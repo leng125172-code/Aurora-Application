@@ -1,0 +1,26 @@
+﻿# 自动给 PR / Issue 打标签
+bug:
+  - title: ['bug', 'error', '问题', '报错', '异常', '崩溃']
+
+enhancement:
+  - title: ['feature', 'enhance', 'improve', '功能', '优化', '建议', '增强']
+
+documentation:
+  - '**/*.md'
+  - '**/*.rst'
+
+dependencies:
+  - '**/dependabot.yml'
+  - '**/*.csproj'
+  - '**/packages.config'
+
+tools:
+  - '.github/**/*'
+  - 'Tools/**/*'
+
+src:
+  - 'Sources/**/*'
+  - 'src/**/*'
+
+tests:
+  - 'Tests/**/*'

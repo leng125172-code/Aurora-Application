@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <Import Project="..\..\..\common.props" />
+    <PropertyGroup>
+        <OutputType>Library</OutputType>
+        <TargetFramework>net10.0</TargetFramework>
+        <RootNamespace>AuroraCV.Application</RootNamespace>
+        <AssemblyTitle>$(RootNamespace)</AssemblyTitle>
+        <Description>Aurora Computer Vision Engine - Application Layer.</Description>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\AuroraCV.Domain\AuroraCV.Domain.csproj" />
+        <ProjectReference Include="..\AuroraCV.Application.Contracts\AuroraCV.Application.Contracts.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Lion.AbpPro.BasicManagement.Application" />
+        <PackageReference Include="Lion.AbpPro.NotificationManagement.Application" />
+        <PackageReference Include="Lion.AbpPro.DataDictionaryManagement.Application" />
+        <PackageReference Include="Lion.AbpPro.LanguageManagement.Application" />
+        <PackageReference Include="Lion.AbpPro.CodeManagement.Application" />
+        <PackageReference Include="Lion.AbpPro.TemplateManagement.Application" />
+        <PackageReference Include="Lion.AbpPro.DynamicMenuManagement.Application" />
+        <PackageReference Include="Lion.AbpPro.ImportExportManagement.Application" />
+        <PackageReference Include="Lion.AbpPro.FileManagement.Application" />
+        <PackageReference Include="Lion.AbpPro.CacheManagement.Application" />
+        <PackageReference Include="Lion.AbpPro.MasterDataManagement.Application" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Volo.Abp.BackgroundJobs.HangFire" />
+    </ItemGroup>
+</Project>

@@ -1,0 +1,92 @@
+<!--
+  common.props 文件
+  功能：定义 Aurora Application 项目的公共属性和配置
+  用途：作为项目的共享配置文件，确保所有子项目使用一致的设置
+-->
+<Project>
+    <!-- 主要属性组：定义项目的基本配置 -->
+    <PropertyGroup>
+        <!-- Platforms 平台：支持的目标平台 -->
+        <Platforms>x86;x64;arm64</Platforms>
+        <!-- Implicit Usings 全局引用：启用 C# 10+ 的全局 using 指令 -->
+        <ImplicitUsings>enable</ImplicitUsings>
+        <!-- 语言版本：使用当前 .NET SDK 所支持的最新 C# 语言版本 -->
+        <LangVersion>preview</LangVersion>
+        <!-- Nullable 可为空警告：启用可为空引用类型检查 -->
+        <Nullable>enable</Nullable>
+        <!-- 允许不安全代码：允许使用 unsafe 代码块 -->
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+        <!-- 禁用全球化不变模式，确保多语言区域性支持正常工作 -->
+        <InvariantGlobalization>false</InvariantGlobalization>
+
+        <!-- 软件信息：定义程序集的元数据 -->
+        <AssemblyTitle>$(RootNamespace)</AssemblyTitle>
+        <Description>Aurorap $(RootNamespace) module</Description>
+        <Company>三花装备事业部 C Sharp 开发团队</Company>
+        <Copyright>©2002-$([System.DateTime]::Now.ToString(`yyyy`)) 三花装备事业部</Copyright>
+
+        <!-- 版本信息：使用前缀 + 日期格式的版本号 -->
+        <VersionPrefix>0.1</VersionPrefix>
+        <VersionSuffix>$([System.DateTime]::Now.ToString(`yyyy.Md`))</VersionSuffix>
+        <Version>$(VersionPrefix).$(VersionSuffix)</Version>
+        <FileVersion>$(Version)</FileVersion>
+        <AssemblyVersion>$(VersionPrefix).$([System.DateTime]::Now.ToString(`yyyy.Md`))</AssemblyVersion>
+
+        <!-- 应用图标 -->
+        <ApplicationIcon>Assets/Aurora Application.ico</ApplicationIcon>
+
+        <!-- 包信息：定义 NuGet 包的元数据 -->
+        <PackageId>$(RootNamespace)</PackageId>
+        <Authors>$(Company)</Authors>
+        <PackageIcon>Assets/Aurora Application.png</PackageIcon>
+        <RepositoryType>git</RepositoryType>
+        <PackageTags>$(Company);$(AssemblyName)</PackageTags>
+        <PackageReleaseNotes>$(Description)</PackageReleaseNotes>
+        <PackageLicenseExpression>MIT</PackageLicenseExpression>
+        <PublishRepositoryUrl>true</PublishRepositoryUrl>
+        <EmbedUntrackedSources>true</EmbedUntrackedSources>
+        <IncludeSymbols>true</IncludeSymbols>
+        <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+        <PackageReadmeFile>Readme.MD</PackageReadmeFile>
+        <NuGetAuditMode>all</NuGetAuditMode>
+        <DefaultLanguage>zh-hans</DefaultLanguage>
+
+        <!-- 禁用警告：指定要忽略的 NuGet 警告 -->
+        <!-- NU1701: 包使用了不同版本的依赖项 -->
+        <!-- NU1902: 包包含已知的安全漏洞 -->
+        <!-- NU1903: 包使用了已弃用的依赖项 -->
+        <NoWarn>$(NoWarn);NU1701;NU1902;NU1903</NoWarn>
+    </PropertyGroup>
+
+    <!-- Debug 配置：定义调试模式下的输出路径 -->
+    <PropertyGroup Condition="'$(Configuration)'=='Debug'">
+        <!-- Debug Output Path 输出路径：调试构建的输出目录 -->
+        <OutputPath>..\..\..\Builds\Debug\$(RootNamespace)</OutputPath>
+    </PropertyGroup>
+
+    <!-- Release 配置：定义发布模式下的输出路径 -->
+    <PropertyGroup Condition="'$(Configuration)'=='Release'">
+        <!-- Release Output Path 输出路径：发布构建的输出目录 -->
+        <OutputPath>..\..\..\Builds\Release\$(RootNamespace)</OutputPath>
+    </PropertyGroup>
+
+    <!-- 资源文件配置：定义需要复制到输出目录的资源文件 -->
+    <ItemGroup>
+        <!-- 资源文件 (必须开启始终复制，保证Msix和Self模式都可以运行)-->
+        <Content Include="Assets\*">
+            <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+        </Content>
+    </ItemGroup>
+
+    <!-- 包引用配置：定义项目依赖的 NuGet 包 -->
+    <ItemGroup>
+        <!-- Microsoft.SourceLink.GitHub：用于在 NuGet 包中包含源代码链接信息 -->
+        <!-- 版本：10.0.201 -->
+        <!-- PrivateAssets: all - 表示此包仅用于构建，不会传递给依赖项 -->
+        <!-- IncludeAssets: 指定要包含的资产类型 -->
+        <PackageReference Include="Microsoft.SourceLink.GitHub" Version="10.0.201">
+            <PrivateAssets>all</PrivateAssets>
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
+        </PackageReference>
+    </ItemGroup>
+</Project>

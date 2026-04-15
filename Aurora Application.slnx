@@ -1,0 +1,130 @@
+<Solution>
+    <Configurations>
+        <Platform Name="arm64" />
+        <Platform Name="x64" />
+        <Platform Name="x86" />
+    </Configurations>
+    <Folder Name="/.github/">
+        <File Path=".github/CODEOWNERS" />
+        <File Path=".github/CONTRIBUTING.md" />
+        <File Path=".github/copilot-instructions.md" />
+        <File Path=".github/dependabot.yml" />
+        <File Path=".github/labeler-config.yml" />
+        <File Path=".github/PULL_REQUEST_TEMPLATE.md" />
+    </Folder>
+    <Folder Name="/.github/ISSUE_TEMPLATE/">
+        <File Path=".github/ISSUE_TEMPLATE/bug_report_en.md" />
+        <File Path=".github/ISSUE_TEMPLATE/bug_report_zh.md" />
+        <File Path=".github/ISSUE_TEMPLATE/config.yml" />
+        <File Path=".github/ISSUE_TEMPLATE/feature_request_en.md" />
+        <File Path=".github/ISSUE_TEMPLATE/feature_request_zh.md" />
+    </Folder>
+    <Folder Name="/.github/workflows/">
+        <File Path=".github/workflows/labeler.yml" />
+    </Folder>
+    <Folder Name="/.Solution Items/">
+        <File Path=".dockerignore" />
+        <File Path=".editorconfig" />
+        <File Path=".gitattributes" />
+        <File Path=".gitignore" />
+        <File Path="CHANGELOG.md" />
+        <File Path="common.props" />
+        <File Path="CONTRIBUTING.md" />
+        <File Path="Delete-BIN-OBJ-Folders.bat" />
+        <File Path="Directory.Build.Lion.targets" />
+        <File Path="Directory.Build.Microsoft.targets" />
+        <File Path="Directory.Build.targets" />
+        <File Path="Directory.Build.Volo.targets" />
+        <File Path="Dockerfile" />
+        <File Path="LICENSE" />
+        <File Path="NuGet.Config" />
+        <File Path="README.md" />
+        <File Path="SECURITY.md" />
+    </Folder>
+    <Folder Name="/Assets/">
+        <File Path="Assets/Aurora Application.ico" />
+        <File Path="Assets/Aurora Application.png" />
+    </Folder>
+    <Folder Name="/Documents/" />
+    <Folder Name="/Sources/" />
+    <Folder Name="/Sources/Aurora CV Engine Tests/">
+        <Project Path="Sources/Aurora CV Engine Tests/AuroraCV.Application.Tests/AuroraCV.Application.Tests.csproj">
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/Aurora CV Engine Tests/AuroraCV.Domain.Tests/AuroraCV.Domain.Tests.csproj">
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/Aurora CV Engine Tests/AuroraCV.EntityFrameworkCore.Tests/AuroraCV.EntityFrameworkCore.Tests.csproj">
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/Aurora CV Engine Tests/AuroraCV.HttpApi.Client.ConsoleTestApp/AuroraCV.HttpApi.Client.ConsoleTestApp.csproj">
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/Aurora CV Engine Tests/AuroraCV.TestBase/AuroraCV.TestBase.csproj">
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+    </Folder>
+    <Folder Name="/Sources/Aurora CV Engine/">
+        <Project Path="Sources/Aurora CV Engine/AuroraCV.Application.Contracts/AuroraCV.Application.Contracts.csproj">
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/Aurora CV Engine/AuroraCV.Application/AuroraCV.Application.csproj">
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/Aurora CV Engine/AuroraCV.DbMigrator/AuroraCV.DbMigrator.csproj">
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/Aurora CV Engine/AuroraCV.Domain.Shared/AuroraCV.Domain.Shared.csproj">
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/Aurora CV Engine/AuroraCV.Domain/AuroraCV.Domain.csproj">
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/Aurora CV Engine/AuroraCV.EntityFrameworkCore/AuroraCV.EntityFrameworkCore.csproj">
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/Aurora CV Engine/AuroraCV.HttpApi.Client/AuroraCV.HttpApi.Client.csproj">
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/Aurora CV Engine/AuroraCV.HttpApi.Host/AuroraCV.HttpApi.Host.csproj">
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/Aurora CV Engine/AuroraCV.HttpApi/AuroraCV.HttpApi.csproj">
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/Aurora CV Engine/AuroraCV.WebGateway/AuroraCV.WebGateway.csproj">
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+    </Folder>
+    <Folder Name="/Tools/" />
+</Solution>

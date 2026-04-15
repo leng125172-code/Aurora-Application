@@ -1,0 +1,73 @@
+﻿# Git Attributes
+
+# Line endings
+*.cs text eol=crlf
+*.vb text eol=crlf
+*.fs text eol=crlf
+*.ts text eol=lf
+*.js text eol=lf
+*.html text eol=lf
+*.css text eol=lf
+*.json text eol=lf
+*.xml text eol=lf
+*.md text eol=lf
+*.txt text eol=lf
+
+# Binary files
+*.exe binary
+*.dll binary
+*.so binary
+*.dylib binary
+*.lib binary
+*.a binary
+*.o binary
+*.obj binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.bmp binary
+*.ico binary
+*.pdf binary
+*.zip binary
+*.7z binary
+*.rar binary
+
+# Text files
+*.cs diff=csharp
+*.vb diff=vb
+*.fs diff=fsharp
+*.ts diff=typescript
+*.js diff=javascript
+*.html diff=html
+*.css diff=css
+*.json diff=json
+*.xml diff=xml
+*.md diff=markdown
+*.txt diff=text
+
+# Ignore whitespace in diffs
+*.cs whitespace=nowarn
+*.vb whitespace=nowarn
+*.fs whitespace=nowarn
+*.ts whitespace=nowarn
+*.js whitespace=nowarn
+*.html whitespace=nowarn
+*.css whitespace=nowarn
+*.json whitespace=nowarn
+*.xml whitespace=nowarn
+*.md whitespace=nowarn
+*.txt whitespace=nowarn
+
+# Merge strategies
+*.cs merge=union
+*.vb merge=union
+*.fs merge=union
+*.ts merge=union
+*.js merge=union
+*.html merge=union
+*.css merge=union
+*.json merge=union
+*.xml merge=union
+*.md merge=union
+*.txt merge=union

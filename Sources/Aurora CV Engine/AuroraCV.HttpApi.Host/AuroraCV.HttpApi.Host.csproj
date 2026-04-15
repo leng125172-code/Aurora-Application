@@ -1,0 +1,49 @@
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
+    <Import Project="..\..\..\common.props" />
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <TargetFramework>net10.0</TargetFramework>
+        <RootNamespace>AuroraCV.HttpApi.Host</RootNamespace>
+        <AssemblyTitle>$(RootNamespace)</AssemblyTitle>
+        <Description>Aurora Computer Vision Engine - HTTP API Host Server.</Description>
+        <PreserveCompilationReferences>true</PreserveCompilationReferences>
+        <UserSecretsId>AuroraCV-4681b4fd-151f-4221-84a4-929d86723e4c</UserSecretsId>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Volo.Abp.Account.Web" />
+        <PackageReference Include="Volo.Abp.Caching.StackExchangeRedis" />
+        <PackageReference Include="Volo.Abp.AspNetCore.Serilog" />
+        <PackageReference Include="Volo.Abp.DistributedLocking" />
+        <PackageReference Include="Volo.Abp.BlobStoring.FileSystem" />
+        <PackageReference Include="Volo.Abp.BackgroundJobs.HangFire" />
+        <PackageReference Include="Lion.AbpPro.CAP.EntityFrameworkCore" />
+        <PackageReference Include="DistributedLock.Redis" />
+        <PackageReference Include="Lion.AbpPro.AspNetCore" />
+        <PackageReference Include="DotNetCore.CAP.Dashboard"/>
+        <PackageReference Include="DotNetCore.CAP.InMemoryStorage"/>
+        <PackageReference Include="Savorboard.CAP.InMemoryMessageQueue"/>
+        <PackageReference Include="DotNetCore.CAP.PostgreSql"/>
+        <PackageReference Include="Hangfire.PostgreSql"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\AuroraCV.Application\AuroraCV.Application.csproj" />
+        <ProjectReference Include="..\AuroraCV.EntityFrameworkCore\AuroraCV.EntityFrameworkCore.csproj" />
+        <ProjectReference Include="..\AuroraCV.HttpApi\AuroraCV.HttpApi.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <Compile Remove="Logs\**" />
+        <Content Remove="Logs\**" />
+        <EmbeddedResource Remove="Logs\**" />
+        <None Remove="Logs\**" />
+        <None Update="ip2region.db">
+            <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+        </None>
+    </ItemGroup>
+
+    <ItemGroup>
+        <Content Remove="$(UserProfile)\.nuget\packages\*\*\contentFiles\any\*\*.abppkg*.json" />
+    </ItemGroup>
+</Project>

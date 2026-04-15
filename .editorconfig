@@ -1,0 +1,20 @@
+# 全局默认：所有文件 UTF-8 无签名
+[*]
+charset = utf-8
+indent_style = space
+indent_size = 4
+trim_trailing_whitespace = true
+insert_final_newline = true
+
+# C# 可单独指定（带/不带 BOM 按需）
+[*.cs]
+charset = utf-8
+# charset = utf-8-bom  # 如需带 BOM 则启用
+
+# C++/C 项目
+[*.{cpp,c,h,hpp}]
+charset = utf-8
+
+# 前端/配置文件
+[*.{js,ts,json,xml,yml,md}]
+charset = utf-8

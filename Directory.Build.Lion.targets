@@ -1,0 +1,248 @@
+<Project>
+    <!--    Lion.AbpPro包-->
+    <ItemGroup>
+        <PackageReference Update="Lion.AbpPro.Core" Version="10.2.0.103" />
+        <PackageReference Update="Lion.AbpPro.AspNetCore" Version="10.2.0.103" />
+        <PackageReference Update="Lion.AbpPro.Starter" Version="10.2.0.103" />
+        <PackageReference Update="Lion.AbpPro.CAP" Version="10.2.0.103" />
+        <PackageReference Update="Lion.AbpPro.CAP.EntityFrameworkCore" Version="10.2.0.103" />
+        <PackageReference Update="Lion.AbpPro.Localization" Version="10.2.0.103" />
+        <PackageReference Update="Lion.AbpPro.Oidc" Version="10.2.0.103" />
+        <PackageReference Update="Lion.AbpPro.TwoFactor" Version="10.2.0.103" />
+
+        <PackageReference Update="Lion.AbpPro.BasicManagement.Application" Version="10.2.0.103" />
+        <PackageReference
+            Update="Lion.AbpPro.BasicManagement.Application.Contracts"
+            Version="10.2.0.103"
+        />
+        <PackageReference Update="Lion.AbpPro.BasicManagement.Domain" Version="10.2.0.103" />
+        <PackageReference Update="Lion.AbpPro.BasicManagement.Domain.Shared" Version="10.2.0.103" />
+        <PackageReference
+            Update="Lion.AbpPro.BasicManagement.EntityFrameworkCore"
+            Version="10.2.0.103"
+        />
+        <PackageReference Update="Lion.AbpPro.BasicManagement.HttpApi" Version="10.2.0.103" />
+        <PackageReference
+            Update="Lion.AbpPro.BasicManagement.HttpApi.Client"
+            Version="10.2.0.103"
+        />
+
+        <PackageReference
+            Update="Lion.AbpPro.NotificationManagement.Application"
+            Version="10.2.0.103"
+        />
+        <PackageReference
+            Update="Lion.AbpPro.NotificationManagement.Application.Contracts"
+            Version="10.2.0.103"
+        />
+        <PackageReference Update="Lion.AbpPro.NotificationManagement.Domain" Version="10.2.0.103" />
+        <PackageReference
+            Update="Lion.AbpPro.NotificationManagement.Domain.Shared"
+            Version="10.2.0.103"
+        />
+        <PackageReference
+            Update="Lion.AbpPro.NotificationManagement.EntityFrameworkCore"
+            Version="10.2.0.103"
+        />
+        <PackageReference
+            Update="Lion.AbpPro.NotificationManagement.HttpApi"
+            Version="10.2.0.103"
+        />
+        <PackageReference
+            Update="Lion.AbpPro.NotificationManagement.HttpApi.Client"
+            Version="10.2.0.103"
+        />
+
+        <PackageReference
+            Update="Lion.AbpPro.DataDictionaryManagement.Application"
+            Version="10.2.0.103"
+        />
+        <PackageReference
+            Update="Lion.AbpPro.DataDictionaryManagement.Application.Contracts"
+            Version="10.2.0.103"
+        />
+        <PackageReference
+            Update="Lion.AbpPro.DataDictionaryManagement.Domain"
+            Version="10.2.0.103"
+        />
+        <PackageReference
+            Update="Lion.AbpPro.DataDictionaryManagement.Domain.Shared"
+            Version="10.2.0.103"
+        />
+        <PackageReference
+            Update="Lion.AbpPro.DataDictionaryManagement.EntityFrameworkCore"
+            Version="10.2.0.103"
+        />
+        <PackageReference
+            Update="Lion.AbpPro.DataDictionaryManagement.HttpApi"
+            Version="10.2.0.103"
+        />
+        <PackageReference
+            Update="Lion.AbpPro.DataDictionaryManagement.HttpApi.Client"
+            Version="10.2.0.103"
+        />
+
+        <PackageReference
+            Update="Lion.AbpPro.LanguageManagement.Application"
+            Version="10.2.0.103"
+        />
+        <PackageReference
+            Update="Lion.AbpPro.LanguageManagement.Application.Contracts"
+            Version="10.2.0.103"
+        />
+        <PackageReference Update="Lion.AbpPro.LanguageManagement.Domain" Version="10.2.0.103" />
+        <PackageReference
+            Update="Lion.AbpPro.LanguageManagement.Domain.Shared"
+            Version="10.2.0.103"
+        />
+        <PackageReference
+            Update="Lion.AbpPro.LanguageManagement.EntityFrameworkCore"
+            Version="10.2.0.103"
+        />
+        <PackageReference Update="Lion.AbpPro.LanguageManagement.HttpApi" Version="10.2.0.103" />
+        <PackageReference
+            Update="Lion.AbpPro.LanguageManagement.HttpApi.Client"
+            Version="10.2.0.103"
+        />
+
+        <PackageReference Update="Lion.AbpPro.CodeManagement.Application" Version="10.2.0.103" />
+        <PackageReference
+            Update="Lion.AbpPro.CodeManagement.Application.Contracts"
+            Version="10.2.0.103"
+        />
+        <PackageReference Update="Lion.AbpPro.CodeManagement.Domain" Version="10.2.0.103" />
+        <PackageReference Update="Lion.AbpPro.CodeManagement.Domain.Shared" Version="10.2.0.103" />
+        <PackageReference
+            Update="Lion.AbpPro.CodeManagement.EntityFrameworkCore"
+            Version="10.2.0.103"
+        />
+        <PackageReference Update="Lion.AbpPro.CodeManagement.HttpApi" Version="10.2.0.103" />
+        <PackageReference Update="Lion.AbpPro.CodeManagement.HttpApi.Client" Version="10.2.0.103" />
+
+        <PackageReference
+            Update="Lion.AbpPro.TemplateManagement.Application"
+            Version="10.2.0.103"
+        />
+        <PackageReference
+            Update="Lion.AbpPro.TemplateManagement.Application.Contracts"
+            Version="10.2.0.103"
+        />
+        <PackageReference Update="Lion.AbpPro.TemplateManagement.Domain" Version="10.2.0.103" />
+        <PackageReference
+            Update="Lion.AbpPro.TemplateManagement.Domain.Shared"
+            Version="10.2.0.103"
+        />
+        <PackageReference
+            Update="Lion.AbpPro.TemplateManagement.EntityFrameworkCore"
+            Version="10.2.0.103"
+        />
+        <PackageReference Update="Lion.AbpPro.TemplateManagement.HttpApi" Version="10.2.0.103" />
+        <PackageReference
+            Update="Lion.AbpPro.TemplateManagement.HttpApi.Client"
+            Version="10.2.0.103"
+        />
+
+        <PackageReference
+            Update="Lion.AbpPro.DynamicMenuManagement.Application"
+            Version="10.2.0.103"
+        />
+        <PackageReference
+            Update="Lion.AbpPro.DynamicMenuManagement.Application.Contracts"
+            Version="10.2.0.103"
+        />
+        <PackageReference Update="Lion.AbpPro.DynamicMenuManagement.Domain" Version="10.2.0.103" />
+        <PackageReference
+            Update="Lion.AbpPro.DynamicMenuManagement.Domain.Shared"
+            Version="10.2.0.103"
+        />
+        <PackageReference
+            Update="Lion.AbpPro.DynamicMenuManagement.EntityFrameworkCore"
+            Version="10.2.0.103"
+        />
+        <PackageReference Update="Lion.AbpPro.DynamicMenuManagement.HttpApi" Version="10.2.0.103" />
+        <PackageReference
+            Update="Lion.AbpPro.DynamicMenuManagement.HttpApi.Client"
+            Version="10.2.0.103"
+        />
+
+        <PackageReference
+            Update="Lion.AbpPro.ImportExportManagement.Application"
+            Version="10.2.0.103"
+        />
+        <PackageReference
+            Update="Lion.AbpPro.ImportExportManagement.Application.Contracts"
+            Version="10.2.0.103"
+        />
+        <PackageReference Update="Lion.AbpPro.ImportExportManagement.Domain" Version="10.2.0.103" />
+        <PackageReference
+            Update="Lion.AbpPro.ImportExportManagement.Domain.Shared"
+            Version="10.2.0.103"
+        />
+        <PackageReference
+            Update="Lion.AbpPro.ImportExportManagement.EntityFrameworkCore"
+            Version="10.2.0.103"
+        />
+        <PackageReference
+            Update="Lion.AbpPro.ImportExportManagement.HttpApi"
+            Version="10.2.0.103"
+        />
+        <PackageReference
+            Update="Lion.AbpPro.ImportExportManagement.HttpApi.Client"
+            Version="10.2.0.103"
+        />
+
+        <PackageReference Update="Lion.AbpPro.FileManagement.Application" Version="10.2.0.103" />
+        <PackageReference
+            Update="Lion.AbpPro.FileManagement.Application.Contracts"
+            Version="10.2.0.103"
+        />
+        <PackageReference Update="Lion.AbpPro.FileManagement.Domain" Version="10.2.0.103" />
+        <PackageReference Update="Lion.AbpPro.FileManagement.Domain.Shared" Version="10.2.0.103" />
+        <PackageReference
+            Update="Lion.AbpPro.FileManagement.EntityFrameworkCore"
+            Version="10.2.0.103"
+        />
+        <PackageReference Update="Lion.AbpPro.FileManagement.HttpApi" Version="10.2.0.103" />
+        <PackageReference Update="Lion.AbpPro.FileManagement.HttpApi.Client" Version="10.2.0.103" />
+
+        <PackageReference Update="Lion.AbpPro.CacheManagement.Application" Version="10.2.0.103" />
+        <PackageReference
+            Update="Lion.AbpPro.CacheManagement.Application.Contracts"
+            Version="10.2.0.103"
+        />
+        <PackageReference Update="Lion.AbpPro.CacheManagement.Domain" Version="10.2.0.103" />
+        <PackageReference Update="Lion.AbpPro.CacheManagement.Domain.Shared" Version="10.2.0.103" />
+        <PackageReference
+            Update="Lion.AbpPro.CacheManagement.EntityFrameworkCore"
+            Version="10.2.0.103"
+        />
+        <PackageReference Update="Lion.AbpPro.CacheManagement.HttpApi" Version="10.2.0.103" />
+        <PackageReference
+            Update="Lion.AbpPro.CacheManagement.HttpApi.Client"
+            Version="10.2.0.103"
+        />
+
+        <PackageReference
+            Update="Lion.AbpPro.MasterDataManagement.Application"
+            Version="10.2.0.103"
+        />
+        <PackageReference
+            Update="Lion.AbpPro.MasterDataManagement.Application.Contracts"
+            Version="10.2.0.103"
+        />
+        <PackageReference Update="Lion.AbpPro.MasterDataManagement.Domain" Version="10.2.0.103" />
+        <PackageReference
+            Update="Lion.AbpPro.MasterDataManagement.Domain.Shared"
+            Version="10.2.0.103"
+        />
+        <PackageReference
+            Update="Lion.AbpPro.MasterDataManagement.EntityFrameworkCore"
+            Version="10.2.0.103"
+        />
+        <PackageReference Update="Lion.AbpPro.MasterDataManagement.HttpApi" Version="10.2.0.103" />
+        <PackageReference
+            Update="Lion.AbpPro.MasterDataManagement.HttpApi.Client"
+            Version="10.2.0.103"
+        />
+    </ItemGroup>
+</Project>

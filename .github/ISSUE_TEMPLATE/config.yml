@@ -1,0 +1,14 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 提出功能建议 (中文)
+    about: 使用中文描述你的功能需求
+    template: feature_request_zh.md
+  - name: Feature Request (English)
+    about: Describe your feature request in English
+    template: feature_request_en.md
+  - name: 缺陷反馈 (中文)
+    about: 使用中文反馈一个 Bug 以帮助我们改进
+    template: bug_report_zh.md
+  - name: Bug Report (English)
+    about: Describe a bug in English
+    template: bug_report_en.md
