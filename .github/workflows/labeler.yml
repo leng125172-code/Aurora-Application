@@ -1,11 +1,37 @@
-﻿name: Labeler
-on: [pull_request, issues]
+﻿# Labeler 工作流
+# 功能：自动为 PR 和 Issue 打标签
+# 基于文件路径和标题关键词匹配规则
+
+name: Labeler
+
+# 触发事件：当有新的 PR 或 Issue 创建时
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  issues:
+    types: [opened, reopened]
 
 jobs:
   label:
+    # 运行环境
     runs-on: ubuntu-latest
+    # 权限配置
+    permissions:
+      contents: read
+      pull-requests: write
+    
     steps:
-      - uses: actions/labeler@v5
+      # 检查代码库
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      # 使用 labeler 动作自动打标签
+      - name: Labeler
+        uses: actions/labeler@v5
         with:
+          # GitHub 令牌，用于授权操作
           repo-token: "${{ secrets.GITHUB_TOKEN }}"
+          # 配置文件路径
           configuration-path: .github/labeler-config.yml
+          # 同步标签（确保移除不再匹配的标签）
+          sync-labels: true

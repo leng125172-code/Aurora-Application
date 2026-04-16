@@ -1,4 +1,6 @@
 ﻿# 自动给 PR / Issue 打标签
+# 基于标题关键词和文件路径匹配规则
+
 bug:
   - title: ['bug', 'error', '问题', '报错', '异常', '崩溃']
 
@@ -24,3 +26,18 @@ src:
 
 tests:
   - 'Tests/**/*'
+
+# 项目特定标签
+cv-engine:
+  - '*CV*Engine*'
+  - '*Aurora.CV.Engine*'
+
+struct3d:
+  - '*Struct3D*'
+  - '*Aurora.Struct3D.Core*'
+
+assets:
+  - 'Assets/**/*'
+
+ci-cd:
+  - '.github/workflows/**/*'
