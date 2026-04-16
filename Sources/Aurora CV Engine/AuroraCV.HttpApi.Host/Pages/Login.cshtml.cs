@@ -1,9 +1,10 @@
-using Lion.AbpPro.AspNetCore.Options;
+﻿using Lion.AbpPro.AspNetCore.Options;
 using Lion.AbpPro.BasicManagement.ConfigurationOptions;
 using Lion.AbpPro.BasicManagement.Tenants;
 using Lion.AbpPro.BasicManagement.Tenants.Dtos;
 using Lion.AbpPro.BasicManagement.Users;
 using Lion.AbpPro.BasicManagement.Users.Dtos;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Volo.Abp.AspNetCore.MultiTenancy;
 using Volo.Abp.Timing;
@@ -48,14 +49,22 @@ namespace AuroraCV.Pages
             _jwtOptions = jwtOptions.Value;
         }
 
-        public void OnGet()
+        public IActionResult OnGet()
         {
+            // 已登录时直接跳转监控页面
+            var authCookie = Request.Cookies[_abpProCookieOptions.Name];
+            if (!string.IsNullOrWhiteSpace(authCookie))
+            {
+                return Redirect("/monitor");
+            }
+
             ViewData["ErrorMessage"] = null;
             TempData["EnableTenant"] = _abpProMultiTenancyOptions.Enabled;
             Response.Cookies.Delete(_abpAspNetCoreMultiTenancyOptions.TenantKey);
+            return Page();
         }
 
-        public async Task OnPost()
+        public async Task<IActionResult> OnPost()
         {
             Response.Cookies.Delete(_abpAspNetCoreMultiTenancyOptions.TenantKey);
             TempData["EnableTenant"] = _abpProMultiTenancyOptions.Enabled;
@@ -66,7 +75,7 @@ namespace AuroraCV.Pages
             {
                 // 添加错误提示信息
                 TempData["ErrorMessage"] = "用户名和密码不能为空";
-                return;
+                return Page();
             }
 
             try
@@ -81,7 +90,7 @@ namespace AuroraCV.Pages
                     if (!tenant.Success)
                     {
                         TempData["ErrorMessage"] = $"租户[{tenantName}]不存在";
-                        return;
+                        return Page();
                     }
 
                     tenantId = tenant.TenantId;
@@ -115,15 +124,15 @@ namespace AuroraCV.Pages
             {
                 _logger.LogError($"登录失败：{e.Message}");
                 TempData["ErrorMessage"] = $"用户名或者密码错误";
-                return;
+                return Page();
             }
             catch (Exception e)
             {
                 _logger.LogError($"登录失败：{e.Message}");
                 TempData["ErrorMessage"] = $"登录失败：{e.Message}";
-                return;
+                return Page();
             }
-            Response.Redirect("/monitor");
+            return Redirect("/monitor");
         }
     }
 }

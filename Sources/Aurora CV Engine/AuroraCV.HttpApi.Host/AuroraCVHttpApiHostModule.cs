@@ -56,7 +56,11 @@ namespace AuroraCV
             app.UseAbpProMultiTenancy();
             app.UseAuthorization();
 
-            app.UseAbpHangfireDashboard();
+            app.UseAbpHangfireDashboard(configure: options =>
+            {
+                // 隐藏右上角"返回应用"按钮
+                options.AppPath = null;
+            });
 
             app.UseAbpProSwaggerUI("/swagger/AbpPro/swagger.json", "AbpPro");
             app.UseAbpProAuditing();
@@ -65,6 +69,11 @@ namespace AuroraCV
             app.UseConfiguredEndpoints(endpoints =>
             {
                 endpoints.MapHealthChecks("/health");
+                endpoints.MapGet("/", context =>
+                {
+                    context.Response.Redirect("/monitor");
+                    return Task.CompletedTask;
+                });
             });
             app.UseAbpProConsul();
         }

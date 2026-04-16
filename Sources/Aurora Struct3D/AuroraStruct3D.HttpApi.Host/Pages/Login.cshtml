@@ -1,184 +1,408 @@
-
 @page
 @model AuroraStruct3D.Pages.Login
 
 @{
-  Layout = null;
+    Layout = null;
 }
 
 <!DOCTYPE html>
-
-<html>
+<html lang="zh-CN" data-theme="light">
 <head>
-  <title>后台服务登录</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0-beta1/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-giJF6kkoqNQ00vy+HMDP7azOuL0xtbfIcaT9wjKHr8RbDVddVHyTfAAsrekwKmP1" crossorigin="anonymous">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Aurora Struct3D - 后台服务登录</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+    <link rel="stylesheet" href="/css/aurora-fonts.css" />
+    <style>
+        /* ==================== CSS 变量：明暗主题 ==================== */
+        :root {
+            --bg-primary: #f0f2f5;
+            --bg-card: #ffffff;
+            --bg-input: #f8f9fa;
+            --text-primary: #1a1a2e;
+            --text-secondary: #6b7280;
+            --text-muted: #9ca3af;
+            --border-color: #e5e7eb;
+            --accent-start: #6366f1;
+            --accent-end: #8b5cf6;
+            --accent-glow: rgba(99, 102, 241, 0.3);
+            --shadow-card: 0 20px 60px rgba(0, 0, 0, 0.08);
+            --shadow-input: 0 2px 8px rgba(0, 0, 0, 0.04);
+            --shadow-input-focus: 0 4px 16px rgba(99, 102, 241, 0.15);
+            --glass-bg: rgba(255, 255, 255, 0.7);
+            --particle-color: rgba(99, 102, 241, 0.08);
+        }
+
+        [data-theme="dark"] {
+            --bg-primary: #0f0f23;
+            --bg-card: #1a1a2e;
+            --bg-input: #16213e;
+            --text-primary: #e2e8f0;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --border-color: #2d2d44;
+            --accent-start: #818cf8;
+            --accent-end: #a78bfa;
+            --accent-glow: rgba(129, 140, 248, 0.25);
+            --shadow-card: 0 20px 60px rgba(0, 0, 0, 0.4);
+            --shadow-input: 0 2px 8px rgba(0, 0, 0, 0.2);
+            --shadow-input-focus: 0 4px 16px rgba(129, 140, 248, 0.2);
+            --glass-bg: rgba(26, 26, 46, 0.8);
+            --particle-color: rgba(129, 140, 248, 0.06);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: "PingFang SC", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+            line-height: 1.5;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.4s ease, color 0.4s ease;
+            overflow: hidden;
+            position: relative;
+        }
+
+        /* 动态背景 */
+        .bg-gradient {
+            position: fixed; inset: 0; z-index: 0;
+            background:
+                radial-gradient(ellipse at 20% 50%, var(--particle-color) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 20%, rgba(139, 92, 246, 0.06) 0%, transparent 50%),
+                radial-gradient(ellipse at 50% 80%, rgba(59, 130, 246, 0.05) 0%, transparent 50%);
+        }
+
+        .bg-grid {
+            position: fixed; inset: 0; z-index: 0;
+            background-image:
+                linear-gradient(var(--border-color) 1px, transparent 1px),
+                linear-gradient(90deg, var(--border-color) 1px, transparent 1px);
+            background-size: 60px 60px;
+            opacity: 0.3;
+        }
+
+        /* 顶栏工具条 */
+        .top-bar {
+            position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+            display: flex; justify-content: flex-end; align-items: center;
+            padding: 12px 24px; gap: 8px;
+        }
+
+        .top-btn {
+            background: var(--glass-bg);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
+            border-radius: 10px;
+            padding: 0 14px;
+            height: 36px;
+            font-size: 13px;
+            line-height: 1;
+            cursor: pointer;
+            transition: all 0.25s ease;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            min-width: 80px;
+            white-space: nowrap;
+        }
+
+        .top-btn i { font-size: 14px; }
+        .top-btn span { min-width: 28px; text-align: center; }
+
+        .top-btn:hover {
+            color: var(--text-primary);
+            border-color: var(--accent-start);
+            box-shadow: 0 2px 12px var(--accent-glow);
+        }
+
+        .top-btn.active {
+            background: linear-gradient(135deg, var(--accent-start), var(--accent-end));
+            color: #fff;
+            border-color: transparent;
+        }
+
+        /* 登录卡片 */
+        .login-card {
+            position: relative; z-index: 10;
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            padding: 48px 40px 40px;
+            width: 100%;
+            max-width: 420px;
+            box-shadow: var(--shadow-card);
+            transition: all 0.4s ease;
+        }
+
+        .login-card:hover { box-shadow: var(--shadow-card), 0 0 40px var(--accent-glow); }
+
+        .login-logo {
+            width: 56px; height: 56px;
+            background: linear-gradient(135deg, var(--accent-start), var(--accent-end));
+            border-radius: 16px;
+            display: flex; align-items: center; justify-content: center;
+            margin: 0 auto 20px;
+            box-shadow: 0 8px 24px var(--accent-glow);
+        }
+
+        .login-logo i { font-size: 24px; color: #fff; }
+
+        .login-title {
+            text-align: center;
+            font-size: 22px;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 6px;
+        }
+
+        .login-subtitle {
+            text-align: center;
+            font-size: 13px;
+            color: var(--text-muted);
+            margin-bottom: 32px;
+        }
+
+        /* 表单 */
+        .form-field { margin-bottom: 20px; }
+
+        .form-field label {
+            display: block;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            margin-bottom: 6px;
+        }
+
+        .input-wrap {
+            position: relative;
+            display: flex;
+            align-items: center;
+            background: var(--bg-input);
+            border: 1.5px solid var(--border-color);
+            border-radius: 12px;
+            transition: all 0.25s ease;
+            box-shadow: var(--shadow-input);
+            overflow: hidden;
+        }
+
+        .input-wrap:focus-within {
+            border-color: var(--accent-start);
+            box-shadow: var(--shadow-input-focus);
+        }
+
+        .input-wrap i {
+            position: absolute; left: 14px;
+            font-size: 15px;
+            color: var(--text-muted);
+            transition: color 0.25s ease;
+        }
+
+        .input-wrap:focus-within i { color: var(--accent-start); }
+
+        .input-wrap input {
+            width: 100%;
+            padding: 12px 14px 12px 42px;
+            border: none;
+            background: transparent;
+            font-size: 14px;
+            color: var(--text-primary);
+            outline: none;
+        }
+
+        .input-wrap input::placeholder { color: var(--text-muted); }
+
+        /* 浏览器自动填充样式覆盖 */
+        .input-wrap input:-webkit-autofill,
+        .input-wrap input:-webkit-autofill:hover,
+        .input-wrap input:-webkit-autofill:focus {
+            -webkit-box-shadow: 0 0 0 1000px var(--bg-input) inset !important;
+            -webkit-text-fill-color: var(--text-primary) !important;
+            transition: background-color 5000s ease-in-out 0s;
+        }
+
+        .btn-login {
+            width: 100%;
+            padding: 13px;
+            border: none;
+            border-radius: 12px;
+            background: linear-gradient(135deg, var(--accent-start), var(--accent-end));
+            color: #fff;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 16px var(--accent-glow);
+            letter-spacing: 0.5px;
+            margin-top: 8px;
+        }
+
+        .btn-login:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px var(--accent-glow);
+        }
+
+        .btn-login:active { transform: translateY(0); }
+
+        /* 错误提示 */
+        .alert-aurora {
+            background: rgba(239, 68, 68, 0.08);
+            border: 1px solid rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+            border-radius: 12px;
+            padding: 12px 16px;
+            font-size: 13px;
+            margin-bottom: 20px;
+            display: flex; align-items: center; gap: 8px;
+        }
+
+        [data-theme="dark"] .alert-aurora {
+            background: rgba(239, 68, 68, 0.12);
+            border-color: rgba(239, 68, 68, 0.25);
+        }
+
+        /* 底部版权 */
+        .footer-text {
+            position: fixed; bottom: 16px; left: 0; right: 0;
+            text-align: center;
+            font-size: 12px;
+            color: var(--text-muted);
+            z-index: 10;
+        }
+    </style>
 </head>
 <body>
-<div class="container-fluid d-flex align-items-center justify-content-center min-vh-100">
-  <div class="row w-100 justify-content-center">
-    <div class="col-md-6">
-      <form class="form-horizontal" method="post" novalidate>
-        @Html.AntiForgeryToken()
-          <!-- 错误提示区域 -->
-          @if (TempData["ErrorMessage"] != null)
-          {
-            <div class="alert alert-danger alert-dismissible fade show" role="alert">
-              <i class="fas fa-exclamation-circle me-2"></i>@TempData["ErrorMessage"]
-            </div>
-          }
-        <span class="heading">后台服务登录</span>
-      
-        @if (TempData["EnableTenant"] != null && (bool)TempData["EnableTenant"])
-        {
-          <div class="form-group">
-            <div class="input-group">
-              <span class="input-group-text"><i class="fas fa-building"></i></span>
-              <input type="text" class="form-control" name="tenantName" placeholder="租户名称（可选）">
-            </div>
-          </div>
-        }
-        <div class="form-group">
-          <div class="input-group">
-            <span class="input-group-text"><i class="fas fa-user"></i></span>
-            <input type="text" class="form-control" name="userName" placeholder="用户名" required>
-          </div>
-        </div>
-        <div class="form-group help">
-          <div class="input-group">
-            <span class="input-group-text"><i class="fas fa-lock"></i></span>
-            <input type="password" class="form-control" name="password" placeholder="密码" required>
-          </div>
-        </div>
-        <div class="form-group">
-          <button type="submit" class="btn btn-default">登录</button>
-        </div>
-      </form>
+    <div class="bg-gradient"></div>
+    <div class="bg-grid"></div>
+
+    <!-- 顶栏：语言切换 + 主题切换 -->
+    <div class="top-bar">
+        <button class="top-btn" id="btnLang" onclick="toggleLang()" title="切换语言">
+            <i class="fas fa-globe"></i><span id="langLabel">中文</span>
+        </button>
+        <button class="top-btn" id="btnTheme" onclick="toggleTheme()" title="切换主题">
+            <i class="fas fa-circle-half-stroke"></i><span id="themeLabel">Auto</span>
+        </button>
     </div>
-  </div>
-</div>
+
+    <!-- 登录卡片 -->
+    <div class="login-card">
+        <div class="login-logo"><i class="fas fa-cube"></i></div>
+        <div class="login-title" data-i18n="loginTitle">后台服务登录</div>
+        <div class="login-subtitle" data-i18n="loginSubtitle">Aurora Struct3D · 服务管理平台</div>
+
+        <form method="post" novalidate>
+            @Html.AntiForgeryToken()
+
+            @if (TempData["ErrorMessage"] != null)
+            {
+                <div class="alert-aurora">
+                    <i class="fas fa-exclamation-circle"></i>
+                    <span>@TempData["ErrorMessage"]</span>
+                </div>
+            }
+
+            @if (TempData["EnableTenant"] != null && (bool)TempData["EnableTenant"])
+            {
+                <div class="form-field">
+                    <label data-i18n="tenantLabel">租户</label>
+                    <div class="input-wrap">
+                        <i class="fas fa-building"></i>
+                        <input type="text" name="tenantName" data-i18n-placeholder="tenantPlaceholder" placeholder="租户名称（可选）" />
+                    </div>
+                </div>
+            }
+
+            <div class="form-field">
+                <label data-i18n="userLabel">用户名</label>
+                <div class="input-wrap">
+                    <i class="fas fa-user"></i>
+                    <input type="text" name="userName" data-i18n-placeholder="userPlaceholder" placeholder="请输入用户名" required />
+                </div>
+            </div>
+
+            <div class="form-field">
+                <label data-i18n="passLabel">密码</label>
+                <div class="input-wrap">
+                    <i class="fas fa-lock"></i>
+                    <input type="password" name="password" data-i18n-placeholder="passPlaceholder" placeholder="请输入密码" required />
+                </div>
+            </div>
+
+            <button type="submit" class="btn-login" data-i18n="loginBtn">登 录</button>
+        </form>
+    </div>
+
+    <div class="footer-text" data-i18n="copyright">© 2025 Aurora Struct3D · 三花装备事业部</div>
+
+    <script>
+        // ==================== 多语言 ====================
+        const i18n = {
+            'zh-CN': {
+                loginTitle: '后台服务登录', loginSubtitle: 'Aurora Struct3D · 服务管理平台',
+                tenantLabel: '租户', tenantPlaceholder: '租户名称（可选）',
+                userLabel: '用户名', userPlaceholder: '请输入用户名',
+                passLabel: '密码', passPlaceholder: '请输入密码',
+                loginBtn: '登 录', copyright: '© 2025 Aurora Struct3D · 三花装备事业部'
+            },
+            'en': {
+                loginTitle: 'Service Login', loginSubtitle: 'Aurora Struct3D · Management Platform',
+                tenantLabel: 'Tenant', tenantPlaceholder: 'Tenant name (optional)',
+                userLabel: 'Username', userPlaceholder: 'Enter username',
+                passLabel: 'Password', passPlaceholder: 'Enter password',
+                loginBtn: 'Sign In', copyright: '© 2025 Aurora Struct3D · Sanhua Equipment Division'
+            }
+        };
+
+        let currentLang = localStorage.getItem('aurora-lang') || 'zh-CN';
+
+        function applyLang(lang) {
+            currentLang = lang;
+            localStorage.setItem('aurora-lang', lang);
+            document.getElementById('langLabel').textContent = lang === 'zh-CN' ? '中文' : 'EN';
+            const texts = i18n[lang];
+            document.querySelectorAll('[data-i18n]').forEach(el => {
+                const key = el.getAttribute('data-i18n');
+                if (texts[key]) el.textContent = texts[key];
+            });
+            document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+                const key = el.getAttribute('data-i18n-placeholder');
+                if (texts[key]) el.placeholder = texts[key];
+            });
+        }
+
+        function toggleLang() {
+            applyLang(currentLang === 'zh-CN' ? 'en' : 'zh-CN');
+        }
+
+        // ==================== 明暗主题 ====================
+        const themeOrder = ['light', 'dark'];
+        const themeLabels = { light: 'Light', dark: 'Dark' };
+        let currentThemeIdx = themeOrder.indexOf(localStorage.getItem('aurora-theme') || 'light');
+        if (currentThemeIdx < 0) currentThemeIdx = 0;
+
+        function applyTheme() {
+            const mode = themeOrder[currentThemeIdx];
+            localStorage.setItem('aurora-theme', mode);
+            document.getElementById('themeLabel').textContent = themeLabels[mode];
+            document.documentElement.setAttribute('data-theme', mode);
+        }
+
+        function toggleTheme() {
+            currentThemeIdx = (currentThemeIdx + 1) % themeOrder.length;
+            applyTheme();
+        }
+
+        // 初始化
+        applyTheme();
+        applyLang(currentLang);
+    </script>
 </body>
 </html>
-<style>  body {
-    background: linear-gradient(120deg, #3498db, #8e44ad);
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    margin: 0;
-    padding: 0;
-    height: 100vh;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .form-horizontal {
-    background: rgba(255, 255, 255, 0.9);
-    padding-bottom: 40px;
-    border-radius: 15px;
-    text-align: center;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
-    width: 100%;
-    max-width: 400px;
-    margin: 0 auto;
-  }
-
-  .form-horizontal .heading {
-    display: block;
-    font-size: 32px;
-    font-weight: 700;
-    padding: 35px 0;
-    border-bottom: 1px solid #f0f0f0;
-    margin-bottom: 30px;
-    color: #2c3e50;
-    text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
-  }
-
-  .form-group {
-    padding: 0 30px;
-    margin: 0 0 25px 0;
-    position: relative;
-  }
-
-  .input-group {
-    border-radius: 30px;
-    overflow: hidden;
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
-    transition: all 0.3s ease;
-  }
-
-  .input-group:focus-within {
-    box-shadow: 0 6px 15px rgba(52, 152, 219, 0.4);
-    transform: translateY(-2px);
-  }
-
-  .input-group-text {
-    background: #3498db;
-    border: none;
-    color: white;
-    border-radius: 0;
-    width: 45px;
-    font-size: 16px;
-  }
-
-  .form-control {
-    border: none;
-    padding: 12px 15px;
-    height: 45px;
-    font-size: 15px;
-    box-shadow: none;
-  }
-
-  .form-control:focus {
-    box-shadow: none;
-    outline: 0 none;
-    background-color: #f8f9fa;
-  }
-
-  .form-control:required:valid {
-    border-left: 3px solid #28a745;
-  }
-
-  .form-control:required:invalid:not(:placeholder-shown) {
-    border-left: 3px solid #dc3545;
-  }
-
-  .form-horizontal .btn {
-    text-align: center;
-    font-size: 15px;
-    font-weight: 600;
-    color: #fff;
-    background: linear-gradient(to right, #3498db, #8e44ad);
-    border-radius: 30px;
-    padding: 10px 25px;
-    border: none;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    transition: all 0.4s ease 0s;
-    box-shadow: 0 4px 15px rgba(52, 152, 219, 0.4);
-    width: 100%;
-    cursor: pointer;
-  }
-
-  .form-horizontal .btn:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 6px 20px rgba(52, 152, 219, 0.6);
-  }
-
-  .form-horizontal .btn:active {
-    transform: translateY(0);
-  }
-
-  .container-fluid {
-    padding: 10px;
-  }
-  
-  .form-group {
-    padding: 0 15px;
-    margin: 0 0 20px 0;
-  }
-  
-  .form-horizontal .heading {
-    font-size: 26px;
-    padding: 25px 0;
-    margin-bottom: 25px;
-  }
-</style>

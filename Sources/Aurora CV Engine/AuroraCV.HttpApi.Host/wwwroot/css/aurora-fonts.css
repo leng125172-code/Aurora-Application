@@ -1,0 +1,16 @@
+/* 统一中英文字体 ascent/descent 比例 */
+@font-face {
+    font-family: "PingFang SC";
+    src: local("PingFang SC");
+    ascent-override: 85%;
+    descent-override: 15%;
+    line-gap-override: 0%;
+}
+
+@font-face {
+    font-family: "Microsoft YaHei";
+    src: local("Microsoft YaHei");
+    ascent-override: 85%;
+    descent-override: 15%;
+    line-gap-override: 0%;
+}
