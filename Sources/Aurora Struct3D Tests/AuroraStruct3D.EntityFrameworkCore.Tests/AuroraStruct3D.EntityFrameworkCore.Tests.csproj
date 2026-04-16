@@ -9,7 +9,7 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\..\Aurora CV Engine\AuroraStruct3D.EntityFrameworkCore\AuroraStruct3D.EntityFrameworkCore.csproj" />
+        <ProjectReference Include="..\..\Aurora Struct3D\AuroraStruct3D.EntityFrameworkCore\AuroraStruct3D.EntityFrameworkCore.csproj" />
         <ProjectReference Include="..\AuroraStruct3D.TestBase\AuroraStruct3D.TestBase.csproj" />
         <PackageReference Include="Volo.Abp.EntityFrameworkCore.Sqlite" />
     </ItemGroup>

@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
     <Import Project="..\..\..\common.props" />
     <PropertyGroup>
         <OutputType>Library</OutputType>
@@ -12,7 +12,7 @@
         <PackageReference Include="Volo.Abp.TestBase" />
         <PackageReference Include="Volo.Abp.Autofac" />
         <PackageReference Include="Volo.Abp.Authorization" />
-        <ProjectReference Include="..\..\Aurora CV Engine\AuroraStruct3D.Domain\AuroraStruct3D.Domain.csproj" />
+        <ProjectReference Include="..\..\Aurora Struct3D\AuroraStruct3D.Domain\AuroraStruct3D.Domain.csproj" />
     </ItemGroup>
 
     <ItemGroup>

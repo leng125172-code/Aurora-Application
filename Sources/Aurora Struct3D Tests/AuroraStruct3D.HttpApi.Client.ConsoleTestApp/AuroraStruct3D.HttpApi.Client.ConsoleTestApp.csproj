@@ -21,7 +21,7 @@
 
     <ItemGroup>
         <PackageReference Include="Volo.Abp.Http.Client.IdentityModel" />
-        <ProjectReference Include="..\..\Aurora CV Engine\AuroraStruct3D.HttpApi.Client\AuroraStruct3D.HttpApi.Client.csproj" />
+        <ProjectReference Include="..\..\Aurora Struct3D\AuroraStruct3D.HttpApi.Client\AuroraStruct3D.HttpApi.Client.csproj" />
     </ItemGroup>
 
     <ItemGroup>
