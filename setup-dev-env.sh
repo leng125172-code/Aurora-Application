@@ -41,10 +41,54 @@ check_privileges() {
 }
 
 # ============================================================================
+# 检测 CPU 架构
+# ============================================================================
+ARCH=$(uname -m)
+
+# ============================================================================
+# 配置 .NET 环境变量（安装到 /usr/share/dotnet 供所有用户使用）
+# ============================================================================
+configure_dotnet_env() {
+    local dotnet_root="$1"
+    cat > /etc/profile.d/dotnet.sh <<EOF
+export DOTNET_ROOT=${dotnet_root}
+export PATH=\$PATH:${dotnet_root}:${dotnet_root}/tools
+# 禁用全球化不变模式，确保多语言区域性支持正常工作
+export DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=0
+EOF
+    # 立即在当前 shell 生效
+    export DOTNET_ROOT="${dotnet_root}"
+    export PATH="$PATH:${dotnet_root}:${dotnet_root}/tools"
+
+    # 创建符号链接，使 dotnet 命令全局可用
+    if [ ! -f /usr/local/bin/dotnet ] && [ -f "${dotnet_root}/dotnet" ]; then
+        ln -sf "${dotnet_root}/dotnet" /usr/local/bin/dotnet
+    fi
+}
+
+# ============================================================================
+# 通过官方 dotnet-install.sh 脚本安装 .NET（适用于 ARM64 等架构）
+# ============================================================================
+install_dotnet_via_script() {
+    local install_dir="/usr/share/dotnet"
+
+    log_info "使用官方安装脚本安装 .NET 10 SDK（架构: ${ARCH}）..."
+    apt-get install -y -qq wget libicu-dev libssl-dev 2>/dev/null || dnf install -y wget libicu-devel openssl-devel 2>/dev/null || true
+
+    wget -q https://dot.net/v1/dotnet-install.sh -O /tmp/dotnet-install.sh
+    chmod +x /tmp/dotnet-install.sh
+    /tmp/dotnet-install.sh --channel 10.0 --install-dir "${install_dir}"
+    rm -f /tmp/dotnet-install.sh
+
+    configure_dotnet_env "${install_dir}"
+}
+
+# ============================================================================
 # .NET 10 SDK 安装
 # ============================================================================
 install_dotnet() {
     log_info "开始安装 .NET 10 SDK ..."
+    log_info "检测到 CPU 架构: ${ARCH}"
 
     if command -v dotnet &> /dev/null; then
         local current_version
@@ -52,41 +96,40 @@ install_dotnet() {
         log_warn ".NET SDK 已安装，当前版本: ${current_version}"
     fi
 
+    # ARM64 架构（如 RK3588）：Microsoft apt 源不支持，使用安装脚本
+    if [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ]; then
+        log_info "ARM64 架构检测到，Microsoft apt 源暂不支持，使用官方安装脚本 ..."
+        install_dotnet_via_script
+        log_ok ".NET SDK 安装完成（ARM64 脚本方式）"
+        return
+    fi
+
+    # x86_64 架构：优先使用包管理器
     case "$OS_ID" in
         ubuntu|debian)
-            # 添加 Microsoft 包源
             apt-get update -qq
             apt-get install -y -qq wget apt-transport-https software-properties-common
 
             # 安装 Microsoft 包签名密钥和源
-            wget -q "https://packages.microsoft.com/config/${OS_ID}/${OS_VERSION}/packages-microsoft-prod.deb" -O packages-microsoft-prod.deb
-            dpkg -i packages-microsoft-prod.deb
-            rm -f packages-microsoft-prod.deb
+            if wget -q "https://packages.microsoft.com/config/${OS_ID}/${OS_VERSION}/packages-microsoft-prod.deb" -O /tmp/packages-microsoft-prod.deb 2>/dev/null; then
+                dpkg -i /tmp/packages-microsoft-prod.deb
+                rm -f /tmp/packages-microsoft-prod.deb
+                apt-get update -qq
+                apt-get install -y -qq dotnet-sdk-10.0 && { log_ok ".NET SDK 安装完成"; return; }
+            fi
 
-            apt-get update -qq
-            apt-get install -y -qq dotnet-sdk-10.0
+            # apt 安装失败时回退到脚本安装
+            log_warn "apt 安装失败，回退到官方安装脚本 ..."
+            install_dotnet_via_script
             ;;
-        centos|rhel|rocky|almalinux)
-            dnf install -y dotnet-sdk-10.0
-            ;;
-        fedora)
-            dnf install -y dotnet-sdk-10.0
+        centos|rhel|rocky|almalinux|fedora)
+            dnf install -y dotnet-sdk-10.0 || {
+                log_warn "dnf 安装失败，回退到官方安装脚本 ..."
+                install_dotnet_via_script
+            }
             ;;
         *)
-            log_warn "未识别的发行版 ${OS_ID}，尝试使用官方安装脚本 ..."
-            wget -q https://dot.net/v1/dotnet-install.sh -O dotnet-install.sh
-            chmod +x dotnet-install.sh
-            ./dotnet-install.sh --channel 10.0
-            rm -f dotnet-install.sh
-
-            # 配置环境变量
-            local dotnet_root="$HOME/.dotnet"
-            if ! grep -q "DOTNET_ROOT" /etc/profile.d/dotnet.sh 2>/dev/null; then
-                cat > /etc/profile.d/dotnet.sh <<EOF
-export DOTNET_ROOT=${dotnet_root}
-export PATH=\$PATH:${dotnet_root}:${dotnet_root}/tools
-EOF
-            fi
+            install_dotnet_via_script
             ;;
     esac
 
@@ -94,7 +137,7 @@ EOF
 }
 
 # ============================================================================
-# C++ 编译工具链安装 (gcc, g++, cmake, make, gdb)
+# C++ 编译工具链安装 (gcc, g++, cmake, make, gdb, OpenCV, OCR 依赖)
 # ============================================================================
 install_cpp() {
     log_info "开始安装 C++ 编译工具链 ..."
@@ -102,6 +145,7 @@ install_cpp() {
     case "$OS_ID" in
         ubuntu|debian)
             apt-get update -qq
+            # 基础编译工具链
             apt-get install -y -qq \
                 build-essential \
                 gcc \
@@ -115,8 +159,28 @@ install_cpp() {
                 autoconf \
                 automake \
                 libtool
+
+            # OpenCV 和 OCR 相关依赖库（Aurora CV Engine 需要）
+            log_info "安装 OpenCV / OCR 相关依赖库 ..."
+            apt-get install -y -qq \
+                libopencv-dev \
+                libopencv-contrib-dev \
+                libtesseract-dev \
+                tesseract-ocr \
+                tesseract-ocr-chi-sim \
+                tesseract-ocr-chi-tra \
+                tesseract-ocr-eng \
+                libleptonica-dev \
+                libgtk-3-dev \
+                libavcodec-dev \
+                libavformat-dev \
+                libswscale-dev \
+                libjpeg-dev \
+                libpng-dev \
+                libtiff-dev \
+                2>/dev/null || log_warn "部分 OpenCV/OCR 包可能不可用，请根据需要手动安装"
             ;;
-        centos|rhel|rocky|almalinux)
+        centos|rhel|rocky|almalinux|fedora)
             dnf groupinstall -y "Development Tools"
             dnf install -y \
                 gcc \
@@ -128,18 +192,12 @@ install_cpp() {
                 pkg-config \
                 autoconf \
                 automake \
-                libtool
-            ;;
-        fedora)
-            dnf groupinstall -y "Development Tools"
-            dnf install -y \
-                gcc \
-                gcc-c++ \
-                cmake \
-                make \
-                gdb \
-                clang \
-                pkg-config
+                libtool \
+                opencv-devel \
+                tesseract-devel \
+                tesseract-langpack-chi-sim \
+                leptonica-devel \
+                2>/dev/null || log_warn "部分 OpenCV/OCR 包可能不可用"
             ;;
         *)
             log_error "不支持的发行版: ${OS_ID}，请手动安装 C++ 工具链"
@@ -240,6 +298,19 @@ print_summary() {
         echo -e " Pip:         ${RED}未安装${NC}"
     fi
 
+    if pkg-config --modversion opencv4 &> /dev/null; then
+        echo -e " OpenCV:      ${GREEN}$(pkg-config --modversion opencv4)${NC}"
+    else
+        echo -e " OpenCV:      ${YELLOW}未检测到（可选）${NC}"
+    fi
+
+    if command -v tesseract &> /dev/null; then
+        echo -e " Tesseract:   ${GREEN}$(tesseract --version 2>&1 | head -n1)${NC}"
+    else
+        echo -e " Tesseract:   ${YELLOW}未检测到（可选）${NC}"
+    fi
+
+    echo -e " 架构:        ${CYAN}$(uname -m)${NC}"
     echo "============================================"
     echo ""
     log_info "如果 dotnet 命令未生效，请执行: source /etc/profile.d/dotnet.sh 或重新登录终端"
