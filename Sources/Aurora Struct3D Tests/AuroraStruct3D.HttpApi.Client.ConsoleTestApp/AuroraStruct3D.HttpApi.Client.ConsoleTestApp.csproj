@@ -5,7 +5,7 @@
         <TargetFramework>net10.0</TargetFramework>
         <RootNamespace>AuroraStruct3D.HttpApi.Client.ConsoleTestApp</RootNamespace>
         <AssemblyTitle>$(RootNamespace)</AssemblyTitle>
-        <Description>Aurora Computer Vision Engine - HTTP API Client Console Test App.</Description>
+        <Description>Aurora Struct3D - HTTP API Client Console Test App.</Description>
     </PropertyGroup>
 
     <ItemGroup>

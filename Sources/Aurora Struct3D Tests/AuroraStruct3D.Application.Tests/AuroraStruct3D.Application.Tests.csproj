@@ -5,7 +5,7 @@
         <TargetFramework>net10.0</TargetFramework>
         <RootNamespace>AuroraStruct3D.Application.Tests</RootNamespace>
         <AssemblyTitle>$(RootNamespace)</AssemblyTitle>
-        <Description>Aurora Computer Vision Engine - Application Tests.</Description>
+        <Description>Aurora Struct3D - Application Tests.</Description>
     </PropertyGroup>
 
     <ItemGroup>

@@ -5,7 +5,7 @@
         <TargetFramework>net10.0</TargetFramework>
         <RootNamespace>AuroraStruct3D.Application.Contracts</RootNamespace>
         <AssemblyTitle>$(RootNamespace)</AssemblyTitle>
-        <Description>Aurora Computer Vision Engine - Application Contracts Layer.</Description>
+        <Description>Aurora Struct3D - Application Contracts Layer.</Description>
     </PropertyGroup>
 
     <ItemGroup>

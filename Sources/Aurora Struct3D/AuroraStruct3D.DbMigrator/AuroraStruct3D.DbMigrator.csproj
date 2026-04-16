@@ -5,7 +5,7 @@
         <TargetFramework>net10.0</TargetFramework>
         <RootNamespace>AuroraStruct3D.DbMigrator</RootNamespace>
         <AssemblyTitle>$(RootNamespace)</AssemblyTitle>
-        <Description>Aurora Computer Vision Engine - Database Migrator (Database Migration Tool).</Description>
+        <Description>Aurora Struct3D - Database Migrator (Database Migration Tool).</Description>
     </PropertyGroup>
 
     <ItemGroup>

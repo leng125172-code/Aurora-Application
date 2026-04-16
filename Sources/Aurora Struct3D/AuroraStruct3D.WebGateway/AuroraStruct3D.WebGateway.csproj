@@ -5,7 +5,7 @@
         <TargetFramework>net10.0</TargetFramework>
         <RootNamespace>AuroraStruct3D.WebGateway</RootNamespace>
         <AssemblyTitle>$(RootNamespace)</AssemblyTitle>
-        <Description>Aurora Computer Vision Engine - Web API Gateway (Ocelot).</Description>
+        <Description>Aurora Struct3D - Web API Gateway (Ocelot).</Description>
     </PropertyGroup>
 
     <ItemGroup>

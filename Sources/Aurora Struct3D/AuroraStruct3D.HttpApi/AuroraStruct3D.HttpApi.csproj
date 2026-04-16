@@ -5,7 +5,7 @@
         <TargetFramework>net10.0</TargetFramework>
         <RootNamespace>AuroraStruct3D.HttpApi</RootNamespace>
         <AssemblyTitle>$(RootNamespace)</AssemblyTitle>
-        <Description>Aurora Computer Vision Engine - Http Api Layer.</Description>
+        <Description>Aurora Struct3D - Http Api Layer.</Description>
     </PropertyGroup>
 
     <ItemGroup>
