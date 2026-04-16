@@ -126,5 +126,6 @@
             <Platform Solution="*|x86" Project="x86" />
         </Project>
     </Folder>
+    <Folder Name="/Sources/Aurora Struct3D/" />
     <Folder Name="/Tools/" />
 </Solution>
