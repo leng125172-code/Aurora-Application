@@ -1,0 +1,216 @@
+
+@page
+@using Lion.AbpPro
+@model AuroraStruct3D.Pages.Monitor
+
+@{
+    Layout = null;
+}
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"/>
+    <meta http-equiv="X-UA-Compatible" content="IE=edge"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0-beta1/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-giJF6kkoqNQ00vy+HMDP7azOuL0xtbfIcaT9wjKHr8RbDVddVHyTfAAsrekwKmP1" crossorigin="anonymous">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <title>后端服务监控</title>
+</head>
+
+<body>
+<div class="page-wrapper">
+    <div class="container">
+        <div class="page-header">
+            <h1>后端服务监控面板</h1>
+            <p class="subtitle">请选择您要访问的服务面板</p>
+        </div>
+        
+        <div class="services-grid">
+            <div class="service-item">
+                <a href="@AuroraStruct3DHttpApiHostConst.SwaggerUiEndPoint" target="_blank" class="service-link">
+                    <div class="service-icon">
+                        <i class="fas fa-book"></i>
+                    </div>
+                    <div class="service-info">
+                        <h3>SwaggerUI</h3>
+                        <p class="description">API文档与测试</p>
+                    </div>
+                </a>
+            </div>
+
+            <div class="service-item">
+                <a href="@AuroraStruct3DHttpApiHostConst.CapDashboardEndPoint" target="_blank" class="service-link">
+                    <div class="service-icon">
+                        <i class="fas fa-exchange-alt"></i>
+                    </div>
+                    <div class="service-info">
+                        <h3>CAP面板</h3>
+                        <p class="description">事件总线监控</p>
+                    </div>
+                </a>
+            </div>
+
+            <div class="service-item">
+                <a href="@AuroraStruct3DHttpApiHostConst.HangfireDashboardEndPoint" target="_blank" class="service-link">
+                    <div class="service-icon">
+                        <i class="fas fa-tasks"></i>
+                    </div>
+                    <div class="service-info">
+                        <h3>Hangfire面板</h3>
+                        <p class="description">后台任务管理</p>
+                    </div>
+                </a>
+            </div>
+
+            <div class="service-item">
+                <a href="@AuroraStruct3DHttpApiHostConst.MiniprofilerEndPoint" target="_blank" class="service-link">
+                    <div class="service-icon">
+                        <i class="fas fa-chart-line"></i>
+                    </div>
+                    <div class="service-info">
+                        <h3>Miniprofiler</h3>
+                        <p class="description">性能分析工具</p>
+                    </div>
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+</body>
+
+<style>
+    * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+    }
+
+    body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+        background-color: #f5f7fa;
+        color: #333;
+        line-height: 1.6;
+        min-height: 100vh;
+        padding: 20px;
+    }
+
+    .page-wrapper {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: calc(100vh - 40px);
+    }
+
+    .container {
+        max-width: 1000px;
+        width: 100%;
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 5px 20px rgba(0, 0, 0, 0.08);
+        padding: 40px;
+    }
+
+    .page-header {
+        text-align: center;
+        margin-bottom: 40px;
+    }
+
+    .page-header h1 {
+        font-size: 28px;
+        font-weight: 600;
+        color: #2d3748;
+        margin-bottom: 10px;
+    }
+
+    .subtitle {
+        font-size: 16px;
+        color: #718096;
+    }
+
+    .services-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 25px;
+    }
+
+    .service-item {
+        border-radius: 10px;
+        overflow: hidden;
+        transition: all 0.3s ease;
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+    }
+
+    .service-item:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+        border-color: #cbd5e0;
+    }
+
+    .service-link {
+        text-decoration: none;
+        color: inherit;
+        display: flex;
+        align-items: center;
+        padding: 25px;
+    }
+
+    .service-icon {
+        width: 60px;
+        height: 60px;
+        border-radius: 50%;
+        background: #edf2f7;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-right: 20px;
+        flex-shrink: 0;
+    }
+
+    .service-icon i {
+        font-size: 24px;
+        color: #4299e1;
+    }
+
+    .service-info h3 {
+        font-size: 18px;
+        font-weight: 600;
+        color: #2d3748;
+        margin-bottom: 5px;
+    }
+
+    .description {
+        font-size: 14px;
+        color: #718096;
+        margin: 0;
+    }
+
+    /* 使用响应式单位和弹性布局替代媒体查询 */
+    .container {
+        padding: clamp(20px, 5vw, 40px);
+    }
+    
+    .page-header h1 {
+        font-size: clamp(24px, 4vw, 28px);
+    }
+    
+    .service-link {
+        padding: clamp(15px, 3vw, 25px);
+    }
+    
+    .services-grid {
+        gap: clamp(15px, 3vw, 25px);
+    }
+    
+    .service-icon {
+        width: clamp(50px, 8vw, 60px);
+        height: clamp(50px, 8vw, 60px);
+    }
+    
+    .service-icon i {
+        font-size: clamp(20px, 4vw, 24px);
+    }
+</style>
+
+</html>

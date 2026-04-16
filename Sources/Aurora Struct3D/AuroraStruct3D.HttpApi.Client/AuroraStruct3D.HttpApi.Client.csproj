@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <Import Project="..\..\..\common.props" />
+    <PropertyGroup>
+        <OutputType>Library</OutputType>
+        <TargetFramework>net10.0</TargetFramework>
+        <RootNamespace>AuroraStruct3D.HttpApi.Client</RootNamespace>
+        <AssemblyTitle>$(RootNamespace)</AssemblyTitle>
+        <Description>Aurora Computer Vision Engine - HTTP API Client Library.</Description>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\AuroraStruct3D.Application.Contracts\AuroraStruct3D.Application.Contracts.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Lion.AbpPro.BasicManagement.HttpApi.Client" />
+        <PackageReference Include="Lion.AbpPro.NotificationManagement.HttpApi.Client" />
+        <PackageReference Include="Lion.AbpPro.DataDictionaryManagement.HttpApi.Client" />
+        <PackageReference Include="Lion.AbpPro.LanguageManagement.HttpApi.Client" />
+        <PackageReference Include="Lion.AbpPro.CodeManagement.HttpApi.Client" />
+        <PackageReference Include="Lion.AbpPro.TemplateManagement.HttpApi.Client" />
+        <PackageReference Include="Lion.AbpPro.DynamicMenuManagement.HttpApi.Client" />
+        <PackageReference Include="Lion.AbpPro.ImportExportManagement.HttpApi.Client" />
+        <PackageReference Include="Lion.AbpPro.FileManagement.HttpApi.Client" />
+        <PackageReference Include="Lion.AbpPro.CacheManagement.HttpApi.Client" />
+        <PackageReference Include="Lion.AbpPro.MasterDataManagement.HttpApi.Client" />
+    </ItemGroup>
+</Project>

@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <Import Project="..\..\..\common.props" />
+    <PropertyGroup>
+        <OutputType>Library</OutputType>
+        <TargetFramework>net10.0</TargetFramework>
+        <RootNamespace>AuroraStruct3D.Domain.Tests</RootNamespace>
+        <AssemblyTitle>$(RootNamespace)</AssemblyTitle>
+        <Description>Aurora Computer Vision Engine - Domain Tests.</Description>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\AuroraStruct3D.EntityFrameworkCore.Tests\AuroraStruct3D.EntityFrameworkCore.Tests.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    </ItemGroup>
+</Project>

@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <Import Project="..\..\..\common.props" />
+    <PropertyGroup>
+        <OutputType>Library</OutputType>
+        <TargetFramework>net10.0</TargetFramework>
+        <RootNamespace>AuroraStruct3D.Domain.Shared</RootNamespace>
+        <AssemblyTitle>$(RootNamespace)</AssemblyTitle>
+        <Description>Aurora Computer Vision Engine - Domain Shared Layer.</Description>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <EmbeddedResource Include="Localization\AuroraStruct3D\*.json" />
+        <Content Remove="Localization\AuroraStruct3D\*.json" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Lion.AbpPro.Core" />
+        <PackageReference Include="Lion.AbpPro.BasicManagement.Domain.Shared" />
+        <PackageReference Include="Lion.AbpPro.NotificationManagement.Domain.Shared" />
+        <PackageReference Include="Lion.AbpPro.DataDictionaryManagement.Domain.Shared" />
+        <PackageReference Include="Lion.AbpPro.LanguageManagement.Domain.Shared" />
+        <PackageReference Include="Lion.AbpPro.CodeManagement.Domain.Shared" />
+        <PackageReference Include="Lion.AbpPro.TemplateManagement.Domain.Shared" />
+        <PackageReference Include="Lion.AbpPro.DynamicMenuManagement.Domain.Shared" />
+        <PackageReference Include="Lion.AbpPro.ImportExportManagement.Domain.Shared" />
+        <PackageReference Include="Lion.AbpPro.FileManagement.Domain.Shared" />
+        <PackageReference Include="Lion.AbpPro.CacheManagement.Domain.Shared" />
+        <PackageReference Include="Lion.AbpPro.MasterDataManagement.Domain.Shared" />
+    </ItemGroup>
+</Project>
