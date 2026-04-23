@@ -53,7 +53,3 @@ It is used for rapid application development, module management, solution genera
 - 兼容 ABP 框架
 - 符合 Aurora 风格
 
-
-// OpenCV,分支拉去到本地
-// OCR 文字识别分支拉去到本地
-// OpenCV OCR，本地模型OCR图片识别

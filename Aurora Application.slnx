@@ -1,9 +1,4 @@
 <Solution>
-    <Configurations>
-        <Platform Name="arm64" />
-        <Platform Name="x64" />
-        <Platform Name="x86" />
-    </Configurations>
     <Folder Name="/.github/">
         <File Path=".github/CODEOWNERS" />
         <File Path=".github/CONTRIBUTING.md" />
@@ -31,13 +26,10 @@
         <File Path="common.props" />
         <File Path="CONTRIBUTING.md" />
         <File Path="Delete-BIN-OBJ-Folders.bat" />
-        <File Path="Directory.Build.Lion.targets" />
-        <File Path="Directory.Build.Microsoft.targets" />
-        <File Path="Directory.Build.targets" />
-        <File Path="Directory.Build.Volo.targets" />
         <File Path="Dockerfile" />
         <File Path="LICENSE" />
         <File Path="NuGet.Config" />
+        <File Path="Publish-To-NuGet.bat" />
         <File Path="README.md" />
         <File Path="SECURITY.md" />
     </Folder>
@@ -47,168 +39,14 @@
     </Folder>
     <Folder Name="/Documents/" />
     <Folder Name="/Sources/" />
-    <Folder Name="/Sources/Aurora CV Engine Tests/">
-        <Project Path="Sources/Aurora CV Engine Tests/AuroraCV.Application.Tests/AuroraCV.Application.Tests.csproj">
-            <Platform Solution="*|arm64" Project="arm64" />
-            <Platform Solution="*|x64" Project="x64" />
-            <Platform Solution="*|x86" Project="x86" />
-        </Project>
-        <Project Path="Sources/Aurora CV Engine Tests/AuroraCV.Domain.Tests/AuroraCV.Domain.Tests.csproj">
-            <Platform Solution="*|arm64" Project="arm64" />
-            <Platform Solution="*|x64" Project="x64" />
-            <Platform Solution="*|x86" Project="x86" />
-        </Project>
-        <Project Path="Sources/Aurora CV Engine Tests/AuroraCV.EntityFrameworkCore.Tests/AuroraCV.EntityFrameworkCore.Tests.csproj">
-            <Platform Solution="*|arm64" Project="arm64" />
-            <Platform Solution="*|x64" Project="x64" />
-            <Platform Solution="*|x86" Project="x86" />
-        </Project>
-        <Project Path="Sources/Aurora CV Engine Tests/AuroraCV.HttpApi.Client.ConsoleTestApp/AuroraCV.HttpApi.Client.ConsoleTestApp.csproj">
-            <Platform Solution="*|arm64" Project="arm64" />
-            <Platform Solution="*|x64" Project="x64" />
-            <Platform Solution="*|x86" Project="x86" />
-        </Project>
-        <Project Path="Sources/Aurora CV Engine Tests/AuroraCV.TestBase/AuroraCV.TestBase.csproj">
-            <Platform Solution="*|arm64" Project="arm64" />
-            <Platform Solution="*|x64" Project="x64" />
-            <Platform Solution="*|x86" Project="x86" />
-        </Project>
-    </Folder>
-    <Folder Name="/Sources/Aurora CV Engine/">
-        <Project Path="Sources/Aurora CV Engine/AuroraCV.Application.Contracts/AuroraCV.Application.Contracts.csproj">
-            <Platform Solution="*|arm64" Project="arm64" />
-            <Platform Solution="*|x64" Project="x64" />
-            <Platform Solution="*|x86" Project="x86" />
-        </Project>
-        <Project Path="Sources/Aurora CV Engine/AuroraCV.Application/AuroraCV.Application.csproj">
-            <Platform Solution="*|arm64" Project="arm64" />
-            <Platform Solution="*|x64" Project="x64" />
-            <Platform Solution="*|x86" Project="x86" />
-        </Project>
-        <Project Path="Sources/Aurora CV Engine/AuroraCV.DbMigrator/AuroraCV.DbMigrator.csproj">
-            <Platform Solution="*|arm64" Project="arm64" />
-            <Platform Solution="*|x64" Project="x64" />
-            <Platform Solution="*|x86" Project="x86" />
-        </Project>
-        <Project Path="Sources/Aurora CV Engine/AuroraCV.Domain.Shared/AuroraCV.Domain.Shared.csproj">
-            <Platform Solution="*|arm64" Project="arm64" />
-            <Platform Solution="*|x64" Project="x64" />
-            <Platform Solution="*|x86" Project="x86" />
-        </Project>
-        <Project Path="Sources/Aurora CV Engine/AuroraCV.Domain/AuroraCV.Domain.csproj">
-            <Platform Solution="*|arm64" Project="arm64" />
-            <Platform Solution="*|x64" Project="x64" />
-            <Platform Solution="*|x86" Project="x86" />
-        </Project>
-        <Project Path="Sources/Aurora CV Engine/AuroraCV.EntityFrameworkCore/AuroraCV.EntityFrameworkCore.csproj">
-            <Platform Solution="*|arm64" Project="arm64" />
-            <Platform Solution="*|x64" Project="x64" />
-            <Platform Solution="*|x86" Project="x86" />
-        </Project>
-        <Project Path="Sources/Aurora CV Engine/AuroraCV.HttpApi.Client/AuroraCV.HttpApi.Client.csproj">
-            <Platform Solution="*|arm64" Project="arm64" />
-            <Platform Solution="*|x64" Project="x64" />
-            <Platform Solution="*|x86" Project="x86" />
-        </Project>
-        <Project Path="Sources/Aurora CV Engine/AuroraCV.HttpApi.Host/AuroraCV.HttpApi.Host.csproj">
-            <Platform Solution="*|arm64" Project="arm64" />
-            <Platform Solution="*|x64" Project="x64" />
-            <Platform Solution="*|x86" Project="x86" />
-        </Project>
-        <Project Path="Sources/Aurora CV Engine/AuroraCV.HttpApi/AuroraCV.HttpApi.csproj">
-            <Platform Solution="*|arm64" Project="arm64" />
-            <Platform Solution="*|x64" Project="x64" />
-            <Platform Solution="*|x86" Project="x86" />
-        </Project>
-        <Project Path="Sources/Aurora CV Engine/AuroraCV.WebGateway/AuroraCV.WebGateway.csproj">
-            <Platform Solution="*|arm64" Project="arm64" />
-            <Platform Solution="*|x64" Project="x64" />
-            <Platform Solution="*|x86" Project="x86" />
-        </Project>
-    </Folder>
-    <Folder Name="/Sources/Aurora Struct3D Tests/">
-        <Project Path="Sources/Aurora Struct3D Tests/AuroraStruct3D.Application.Tests/AuroraStruct3D.Application.Tests.csproj">
-            <Platform Solution="*|arm64" Project="arm64" />
-            <Platform Solution="*|x64" Project="x64" />
-            <Platform Solution="*|x86" Project="x86" />
-        </Project>
-        <Project Path="Sources/Aurora Struct3D Tests/AuroraStruct3D.Domain.Tests/AuroraStruct3D.Domain.Tests.csproj">
-            <Platform Solution="*|arm64" Project="arm64" />
-            <Platform Solution="*|x64" Project="x64" />
-            <Platform Solution="*|x86" Project="x86" />
-        </Project>
-        <Project Path="Sources/Aurora Struct3D Tests/AuroraStruct3D.EntityFrameworkCore.Tests/AuroraStruct3D.EntityFrameworkCore.Tests.csproj">
-            <Platform Solution="*|arm64" Project="arm64" />
-            <Platform Solution="*|x64" Project="x64" />
-            <Platform Solution="*|x86" Project="x86" />
-        </Project>
-        <Project Path="Sources/Aurora Struct3D Tests/AuroraStruct3D.HttpApi.Client.ConsoleTestApp/AuroraStruct3D.HttpApi.Client.ConsoleTestApp.csproj">
-            <Platform Solution="*|arm64" Project="arm64" />
-            <Platform Solution="*|x64" Project="x64" />
-            <Platform Solution="*|x86" Project="x86" />
-        </Project>
-        <Project Path="Sources/Aurora Struct3D Tests/AuroraStruct3D.TestBase/AuroraStruct3D.TestBase.csproj">
-            <Platform Solution="*|arm64" Project="arm64" />
-            <Platform Solution="*|x64" Project="x64" />
-            <Platform Solution="*|x86" Project="x86" />
-        </Project>
-    </Folder>
-    <Folder Name="/Sources/Aurora Struct3D/">
-        <Project Path="Sources/Aurora Struct3D/AuroraStruct3D.Application.Contracts/AuroraStruct3D.Application.Contracts.csproj">
-            <Platform Solution="*|arm64" Project="arm64" />
-            <Platform Solution="*|x64" Project="x64" />
-            <Platform Solution="*|x86" Project="x86" />
-        </Project>
-        <Project Path="Sources/Aurora Struct3D/AuroraStruct3D.Application/AuroraStruct3D.Application.csproj">
-            <Platform Solution="*|arm64" Project="arm64" />
-            <Platform Solution="*|x64" Project="x64" />
-            <Platform Solution="*|x86" Project="x86" />
-        </Project>
-        <Project Path="Sources/Aurora Struct3D/AuroraStruct3D.Avalonia/AuroraStruct3D.Avalonia.csproj">
-            <Platform Solution="*|arm64" Project="arm64" />
-            <Platform Solution="*|x64" Project="x64" />
-            <Platform Solution="*|x86" Project="x86" />
-        </Project>
-        <Project Path="Sources/Aurora Struct3D/AuroraStruct3D.DbMigrator/AuroraStruct3D.DbMigrator.csproj">
-            <Platform Solution="*|arm64" Project="arm64" />
-            <Platform Solution="*|x64" Project="x64" />
-            <Platform Solution="*|x86" Project="x86" />
-        </Project>
-        <Project Path="Sources/Aurora Struct3D/AuroraStruct3D.Domain.Shared/AuroraStruct3D.Domain.Shared.csproj">
-            <Platform Solution="*|arm64" Project="arm64" />
-            <Platform Solution="*|x64" Project="x64" />
-            <Platform Solution="*|x86" Project="x86" />
-        </Project>
-        <Project Path="Sources/Aurora Struct3D/AuroraStruct3D.Domain/AuroraStruct3D.Domain.csproj">
-            <Platform Solution="*|arm64" Project="arm64" />
-            <Platform Solution="*|x64" Project="x64" />
-            <Platform Solution="*|x86" Project="x86" />
-        </Project>
-        <Project Path="Sources/Aurora Struct3D/AuroraStruct3D.EntityFrameworkCore/AuroraStruct3D.EntityFrameworkCore.csproj">
-            <Platform Solution="*|arm64" Project="arm64" />
-            <Platform Solution="*|x64" Project="x64" />
-            <Platform Solution="*|x86" Project="x86" />
-        </Project>
-        <Project Path="Sources/Aurora Struct3D/AuroraStruct3D.HttpApi.Client/AuroraStruct3D.HttpApi.Client.csproj">
-            <Platform Solution="*|arm64" Project="arm64" />
-            <Platform Solution="*|x64" Project="x64" />
-            <Platform Solution="*|x86" Project="x86" />
-        </Project>
-        <Project Path="Sources/Aurora Struct3D/AuroraStruct3D.HttpApi.Host/AuroraStruct3D.HttpApi.Host.csproj">
-            <Platform Solution="*|arm64" Project="arm64" />
-            <Platform Solution="*|x64" Project="x64" />
-            <Platform Solution="*|x86" Project="x86" />
-        </Project>
-        <Project Path="Sources/Aurora Struct3D/AuroraStruct3D.HttpApi/AuroraStruct3D.HttpApi.csproj">
-            <Platform Solution="*|arm64" Project="arm64" />
-            <Platform Solution="*|x64" Project="x64" />
-            <Platform Solution="*|x86" Project="x86" />
-        </Project>
-        <Project Path="Sources/Aurora Struct3D/AuroraStruct3D.WebGateway/AuroraStruct3D.WebGateway.csproj">
-            <Platform Solution="*|arm64" Project="arm64" />
-            <Platform Solution="*|x64" Project="x64" />
-            <Platform Solution="*|x86" Project="x86" />
-        </Project>
-    </Folder>
+    <Folder Name="/Sources/Aurora Abp Pak/" />
+    <Folder Name="/Sources/Aurora Abp Pro/" />
+    <Folder Name="/Sources/Aurora CV Engine/" />
     <Folder Name="/Tools/" />
+    <Folder Name="/Tools/CSharpTools/"></Folder>
+    <Folder Name="/Tools/PythonTools/">
+        <Project Path="Tools/PythonTools/SudokuTools/SudokuTools.pyproj" Type="888888a0-9f3d-457c-b088-3a5042f75d52" Id="195249b6-cae0-4b6f-92b2-972b42ca51d1">
+            <Build Project="false" />
+        </Project>
+    </Folder>
 </Solution>

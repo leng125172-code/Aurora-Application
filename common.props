@@ -84,7 +84,7 @@
         <!-- 版本：10.0.201 -->
         <!-- PrivateAssets: all - 表示此包仅用于构建，不会传递给依赖项 -->
         <!-- IncludeAssets: 指定要包含的资产类型 -->
-        <PackageReference Include="Microsoft.SourceLink.GitHub" Version="10.0.201">
+        <PackageReference Include="Microsoft.SourceLink.GitHub" Version="10.0.202">
             <PrivateAssets>all</PrivateAssets>
             <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
         </PackageReference>
