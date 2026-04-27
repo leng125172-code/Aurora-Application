@@ -1,0 +1,161 @@
+using Hangfire.PostgreSql;
+using Lion.AbpPro.CAP;
+using Medallion.Threading;
+using Medallion.Threading.Redis;
+using Microsoft.AspNetCore.SignalR.StackExchangeRedis;
+using Savorboard.CAP.InMemoryMessageQueue;
+using Volo.Abp.BlobStoring;
+
+#pragma warning disable CS0618 // Type or member is obsolete
+
+namespace Microsoft.Extensions.DependencyInjection;
+
+public static class ServiceCollectionExtensions
+{
+    /// <summary>
+    /// 注册Redis缓存
+    /// </summary>
+    public static IServiceCollection AddAbpProRedis(this IServiceCollection service, Action<AbpDistributedCacheOptions> configureOptions = null)
+    {
+        var configuration = service.GetConfiguration();
+        var redisEnabled = configuration.GetValue<bool>("Redis:IsEnabled");
+        if (!redisEnabled) return service;
+
+        if (configureOptions != null)
+        {
+            service.Configure(configureOptions);
+        }
+        else
+        {
+            service.Configure<AbpDistributedCacheOptions>(options => { options.KeyPrefix = "AbpPro:"; });
+        }
+
+        var redis = ConnectionMultiplexer.Connect(configuration.GetValue<string>("Redis:Configuration"));
+        service.AddDataProtection().PersistKeysToStackExchangeRedis(redis, "AbpPro-Protection-Keys");
+        return service;
+    }
+
+    /// <summary>
+    /// 注册redis分布式锁
+    /// </summary>
+    public static IServiceCollection AddAbpProRedisDistributedLocking(this IServiceCollection service)
+    {
+        var configuration = service.GetConfiguration();
+        var redisEnabled = configuration.GetValue<bool>("Redis:IsEnabled");
+        if (!redisEnabled) return service;
+
+        var connectionString = configuration.GetValue<string>("Redis:Configuration");
+        service.AddSingleton<IDistributedLockProvider>(sp =>
+        {
+            var connection = ConnectionMultiplexer.Connect(connectionString);
+            return new RedisDistributedSynchronizationProvider(connection.GetDatabase());
+        });
+        return service;
+    }
+
+    /// <summary>
+    /// 注册Identity
+    /// </summary>
+    public static IServiceCollection AddAbpProIdentity(this IServiceCollection service)
+    {
+        service.Configure<IdentityOptions>(options => { options.Lockout = new LockoutOptions() { AllowedForNewUsers = false }; });
+        return service;
+    }
+
+    /// <summary>
+    /// 注册SignalR
+    /// </summary>
+    public static IServiceCollection AddAbpProSignalR(this IServiceCollection service, Action<RedisOptions> redisOptions = null)
+    {
+        var configuration = service.GetConfiguration();
+        var redisEnabled = configuration.GetValue<bool>("Redis:IsEnabled");
+        if (redisEnabled)
+        {
+            if (redisOptions != null)
+            {
+                service
+                    .AddSignalR()
+                    .AddStackExchangeRedis(service.GetConfiguration().GetValue<string>("Redis:Configuration"), redisOptions);
+            }
+            else
+            {
+                service
+                    .AddSignalR()
+                    .AddStackExchangeRedis(service.GetConfiguration().GetValue<string>("Redis:Configuration"),
+                        options => { options.Configuration.ChannelPrefix = "Lion.AbpPro"; });
+            }
+        }
+        else
+        {
+            service.AddSignalR();
+        }
+
+        return service;
+    }
+
+    /// <summary>
+    /// 注册基于FileSystem的blob设置
+    /// </summary>
+    public static IServiceCollection AddAbpProBlobStorageFileSystem(this IServiceCollection service)
+    {
+        service.Configure<AbpBlobStoringOptions>(options => { options.Containers.ConfigureDefault(container => { container.UseFileSystem(fileSystem => { fileSystem.BasePath = "C:\\my-files"; }); }); });
+        return service;
+    }
+
+    /// <summary>
+    /// 注册cap —— 纯PG + 无RabbitMQ
+    /// </summary>
+    public static IServiceCollection AddAbpProCap(this IServiceCollection service)
+    {
+        var configuration = service.GetConfiguration();
+        service.AddAbpCap(capOptions =>
+        {
+            // PostgreSQL 存储
+            capOptions.UsePostgreSql(configuration.GetConnectionString("Default"));
+
+            // 不用 RabbitMQ！用内存传输（单机直接跑）
+            capOptions.UseInMemoryMessageQueue();
+
+            capOptions.FailedRetryCount = 0;
+
+            // CAP 面板
+            capOptions.UseDashboard(options =>
+            {
+                options.AuthorizationPolicy = "AbpProCapPermissions.CapManagement.Cap";
+            });
+        });
+        return service;
+    }
+
+    /// <summary>
+    /// 注册hangfire —— 纯PostgreSQL版
+    /// </summary>
+    public static IServiceCollection AddAbpProHangfire(this IServiceCollection service)
+    {
+        var configuration = service.GetConfiguration();
+
+        service.Configure<AbpBackgroundJobOptions>(options =>
+        {
+            options.IsJobExecutionEnabled = true;
+        });
+
+        service.AddHangfire(config =>
+        {
+            // 使用新版 API 注册 PostgreSQL 存储
+            config.UsePostgreSqlStorage(options =>
+            {
+                options.UseNpgsqlConnection(configuration.GetConnectionString("Default"));
+            });
+
+            // 重试策略
+            config.UseFilter(new AutomaticRetryAttribute
+            {
+                Attempts = 3,
+                DelaysInSeconds = new[] { 10, 60, 180 }
+            });
+        });
+
+        service.AddHangfireServer();
+        return service;
+    }
+}

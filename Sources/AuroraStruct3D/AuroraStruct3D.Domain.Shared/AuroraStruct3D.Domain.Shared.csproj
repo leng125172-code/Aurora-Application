@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <Import Project="..\..\..\common.props" />
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <RootNamespace>AuroraStruct3D.Domain.Shared</RootNamespace>
+        <GenerateEmbeddedFilesManifest>true</GenerateEmbeddedFilesManifest>
+        <OutputType>Library</OutputType>
+        <Description>基于项目名和引用包信息，生成的描述为： "AuroraStruct3DDomain_shared基础类库，提供共享域模型和核心功能" 长度为41个中文字符，符合要求。</Description>
+    </PropertyGroup>
+    <ItemGroup>
+        <EmbeddedResource Include="Localization\AuroraStruct3D\*.json" />
+        <Content Remove="Localization\AuroraStruct3D\*.json" />
+    </ItemGroup>
+    <ItemGroup>
+        <PackageReference Include="Lion.AbpPro.Core" />
+        <PackageReference Include="Lion.AbpPro.BasicManagement.Domain.Shared" />
+        <PackageReference Include="Lion.AbpPro.NotificationManagement.Domain.Shared" />
+        <PackageReference Include="Lion.AbpPro.DataDictionaryManagement.Domain.Shared" />
+        <PackageReference Include="Lion.AbpPro.LanguageManagement.Domain.Shared" />
+        <PackageReference Include="Lion.AbpPro.CodeManagement.Domain.Shared" />
+        <PackageReference Include="Lion.AbpPro.TemplateManagement.Domain.Shared" />
+        <PackageReference Include="Lion.AbpPro.DynamicMenuManagement.Domain.Shared" />
+        <PackageReference Include="Lion.AbpPro.ImportExportManagement.Domain.Shared" />
+        <PackageReference Include="Lion.AbpPro.FileManagement.Domain.Shared" />
+        <PackageReference Include="Lion.AbpPro.CacheManagement.Domain.Shared" />
+        <PackageReference Include="Lion.AbpPro.MasterDataManagement.Domain.Shared" />
+    </ItemGroup>
+</Project>

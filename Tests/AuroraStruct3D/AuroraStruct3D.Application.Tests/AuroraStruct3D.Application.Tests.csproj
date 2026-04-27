@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <Import Project="..\..\..\common.props" />
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <RootNamespace>AuroraStruct3D.Application.Tests</RootNamespace>
+        <IsPackable>false</IsPackable>
+        <OutputType>Library</OutputType>
+        <Description>AuroraStruct3D.Application.Tests测试集</Description>
+    </PropertyGroup>
+    <ItemGroup>
+        <ProjectReference Include="..\..\..\Sources\AuroraStruct3D\AuroraStruct3D.Application\AuroraStruct3D.Application.csproj" />
+        <ProjectReference Include="..\AuroraStruct3D.Domain.Tests\AuroraStruct3D.Domain.Tests.csproj" />
+    </ItemGroup>
+    <ItemGroup>
+        <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    </ItemGroup>
+</Project>

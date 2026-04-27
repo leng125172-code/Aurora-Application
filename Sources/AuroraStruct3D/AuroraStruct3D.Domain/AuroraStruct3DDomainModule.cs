@@ -1,0 +1,29 @@
+using Lion.AbpPro.CodeManagement;
+using Lion.AbpPro.DynamicMenuManagement;
+using Lion.AbpPro.FileManagement;
+using Lion.AbpPro.ImportExportManagement;
+using Lion.AbpPro.TemplateManagement;
+using Lion.AbpPro.CacheManagement;
+using Lion.AbpPro.MasterDataManagement;
+
+namespace AuroraStruct3D
+{
+    [DependsOn(
+        typeof(AuroraStruct3DDomainSharedModule),
+        typeof(BasicManagementDomainModule),
+        typeof(NotificationManagementDomainModule),
+        typeof(DataDictionaryManagementDomainModule),
+        typeof(LanguageManagementDomainModule),
+        typeof(CodeManagementDomainModule),
+        typeof(TemplateManagementDomainModule),
+        typeof(DynamicMenuManagementDomainModule),
+        typeof(FileManagementDomainModule),
+        typeof(CacheManagementDomainModule),
+        typeof(MasterDataManagementDomainModule),
+        typeof(ImportExportManagementDomainModule)
+    )]
+    public class AuroraStruct3DDomainModule : AbpModule
+    {
+     
+    }
+}

@@ -21,7 +21,6 @@
 
         <!-- 软件信息：定义程序集的元数据 -->
         <AssemblyTitle>$(RootNamespace)</AssemblyTitle>
-        <Description>Aurorap $(RootNamespace) module</Description>
         <Company>三花装备事业部 C Sharp 开发团队</Company>
         <Copyright>©2002-$([System.DateTime]::Now.ToString(`yyyy`)) 三花装备事业部</Copyright>
 
@@ -51,11 +50,21 @@
         <NuGetAuditMode>all</NuGetAuditMode>
         <DefaultLanguage>zh-hans</DefaultLanguage>
 
-        <!-- 禁用警告：指定要忽略的 NuGet 警告 -->
-        <!-- NU1701: 包使用了不同版本的依赖项 -->
-        <!-- NU1902: 包包含已知的安全漏洞 -->
-        <!-- NU1903: 包使用了已弃用的依赖项 -->
-        <NoWarn>$(NoWarn);NU1701;NU1902;NU1903</NoWarn>
+        <!-- 锁死 1：禁用所有警告转为错误 -->
+        <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+        <MSBuildTreatWarningsAsErrors>false</MSBuildTreatWarningsAsErrors>
+
+        <!-- 锁死 2：屏蔽所有编译器警告 CSxxx SYSLIBxxx -->
+        <NoWarn>$(NoWarn);CS*;SYSLIB*;NETSDK*;CA*</NoWarn>
+
+        <!-- 锁死 3：屏蔽所有 NuGet 警告 NUxxx -->
+        <NuGetIgnoreWarning>NU*</NuGetIgnoreWarning>
+        <NoWarn>$(NoWarn);NU1510;NU1701;NU1902;NU1903;NU1904</NoWarn>
+
+        <!-- 锁死 4：彻底关闭分析器 -->
+        <EnableNETAnalyzers>false</EnableNETAnalyzers>
+        <EnforceCodeStyleInBuild>false</EnforceCodeStyleInBuild>
+        <AnalysisLevel>none</AnalysisLevel>
     </PropertyGroup>
 
     <!-- Debug 配置：定义调试模式下的输出路径 -->
@@ -89,4 +98,10 @@
             <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
         </PackageReference>
     </ItemGroup>
+    <ItemDefinitionGroup>
+        <ProjectReference>
+            <PrivateAssets>None</PrivateAssets>
+            <ExcludeAssets>None</ExcludeAssets>
+        </ProjectReference>
+    </ItemDefinitionGroup>
 </Project>

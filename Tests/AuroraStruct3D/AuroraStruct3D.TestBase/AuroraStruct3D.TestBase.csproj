@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <Import Project="..\..\..\common.props" />
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <RootNamespace>AuroraStruct3D.TestBase</RootNamespace>
+        <IsPackable>false</IsPackable>
+        <OutputType>Library</OutputType>
+        <Description>AuroraStruct3D Test Base</Description>
+    </PropertyGroup>
+    <ItemGroup>
+        <PackageReference Include="Volo.Abp.TestBase" />
+        <PackageReference Include="Volo.Abp.Autofac" />
+        <PackageReference Include="Volo.Abp.Authorization" />
+        <ProjectReference Include="..\..\..\Sources\AuroraStruct3D\AuroraStruct3D.Domain\AuroraStruct3D.Domain.csproj" />
+    </ItemGroup>
+    <ItemGroup>
+        <PackageReference Include="Microsoft.NET.Test.Sdk" />
+        <PackageReference Include="NSubstitute" />
+        <PackageReference Include="Shouldly" />
+        <PackageReference Include="xunit" />
+        <PackageReference Include="xunit.extensibility.execution" />
+        <PackageReference Include="xunit.runner.visualstudio" />
+    </ItemGroup>
+    <ItemGroup>
+        <Content Include="appsettings.json">
+            <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+            <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+        </Content>
+    </ItemGroup>
+</Project>
