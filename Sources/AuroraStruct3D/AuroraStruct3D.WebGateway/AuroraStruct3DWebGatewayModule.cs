@@ -1,7 +1,6 @@
 namespace AuroraStruct3D.WebGateway;
 
-[DependsOn(
-    typeof(AbpProAspNetCoreModule))]
+[DependsOn(typeof(AbpProAspNetCoreModule))]
 public class AuroraStruct3DWebGatewayModule : AbpModule
 {
     public override void ConfigureServices(ServiceConfigurationContext context)
@@ -15,7 +14,10 @@ public class AuroraStruct3DWebGatewayModule : AbpModule
         var app = context.GetApplicationBuilder();
         app.UseCorrelationId();
         app.UseRouting();
-        app.UseConfiguredEndpoints(endpoints => { endpoints.MapHealthChecks("/health"); });
+        app.UseConfiguredEndpoints(endpoints =>
+        {
+            endpoints.MapHealthChecks("/health");
+        });
         app.UseWebSockets();
         app.UseOcelot().Wait();
     }

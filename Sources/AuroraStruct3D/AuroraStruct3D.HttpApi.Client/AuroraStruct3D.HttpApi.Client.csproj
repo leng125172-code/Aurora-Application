@@ -1,25 +1,25 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project Sdk="Microsoft.NET.Sdk">
     <Import Project="..\..\..\common.props" />
     <PropertyGroup>
         <TargetFramework>net10.0</TargetFramework>
-        <RootNamespace>AuroraStruct3D.HttpApi.Client</RootNamespace>
-        <OutputType>Library</OutputType>
-        <Description>AuroraStruct3D.HTTP客户端服务API，提供 HTTP请求和响应的基本功能。</Description>
     </PropertyGroup>
+
     <ItemGroup>
         <ProjectReference Include="..\AuroraStruct3D.Application.Contracts\AuroraStruct3D.Application.Contracts.csproj" />
     </ItemGroup>
+
     <ItemGroup>
-        <PackageReference Include="Lion.AbpPro.BasicManagement.HttpApi.Client" />
-        <PackageReference Include="Lion.AbpPro.NotificationManagement.HttpApi.Client" />
-        <PackageReference Include="Lion.AbpPro.DataDictionaryManagement.HttpApi.Client" />
-        <PackageReference Include="Lion.AbpPro.LanguageManagement.HttpApi.Client" />
-        <PackageReference Include="Lion.AbpPro.CodeManagement.HttpApi.Client" />
-        <PackageReference Include="Lion.AbpPro.TemplateManagement.HttpApi.Client" />
-        <PackageReference Include="Lion.AbpPro.DynamicMenuManagement.HttpApi.Client" />
-        <PackageReference Include="Lion.AbpPro.ImportExportManagement.HttpApi.Client" />
-        <PackageReference Include="Lion.AbpPro.FileManagement.HttpApi.Client" />
-        <PackageReference Include="Lion.AbpPro.CacheManagement.HttpApi.Client" />
-        <PackageReference Include="Lion.AbpPro.MasterDataManagement.HttpApi.Client" />
+        <ProjectReference Include="..\..\AuroraAbpPro\Lion.AbpPro.BasicManagement.HttpApi.Client\Lion.AbpPro.BasicManagement.HttpApi.Client.csproj" />
+        <ProjectReference Include="..\..\AuroraAbpPro\Lion.AbpPro.NotificationManagement.HttpApi.Client\Lion.AbpPro.NotificationManagement.HttpApi.Client.csproj" />
+        <ProjectReference Include="..\..\AuroraAbpPro\Lion.AbpPro.DataDictionaryManagement.HttpApi.Client\Lion.AbpPro.DataDictionaryManagement.HttpApi.Client.csproj" />
+        <ProjectReference Include="..\..\AuroraAbpPro\Lion.AbpPro.LanguageManagement.HttpApi.Client\Lion.AbpPro.LanguageManagement.HttpApi.Client.csproj" />
+        <ProjectReference Include="..\..\AuroraAbpPro\Lion.AbpPro.CodeManagement.HttpApi.Client\Lion.AbpPro.CodeManagement.HttpApi.Client.csproj" />
+        <ProjectReference Include="..\..\AuroraAbpPro\Lion.AbpPro.TemplateManagement.HttpApi.Client\Lion.AbpPro.TemplateManagement.HttpApi.Client.csproj" />
+        <ProjectReference Include="..\..\AuroraAbpPro\Lion.AbpPro.DynamicMenuManagement.HttpApi.Client\Lion.AbpPro.DynamicMenuManagement.HttpApi.Client.csproj" />
+        <ProjectReference Include="..\..\AuroraAbpPro\Lion.AbpPro.ImportExportManagement.HttpApi.Client\Lion.AbpPro.ImportExportManagement.HttpApi.Client.csproj" />
+        <ProjectReference Include="..\..\AuroraAbpPro\Lion.AbpPro.FileManagement.HttpApi.Client\Lion.AbpPro.FileManagement.HttpApi.Client.csproj" />
+        <ProjectReference Include="..\..\AuroraAbpPro\Lion.AbpPro.CacheManagement.HttpApi.Client\Lion.AbpPro.CacheManagement.HttpApi.Client.csproj" />
+        <ProjectReference Include="..\..\AuroraAbpPro\Lion.AbpPro.MasterDataManagement.HttpApi.Client\Lion.AbpPro.MasterDataManagement.HttpApi.Client.csproj" />
     </ItemGroup>
 </Project>

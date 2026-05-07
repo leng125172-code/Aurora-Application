@@ -1,0 +1,14 @@
+{
+  "culture": "en",
+  "texts": {
+    "ManageYourProfile":  "Manage your profile",
+    "SamplePageMessage": "A sample page for the TemplateManagement module",
+    "Permission:TemplateManagement": "TemplateManagement",
+    "Permission:TemplateManagementList": "TemplateManagementList",
+    "Permission:Create": "Create",
+    "Permission:Update": "Update",
+    "Permission:Delete": "Delete",
+    "Permission:Export": "Export"
+
+  }
+}

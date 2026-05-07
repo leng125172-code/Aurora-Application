@@ -1,0 +1,13 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+    <Import Project="..\..\..\common.props" />
+
+    <PropertyGroup>
+        <TargetFrameworks>net10.0</TargetFrameworks>
+        <AssemblyName>Savorboard.CAP.InMemoryMessageQueue</AssemblyName>
+        <RootNamespace>Savorboard.CAP.InMemoryMessageQueue</RootNamespace>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\DotNetCore.CAP\DotNetCore.CAP.csproj" />
+    </ItemGroup>
+</Project>

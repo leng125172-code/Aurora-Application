@@ -1,0 +1,15 @@
+namespace {{ context.Project.NameSpace }}.{{ context.EntityModel.AggregateCodePluralized }}.Permissions
+{
+    public class {{ context.EntityModel.AggregateCode }}
+    {
+         public const string GroupName = {{ context.EntityModel.AggregateCode }}Management;
+
+         public static class {{ context.EntityModel.AggregateCode }}+"Management"
+         {
+             public const string Default = GroupName + ".{{ context.EntityModel.AggregateCode }}";
+             public const string Create = Default + ".Create";
+             public const string Update = Default + ".Update";
+             public const string Delete = Default + ".Delete";
+         }
+    }
+}

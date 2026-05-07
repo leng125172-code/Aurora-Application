@@ -1,0 +1,1 @@
+import{I as e,h as t,x as n}from"./i18n-zxTsEohn.js";import{t as r}from"./IframeView-BZrdW2ik.js";var i=n({__name:`CapPage`,setup(n){return(n,i)=>(e(),t(r,{src:`/cap`,title:`CAP Dashboard`}))}});export{i as default};

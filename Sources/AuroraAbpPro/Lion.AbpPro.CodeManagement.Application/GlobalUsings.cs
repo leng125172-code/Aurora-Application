@@ -1,0 +1,29 @@
+// Global using directives
+
+global using System.Collections.Generic;
+global using System.IO.Compression;
+global using System.Linq;
+global using System.Threading;
+global using System.Threading.Tasks;
+global using Lion.AbpPro.CodeManagement.DataTypes;
+global using Lion.AbpPro.CodeManagement.DataTypes.Dto;
+global using Lion.AbpPro.CodeManagement.EntityModels.Dto;
+global using Lion.AbpPro.CodeManagement.EnumTypes;
+global using Lion.AbpPro.CodeManagement.EnumTypes.Dto;
+global using Lion.AbpPro.CodeManagement.Extensions;
+global using Lion.AbpPro.CodeManagement.Files;
+global using Lion.AbpPro.CodeManagement.Generators.Dto;
+global using Lion.AbpPro.CodeManagement.Localization;
+global using Lion.AbpPro.CodeManagement.Permissions;
+global using Lion.AbpPro.CodeManagement.Projects;
+global using Lion.AbpPro.CodeManagement.Projects.Dto;
+global using Lion.AbpPro.CodeManagement.Projects.Dto.Generators;
+global using Lion.AbpPro.CodeManagement.Templates;
+global using Mapster;
+global using Microsoft.AspNetCore.Authorization;
+global using Microsoft.Extensions.DependencyInjection;
+global using Volo.Abp;
+global using Volo.Abp.Application;
+global using Volo.Abp.Application.Dtos;
+global using Volo.Abp.Application.Services;
+global using Volo.Abp.Modularity;

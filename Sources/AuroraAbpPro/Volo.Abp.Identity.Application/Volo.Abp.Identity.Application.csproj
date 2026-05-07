@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Microsoft.NET.Sdk">
+    <Import Project="..\..\..\configureawait.props" />
+    <Import Project="..\..\..\common.props" />
+    <PropertyGroup>
+        <TargetFrameworks>net10.0</TargetFrameworks>
+        <AssemblyName>Volo.Abp.Identity.Application</AssemblyName>
+        <PackageId>Volo.Abp.Identity.Application</PackageId>
+        <AssetTargetFallback>$(AssetTargetFallback);portable-net45+win8+wp8+wpa81;</AssetTargetFallback>
+        <GenerateAssemblyConfigurationAttribute>false</GenerateAssemblyConfigurationAttribute>
+        <GenerateAssemblyCompanyAttribute>false</GenerateAssemblyCompanyAttribute>
+        <GenerateAssemblyProductAttribute>false</GenerateAssemblyProductAttribute>
+        <RootNamespace />
+    </PropertyGroup>
+    <ItemGroup>
+        <ProjectReference Include="..\Volo.Abp.Identity.Application.Contracts\Volo.Abp.Identity.Application.Contracts.csproj" />
+        <ProjectReference Include="..\Volo.Abp.Identity.Domain\Volo.Abp.Identity.Domain.csproj" />
+        <ProjectReference Include="..\Volo.Abp.PermissionManagement.Application\Volo.Abp.PermissionManagement.Application.csproj" />
+        <ProjectReference Include="..\Volo.Abp.Mapperly\Volo.Abp.Mapperly.csproj" />
+    </ItemGroup>
+</Project>

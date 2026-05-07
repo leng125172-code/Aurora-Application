@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <Import Project="..\..\..\configureawait.props" />
+    <Import Project="..\..\..\common.props" />
+    <PropertyGroup>
+        <TargetFrameworks>net10.0</TargetFrameworks>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <AssemblyName>Lion.AbpPro.ImportExport</AssemblyName>
+        <RootNamespace />
+    </PropertyGroup>
+    <ItemGroup>
+        <ProjectReference Include="..\Volo.Abp.Ddd.Domain\Volo.Abp.Ddd.Domain.csproj" />
+        <ProjectReference Include="..\Volo.Abp.BlobStoring\Volo.Abp.BlobStoring.csproj" />
+        <PackageReference Include="Magicodes.IE.Excel" Version="2.7.5.2" />
+        <ProjectReference Include="..\Volo.Abp.Identity.Domain\Volo.Abp.Identity.Domain.csproj" />
+    </ItemGroup>
+    <ItemGroup>
+        <ProjectReference Include="..\Lion.AbpPro.Core\Lion.AbpPro.Core.csproj" />
+        <ProjectReference Include="..\Lion.AbpPro.SignalR\Lion.AbpPro.SignalR.csproj" />
+    </ItemGroup>
+</Project>

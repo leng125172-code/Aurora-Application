@@ -12,10 +12,7 @@ namespace AuroraStruct3D.Settings
         /// <summary>
         /// 重写默认setting添加自定义属性
         /// </summary>
-        private static void OverrideDefalutSettings(ISettingDefinitionContext context)
-        {
-            
-        }
+        private static void OverrideDefalutSettings(ISettingDefinitionContext context) { }
 
         private static LocalizableString L(string name)
         {

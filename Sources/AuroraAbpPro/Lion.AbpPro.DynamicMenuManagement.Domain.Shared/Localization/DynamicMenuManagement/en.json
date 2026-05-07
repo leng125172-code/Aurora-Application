@@ -1,0 +1,35 @@
+{
+  "culture": "en",
+  "texts": {
+    "ManageYourProfile":  "Manage your profile",
+    "SamplePageMessage": "A sample page for the DynamicMenuManagement module",
+    "Permission:DynamicMenuManagement": "DynamicMenuManagement",
+    "Permission:Create": "Create",
+    "Permission:Update": "Update",
+    "Permission:Delete": "Delete",
+    "Lion.AbpPro.DynamicMenuManagement:Dashboard": "Dashboard",
+    "Lion.AbpPro.DynamicMenuManagement:Analytics": "Analytics",
+    "Lion.AbpPro.DynamicMenuManagement:Workspace": "Workspace",
+    "Lion.AbpPro.DynamicMenuManagement:System": "SystemManagement",
+    "Lion.AbpPro.DynamicMenuManagement:User": "UserManagement",
+    "Lion.AbpPro.DynamicMenuManagement:Role": "RoleManagement",
+    "Lion.AbpPro.DynamicMenuManagement:OrganizationUnit": "OrganizationUnitManagement",
+    "Lion.AbpPro.DynamicMenuManagement:Setting": "SettingManagement",
+    "Lion.AbpPro.DynamicMenuManagement:Feature": "FeatureManagement",
+    "Lion.AbpPro.DynamicMenuManagement:AuditLog": "AuditLogManagement",
+    "Lion.AbpPro.DynamicMenuManagement:LoginLog": "LoginLogManagement",
+    "Lion.AbpPro.DynamicMenuManagement:Language": "LanguageManagement",
+    "Lion.AbpPro.DynamicMenuManagement:LanguageText": "LanguageTextManagement",
+    "Lion.AbpPro.DynamicMenuManagement:DataDictionary": "DataDictionaryManagement",
+    "Lion.AbpPro.DynamicMenuManagement:Notification": "NotificationManagement",
+    "Lion.AbpPro.DynamicMenuManagement:Message": "MessageManagement",
+    "Lion.AbpPro.DynamicMenuManagement:Menu": "DynamicMenuManagement",
+    "Lion.AbpPro.DynamicMenuManagement:Tenant": "TenantManagement",
+    "Lion.AbpPro.DynamicMenuManagement:File": "FileManagement",
+    "Lion.AbpPro.DynamicMenuManagement:100001": "Menu Exist",
+    "Lion.AbpPro.DynamicMenuManagement:100002": "Menu Not Exist",
+    "Lion.AbpPro.DynamicMenuManagement:100003": "Menu Path Exist",
+    "Lion.AbpPro.DynamicMenuManagement:100004": "Menu Path Exist"
+
+  }
+}

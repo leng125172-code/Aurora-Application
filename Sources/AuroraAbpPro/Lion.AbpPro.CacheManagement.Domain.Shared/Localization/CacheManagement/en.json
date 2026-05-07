@@ -1,0 +1,12 @@
+{
+  "culture": "en",
+  "texts": {
+    "ManageYourProfile": "Manage your profile",
+    "SamplePageMessage": "A sample page for the CacheManagement module",
+    "Permission:CacheManagement": "CacheManagement",
+    "Permission:Create": "Create",
+    "Permission:Update": "Update",
+    "Permission:LookValue": "LookValue",
+    "Permission:Delete": "Delete"
+  }
+}

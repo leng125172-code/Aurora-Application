@@ -1,0 +1,10 @@
+using Volo.Abp.Domain.Repositories;
+
+namespace {{ context.Project.NameSpace }}.{{ context.EntityModel.AggregateCodePluralized }};
+
+public interface I{{ context.EntityModel.Code }}Repository : IBasicRepository<{{ context.EntityModel.Code }}, Guid>
+{
+    Task<List<{{ context.EntityModel.Code }}>> GetListAsync(DateTime? startDateTime = null, DateTime? endDateTime = null, int maxResultCount = 10, int skipCount = 0);
+
+    Task<long> GetCountAsync(DateTime? startDateTime = null, DateTime? endDateTime = null);
+}

@@ -1,0 +1,19 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Microsoft.NET.Sdk">
+    <Import Project="..\..\..\common.props" />
+    <PropertyGroup>
+        <TargetFrameworks>net10.0</TargetFrameworks>
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
+        <!-- 禁用 SDK 自动生成 AssemblyInfo，避免与 Properties\AssemblyInfo.cs 中的特性重复（CS0579） -->
+        <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+        <NoWarn>$(NoWarn);1591</NoWarn>
+        <RootNamespace>Hangfire</RootNamespace>
+    </PropertyGroup>
+    <ItemGroup>
+        <!-- Hangfire.NetCore 已拷贝到 Sources，恢复 ProjectReference；Hangfire.Core 会通过依赖链转递得到 -->
+        <ProjectReference Include="..\Hangfire.NetCore\Hangfire.NetCore.csproj" />
+    </ItemGroup>
+    <ItemGroup>
+        <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    </ItemGroup>
+</Project>

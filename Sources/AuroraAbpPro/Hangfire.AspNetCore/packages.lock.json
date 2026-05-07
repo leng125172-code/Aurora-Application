@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "dependencies": {
+    "net10.0": {
+      "Cronos": {
+        "type": "Transitive",
+        "resolved": "0.8.3",
+        "contentHash": "lep1gKd68dBEt7isLnnHadJHwUlhctMd+gYGMk3p8eOT9dIfw6fXJFkreYBQ8dIXm23S01ilHgpk2ttou5Wvtw=="
+      },
+      "Newtonsoft.Json": {
+        "type": "Transitive",
+        "resolved": "11.0.1",
+        "contentHash": "pNN4l+J6LlpIvHOeNdXlwxv39NPJ2B5klz+Rd2UQZIx30Squ5oND1Yy3wEAUoKn0GPUj6Yxt9lxlYWQqfZcvKg=="
+      },
+      "hangfire.core": {
+        "type": "Project",
+        "dependencies": {
+          "Cronos": "[0.8.3, )",
+          "Newtonsoft.Json": "[11.0.1, )"
+        }
+      },
+      "hangfire.netcore": {
+        "type": "Project",
+        "dependencies": {
+          "Hangfire.Core": "[0.1.2026.57, )"
+        }
+      }
+    }
+  }
+}

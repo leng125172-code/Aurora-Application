@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.VisualStudio.JavaScript.Sdk/1.0.4902498">
+  <PropertyGroup>
+    <!-- 入口与启动方式：交由 Vite Dev Server 处理（端口 5173） -->
+    <StartupCommand>npm run dev</StartupCommand>
+    <JavaScriptTestRoot>src\</JavaScriptTestRoot>
+    <JavaScriptTestFramework>Vitest</JavaScriptTestFramework>
+    <!-- 构建命令：执行 vite build，产物输出至 HttpApi.Host/wwwroot -->
+    <BuildCommand>npm run build</BuildCommand>
+    <ProductionBuildCommand>npm run build</ProductionBuildCommand>
+    <!-- 不让 VS 自动打开浏览器（由后端宿主统一接管） -->
+    <ShouldRunBuildInParallel>false</ShouldRunBuildInParallel>
+  </PropertyGroup>
+  <ItemGroup>
+    <Folder Include="src\components\ui\aurora-background\" />
+    <Folder Include="src\components\ui\sparkles-text\" />
+  </ItemGroup>
+</Project>

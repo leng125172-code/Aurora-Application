@@ -17,6 +17,7 @@ namespace AuroraStruct3D
         /// </summary>
         protected ILocalEventBus LocalEventBus =>
             LazyServiceProvider.LazyGetRequiredService<ILocalEventBus>();
+
         /// <summary>
         /// 分布式事件总线
         /// </summary>

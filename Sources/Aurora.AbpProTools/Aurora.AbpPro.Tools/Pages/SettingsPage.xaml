@@ -1,0 +1,180 @@
+<UserControl
+    x:Class="Aurora.AbpPro.Tools.Pages.SettingsPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:hc="https://handyorg.github.io/handycontrol"
+>
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- 标题 -->
+        <TextBlock
+            Text="{DynamicResource Lang.Settings.Title}"
+            FontSize="22"
+            FontWeight="Bold"
+            Foreground="{DynamicResource PrimaryTextBrush}"
+        />
+
+        <!-- GitHub Token 设置：自动保存 -->
+        <Border
+            Grid.Row="1"
+            Background="{DynamicResource SecondaryRegionBrush}"
+            CornerRadius="6"
+            Padding="10"
+            Margin="0,12,0,0"
+        >
+            <StackPanel>
+                <!-- 第 1 行：GitHub Token -->
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock
+                        Text="{DynamicResource Lang.Settings.GitHubToken}"
+                        Width="120"
+                        VerticalAlignment="Center"
+                        FontWeight="Bold"
+                        Foreground="{DynamicResource PrimaryTextBrush}"
+                    />
+                    <PasswordBox
+                        x:Name="GitHubTokenBox"
+                        Width="400"
+                        PasswordChar="●"
+                        PasswordChanged="GitHubTokenBox_OnPasswordChanged"
+                    />
+                    <TextBlock
+                        Text="{DynamicResource Lang.Settings.GitHubToken.Hint}"
+                        VerticalAlignment="Center"
+                        Margin="12,0,0,0"
+                        Foreground="{DynamicResource ThirdlyTextBrush}"
+                    />
+                </StackPanel>
+            </StackPanel>
+        </Border>
+
+        <!-- 日志小标题 -->
+        <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,12,0,8">
+            <TextBlock
+                Text="{DynamicResource Lang.Settings.LogTitle}"
+                FontSize="14"
+                FontWeight="Bold"
+                VerticalAlignment="Center"
+                Foreground="{DynamicResource PrimaryTextBrush}"
+            />
+        </StackPanel>
+
+        <!-- 筛选区：起止时间 + 级别 + 关键字 + 重置 -->
+        <Border
+            Grid.Row="3"
+            Background="{DynamicResource SecondaryRegionBrush}"
+            CornerRadius="6"
+            Padding="10"
+            Margin="0,0,0,8"
+        >
+            <StackPanel Orientation="Horizontal">
+                <TextBlock
+                    Text="{DynamicResource Lang.Settings.Filter.From}"
+                    VerticalAlignment="Center"
+                    Margin="0,0,6,0"
+                    Foreground="{DynamicResource PrimaryTextBrush}"
+                />
+                <hc:DateTimePicker
+                    Width="180"
+                    SelectedDateTime="{Binding FromTime, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                />
+
+                <TextBlock
+                    Text="{DynamicResource Lang.Settings.Filter.To}"
+                    VerticalAlignment="Center"
+                    Margin="16,0,6,0"
+                    Foreground="{DynamicResource PrimaryTextBrush}"
+                />
+                <hc:DateTimePicker
+                    Width="180"
+                    SelectedDateTime="{Binding ToTime, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                />
+
+                <TextBlock
+                    Text="{DynamicResource Lang.Settings.Filter.Level}"
+                    VerticalAlignment="Center"
+                    Margin="16,0,6,0"
+                    Foreground="{DynamicResource PrimaryTextBrush}"
+                />
+                <ComboBox
+                    Width="120"
+                    ItemsSource="{Binding LevelOptions}"
+                    SelectedItem="{Binding SelectedLevel, Mode=TwoWay}"
+                />
+
+                <TextBlock
+                    Text="{DynamicResource Lang.Settings.Filter.Keyword}"
+                    VerticalAlignment="Center"
+                    Margin="16,0,6,0"
+                    Foreground="{DynamicResource PrimaryTextBrush}"
+                />
+                <TextBox
+                    Width="180"
+                    Text="{Binding Keyword, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                />
+
+                <Button
+                    Margin="16,0,0,0"
+                    Style="{StaticResource ButtonDefault}"
+                    Content="{DynamicResource Lang.Settings.Filter.Reset}"
+                    Command="{Binding ResetFilterCommand}"
+                />
+            </StackPanel>
+        </Border>
+
+        <!-- 日志表格 -->
+        <Border
+            Grid.Row="4"
+            Background="{DynamicResource SecondaryRegionBrush}"
+            CornerRadius="6"
+            Padding="0"
+        >
+            <DataGrid
+                x:Name="LogGrid"
+                ItemsSource="{Binding EntriesView}"
+                AutoGenerateColumns="False"
+                IsReadOnly="True"
+                CanUserAddRows="False"
+                CanUserDeleteRows="False"
+                CanUserResizeRows="False"
+                HeadersVisibility="Column"
+                GridLinesVisibility="Horizontal"
+                Background="Transparent"
+                BorderThickness="0"
+                FontFamily="Consolas"
+                FontSize="12"
+            >
+                <DataGrid.Columns>
+                    <DataGridTextColumn
+                        Header="{DynamicResource Lang.Settings.Col.Time}"
+                        Binding="{Binding Timestamp, StringFormat={}{0:yyyy-MM-dd HH:mm:ss.fff}}"
+                        Width="170"
+                        SortMemberPath="Timestamp"
+                    />
+                    <DataGridTextColumn
+                        Header="{DynamicResource Lang.Settings.Col.Level}"
+                        Binding="{Binding Level}"
+                        Width="80"
+                    />
+                    <DataGridTextColumn
+                        Header="{DynamicResource Lang.Settings.Col.Logger}"
+                        Binding="{Binding Logger}"
+                        Width="220"
+                    />
+                    <DataGridTextColumn
+                        Header="{DynamicResource Lang.Settings.Col.Message}"
+                        Binding="{Binding Message}"
+                        Width="*"
+                    />
+                </DataGrid.Columns>
+            </DataGrid>
+        </Border>
+    </Grid>
+</UserControl>

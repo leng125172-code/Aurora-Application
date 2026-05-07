@@ -1,0 +1,15 @@
+using System;
+using System.ComponentModel.DataAnnotations;
+
+namespace {{ context.Project.NameSpace }}.{{ context.EntityModel.AggregateCodePluralized }};
+
+/// <summary>
+/// 删除{{ context.EntityModel.Description }}
+/// </summary>
+public class Delete{{ context.EntityModel.Code }}Input
+{
+    /// <summary>
+    /// {{ context.EntityModel.Description }}Id
+    /// </summary>
+    public Guid Id { get; set; }
+}

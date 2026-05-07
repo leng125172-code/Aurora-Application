@@ -1,0 +1,2 @@
+
+        DbSet<{{ context.EntityModel.Code}}> {{ context.EntityModel.AggregateCodePluralized}} { get; set; }

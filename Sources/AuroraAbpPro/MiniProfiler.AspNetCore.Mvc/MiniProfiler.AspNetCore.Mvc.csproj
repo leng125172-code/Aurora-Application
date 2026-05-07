@@ -1,0 +1,18 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+    <Import Project="..\..\..\configureawait.props" />
+    <Import Project="..\..\..\common.props" />
+    <PropertyGroup>
+        <AssemblyName>MiniProfiler.AspNetCore.Mvc</AssemblyName>
+        <Title>MiniProfiler for ASP.NET Core MVC</Title>
+        <Description>Lightweight mini-profiler, designed for ASP.NET Core MVC (*not* System.Web) websites</Description>
+        <Authors>Nick Craver</Authors>
+        <PackageTags>ASP.NET Core;MVC;MVC Core;$(PackageBaseTags)</PackageTags>
+        <TargetFrameworks>net10.0</TargetFrameworks>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <FrameworkReference Include="Microsoft.AspNetCore.App" />
+
+        <ProjectReference Include="..\MiniProfiler.AspNetCore\MiniProfiler.AspNetCore.csproj" />
+    </ItemGroup>
+</Project>

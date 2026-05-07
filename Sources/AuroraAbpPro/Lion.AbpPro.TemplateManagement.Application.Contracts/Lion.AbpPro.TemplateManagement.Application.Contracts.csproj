@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Microsoft.NET.Sdk">
+    <Import Project="..\..\..\common.props" />
+    <PropertyGroup>
+        <TargetFrameworks>net10.0</TargetFrameworks>
+        <RootNamespace>Lion.AbpPro.TemplateManagement</RootNamespace>
+    </PropertyGroup>
+    <ItemGroup>
+        <PackageReference Include="Magicodes.IE.Excel" Version="2.7.5.2" />
+        <PackageReference Include="Microsoft.AspNetCore.Mvc.Core" Version="2.2.0" />
+        <ProjectReference Include="..\Volo.Abp.AspNetCore.Mvc.Contracts\Volo.Abp.AspNetCore.Mvc.Contracts.csproj" />
+        <ProjectReference Include="..\Volo.Abp.Ddd.Application.Contracts\Volo.Abp.Ddd.Application.Contracts.csproj" />
+        <ProjectReference Include="..\Volo.Abp.Authorization\Volo.Abp.Authorization.csproj" />
+    </ItemGroup>
+    <ItemGroup>
+        <ProjectReference Include="..\Lion.AbpPro.TemplateManagement.Domain.Shared\Lion.AbpPro.TemplateManagement.Domain.Shared.csproj" />
+    </ItemGroup>
+</Project>

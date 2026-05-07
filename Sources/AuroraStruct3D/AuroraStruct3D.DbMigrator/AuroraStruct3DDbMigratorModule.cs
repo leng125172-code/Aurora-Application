@@ -6,7 +6,7 @@ namespace AuroraStruct3D.DbMigrator
         typeof(AbpAutofacModule),
         typeof(AuroraStruct3DEntityFrameworkCoreModule),
         typeof(AuroraStruct3DApplicationContractsModule)
-        )]
+    )]
     public class AuroraStruct3DDbMigratorModule : AbpModule
     {
         public override void ConfigureServices(ServiceConfigurationContext context)
@@ -15,7 +15,7 @@ namespace AuroraStruct3D.DbMigrator
 
             ConfigureLocalization();
         }
-        
+
         /// <summary>
         /// 多语言配置
         /// </summary>

@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Microsoft.NET.Sdk">
+    <Import Project="..\..\..\common.props" />
+    <PropertyGroup>
+        <TargetFrameworks>net10.0</TargetFrameworks>
+        <RootNamespace>Lion.AbpPro.BasicManagement</RootNamespace>
+    </PropertyGroup>
+    <ItemGroup>
+        <ProjectReference Include="..\Volo.Abp.Ddd.Application\Volo.Abp.Ddd.Application.csproj" />
+        <ProjectReference Include="..\Volo.Abp.Account.Application\Volo.Abp.Account.Application.csproj" />
+        <ProjectReference Include="..\Volo.Abp.Identity.Application\Volo.Abp.Identity.Application.csproj" />
+        <ProjectReference Include="..\Volo.Abp.Identity.AspNetCore\Volo.Abp.Identity.AspNetCore.csproj" />
+        <ProjectReference Include="..\Volo.Abp.AspNetCore\Volo.Abp.AspNetCore.csproj" />
+        <ProjectReference Include="..\Volo.Abp.AspNetCore.Mvc\Volo.Abp.AspNetCore.Mvc.csproj" />
+        <ProjectReference Include="..\Volo.Abp.PermissionManagement.Application\Volo.Abp.PermissionManagement.Application.csproj" />
+        <ProjectReference Include="..\Volo.Abp.TenantManagement.Application\Volo.Abp.TenantManagement.Application.csproj" />
+        <ProjectReference Include="..\Volo.Abp.FeatureManagement.Application\Volo.Abp.FeatureManagement.Application.csproj" />
+        <ProjectReference Include="..\Volo.Abp.SettingManagement.Application\Volo.Abp.SettingManagement.Application.csproj" />
+        <PackageReference Include="Magicodes.IE.Excel.AspNetCore" Version="2.7.5.2" />
+        <ProjectReference Include="..\Lion.AbpPro.ImportExport\Lion.AbpPro.ImportExport.csproj" />
+        <ProjectReference Include="..\Lion.AbpPro.Oidc\Lion.AbpPro.Oidc.csproj" />
+        <ProjectReference Include="..\Lion.AbpPro.TwoFactor\Lion.AbpPro.TwoFactor.csproj" />
+        <ProjectReference Include="..\Lion.AbpPro.BasicManagement.Application.Contracts\Lion.AbpPro.BasicManagement.Application.Contracts.csproj" />
+        <ProjectReference Include="..\Lion.AbpPro.BasicManagement.Domain\Lion.AbpPro.BasicManagement.Domain.csproj" />
+    </ItemGroup>
+    <ItemGroup>
+        <Content Remove="$(UserProfile)\.nuget\packages\*\*\contentFiles\any\*\*.abppkg*.json" />
+    </ItemGroup>
+</Project>

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Microsoft.NET.Sdk">
+    <Import Project="..\..\..\common.props" />
+    <PropertyGroup>
+        <TargetFrameworks>net10.0</TargetFrameworks>
+        <RootNamespace>Lion.AbpPro.TemplateManagement</RootNamespace>
+    </PropertyGroup>
+    <ItemGroup>
+        <ProjectReference Include="..\Volo.Abp.Ddd.Domain\Volo.Abp.Ddd.Domain.csproj" />
+        <ProjectReference Include="..\Volo.Abp.Caching\Volo.Abp.Caching.csproj" />
+        <PackageReference Include="Humanizer.Core.zh-Hans" Version="3.0.1" />
+        <ProjectReference Include="..\Lion.AbpPro.TemplateManagement.Domain.Shared\Lion.AbpPro.TemplateManagement.Domain.Shared.csproj" />
+    </ItemGroup>
+</Project>

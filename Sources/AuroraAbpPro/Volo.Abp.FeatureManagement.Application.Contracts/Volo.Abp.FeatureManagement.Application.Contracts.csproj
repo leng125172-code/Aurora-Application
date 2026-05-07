@@ -1,0 +1,17 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Microsoft.NET.Sdk">
+    <Import Project="..\..\..\configureawait.props" />
+    <Import Project="..\..\..\common.props" />
+    <PropertyGroup>
+        <TargetFrameworks>net10.0</TargetFrameworks>
+        <RootNamespace />
+    </PropertyGroup>
+    <ItemGroup>
+        <ProjectReference Include="..\Volo.Abp.Ddd.Application.Contracts\Volo.Abp.Ddd.Application.Contracts.csproj" />
+        <ProjectReference Include="..\Volo.Abp.Authorization.Abstractions\Volo.Abp.Authorization.Abstractions.csproj" />
+        <ProjectReference Include="..\Volo.Abp.Json\Volo.Abp.Json.csproj" />
+    </ItemGroup>
+    <ItemGroup>
+        <ProjectReference Include="..\Volo.Abp.FeatureManagement.Domain.Shared\Volo.Abp.FeatureManagement.Domain.Shared.csproj" />
+    </ItemGroup>
+</Project>

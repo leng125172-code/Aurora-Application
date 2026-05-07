@@ -1,0 +1,162 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+/* Tailwind v4 入口 */
+@import "tailwindcss";
+@import "tw-animate-css";
+
+/* 暗色模式：基于 .dark 类（与项目 theme store 保持一致） */
+@custom-variant dark (&:is(.dark *));
+
+/* shadcn-vue 主题变量（HSL 通道值，配合 hsl(var(--xxx)) 使用） */
+:root {
+    --background: 0 0% 100%;
+    --foreground: 0 0% 3.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 3.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 3.9%;
+    --primary: 0 0% 9%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 0 0% 96.1%;
+    --secondary-foreground: 0 0% 9%;
+    --muted: 0 0% 96.1%;
+    --muted-foreground: 0 0% 45.1%;
+    --accent: 0 0% 96.1%;
+    --accent-foreground: 0 0% 9%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 89.8%;
+    --input: 0 0% 89.8%;
+    --ring: 0 0% 3.9%;
+    --radius: 0.5rem;
+    --chart-1: 12 76% 61%;
+    --chart-2: 173 58% 39%;
+    --chart-3: 197 37% 24%;
+    --chart-4: 43 74% 66%;
+    --chart-5: 27 87% 67%;
+}
+
+.dark {
+    --background: 0 0% 3.9%;
+    --foreground: 0 0% 98%;
+    --card: 0 0% 3.9%;
+    --card-foreground: 0 0% 98%;
+    --popover: 0 0% 3.9%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 0 0% 98%;
+    --primary-foreground: 0 0% 9%;
+    --secondary: 0 0% 14.9%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 0 0% 14.9%;
+    --muted-foreground: 0 0% 63.9%;
+    --accent: 0 0% 14.9%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 14.9%;
+    --input: 0 0% 14.9%;
+    --ring: 0 0% 83.1%;
+    --chart-1: 220 70% 50%;
+    --chart-2: 160 60% 45%;
+    --chart-3: 30 80% 55%;
+    --chart-4: 280 65% 60%;
+    --chart-5: 340 75% 55%;
+}
+
+/* 把 shadcn-vue 的 CSS 变量映射到 Tailwind v4 主题（生成 bg-background / text-foreground 等工具类） */
+@theme inline {
+    --color-background: hsl(var(--background));
+    --color-foreground: hsl(var(--foreground));
+    --color-card: hsl(var(--card));
+    --color-card-foreground: hsl(var(--card-foreground));
+    --color-popover: hsl(var(--popover));
+    --color-popover-foreground: hsl(var(--popover-foreground));
+    --color-primary: hsl(var(--primary));
+    --color-primary-foreground: hsl(var(--primary-foreground));
+    --color-secondary: hsl(var(--secondary));
+    --color-secondary-foreground: hsl(var(--secondary-foreground));
+    --color-muted: hsl(var(--muted));
+    --color-muted-foreground: hsl(var(--muted-foreground));
+    --color-accent: hsl(var(--accent));
+    --color-accent-foreground: hsl(var(--accent-foreground));
+    --color-destructive: hsl(var(--destructive));
+    --color-destructive-foreground: hsl(var(--destructive-foreground));
+    --color-border: hsl(var(--border));
+    --color-input: hsl(var(--input));
+    --color-ring: hsl(var(--ring));
+    --color-chart-1: hsl(var(--chart-1));
+    --color-chart-2: hsl(var(--chart-2));
+    --color-chart-3: hsl(var(--chart-3));
+    --color-chart-4: hsl(var(--chart-4));
+    --color-chart-5: hsl(var(--chart-5));
+
+    --radius-sm: calc(var(--radius) - 4px);
+    --radius-md: calc(var(--radius) - 2px);
+    --radius-lg: var(--radius);
+    --radius-xl: calc(var(--radius) + 4px);
+
+    /* Inspira UI Aurora 动画 */
+    --animate-aurora: aurora 60s linear infinite;
+    @keyframes aurora {
+        from { background-position: 50% 50%, 50% 50%; }
+        to   { background-position: 350% 50%, 350% 50%; }
+    }
+
+    /* Reka UI 折叠动画 */
+    --animate-accordion-down: accordion-down 0.2s ease-out;
+    --animate-accordion-up: accordion-up 0.2s ease-out;
+    --animate-collapsible-down: collapsible-down 0.2s ease-in-out;
+    --animate-collapsible-up: collapsible-up 0.2s ease-in-out;
+    @keyframes accordion-down {
+        from { height: 0; }
+        to   { height: var(--reka-accordion-content-height); }
+    }
+    @keyframes accordion-up {
+        from { height: var(--reka-accordion-content-height); }
+        to   { height: 0; }
+    }
+    @keyframes collapsible-down {
+        from { height: 0; }
+        to   { height: var(--reka-collapsible-content-height); }
+    }
+    @keyframes collapsible-up {
+        from { height: var(--reka-collapsible-content-height); }
+        to   { height: 0; }
+    }
+    --font-heading: var(--font-sans)
+}
+
+/* v4 默认 border-color 不再是 gray-200，这里恢复 v3 的全局 border 行为，避免 UI 走样 */
+@layer base {
+    *,
+    ::after,
+    ::before,
+    ::backdrop,
+    ::file-selector-button {
+        border-color: hsl(var(--border));
+    }
+
+    html,
+    body,
+    #app {
+        height: 100%;
+    }
+
+    body {
+        background-color: hsl(var(--background));
+        color: hsl(var(--foreground));
+        -webkit-font-smoothing: antialiased;
+        font-family:
+            -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
+            'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+    }
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+    }
+  body {
+    @apply bg-background text-foreground;
+    }
+}

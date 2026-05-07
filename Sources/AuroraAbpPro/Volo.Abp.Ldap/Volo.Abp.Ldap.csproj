@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <Import Project="..\..\..\configureawait.props" />
+    <Import Project="..\..\..\common.props" />
+    <PropertyGroup>
+        <TargetFrameworks>net10.0</TargetFrameworks>
+        <Nullable>enable</Nullable>
+        <WarningsAsErrors>Nullable</WarningsAsErrors>
+        <AssemblyName>Volo.Abp.Ldap</AssemblyName>
+        <PackageId>Volo.Abp.Ldap</PackageId>
+        <AssetTargetFallback>$(AssetTargetFallback);portable-net45+win8+wp8+wpa81;</AssetTargetFallback>
+        <GenerateAssemblyConfigurationAttribute>false</GenerateAssemblyConfigurationAttribute>
+        <GenerateAssemblyCompanyAttribute>false</GenerateAssemblyCompanyAttribute>
+        <GenerateAssemblyProductAttribute>false</GenerateAssemblyProductAttribute>
+        <RootNamespace />
+    </PropertyGroup>
+    <ItemGroup>
+        <PackageReference Include="LdapForNet" Version="2.7.15" />
+    </ItemGroup>
+    <ItemGroup>
+        <ProjectReference Include="..\Volo.Abp.Ldap.Abstractions\Volo.Abp.Ldap.Abstractions.csproj" />
+        <ProjectReference Include="..\Volo.Abp.Settings\Volo.Abp.Settings.csproj" />
+    </ItemGroup>
+</Project>

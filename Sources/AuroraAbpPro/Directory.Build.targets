@@ -1,0 +1,13 @@
+<!--
+  Directory.Build.targets
+  功能：在所有 AuroraAbpPro 子项目中覆盖 ABP 框架原始的 WarningsAsErrors 设置
+  说明：ABP 框架项目使用 <WarningsAsErrors>Nullable</WarningsAsErrors> 强制可空检查，
+        但本项目通过 common.props 统一管理警告策略，故此处清除该设置。
+-->
+<Project>
+    <PropertyGroup>
+        <!-- 清除 ABP 框架项目中的 WarningsAsErrors=Nullable 设置，避免 nullable 警告被提升为错误 -->
+        <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+        <WarningsAsErrors></WarningsAsErrors>
+    </PropertyGroup>
+</Project>

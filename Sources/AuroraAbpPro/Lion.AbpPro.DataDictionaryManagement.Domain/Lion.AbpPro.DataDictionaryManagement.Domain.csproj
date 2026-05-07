@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Microsoft.NET.Sdk">
+    <Import Project="..\..\..\common.props" />
+    <PropertyGroup>
+        <TargetFrameworks>net10.0</TargetFrameworks>
+        <RootNamespace>Lion.AbpPro.DataDictionaryManagement</RootNamespace>
+    </PropertyGroup>
+    <ItemGroup>
+        <ProjectReference Include="..\Volo.Abp.Ddd.Domain\Volo.Abp.Ddd.Domain.csproj" />
+        <ProjectReference Include="..\Volo.Abp.Caching\Volo.Abp.Caching.csproj" />
+        <ProjectReference Include="..\Lion.AbpPro.DataDictionaryManagement.Domain.Shared\Lion.AbpPro.DataDictionaryManagement.Domain.Shared.csproj" />
+    </ItemGroup>
+</Project>

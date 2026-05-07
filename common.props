@@ -31,13 +31,9 @@
         <FileVersion>$(Version)</FileVersion>
         <AssemblyVersion>$(VersionPrefix).$([System.DateTime]::Now.ToString(`yyyy.Md`))</AssemblyVersion>
 
-        <!-- 应用图标 -->
-        <ApplicationIcon>Assets/Aurora Application.ico</ApplicationIcon>
-
         <!-- 包信息：定义 NuGet 包的元数据 -->
         <PackageId>$(RootNamespace)</PackageId>
         <Authors>$(Company)</Authors>
-        <PackageIcon>Assets/Aurora Application.png</PackageIcon>
         <RepositoryType>git</RepositoryType>
         <PackageTags>$(Company);$(AssemblyName)</PackageTags>
         <PackageReleaseNotes>$(Description)</PackageReleaseNotes>
@@ -65,6 +61,7 @@
         <EnableNETAnalyzers>false</EnableNETAnalyzers>
         <EnforceCodeStyleInBuild>false</EnforceCodeStyleInBuild>
         <AnalysisLevel>none</AnalysisLevel>
+        <AllowedOutputExtensionsInPackageBuildOutputFolder>$(AllowedOutputExtensionsInPackageBuildOutputFolder);.pdb</AllowedOutputExtensionsInPackageBuildOutputFolder>
     </PropertyGroup>
 
     <!-- Debug 配置：定义调试模式下的输出路径 -->
@@ -79,29 +76,11 @@
         <OutputPath>..\..\..\Builds\Release\$(RootNamespace)</OutputPath>
     </PropertyGroup>
 
-    <!-- 资源文件配置：定义需要复制到输出目录的资源文件 -->
-    <ItemGroup>
-        <!-- 资源文件 (必须开启始终复制，保证Msix和Self模式都可以运行)-->
-        <Content Include="Assets\*">
-            <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    <ItemGroup Condition="'$(UsingMicrosoftNETSdkWeb)' != 'true' AND '$(UsingMicrosoftNETSdkRazor)' != 'true'">
+        <None Remove="*.abppkg.analyze.json" />
+        <Content Include="*.abppkg.analyze.json">
+            <Pack>true</Pack>
+            <PackagePath>content\</PackagePath>
         </Content>
     </ItemGroup>
-
-    <!-- 包引用配置：定义项目依赖的 NuGet 包 -->
-    <ItemGroup>
-        <!-- Microsoft.SourceLink.GitHub：用于在 NuGet 包中包含源代码链接信息 -->
-        <!-- 版本：10.0.201 -->
-        <!-- PrivateAssets: all - 表示此包仅用于构建，不会传递给依赖项 -->
-        <!-- IncludeAssets: 指定要包含的资产类型 -->
-        <PackageReference Include="Microsoft.SourceLink.GitHub" Version="10.0.202">
-            <PrivateAssets>all</PrivateAssets>
-            <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
-        </PackageReference>
-    </ItemGroup>
-    <ItemDefinitionGroup>
-        <ProjectReference>
-            <PrivateAssets>None</PrivateAssets>
-            <ExcludeAssets>None</ExcludeAssets>
-        </ProjectReference>
-    </ItemDefinitionGroup>
 </Project>

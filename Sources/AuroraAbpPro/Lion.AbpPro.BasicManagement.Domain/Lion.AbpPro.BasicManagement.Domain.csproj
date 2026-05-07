@@ -1,0 +1,23 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Microsoft.NET.Sdk">
+    <Import Project="..\..\..\common.props" />
+    <PropertyGroup>
+        <TargetFrameworks>net10.0</TargetFrameworks>
+        <RootNamespace>Lion.AbpPro.BasicManagement</RootNamespace>
+    </PropertyGroup>
+    <ItemGroup>
+        <ProjectReference Include="..\Volo.Abp.Ddd.Domain\Volo.Abp.Ddd.Domain.csproj" />
+        <ProjectReference Include="..\Volo.Abp.Identity.Domain\Volo.Abp.Identity.Domain.csproj" />
+        <ProjectReference Include="..\Volo.Abp.PermissionManagement.Domain.Identity\Volo.Abp.PermissionManagement.Domain.Identity.csproj" />
+        <ProjectReference Include="..\Volo.Abp.BackgroundJobs.Domain\Volo.Abp.BackgroundJobs.Domain.csproj" />
+        <ProjectReference Include="..\Volo.Abp.AuditLogging.Domain\Volo.Abp.AuditLogging.Domain.csproj" />
+        <ProjectReference Include="..\Volo.Abp.TenantManagement.Domain\Volo.Abp.TenantManagement.Domain.csproj" />
+        <ProjectReference Include="..\Volo.Abp.FeatureManagement.Domain\Volo.Abp.FeatureManagement.Domain.csproj" />
+        <ProjectReference Include="..\Volo.Abp.SettingManagement.Domain\Volo.Abp.SettingManagement.Domain.csproj" />
+        <PackageReference Include="IPTools.China" Version="1.6.0" />
+        <PackageReference Include="UAParser" Version="3.1.47" />
+    </ItemGroup>
+    <ItemGroup>
+        <ProjectReference Include="..\Lion.AbpPro.BasicManagement.Domain.Shared\Lion.AbpPro.BasicManagement.Domain.Shared.csproj" />
+    </ItemGroup>
+</Project>

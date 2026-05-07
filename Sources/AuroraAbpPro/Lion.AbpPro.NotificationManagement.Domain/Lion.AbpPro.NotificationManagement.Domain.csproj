@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Microsoft.NET.Sdk">
+    <Import Project="..\..\..\common.props" />
+    <PropertyGroup>
+        <TargetFrameworks>net10.0</TargetFrameworks>
+        <RootNamespace>Lion.AbpPro.NotificationManagement</RootNamespace>
+    </PropertyGroup>
+    <ItemGroup>
+        <ProjectReference Include="..\Volo.Abp.Ddd.Domain\Volo.Abp.Ddd.Domain.csproj" />
+        <ProjectReference Include="..\Lion.AbpPro.NotificationManagement.Domain.Shared\Lion.AbpPro.NotificationManagement.Domain.Shared.csproj" />
+    </ItemGroup>
+</Project>

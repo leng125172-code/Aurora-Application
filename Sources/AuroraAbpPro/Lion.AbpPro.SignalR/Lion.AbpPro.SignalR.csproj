@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <Import Project="..\..\..\configureawait.props" />
+    <Import Project="..\..\..\common.props" />
+    <PropertyGroup>
+        <TargetFrameworks>net10.0</TargetFrameworks>
+        <RootNamespace />
+        <PackageId>Lion.AbpPro.SignalR</PackageId>
+    </PropertyGroup>
+    <ItemGroup>
+        <ProjectReference Include="..\Volo.Abp.Autofac\Volo.Abp.Autofac.csproj" />
+        <ProjectReference Include="..\Volo.Abp.Ddd.Domain\Volo.Abp.Ddd.Domain.csproj" />
+        <ProjectReference Include="..\Volo.Abp.AspNetCore.SignalR\Volo.Abp.AspNetCore.SignalR.csproj" />
+    </ItemGroup>
+</Project>

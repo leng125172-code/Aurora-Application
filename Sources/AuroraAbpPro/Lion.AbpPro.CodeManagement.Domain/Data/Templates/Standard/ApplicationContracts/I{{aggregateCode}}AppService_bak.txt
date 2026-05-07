@@ -1,0 +1,36 @@
+using Volo.Abp.Application.Dtos;
+using Volo.Abp.Application.Services;
+using {{ context.Project.NameSpace }}.{{ context.EntityModel.AggregateCodePluralized }};
+
+namespace {{ context.Project.NameSpace }}.{{ context.EntityModel.AggregateCodePluralized }};
+
+/// <summary>
+/// {{ context.EntityModel.Description }}
+/// </summary>
+public interface I{{ context.EntityModel.Code }}AppService : IApplicationService
+{
+    /// <summary>
+    /// 分页查询{{ context.EntityModel.Description }}
+    /// </summary>
+    Task<PagedResultDto<Page{{ context.EntityModel.Code }}Output>> PageAsync(Page{{ context.EntityModel.Code }}Input input);
+
+    /// <summary>
+    /// 创建{{ context.EntityModel.Description }}
+    /// </summary>
+    Task CreateAsync(Create{{ context.EntityModel.Code }}Input input);
+
+    /// <summary>
+    /// 编辑{{ context.EntityModel.Description }}
+    /// </summary>
+    Task UpdateAsync(Update{{ context.EntityModel.Code }}Input input);
+
+    /// <summary>
+    /// 删除{{ context.EntityModel.Description }}
+    /// </summary>
+    Task DeleteAsync(Delete{{ context.EntityModel.Code }}Input input);
+
+    /// <summary>
+    /// {{ context.EntityModel.Description }}导出
+    /// </summary>
+    Task<ActionResult> ExportAsync(Page{{ context.EntityModel.Code }}Input input);
+}

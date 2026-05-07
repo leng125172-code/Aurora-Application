@@ -22,17 +22,19 @@ using Lion.AbpPro.TemplateManagement.TextTemplates;
 namespace AuroraStruct3D.EntityFrameworkCore
 {
     [ConnectionStringName("Default")]
-    public class AuroraStruct3DDbContext : AbpDbContext<AuroraStruct3DDbContext>, IAuroraStruct3DDbContext,
-        IBasicManagementDbContext,
-        INotificationManagementDbContext,
-        IDataDictionaryManagementDbContext,
-        ILanguageManagementDbContext,
-        ICodeManagementDbContext,
-        ITemplateManagementDbContext,
-        IDynamicMenuManagementDbContext,
-        IFileManagementDbContext,
-        IImportExportManagementDbContext,
-        IMasterDataManagementDbContext
+    public class AuroraStruct3DDbContext
+        : AbpDbContext<AuroraStruct3DDbContext>,
+            IAuroraStruct3DDbContext,
+            IBasicManagementDbContext,
+            INotificationManagementDbContext,
+            IDataDictionaryManagementDbContext,
+            ILanguageManagementDbContext,
+            ICodeManagementDbContext,
+            ITemplateManagementDbContext,
+            IDynamicMenuManagementDbContext,
+            IFileManagementDbContext,
+            IImportExportManagementDbContext,
+            IMasterDataManagementDbContext
     {
         public DbSet<IdentityUser> Users { get; set; }
         public DbSet<IdentityRole> Roles { get; set; }
@@ -48,7 +50,7 @@ namespace AuroraStruct3D.EntityFrameworkCore
         public DbSet<PermissionGroupDefinitionRecord> PermissionGroups { get; set; }
         public DbSet<PermissionDefinitionRecord> Permissions { get; set; }
         public DbSet<PermissionGrant> PermissionGrants { get; set; }
-        public DbSet<ResourcePermissionGrant> ResourcePermissionGrants { get; set;}		
+        public DbSet<ResourcePermissionGrant> ResourcePermissionGrants { get; set; }
         public DbSet<Setting> Settings { get; set; }
         public DbSet<SettingDefinitionRecord> SettingDefinitionRecords { get; set; }
         public DbSet<Tenant> Tenants { get; set; }
@@ -61,71 +63,62 @@ namespace AuroraStruct3D.EntityFrameworkCore
         public DbSet<DataDictionary> DataDictionaries { get; set; }
         public DbSet<Language> Languages { get; set; }
         public DbSet<LanguageText> LanguageTexts { get; set; }
-        
+
         public DbSet<Template> Templates { get; set; }
-        
+
         // 代码生成器模块
         public DbSet<Project> Projects { get; set; }
         public DbSet<EntityModel> EntityModels { get; set; }
         public DbSet<DataType> DataTypes { get; set; }
         public DbSet<EnumType> EnumTypes { get; set; }
         public DbSet<TextTemplate> TextTemplates { get; set; }
-        
-        
+
         public DbSet<Menu> Menus { get; set; }
         public DbSet<UserRefreshToken> UserRefreshTokens { get; set; }
-        
-        
+
         public DbSet<FileObject> FileObjects { get; set; }
         public DbSet<ImportRecord> ImportRecords { get; set; }
-        
+
         public DbSet<MasterDataAttribute> MasterDataAttributes { get; set; }
         public DbSet<MasterData> MasterDatas { get; set; }
         public DbSet<MasterDataType> MasterDataTypes { get; set; }
         public DbSet<MasterDataValue> MasterDataValues { get; set; }
-        
+
         public AuroraStruct3DDbContext(DbContextOptions<AuroraStruct3DDbContext> options)
-            : base(options)
-        {
-        }
+            : base(options) { }
 
         protected override void OnModelCreating(ModelBuilder builder)
         {
-            
             base.OnModelCreating(builder);
 
             builder.ConfigureAuroraStruct3D();
 
             // 基础模块
             builder.ConfigureBasicManagement();
-            
+
             // 消息通知
             builder.ConfigureNotificationManagement();
-            
+
             //数据字典
             builder.ConfigureDataDictionaryManagement();
-            
+
             // 多语言
             builder.ConfigureLanguageManagement();
-            
+
             // 代码生成器模块
             builder.ConfigureCodeManagement();
-            
+
             // 文本模板模块
             builder.ConfigureTemplateManagement();
-            
+
             // 动态菜单
             builder.ConfigureDynamicMenuManagement();
-            
+
             builder.ConfigureFileManagement();
-            
+
             builder.ConfigureImportExportManagement();
-            
+
             builder.ConfigureMasterDataManagement();
-            
         }
-
-
-
     }
 }

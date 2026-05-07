@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <Import Project="..\..\..\configureawait.props" />
+    <Import Project="..\..\..\common.props" />
+    <PropertyGroup>
+        <TargetFrameworks>net10.0</TargetFrameworks>
+        <AssemblyName>Lion.AbpPro.TwoFactor</AssemblyName>
+        <RootNamespace />
+    </PropertyGroup>
+    <ItemGroup>
+        <ProjectReference Include="..\Lion.AbpPro.Core\Lion.AbpPro.Core.csproj" />
+    </ItemGroup>
+    <ItemGroup>
+        <PackageReference Include="Otp.NET" Version="1.4.0" />
+        <PackageReference Include="QRCoder" Version="1.6.0" />
+        <ProjectReference Include="..\Volo.Abp.Caching\Volo.Abp.Caching.csproj" />
+        <ProjectReference Include="..\Volo.Abp.Settings\Volo.Abp.Settings.csproj" />
+    </ItemGroup>
+</Project>

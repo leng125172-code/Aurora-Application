@@ -1,0 +1,18 @@
+{
+  "culture": "en",
+  "texts": {
+    "ManageYourProfile":  "Manage your profile",
+    "SamplePageMessage": "A sample page for the CodeManagement module",
+    "Permission:CodeManagement": "CodeManagement",
+    "Permission:ProjectManagement": "ProjectList",
+    "Permission:TemplateManagement": "TempateList",
+    "Permission:GeneratorManagement": "CodeGenerator",
+    "Permission:Create": "Create",
+    "Permission:Update": "Update",
+    "Permission:Delete": "Delete",
+    "Permission:Model": "Model",
+    "Permission:Copy": "Copy",
+    "Permission:Preview": "Preview",
+    "Permission:Download": "Download"
+  }
+}

@@ -1,0 +1,164 @@
+<Window
+    x:Class="Aurora.AbpPro.Tools.Pages.DependencyGraphWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:hc="https://handyorg.github.io/handycontrol"
+    xmlns:nodify="https://miroiu.github.io/nodify"
+    xmlns:vm="clr-namespace:Aurora.AbpPro.Tools.ViewModels"
+    Title="框架依赖图"
+    Width="1400"
+    Height="900"
+    WindowStartupLocation="CenterScreen"
+    Background="#1E1E1E"
+>
+    <Window.Resources>
+        <!--  按 SourceRepo 着色：返回不同的画刷  -->
+        <Style x:Key="NodeContainerStyle" TargetType="nodify:ItemContainer">
+            <!--  关键：把节点的 Location/Size 绑定到 ViewModel  -->
+            <Setter Property="Location" Value="{Binding Location, Mode=TwoWay}" />
+        </Style>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!--  顶部信息栏  -->
+        <Border
+            Grid.Row="0"
+            Background="#252526"
+            Padding="12,8"
+            BorderBrush="#3F3F46"
+            BorderThickness="0,0,0,1"
+        >
+            <DockPanel>
+                <TextBlock
+                    DockPanel.Dock="Left"
+                    FontSize="14"
+                    FontWeight="Bold"
+                    Foreground="#E0E0E0"
+                    Text="依赖图（双击节点展开下一层；按住中键拖动画布；Ctrl + 滚轮缩放）"
+                />
+                <TextBlock
+                    DockPanel.Dock="Right"
+                    Margin="16,0,0,0"
+                    FontSize="12"
+                    Foreground="#9E9E9E"
+                >
+                    <Run Text="节点: " />
+                    <Run Text="{Binding Nodes.Count, Mode=OneWay}" />
+                    <Run Text="    边: " />
+                    <Run Text="{Binding Connections.Count, Mode=OneWay}" />
+                </TextBlock>
+            </DockPanel>
+        </Border>
+
+        <!--  节点编辑器：核心画布  -->
+        <nodify:NodifyEditor
+            Grid.Row="1"
+            ItemsSource="{Binding Nodes}"
+            Connections="{Binding Connections}"
+            ItemContainerStyle="{StaticResource NodeContainerStyle}"
+            Background="#1E1E1E"
+            DisplayConnectionsOnTop="False"
+        >
+            <!--  节点模板  -->
+            <nodify:NodifyEditor.ItemTemplate>
+                <DataTemplate DataType="{x:Type vm:DependencyNodeViewModel}">
+                    <nodify:Node
+                        Header="{Binding Name}"
+                        Width="280"
+                        ToolTip="{Binding FilePath}"
+                        Background="#2D2D30"
+                        BorderBrush="#3F3F46"
+                        Foreground="#E0E0E0"
+                    >
+                        <nodify:Node.HeaderTemplate>
+                            <DataTemplate>
+                                <Border
+                                    Background="{Binding DataContext.SourceRepo, RelativeSource={RelativeSource AncestorType=nodify:Node}, Converter={StaticResource RepoToBrushConverter}}"
+                                    Padding="8,6"
+                                    CornerRadius="4,4,0,0"
+                                >
+                                    <StackPanel>
+                                        <TextBlock
+                                            Text="{Binding}"
+                                            FontWeight="Bold"
+                                            FontSize="13"
+                                            Foreground="White"
+                                            TextTrimming="CharacterEllipsis"
+                                        />
+                                        <TextBlock
+                                            Text="{Binding DataContext.SourceRepo, RelativeSource={RelativeSource AncestorType=nodify:Node}}"
+                                            FontSize="10"
+                                            Foreground="#DDFFFFFF"
+                                        />
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </nodify:Node.HeaderTemplate>
+                        <!--  双击节点 → 展开命令  -->
+                        <nodify:Node.InputBindings>
+                            <MouseBinding
+                                MouseAction="LeftDoubleClick"
+                                Command="{Binding DataContext.ExpandCommand, RelativeSource={RelativeSource AncestorType=nodify:NodifyEditor}}"
+                                CommandParameter="{Binding}"
+                            />
+                        </nodify:Node.InputBindings>
+                    </nodify:Node>
+                </DataTemplate>
+            </nodify:NodifyEditor.ItemTemplate>
+
+            <!--  连线模板：曲线  -->
+            <nodify:NodifyEditor.ConnectionTemplate>
+                <DataTemplate DataType="{x:Type vm:DependencyConnectionViewModel}">
+                    <nodify:LineConnection
+                        Source="{Binding Source.Location}"
+                        Target="{Binding Target.Location}"
+                        SourceOffset="280,30"
+                        TargetOffset="0,30"
+                        Stroke="#7B9CFF"
+                        StrokeThickness="2"
+                    />
+                </DataTemplate>
+            </nodify:NodifyEditor.ConnectionTemplate>
+        </nodify:NodifyEditor>
+
+        <!--  底部图例  -->
+        <Border
+            Grid.Row="2"
+            Background="#252526"
+            Padding="12,6"
+            BorderBrush="#3F3F46"
+            BorderThickness="0,1,0,0"
+        >
+            <StackPanel Orientation="Horizontal">
+                <TextBlock
+                    VerticalAlignment="Center"
+                    Margin="0,0,12,0"
+                    Foreground="#9E9E9E"
+                    Text="来源:"
+                />
+                <Border Background="#7ED321" Padding="6,2" Margin="0,0,6,0" CornerRadius="3">
+                    <TextBlock
+                        Foreground="White"
+                        FontSize="11"
+                        Text="abp-vnext-pro/aspnet-core (种子)"
+                    />
+                </Border>
+                <Border Background="#F5A623" Padding="6,2" Margin="0,0,6,0" CornerRadius="3">
+                    <TextBlock Foreground="White" FontSize="11" Text="abpframework/abp" />
+                </Border>
+                <Border Background="#BD10E0" Padding="6,2" Margin="0,0,6,0" CornerRadius="3">
+                    <TextBlock Foreground="White" FontSize="11" Text="dotnetcore/CAP" />
+                </Border>
+                <Border Background="#D0021B" Padding="6,2" Margin="0,0,6,0" CornerRadius="3">
+                    <TextBlock Foreground="White" FontSize="11" Text="HangfireIO/Hangfire" />
+                </Border>
+            </StackPanel>
+        </Border>
+    </Grid>
+</Window>

@@ -1,0 +1,13 @@
+{
+  "culture": "zh-Hans",
+  "texts": {
+    "ManageYourProfile": "管理个人资料",
+    "SamplePageMessage": "TemplateManagement模块的示例页面",
+    "Permission:TemplateManagement": "模板管理",
+    "Permission:TemplateManagementList": "模板列表",
+    "Permission:Create": "创建",
+    "Permission:Update": "编辑",
+    "Permission:Delete": "删除",
+    "Permission:Export": "导出"
+  }
+}

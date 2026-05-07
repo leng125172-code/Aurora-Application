@@ -1,0 +1,18 @@
+{
+  "culture": "zh-Hans",
+  "texts": {
+    "ManageYourProfile": "管理个人资料",
+    "SamplePageMessage": "CodeManagement模块的示例页面",
+    "Permission:CodeManagement": "代码管理",
+    "Permission:ProjectManagement": "项目列表",
+    "Permission:TemplateManagement": "模版列表",
+    "Permission:GeneratorManagement": "代码生成",
+    "Permission:Create": "创建",
+    "Permission:Update": "编辑",
+    "Permission:Delete": "删除",
+    "Permission:Model": "模型",
+    "Permission:Copy": "复制",
+    "Permission:Preview": "预览",
+    "Permission:Download": "下载"
+  }
+}

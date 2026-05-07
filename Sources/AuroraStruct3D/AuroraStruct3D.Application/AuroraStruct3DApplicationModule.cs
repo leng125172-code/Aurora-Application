@@ -22,8 +22,6 @@ namespace AuroraStruct3D
         typeof(ImportExportManagementApplicationModule),
         typeof(CacheManagementApplicationModule),
         typeof(MasterDataManagementApplicationModule)
-        )]
-    public class AuroraStruct3DApplicationModule : AbpModule
-    {
-    }
+    )]
+    public class AuroraStruct3DApplicationModule : AbpModule { }
 }

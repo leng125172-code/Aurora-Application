@@ -26,15 +26,12 @@ namespace AuroraStruct3D
         /// CAP 端点
         /// </summary>
         public const string CapDashboardEndPoint = "/cap";
-        
-    
+
         public const string MoreEndPoint = "https://doc.cncore.club/";
-        
-        
+
         /// <summary>
         /// HMiniprofiler端点
         /// </summary>
         public const string MiniprofilerEndPoint = "/profiler/results-index";
-
     }
 }

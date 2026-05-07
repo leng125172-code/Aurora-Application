@@ -1,12 +1,12 @@
 {
-  "profiles": {
-    "AuroraStruct3D.HttpApi.Host": {
-      "commandName": "Project",
-      "launchBrowser": true,
-      "applicationUrl": "http://localhost:44315",
-      "environmentVariables": {
-        "ASPNETCORE_ENVIRONMENT": "Development"
-      }
+    "profiles": {
+        "AuroraStruct3D.HttpApi.Host": {
+            "commandName": "Project",
+            "launchBrowser": true,
+            "applicationUrl": "http://localhost:44315",
+            "environmentVariables": {
+                "ASPNETCORE_ENVIRONMENT": "Development"
+            }
+        }
     }
-  }
 }

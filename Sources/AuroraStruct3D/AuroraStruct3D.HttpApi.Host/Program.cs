@@ -13,15 +13,18 @@ public class Program
         {
             Log.Information("AuroraStruct3D.HttpApi.Host.");
             var builder = WebApplication.CreateBuilder(args);
-            builder.Host
-                .AddAppSettingsSecretsJson()
+            builder
+                .Host.AddAppSettingsSecretsJson()
                 .UseAutofac()
-                .UseSerilog((context, loggerConfiguration) =>
-                {
-                    SerilogToEsExtensions.SetSerilogConfiguration(
-                        loggerConfiguration,
-                        context.Configuration);
-                });
+                .UseSerilog(
+                    (context, loggerConfiguration) =>
+                    {
+                        SerilogToEsExtensions.SetSerilogConfiguration(
+                            loggerConfiguration,
+                            context.Configuration
+                        );
+                    }
+                );
             // 设置MaxRequestBodySize
             //builder.WebHost.ConfigureKestrel(options => options.Limits.MaxRequestBodySize = 52428800);
             await builder.AddApplicationAsync<AuroraStruct3DHttpApiHostModule>();

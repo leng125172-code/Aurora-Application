@@ -1,0 +1,20 @@
+using  Volo.Abp.Authorization.Permissions;
+
+namespace {{ context.Project.NameSpace }}.{{ context.EntityModel.AggregateCodePluralized }}.Permissions;
+
+public class {{ context.EntityModel.AggregateCode }}PermissionDefinitionProvider : PermissionDefinitionProvider
+{
+    public override void Define(IPermissionDefinitionContext context)
+    {
+        var {{ context.EntityModel.CodeCamelCase }}Group = context.AddGroup({{ context.EntityModel.AggregateCode }}Permissions.GroupName, L("{{context.EntityModel.Description}"));
+        var permission = {{ context.EntityModel.CodeCamelCase }}Group.AddPermission({{ context.EntityModel.AggregateCode }}.{{ context.EntityModel.AggregateCode }}Management.Default, L("{{context.EntityModel.Description}"));
+        permission.AddChild({{ context.EntityModel.AggregateCode }}.{{ context.EntityModel.AggregateCode }}Management.Create, L("创建"));
+        permission.AddChild({{ context.EntityModel.AggregateCode }}.{{ context.EntityModel.AggregateCode }}Management.Update, L("编辑"));
+        permission.AddChild({{ context.EntityModel.AggregateCode }}.{{ context.EntityModel.AggregateCode }}Management.Delete, L("删除"));
+    }
+
+    private static LocalizableString L(string name)
+    {
+        return LocalizableString.Create<{{ context.Project.ProjectName }}>(name);
+    }
+}

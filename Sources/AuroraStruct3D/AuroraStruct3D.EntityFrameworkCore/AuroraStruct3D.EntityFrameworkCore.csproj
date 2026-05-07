@@ -1,29 +1,30 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project Sdk="Microsoft.NET.Sdk">
     <Import Project="..\..\..\common.props" />
     <PropertyGroup>
         <TargetFramework>net10.0</TargetFramework>
-        <RootNamespace>AuroraStruct3D.EntityFrameworkCore</RootNamespace>
-        <OutputType>Library</OutputType>
-        <Description>AuroraStruct3D.EntityFrameworkCore 基于PostgreSql的Entity Framework Core实现。</Description>
     </PropertyGroup>
+
     <ItemGroup>
         <ProjectReference Include="..\AuroraStruct3D.Domain\AuroraStruct3D.Domain.csproj" />
-        <PackageReference Include="Volo.Abp.EntityFrameworkCore.PostgreSql" />
+        <ProjectReference Include="..\..\AuroraAbpPro\Volo.Abp.EntityFrameworkCore.PostgreSql\Volo.Abp.EntityFrameworkCore.PostgreSql.csproj" />
     </ItemGroup>
+
     <ItemGroup>
-        <PackageReference Include="Lion.AbpPro.BasicManagement.EntityFrameworkCore" />
-        <PackageReference Include="Lion.AbpPro.NotificationManagement.EntityFrameworkCore" />
-        <PackageReference Include="Lion.AbpPro.DataDictionaryManagement.EntityFrameworkCore" />
-        <PackageReference Include="Lion.AbpPro.LanguageManagement.EntityFrameworkCore" />
-        <PackageReference Include="Lion.AbpPro.CodeManagement.EntityFrameworkCore" />
-        <PackageReference Include="Lion.AbpPro.TemplateManagement.EntityFrameworkCore" />
-        <PackageReference Include="Lion.AbpPro.DynamicMenuManagement.EntityFrameworkCore" />
-        <PackageReference Include="Lion.AbpPro.ImportExportManagement.EntityFrameworkCore" />
-        <PackageReference Include="Lion.AbpPro.FileManagement.EntityFrameworkCore" />
-        <PackageReference Include="Lion.AbpPro.MasterDataManagement.EntityFrameworkCore" />
+        <ProjectReference Include="..\..\AuroraAbpPro\Lion.AbpPro.BasicManagement.EntityFrameworkCore\Lion.AbpPro.BasicManagement.EntityFrameworkCore.csproj" />
+        <ProjectReference Include="..\..\AuroraAbpPro\Lion.AbpPro.NotificationManagement.EntityFrameworkCore\Lion.AbpPro.NotificationManagement.EntityFrameworkCore.csproj" />
+        <ProjectReference Include="..\..\AuroraAbpPro\Lion.AbpPro.DataDictionaryManagement.EntityFrameworkCore\Lion.AbpPro.DataDictionaryManagement.EntityFrameworkCore.csproj" />
+        <ProjectReference Include="..\..\AuroraAbpPro\Lion.AbpPro.LanguageManagement.EntityFrameworkCore\Lion.AbpPro.LanguageManagement.EntityFrameworkCore.csproj" />
+        <ProjectReference Include="..\..\AuroraAbpPro\Lion.AbpPro.CodeManagement.EntityFrameworkCore\Lion.AbpPro.CodeManagement.EntityFrameworkCore.csproj" />
+        <ProjectReference Include="..\..\AuroraAbpPro\Lion.AbpPro.TemplateManagement.EntityFrameworkCore\Lion.AbpPro.TemplateManagement.EntityFrameworkCore.csproj" />
+        <ProjectReference Include="..\..\AuroraAbpPro\Lion.AbpPro.DynamicMenuManagement.EntityFrameworkCore\Lion.AbpPro.DynamicMenuManagement.EntityFrameworkCore.csproj" />
+        <ProjectReference Include="..\..\AuroraAbpPro\Lion.AbpPro.ImportExportManagement.EntityFrameworkCore\Lion.AbpPro.ImportExportManagement.EntityFrameworkCore.csproj" />
+        <ProjectReference Include="..\..\AuroraAbpPro\Lion.AbpPro.FileManagement.EntityFrameworkCore\Lion.AbpPro.FileManagement.EntityFrameworkCore.csproj" />
+        <ProjectReference Include="..\..\AuroraAbpPro\Lion.AbpPro.MasterDataManagement.EntityFrameworkCore\Lion.AbpPro.MasterDataManagement.EntityFrameworkCore.csproj" />
     </ItemGroup>
+
     <ItemGroup>
-        <PackageReference Include="Microsoft.EntityFrameworkCore.Tools">
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="10.0.2">
             <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
             <PrivateAssets>compile; contentFiles; build; buildMultitargeting; buildTransitive; analyzers; native</PrivateAssets>
         </PackageReference>

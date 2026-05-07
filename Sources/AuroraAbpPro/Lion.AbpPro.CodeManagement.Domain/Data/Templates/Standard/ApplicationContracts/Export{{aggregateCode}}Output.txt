@@ -1,0 +1,34 @@
+using System;
+using Magicodes.ExporterAndImporter.Core;
+using System.ComponentModel.DataAnnotations;
+
+namespace {{ context.Project.NameSpace }}.{{ context.EntityModel.AggregateCodePluralized }};
+
+/// <summary>
+/// 导出{{ context.EntityModel.Description }}
+/// </summary>
+public class Export{{ context.EntityModel.Code }}Output
+{
+    {{~ for prop in context.EntityModel.Properties ~}}
+      {{~ if prop.IsEnum ~}}
+    /// <summary>
+    /// {{ prop.Description }}
+    /// </summary>
+    [ExporterHeader(DisplayName = "{{ prop.Description }}")]
+    public string {{ prop.EnumType.Code }}Description => {{ prop.Code }}.ToDescription();
+      {{~ else ~}}
+
+    /// <summary>
+    /// {{ prop.Description }}
+    /// </summary>
+    [ExporterHeader(DisplayName = "{{ prop.Description }}")]
+    public {{ prop.DataType.Code }}{{prop.Null}} {{ prop.Code }} { get; set; }
+      {{~ end ~}}
+    {{~ end ~}}
+
+    /// <summary>
+    /// 创建时间
+    /// </summary>
+    [ExporterHeader(DisplayName = "创建时间")]
+    public DateTime CreationTime { get; set; }
+}

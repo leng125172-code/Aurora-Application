@@ -1,7 +1,8 @@
 namespace AuroraStruct3D.EntityFrameworkCore
 {
     public class EntityFrameworkCoreAuroraStruct3DDbSchemaMigrator
-        : IAuroraStruct3DDbSchemaMigrator, ITransientDependency
+        : IAuroraStruct3DDbSchemaMigrator,
+            ITransientDependency
     {
         private readonly IServiceProvider _serviceProvider;
 
@@ -20,8 +21,7 @@ namespace AuroraStruct3D.EntityFrameworkCore
 
             await _serviceProvider
                 .GetRequiredService<AuroraStruct3DDbContext>()
-                .Database
-                .MigrateAsync();
+                .Database.MigrateAsync();
         }
     }
 }

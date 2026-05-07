@@ -1,0 +1,13 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Microsoft.NET.Sdk">
+    <Import Project="..\..\..\common.props" />
+    <PropertyGroup>
+        <TargetFrameworks>net10.0</TargetFrameworks>
+        <RootNamespace>Lion.AbpPro.BasicManagement</RootNamespace>
+    </PropertyGroup>
+    <ItemGroup>
+        <PackageReference Include="Swashbuckle.AspNetCore.Annotations" Version="10.0.1" />
+        <ProjectReference Include="..\Volo.Abp.AspNetCore.Mvc\Volo.Abp.AspNetCore.Mvc.csproj" />
+        <ProjectReference Include="..\Lion.AbpPro.BasicManagement.Application.Contracts\Lion.AbpPro.BasicManagement.Application.Contracts.csproj" />
+    </ItemGroup>
+</Project>

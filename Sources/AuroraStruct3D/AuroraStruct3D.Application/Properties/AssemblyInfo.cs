@@ -1,2 +1,3 @@
 using System.Runtime.CompilerServices;
-[assembly:InternalsVisibleToAttribute("AuroraStruct3D.Application.Tests")]
+
+[assembly: InternalsVisibleToAttribute("AuroraStruct3D.Application.Tests")]

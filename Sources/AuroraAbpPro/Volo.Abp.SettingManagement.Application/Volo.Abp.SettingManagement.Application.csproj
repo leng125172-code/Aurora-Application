@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Microsoft.NET.Sdk">
+    <Import Project="..\..\..\configureawait.props" />
+    <Import Project="..\..\..\common.props" />
+    <PropertyGroup>
+        <TargetFrameworks>net10.0</TargetFrameworks>
+        <RootNamespace />
+    </PropertyGroup>
+    <ItemGroup>
+        <ProjectReference Include="..\Volo.Abp.Emailing\Volo.Abp.Emailing.csproj" />
+        <ProjectReference Include="..\Volo.Abp.Ddd.Application\Volo.Abp.Ddd.Application.csproj" />
+        <ProjectReference Include="..\Volo.Abp.SettingManagement.Application.Contracts\Volo.Abp.SettingManagement.Application.Contracts.csproj" />
+        <ProjectReference Include="..\Volo.Abp.SettingManagement.Domain\Volo.Abp.SettingManagement.Domain.csproj" />
+        <ProjectReference Include="..\Volo.Abp.Users.Abstractions\Volo.Abp.Users.Abstractions.csproj" />
+    </ItemGroup>
+</Project>

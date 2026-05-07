@@ -1,0 +1,16 @@
+{
+  "culture": "en",
+  "texts": {
+    "ManageYourProfile":  "Manage your profile",
+    "SamplePageMessage": "A sample page for the MasterDataManagement module",
+    "Permission:MasterDataManagement": "MasterDataManagement",
+    "Permission:MasterDataManagement:DataModel": "DataModel",
+    "Permission:MasterDataManagement:Data": "Data",
+    "Permission:Create": "Create",
+    "Permission:Update": "Update",
+    "Permission:Delete": "Delete",
+    "Lion.AbpPro.MasterDataManagement:010001": "Master data type code already exists",
+    "Lion.AbpPro.MasterDataManagement:010002": "Master data code already exists",
+    "Lion.AbpPro.MasterDataManagement:010003": "Master data attribute code already exists"
+  }
+}

@@ -1,6 +1,5 @@
 // Global using directives
 
-
 global using Lion.AbpPro.BasicManagement;
 global using Lion.AbpPro.NotificationManagement;
 global using Localization.Resources.AbpUi;

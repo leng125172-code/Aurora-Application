@@ -9,8 +9,7 @@ namespace AuroraStruct3D.EntityFrameworkCore
             AuroraStruct3DGlobalFeatureConfigurator.Configure();
             AuroraStruct3DModuleExtensionConfigurator.Configure();
 
-            OneTimeRunner.Run(() =>
-            {
+            OneTimeRunner.Run(() => {
                 /* You can configure extra properties for the
                  * entities defined in the modules used by your application.
                  *

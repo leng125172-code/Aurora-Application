@@ -13,7 +13,8 @@ namespace AuroraStruct3D.Data
             IDataSeeder dataSeeder,
             IEnumerable<IAuroraStruct3DDbSchemaMigrator> dbSchemaMigrators,
             ITenantRepository tenantRepository,
-            ICurrentTenant currentTenant)
+            ICurrentTenant currentTenant
+        )
         {
             _dataSeeder = dataSeeder;
             _dbSchemaMigrators = dbSchemaMigrators;
@@ -48,8 +49,8 @@ namespace AuroraStruct3D.Data
                 {
                     if (tenant.ConnectionStrings.Any())
                     {
-                        var tenantConnectionStrings = tenant.ConnectionStrings
-                            .Select(x => x.Value)
+                        var tenantConnectionStrings = tenant
+                            .ConnectionStrings.Select(x => x.Value)
                             .ToList();
 
                         if (!migratedDatabaseSchemas.IsSupersetOf(tenantConnectionStrings))
@@ -63,7 +64,9 @@ namespace AuroraStruct3D.Data
                     await SeedDataAsync(tenant);
                 }
 
-                Logger.LogInformation($"Successfully completed {tenant.Name} tenant database migrations.");
+                Logger.LogInformation(
+                    $"Successfully completed {tenant.Name} tenant database migrations."
+                );
             }
 
             Logger.LogInformation("Successfully completed all database migrations.");
@@ -73,7 +76,8 @@ namespace AuroraStruct3D.Data
         private async Task MigrateDatabaseSchemaAsync(Tenant tenant = null)
         {
             Logger.LogInformation(
-                $"Migrating schema for {(tenant == null ? "host" : tenant.Name + " tenant")} database...");
+                $"Migrating schema for {(tenant == null ? "host" : tenant.Name + " tenant")} database..."
+            );
 
             foreach (var migrator in _dbSchemaMigrators)
             {
@@ -83,11 +87,20 @@ namespace AuroraStruct3D.Data
 
         private async Task SeedDataAsync(Tenant tenant = null)
         {
-            Logger.LogInformation($"Executing {(tenant == null ? "host" : tenant.Name + " tenant")} database seed...");
+            Logger.LogInformation(
+                $"Executing {(tenant == null ? "host" : tenant.Name + " tenant")} database seed..."
+            );
 
-            await _dataSeeder.SeedAsync(new DataSeedContext(tenant?.Id)
-                .WithProperty(IdentityDataSeedContributor.AdminEmailPropertyName, IdentityDataSeedContributor.AdminEmailDefaultValue)
-                .WithProperty(IdentityDataSeedContributor.AdminPasswordPropertyName, IdentityDataSeedContributor.AdminPasswordDefaultValue)
+            await _dataSeeder.SeedAsync(
+                new DataSeedContext(tenant?.Id)
+                    .WithProperty(
+                        IdentityDataSeedContributor.AdminEmailPropertyName,
+                        IdentityDataSeedContributor.AdminEmailDefaultValue
+                    )
+                    .WithProperty(
+                        IdentityDataSeedContributor.AdminPasswordPropertyName,
+                        IdentityDataSeedContributor.AdminPasswordDefaultValue
+                    )
             );
         }
 
@@ -145,7 +158,10 @@ namespace AuroraStruct3D.Data
             string argumentPrefix;
             string fileName;
 
-            if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX) || RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+            if (
+                RuntimeInformation.IsOSPlatform(OSPlatform.OSX)
+                || RuntimeInformation.IsOSPlatform(OSPlatform.Linux)
+            )
             {
                 argumentPrefix = "-c";
                 fileName = "/bin/bash";
@@ -156,7 +172,8 @@ namespace AuroraStruct3D.Data
                 fileName = "cmd.exe";
             }
 
-            var procStartInfo = new ProcessStartInfo(fileName,
+            var procStartInfo = new ProcessStartInfo(
+                fileName,
                 $"{argumentPrefix} \"abp create-migration-and-run-migrator \"{GetDbMigrationsProjectFolderPath()}\"\""
             );
 
@@ -181,7 +198,8 @@ namespace AuroraStruct3D.Data
 
             var srcDirectoryPath = Path.Combine(slnDirectoryPath, "src");
 
-            return Directory.GetDirectories(srcDirectoryPath)
+            return Directory
+                .GetDirectories(srcDirectoryPath)
                 .FirstOrDefault(d => d.EndsWith(".DbMigrations"));
         }
 
@@ -193,7 +211,11 @@ namespace AuroraStruct3D.Data
             {
                 currentDirectory = Directory.GetParent(currentDirectory.FullName);
 
-                if (Directory.GetFiles(currentDirectory.FullName).FirstOrDefault(f => f.EndsWith(".sln")) != null)
+                if (
+                    Directory
+                        .GetFiles(currentDirectory.FullName)
+                        .FirstOrDefault(f => f.EndsWith(".sln")) != null
+                )
                 {
                     return currentDirectory.FullName;
                 }

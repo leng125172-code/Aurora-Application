@@ -1,10 +1,10 @@
+using Lion.AbpPro.CacheManagement;
 using Lion.AbpPro.CodeManagement;
 using Lion.AbpPro.DynamicMenuManagement;
 using Lion.AbpPro.FileManagement;
 using Lion.AbpPro.ImportExportManagement;
-using Lion.AbpPro.TemplateManagement;
-using Lion.AbpPro.CacheManagement;
 using Lion.AbpPro.MasterDataManagement;
+using Lion.AbpPro.TemplateManagement;
 
 namespace AuroraStruct3D
 {
@@ -34,13 +34,17 @@ namespace AuroraStruct3D
         {
             Configure<AbpVirtualFileSystemOptions>(options =>
             {
-                options.FileSets.AddEmbedded<AuroraStruct3DDomainSharedModule>(AuroraStruct3DDomainSharedConsts.NameSpace);
+                options.FileSets.AddEmbedded<AuroraStruct3DDomainSharedModule>(
+                    AuroraStruct3DDomainSharedConsts.NameSpace
+                );
             });
-          
+
             Configure<AbpLocalizationOptions>(options =>
             {
-                options.Resources
-                    .Add<AuroraStruct3DResource>(AuroraStruct3DDomainSharedConsts.DefaultCultureName)
+                options
+                    .Resources.Add<AuroraStruct3DResource>(
+                        AuroraStruct3DDomainSharedConsts.DefaultCultureName
+                    )
                     .AddVirtualJson("/Localization/AuroraStruct3D")
                     .AddBaseTypes(typeof(BasicManagementResource))
                     .AddBaseTypes(typeof(AbpTimingResource));
@@ -50,10 +54,11 @@ namespace AuroraStruct3D
 
             Configure<AbpExceptionLocalizationOptions>(options =>
             {
-                options.MapCodeNamespace(AuroraStruct3DDomainSharedConsts.NameSpace, typeof(AuroraStruct3DResource));
+                options.MapCodeNamespace(
+                    AuroraStruct3DDomainSharedConsts.NameSpace,
+                    typeof(AuroraStruct3DResource)
+                );
             });
         }
-
-       
     }
 }

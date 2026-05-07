@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <Import Project="..\..\..\configureawait.props" />
+    <Import Project="..\..\..\common.props" />
+    <PropertyGroup>
+        <TargetFrameworks>net10.0</TargetFrameworks>
+        <Nullable>enable</Nullable>
+        <WarningsAsErrors>Nullable</WarningsAsErrors>
+        <AssemblyName>Volo.Abp.AspNetCore.Authentication.JwtBearer</AssemblyName>
+        <PackageId>Volo.Abp.AspNetCore.Authentication.JwtBearer</PackageId>
+        <AssetTargetFallback>$(AssetTargetFallback);portable-net45+win8+wp8+wpa81;</AssetTargetFallback>
+        <GenerateAssemblyConfigurationAttribute>false</GenerateAssemblyConfigurationAttribute>
+        <GenerateAssemblyCompanyAttribute>false</GenerateAssemblyCompanyAttribute>
+        <GenerateAssemblyProductAttribute>false</GenerateAssemblyProductAttribute>
+        <RootNamespace />
+    </PropertyGroup>
+    <ItemGroup>
+        <ProjectReference Include="..\Volo.Abp.Security\Volo.Abp.Security.csproj" />
+        <ProjectReference Include="..\Volo.Abp.Caching\Volo.Abp.Caching.csproj" />
+        <ProjectReference Include="..\Volo.Abp.AspNetCore.Abstractions\Volo.Abp.AspNetCore.Abstractions.csproj" />
+    </ItemGroup>
+    <ItemGroup>
+        <PackageReference
+            Include="Microsoft.AspNetCore.Authentication.JwtBearer"
+            Version="10.0.2"
+        />
+        <PackageReference
+            Include="Microsoft.IdentityModel.Protocols.OpenIdConnect"
+            Version="8.14.0"
+        />
+        <PackageReference Include="Microsoft.IdentityModel.Tokens" Version="8.14.0" />
+        <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" Version="8.14.0" />
+        <PackageReference Include="Duende.IdentityModel" Version="7.1.0" />
+    </ItemGroup>
+</Project>

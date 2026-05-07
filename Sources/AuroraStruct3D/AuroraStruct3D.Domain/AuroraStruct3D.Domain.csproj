@@ -1,25 +1,25 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project Sdk="Microsoft.NET.Sdk">
     <Import Project="..\..\..\common.props" />
     <PropertyGroup>
         <TargetFramework>net10.0</TargetFramework>
-        <RootNamespace>AuroraStruct3D.Domain</RootNamespace>
-        <OutputType>Library</OutputType>
-        <Description>AuroraStruct3D.Domain 是一款基于Abp Framework的域模型管理解决方案，提供了一个强大且灵活的基础。</Description>
     </PropertyGroup>
+
     <ItemGroup>
         <ProjectReference Include="..\AuroraStruct3D.Domain.Shared\AuroraStruct3D.Domain.Shared.csproj" />
     </ItemGroup>
+
     <ItemGroup>
-        <PackageReference Include="Lion.AbpPro.BasicManagement.Domain" />
-        <PackageReference Include="Lion.AbpPro.NotificationManagement.Domain" />
-        <PackageReference Include="Lion.AbpPro.DataDictionaryManagement.Domain" />
-        <PackageReference Include="Lion.AbpPro.LanguageManagement.Domain" />
-        <PackageReference Include="Lion.AbpPro.CodeManagement.Domain" />
-        <PackageReference Include="Lion.AbpPro.TemplateManagement.Domain" />
-        <PackageReference Include="Lion.AbpPro.DynamicMenuManagement.Domain" />
-        <PackageReference Include="Lion.AbpPro.ImportExportManagement.Domain" />
-        <PackageReference Include="Lion.AbpPro.FileManagement.Domain" />
-        <PackageReference Include="Lion.AbpPro.CacheManagement.Domain" />
-        <PackageReference Include="Lion.AbpPro.MasterDataManagement.Domain" />
+        <ProjectReference Include="..\..\AuroraAbpPro\Lion.AbpPro.BasicManagement.Domain\Lion.AbpPro.BasicManagement.Domain.csproj" />
+        <ProjectReference Include="..\..\AuroraAbpPro\Lion.AbpPro.NotificationManagement.Domain\Lion.AbpPro.NotificationManagement.Domain.csproj" />
+        <ProjectReference Include="..\..\AuroraAbpPro\Lion.AbpPro.DataDictionaryManagement.Domain\Lion.AbpPro.DataDictionaryManagement.Domain.csproj" />
+        <ProjectReference Include="..\..\AuroraAbpPro\Lion.AbpPro.LanguageManagement.Domain\Lion.AbpPro.LanguageManagement.Domain.csproj" />
+        <ProjectReference Include="..\..\AuroraAbpPro\Lion.AbpPro.CodeManagement.Domain\Lion.AbpPro.CodeManagement.Domain.csproj" />
+        <ProjectReference Include="..\..\AuroraAbpPro\Lion.AbpPro.TemplateManagement.Domain\Lion.AbpPro.TemplateManagement.Domain.csproj" />
+        <ProjectReference Include="..\..\AuroraAbpPro\Lion.AbpPro.DynamicMenuManagement.Domain\Lion.AbpPro.DynamicMenuManagement.Domain.csproj" />
+        <ProjectReference Include="..\..\AuroraAbpPro\Lion.AbpPro.ImportExportManagement.Domain\Lion.AbpPro.ImportExportManagement.Domain.csproj" />
+        <ProjectReference Include="..\..\AuroraAbpPro\Lion.AbpPro.FileManagement.Domain\Lion.AbpPro.FileManagement.Domain.csproj" />
+        <ProjectReference Include="..\..\AuroraAbpPro\Lion.AbpPro.CacheManagement.Domain\Lion.AbpPro.CacheManagement.Domain.csproj" />
+        <ProjectReference Include="..\..\AuroraAbpPro\Lion.AbpPro.MasterDataManagement.Domain\Lion.AbpPro.MasterDataManagement.Domain.csproj" />
     </ItemGroup>
 </Project>

@@ -1,0 +1,24 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Microsoft.NET.Sdk">
+    <Import Project="..\..\..\configureawait.props" />
+    <Import Project="..\..\..\common.props" />
+    <PropertyGroup>
+        <TargetFrameworks>net10.0</TargetFrameworks>
+        <Nullable>enable</Nullable>
+        <WarningsAsErrors>Nullable</WarningsAsErrors>
+        <AssemblyName>Volo.Abp.DistributedLocking</AssemblyName>
+        <PackageId>Volo.Abp.DistributedLocking</PackageId>
+        <AssetTargetFallback>$(AssetTargetFallback);portable-net45+win8+wp8+wpa81;</AssetTargetFallback>
+        <GenerateAssemblyConfigurationAttribute>false</GenerateAssemblyConfigurationAttribute>
+        <GenerateAssemblyCompanyAttribute>false</GenerateAssemblyCompanyAttribute>
+        <GenerateAssemblyProductAttribute>false</GenerateAssemblyProductAttribute>
+        <RootNamespace />
+    </PropertyGroup>
+    <ItemGroup>
+        <ProjectReference Include="..\Volo.Abp.DistributedLocking.Abstractions\Volo.Abp.DistributedLocking.Abstractions.csproj" />
+        <ProjectReference Include="..\Volo.Abp.Threading\Volo.Abp.Threading.csproj" />
+    </ItemGroup>
+    <ItemGroup>
+        <PackageReference Include="DistributedLock.Core" Version="1.0.8" />
+    </ItemGroup>
+</Project>

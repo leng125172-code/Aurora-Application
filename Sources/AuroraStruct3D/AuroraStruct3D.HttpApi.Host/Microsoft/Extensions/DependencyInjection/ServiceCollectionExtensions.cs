@@ -15,11 +15,15 @@ public static class ServiceCollectionExtensions
     /// <summary>
     /// 注册Redis缓存
     /// </summary>
-    public static IServiceCollection AddAbpProRedis(this IServiceCollection service, Action<AbpDistributedCacheOptions> configureOptions = null)
+    public static IServiceCollection AddAbpProRedis(
+        this IServiceCollection service,
+        Action<AbpDistributedCacheOptions> configureOptions = null
+    )
     {
         var configuration = service.GetConfiguration();
         var redisEnabled = configuration.GetValue<bool>("Redis:IsEnabled");
-        if (!redisEnabled) return service;
+        if (!redisEnabled)
+            return service;
 
         if (configureOptions != null)
         {
@@ -27,22 +31,32 @@ public static class ServiceCollectionExtensions
         }
         else
         {
-            service.Configure<AbpDistributedCacheOptions>(options => { options.KeyPrefix = "AbpPro:"; });
+            service.Configure<AbpDistributedCacheOptions>(options =>
+            {
+                options.KeyPrefix = "AbpPro:";
+            });
         }
 
-        var redis = ConnectionMultiplexer.Connect(configuration.GetValue<string>("Redis:Configuration"));
-        service.AddDataProtection().PersistKeysToStackExchangeRedis(redis, "AbpPro-Protection-Keys");
+        var redis = ConnectionMultiplexer.Connect(
+            configuration.GetValue<string>("Redis:Configuration")
+        );
+        service
+            .AddDataProtection()
+            .PersistKeysToStackExchangeRedis(redis, "AbpPro-Protection-Keys");
         return service;
     }
 
     /// <summary>
     /// 注册redis分布式锁
     /// </summary>
-    public static IServiceCollection AddAbpProRedisDistributedLocking(this IServiceCollection service)
+    public static IServiceCollection AddAbpProRedisDistributedLocking(
+        this IServiceCollection service
+    )
     {
         var configuration = service.GetConfiguration();
         var redisEnabled = configuration.GetValue<bool>("Redis:IsEnabled");
-        if (!redisEnabled) return service;
+        if (!redisEnabled)
+            return service;
 
         var connectionString = configuration.GetValue<string>("Redis:Configuration");
         service.AddSingleton<IDistributedLockProvider>(sp =>
@@ -58,14 +72,20 @@ public static class ServiceCollectionExtensions
     /// </summary>
     public static IServiceCollection AddAbpProIdentity(this IServiceCollection service)
     {
-        service.Configure<IdentityOptions>(options => { options.Lockout = new LockoutOptions() { AllowedForNewUsers = false }; });
+        service.Configure<IdentityOptions>(options =>
+        {
+            options.Lockout = new LockoutOptions() { AllowedForNewUsers = false };
+        });
         return service;
     }
 
     /// <summary>
     /// 注册SignalR
     /// </summary>
-    public static IServiceCollection AddAbpProSignalR(this IServiceCollection service, Action<RedisOptions> redisOptions = null)
+    public static IServiceCollection AddAbpProSignalR(
+        this IServiceCollection service,
+        Action<RedisOptions> redisOptions = null
+    )
     {
         var configuration = service.GetConfiguration();
         var redisEnabled = configuration.GetValue<bool>("Redis:IsEnabled");
@@ -75,14 +95,22 @@ public static class ServiceCollectionExtensions
             {
                 service
                     .AddSignalR()
-                    .AddStackExchangeRedis(service.GetConfiguration().GetValue<string>("Redis:Configuration"), redisOptions);
+                    .AddStackExchangeRedis(
+                        service.GetConfiguration().GetValue<string>("Redis:Configuration"),
+                        redisOptions
+                    );
             }
             else
             {
                 service
                     .AddSignalR()
-                    .AddStackExchangeRedis(service.GetConfiguration().GetValue<string>("Redis:Configuration"),
-                        options => { options.Configuration.ChannelPrefix = "Lion.AbpPro"; });
+                    .AddStackExchangeRedis(
+                        service.GetConfiguration().GetValue<string>("Redis:Configuration"),
+                        options =>
+                        {
+                            options.Configuration.ChannelPrefix = "Lion.AbpPro";
+                        }
+                    );
             }
         }
         else
@@ -98,7 +126,16 @@ public static class ServiceCollectionExtensions
     /// </summary>
     public static IServiceCollection AddAbpProBlobStorageFileSystem(this IServiceCollection service)
     {
-        service.Configure<AbpBlobStoringOptions>(options => { options.Containers.ConfigureDefault(container => { container.UseFileSystem(fileSystem => { fileSystem.BasePath = "C:\\my-files"; }); }); });
+        service.Configure<AbpBlobStoringOptions>(options =>
+        {
+            options.Containers.ConfigureDefault(container =>
+            {
+                container.UseFileSystem(fileSystem =>
+                {
+                    fileSystem.BasePath = "C:\\my-files";
+                });
+            });
+        });
         return service;
     }
 
@@ -148,11 +185,13 @@ public static class ServiceCollectionExtensions
             });
 
             // 重试策略
-            config.UseFilter(new AutomaticRetryAttribute
-            {
-                Attempts = 3,
-                DelaysInSeconds = new[] { 10, 60, 180 }
-            });
+            config.UseFilter(
+                new AutomaticRetryAttribute
+                {
+                    Attempts = 3,
+                    DelaysInSeconds = new[] { 10, 60, 180 },
+                }
+            );
         });
 
         service.AddHangfireServer();

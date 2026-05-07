@@ -1,10 +1,10 @@
+using Lion.AbpPro.CacheManagement;
 using Lion.AbpPro.CodeManagement;
 using Lion.AbpPro.DynamicMenuManagement;
 using Lion.AbpPro.FileManagement;
 using Lion.AbpPro.ImportExportManagement;
-using Lion.AbpPro.TemplateManagement;
-using Lion.AbpPro.CacheManagement;
 using Lion.AbpPro.MasterDataManagement;
+using Lion.AbpPro.TemplateManagement;
 
 namespace AuroraStruct3D
 {
@@ -22,8 +22,5 @@ namespace AuroraStruct3D
         typeof(MasterDataManagementDomainModule),
         typeof(ImportExportManagementDomainModule)
     )]
-    public class AuroraStruct3DDomainModule : AbpModule
-    {
-     
-    }
+    public class AuroraStruct3DDomainModule : AbpModule { }
 }

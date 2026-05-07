@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Microsoft.NET.Sdk">
+    <Import Project="..\..\..\common.props" />
+    <PropertyGroup>
+        <TargetFrameworks>net10.0</TargetFrameworks>
+        <RootNamespace>Lion.AbpPro.ImportExportManagement</RootNamespace>
+    </PropertyGroup>
+    <ItemGroup>
+        <ProjectReference Include="..\Volo.Abp.Ddd.Domain\Volo.Abp.Ddd.Domain.csproj" />
+        <ProjectReference Include="..\Volo.Abp.Caching\Volo.Abp.Caching.csproj" />
+        <ProjectReference Include="..\Lion.AbpPro.ImportExport\Lion.AbpPro.ImportExport.csproj" />
+        <ProjectReference Include="..\Lion.AbpPro.ImportExportManagement.Domain.Shared\Lion.AbpPro.ImportExportManagement.Domain.Shared.csproj" />
+    </ItemGroup>
+</Project>

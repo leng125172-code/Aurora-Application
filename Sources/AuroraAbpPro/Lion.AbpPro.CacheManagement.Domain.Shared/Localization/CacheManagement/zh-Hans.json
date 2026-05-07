@@ -1,0 +1,12 @@
+{
+  "culture": "zh-Hans",
+  "texts": {
+    "ManageYourProfile": "管理个人资料",
+    "SamplePageMessage": "CacheManagement模块的示例页面",
+    "Permission:CacheManagement": "缓存管理",
+    "Permission:Create": "创建",
+    "Permission:Update": "编辑",
+    "Permission:LookValue": "查看值",
+    "Permission:Delete": "删除"
+  }
+}

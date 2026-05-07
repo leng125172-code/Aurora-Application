@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Microsoft.NET.Sdk">
+    <Import Project="..\..\..\common.props" />
+    <PropertyGroup>
+        <TargetFrameworks>net10.0</TargetFrameworks>
+        <RootNamespace>Lion.AbpPro.ImportExportManagement</RootNamespace>
+    </PropertyGroup>
+    <ItemGroup>
+        <ProjectReference Include="..\Volo.Abp.Ddd.Application.Contracts\Volo.Abp.Ddd.Application.Contracts.csproj" />
+        <ProjectReference Include="..\Volo.Abp.Authorization\Volo.Abp.Authorization.csproj" />
+        <PackageReference Include="Microsoft.AspNetCore.Mvc.Core" Version="2.2.0" />
+    </ItemGroup>
+    <ItemGroup>
+        <ProjectReference Include="..\Lion.AbpPro.ImportExport\Lion.AbpPro.ImportExport.csproj" />
+        <ProjectReference Include="..\Lion.AbpPro.ImportExportManagement.Domain.Shared\Lion.AbpPro.ImportExportManagement.Domain.Shared.csproj" />
+    </ItemGroup>
+</Project>

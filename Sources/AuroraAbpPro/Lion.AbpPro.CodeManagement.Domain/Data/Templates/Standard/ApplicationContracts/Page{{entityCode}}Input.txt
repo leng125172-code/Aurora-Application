@@ -1,0 +1,22 @@
+using System;
+using System.ComponentModel.DataAnnotations;
+using Lion.AbpPro.Core;
+using {{ context.Project.NameSpace }}.{{ context.EntityModel.AggregateCodePluralized }};
+
+namespace {{ context.Project.NameSpace }}.{{ context.EntityModel.AggregateCodePluralized }};
+
+/// <summary>
+/// 分页查询{{ context.EntityModel.Description }}
+/// </summary>
+public class Page{{ context.EntityModel.Code }}Input : PagingBase
+{
+      /// <summary>
+      /// 开始创建时间
+      /// </summary>
+      public DateTime StartCreationTime { get; set; }
+
+      /// <summary>
+      /// 结束创建时间
+      /// </summary>
+      public DateTime EndCreationTime { get; set; }
+}

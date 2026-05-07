@@ -1,115 +1,1039 @@
 <Solution>
     <Configurations>
+        <Platform Name="Any CPU" />
         <Platform Name="arm64" />
         <Platform Name="x64" />
         <Platform Name="x86" />
     </Configurations>
-    <Folder Name="/.github/">
-        <File Path=".github/CODEOWNERS" />
-        <File Path=".github/CONTRIBUTING.md" />
-        <File Path=".github/copilot-instructions.md" />
-        <File Path=".github/dependabot.yml" />
-        <File Path=".github/labeler-config.yml" />
-        <File Path=".github/PULL_REQUEST_TEMPLATE.md" />
-    </Folder>
-    <Folder Name="/.github/ISSUE_TEMPLATE/">
-        <File Path=".github/ISSUE_TEMPLATE/bug_report_en.md" />
-        <File Path=".github/ISSUE_TEMPLATE/bug_report_zh.md" />
-        <File Path=".github/ISSUE_TEMPLATE/config.yml" />
-        <File Path=".github/ISSUE_TEMPLATE/feature_request_en.md" />
-        <File Path=".github/ISSUE_TEMPLATE/feature_request_zh.md" />
-    </Folder>
-    <Folder Name="/.github/workflows/">
-        <File Path=".github/workflows/labeler.yml" />
-    </Folder>
-    <Folder Name="/.Solution Items/"></Folder>
-    <Folder Name="/Assets/">
-        <File Path="Assets/Aurora Application.ico" />
-        <File Path="Assets/Aurora Application.png" />
-    </Folder>
+    <Folder Name="/.github/" />
+    <Folder Name="/.github/ISSUE_TEMPLATE/" />
+    <Folder Name="/.github/workflows/" />
+    <Folder Name="/.Solution Items/" />
+    <Folder Name="/Assets/" />
     <Folder Name="/Documents/" />
     <Folder Name="/Sources/" />
+    <Folder Name="/Sources/Aurora.AbpPro.Tools/">
+        <Project Path="Sources/Aurora.AbpProTools/Aurora.AbpPro.Tools/Aurora.AbpPro.Tools.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+    </Folder>
+    <Folder Name="/Sources/AuroraAbpPro/">
+        <Project Path="Sources/AuroraAbpPro/DotNetCore.CAP.Dashboard/DotNetCore.CAP.Dashboard.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/DotNetCore.CAP.InMemoryStorage/DotNetCore.CAP.InMemoryStorage.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/DotNetCore.CAP.MySql/DotNetCore.CAP.MySql.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/DotNetCore.CAP.PostgreSql/DotNetCore.CAP.PostgreSql.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/DotNetCore.CAP.RabbitMQ/DotNetCore.CAP.RabbitMQ.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/DotNetCore.CAP/DotNetCore.CAP.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Hangfire.AspNetCore/Hangfire.AspNetCore.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Hangfire.Core/Hangfire.Core.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Hangfire.NetCore/Hangfire.NetCore.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Hangfire.PostgreSql/Hangfire.PostgreSql.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Lion.AbpPro.AspNetCore/Lion.AbpPro.AspNetCore.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Lion.AbpPro.BasicManagement.Application.Contracts/Lion.AbpPro.BasicManagement.Application.Contracts.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Lion.AbpPro.BasicManagement.Application/Lion.AbpPro.BasicManagement.Application.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Lion.AbpPro.BasicManagement.Domain.Shared/Lion.AbpPro.BasicManagement.Domain.Shared.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Lion.AbpPro.BasicManagement.Domain/Lion.AbpPro.BasicManagement.Domain.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Lion.AbpPro.BasicManagement.EntityFrameworkCore/Lion.AbpPro.BasicManagement.EntityFrameworkCore.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Lion.AbpPro.BasicManagement.HttpApi.Client/Lion.AbpPro.BasicManagement.HttpApi.Client.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Lion.AbpPro.BasicManagement.HttpApi/Lion.AbpPro.BasicManagement.HttpApi.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Lion.AbpPro.CacheManagement.Application.Contracts/Lion.AbpPro.CacheManagement.Application.Contracts.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Lion.AbpPro.CacheManagement.Application/Lion.AbpPro.CacheManagement.Application.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Lion.AbpPro.CacheManagement.Domain.Shared/Lion.AbpPro.CacheManagement.Domain.Shared.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Lion.AbpPro.CacheManagement.Domain/Lion.AbpPro.CacheManagement.Domain.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Lion.AbpPro.CacheManagement.HttpApi.Client/Lion.AbpPro.CacheManagement.HttpApi.Client.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Lion.AbpPro.CacheManagement.HttpApi/Lion.AbpPro.CacheManagement.HttpApi.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Lion.AbpPro.CAP/Lion.AbpPro.CAP.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Lion.AbpPro.CodeManagement.Application.Contracts/Lion.AbpPro.CodeManagement.Application.Contracts.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Lion.AbpPro.CodeManagement.Application/Lion.AbpPro.CodeManagement.Application.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Lion.AbpPro.CodeManagement.Domain.Shared/Lion.AbpPro.CodeManagement.Domain.Shared.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Lion.AbpPro.CodeManagement.Domain/Lion.AbpPro.CodeManagement.Domain.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Lion.AbpPro.CodeManagement.EntityFrameworkCore/Lion.AbpPro.CodeManagement.EntityFrameworkCore.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Lion.AbpPro.CodeManagement.HttpApi.Client/Lion.AbpPro.CodeManagement.HttpApi.Client.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Lion.AbpPro.CodeManagement.HttpApi/Lion.AbpPro.CodeManagement.HttpApi.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Lion.AbpPro.Core/Lion.AbpPro.Core.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Lion.AbpPro.DataDictionaryManagement.Application.Contracts/Lion.AbpPro.DataDictionaryManagement.Application.Contracts.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Lion.AbpPro.DataDictionaryManagement.Application/Lion.AbpPro.DataDictionaryManagement.Application.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Lion.AbpPro.DataDictionaryManagement.Domain.Shared/Lion.AbpPro.DataDictionaryManagement.Domain.Shared.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Lion.AbpPro.DataDictionaryManagement.Domain/Lion.AbpPro.DataDictionaryManagement.Domain.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Lion.AbpPro.DataDictionaryManagement.EntityFrameworkCore/Lion.AbpPro.DataDictionaryManagement.EntityFrameworkCore.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Lion.AbpPro.DataDictionaryManagement.HttpApi.Client/Lion.AbpPro.DataDictionaryManagement.HttpApi.Client.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Lion.AbpPro.DataDictionaryManagement.HttpApi/Lion.AbpPro.DataDictionaryManagement.HttpApi.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Lion.AbpPro.DynamicMenuManagement.Application.Contracts/Lion.AbpPro.DynamicMenuManagement.Application.Contracts.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Lion.AbpPro.DynamicMenuManagement.Application/Lion.AbpPro.DynamicMenuManagement.Application.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Lion.AbpPro.DynamicMenuManagement.Domain.Shared/Lion.AbpPro.DynamicMenuManagement.Domain.Shared.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Lion.AbpPro.DynamicMenuManagement.Domain/Lion.AbpPro.DynamicMenuManagement.Domain.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Lion.AbpPro.DynamicMenuManagement.EntityFrameworkCore/Lion.AbpPro.DynamicMenuManagement.EntityFrameworkCore.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Lion.AbpPro.DynamicMenuManagement.HttpApi.Client/Lion.AbpPro.DynamicMenuManagement.HttpApi.Client.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Lion.AbpPro.DynamicMenuManagement.HttpApi/Lion.AbpPro.DynamicMenuManagement.HttpApi.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Lion.AbpPro.FileManagement.Application.Contracts/Lion.AbpPro.FileManagement.Application.Contracts.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Lion.AbpPro.FileManagement.Application/Lion.AbpPro.FileManagement.Application.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Lion.AbpPro.FileManagement.Domain.Shared/Lion.AbpPro.FileManagement.Domain.Shared.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Lion.AbpPro.FileManagement.Domain/Lion.AbpPro.FileManagement.Domain.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Lion.AbpPro.FileManagement.EntityFrameworkCore/Lion.AbpPro.FileManagement.EntityFrameworkCore.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Lion.AbpPro.FileManagement.HttpApi.Client/Lion.AbpPro.FileManagement.HttpApi.Client.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Lion.AbpPro.FileManagement.HttpApi/Lion.AbpPro.FileManagement.HttpApi.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Lion.AbpPro.ImportExportManagement.Application.Contracts/Lion.AbpPro.ImportExportManagement.Application.Contracts.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Lion.AbpPro.ImportExportManagement.Application/Lion.AbpPro.ImportExportManagement.Application.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Lion.AbpPro.ImportExportManagement.Domain.Shared/Lion.AbpPro.ImportExportManagement.Domain.Shared.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Lion.AbpPro.ImportExportManagement.Domain/Lion.AbpPro.ImportExportManagement.Domain.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Lion.AbpPro.ImportExportManagement.EntityFrameworkCore/Lion.AbpPro.ImportExportManagement.EntityFrameworkCore.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Lion.AbpPro.ImportExportManagement.HttpApi.Client/Lion.AbpPro.ImportExportManagement.HttpApi.Client.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Lion.AbpPro.ImportExportManagement.HttpApi/Lion.AbpPro.ImportExportManagement.HttpApi.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Lion.AbpPro.LanguageManagement.Application.Contracts/Lion.AbpPro.LanguageManagement.Application.Contracts.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Lion.AbpPro.LanguageManagement.Application/Lion.AbpPro.LanguageManagement.Application.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Lion.AbpPro.LanguageManagement.Domain.Shared/Lion.AbpPro.LanguageManagement.Domain.Shared.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Lion.AbpPro.LanguageManagement.Domain/Lion.AbpPro.LanguageManagement.Domain.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Lion.AbpPro.LanguageManagement.EntityFrameworkCore/Lion.AbpPro.LanguageManagement.EntityFrameworkCore.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Lion.AbpPro.LanguageManagement.HttpApi.Client/Lion.AbpPro.LanguageManagement.HttpApi.Client.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Lion.AbpPro.LanguageManagement.HttpApi/Lion.AbpPro.LanguageManagement.HttpApi.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Lion.AbpPro.MasterDataManagement.Application.Contracts/Lion.AbpPro.MasterDataManagement.Application.Contracts.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Lion.AbpPro.MasterDataManagement.Application/Lion.AbpPro.MasterDataManagement.Application.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Lion.AbpPro.MasterDataManagement.Domain.Shared/Lion.AbpPro.MasterDataManagement.Domain.Shared.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Lion.AbpPro.MasterDataManagement.Domain/Lion.AbpPro.MasterDataManagement.Domain.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Lion.AbpPro.MasterDataManagement.EntityFrameworkCore/Lion.AbpPro.MasterDataManagement.EntityFrameworkCore.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Lion.AbpPro.MasterDataManagement.HttpApi.Client/Lion.AbpPro.MasterDataManagement.HttpApi.Client.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Lion.AbpPro.MasterDataManagement.HttpApi/Lion.AbpPro.MasterDataManagement.HttpApi.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Lion.AbpPro.NotificationManagement.Application.Contracts/Lion.AbpPro.NotificationManagement.Application.Contracts.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Lion.AbpPro.NotificationManagement.Application/Lion.AbpPro.NotificationManagement.Application.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Lion.AbpPro.NotificationManagement.Domain.Shared/Lion.AbpPro.NotificationManagement.Domain.Shared.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Lion.AbpPro.NotificationManagement.Domain/Lion.AbpPro.NotificationManagement.Domain.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Lion.AbpPro.NotificationManagement.EntityFrameworkCore/Lion.AbpPro.NotificationManagement.EntityFrameworkCore.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Lion.AbpPro.NotificationManagement.HttpApi.Client/Lion.AbpPro.NotificationManagement.HttpApi.Client.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Lion.AbpPro.NotificationManagement.HttpApi/Lion.AbpPro.NotificationManagement.HttpApi.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Lion.AbpPro.TemplateManagement.Application.Contracts/Lion.AbpPro.TemplateManagement.Application.Contracts.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Lion.AbpPro.TemplateManagement.Application/Lion.AbpPro.TemplateManagement.Application.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Lion.AbpPro.TemplateManagement.Domain.Shared/Lion.AbpPro.TemplateManagement.Domain.Shared.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Lion.AbpPro.TemplateManagement.Domain/Lion.AbpPro.TemplateManagement.Domain.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Lion.AbpPro.TemplateManagement.EntityFrameworkCore/Lion.AbpPro.TemplateManagement.EntityFrameworkCore.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Lion.AbpPro.TemplateManagement.HttpApi.Client/Lion.AbpPro.TemplateManagement.HttpApi.Client.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Lion.AbpPro.TemplateManagement.HttpApi/Lion.AbpPro.TemplateManagement.HttpApi.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/MiniProfiler.AspNetCore.Mvc/MiniProfiler.AspNetCore.Mvc.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/MiniProfiler.AspNetCore/MiniProfiler.AspNetCore.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/MiniProfiler.EntityFrameworkCore/MiniProfiler.EntityFrameworkCore.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/MiniProfiler.Shared/MiniProfiler.Shared.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Savorboard.CAP.InMemoryMessageQueue/Savorboard.CAP.InMemoryMessageQueue.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Volo.Abp.Account.Application.Contracts/Volo.Abp.Account.Application.Contracts.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Volo.Abp.Account.Application/Volo.Abp.Account.Application.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Volo.Abp.Account.Web/Volo.Abp.Account.Web.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Volo.Abp.AspNetCore.MultiTenancy/Volo.Abp.AspNetCore.MultiTenancy.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Volo.Abp.AspNetCore.Mvc.Contracts/Volo.Abp.AspNetCore.Mvc.Contracts.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Volo.Abp.AspNetCore.Mvc.UI.Theme.Basic/Volo.Abp.AspNetCore.Mvc.UI.Theme.Basic.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Volo.Abp.AspNetCore.Mvc/Volo.Abp.AspNetCore.Mvc.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Volo.Abp.AspNetCore.Serilog/Volo.Abp.AspNetCore.Serilog.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Volo.Abp.AspNetCore.SignalR/Volo.Abp.AspNetCore.SignalR.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Volo.Abp.AspNetCore/Volo.Abp.AspNetCore.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Volo.Abp.AuditLogging.Domain.Shared/Volo.Abp.AuditLogging.Domain.Shared.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Volo.Abp.AuditLogging.Domain/Volo.Abp.AuditLogging.Domain.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Volo.Abp.AuditLogging.EntityFrameworkCore/Volo.Abp.AuditLogging.EntityFrameworkCore.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Volo.Abp.Authorization.Abstractions/Volo.Abp.Authorization.Abstractions.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Volo.Abp.Authorization/Volo.Abp.Authorization.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Volo.Abp.Autofac/Volo.Abp.Autofac.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Volo.Abp.BackgroundJobs.Domain.Shared/Volo.Abp.BackgroundJobs.Domain.Shared.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Volo.Abp.BackgroundJobs.Domain/Volo.Abp.BackgroundJobs.Domain.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Volo.Abp.BackgroundJobs.EntityFrameworkCore/Volo.Abp.BackgroundJobs.EntityFrameworkCore.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Volo.Abp.BackgroundJobs.HangFire/Volo.Abp.BackgroundJobs.HangFire.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Volo.Abp.BlobStoring.FileSystem/Volo.Abp.BlobStoring.FileSystem.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Volo.Abp.BlobStoring/Volo.Abp.BlobStoring.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Volo.Abp.Caching.StackExchangeRedis/Volo.Abp.Caching.StackExchangeRedis.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Volo.Abp.Caching/Volo.Abp.Caching.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Volo.Abp.Core/Volo.Abp.Core.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Volo.Abp.Ddd.Application.Contracts/Volo.Abp.Ddd.Application.Contracts.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Volo.Abp.Ddd.Application/Volo.Abp.Ddd.Application.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Volo.Abp.Ddd.Domain/Volo.Abp.Ddd.Domain.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Volo.Abp.DistributedLocking/Volo.Abp.DistributedLocking.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Volo.Abp.EntityFrameworkCore.PostgreSql/Volo.Abp.EntityFrameworkCore.PostgreSql.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Volo.Abp.EntityFrameworkCore/Volo.Abp.EntityFrameworkCore.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Volo.Abp.EventBus/Volo.Abp.EventBus.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Volo.Abp.FeatureManagement.Application.Contracts/Volo.Abp.FeatureManagement.Application.Contracts.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Volo.Abp.FeatureManagement.Application/Volo.Abp.FeatureManagement.Application.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Volo.Abp.FeatureManagement.Domain.Shared/Volo.Abp.FeatureManagement.Domain.Shared.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Volo.Abp.FeatureManagement.Domain/Volo.Abp.FeatureManagement.Domain.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Volo.Abp.FeatureManagement.EntityFrameworkCore/Volo.Abp.FeatureManagement.EntityFrameworkCore.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Volo.Abp.HangFire/Volo.Abp.HangFire.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Volo.Abp.Http.Client/Volo.Abp.Http.Client.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Volo.Abp.Identity.Application.Contracts/Volo.Abp.Identity.Application.Contracts.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Volo.Abp.Identity.Application/Volo.Abp.Identity.Application.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Volo.Abp.Identity.AspNetCore/Volo.Abp.Identity.AspNetCore.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Volo.Abp.Identity.Domain.Shared/Volo.Abp.Identity.Domain.Shared.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Volo.Abp.Identity.Domain/Volo.Abp.Identity.Domain.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Volo.Abp.Identity.EntityFrameworkCore/Volo.Abp.Identity.EntityFrameworkCore.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Volo.Abp.PermissionManagement.Application.Contracts/Volo.Abp.PermissionManagement.Application.Contracts.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Volo.Abp.PermissionManagement.Application/Volo.Abp.PermissionManagement.Application.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Volo.Abp.PermissionManagement.Domain.Identity/Volo.Abp.PermissionManagement.Domain.Identity.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Volo.Abp.PermissionManagement.Domain.Shared/Volo.Abp.PermissionManagement.Domain.Shared.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Volo.Abp.PermissionManagement.EntityFrameworkCore/Volo.Abp.PermissionManagement.EntityFrameworkCore.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Volo.Abp.SettingManagement.Application.Contracts/Volo.Abp.SettingManagement.Application.Contracts.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Volo.Abp.SettingManagement.Application/Volo.Abp.SettingManagement.Application.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Volo.Abp.SettingManagement.Domain.Shared/Volo.Abp.SettingManagement.Domain.Shared.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Volo.Abp.SettingManagement.Domain/Volo.Abp.SettingManagement.Domain.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Volo.Abp.SettingManagement.EntityFrameworkCore/Volo.Abp.SettingManagement.EntityFrameworkCore.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Volo.Abp.TenantManagement.Application.Contracts/Volo.Abp.TenantManagement.Application.Contracts.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Volo.Abp.TenantManagement.Application/Volo.Abp.TenantManagement.Application.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Volo.Abp.TenantManagement.Domain.Shared/Volo.Abp.TenantManagement.Domain.Shared.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Volo.Abp.TenantManagement.Domain/Volo.Abp.TenantManagement.Domain.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Volo.Abp.TenantManagement.EntityFrameworkCore/Volo.Abp.TenantManagement.EntityFrameworkCore.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Volo.Abp.Validation/Volo.Abp.Validation.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraAbpPro/Volo.Abp/Volo.Abp.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+    </Folder>
     <Folder Name="/Sources/AuroraStruct3D/">
+        <Project
+            Path="Sources/AuroraStruct3D/Aurora.RK3588NPU/Aurora.RK3588NPU.pyproj"
+            Type="888888a0-9f3d-457c-b088-3a5042f75d52"
+            Id="744aa81b-42c2-4fac-bf64-f75ba96a1156"
+        >
+            <Platform Project="AnyCPU" />
+            <Build Project="false" />
+        </Project>
         <Project Path="Sources/AuroraStruct3D/AuroraStruct3D.Application.Contracts/AuroraStruct3D.Application.Contracts.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
             <Platform Solution="*|arm64" Project="arm64" />
             <Platform Solution="*|x64" Project="x64" />
             <Platform Solution="*|x86" Project="x86" />
         </Project>
         <Project Path="Sources/AuroraStruct3D/AuroraStruct3D.Application/AuroraStruct3D.Application.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
             <Platform Solution="*|arm64" Project="arm64" />
             <Platform Solution="*|x64" Project="x64" />
             <Platform Solution="*|x86" Project="x86" />
         </Project>
         <Project Path="Sources/AuroraStruct3D/AuroraStruct3D.DbMigrator/AuroraStruct3D.DbMigrator.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
             <Platform Solution="*|arm64" Project="arm64" />
             <Platform Solution="*|x64" Project="x64" />
             <Platform Solution="*|x86" Project="x86" />
         </Project>
         <Project Path="Sources/AuroraStruct3D/AuroraStruct3D.Domain.Shared/AuroraStruct3D.Domain.Shared.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
             <Platform Solution="*|arm64" Project="arm64" />
             <Platform Solution="*|x64" Project="x64" />
             <Platform Solution="*|x86" Project="x86" />
         </Project>
         <Project Path="Sources/AuroraStruct3D/AuroraStruct3D.Domain/AuroraStruct3D.Domain.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
             <Platform Solution="*|arm64" Project="arm64" />
             <Platform Solution="*|x64" Project="x64" />
             <Platform Solution="*|x86" Project="x86" />
         </Project>
         <Project Path="Sources/AuroraStruct3D/AuroraStruct3D.EntityFrameworkCore/AuroraStruct3D.EntityFrameworkCore.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
             <Platform Solution="*|arm64" Project="arm64" />
             <Platform Solution="*|x64" Project="x64" />
             <Platform Solution="*|x86" Project="x86" />
         </Project>
+        <Project Path="Sources/AuroraStruct3D/AuroraStruct3D.Frontend/AuroraStruct3D.Frontend.esproj">
+            <Platform Project="AnyCPU" />
+            <Build />
+            <Deploy />
+        </Project>
         <Project Path="Sources/AuroraStruct3D/AuroraStruct3D.HttpApi.Client/AuroraStruct3D.HttpApi.Client.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
             <Platform Solution="*|arm64" Project="arm64" />
             <Platform Solution="*|x64" Project="x64" />
             <Platform Solution="*|x86" Project="x86" />
         </Project>
         <Project Path="Sources/AuroraStruct3D/AuroraStruct3D.HttpApi.Host/AuroraStruct3D.HttpApi.Host.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
             <Platform Solution="*|arm64" Project="arm64" />
             <Platform Solution="*|x64" Project="x64" />
             <Platform Solution="*|x86" Project="x86" />
         </Project>
         <Project Path="Sources/AuroraStruct3D/AuroraStruct3D.HttpApi/AuroraStruct3D.HttpApi.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
             <Platform Solution="*|arm64" Project="arm64" />
             <Platform Solution="*|x64" Project="x64" />
             <Platform Solution="*|x86" Project="x86" />
         </Project>
         <Project Path="Sources/AuroraStruct3D/AuroraStruct3D.WebGateway/AuroraStruct3D.WebGateway.csproj">
-            <Platform Solution="*|arm64" Project="arm64" />
-            <Platform Solution="*|x64" Project="x64" />
-            <Platform Solution="*|x86" Project="x86" />
-        </Project>
-    </Folder>
-    <Folder Name="/Tests/" />
-    <Folder Name="/Tests/AuroraStruct3D/">
-        <Project Path="Tests/AuroraStruct3D/AuroraStruct3D.Application.Tests/AuroraStruct3D.Application.Tests.csproj">
-            <Platform Solution="*|arm64" Project="arm64" />
-            <Platform Solution="*|x64" Project="x64" />
-            <Platform Solution="*|x86" Project="x86" />
-        </Project>
-        <Project Path="Tests/AuroraStruct3D/AuroraStruct3D.Domain.Tests/AuroraStruct3D.Domain.Tests.csproj">
-            <Platform Solution="*|arm64" Project="arm64" />
-            <Platform Solution="*|x64" Project="x64" />
-            <Platform Solution="*|x86" Project="x86" />
-        </Project>
-        <Project Path="Tests/AuroraStruct3D/AuroraStruct3D.EntityFrameworkCore.Tests/AuroraStruct3D.EntityFrameworkCore.Tests.csproj">
-            <Platform Solution="*|arm64" Project="arm64" />
-            <Platform Solution="*|x64" Project="x64" />
-            <Platform Solution="*|x86" Project="x86" />
-        </Project>
-        <Project Path="Tests/AuroraStruct3D/AuroraStruct3D.HttpApi.Client.ConsoleTestApp/AuroraStruct3D.HttpApi.Client.ConsoleTestApp.csproj">
-            <Platform Solution="*|arm64" Project="arm64" />
-            <Platform Solution="*|x64" Project="x64" />
-            <Platform Solution="*|x86" Project="x86" />
-        </Project>
-        <Project Path="Tests/AuroraStruct3D/AuroraStruct3D.TestBase/AuroraStruct3D.TestBase.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
             <Platform Solution="*|arm64" Project="arm64" />
             <Platform Solution="*|x64" Project="x64" />
             <Platform Solution="*|x86" Project="x86" />
         </Project>
     </Folder>
     <Folder Name="/Tools/" />
-    <Folder Name="/Tools/CSharpTools/"></Folder>
-    <Folder Name="/Tools/PythonTools/"></Folder>
+    <Folder Name="/Tools/CSharpTools/" />
+    <Folder Name="/Tools/PythonTools/" />
 </Solution>

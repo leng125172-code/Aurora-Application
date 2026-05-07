@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Microsoft.NET.Sdk">
+    <Import Project="..\..\..\common.props" />
+    <PropertyGroup>
+        <TargetFrameworks>net10.0</TargetFrameworks>
+        <AssemblyName>Lion.AbpPro.Core</AssemblyName>
+        <RootNamespace />
+        <NoWarn>SYSLIB0045</NoWarn>
+    </PropertyGroup>
+    <ItemGroup>
+        <ProjectReference Include="..\Lion.AbpPro.Localization\Lion.AbpPro.Localization.csproj" />
+    </ItemGroup>
+    <ItemGroup>
+        <PackageReference Include="Mapster" Version="7.4.0" />
+        <PackageReference Include="BouncyCastle.Cryptography" Version="2.6.1" />
+    </ItemGroup>
+</Project>

@@ -1,34 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
 <Project Sdk="Microsoft.NET.Sdk.Web">
     <Import Project="..\..\..\common.props" />
     <PropertyGroup>
         <TargetFramework>net10.0</TargetFramework>
-        <RootNamespace>AuroraStruct3D.HttpApi.Host</RootNamespace>
         <PreserveCompilationReferences>true</PreserveCompilationReferences>
         <UserSecretsId>AuroraStruct3D-4681b4fd-151f-4221-84a4-929d86723e4c</UserSecretsId>
-        <OutputType>Exe</OutputType>
-        <Description>AuroraStruct3D(httpApiHOST)，为多端应用提供高效的HTTPAPI服务。</Description>
     </PropertyGroup>
+
     <ItemGroup>
-        <PackageReference Include="Volo.Abp.Account.Web" />
-        <PackageReference Include="Volo.Abp.Caching.StackExchangeRedis" />
-        <PackageReference Include="Volo.Abp.AspNetCore.Serilog" />
-        <PackageReference Include="Volo.Abp.DistributedLocking" />
-        <PackageReference Include="Volo.Abp.BlobStoring.FileSystem" />
-        <PackageReference Include="Volo.Abp.BackgroundJobs.HangFire" />
-        <PackageReference Include="Lion.AbpPro.CAP.EntityFrameworkCore" />
-        <PackageReference Include="DistributedLock.Redis" />
-        <PackageReference Include="Lion.AbpPro.AspNetCore" />
-        <PackageReference Include="DotNetCore.CAP.Dashboard" />
-        <PackageReference Include="DotNetCore.CAP.InMemoryStorage" />
-        <PackageReference Include="Savorboard.CAP.InMemoryMessageQueue" />
-        <PackageReference Include="DotNetCore.CAP.PostgreSql" />
-        <PackageReference Include="Hangfire.PostgreSql" />
+        <ProjectReference Include="..\..\AuroraAbpPro\Lion.AbpPro.CAP\Lion.AbpPro.CAP.csproj" />
+        <ProjectReference Include="..\..\AuroraAbpPro\Volo.Abp.HangFire\Volo.Abp.HangFire.csproj" />
+        <ProjectReference Include="..\..\AuroraAbpPro\Hangfire.PostgreSql\Hangfire.PostgreSql.csproj" />
+        <ProjectReference Include="..\..\AuroraAbpPro\DotNetCore.CAP\DotNetCore.CAP.csproj" />
+        <ProjectReference Include="..\..\AuroraAbpPro\DotNetCore.CAP.Dashboard\DotNetCore.CAP.Dashboard.csproj" />
+        <ProjectReference Include="..\..\AuroraAbpPro\DotNetCore.CAP.MySql\DotNetCore.CAP.MySql.csproj" />
+        <ProjectReference Include="..\..\AuroraAbpPro\DotNetCore.CAP.PostgreSql\DotNetCore.CAP.PostgreSql.csproj" />
+        <ProjectReference Include="..\..\AuroraAbpPro\DotNetCore.CAP.RabbitMQ\DotNetCore.CAP.RabbitMQ.csproj" />
+        <ProjectReference Include="..\..\AuroraAbpPro\DotNetCore.CAP.InMemoryStorage\DotNetCore.CAP.InMemoryStorage.csproj" />
+        <ProjectReference Include="..\..\AuroraAbpPro\Savorboard.CAP.InMemoryMessageQueue\Savorboard.CAP.InMemoryMessageQueue.csproj" />
+
+        <ProjectReference Include="..\..\AuroraAbpPro\Volo.Abp.Caching.StackExchangeRedis\Volo.Abp.Caching.StackExchangeRedis.csproj" />
+        <ProjectReference Include="..\..\AuroraAbpPro\Volo.Abp.AspNetCore.Serilog\Volo.Abp.AspNetCore.Serilog.csproj" />
+        <ProjectReference Include="..\..\AuroraAbpPro\Volo.Abp.DistributedLocking\Volo.Abp.DistributedLocking.csproj" />
+        <ProjectReference Include="..\..\AuroraAbpPro\Volo.Abp.BlobStoring.FileSystem\Volo.Abp.BlobStoring.FileSystem.csproj" />
+        <PackageReference Include="DistributedLock.Redis" Version="1.1.0" />
+        <ProjectReference Include="..\..\AuroraAbpPro\Lion.AbpPro.AspNetCore\Lion.AbpPro.AspNetCore.csproj" />
     </ItemGroup>
+
     <ItemGroup>
         <ProjectReference Include="..\AuroraStruct3D.Application\AuroraStruct3D.Application.csproj" />
         <ProjectReference Include="..\AuroraStruct3D.EntityFrameworkCore\AuroraStruct3D.EntityFrameworkCore.csproj" />
         <ProjectReference Include="..\AuroraStruct3D.HttpApi\AuroraStruct3D.HttpApi.csproj" />
     </ItemGroup>
+
     <ItemGroup>
         <Compile Remove="Logs\**" />
         <Content Remove="Logs\**" />
@@ -38,7 +42,40 @@
             <CopyToOutputDirectory>Always</CopyToOutputDirectory>
         </None>
     </ItemGroup>
+
     <ItemGroup>
         <Content Remove="$(UserProfile)\.nuget\packages\*\*\contentFiles\any\*\*.abppkg*.json" />
     </ItemGroup>
+
+    <ItemGroup>
+        <Folder Include="Controllers\" />
+    </ItemGroup>
+
+    <!-- 前端 SPA 工程目录（相对路径） -->
+    <PropertyGroup>
+        <SpaRoot>..\AuroraStruct3D.Frontend\</SpaRoot>
+        <DefaultItemExcludes>$(DefaultItemExcludes);$(SpaRoot)node_modules\**;$(SpaRoot)dist\**</DefaultItemExcludes>
+    </PropertyGroup>
+
+    <!-- 让 VS 文件视图忽略前端中间产物 -->
+    <ItemGroup>
+        <Content Remove="$(SpaRoot)node_modules\**" />
+        <Content Remove="$(SpaRoot)dist\**" />
+        <None Remove="$(SpaRoot)node_modules\**" />
+        <None Remove="$(SpaRoot)dist\**" />
+    </ItemGroup>
+
+    <!--
+        Release 配置下：先执行 npm ci 安装依赖，再执行 npm run build
+        Debug 配置下：跳过 npm ci（依赖已就绪），直接执行 npm run build 更新 wwwroot
+    -->
+    <Target Name="BuildSpa" BeforeTargets="BeforeBuild">
+        <Message Importance="high" Text="正在构建前端 SPA（AuroraStruct3D.Frontend）..." />
+        <Exec
+            WorkingDirectory="$(SpaRoot)"
+            Command="npm ci"
+            Condition="'$(Configuration)' == 'Release'"
+        />
+        <Exec WorkingDirectory="$(SpaRoot)" Command="npm run build" />
+    </Target>
 </Project>

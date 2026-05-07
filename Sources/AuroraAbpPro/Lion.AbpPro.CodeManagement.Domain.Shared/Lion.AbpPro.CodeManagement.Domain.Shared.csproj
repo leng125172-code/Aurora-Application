@@ -1,0 +1,25 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Microsoft.NET.Sdk">
+    <Import Project="..\..\..\common.props" />
+    <PropertyGroup>
+        <TargetFrameworks>net10.0</TargetFrameworks>
+        <RootNamespace>Lion.AbpPro.CodeManagement</RootNamespace>
+        <GenerateEmbeddedFilesManifest>true</GenerateEmbeddedFilesManifest>
+    </PropertyGroup>
+    <ItemGroup>
+        <ProjectReference Include="..\Volo.Abp.Validation\Volo.Abp.Validation.csproj" />
+    </ItemGroup>
+    <ItemGroup>
+        <PackageReference Include="Humanizer.Core.zh-Hans" Version="3.0.1" />
+    </ItemGroup>
+    <ItemGroup>
+        <PackageReference Include="Microsoft.Extensions.FileProviders.Embedded" Version="10.0.2" />
+    </ItemGroup>
+    <ItemGroup>
+        <EmbeddedResource Include="Localization\CodeManagement\*.json" />
+        <Content Remove="Localization\CodeManagement\*.json" />
+    </ItemGroup>
+    <ItemGroup>
+        <ProjectReference Include="..\Lion.AbpPro.Core\Lion.AbpPro.Core.csproj" />
+    </ItemGroup>
+</Project>

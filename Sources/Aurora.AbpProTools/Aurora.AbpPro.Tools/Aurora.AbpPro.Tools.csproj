@@ -1,0 +1,58 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <Import Project="..\..\..\common.props" />
+
+    <!-- 项目基本属性 -->
+    <PropertyGroup>
+        <!-- 输出类型：WinExe 表示无控制台窗口的 Windows 可执行程序 -->
+        <OutputType>WinExe</OutputType>
+        <!-- 目标框架：.NET 10 Windows，启用 WPF 所需的桌面运行时 -->
+        <TargetFramework>net10.0-windows</TargetFramework>
+        <!-- 根命名空间 -->
+        <RootNamespace>Aurora.AbpPro.Tools</RootNamespace>
+        <!-- 程序集说明 -->
+        <Description>Aurora AbpPro Tools 提供框架创建、更新等功能（WPF + Generic Host + HandyControl + NLog）。</Description>
+        <!-- 启用 WPF -->
+        <UseWPF>True</UseWPF>
+    </PropertyGroup>
+
+    <!-- NuGet 包引用：UI 框架、主机模式、日志、MVVM、配置 -->
+    <ItemGroup>
+        <!-- HandyControl：WPF 控件库 -->
+        <PackageReference Include="HandyControl" Version="3.5.1" />
+        <!-- Generic Host：依赖注入与应用生命周期管理 -->
+        <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.2" />
+        <!-- 配置（JSON 文件支持） -->
+        <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="10.0.2" />
+        <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="10.0.2" />
+        <!-- NLog：日志组件 + Host 适配 -->
+        <PackageReference Include="NLog" Version="5.3.4" />
+        <PackageReference Include="NLog.Extensions.Hosting" Version="5.3.15" />
+        <PackageReference Include="NLog.Extensions.Logging" Version="5.3.15" />
+        <!-- MVVM 工具包 -->
+        <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
+        <PackageReference Include="Nodify" Version="6.6.0" />
+        <!-- Octokit：GitHub REST API 客户端，用于查询 Release / 下载资产 -->
+        <PackageReference Include="Octokit" Version="13.0.1" />
+    </ItemGroup>
+
+    <!-- 配置文件：随构建复制到输出目录 -->
+    <ItemGroup>
+        <None Update="NLog.config">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Update="appsettings.json">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+    </ItemGroup>
+
+    <!-- 嵌入式图像资源（国旗等） -->
+    <ItemGroup>
+        <Resource Include="Resources\Img\**\*.png" />
+    </ItemGroup>
+
+    <!-- 嵌入资源：生成框架时由工具提取，写入到每个目标项目的 Assets 目录 -->
+    <ItemGroup>
+        <EmbeddedResource Include="Assets\AuroraApplication.ico" />
+        <EmbeddedResource Include="Assets\AuroraApplication.png" />
+    </ItemGroup>
+</Project>

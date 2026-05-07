@@ -1,0 +1,43 @@
+<Application
+    x:Class="Aurora.AbpPro.Tools.App"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:hc="https://handyorg.github.io/handycontrol"
+    xmlns:helpers="clr-namespace:Aurora.AbpPro.Tools.Helpers"
+>
+    <!--
+        应用资源字典
+        说明：
+        1. MergedDictionaries[0] 为皮肤外壳：内部承载 HandyControl 皮肤资源（颜色），运行时由 IThemeService 动态替换
+        2. MergedDictionaries[1] 为主题外壳：内部承载 HandyControl 主题样式（Brush/Style），随皮肤变化时一并重载
+        3. MergedDictionaries[2] 为多语言资源，运行时由 ILocalizationService 动态替换
+        注意：HandyControl 的 Brush 在 Theme.xaml 中通过 StaticResource 引用 Skin 的 Color，
+        因此切换皮肤必须同时重新加载 Theme.xaml，让 Brush 重新构造。
+    -->
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <!--  [0] 皮肤外壳  -->
+                <ResourceDictionary>
+                    <ResourceDictionary.MergedDictionaries>
+                        <ResourceDictionary Source="pack://application:,,,/HandyControl;component/Themes/SkinDefault.xaml" />
+                    </ResourceDictionary.MergedDictionaries>
+                </ResourceDictionary>
+                <!--  [1] 主题外壳  -->
+                <ResourceDictionary>
+                    <ResourceDictionary.MergedDictionaries>
+                        <ResourceDictionary Source="pack://application:,,,/HandyControl;component/Themes/Theme.xaml" />
+                    </ResourceDictionary.MergedDictionaries>
+                </ResourceDictionary>
+                <!--  [2] 多语言资源（默认中文）  -->
+                <ResourceDictionary Source="pack://application:,,,/Aurora.AbpPro.Tools;component/Resources/Langs/zh-CN.xaml" />
+                <!--  [3] 自定义几何资源（补充 HandyControl 未提供的图标）  -->
+                <ResourceDictionary Source="pack://application:,,,/Aurora.AbpPro.Tools;component/Resources/Geometries.xaml" />
+                <!--  [4] Nodify 节点编辑器深色主题（依赖图弹窗用）  -->
+                <ResourceDictionary Source="pack://application:,,,/Nodify;component/Themes/Dark.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+            <!--  全局 Converter：把仓库来源映射为节点头部画刷  -->
+            <helpers:RepoToBrushConverter x:Key="RepoToBrushConverter" />
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>

@@ -1,0 +1,39 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+    <Import Project="..\..\..\configureawait.props" />
+    <Import Project="..\..\..\common.props" />
+    <PropertyGroup>
+        <AssemblyName>MiniProfiler.Shared</AssemblyName>
+        <Title>MiniProfiler.Shared</Title>
+        <Authors>Marc Gravell, Jarrod Dixon, Yaakov Ellis, Nick Craver</Authors>
+        <Description>You shouldn't reference this - MiniProfiler's shared library for all frameworks</Description>
+        <TargetFrameworks>net10.0</TargetFrameworks>
+
+        <DefineConstants Condition="'$(TargetFramework)' == 'net472'">NEWTONSOFT</DefineConstants>
+        <DefineConstants Condition="'$(TargetFramework)' == 'netstandard2.0'"
+            >NEWTONSOFT</DefineConstants
+        >
+        <DefineConstants Condition="'$(TargetFramework)' == 'net8.0'">STJSON</DefineConstants>
+        <DefineConstants Condition="'$(TargetFramework)' == 'net10.0'">STJSON</DefineConstants>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference
+            Include="Microsoft.Extensions.DependencyInjection.Abstractions"
+            Version="2.0.0"
+        />
+    </ItemGroup>
+
+    <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">
+        <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+        <PackageReference Include="System.Diagnostics.DiagnosticSource" Version="4.4.1" />
+        <PackageReference Include="System.Reflection.Emit.Lightweight" Version="4.3.0" />
+    </ItemGroup>
+
+    <ItemGroup Condition="'$(TargetFramework)' == 'net472'">
+        <Reference Include="System.Transactions" />
+        <Reference Include="System.Web" />
+
+        <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+        <PackageReference Include="System.Diagnostics.DiagnosticSource" Version="4.4.1" />
+    </ItemGroup>
+</Project>

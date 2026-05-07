@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Microsoft.NET.Sdk">
+    <Import Project="..\..\..\common.props" />
+    <PropertyGroup>
+        <TargetFrameworks>net10.0</TargetFrameworks>
+        <RootNamespace>Lion.AbpPro.CodeManagement</RootNamespace>
+    </PropertyGroup>
+    <ItemGroup>
+        <ProjectReference Include="..\Volo.Abp.Ddd.Domain\Volo.Abp.Ddd.Domain.csproj" />
+        <ProjectReference Include="..\Volo.Abp.Caching\Volo.Abp.Caching.csproj" />
+        <PackageReference Include="Scriban" Version="7.0.0" />
+        <ProjectReference Include="..\Lion.AbpPro.CodeManagement.Domain.Shared\Lion.AbpPro.CodeManagement.Domain.Shared.csproj" />
+    </ItemGroup>
+    <ItemGroup>
+        <EmbeddedResource Include="Data\Templates\Standard\**\*.txt" />
+        <EmbeddedResource Include="Data\Templates\Standard\**\*.ts" />
+        <EmbeddedResource Include="Data\Templates\Standard\**\*.vue" />
+    </ItemGroup>
+</Project>

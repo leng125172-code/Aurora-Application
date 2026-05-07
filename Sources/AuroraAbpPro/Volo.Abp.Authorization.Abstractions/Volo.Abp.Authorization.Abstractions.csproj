@@ -1,0 +1,23 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Microsoft.NET.Sdk">
+    <Import Project="..\..\..\configureawait.props" />
+    <Import Project="..\..\..\common.props" />
+    <PropertyGroup>
+        <TargetFrameworks>net10.0</TargetFrameworks>
+        <Nullable>enable</Nullable>
+        <WarningsAsErrors>Nullable</WarningsAsErrors>
+        <AssemblyName>Volo.Abp.Authorization.Abstractions</AssemblyName>
+        <PackageId>Volo.Abp.Authorization.Abstractions</PackageId>
+        <AssetTargetFallback>$(AssetTargetFallback);portable-net45+win8+wp8+wpa81;</AssetTargetFallback>
+        <GenerateAssemblyConfigurationAttribute>false</GenerateAssemblyConfigurationAttribute>
+        <GenerateAssemblyCompanyAttribute>false</GenerateAssemblyCompanyAttribute>
+        <GenerateAssemblyProductAttribute>false</GenerateAssemblyProductAttribute>
+        <RootNamespace />
+    </PropertyGroup>
+    <ItemGroup>
+        <PackageReference Include="Microsoft.AspNetCore.Authorization" Version="10.0.2" />
+    </ItemGroup>
+    <ItemGroup>
+        <ProjectReference Include="..\Volo.Abp.MultiTenancy.Abstractions\Volo.Abp.MultiTenancy.Abstractions.csproj" />
+    </ItemGroup>
+</Project>

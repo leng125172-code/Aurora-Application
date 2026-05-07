@@ -1,0 +1,19 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Microsoft.NET.Sdk">
+    <Import Project="..\..\..\common.props" />
+    <PropertyGroup>
+        <TargetFrameworks>net10.0</TargetFrameworks>
+        <RootNamespace>Lion.AbpPro.BasicManagement</RootNamespace>
+    </PropertyGroup>
+    <ItemGroup>
+        <ProjectReference Include="..\Volo.Abp.EntityFrameworkCore\Volo.Abp.EntityFrameworkCore.csproj" />
+        <ProjectReference Include="..\Volo.Abp.PermissionManagement.EntityFrameworkCore\Volo.Abp.PermissionManagement.EntityFrameworkCore.csproj" />
+        <ProjectReference Include="..\Volo.Abp.SettingManagement.EntityFrameworkCore\Volo.Abp.SettingManagement.EntityFrameworkCore.csproj" />
+        <ProjectReference Include="..\Volo.Abp.Identity.EntityFrameworkCore\Volo.Abp.Identity.EntityFrameworkCore.csproj" />
+        <ProjectReference Include="..\Volo.Abp.BackgroundJobs.EntityFrameworkCore\Volo.Abp.BackgroundJobs.EntityFrameworkCore.csproj" />
+        <ProjectReference Include="..\Volo.Abp.AuditLogging.EntityFrameworkCore\Volo.Abp.AuditLogging.EntityFrameworkCore.csproj" />
+        <ProjectReference Include="..\Volo.Abp.TenantManagement.EntityFrameworkCore\Volo.Abp.TenantManagement.EntityFrameworkCore.csproj" />
+        <ProjectReference Include="..\Volo.Abp.FeatureManagement.EntityFrameworkCore\Volo.Abp.FeatureManagement.EntityFrameworkCore.csproj" />
+        <ProjectReference Include="..\Lion.AbpPro.BasicManagement.Domain\Lion.AbpPro.BasicManagement.Domain.csproj" />
+    </ItemGroup>
+</Project>
