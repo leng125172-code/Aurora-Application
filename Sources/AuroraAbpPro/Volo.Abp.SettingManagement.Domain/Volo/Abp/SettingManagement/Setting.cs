@@ -13,10 +13,10 @@ public class Setting : Entity<Guid>, IAggregateRoot<Guid>
     public virtual string Value { get; internal set; }
 
     [CanBeNull]
-    public virtual string ProviderName { get; protected set; }
+    public virtual string? ProviderName { get; protected set; }
 
     [CanBeNull]
-    public virtual string ProviderKey { get; protected set; }
+    public virtual string? ProviderKey { get; protected set; }
 
     protected Setting() { }
 

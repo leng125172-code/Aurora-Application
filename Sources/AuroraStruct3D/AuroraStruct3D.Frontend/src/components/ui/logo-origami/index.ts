@@ -1,1 +1,1 @@
-export { default as LogoOrigami } from "./LogoOrigami.vue";
+export { default as LogoOrigami } from './LogoOrigami.vue'

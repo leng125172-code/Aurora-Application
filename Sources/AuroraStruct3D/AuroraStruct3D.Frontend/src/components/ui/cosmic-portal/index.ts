@@ -1,1 +1,1 @@
-export { default as CosmicPortal } from "./CosmicPortal.vue";
+export { default as CosmicPortal } from './CosmicPortal.vue'

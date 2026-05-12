@@ -1,1 +1,1 @@
-export { default as HaloSearch } from "./HaloSearch.vue";
+export { default as HaloSearch } from './HaloSearch.vue'

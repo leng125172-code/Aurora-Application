@@ -27,7 +27,7 @@ void main() {
 
     // Apply the opacity uniform to the alpha channel of the final color
     gl_FragColor = vec4(sum.rgb, sum.a * uOpacity); // sum.a is usually 1.0 from texture, so multiply by uOpacity
-}`;
+}`
 
 export const gaussianBlurVertexShader = `
   attribute vec2 uv;
@@ -43,7 +43,7 @@ export const gaussianBlurVertexShader = `
     vUv = vec2(uv.x, 1.0 - uv.y);
     gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
   }
-`;
+`
 
 export const postProcessFragmentShader = /* glsl */ `precision highp float;
 
@@ -81,7 +81,7 @@ void main() {
     // The original '* vignetteIntensity' would brighten. Vignettes usually darken.
     // If you want a more subtle darkening, adjust the '(1.0 - vignetteIntensity)''.
     gl_FragColor = vec4(color, 1.);
-}`;
+}`
 
 export const postProcessVertexShader = /* glsl */ `
 attribute vec2 uv;
@@ -95,4 +95,4 @@ varying vec2 vUv;
 void main() {
     vUv = uv;
     gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-}`;
+}`

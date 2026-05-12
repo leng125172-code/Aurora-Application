@@ -1,1 +1,1 @@
-export { default as GlowingEffect } from "./GlowingEffect.vue";
+export { default as GlowingEffect } from './GlowingEffect.vue'

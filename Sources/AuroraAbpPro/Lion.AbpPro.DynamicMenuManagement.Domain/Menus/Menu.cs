@@ -23,8 +23,8 @@ public class Menu : FullAuditedAggregateRoot<Guid>, IMultiTenant
         string path,
         MenuType menuType,
         OpenType openType,
-        string url,
-        string component,
+        string? url,
+        string? component,
         bool enabled,
         string policy,
         Guid? tenantId = null
@@ -106,12 +106,12 @@ public class Menu : FullAuditedAggregateRoot<Guid>, IMultiTenant
     /// <summary>
     /// 内外链地址
     /// </summary>
-    public string Url { get; private set; }
+    public string? Url { get; private set; }
 
     /// <summary>
     /// 组件地址
     /// </summary>
-    public string Component { get; private set; }
+    public string? Component { get; private set; }
 
     /// <summary>
     /// 权限
@@ -207,16 +207,20 @@ public class Menu : FullAuditedAggregateRoot<Guid>, IMultiTenant
     /// <summary>
     /// 设置内外链地址
     /// </summary>
-    private void SetUrl(string url)
+    private void SetUrl(string? url)
     {
-        Guard.Length(url, nameof(url), 512, 0);
+        if (url != null)
+        {
+            Guard.Length(url, nameof(url), 512, 0);
+        }
+
         Url = url;
     }
 
     /// <summary>
     /// 设置组件地址
     /// </summary>
-    private void SetComponent(string component)
+    private void SetComponent(string? component)
     {
         Component = component;
     }
@@ -240,8 +244,8 @@ public class Menu : FullAuditedAggregateRoot<Guid>, IMultiTenant
         string path,
         MenuType menuType,
         OpenType openType,
-        string url,
-        string component,
+        string? url,
+        string? component,
         bool enabled,
         string policy,
         Guid? parentId

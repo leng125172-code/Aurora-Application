@@ -28,7 +28,7 @@ public class PagingBase : IValidatableObject
     ///  name desc
     /// </example>
     /// </summary>
-    public string Sorting { get; set; }
+    public string? Sorting { get; set; }
 
     protected PagingBase() { }
 

@@ -1,1 +1,1 @@
-export { default as ParticleWhirlpoolBg } from "./ParticleWhirlpoolBg.vue";
+export { default as ParticleWhirlpoolBg } from './ParticleWhirlpoolBg.vue'

@@ -6,7 +6,7 @@ public class UpdateFeatureInput : IValidatableObject
 {
     public string ProviderName { get; set; }
 
-    public string ProviderKey { get; set; }
+    public string? ProviderKey { get; set; }
 
     public UpdateFeaturesDto UpdateFeaturesDto { get; set; }
 

@@ -1,4 +1,4 @@
-import * as THREE from "three";
+import * as THREE from 'three'
 
 export const roadBaseFragment = `
   #define USE_FOG;
@@ -14,11 +14,11 @@ export const roadBaseFragment = `
     gl_FragColor = vec4(color, 1.);
     ${THREE.ShaderChunk.fog_fragment}
   }
-`;
+`
 
 export const islandFragment = roadBaseFragment
-  .replace("#include <roadMarkings_fragment>", "")
-  .replace("#include <roadMarkings_vars>", "");
+    .replace('#include <roadMarkings_fragment>', '')
+    .replace('#include <roadMarkings_vars>', '')
 
 export const roadMarkings_vars = `
   uniform float uLanes;
@@ -35,7 +35,7 @@ export const roadMarkings_vars = `
     highp float sn = mod(dt, 3.14);
     return fract(sin(sn) * c);
   }
-`;
+`
 
 export const roadMarkings_fragment = `
   uv.y = mod(uv.y + uTime * 0.05, 1.);
@@ -52,11 +52,11 @@ export const roadMarkings_fragment = `
   // vec2 noiseFreq = vec2(4., 7000.);
   // float roadNoise = random(floor(uv * noiseFreq) / noiseFreq) * 0.02 - 0.01; 
   // color += roadNoise;
-`;
+`
 
 export const roadFragment = roadBaseFragment
-  .replace("#include <roadMarkings_fragment>", roadMarkings_fragment)
-  .replace("#include <roadMarkings_vars>", roadMarkings_vars);
+    .replace('#include <roadMarkings_fragment>', roadMarkings_fragment)
+    .replace('#include <roadMarkings_vars>', roadMarkings_vars)
 
 export const roadVertex = `
   #define USE_FOG;
@@ -77,7 +77,7 @@ export const roadVertex = `
     vUv = uv;
     ${THREE.ShaderChunk.fog_vertex}
   }
-`;
+`
 
 export const carLightsFragment = `
   #define USE_FOG;
@@ -92,7 +92,7 @@ export const carLightsFragment = `
     if (gl_FragColor.a < 0.0001) discard;
     ${THREE.ShaderChunk.fog_fragment}
   }
-`;
+`
 
 export const carLightsVertex = `
   #define USE_FOG;
@@ -126,7 +126,7 @@ export const carLightsVertex = `
     vColor = aColor;
     ${THREE.ShaderChunk.fog_vertex}
   }
-`;
+`
 
 export const sideSticksVertex = `
   #define USE_FOG;
@@ -167,7 +167,7 @@ export const sideSticksVertex = `
     vColor = aColor;
     ${THREE.ShaderChunk.fog_vertex}
   }
-`;
+`
 
 export const sideSticksFragment = `
   #define USE_FOG;
@@ -178,7 +178,7 @@ export const sideSticksFragment = `
     gl_FragColor = vec4(color,1.);
     ${THREE.ShaderChunk.fog_fragment}
   }
-`;
+`
 
 export const distortion_vertex = `
   #define PI 3.14159265358979
@@ -199,4 +199,4 @@ export const distortion_vertex = `
       0.
     );
   }
-`;
+`

@@ -1,1 +1,1 @@
-export { default as AnimatedTooltip } from "./AnimatedTooltip.vue";
+export { default as AnimatedTooltip } from './AnimatedTooltip.vue'

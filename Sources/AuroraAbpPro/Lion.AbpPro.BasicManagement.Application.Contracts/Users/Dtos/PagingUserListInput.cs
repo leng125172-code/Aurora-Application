@@ -5,6 +5,6 @@ namespace Lion.AbpPro.BasicManagement.Users.Dtos
         /// <summary>
         /// 关键字
         /// </summary>
-        public string Filter { get; set; }
+        public string? Filter { get; set; }
     }
 }

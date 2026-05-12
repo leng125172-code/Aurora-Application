@@ -1,7 +1,7 @@
 <Project>
     <ItemGroup Condition="'$(Configuration)' == 'Release'">
-        <PackageReference Include="ConfigureAwait.Fody" PrivateAssets="All" />
-        <PackageReference Include="Fody">
+        <PackageReference Include="ConfigureAwait.Fody" Version="3.4.0" PrivateAssets="All" />
+        <PackageReference Include="Fody" Version="6.9.3">
             <PrivateAssets>All</PrivateAssets>
             <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
         </PackageReference>

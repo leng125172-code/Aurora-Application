@@ -1,1 +1,1 @@
-export { default as DitherShader } from "./DitherShader.vue";
+export { default as DitherShader } from './DitherShader.vue'

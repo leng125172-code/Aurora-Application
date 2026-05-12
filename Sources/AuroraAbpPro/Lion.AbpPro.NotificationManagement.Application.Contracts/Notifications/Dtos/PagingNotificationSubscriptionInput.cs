@@ -12,7 +12,7 @@ namespace Lion.AbpPro.NotificationManagement.Notifications.Dtos
         /// <summary>
         /// 接受者名称
         /// </summary>
-        public string ReceiverUserName { get; set; }
+        public string? ReceiverUserName { get; set; }
 
         /// <summary>
         /// 是否已读

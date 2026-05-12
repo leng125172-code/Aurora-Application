@@ -1,1 +1,1 @@
-export { default as BalanceSlider } from "./BalanceSlider.vue";
+export { default as BalanceSlider } from './BalanceSlider.vue'

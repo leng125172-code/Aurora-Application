@@ -6,8 +6,6 @@ import { httpClient } from '@/api/client'
 import type { AbpApplicationConfiguration } from '@/types/abp'
 
 export async function getApplicationConfigurationAsync(): Promise<AbpApplicationConfiguration> {
-    const response = await httpClient.get<AbpApplicationConfiguration>(
-        '/api/abp/application-configuration',
-    )
+    const response = await httpClient.get<AbpApplicationConfiguration>('/api/abp/application-configuration')
     return response.data
 }

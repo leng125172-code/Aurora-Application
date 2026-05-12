@@ -1,1 +1,1 @@
-export { default as GradientButton } from "./GradientButton.vue";
+export { default as GradientButton } from './GradientButton.vue'

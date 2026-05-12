@@ -5,5 +5,5 @@ namespace Lion.AbpPro.CacheManagement.Cache;
 public class GetCacheValueInput
 {
     [Required]
-    public string Key { get; set; }
+    public string? Key { get; set; }
 }

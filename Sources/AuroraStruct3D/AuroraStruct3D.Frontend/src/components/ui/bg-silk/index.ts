@@ -1,1 +1,1 @@
-export { default as SilkBackground } from "./SilkBackground.vue";
+export { default as SilkBackground } from './SilkBackground.vue'

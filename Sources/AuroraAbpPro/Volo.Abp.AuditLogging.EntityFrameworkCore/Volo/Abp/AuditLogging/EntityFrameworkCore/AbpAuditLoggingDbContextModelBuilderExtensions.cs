@@ -21,33 +21,45 @@ public static class AbpAuditLoggingDbContextModelBuilderExtensions
 
             b.Property(x => x.ApplicationName)
                 .HasMaxLength(AuditLogConsts.MaxApplicationNameLength)
-                .HasColumnName(nameof(AuditLog.ApplicationName));
+                .HasColumnName(nameof(AuditLog.ApplicationName))
+                .IsRequired(false);
             b.Property(x => x.ClientIpAddress)
                 .HasMaxLength(AuditLogConsts.MaxClientIpAddressLength)
-                .HasColumnName(nameof(AuditLog.ClientIpAddress));
+                .HasColumnName(nameof(AuditLog.ClientIpAddress))
+                .IsRequired(false);
             b.Property(x => x.ClientName)
                 .HasMaxLength(AuditLogConsts.MaxClientNameLength)
-                .HasColumnName(nameof(AuditLog.ClientName));
+                .HasColumnName(nameof(AuditLog.ClientName))
+                .IsRequired(false);
             b.Property(x => x.ClientId)
                 .HasMaxLength(AuditLogConsts.MaxClientIdLength)
-                .HasColumnName(nameof(AuditLog.ClientId));
+                .HasColumnName(nameof(AuditLog.ClientId))
+                .IsRequired(false);
             b.Property(x => x.CorrelationId)
                 .HasMaxLength(AuditLogConsts.MaxCorrelationIdLength)
-                .HasColumnName(nameof(AuditLog.CorrelationId));
+                .HasColumnName(nameof(AuditLog.CorrelationId))
+                .IsRequired(false);
             b.Property(x => x.BrowserInfo)
                 .HasMaxLength(AuditLogConsts.MaxBrowserInfoLength)
-                .HasColumnName(nameof(AuditLog.BrowserInfo));
+                .HasColumnName(nameof(AuditLog.BrowserInfo))
+                .IsRequired(false);
             b.Property(x => x.HttpMethod)
                 .HasMaxLength(AuditLogConsts.MaxHttpMethodLength)
-                .HasColumnName(nameof(AuditLog.HttpMethod));
+                .HasColumnName(nameof(AuditLog.HttpMethod))
+                .IsRequired(false);
             b.Property(x => x.Url)
                 .HasMaxLength(AuditLogConsts.MaxUrlLength)
-                .HasColumnName(nameof(AuditLog.Url));
+                .HasColumnName(nameof(AuditLog.Url))
+                .IsRequired(false);
             b.Property(x => x.HttpStatusCode).HasColumnName(nameof(AuditLog.HttpStatusCode));
 
             b.Property(x => x.Comments)
                 .HasMaxLength(AuditLogConsts.MaxCommentsLength)
-                .HasColumnName(nameof(AuditLog.Comments));
+                .HasColumnName(nameof(AuditLog.Comments))
+                .IsRequired(false);
+            b.Property(x => x.Exceptions)
+                .HasColumnName(nameof(AuditLog.Exceptions))
+                .IsRequired(false);
             b.Property(x => x.ExecutionDuration).HasColumnName(nameof(AuditLog.ExecutionDuration));
             b.Property(x => x.ImpersonatorTenantId)
                 .HasColumnName(nameof(AuditLog.ImpersonatorTenantId));
@@ -55,18 +67,22 @@ public static class AbpAuditLoggingDbContextModelBuilderExtensions
                 .HasColumnName(nameof(AuditLog.ImpersonatorUserId));
             b.Property(x => x.ImpersonatorTenantName)
                 .HasMaxLength(AuditLogConsts.MaxTenantNameLength)
-                .HasColumnName(nameof(AuditLog.ImpersonatorTenantName));
+                .HasColumnName(nameof(AuditLog.ImpersonatorTenantName))
+                .IsRequired(false);
             b.Property(x => x.ImpersonatorUserName)
                 .HasMaxLength(AuditLogConsts.MaxUserNameLength)
-                .HasColumnName(nameof(AuditLog.ImpersonatorUserName));
+                .HasColumnName(nameof(AuditLog.ImpersonatorUserName))
+                .IsRequired(false);
             b.Property(x => x.UserId).HasColumnName(nameof(AuditLog.UserId));
             b.Property(x => x.UserName)
                 .HasMaxLength(AuditLogConsts.MaxUserNameLength)
-                .HasColumnName(nameof(AuditLog.UserName));
+                .HasColumnName(nameof(AuditLog.UserName))
+                .IsRequired(false);
             b.Property(x => x.TenantId).HasColumnName(nameof(AuditLog.TenantId));
             b.Property(x => x.TenantName)
                 .HasMaxLength(AuditLogConsts.MaxTenantNameLength)
-                .HasColumnName(nameof(AuditLog.TenantName));
+                .HasColumnName(nameof(AuditLog.TenantName))
+                .IsRequired(false);
 
             b.HasMany(a => a.Actions).WithOne().HasForeignKey(x => x.AuditLogId).IsRequired();
             b.HasMany(a => a.EntityChanges).WithOne().HasForeignKey(x => x.AuditLogId).IsRequired();
@@ -94,13 +110,16 @@ public static class AbpAuditLoggingDbContextModelBuilderExtensions
             b.Property(x => x.AuditLogId).HasColumnName(nameof(AuditLogAction.AuditLogId));
             b.Property(x => x.ServiceName)
                 .HasMaxLength(AuditLogActionConsts.MaxServiceNameLength)
-                .HasColumnName(nameof(AuditLogAction.ServiceName));
+                .HasColumnName(nameof(AuditLogAction.ServiceName))
+                .IsRequired(false);
             b.Property(x => x.MethodName)
                 .HasMaxLength(AuditLogActionConsts.MaxMethodNameLength)
-                .HasColumnName(nameof(AuditLogAction.MethodName));
+                .HasColumnName(nameof(AuditLogAction.MethodName))
+                .IsRequired(false);
             b.Property(x => x.Parameters)
                 .HasMaxLength(AuditLogActionConsts.MaxParametersLength)
-                .HasColumnName(nameof(AuditLogAction.Parameters));
+                .HasColumnName(nameof(AuditLogAction.Parameters))
+                .IsRequired(false);
             b.Property(x => x.ExecutionTime).HasColumnName(nameof(AuditLogAction.ExecutionTime));
             b.Property(x => x.ExecutionDuration)
                 .HasColumnName(nameof(AuditLogAction.ExecutionDuration));
@@ -168,6 +187,7 @@ public static class AbpAuditLoggingDbContextModelBuilderExtensions
 
             b.Property(x => x.NewValue)
                 .HasMaxLength(EntityPropertyChangeConsts.MaxNewValueLength)
+                .IsRequired(false)
                 .HasColumnName(nameof(EntityPropertyChange.NewValue));
             b.Property(x => x.PropertyName)
                 .HasMaxLength(EntityPropertyChangeConsts.MaxPropertyNameLength)
@@ -179,6 +199,7 @@ public static class AbpAuditLoggingDbContextModelBuilderExtensions
                 .HasColumnName(nameof(EntityPropertyChange.PropertyTypeFullName));
             b.Property(x => x.OriginalValue)
                 .HasMaxLength(EntityPropertyChangeConsts.MaxOriginalValueLength)
+                .IsRequired(false)
                 .HasColumnName(nameof(EntityPropertyChange.OriginalValue));
 
             b.HasIndex(x => new { x.EntityChangeId });

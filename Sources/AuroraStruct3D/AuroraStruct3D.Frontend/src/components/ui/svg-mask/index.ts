@@ -1,1 +1,1 @@
-export { default as SvgMask } from "./SVGMask.vue";
+export { default as SvgMask } from './SVGMask.vue'

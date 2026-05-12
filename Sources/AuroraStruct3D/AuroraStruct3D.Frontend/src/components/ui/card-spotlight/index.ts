@@ -1,1 +1,1 @@
-export { default as CardSpotlight } from "./CardSpotlight.vue";
+export { default as CardSpotlight } from './CardSpotlight.vue'

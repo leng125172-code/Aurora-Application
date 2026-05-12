@@ -1,19 +1,16 @@
 <script setup lang="ts">
-import { cn } from "@inspira-ui/plugins";
+import { cn } from '@inspira-ui/plugins'
 defineProps({
-  class: String,
-});
+    class: String,
+})
 </script>
 
 <template>
-  <div
-    :class="
-      cn(
-        `grid h-36 w-52 place-content-center rounded-lg bg-neutral-700 text-6xl text-neutral-50`,
-        $props.class,
-      )
-    "
-  >
-    <slot />
-  </div>
+    <div
+        :class="
+            cn(`grid h-36 w-52 place-content-center rounded-lg bg-neutral-700 text-6xl text-neutral-50`, $props.class)
+        "
+    >
+        <slot />
+    </div>
 </template>

@@ -1,16 +1,16 @@
 <script lang="ts" setup>
-import type { HTMLAttributes } from "vue";
-import { cn } from "@inspira-ui/plugins";
+import type { HTMLAttributes } from 'vue'
+import { cn } from '@inspira-ui/plugins'
 
 interface BookHeaderProps {
-  class?: HTMLAttributes["class"];
+    class?: HTMLAttributes['class']
 }
 
-defineProps<BookHeaderProps>();
+defineProps<BookHeaderProps>()
 </script>
 
 <template>
-  <div :class="cn(`flex flex-wrap gap-2`, $props.class)">
-    <slot />
-  </div>
+    <div :class="cn(`flex flex-wrap gap-2`, $props.class)">
+        <slot />
+    </div>
 </template>

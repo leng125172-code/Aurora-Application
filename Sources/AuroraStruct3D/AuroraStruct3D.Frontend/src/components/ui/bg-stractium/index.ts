@@ -1,1 +1,1 @@
-export { default as StractiumBackground } from "./StractiumBackground.vue";
+export { default as StractiumBackground } from './StractiumBackground.vue'

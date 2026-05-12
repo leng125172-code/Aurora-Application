@@ -1,0 +1,21 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Microsoft.NET.Sdk">
+    <Import Project="..\..\..\common.props" />
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <!-- RS485串口通信依赖 -->
+        <PackageReference Include="System.IO.Ports" Version="9.0.5" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\AuroraStruct3D.Domain\AuroraStruct3D.Domain.csproj" />
+        <ProjectReference Include="..\..\AuroraAbpPro\Volo.Abp.Core\Volo.Abp.Core.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\..\AuroraAbpPro\Volo.Abp.BackgroundJobs.HangFire\Volo.Abp.BackgroundJobs.HangFire.csproj" />
+    </ItemGroup>
+</Project>

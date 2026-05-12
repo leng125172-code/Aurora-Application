@@ -1,1 +1,1 @@
-export { default as Vortex } from "./Vortex.vue";
+export { default as Vortex } from './Vortex.vue'

@@ -1,1 +1,1 @@
-export { default as MorphingTabs } from "./MorphingTabs.vue";
+export { default as MorphingTabs } from './MorphingTabs.vue'

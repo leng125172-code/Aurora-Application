@@ -1,3 +1,29 @@
 {
-    "markdown.validate.enabled": true
+    "markdown.validate.enabled": true,
+    "dotnet.defaultSolution": "Aurora Application.slnx",
+    "dotnet.server.useOmnisharp": false,
+    "editor.codeLens": true,
+    "dotnet.codeLens.references.enabled": true,
+    "files.exclude": {
+        "**\\bin": true,
+        "**\\obj": true,
+        "Builds": true,
+        "Publish": true
+    },
+    "search.exclude": {
+        "**/bin": true,
+        "**/obj": true,
+        "**/node_modules": true,
+        "**/Logs": true,
+        "Builds": true,
+        "Publish": true
+    },
+    "files.watcherExclude": {
+        "**/bin/**": true,
+        "**/obj/**": true,
+        "**/node_modules/**": true,
+        "**/Logs/**": true,
+        "Builds/**": true,
+        "Publish/**": true
+    }
 }

@@ -1,18 +1,18 @@
 <script lang="ts" setup>
-import type { OGLRenderingContext } from "ogl";
-import type { HTMLAttributes } from "vue";
-import { cn } from "@inspira-ui/plugins";
-import { Color, Mesh, Program, Renderer, Triangle } from "ogl";
-import { onMounted, onUnmounted, ref } from "vue";
+import type { OGLRenderingContext } from 'ogl'
+import type { HTMLAttributes } from 'vue'
+import { cn } from '@inspira-ui/plugins'
+import { Color, Mesh, Program, Renderer, Triangle } from 'ogl'
+import { onMounted, onUnmounted, ref } from 'vue'
 
-const props = defineProps<{ class?: HTMLAttributes["class"] }>();
+const props = defineProps<{ class?: HTMLAttributes['class'] }>()
 
-const ctnDom = ref<HTMLDivElement | null>(null);
+const ctnDom = ref<HTMLDivElement | null>(null)
 
-let animateId: number;
-let renderer: Renderer;
-let gl: OGLRenderingContext;
-let mesh: Mesh;
+let animateId: number
+let renderer: Renderer
+let gl: OGLRenderingContext
+let mesh: Mesh
 
 // Vertex Shader
 const vert = `
@@ -25,7 +25,7 @@ const vert = `
       vUv = uv;
       gl_Position = vec4(position, 0, 1);
   }
-  `;
+  `
 
 // Fragment Shader
 const frag = `
@@ -52,72 +52,69 @@ const frag = `
       col = cos(col * cos(vec3(d, a, 2.5)) * 0.5 + 0.5);
       gl_FragColor = vec4(col, 1.0);
   }
-  `;
+  `
 
 function resize() {
-  if (!ctnDom.value) return;
-  const scale = 1;
-  renderer.setSize(ctnDom.value.offsetWidth * scale, ctnDom.value.offsetHeight * scale);
-  if (mesh) {
-    mesh.program.uniforms.uResolution.value = [
-      gl.canvas.width,
-      gl.canvas.height,
-      gl.canvas.width / gl.canvas.height,
-    ];
-  }
+    if (!ctnDom.value) return
+    const scale = 1
+    renderer.setSize(ctnDom.value.offsetWidth * scale, ctnDom.value.offsetHeight * scale)
+    if (mesh) {
+        mesh.program.uniforms.uResolution.value = [
+            gl.canvas.width,
+            gl.canvas.height,
+            gl.canvas.width / gl.canvas.height,
+        ]
+    }
 }
 
 function update(t: number) {
-  animateId = requestAnimationFrame(update);
-  if (mesh) {
-    mesh.program.uniforms.uTime.value = t * 0.001;
-    renderer.render({ scene: mesh });
-  }
+    animateId = requestAnimationFrame(update)
+    if (mesh) {
+        mesh.program.uniforms.uTime.value = t * 0.001
+        renderer.render({ scene: mesh })
+    }
 }
 
 onMounted(() => {
-  if (!ctnDom.value) return;
+    if (!ctnDom.value) return
 
-  renderer = new Renderer();
-  gl = renderer.gl;
-  gl.clearColor(1, 1, 1, 1);
+    renderer = new Renderer()
+    gl = renderer.gl
+    gl.clearColor(1, 1, 1, 1)
 
-  window.addEventListener("resize", resize, false);
-  resize();
+    window.addEventListener('resize', resize, false)
+    resize()
 
-  const geometry = new Triangle(gl);
+    const geometry = new Triangle(gl)
 
-  const program = new Program(gl, {
-    vertex: vert,
-    fragment: frag,
-    uniforms: {
-      uTime: { value: 0 },
-      uColor: { value: new Color(0.3, 0.2, 0.5) },
-      uResolution: {
-        value: [gl.canvas.width, gl.canvas.height, gl.canvas.width / gl.canvas.height],
-      },
-    },
-  });
+    const program = new Program(gl, {
+        vertex: vert,
+        fragment: frag,
+        uniforms: {
+            uTime: { value: 0 },
+            uColor: { value: new Color(0.3, 0.2, 0.5) },
+            uResolution: {
+                value: [gl.canvas.width, gl.canvas.height, gl.canvas.width / gl.canvas.height],
+            },
+        },
+    })
 
-  mesh = new Mesh(gl, { geometry, program });
-  animateId = requestAnimationFrame(update);
+    mesh = new Mesh(gl, { geometry, program })
+    animateId = requestAnimationFrame(update)
 
-  ctnDom.value.appendChild(gl.canvas);
-});
+    ctnDom.value.appendChild(gl.canvas)
+})
 
 onUnmounted(() => {
-  cancelAnimationFrame(animateId);
-  window.removeEventListener("resize", resize);
-  if (ctnDom.value && gl?.canvas) {
-    ctnDom.value.removeChild(gl.canvas);
-  }
-  gl?.getExtension("WEBGL_lose_context")?.loseContext();
-});
+    cancelAnimationFrame(animateId)
+    window.removeEventListener('resize', resize)
+    if (ctnDom.value && gl?.canvas) {
+        ctnDom.value.removeChild(gl.canvas)
+    }
+    gl?.getExtension('WEBGL_lose_context')?.loseContext()
+})
 </script>
 
 <template>
-  <div
-    ref="ctnDom"
-    :class="cn(`block size-full`, props.class)"
-  />
+    <div ref="ctnDom" :class="cn(`block size-full`, props.class)" />
 </template>

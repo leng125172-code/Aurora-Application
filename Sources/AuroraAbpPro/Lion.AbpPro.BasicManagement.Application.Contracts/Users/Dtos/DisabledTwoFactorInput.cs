@@ -6,5 +6,5 @@ public class DisabledTwoFactorInput
     /// 验证码
     /// </summary>
     [Required]
-    public string Code { get; set; }
+    public string? Code { get; set; }
 }

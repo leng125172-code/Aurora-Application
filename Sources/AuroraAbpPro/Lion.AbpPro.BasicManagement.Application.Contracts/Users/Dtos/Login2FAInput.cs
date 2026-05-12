@@ -10,18 +10,18 @@ namespace Lion.AbpPro.BasicManagement.Users.Dtos
         /// <summary>
         /// 用户名或者邮箱
         /// </summary>
-        public string Name { get; set; }
+        public string? Name { get; set; }
 
         /// <summary>
         /// 密码
         /// </summary>
         [DisableAuditing]
-        public string Password { get; set; }
+        public string? Password { get; set; }
 
         /// <summary>
         /// 双因素验证码
         /// </summary>
-        public string Code { get; set; }
+        public string? Code { get; set; }
 
         public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
         {

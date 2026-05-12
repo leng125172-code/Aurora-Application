@@ -1,3 +1,4 @@
+using AuroraStruct3D.Tucam;
 using Lion.AbpPro.CacheManagement;
 using Lion.AbpPro.CodeManagement;
 using Lion.AbpPro.DynamicMenuManagement;
@@ -23,5 +24,12 @@ namespace AuroraStruct3D
         typeof(CacheManagementApplicationModule),
         typeof(MasterDataManagementApplicationModule)
     )]
-    public class AuroraStruct3DApplicationModule : AbpModule { }
+    public class AuroraStruct3DApplicationModule : AbpModule
+    {
+        public override void ConfigureServices(ServiceConfigurationContext context)
+        {
+            // 注册TUCam相机服务为单例
+            context.Services.AddTucamCameraServices();
+        }
+    }
 }

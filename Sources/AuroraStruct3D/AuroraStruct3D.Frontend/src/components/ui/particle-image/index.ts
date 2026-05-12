@@ -1,1 +1,1 @@
-export { default as ParticleImage } from "./ParticleImage.vue";
+export { default as ParticleImage } from './ParticleImage.vue'

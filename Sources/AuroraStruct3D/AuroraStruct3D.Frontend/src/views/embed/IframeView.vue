@@ -17,13 +17,7 @@ const safeTitle = computed(() => props.title ?? 'Embedded Dashboard')
 
 <template>
     <div class="h-full w-full overflow-hidden rounded-md border bg-card">
-        <iframe
-            :src="src"
-            :title="safeTitle"
-            class="h-full w-full"
-            frameborder="0"
-            referrerpolicy="no-referrer"
-        />
+        <iframe :src="src" :title="safeTitle" class="h-full w-full" frameborder="0" referrerpolicy="no-referrer" />
     </div>
 </template>
 

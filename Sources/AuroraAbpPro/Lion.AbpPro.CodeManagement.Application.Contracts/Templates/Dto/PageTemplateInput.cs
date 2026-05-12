@@ -2,5 +2,5 @@
 
 public class PageTemplateInput : PagingBase
 {
-    public string Filter { get; set; }
+    public string? Filter { get; set; }
 }

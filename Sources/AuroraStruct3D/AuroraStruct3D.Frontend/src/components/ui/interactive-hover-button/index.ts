@@ -1,1 +1,1 @@
-export { default as InteractiveHoverButton } from "./InteractiveHoverButton.vue";
+export { default as InteractiveHoverButton } from './InteractiveHoverButton.vue'

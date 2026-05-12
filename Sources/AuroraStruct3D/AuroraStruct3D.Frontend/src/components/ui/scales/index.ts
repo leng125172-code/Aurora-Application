@@ -1,1 +1,1 @@
-export { default as Scales } from "./Scales.vue";
+export { default as Scales } from './Scales.vue'

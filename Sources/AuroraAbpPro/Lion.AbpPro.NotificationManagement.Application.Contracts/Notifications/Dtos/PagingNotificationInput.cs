@@ -7,12 +7,12 @@ namespace Lion.AbpPro.NotificationManagement.Notifications.Dtos
         /// <summary>
         ///  标题
         /// </summary>
-        public string Title { get; set; }
+        public string? Title { get; set; }
 
         /// <summary>
         ///  内容
         /// </summary>
-        public string Content { get; set; }
+        public string? Content { get; set; }
 
         /// <summary>
         /// 发送者Id
@@ -22,7 +22,7 @@ namespace Lion.AbpPro.NotificationManagement.Notifications.Dtos
         /// <summary>
         /// 发送者名称
         /// </summary>
-        public string SenderUserName { get; set; }
+        public string? SenderUserName { get; set; }
 
         /// <summary>
         /// 接受者Id
@@ -32,7 +32,7 @@ namespace Lion.AbpPro.NotificationManagement.Notifications.Dtos
         /// <summary>
         /// 接受者名称
         /// </summary>
-        public string ReceiverUserName { get; set; }
+        public string? ReceiverUserName { get; set; }
 
         /// <summary>
         /// 是否已读

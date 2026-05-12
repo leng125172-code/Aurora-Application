@@ -36,7 +36,7 @@ export async function loginAsync(payload: LoginPayload): Promise<LoginResult> {
             headers: {
                 ...(payload.tenantId ? { __tenant: payload.tenantId } : {}),
             },
-        },
+        }
     )
     return response.data
 }

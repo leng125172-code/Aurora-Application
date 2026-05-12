@@ -1,3 +1,6 @@
+using AuroraStruct3D.Cameras;
+using AuroraStruct3D.Motors;
+using AuroraStruct3D.Projectors;
 using Lion.AbpPro.BasicManagement.UserRefreshTokens;
 using Lion.AbpPro.CodeManagement.DataTypes.Aggregates;
 using Lion.AbpPro.CodeManagement.EntityFrameworkCore;
@@ -84,6 +87,21 @@ namespace AuroraStruct3D.EntityFrameworkCore
         public DbSet<MasterDataType> MasterDataTypes { get; set; }
         public DbSet<MasterDataValue> MasterDataValues { get; set; }
 
+        // ── 相机模块 ──────────────────────────────────────────────────────────────
+        public DbSet<CameraDevice> CameraDevices { get; set; }
+        public DbSet<CameraParameterSet> CameraParameterSets { get; set; }
+        public DbSet<CameraParameter> CameraParameters { get; set; }
+
+        // ── 电机模块 ──────────────────────────────────────────────────────────────
+        public DbSet<MotorAxis> MotorAxes { get; set; }
+        public DbSet<MotorMotionConfig> MotorMotionConfigs { get; set; }
+        public DbSet<MotorFaultRecord> MotorFaultRecords { get; set; }
+        public DbSet<MotorPrPath> MotorPrPaths { get; set; }
+
+        // ── DLP 投影机模块 ─────────────────────────────────────────────────────────
+        public DbSet<ProjectorDevice> ProjectorDevices { get; set; }
+        public DbSet<ProjectorOperationLog> ProjectorOperationLogs { get; set; }
+
         public AuroraStruct3DDbContext(DbContextOptions<AuroraStruct3DDbContext> options)
             : base(options) { }
 
@@ -119,6 +137,15 @@ namespace AuroraStruct3D.EntityFrameworkCore
             builder.ConfigureImportExportManagement();
 
             builder.ConfigureMasterDataManagement();
+
+            // 相机模块
+            builder.ConfigureCamera();
+
+            // 电机模块
+            builder.ConfigureMotor();
+
+            // DLP 投影机模块
+            builder.ConfigureProjector();
         }
     }
 }

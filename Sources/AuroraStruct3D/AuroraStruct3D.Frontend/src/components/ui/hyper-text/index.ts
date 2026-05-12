@@ -1,1 +1,1 @@
-export { default as HyperText } from "./HyperText.vue";
+export { default as HyperText } from './HyperText.vue'

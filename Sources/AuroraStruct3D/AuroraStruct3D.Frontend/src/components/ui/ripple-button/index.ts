@@ -1,1 +1,1 @@
-export { default as RippleButton } from "./RippleButton.vue";
+export { default as RippleButton } from './RippleButton.vue'

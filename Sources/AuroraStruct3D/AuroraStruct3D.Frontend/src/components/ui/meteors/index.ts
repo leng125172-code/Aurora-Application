@@ -1,1 +1,1 @@
-export { default as Meteors } from "./Meteors.vue";
+export { default as Meteors } from './Meteors.vue'

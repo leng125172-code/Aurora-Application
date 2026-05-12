@@ -66,8 +66,7 @@
     </ItemGroup>
 
     <!--
-        Release 配置下：先执行 npm ci 安装依赖，再执行 npm run build
-        Debug 配置下：跳过 npm ci（依赖已就绪），直接执行 npm run build 更新 wwwroot
+       先执行 npm ci 安装依赖，再执行 npm run build 更新 wwwroot
     -->
     <Target Name="BuildSpa" BeforeTargets="BeforeBuild">
         <Message Importance="high" Text="正在构建前端 SPA（AuroraStruct3D.Frontend）..." />

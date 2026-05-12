@@ -28,9 +28,7 @@ async function handleLogout(): Promise<void> {
 </script>
 
 <template>
-    <header
-        class="flex h-14 items-center justify-between border-b bg-card/40 px-4 backdrop-blur"
-    >
+    <header class="flex h-14 items-center justify-between border-b bg-card/40 px-4 backdrop-blur">
         <div class="text-sm text-muted-foreground">
             {{ auth.currentUser?.userName ?? '' }}
         </div>

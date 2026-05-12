@@ -1,1 +1,1 @@
-export { default as LampEffect } from "./LampEffect.vue";
+export { default as LampEffect } from './LampEffect.vue'

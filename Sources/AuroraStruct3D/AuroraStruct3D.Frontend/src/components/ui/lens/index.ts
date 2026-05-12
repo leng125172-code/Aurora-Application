@@ -1,1 +1,1 @@
-export { default as Lens } from "./Lens.vue";
+export { default as Lens } from './Lens.vue'

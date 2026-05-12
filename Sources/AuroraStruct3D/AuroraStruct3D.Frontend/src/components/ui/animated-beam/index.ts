@@ -1,1 +1,1 @@
-export { default as AnimatedBeam } from "./AnimatedBeam.vue";
+export { default as AnimatedBeam } from './AnimatedBeam.vue'

@@ -8,15 +8,15 @@ public class PageLanguageTextInput : PagingBase
     /// <summary>
     /// 语言
     /// </summary>
-    public string CultureName { get; set; }
+    public string? CultureName { get; set; }
 
     /// <summary>
     /// 资源
     /// </summary>
-    public string ResourceName { get; set; }
+    public string? ResourceName { get; set; }
 
     /// <summary>
     /// 查询条件 name or value
     /// </summary>
-    public string Filter { get; set; }
+    public string? Filter { get; set; }
 }

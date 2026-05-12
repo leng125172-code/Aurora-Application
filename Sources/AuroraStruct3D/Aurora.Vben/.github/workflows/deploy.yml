@@ -1,0 +1,80 @@
+name: Deploy OSS
+
+# 触发条件
+on:
+  # 手动触发
+  workflow_dispatch:
+  # push 到指定分支
+  push:
+    branches:
+      - main
+    # 只在下列路径变更时触发
+    # paths:
+    #   - 'docs/**'
+    #   - 'package.json'
+
+# 设置权限
+permissions:
+  contents: write
+
+# 设置上海时区
+env:
+  TZ: Asia/Shanghai
+
+# 任务
+jobs:
+  deploy-antd:
+    runs-on: ubuntu-latest  #指定服务器的运行环境：最新版本ubuntu
+    steps:
+      # 使用actions/checkout@v4 库拉取代码到 ubuntu 上
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # 根据网上资料查询此处可以设置为 false。https://github.com/actions/checkout
+          persist-credentials: false
+
+      # 安装 pnpm
+      - name: Install pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 9.15.9
+
+      # 设置node的版本
+      - name: Use Node.js
+        # 使用 actions/setup-node@v3 库安装 nodejs，with 提供了一个参数 node-version 表示要安装的 nodejs 版本
+        uses: actions/setup-node@v3
+        with:
+          node-version: '22.14.0'
+          cache: 'pnpm'
+
+      # 打包成静态文件
+      - name: Build
+        run: pnpm install && pnpm build
+
+      - name: Deploy Antd
+        uses: fangbinwei/aliyun-oss-website-action@v1
+        with:
+          endpoint: oss-cn-shenzhen.aliyuncs.com
+          accessKeyId: ${{ secrets.OSS_ACCESS_KEY_ID }}
+          accessKeySecret: ${{ secrets.OSS_ACCESS_KEY_SECRET }}
+          bucket: ${{ secrets.OSS_BUCKET_ANTD_NAME }}
+          folder: apps/web-antd/dist
+
+      - name: Deploy Ele
+        uses: fangbinwei/aliyun-oss-website-action@v1
+        with:
+          endpoint: oss-cn-shenzhen.aliyuncs.com
+          accessKeyId: ${{ secrets.OSS_ACCESS_KEY_ID }}
+          accessKeySecret: ${{ secrets.OSS_ACCESS_KEY_SECRET }}
+          bucket: ${{ secrets.OSS_BUCKET_ELE_NAME }}
+          folder: apps/web-ele/dist
+
+
+      - name: Deploy Naive
+        uses: fangbinwei/aliyun-oss-website-action@v1
+        with:
+          endpoint: oss-cn-shenzhen.aliyuncs.com
+          accessKeyId: ${{ secrets.OSS_ACCESS_KEY_ID }}
+          accessKeySecret: ${{ secrets.OSS_ACCESS_KEY_SECRET }}
+          bucket: ${{ secrets.OSS_BUCKET_NAIVE_NAME }}
+          folder: apps/web-naive/dist

@@ -1,1 +1,1 @@
-export { default as PhotoGallery } from "./PhotoGallery.vue";
+export { default as PhotoGallery } from './PhotoGallery.vue'

@@ -1,1 +1,1 @@
-export { default as GlowBorder } from "./GlowBorder.vue";
+export { default as GlowBorder } from './GlowBorder.vue'

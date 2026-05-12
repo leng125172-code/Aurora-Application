@@ -37,14 +37,8 @@
             Version="10.0.7"
         />
         <!-- 显式覆盖间接依赖中存在安全漏洞的版本 -->
-        <PackageReference
-            Include="Microsoft.AspNetCore.DataProtection"
-            Version="10.0.7"
-        />
-        <PackageReference
-            Include="System.Security.Cryptography.Xml"
-            Version="10.0.7"
-        />
+        <PackageReference Include="Microsoft.AspNetCore.DataProtection" Version="10.0.7" />
+        <PackageReference Include="System.Security.Cryptography.Xml" Version="10.0.7" />
     </ItemGroup>
     <ItemGroup>
         <PackageReference Include="Serilog" Version="4.3.0" />

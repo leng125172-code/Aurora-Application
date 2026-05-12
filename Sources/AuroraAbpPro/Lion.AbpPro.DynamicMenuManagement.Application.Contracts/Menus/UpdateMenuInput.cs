@@ -73,12 +73,12 @@ public class UpdateMenuInput
     /// <summary>
     /// 内外链地址
     /// </summary>
-    public string Url { get; set; }
+    public string? Url { get; set; }
 
     /// <summary>
     /// 组件地址
     /// </summary>
-    public string Component { get; set; }
+    public string? Component { get; set; }
 
     public bool Enabled { get; set; }
 

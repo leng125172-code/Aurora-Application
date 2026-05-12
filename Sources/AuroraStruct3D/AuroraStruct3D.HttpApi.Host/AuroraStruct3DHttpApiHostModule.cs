@@ -1,3 +1,7 @@
+using AuroraStruct3D.Endpoints;
+using AuroraStruct3D.HostedServices;
+using AuroraStruct3D.Hubs;
+using AuroraStruct3D.Services;
 using Lion.AbpPro.CAP;
 using Volo.Abp.AspNetCore.Mvc.Libs;
 using Volo.Abp.Hangfire;
@@ -39,6 +43,11 @@ namespace AuroraStruct3D
                 .AddAbpProSwagger("AbpPro")
                 .AddAbpProCap()
                 .AddAbpProHangfire();
+
+            // 注册后台广播服务，定期通过 SignalR 推送仪表盘统计数据
+            context.Services.AddHostedService<DashboardBroadcastService>();
+            // 注册系统指标采集器（单例，维护两次采样之间的状态）
+            context.Services.AddSingleton<SystemMetricsCollector>();
         }
 
         public override void OnApplicationInitialization(ApplicationInitializationContext context)
@@ -73,6 +82,10 @@ namespace AuroraStruct3D
                 endpoints.MapHealthChecks("/health");
                 // 注册 Hangfire 监控 REST API，对应路径前缀 /api/hangfire
                 endpoints.UseAbpHangfireApi("/api/hangfire");
+                // 注册系统信息 REST API
+                endpoints.MapSystemInfoApi();
+                // 直接映射 DashboardHub，无需依赖 AbpAspNetCoreSignalRModule
+                endpoints.MapHub<DashboardHub>("/signalr-hubs/dashboard");
                 endpoints.MapFallback(async httpContext =>
                 {
                     var path = httpContext.Request.Path.Value ?? string.Empty;
@@ -90,6 +103,7 @@ namespace AuroraStruct3D
                         || path.StartsWith("/health", StringComparison.OrdinalIgnoreCase)
                         || path.StartsWith("/abp", StringComparison.OrdinalIgnoreCase)
                         || path.StartsWith("/connect", StringComparison.OrdinalIgnoreCase)
+                        || path.StartsWith("/signalr-hubs", StringComparison.OrdinalIgnoreCase)
                     )
                     {
                         httpContext.Response.StatusCode = StatusCodes.Status404NotFound;

@@ -11,12 +11,12 @@ public class PageImportRecordInput : PagingBase
     /// <summary>
     /// 导入名称
     /// </summary>
-    public string Name { get; set; }
+    public string? Name { get; set; }
 
     /// <summary>
     /// 文件名称
     /// </summary>
-    public string BlobName { get; set; }
+    public string? BlobName { get; set; }
 
     /// <summary>
     /// 状态

@@ -1,1 +1,1 @@
-export { default as ColourfulText } from "./ColourfulText.vue";
+export { default as ColourfulText } from './ColourfulText.vue'

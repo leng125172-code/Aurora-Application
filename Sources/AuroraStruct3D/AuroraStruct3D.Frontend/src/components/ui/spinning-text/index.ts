@@ -1,1 +1,1 @@
-export { default as SpinningText } from "./SpinningText.vue";
+export { default as SpinningText } from './SpinningText.vue'

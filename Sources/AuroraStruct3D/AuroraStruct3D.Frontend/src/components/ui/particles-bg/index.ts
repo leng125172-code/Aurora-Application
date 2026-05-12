@@ -1,1 +1,1 @@
-export { default as ParticlesBg } from "./ParticlesBg.vue";
+export { default as ParticlesBg } from './ParticlesBg.vue'

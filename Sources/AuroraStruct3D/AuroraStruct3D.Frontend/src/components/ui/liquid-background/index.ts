@@ -1,1 +1,1 @@
-export { default as LiquidBackground } from "./LiquidBackground.vue";
+export { default as LiquidBackground } from './LiquidBackground.vue'

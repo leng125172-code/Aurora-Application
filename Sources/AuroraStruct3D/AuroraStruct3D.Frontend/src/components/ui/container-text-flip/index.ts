@@ -1,1 +1,1 @@
-export { default as ContainerTextFlip } from "./ContainerTextFlip.vue";
+export { default as ContainerTextFlip } from './ContainerTextFlip.vue'

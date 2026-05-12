@@ -1,1 +1,1 @@
-export { default as LiquidGlass } from "./LiquidGlass.vue";
+export { default as LiquidGlass } from './LiquidGlass.vue'

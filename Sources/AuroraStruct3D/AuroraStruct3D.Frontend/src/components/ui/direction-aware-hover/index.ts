@@ -1,1 +1,1 @@
-export { default as DirectionAwareHover } from "./DirectionAwareHover.vue";
+export { default as DirectionAwareHover } from './DirectionAwareHover.vue'

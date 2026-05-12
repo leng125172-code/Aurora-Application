@@ -1,0 +1,77 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "RK3588: 启动 AuroraStruct3D.HttpApi.Host",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "rk3588-prepare-httpapi-host",
+            "program": "/home/linaro/AuroraStruct3D.HttpApi.Host/AuroraStruct3D.HttpApi.Host",
+            "cwd": "/home/linaro/AuroraStruct3D.HttpApi.Host",
+            "env": {
+                "ASPNETCORE_ENVIRONMENT": "Development",
+                "DOTNET_ENVIRONMENT": "Development"
+            },
+            "pipeTransport": {
+                "pipeProgram": "ssh",
+                "pipeArgs": [
+                    "linaro@10.127.135.143"
+                ],
+                "pipeCwd": "${workspaceFolder}",
+                "debuggerPath": "/home/linaro/.vsdbg/vsdbg",
+                "quoteArgs": true
+            }
+        },
+        {
+            "name": "RK3588: 启动 AuroraStruct3D.DbMigrator",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "rk3588-prepare-dbmigrator",
+            "program": "/home/linaro/AuroraStruct3D.DbMigrator/AuroraStruct3D.DbMigrator",
+            "cwd": "/home/linaro/AuroraStruct3D.DbMigrator",
+            "env": {
+                "ASPNETCORE_ENVIRONMENT": "Development",
+                "DOTNET_ENVIRONMENT": "Development"
+            },
+            "pipeTransport": {
+                "pipeProgram": "ssh",
+                "pipeArgs": [
+                    "linaro@10.127.135.143"
+                ],
+                "pipeCwd": "${workspaceFolder}",
+                "debuggerPath": "/home/linaro/.vsdbg/vsdbg",
+                "quoteArgs": true
+            }
+        },
+        {
+            "name": "RK3588: 附加到 AuroraStruct3D.HttpApi.Host",
+            "type": "coreclr",
+            "request": "attach",
+            "processId": "${command:pickRemoteProcess}",
+            "pipeTransport": {
+                "pipeProgram": "ssh",
+                "pipeArgs": [
+                    "linaro@10.127.135.143"
+                ],
+                "pipeCwd": "${workspaceFolder}",
+                "debuggerPath": "/home/linaro/.vsdbg/vsdbg",
+                "quoteArgs": true
+            }
+        },
+        {
+            "name": "RK3588: 附加到 AuroraStruct3D.DbMigrator",
+            "type": "coreclr",
+            "request": "attach",
+            "processId": "${command:pickRemoteProcess}",
+            "pipeTransport": {
+                "pipeProgram": "ssh",
+                "pipeArgs": [
+                    "linaro@10.127.135.143"
+                ],
+                "pipeCwd": "${workspaceFolder}",
+                "debuggerPath": "/home/linaro/.vsdbg/vsdbg",
+                "quoteArgs": true
+            }
+        }
+    ]
+}

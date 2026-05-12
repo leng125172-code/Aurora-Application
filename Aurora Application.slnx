@@ -12,14 +12,6 @@
     <Folder Name="/Assets/" />
     <Folder Name="/Documents/" />
     <Folder Name="/Sources/" />
-    <Folder Name="/Sources/Aurora.AbpPro.Tools/">
-        <Project Path="Sources/Aurora.AbpProTools/Aurora.AbpPro.Tools/Aurora.AbpPro.Tools.csproj">
-            <Platform Solution="*|Any CPU" Project="x64" />
-            <Platform Solution="*|arm64" Project="arm64" />
-            <Platform Solution="*|x64" Project="x64" />
-            <Platform Solution="*|x86" Project="x86" />
-        </Project>
-    </Folder>
     <Folder Name="/Sources/AuroraAbpPro/">
         <Project Path="Sources/AuroraAbpPro/DotNetCore.CAP.Dashboard/DotNetCore.CAP.Dashboard.csproj">
             <Platform Solution="*|Any CPU" Project="x64" />
@@ -985,6 +977,12 @@
             <Platform Solution="*|x64" Project="x64" />
             <Platform Solution="*|x86" Project="x86" />
         </Project>
+        <Project Path="Sources/AuroraStruct3D/AuroraStruct3D.DLP/AuroraStruct3D.DLP.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
         <Project Path="Sources/AuroraStruct3D/AuroraStruct3D.Domain.Shared/AuroraStruct3D.Domain.Shared.csproj">
             <Platform Solution="*|Any CPU" Project="x64" />
             <Platform Solution="*|arm64" Project="arm64" />
@@ -1021,6 +1019,18 @@
             <Platform Solution="*|x86" Project="x86" />
         </Project>
         <Project Path="Sources/AuroraStruct3D/AuroraStruct3D.HttpApi/AuroraStruct3D.HttpApi.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraStruct3D/AuroraStruct3D.RS485/AuroraStruct3D.RS485.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraStruct3D/AuroraStruct3D.Tucam/AuroraStruct3D.Tucam.csproj">
             <Platform Solution="*|Any CPU" Project="x64" />
             <Platform Solution="*|arm64" Project="arm64" />
             <Platform Solution="*|x64" Project="x64" />

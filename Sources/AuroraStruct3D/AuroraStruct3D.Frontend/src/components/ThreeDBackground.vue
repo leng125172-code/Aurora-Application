@@ -6,10 +6,7 @@
 </script>
 
 <template>
-    <div
-        aria-hidden="true"
-        class="pointer-events-none absolute inset-0 -z-10 overflow-hidden"
-    >
+    <div aria-hidden="true" class="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
         <div
             class="absolute -top-1/2 left-1/2 h-[120%] w-[120%] -translate-x-1/2 rounded-full bg-gradient-to-tr from-primary/20 via-accent/10 to-transparent blur-3xl"
         />

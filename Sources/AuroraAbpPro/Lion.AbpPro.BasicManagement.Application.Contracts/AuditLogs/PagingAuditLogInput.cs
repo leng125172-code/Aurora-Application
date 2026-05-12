@@ -17,12 +17,12 @@ namespace Lion.AbpPro.BasicManagement.AuditLogs
         /// <summary>
         /// 请求方法
         /// </summary>
-        public string HttpMethod { get; set; }
+        public string? HttpMethod { get; set; }
 
         /// <summary>
         /// 请求地址
         /// </summary>
-        public string Url { get; set; }
+        public string? Url { get; set; }
 
         /// <summary>
         /// 用户Id
@@ -32,17 +32,17 @@ namespace Lion.AbpPro.BasicManagement.AuditLogs
         /// <summary>
         /// 用户名
         /// </summary>
-        public string UserName { get; set; }
+        public string? UserName { get; set; }
 
         /// <summary>
         /// 应用程序名称
         /// </summary>
-        public string ApplicationName { get; set; }
+        public string? ApplicationName { get; set; }
 
         /// <summary>
         /// RequestId
         /// </summary>
-        public string CorrelationId { get; set; }
+        public string? CorrelationId { get; set; }
 
         /// <summary>
         /// 最大执行时间
@@ -67,6 +67,6 @@ namespace Lion.AbpPro.BasicManagement.AuditLogs
         /// <summary>
         /// 客户端IP
         /// </summary>
-        public string ClientIpAddress { get; set; }
+        public string? ClientIpAddress { get; set; }
     }
 }

@@ -62,8 +62,8 @@ public class MenuManager : DomainService
         string path,
         MenuType menuType,
         OpenType openType,
-        string url,
-        string component,
+        string? url,
+        string? component,
         bool enabled,
         string policy
     )
@@ -108,8 +108,8 @@ public class MenuManager : DomainService
         string path,
         MenuType menuType,
         OpenType openType,
-        string url,
-        string component,
+        string? url,
+        string? component,
         bool enabled,
         string policy,
         Guid? parentId

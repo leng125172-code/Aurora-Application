@@ -1,1 +1,1 @@
-export { default as SparklesText } from "./SparklesText.vue";
+export { default as SparklesText } from './SparklesText.vue'

@@ -1,1 +1,1 @@
-export { default as InteractiveGridPattern } from "./InteractiveGridPattern.vue";
+export { default as InteractiveGridPattern } from './InteractiveGridPattern.vue'

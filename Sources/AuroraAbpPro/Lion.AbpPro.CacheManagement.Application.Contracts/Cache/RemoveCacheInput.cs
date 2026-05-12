@@ -5,5 +5,5 @@ namespace Lion.AbpPro.CacheManagement.Cache;
 public class RemoveCacheInput
 {
     [Required]
-    public string Key { get; set; }
+    public string? Key { get; set; }
 }

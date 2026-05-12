@@ -1,1 +1,1 @@
-export { default as BubblesBg } from "./BubblesBg.vue";
+export { default as BubblesBg } from './BubblesBg.vue'

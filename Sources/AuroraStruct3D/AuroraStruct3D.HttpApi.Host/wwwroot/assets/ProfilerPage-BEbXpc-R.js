@@ -1,1 +1,0 @@
-import{I as e,h as t,x as n}from"./i18n-zxTsEohn.js";import{t as r}from"./IframeView-BZrdW2ik.js";var i=n({__name:`ProfilerPage`,setup(n){return(n,i)=>(e(),t(r,{src:`/profiler-results-index`,title:`MiniProfiler`}))}});export{i as default};

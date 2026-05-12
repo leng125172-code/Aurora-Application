@@ -8,6 +8,7 @@
     <ItemGroup>
         <ProjectReference Include="..\AuroraStruct3D.Domain\AuroraStruct3D.Domain.csproj" />
         <ProjectReference Include="..\AuroraStruct3D.Application.Contracts\AuroraStruct3D.Application.Contracts.csproj" />
+        <ProjectReference Include="..\AuroraStruct3D.Tucam\AuroraStruct3D.Tucam.csproj" />
     </ItemGroup>
 
     <ItemGroup>

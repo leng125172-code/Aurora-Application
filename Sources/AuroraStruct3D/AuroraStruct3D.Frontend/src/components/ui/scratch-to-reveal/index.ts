@@ -1,1 +1,1 @@
-export { default as ScratchToReveal } from "./ScratchToReveal.vue";
+export { default as ScratchToReveal } from './ScratchToReveal.vue'

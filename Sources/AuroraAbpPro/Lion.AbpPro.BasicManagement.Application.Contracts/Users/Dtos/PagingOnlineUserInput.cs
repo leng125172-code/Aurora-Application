@@ -5,5 +5,5 @@ public class PagingOnlineUserInput : PagingBase
     /// <summary>
     /// 用户名(支持模糊匹配)
     /// </summary>
-    public string UserName { get; set; }
+    public string? UserName { get; set; }
 }

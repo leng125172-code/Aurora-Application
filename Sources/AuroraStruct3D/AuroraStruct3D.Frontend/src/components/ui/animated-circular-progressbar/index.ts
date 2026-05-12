@@ -1,1 +1,1 @@
-export { default as AnimatedCircularProgressBar } from "./AnimatedCircularProgressBar.vue";
+export { default as AnimatedCircularProgressBar } from './AnimatedCircularProgressBar.vue'

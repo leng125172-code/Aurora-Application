@@ -1,1 +1,1 @@
-export { default as SmoothCursor } from "./SmoothCursor.vue";
+export { default as SmoothCursor } from './SmoothCursor.vue'

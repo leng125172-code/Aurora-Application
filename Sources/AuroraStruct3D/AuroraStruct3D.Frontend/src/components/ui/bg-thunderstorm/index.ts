@@ -1,1 +1,1 @@
-export { default as ThunderstormBackground } from "./ThunderstormBackground.vue";
+export { default as ThunderstormBackground } from './ThunderstormBackground.vue'

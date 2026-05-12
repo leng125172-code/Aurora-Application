@@ -1,1 +1,1 @@
-export { default as SnowfallBg } from "./SnowfallBg.vue";
+export { default as SnowfallBg } from './SnowfallBg.vue'

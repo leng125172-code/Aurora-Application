@@ -10,9 +10,7 @@ export type ThemeMode = 'light' | 'dark' | 'system'
 const STORAGE_KEY = 'aurora.theme'
 
 function applyTheme(mode: ThemeMode): void {
-    const isDark =
-        mode === 'dark' ||
-        (mode === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
+    const isDark = mode === 'dark' || (mode === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
     document.documentElement.classList.toggle('dark', isDark)
 }
 
@@ -26,16 +24,14 @@ export const useThemeStore = defineStore('theme', () => {
             localStorage.setItem(STORAGE_KEY, next)
             applyTheme(next)
         },
-        { immediate: true },
+        { immediate: true }
     )
 
     // 跟随系统时也要响应系统级变化
     if (window.matchMedia) {
-        window
-            .matchMedia('(prefers-color-scheme: dark)')
-            .addEventListener('change', () => {
-                if (mode.value === 'system') applyTheme('system')
-            })
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+            if (mode.value === 'system') applyTheme('system')
+        })
     }
 
     function setMode(next: ThemeMode): void {

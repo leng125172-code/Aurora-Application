@@ -1,1 +1,1 @@
-export { default as BendingGallery } from "./BendingGallery.vue";
+export { default as BendingGallery } from './BendingGallery.vue'

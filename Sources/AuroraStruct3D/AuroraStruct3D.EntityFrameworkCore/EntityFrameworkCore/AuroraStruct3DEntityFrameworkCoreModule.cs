@@ -1,3 +1,6 @@
+using AuroraStruct3D.Cameras;
+using AuroraStruct3D.Motors;
+using AuroraStruct3D.Projectors;
 using Lion.AbpPro.CodeManagement.EntityFrameworkCore;
 using Lion.AbpPro.DynamicMenuManagement.EntityFrameworkCore;
 using Lion.AbpPro.FileManagement.EntityFrameworkCore;
@@ -37,6 +40,21 @@ namespace AuroraStruct3D.EntityFrameworkCore
                 /* Remove "includeAllEntities: true" to create
                  * default repositories only for aggregate roots */
                 options.AddDefaultRepositories(includeAllEntities: true);
+
+                // 注册相机模块自定义仓储
+                options.AddRepository<CameraDevice, EfCoreCameraDeviceRepository>();
+                options.AddRepository<CameraParameterSet, EfCoreCameraParameterSetRepository>();
+
+                // 注册电机模块自定义仓储
+                options.AddRepository<MotorAxis, EfCoreMotorAxisRepository>();
+                options.AddRepository<MotorPrPath, EfCoreMotorPrPathRepository>();
+
+                // 注册 DLP 投影机模块自定义仓储
+                options.AddRepository<ProjectorDevice, EfCoreProjectorDeviceRepository>();
+                options.AddRepository<
+                    ProjectorOperationLog,
+                    EfCoreProjectorOperationLogRepository
+                >();
             });
             Configure<AbpSequentialGuidGeneratorOptions>(options =>
             {

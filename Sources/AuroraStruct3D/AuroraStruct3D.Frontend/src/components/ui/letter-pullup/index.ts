@@ -1,1 +1,1 @@
-export { default as LetterPullup } from "./LetterPullup.vue";
+export { default as LetterPullup } from './LetterPullup.vue'

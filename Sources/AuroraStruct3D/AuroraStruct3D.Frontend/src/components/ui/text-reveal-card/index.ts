@@ -1,1 +1,1 @@
-export { default as TextRevealCard } from "./TextRevealCard.vue";
+export { default as TextRevealCard } from './TextRevealCard.vue'

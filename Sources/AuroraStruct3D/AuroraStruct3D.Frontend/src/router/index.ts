@@ -54,7 +54,13 @@ const routes: RouteRecordRaw[] = [
                 component: () => import('@/views/embed/ProfilerPage.vue'),
                 meta: { requiresAuth: true, title: 'menu.profiler' },
             },
-            // 第 4/5 期补充：swagger / cap / hangfire / profiler
+            {
+                path: 'system-info',
+                name: 'SystemInfo',
+                component: () => import('@/views/system/SystemInfoPage.vue'),
+                meta: { requiresAuth: true, title: 'menu.systemInfo' },
+            },
+            // 系统管理路由已移除（仅供后台调试使用）
         ],
     },
     {

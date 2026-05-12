@@ -1,1 +1,1 @@
-export { default as FallingStarsBg } from "./FallingStarsBg.vue";
+export { default as FallingStarsBg } from './FallingStarsBg.vue'

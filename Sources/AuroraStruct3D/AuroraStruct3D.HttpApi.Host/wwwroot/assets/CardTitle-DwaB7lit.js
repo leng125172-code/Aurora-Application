@@ -1,0 +1,1 @@
+import{I as e,_ as t,ft as n,mt as r,x as i,z as a}from"./i18n-DHfBPQsl.js";import{t as o}from"./utils-DFp5cjJW.js";var s=i({__name:`CardTitle`,props:{class:{type:[Boolean,null,String,Object,Array]}},setup(i){let s=i;return(i,c)=>(e(),t(`h3`,{class:r(n(o)(`font-semibold leading-none tracking-tight`,s.class))},[a(i.$slots,`default`)],2))}});export{s as t};

@@ -36,35 +36,35 @@
 
 // Card Texture Generation Utilities for OGL
 
-import type { Renderer } from "ogl";
-import { Texture } from "ogl"; // Required for OGL Texture
+import type { Renderer } from 'ogl'
+import { Texture } from 'ogl' // Required for OGL Texture
 
 /**
  * Represents the data structure for a single card/tile
  * This interface must match the CardData interface in InfiniteGridClass.ts
  */
 interface CardData {
-  /** The main title text displayed prominently on the card */
-  title: string;
-  /** Badge text (currently not implemented in the rendering pipeline) */
-  badge: string;
-  /** Detailed description text for the card content (optional) */
-  description?: string;
-  /** Array of tag strings that will be displayed as styled pills */
-  tags: string[];
-  /** Date string displayed in the bottom-right corner */
-  date: string;
-  /** Optional image URL - falls back to '/photo.png' if not provided */
-  image?: string;
+    /** The main title text displayed prominently on the card */
+    title: string
+    /** Badge text (currently not implemented in the rendering pipeline) */
+    badge: string
+    /** Detailed description text for the card content (optional) */
+    description?: string
+    /** Array of tag strings that will be displayed as styled pills */
+    tags: string[]
+    /** Date string displayed in the bottom-right corner */
+    date: string
+    /** Optional image URL - falls back to '/photo.png' if not provided */
+    image?: string
 }
 
 /**
  * Canvas dimensions for all generated textures
  * These dimensions affect the resolution and memory usage of the textures
  */
-const cardWidth = 512;
-const cardHeight = 512;
-const padding = 30;
+const cardWidth = 512
+const cardHeight = 512
+const padding = 30
 
 /**
  * Creates a canvas element with 2D rendering context
@@ -76,18 +76,18 @@ const padding = 30;
  * @throws {Error} If 2D context creation fails
  */
 function createCanvasContext(): { canvas: HTMLCanvasElement; ctx: CanvasRenderingContext2D } {
-  const canvas = document.createElement("canvas");
-  canvas.width = cardWidth;
-  canvas.height = cardHeight;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) {
-    throw new Error("Failed to get 2D context for canvas");
-  }
-  return { canvas, ctx };
+    const canvas = document.createElement('canvas')
+    canvas.width = cardWidth
+    canvas.height = cardHeight
+    const ctx = canvas.getContext('2d')
+    if (!ctx) {
+        throw new Error('Failed to get 2D context for canvas')
+    }
+    return { canvas, ctx }
 }
 
 // Option 1: Pre-generate textures once, reuse them
-const textureCache = new Map<string, Texture>();
+const textureCache = new Map<string, Texture>()
 
 /**
  * Generates the foreground texture for a card using Canvas 2D API
@@ -119,151 +119,148 @@ const textureCache = new Map<string, Texture>();
  * const texture = await generateForegroundTexture(cardData, renderer);
  * ```
  */
-export async function generateForegroundTexture(
-  data: CardData,
-  renderer: Renderer,
-): Promise<Texture> {
-  const cacheKey = `${data.title}-${data.tags?.join("-")}`;
-  if (textureCache.has(cacheKey)) {
-    return textureCache.get(cacheKey)!;
-  }
+export async function generateForegroundTexture(data: CardData, renderer: Renderer): Promise<Texture> {
+    const cacheKey = `${data.title}-${data.tags?.join('-')}`
+    if (textureCache.has(cacheKey)) {
+        return textureCache.get(cacheKey)!
+    }
 
-  const { canvas, ctx } = createCanvasContext();
+    const { canvas, ctx } = createCanvasContext()
 
-  // Set default styles
-  ctx.fillStyle = "white";
-  ctx.strokeStyle = "rgba(60, 60, 60, 1)";
-  ctx.lineWidth = 1;
+    // Set default styles
+    ctx.fillStyle = 'white'
+    ctx.strokeStyle = 'rgba(60, 60, 60, 1)'
+    ctx.lineWidth = 1
 
-  // Card background and border (transparent for foreground to show background)
-  ctx.beginPath();
-  ctx.rect(0, 0, cardWidth, cardHeight);
-  ctx.stroke(); // Draw border
-  // ctx.fill() is not needed as background is transparent
+    // Card background and border (transparent for foreground to show background)
+    ctx.beginPath()
+    ctx.rect(0, 0, cardWidth, cardHeight)
+    ctx.stroke() // Draw border
+    // ctx.fill() is not needed as background is transparent
 
-  let currentY = padding;
+    let currentY = padding
 
-  // Title Text
-  ctx.font = "24px Arial, sans-serif";
-  ctx.fillStyle = "white";
-  ctx.textBaseline = "top";
+    // Title Text
+    ctx.font = '24px Arial, sans-serif'
+    ctx.fillStyle = 'white'
+    ctx.textBaseline = 'top'
 
-  // Measure text to determine actual width
-  const titleText = data.title;
-  const titleMaxWidth = cardWidth - padding * 2;
+    // Measure text to determine actual width
+    const titleText = data.title
+    const titleMaxWidth = cardWidth - padding * 2
 
-  // For `ellipsis` and `wrap: 'none'`, we need to manually truncate
-  let truncatedTitle = titleText;
-  let textMetrics = ctx.measureText(truncatedTitle);
+    // For `ellipsis` and `wrap: 'none'`, we need to manually truncate
+    let truncatedTitle = titleText
+    let textMetrics = ctx.measureText(truncatedTitle)
 
-  // Simple truncation if text exceeds maxWidth
-  while (textMetrics.width > titleMaxWidth && truncatedTitle.length > 3) {
-    truncatedTitle = `${truncatedTitle.substring(0, truncatedTitle.length - 4)}...`;
-    textMetrics = ctx.measureText(truncatedTitle);
-  }
-  ctx.fillText(truncatedTitle, padding, currentY);
+    // Simple truncation if text exceeds maxWidth
+    while (textMetrics.width > titleMaxWidth && truncatedTitle.length > 3) {
+        truncatedTitle = `${truncatedTitle.substring(0, truncatedTitle.length - 4)}...`
+        textMetrics = ctx.measureText(truncatedTitle)
+    }
+    ctx.fillText(truncatedTitle, padding, currentY)
 
-  const headerHeight = 24; // Assuming 24px font height is a good approximation for header height
+    const headerHeight = 24 // Assuming 24px font height is a good approximation for header height
 
-  currentY += headerHeight + 30; // Move Y cursor down
+    currentY += headerHeight + 30 // Move Y cursor down
 
-  const topElementsMaxY = currentY;
-  const bottomReservedSpace = 100;
-  const availableImageHeight = cardHeight - topElementsMaxY - bottomReservedSpace;
-  const availableImageWidth = cardWidth - padding * 2;
+    const topElementsMaxY = currentY
+    const bottomReservedSpace = 100
+    const availableImageHeight = cardHeight - topElementsMaxY - bottomReservedSpace
+    const availableImageWidth = cardWidth - padding * 2
 
-  // Image Loading and Placement
-  const imageObj = new Image();
-  imageObj.crossOrigin = "anonymous";
-  imageObj.src = data.image || "/photo.png"; // Fallback image
+    // Image Loading and Placement
+    const imageObj = new Image()
+    imageObj.crossOrigin = 'anonymous'
+    imageObj.src = data.image || '/photo.png' // Fallback image
 
-  const loadImagePromise = new Promise<void>((resolve) => {
-    imageObj.onload = () => {
-      let imgWidth = imageObj.naturalWidth;
-      let imgHeight = imageObj.naturalHeight;
-      const naturalAspectRatio = imgWidth / imgHeight;
+    const loadImagePromise = new Promise<void>((resolve) => {
+        imageObj.onload = () => {
+            let imgWidth = imageObj.naturalWidth
+            let imgHeight = imageObj.naturalHeight
+            const naturalAspectRatio = imgWidth / imgHeight
 
-      // Scale image to fit within available space, maintaining aspect ratio
-      if (imgWidth > availableImageWidth || imgHeight > availableImageHeight) {
-        if (availableImageWidth / naturalAspectRatio <= availableImageHeight) {
-          imgWidth = availableImageWidth;
-          imgHeight = availableImageWidth / naturalAspectRatio;
-        } else {
-          imgHeight = availableImageHeight;
-          imgWidth = availableImageHeight * naturalAspectRatio;
+            // Scale image to fit within available space, maintaining aspect ratio
+            if (imgWidth > availableImageWidth || imgHeight > availableImageHeight) {
+                if (availableImageWidth / naturalAspectRatio <= availableImageHeight) {
+                    imgWidth = availableImageWidth
+                    imgHeight = availableImageWidth / naturalAspectRatio
+                } else {
+                    imgHeight = availableImageHeight
+                    imgWidth = availableImageHeight * naturalAspectRatio
+                }
+            }
+
+            const imageX = padding + (availableImageWidth - imgWidth) / 2
+            const imageY = topElementsMaxY + (availableImageHeight - imgHeight) / 2
+
+            // Draw image (no direct cornerRadius for images in vanilla canvas,
+            // you'd need to clip the path if truly desired. For simplicity, we draw directly).
+            ctx.drawImage(imageObj, imageX, imageY, imgWidth, imgHeight)
+            resolve()
         }
-      }
 
-      const imageX = padding + (availableImageWidth - imgWidth) / 2;
-      const imageY = topElementsMaxY + (availableImageHeight - imgHeight) / 2;
+        imageObj.onerror = () => {
+            console.error('Failed to load foreground image:', imageObj.src)
+            // Placeholder text on image load error
+            ctx.fillStyle = 'gray'
+            ctx.font = '30px Arial'
+            ctx.textAlign = 'center'
+            ctx.textBaseline = 'middle'
+            ctx.fillText('Image Error', cardWidth / 2, cardHeight / 2 - 50)
+            resolve() // Resolve to allow card generation to continue
+        }
+    })
 
-      // Draw image (no direct cornerRadius for images in vanilla canvas,
-      // you'd need to clip the path if truly desired. For simplicity, we draw directly).
-      ctx.drawImage(imageObj, imageX, imageY, imgWidth, imgHeight);
-      resolve();
-    };
+    await loadImagePromise // Wait for the image to load or fail
 
-    imageObj.onerror = () => {
-      console.error("Failed to load foreground image:", imageObj.src);
-      // Placeholder text on image load error
-      ctx.fillStyle = "gray";
-      ctx.font = "30px Arial";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText("Image Error", cardWidth / 2, cardHeight / 2 - 50);
-      resolve(); // Resolve to allow card generation to continue
-    };
-  });
+    // Tags
+    let currentXForTags = padding
+    const tagFontSize = 16
+    const tagPaddingX = 15
+    const tagPaddingY = 8
+    const tagGap = 10
 
-  await loadImagePromise; // Wait for the image to load or fail
+    const tagsY = cardHeight - padding - tagFontSize - tagPaddingY
+    data.tags.forEach((tagText) => {
+        ctx.font = `${tagFontSize}px Helvetica, Arial, sans-serif`
+        ctx.textBaseline = 'middle' // Align text vertically in the middle of the shape
 
-  // Tags
-  let currentXForTags = padding;
-  const tagFontSize = 16;
-  const tagPaddingX = 15;
-  const tagPaddingY = 8;
-  const tagGap = 10;
+        const textToDraw = `#${tagText.toUpperCase()}`
+        const textMetrics = ctx.measureText(textToDraw)
+        const tagLabelWidth = textMetrics.width
 
-  const tagsY = cardHeight - padding - tagFontSize - tagPaddingY;
-  data.tags.forEach((tagText) => {
-    ctx.font = `${tagFontSize}px Helvetica, Arial, sans-serif`;
-    ctx.textBaseline = "middle"; // Align text vertically in the middle of the shape
+        const tagShapeWidth = tagLabelWidth + tagPaddingX
+        const tagShapeHeight = tagFontSize + tagPaddingY
 
-    const textToDraw = `#${tagText.toUpperCase()}`;
-    const textMetrics = ctx.measureText(textToDraw);
-    const tagLabelWidth = textMetrics.width;
+        // Draw rounded rectangle for tag shape
+        ctx.fillStyle = 'rgba(248,250, 252, 0.15)'
+        drawRoundedRect(ctx, currentXForTags, tagsY, tagShapeWidth, tagShapeHeight, tagShapeHeight / 2) // Use half height for perfect pill shape
+        ctx.fill()
 
-    const tagShapeWidth = tagLabelWidth + tagPaddingX;
-    const tagShapeHeight = tagFontSize + tagPaddingY;
+        // Draw tag text
+        ctx.fillStyle = 'white'
+        ctx.textAlign = 'center'
+        ctx.fillText(textToDraw, currentXForTags + tagShapeWidth / 2, tagsY + tagShapeHeight / 2) // Center text in shape
 
-    // Draw rounded rectangle for tag shape
-    ctx.fillStyle = "rgba(248,250, 252, 0.15)";
-    drawRoundedRect(ctx, currentXForTags, tagsY, tagShapeWidth, tagShapeHeight, tagShapeHeight / 2); // Use half height for perfect pill shape
-    ctx.fill();
+        currentXForTags += tagShapeWidth + tagGap
+    })
 
-    // Draw tag text
-    ctx.fillStyle = "white";
-    ctx.textAlign = "center";
-    ctx.fillText(textToDraw, currentXForTags + tagShapeWidth / 2, tagsY + tagShapeHeight / 2); // Center text in shape
+    // Date
+    ctx.font = '20px Arial, sans-serif'
+    ctx.fillStyle = 'rgba(255, 255, 255, 1)'
+    ctx.textAlign = 'right' // Align text to the right
+    ctx.textBaseline = 'bottom' // Align text to the bottom of its bounding box
+    ctx.fillText(data.date, cardWidth - padding, cardHeight - padding)
 
-    currentXForTags += tagShapeWidth + tagGap;
-  });
+    const texture = new Texture(renderer.gl, {
+        image: canvas,
+        generateMipmaps: false,
+        flipY: false,
+    })
 
-  // Date
-  ctx.font = "20px Arial, sans-serif";
-  ctx.fillStyle = "rgba(255, 255, 255, 1)";
-  ctx.textAlign = "right"; // Align text to the right
-  ctx.textBaseline = "bottom"; // Align text to the bottom of its bounding box
-  ctx.fillText(data.date, cardWidth - padding, cardHeight - padding);
-
-  const texture = new Texture(renderer.gl, {
-    image: canvas,
-    generateMipmaps: false,
-    flipY: false,
-  });
-
-  textureCache.set(cacheKey, texture);
-  return texture;
+    textureCache.set(cacheKey, texture)
+    return texture
 }
 
 /**
@@ -291,67 +288,64 @@ export async function generateForegroundTexture(
  * // Use this texture for the background mesh with shader material
  * ```
  */
-export async function generateBackgroundTexture(
-  data: CardData,
-  renderer: Renderer,
-): Promise<Texture> {
-  const { canvas, ctx } = createCanvasContext();
+export async function generateBackgroundTexture(data: CardData, renderer: Renderer): Promise<Texture> {
+    const { canvas, ctx } = createCanvasContext()
 
-  // Start with transparent background - image will fill the canvas
-  // Alternative: ctx.fillStyle = 'rgba(0,0,0,0.5)' for solid fallback
+    // Start with transparent background - image will fill the canvas
+    // Alternative: ctx.fillStyle = 'rgba(0,0,0,0.5)' for solid fallback
 
-  const backgroundImageObj = new Image();
-  backgroundImageObj.crossOrigin = "Anonymous"; // Enable CORS for external images
-  backgroundImageObj.src = data.image || "/photo.png"; // Use same image as foreground
+    const backgroundImageObj = new Image()
+    backgroundImageObj.crossOrigin = 'Anonymous' // Enable CORS for external images
+    backgroundImageObj.src = data.image || '/photo.png' // Use same image as foreground
 
-  const loadBackgroundImagePromise = new Promise<void>((resolve) => {
-    backgroundImageObj.onload = () => {
-      const backgroundScale = 2.0; // Make background image larger for blur effect
-      const bgImgWidth = backgroundImageObj.naturalWidth * backgroundScale;
-      const bgImgHeight = backgroundImageObj.naturalHeight * backgroundScale;
+    const loadBackgroundImagePromise = new Promise<void>((resolve) => {
+        backgroundImageObj.onload = () => {
+            const backgroundScale = 2.0 // Make background image larger for blur effect
+            const bgImgWidth = backgroundImageObj.naturalWidth * backgroundScale
+            const bgImgHeight = backgroundImageObj.naturalHeight * backgroundScale
 
-      // Draw the image first
-      ctx.drawImage(
-        backgroundImageObj,
-        (cardWidth - bgImgWidth) / 2,
-        (cardHeight - bgImgHeight) / 2,
-        bgImgWidth,
-        bgImgHeight,
-      );
+            // Draw the image first
+            ctx.drawImage(
+                backgroundImageObj,
+                (cardWidth - bgImgWidth) / 2,
+                (cardHeight - bgImgHeight) / 2,
+                bgImgWidth,
+                bgImgHeight
+            )
 
-      // Apply blur directly on the canvas content
-      // Note: blur performance and quality can vary between browsers.
-      // For more control/consistency, you might apply blur in a shader or pre-process images.
-      ctx.filter = "blur(10px)"; // Adjust blur radius as needed
-      ctx.drawImage(canvas, 0, 0); // Redraw the canvas content with blur
-      ctx.filter = "none"; // Reset filter for subsequent draws
+            // Apply blur directly on the canvas content
+            // Note: blur performance and quality can vary between browsers.
+            // For more control/consistency, you might apply blur in a shader or pre-process images.
+            ctx.filter = 'blur(10px)' // Adjust blur radius as needed
+            ctx.drawImage(canvas, 0, 0) // Redraw the canvas content with blur
+            ctx.filter = 'none' // Reset filter for subsequent draws
 
-      // Add a semi-transparent overlay to darken/blend the background
-      ctx.fillStyle = "rgba(0,0,0,0.4)"; // Dark overlay
-      ctx.fillRect(0, 0, cardWidth, cardHeight);
+            // Add a semi-transparent overlay to darken/blend the background
+            ctx.fillStyle = 'rgba(0,0,0,0.4)' // Dark overlay
+            ctx.fillRect(0, 0, cardWidth, cardHeight)
 
-      resolve();
-    };
+            resolve()
+        }
 
-    backgroundImageObj.onerror = () => {
-      console.warn("Failed to load background image:", backgroundImageObj.src);
-      // Fallback to a solid color background if image fails to load
-      // ctx.fillStyle = data.color1 || 'rgba(50,50,50,0.5)'; // Use a default dark gray if data.color1 is not present
-      ctx.fillStyle = "rgba(0,0,0,0.5)"; // Fallback to semi-transparent black
-      ctx.fillRect(0, 0, cardWidth, cardHeight);
-      resolve();
-    };
-  });
+        backgroundImageObj.onerror = () => {
+            console.warn('Failed to load background image:', backgroundImageObj.src)
+            // Fallback to a solid color background if image fails to load
+            // ctx.fillStyle = data.color1 || 'rgba(50,50,50,0.5)'; // Use a default dark gray if data.color1 is not present
+            ctx.fillStyle = 'rgba(0,0,0,0.5)' // Fallback to semi-transparent black
+            ctx.fillRect(0, 0, cardWidth, cardHeight)
+            resolve()
+        }
+    })
 
-  await loadBackgroundImagePromise; // Wait for background image to load or fail
+    await loadBackgroundImagePromise // Wait for background image to load or fail
 
-  const backgroundTexture = new Texture(renderer.gl, {
-    image: canvas,
-    generateMipmaps: false,
-    flipY: false,
-  });
+    const backgroundTexture = new Texture(renderer.gl, {
+        image: canvas,
+        generateMipmaps: false,
+        flipY: false,
+    })
 
-  return backgroundTexture;
+    return backgroundTexture
 }
 
 /**
@@ -369,24 +363,24 @@ export async function generateBackgroundTexture(
  * @param radius - Corner radius in pixels
  */
 function drawRoundedRect(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  width: number,
-  height: number,
-  radius: number,
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    radius: number
 ): void {
-  ctx.beginPath();
-  ctx.moveTo(x + radius, y);
-  ctx.lineTo(x + width - radius, y);
-  ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
-  ctx.lineTo(x + width, y + height - radius);
-  ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
-  ctx.lineTo(x + radius, y + height);
-  ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
-  ctx.lineTo(x, y + radius);
-  ctx.quadraticCurveTo(x, y, x + radius, y);
-  ctx.closePath();
+    ctx.beginPath()
+    ctx.moveTo(x + radius, y)
+    ctx.lineTo(x + width - radius, y)
+    ctx.quadraticCurveTo(x + width, y, x + width, y + radius)
+    ctx.lineTo(x + width, y + height - radius)
+    ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height)
+    ctx.lineTo(x + radius, y + height)
+    ctx.quadraticCurveTo(x, y + height, x, y + height - radius)
+    ctx.lineTo(x, y + radius)
+    ctx.quadraticCurveTo(x, y, x + radius, y)
+    ctx.closePath()
 }
 
 /**
@@ -408,15 +402,15 @@ function drawRoundedRect(
  * ```
  */
 export async function generateCardTextures(
-  data: CardData,
-  renderer: Renderer,
+    data: CardData,
+    renderer: Renderer
 ): Promise<{
-  foreground: Texture;
-  background: Texture;
+    foreground: Texture
+    background: Texture
 }> {
-  const [foreground, background] = await Promise.all([
-    generateForegroundTexture(data, renderer),
-    generateBackgroundTexture(data, renderer),
-  ]);
-  return { foreground, background };
+    const [foreground, background] = await Promise.all([
+        generateForegroundTexture(data, renderer),
+        generateBackgroundTexture(data, renderer),
+    ])
+    return { foreground, background }
 }

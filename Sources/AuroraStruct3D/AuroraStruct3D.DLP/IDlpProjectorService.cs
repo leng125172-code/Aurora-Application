@@ -1,0 +1,129 @@
+namespace AuroraStruct3D.DLP;
+
+/// <summary>
+/// 腾聚结构光投影机状态信息
+/// </summary>
+public class DlpProjectorStatus
+{
+    /// <summary>投影机 IP 地址</summary>
+    public string IpAddress { get; init; } = string.Empty;
+
+    /// <summary>TCP 端口</summary>
+    public int Port { get; init; }
+
+    /// <summary>是否已连接</summary>
+    public bool IsConnected { get; init; }
+
+    /// <summary>固件版本（连接后查询）</summary>
+    public string? FirmwareVersion { get; init; }
+
+    /// <summary>设备标志字节（ID）</summary>
+    public int DeviceId { get; init; }
+
+    /// <summary>当前亮度值（10~200）</summary>
+    public byte CurrentLight { get; init; }
+}
+
+/// <summary>
+/// 腾聚（TJ）结构光投影机操作服务接口。
+/// 基于 TCP ASCII 协议实现，支持 linux-arm64 和 Windows 平台（无需本地 DLL）。
+/// </summary>
+public interface IDlpProjectorService
+{
+    /// <summary>
+    /// 连接到指定 IP 的投影机（TCP 端口 1234）
+    /// </summary>
+    /// <param name="ip">投影机 IPv4 地址，如 "192.168.100.100"</param>
+    /// <param name="cancellationToken">取消令牌</param>
+    Task ConnectAsync(string ip, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 连接到指定 IP 和端口的投影机
+    /// </summary>
+    /// <param name="ip">投影机 IPv4 地址</param>
+    /// <param name="port">TCP 端口（默认 1234）</param>
+    /// <param name="cancellationToken">取消令牌</param>
+    Task ConnectAsync(string ip, int port, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 断开投影机连接
+    /// </summary>
+    Task DisconnectAsync();
+
+    /// <summary>
+    /// 获取投影机当前状态（含连接状态、固件版本）
+    /// </summary>
+    Task<DlpProjectorStatus> GetStatusAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 获取固件版本字符串
+    /// </summary>
+    Task<string?> GetFirmwareVersionAsync(CancellationToken cancellationToken = default);
+
+    // ─── LED 控制 ─────────────────────────────────────────────────
+
+    /// <summary>
+    /// 开启投影灯。不使用时建议关闭以延长设备寿命
+    /// </summary>
+    Task<bool> LedOnAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 关闭投影灯
+    /// </summary>
+    Task<bool> LedOffAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 设置投影亮度（10~200）。亮度 > 175 时注意散热
+    /// </summary>
+    /// <param name="light">亮度值，范围 10~200</param>
+    Task<bool> SetLightAsync(byte light, CancellationToken cancellationToken = default);
+
+    // ─── 显示内容控制 ─────────────────────────────────────────────
+
+    /// <summary>
+    /// 设置投影内容显示模式（黑屏/白屏/十字线/棋盘格）
+    /// </summary>
+    /// <param name="mode">显示模式</param>
+    Task<bool> SetDisplayModeAsync(
+        ProjectorDisplayMode mode,
+        CancellationToken cancellationToken = default
+    );
+
+    /// <summary>
+    /// 设置投影颜色（仅多光谱结构光投影机支持）
+    /// </summary>
+    /// <param name="color">颜色</param>
+    Task<bool> SetColorAsync(ProjectorColor color, CancellationToken cancellationToken = default);
+
+    // ─── 条纹投影触发 ─────────────────────────────────────────────
+
+    /// <summary>
+    /// 触发一次条纹投影（末尾帧为白色，等同于 nGray=255）
+    /// </summary>
+    Task<bool> TriggerOnceAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 触发一次条纹投影，并指定末尾帧灰度值（0=黑，255=白）
+    /// </summary>
+    /// <param name="endGray">末尾帧灰度值（0~254，注意 255 走白色快速命令）</param>
+    Task<bool> TriggerOnceAsync(byte endGray, CancellationToken cancellationToken = default);
+
+    // ─── 通用命令 ────────────────────────────────────────────────
+
+    /// <summary>
+    /// 发送原始 ASCII 命令（无响应等待）
+    /// </summary>
+    /// <param name="command">命令字符串（需自行包含 \r\n）</param>
+    Task<bool> SendRawCommandAsync(string command, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 发送原始 ASCII 命令并读取响应
+    /// </summary>
+    /// <param name="command">命令字符串（需自行包含 \r\n）</param>
+    /// <param name="cancellationToken">取消令牌</param>
+    /// <returns>响应文本，超时时返回 null</returns>
+    Task<string?> SendRawCommandAndReadAsync(
+        string command,
+        CancellationToken cancellationToken = default
+    );
+}

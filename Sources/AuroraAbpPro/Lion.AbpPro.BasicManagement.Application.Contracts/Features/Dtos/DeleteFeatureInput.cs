@@ -4,7 +4,7 @@ public class DeleteFeatureInput : IValidatableObject
 {
     public string ProviderName { get; set; }
 
-    public string ProviderKey { get; set; }
+    public string? ProviderKey { get; set; }
 
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {

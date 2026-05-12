@@ -1,0 +1,90 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "rk3588-install-vsdbg",
+            "type": "shell",
+            "command": "powershell",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-Command",
+                "$ErrorActionPreference='Stop'; ssh linaro@10.127.135.143 \"mkdir -p /home/linaro/.vsdbg && if [ ! -x /home/linaro/.vsdbg/vsdbg ]; then curl -sSL https://aka.ms/getvsdbgsh | bash /dev/stdin -v latest -l /home/linaro/.vsdbg; fi\""
+            ],
+            "problemMatcher": []
+        },
+        {
+            "label": "rk3588-publish-httpapi-host",
+            "type": "shell",
+            "command": "powershell",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-Command",
+                "$ErrorActionPreference='Stop'; dotnet publish '${workspaceFolder}\\Sources\\AuroraStruct3D\\AuroraStruct3D.HttpApi.Host\\AuroraStruct3D.HttpApi.Host.csproj' -c Debug -r linux-arm64 --self-contained false -v minimal"
+            ],
+            "problemMatcher": "$msCompile"
+        },
+        {
+            "label": "rk3588-publish-dbmigrator",
+            "type": "shell",
+            "command": "powershell",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-Command",
+                "$ErrorActionPreference='Stop'; dotnet publish '${workspaceFolder}\\Sources\\AuroraStruct3D\\AuroraStruct3D.DbMigrator\\AuroraStruct3D.DbMigrator.csproj' -c Debug -r linux-arm64 --self-contained false -v minimal"
+            ],
+            "problemMatcher": "$msCompile"
+        },
+        {
+            "label": "rk3588-sync-httpapi-host",
+            "type": "shell",
+            "command": "powershell",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-Command",
+                "$ErrorActionPreference='Stop'; ssh linaro@10.127.135.143 \"mkdir -p /home/linaro/AuroraStruct3D.HttpApi.Host && rm -rf /home/linaro/AuroraStruct3D.HttpApi.Host/*\"; tar -cf - -C '${workspaceFolder}\\Publish\\linux-arm64\\AuroraStruct3D.HttpApi.Host' . | ssh linaro@10.127.135.143 \"tar -xf - -C /home/linaro/AuroraStruct3D.HttpApi.Host\"; ssh linaro@10.127.135.143 \"chmod +x /home/linaro/AuroraStruct3D.HttpApi.Host/AuroraStruct3D.HttpApi.Host\""
+            ],
+            "problemMatcher": []
+        },
+        {
+            "label": "rk3588-sync-dbmigrator",
+            "type": "shell",
+            "command": "powershell",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-Command",
+                "$ErrorActionPreference='Stop'; ssh linaro@10.127.135.143 \"mkdir -p /home/linaro/AuroraStruct3D.DbMigrator && rm -rf /home/linaro/AuroraStruct3D.DbMigrator/*\"; tar -cf - -C '${workspaceFolder}\\Publish\\linux-arm64\\AuroraStruct3D.DbMigrator' . | ssh linaro@10.127.135.143 \"tar -xf - -C /home/linaro/AuroraStruct3D.DbMigrator\"; ssh linaro@10.127.135.143 \"chmod +x /home/linaro/AuroraStruct3D.DbMigrator/AuroraStruct3D.DbMigrator\""
+            ],
+            "problemMatcher": []
+        },
+        {
+            "label": "rk3588-prepare-httpapi-host",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "rk3588-install-vsdbg",
+                "rk3588-publish-httpapi-host",
+                "rk3588-sync-httpapi-host"
+            ],
+            "problemMatcher": []
+        },
+        {
+            "label": "rk3588-prepare-dbmigrator",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "rk3588-install-vsdbg",
+                "rk3588-publish-dbmigrator",
+                "rk3588-sync-dbmigrator"
+            ],
+            "problemMatcher": []
+        }
+    ]
+}

@@ -1,1 +1,1 @@
-export { default as BoxReveal } from "./BoxReveal.vue";
+export { default as BoxReveal } from './BoxReveal.vue'

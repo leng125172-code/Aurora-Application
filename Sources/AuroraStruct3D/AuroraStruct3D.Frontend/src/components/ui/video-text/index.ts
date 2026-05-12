@@ -1,1 +1,1 @@
-export { default as VideoText } from "./VideoText.vue";
+export { default as VideoText } from './VideoText.vue'

@@ -30,30 +30,33 @@ public class StackExchangeRedisCacheManager : ISingletonDependency, IStackExchan
     public AbpRedisCache RedisCache => _distributedCache.As<AbpRedisCache>();
 
     /// <summary>
+    /// 标记当前缓存实现是否为 Redis。
+    /// </summary>
+    private readonly bool _isRedisEnabled;
+
+    /// <summary>
     /// 初始化 StackExchangeRedisCacheManager 类的新实例。
     /// </summary>
     /// <param name="distributedCache">分布式缓存服务实例。</param>
-    /// <exception cref="UserFriendlyException">当注入的缓存不是 Redis 实现时抛出异常。</exception>
     /// <exception cref="InvalidOperationException">当无法找到 ConnectAsync 方法时抛出异常。</exception>
     public StackExchangeRedisCacheManager(IDistributedCache distributedCache)
     {
-        if (distributedCache is not RedisCache redisCache)
-        {
-            throw new InvalidOperationException("Cache not use Redis");
-        }
-
         _distributedCache = distributedCache;
+        _isRedisEnabled = distributedCache is RedisCache;
 
-        var type = typeof(AbpRedisCache);
-        _connectAsyncMethod = typeof(AbpRedisCache).GetMethod(
-            "ConnectAsync",
-            BindingFlags.Instance | BindingFlags.NonPublic
-        );
-        if (_connectAsyncMethod == null)
+        if (_isRedisEnabled)
         {
-            throw new InvalidOperationException(
-                $"Method 'ConnectAsync' not found on type '{type.FullName}'."
+            var type = typeof(AbpRedisCache);
+            _connectAsyncMethod = typeof(AbpRedisCache).GetMethod(
+                "ConnectAsync",
+                BindingFlags.Instance | BindingFlags.NonPublic
             );
+            if (_connectAsyncMethod == null)
+            {
+                throw new InvalidOperationException(
+                    $"Method 'ConnectAsync' not found on type '{type.FullName}'."
+                );
+            }
         }
     }
 
@@ -64,6 +67,11 @@ public class StackExchangeRedisCacheManager : ISingletonDependency, IStackExchan
     /// <returns>表示异步操作的 ValueTask，其结果为 Redis 数据库实例。</returns>
     public virtual ValueTask<IDatabase> ConnectAsync(CancellationToken token = default)
     {
+        if (!_isRedisEnabled)
+        {
+            throw new UserFriendlyException("当前未启用 Redis 缓存，缓存管理功能不可用。");
+        }
+
         return (ValueTask<IDatabase>)_connectAsyncMethod.Invoke(RedisCache, [token])!;
     }
 }

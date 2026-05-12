@@ -7,4 +7,3 @@ import { Toaster } from '@/components/ui/sonner'
     <RouterView />
     <Toaster position="top-right" rich-colors close-button />
 </template>
-

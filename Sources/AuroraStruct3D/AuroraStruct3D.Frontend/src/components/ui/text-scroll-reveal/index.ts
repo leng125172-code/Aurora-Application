@@ -1,1 +1,1 @@
-export { default as TextScrollReveal } from "./TextScrollReveal.vue";
+export { default as TextScrollReveal } from './TextScrollReveal.vue'

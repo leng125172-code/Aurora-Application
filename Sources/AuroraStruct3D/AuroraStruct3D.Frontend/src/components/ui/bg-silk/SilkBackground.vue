@@ -1,21 +1,21 @@
 <script lang="ts" setup>
-import type { HTMLAttributes } from "vue";
-import { cn } from "@inspira-ui/plugins";
+import type { HTMLAttributes } from 'vue'
+import { cn } from '@inspira-ui/plugins'
 
 interface Props {
-  class?: HTMLAttributes["class"];
-  hue?: number;
-  saturation?: number;
-  brightness?: number;
-  speed?: number;
+    class?: HTMLAttributes['class']
+    hue?: number
+    saturation?: number
+    brightness?: number
+    speed?: number
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  hue: 300,
-  saturation: 0.5,
-  brightness: 1,
-  speed: 1,
-});
+    hue: 300,
+    saturation: 0.5,
+    brightness: 1,
+    speed: 1,
+})
 
 const shaderCode = `
 // ShaderToy URL: https://www.shadertoy.com/view/X3yXRd
@@ -76,14 +76,11 @@ void mainImage(out vec4 fragColor, vec2 fragCoord) {
 
     fragColor = vec4(c, 1);
 }
-`;
+`
 </script>
 
 <template>
-  <div :class="cn(`absolute inset-0`, props.class)">
-    <ShaderToy
-      :shader-code="shaderCode"
-      v-bind="props"
-    />
-  </div>
+    <div :class="cn(`absolute inset-0`, props.class)">
+        <ShaderToy :shader-code="shaderCode" v-bind="props" />
+    </div>
 </template>

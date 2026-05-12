@@ -12,12 +12,12 @@ public class PagingIdentitySecurityLogInput : PagingBase
     /// </summary>
     public DateTime? EndTime { get; set; }
 
-    public string Identity { get; set; }
+    public string? Identity { get; set; }
 
     /// <summary>
     /// 请求地址
     /// </summary>
-    public string Action { get; set; }
+    public string? Action { get; set; }
 
     /// <summary>
     /// 用户Id
@@ -27,20 +27,20 @@ public class PagingIdentitySecurityLogInput : PagingBase
     /// <summary>
     /// 用户名
     /// </summary>
-    public string UserName { get; set; }
+    public string? UserName { get; set; }
 
     /// <summary>
     /// 应用程序名称
     /// </summary>
-    public string ApplicationName { get; set; }
+    public string? ApplicationName { get; set; }
 
     /// <summary>
     /// RequestId
     /// </summary>
-    public string CorrelationId { get; set; }
+    public string? CorrelationId { get; set; }
 
     /// <summary>
     /// ClientId
     /// </summary>
-    public string ClientId { get; set; }
+    public string? ClientId { get; set; }
 }

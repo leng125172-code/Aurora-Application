@@ -1,1 +1,1 @@
-export { default as TestimonialSlider } from "./TestimonialSlider.vue";
+export { default as TestimonialSlider } from './TestimonialSlider.vue'

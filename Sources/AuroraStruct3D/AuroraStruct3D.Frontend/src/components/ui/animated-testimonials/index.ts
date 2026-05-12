@@ -1,1 +1,1 @@
-export { default as AnimatedTestimonials } from "./AnimatedTestimonials.vue";
+export { default as AnimatedTestimonials } from './AnimatedTestimonials.vue'

@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="DotNetCore.CAP" Version="10.0.1" />
+        <PackageReference Include="DotNetCore.CAP.Dashboard" Version="10.0.1" />
+        <PackageReference Include="DotNetCore.CAP.InMemoryStorage" Version="10.0.1" />
+        <PackageReference Include="Savorboard.CAP.InMemoryMessageQueue" Version="10.0.0" />
+    </ItemGroup>
+</Project>

@@ -31,13 +31,16 @@ function onSelect(value: string): void {
         <DropdownMenuContent align="end">
             <DropdownMenuRadioGroup :model-value="theme.mode" @update:model-value="onSelect">
                 <DropdownMenuRadioItem value="light">
-                    <Sun class="mr-2 size-4" /> {{ t('layout.themeLight') }}
+                    <Sun class="mr-2 size-4" />
+                    {{ t('layout.themeLight') }}
                 </DropdownMenuRadioItem>
                 <DropdownMenuRadioItem value="dark">
-                    <Moon class="mr-2 size-4" /> {{ t('layout.themeDark') }}
+                    <Moon class="mr-2 size-4" />
+                    {{ t('layout.themeDark') }}
                 </DropdownMenuRadioItem>
                 <DropdownMenuRadioItem value="system">
-                    <Monitor class="mr-2 size-4" /> {{ t('layout.themeSystem') }}
+                    <Monitor class="mr-2 size-4" />
+                    {{ t('layout.themeSystem') }}
                 </DropdownMenuRadioItem>
             </DropdownMenuRadioGroup>
         </DropdownMenuContent>

@@ -5,5 +5,5 @@ namespace Lion.AbpPro.LanguageManagement.Languages;
 /// </summary>
 public class PageLanguageInput : PagingBase
 {
-    public string Filter { get; set; }
+    public string? Filter { get; set; }
 }

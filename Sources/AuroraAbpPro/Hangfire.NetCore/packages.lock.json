@@ -86,6 +86,9 @@
           "Newtonsoft.Json": "[11.0.1, )"
         }
       }
-    }
+    },
+    "net10.0/linux-arm64": {},
+    "net10.0/win-x64": {},
+    "net10.0/win-x86": {}
   }
 }

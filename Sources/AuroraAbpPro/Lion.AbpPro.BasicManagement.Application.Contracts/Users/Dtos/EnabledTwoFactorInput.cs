@@ -6,11 +6,11 @@ public class EnabledTwoFactorInput
     /// 验证码
     /// </summary>
     [Required]
-    public string Code { get; set; }
+    public string? Code { get; set; }
 
     /// <summary>
     /// 密钥
     /// </summary>
     [Required]
-    public string Secret { get; set; }
+    public string? Secret { get; set; }
 }

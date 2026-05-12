@@ -1,1 +1,1 @@
-export { default as FlickeringGrid } from "./FlickeringGrid.vue";
+export { default as FlickeringGrid } from './FlickeringGrid.vue'

@@ -1,1 +1,1 @@
-export { default as GlareCard } from "./GlareCard.vue";
+export { default as GlareCard } from './GlareCard.vue'

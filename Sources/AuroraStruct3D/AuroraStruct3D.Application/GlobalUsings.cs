@@ -4,6 +4,7 @@ global using System;
 global using System.Collections.Generic;
 global using System.Linq;
 global using System.Threading.Tasks;
+global using AuroraStruct3D;
 global using AuroraStruct3D.Permissions;
 global using Lion.AbpPro.BasicManagement;
 global using Lion.AbpPro.DataDictionaryManagement;

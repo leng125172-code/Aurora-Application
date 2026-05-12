@@ -1,1 +1,1 @@
-export { default as AnimateGrid } from "./AnimateGrid.vue";
+export { default as AnimateGrid } from './AnimateGrid.vue'

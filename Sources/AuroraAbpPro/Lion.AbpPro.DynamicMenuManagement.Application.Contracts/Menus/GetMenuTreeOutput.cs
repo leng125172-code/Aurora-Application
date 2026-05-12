@@ -13,7 +13,7 @@ public class GetMenuTreeOutput
 
     public string Path { get; set; }
 
-    public string Component { get; set; }
+    public string? Component { get; set; }
 
     public bool Enabled { get; set; }
 

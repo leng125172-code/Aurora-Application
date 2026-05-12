@@ -1,1 +1,1 @@
-export { default as ScrollIsland } from "./ScrollIsland.vue";
+export { default as ScrollIsland } from './ScrollIsland.vue'

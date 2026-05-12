@@ -1,29 +1,29 @@
 <script lang="ts" setup>
-import type { HTMLAttributes } from "vue";
-import { cn } from "@inspira-ui/plugins";
+import type { HTMLAttributes } from 'vue'
+import { cn } from '@inspira-ui/plugins'
 
 interface Props {
-  class?: HTMLAttributes["class"];
-  hue?: number;
-  saturation?: number;
-  brightness?: number;
-  speed?: number;
-  mouseSensitivity?: number;
-  damping?: number;
-  noise?: {
-    opacity: number;
-    scale: number;
-  };
+    class?: HTMLAttributes['class']
+    hue?: number
+    saturation?: number
+    brightness?: number
+    speed?: number
+    mouseSensitivity?: number
+    damping?: number
+    noise?: {
+        opacity: number
+        scale: number
+    }
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  hue: 0,
-  saturation: 1,
-  brightness: 1,
-  speed: 1,
-  mouseSensitivity: 0.5,
-  damping: 1,
-});
+    hue: 0,
+    saturation: 1,
+    brightness: 1,
+    speed: 1,
+    mouseSensitivity: 0.5,
+    damping: 1,
+})
 
 const shader = `
 // ShaderToy URL: https://www.shadertoy.com/view/W3d3z7
@@ -50,14 +50,11 @@ void mainImage(out vec4 o, vec2 p) {
     + vec3(1.3) / (length(p + vec2(sin(t * 1.2), cos(t * 1.3)) + f(p + t * .3 + 2.)) * 2.1);
   o = vec4(c * .8 / (3.5 + c), 1);
 }
-`;
+`
 </script>
 
 <template>
-  <div :class="cn(`absolute inset-0`, props.class)">
-    <ShaderToy
-      :shader-code="shader"
-      v-bind="props"
-    />
-  </div>
+    <div :class="cn(`absolute inset-0`, props.class)">
+        <ShaderToy :shader-code="shader" v-bind="props" />
+    </div>
 </template>

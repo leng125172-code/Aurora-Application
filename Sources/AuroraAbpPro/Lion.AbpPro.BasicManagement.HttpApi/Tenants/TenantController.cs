@@ -35,7 +35,6 @@ namespace Lion.AbpPro.BasicManagement.Tenants
         [SwaggerOperation(summary: "更新租户", Tags = new[] { "Tenants" })]
         public Task<TenantDto> UpdateAsync(UpdateTenantInput input)
         {
-            var request = new TenantUpdateDto() { Name = input.Name.Trim() };
             return _voloTenantAppService.UpdateAsync(input);
         }
 

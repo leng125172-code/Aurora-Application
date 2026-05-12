@@ -40,11 +40,7 @@ function onSelect(value: string): void {
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
             <DropdownMenuRadioGroup :model-value="locale" @update:model-value="onSelect">
-                <DropdownMenuRadioItem
-                    v-for="lang in langs"
-                    :key="lang.code"
-                    :value="lang.code"
-                >
+                <DropdownMenuRadioItem v-for="lang in langs" :key="lang.code" :value="lang.code">
                     {{ lang.label }}
                 </DropdownMenuRadioItem>
             </DropdownMenuRadioGroup>

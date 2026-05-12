@@ -1,1 +1,1 @@
-export { default as FlipCard } from "./FlipCard.vue";
+export { default as FlipCard } from './FlipCard.vue'

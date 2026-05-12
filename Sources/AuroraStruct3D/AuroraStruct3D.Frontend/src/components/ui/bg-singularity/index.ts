@@ -1,1 +1,1 @@
-export { default as SingularityBackground } from "./SingularityBackground.vue";
+export { default as SingularityBackground } from './SingularityBackground.vue'

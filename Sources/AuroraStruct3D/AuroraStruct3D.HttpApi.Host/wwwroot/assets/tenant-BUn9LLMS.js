@@ -1,1 +1,0 @@
-import{rt as e}from"./i18n-zxTsEohn.js";import{c as t}from"./vue-BP0I0K2F.js";var n=t(`tenant`,()=>{let t=e(null);function n(e){t.value=e}return{current:t,setCurrent:n}});export{n as t};

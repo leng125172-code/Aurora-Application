@@ -10,10 +10,10 @@ public class PageTenantConnectionStringInput
     /// <summary>
     /// 连接字符串名称
     /// </summary>
-    public string Name { get; set; }
+    public string? Name { get; set; }
 
     /// <summary>
     /// 连接字符串地址
     /// </summary>
-    public string Value { get; set; }
+    public string? Value { get; set; }
 }

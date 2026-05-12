@@ -1,1 +1,1 @@
-export { default as ExpandableGallery } from "./ExpandableGallery.vue";
+export { default as ExpandableGallery } from './ExpandableGallery.vue'

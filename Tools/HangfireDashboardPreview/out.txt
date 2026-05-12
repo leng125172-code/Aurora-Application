@@ -1,0 +1,26 @@
+从 D:\GitRepos\Aurora Application\Tools\HangfireDashboardPreview\Properties\launchSettings.json 使用启动设置...
+正在生成...
+D:\GitRepos\Aurora Application\Tools\HangfireDashboardPreview\HangfireDashboardPreview.csproj : warning NU1903: 包 "Newtonsoft.Json" 11.0.1 具有已知的 高 严重性漏洞，https://github.com/advisories/GHSA-5crp-9r3c-p9vr
+D:\GitRepos\Aurora Application\Tools\HangfireDashboardPreview\HangfireDashboardPreview.csproj : warning NU1903: 包 "Newtonsoft.Json" 11.0.1 具有已知的 高 严重性漏洞，https://github.com/advisories/GHSA-5crp-9r3c-p9vr
+info: Microsoft.Hosting.Lifetime[14]
+      Now listening on: http://localhost:5123
+info: Hangfire.BackgroundJobServer[0]
+      Starting Hangfire Server using job storage: 'Hangfire.MemoryStorage.MemoryStorage'
+info: Hangfire.BackgroundJobServer[0]
+      Using the following options for Hangfire Server:
+          Worker count: 20
+          Listening queues: 'default'
+          Shutdown timeout: 00:00:15
+          Schedule polling interval: 00:00:15
+info: Microsoft.Hosting.Lifetime[0]
+      Application started. Press Ctrl+C to shut down.
+info: Microsoft.Hosting.Lifetime[0]
+      Hosting environment: Development
+info: Microsoft.Hosting.Lifetime[0]
+      Content root path: D:\GitRepos\Aurora Application\Tools\HangfireDashboardPreview
+info: Hangfire.Server.BackgroundServerProcess[0]
+      Server qlzhengkai:35032:1be704a7 successfully announced in 73.9019 ms
+info: Hangfire.Server.BackgroundServerProcess[0]
+      Server qlzhengkai:35032:1be704a7 is starting the registered dispatchers: ServerWatchdog, ServerJobCancellationWatcher, ExpirationManager, CountersAggregator, Worker, DelayedJobScheduler, RecurringJobScheduler...
+info: Hangfire.Server.BackgroundServerProcess[0]
+      Server qlzhengkai:35032:1be704a7 all the dispatchers started

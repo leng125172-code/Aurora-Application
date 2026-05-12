@@ -18,5 +18,5 @@ public class PageFileObjectInput : PagingBase
     /// <summary>
     /// 文件名称
     /// </summary>
-    public string FileName { get; set; }
+    public string? FileName { get; set; }
 }

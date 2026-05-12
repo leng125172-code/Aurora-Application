@@ -1,29 +1,29 @@
 <script lang="ts" setup>
-import type { HTMLAttributes } from "vue";
-import { cn } from "@inspira-ui/plugins";
+import type { HTMLAttributes } from 'vue'
+import { cn } from '@inspira-ui/plugins'
 
 interface Props {
-  class?: HTMLAttributes["class"];
-  hue?: number;
-  saturation?: number;
-  brightness?: number;
-  speed?: number;
-  mouseSensitivity?: number;
-  damping?: number;
-  noise?: {
-    opacity: number;
-    scale: number;
-  };
+    class?: HTMLAttributes['class']
+    hue?: number
+    saturation?: number
+    brightness?: number
+    speed?: number
+    mouseSensitivity?: number
+    damping?: number
+    noise?: {
+        opacity: number
+        scale: number
+    }
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  hue: 0,
-  saturation: 1,
-  brightness: 1,
-  speed: 1,
-  mouseSensitivity: 0.5,
-  damping: 1,
-});
+    hue: 0,
+    saturation: 1,
+    brightness: 1,
+    speed: 1,
+    mouseSensitivity: 0.5,
+    damping: 1,
+})
 
 const shader = `
 // ShaderToy URL: https://www.shadertoy.com/view/Mlf3R4
@@ -399,14 +399,11 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord )
     // output the final color with sqrt for "gamma correction"
     fragColor = vec4(sqrt(clamp(finalColor, 0.0, 1.0)),1.0);
 }
-`;
+`
 </script>
 
 <template>
-  <div :class="cn(`absolute inset-0`, props.class)">
-    <ShaderToy
-      :shader-code="shader"
-      v-bind="props"
-    />
-  </div>
+    <div :class="cn(`absolute inset-0`, props.class)">
+        <ShaderToy :shader-code="shader" v-bind="props" />
+    </div>
 </template>
