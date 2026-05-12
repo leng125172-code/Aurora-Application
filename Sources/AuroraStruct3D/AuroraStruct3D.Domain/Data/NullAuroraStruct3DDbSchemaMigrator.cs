@@ -11,5 +11,10 @@ namespace AuroraStruct3D.Data
         {
             return Task.CompletedTask;
         }
+
+        public Task RebuildAsync()
+        {
+            return Task.CompletedTask;
+        }
     }
 }

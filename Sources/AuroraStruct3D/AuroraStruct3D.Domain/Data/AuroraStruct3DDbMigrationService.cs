@@ -73,6 +73,59 @@ namespace AuroraStruct3D.Data
             Logger.LogInformation("You can safely end this process...");
         }
 
+        /// <summary>
+        /// 重建数据库：删除现有数据库后重新创建并填充种子数据
+        /// </summary>
+        public async Task RebuildAsync()
+        {
+            Logger.LogInformation("Started database rebuild (delete and recreate)...");
+
+            // 删除并重新创建宿主数据库
+            foreach (var migrator in _dbSchemaMigrators)
+            {
+                await migrator.RebuildAsync();
+            }
+
+            await SeedDataAsync();
+
+            Logger.LogInformation("Successfully completed host database rebuild.");
+
+            var tenants = await _tenantRepository.GetListAsync(includeDetails: true);
+
+            var rebuiltDatabaseSchemas = new HashSet<string>();
+            foreach (var tenant in tenants)
+            {
+                using (_currentTenant.Change(tenant.Id))
+                {
+                    if (tenant.ConnectionStrings.Any())
+                    {
+                        var tenantConnectionStrings = tenant
+                            .ConnectionStrings.Select(x => x.Value)
+                            .ToList();
+
+                        if (!rebuiltDatabaseSchemas.IsSupersetOf(tenantConnectionStrings))
+                        {
+                            foreach (var migrator in _dbSchemaMigrators)
+                            {
+                                await migrator.RebuildAsync();
+                            }
+
+                            rebuiltDatabaseSchemas.AddIfNotContains(tenantConnectionStrings);
+                        }
+                    }
+
+                    await SeedDataAsync(tenant);
+                }
+
+                Logger.LogInformation(
+                    $"Successfully completed {tenant.Name} tenant database rebuild."
+                );
+            }
+
+            Logger.LogInformation("Successfully completed all database rebuilds.");
+            Logger.LogInformation("You can safely end this process...");
+        }
+
         private async Task MigrateDatabaseSchemaAsync(Tenant tenant = null)
         {
             Logger.LogInformation(

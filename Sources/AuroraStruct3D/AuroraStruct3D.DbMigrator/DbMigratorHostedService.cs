@@ -6,14 +6,17 @@ namespace AuroraStruct3D.DbMigrator
     {
         private readonly IHostApplicationLifetime _hostApplicationLifetime;
         private readonly IConfiguration _configuration;
+        private readonly MigratorOptions _migratorOptions;
 
         public DbMigratorHostedService(
             IHostApplicationLifetime hostApplicationLifetime,
-            IConfiguration configuration
+            IConfiguration configuration,
+            MigratorOptions migratorOptions
         )
         {
             _hostApplicationLifetime = hostApplicationLifetime;
             _configuration = configuration;
+            _migratorOptions = migratorOptions;
         }
 
         public async Task StartAsync(CancellationToken cancellationToken)
@@ -34,9 +37,18 @@ namespace AuroraStruct3D.DbMigrator
             {
                 await application.InitializeAsync();
 
-                await application
-                    .ServiceProvider.GetRequiredService<AuroraStruct3DDbMigrationService>()
-                    .MigrateAsync();
+                var migrationService = application
+                    .ServiceProvider.GetRequiredService<AuroraStruct3DDbMigrationService>();
+
+                // 根据运行模式选择操作
+                if (_migratorOptions.Mode == MigratorMode.Rebuild)
+                {
+                    await migrationService.RebuildAsync();
+                }
+                else
+                {
+                    await migrationService.MigrateAsync();
+                }
 
                 await application.ShutdownAsync();
 
