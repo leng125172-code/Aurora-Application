@@ -11,6 +11,10 @@
     </ItemGroup>
 
     <ItemGroup>
+        <PackageReference Include="HidSharp" Version="2.1.0" />
+    </ItemGroup>
+
+    <ItemGroup>
         <ProjectReference Include="..\..\AuroraAbpPro\Volo.Abp.BackgroundJobs.HangFire\Volo.Abp.BackgroundJobs.HangFire.csproj" />
     </ItemGroup>
 </Project>

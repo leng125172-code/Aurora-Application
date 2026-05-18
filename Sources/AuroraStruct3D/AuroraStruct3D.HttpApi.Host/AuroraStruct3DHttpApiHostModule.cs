@@ -1,7 +1,11 @@
+using AuroraStruct3D.Cameras;
 using AuroraStruct3D.Endpoints;
 using AuroraStruct3D.HostedServices;
 using AuroraStruct3D.Hubs;
+using AuroraStruct3D.Motors;
+using AuroraStruct3D.RS485;
 using AuroraStruct3D.Services;
+using AuroraStruct3D.Tucam;
 using Lion.AbpPro.CAP;
 using Volo.Abp.AspNetCore.Mvc.Libs;
 using Volo.Abp.Hangfire;
@@ -134,6 +138,41 @@ namespace AuroraStruct3D
                 });
             });
             app.UseAbpProConsul();
+
+            // 初始化电机轴 ID 映射（用于 MotorControlService 写入操作日志）
+            using (IServiceScope scope = context.ServiceProvider.CreateScope())
+            {
+                IMotorAxisRepository motorRepo =
+                    scope.ServiceProvider.GetRequiredService<IMotorAxisRepository>();
+                IMotorControlService motorService =
+                    scope.ServiceProvider.GetRequiredService<IMotorControlService>();
+
+                List<MotorAxis> axes = motorRepo
+                    .GetEnabledListAsync()
+                    .GetAwaiter()
+                    .GetResult();
+                Dictionary<int, Guid> mapping = axes.ToDictionary(a => a.SlaveId, a => a.Id);
+                motorService.SetAxisIdMapping(mapping);
+            }
+
+            // 初始化相机设备 ID 映射（用于 TucamCameraService 写入操作日志）
+            using (IServiceScope scope = context.ServiceProvider.CreateScope())
+            {
+                ICameraDeviceRepository cameraRepo =
+                    scope.ServiceProvider.GetRequiredService<ICameraDeviceRepository>();
+                ITucamCameraService tucamService =
+                    scope.ServiceProvider.GetRequiredService<ITucamCameraService>();
+
+                List<CameraDevice> cameras = cameraRepo
+                    .GetEnabledListAsync()
+                    .GetAwaiter()
+                    .GetResult();
+                Dictionary<int, Guid> cameraMapping = cameras.ToDictionary(
+                    c => c.DeviceIndex,
+                    c => c.Id
+                );
+                tucamService.SetCameraDeviceIdMapping(cameraMapping);
+            }
         }
     }
 }

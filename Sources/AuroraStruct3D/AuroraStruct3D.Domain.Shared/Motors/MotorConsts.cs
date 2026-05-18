@@ -28,6 +28,17 @@ public static class MotorConsts
 
     /// <summary>数据库表名前缀</summary>
     public const string DbTablePrefix = "AbpPro";
+
+    // ─────────────────────────── 操作日志字段长度 ───────────────────────────
+
+    /// <summary>命令码最大长度（如 "0x9A Move"、"Modbus FC10"）</summary>
+    public const int MaxCommandCodeLength = 32;
+
+    /// <summary>操作参数摘要最大长度（如 "位置=10000, 速度=300rpm"）</summary>
+    public const int MaxOperationParameterSummaryLength = 128;
+
+    /// <summary>操作日志错误消息最大长度</summary>
+    public const int MaxOperationLogErrorMessageLength = 512;
 }
 
 /// <summary>
@@ -82,4 +93,37 @@ public enum HomeMethod
 
     /// <summary>手动设零 — 将当前位置直接设为零点</summary>
     ManualSetZero = 3,
+}
+
+/// <summary>
+/// 电机控制操作类型枚举（用于 MotorOperationLog 操作分类）
+/// </summary>
+public enum MotorOperationType
+{
+    /// <summary>使能电机</summary>
+    Enable = 0,
+
+    /// <summary>去使能电机</summary>
+    Disable = 1,
+
+    /// <summary>绝对位置运动</summary>
+    MoveAbsolute = 2,
+
+    /// <summary>相对位置运动</summary>
+    MoveRelative = 3,
+
+    /// <summary>减速停止</summary>
+    Stop = 4,
+
+    /// <summary>紧急停止（立即断电）</summary>
+    EmergencyStop = 5,
+
+    /// <summary>回零</summary>
+    Home = 6,
+
+    /// <summary>清除故障</summary>
+    ClearFault = 7,
+
+    /// <summary>查询状态</summary>
+    QueryStatus = 8,
 }

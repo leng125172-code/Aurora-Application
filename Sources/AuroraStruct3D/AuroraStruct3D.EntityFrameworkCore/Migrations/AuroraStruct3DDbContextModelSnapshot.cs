@@ -110,6 +110,52 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                     b.ToTable("AbpProCameraDevices", (string)null);
                 });
 
+            modelBuilder.Entity("AuroraStruct3D.Cameras.CameraOperationLog", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CameraDeviceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("DeviceIndex")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<bool>("IsSuccess")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime>("OccurredAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<int>("OperationType")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ParameterSummary")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<long>("RoundTripMs")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CameraDeviceId");
+
+                    b.HasIndex("OccurredAt");
+
+                    b.HasIndex("CameraDeviceId", "IsSuccess");
+
+                    b.HasIndex("CameraDeviceId", "OccurredAt");
+
+                    b.HasIndex("CameraDeviceId", "OperationType");
+
+                    b.ToTable("AbpProCameraOperationLogs", (string)null);
+                });
+
             modelBuilder.Entity("AuroraStruct3D.Cameras.CameraParameter", b =>
                 {
                     b.Property<Guid>("Id")
@@ -218,9 +264,6 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                     b.Property<int>("AxisIndex")
                         .HasColumnType("integer");
 
-                    b.Property<int>("BaudRate")
-                        .HasColumnType("integer");
-
                     b.Property<int>("Brand")
                         .HasColumnType("integer");
 
@@ -312,10 +355,8 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                         .HasMaxLength(128)
                         .HasColumnType("character varying(128)");
 
-                    b.Property<string>("PortName")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                    b.Property<Guid>("SerialPortConfigId")
+                        .HasColumnType("uuid");
 
                     b.Property<int>("SlaveId")
                         .HasColumnType("integer");
@@ -339,7 +380,7 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
 
                     b.HasIndex("IsEnabled");
 
-                    b.HasIndex("PortName", "SlaveId")
+                    b.HasIndex("SerialPortConfigId", "SlaveId")
                         .IsUnique();
 
                     b.ToTable("AbpProMotorAxes", (string)null);
@@ -516,6 +557,56 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                     b.ToTable("AbpProMotorMotionConfigs", (string)null);
                 });
 
+            modelBuilder.Entity("AuroraStruct3D.Motors.MotorOperationLog", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("CommandCode")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<bool>("IsSuccess")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("MotorAxisId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("OccurredAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<int>("OperationType")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ParameterSummary")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<long>("RoundTripMs")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("SlaveId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MotorAxisId");
+
+                    b.HasIndex("OccurredAt");
+
+                    b.HasIndex("MotorAxisId", "IsSuccess");
+
+                    b.HasIndex("MotorAxisId", "OccurredAt");
+
+                    b.HasIndex("MotorAxisId", "OperationType");
+
+                    b.ToTable("AbpProMotorOperationLogs", (string)null);
+                });
+
             modelBuilder.Entity("AuroraStruct3D.Motors.MotorPrPath", b =>
                 {
                     b.Property<Guid>("Id")
@@ -593,6 +684,9 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                     b.Property<int>("ConnectionStatus")
                         .HasColumnType("integer");
 
+                    b.Property<int>("ConnectionType")
+                        .HasColumnType("integer");
+
                     b.Property<DateTime>("CreationTime")
                         .HasColumnType("timestamp without time zone")
                         .HasColumnName("CreationTime");
@@ -628,8 +722,16 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
 
+                    b.Property<int>("HidDeviceIndex")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("HidProductId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("HidVendorId")
+                        .HasColumnType("integer");
+
                     b.Property<string>("IpAddress")
-                        .IsRequired()
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
 
@@ -680,13 +782,20 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
 
                     b.HasIndex("ConnectionStatus");
 
+                    b.HasIndex("ConnectionType");
+
                     b.HasIndex("DeviceIndex")
                         .IsUnique();
 
                     b.HasIndex("IpAddress")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("\"IpAddress\" IS NOT NULL");
 
                     b.HasIndex("IsEnabled");
+
+                    b.HasIndex("HidVendorId", "HidProductId", "HidDeviceIndex")
+                        .IsUnique()
+                        .HasFilter("\"ConnectionType\" = 1");
 
                     b.ToTable("AbpProProjectors", (string)null);
                 });
@@ -736,6 +845,95 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                     b.HasIndex("ProjectorDeviceId", "OperationType");
 
                     b.ToTable("AbpProProjectorOperationLogs", (string)null);
+                });
+
+            modelBuilder.Entity("AuroraStruct3D.SerialPorts.SerialPortConfig", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("BaudRate")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ConcurrencyStamp")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("ConcurrencyStamp");
+
+                    b.Property<DateTime>("CreationTime")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("CreationTime");
+
+                    b.Property<Guid?>("CreatorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("CreatorId");
+
+                    b.Property<int>("DataBits")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("DeleterId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("DeleterId");
+
+                    b.Property<DateTime?>("DeletionTime")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("DeletionTime");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("ExtraProperties")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("ExtraProperties");
+
+                    b.Property<int>("Handshake")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("IsDeleted");
+
+                    b.Property<bool>("IsEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime?>("LastModificationTime")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("LastModificationTime");
+
+                    b.Property<Guid?>("LastModifierId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("LastModifierId");
+
+                    b.Property<int>("Parity")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("PortName")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<int>("StopBits")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IsEnabled");
+
+                    b.HasIndex("PortName")
+                        .IsUnique();
+
+                    b.ToTable("AbpProSerialPortConfigs", (string)null);
                 });
 
             modelBuilder.Entity("Lion.AbpPro.BasicManagement.UserRefreshTokens.UserRefreshToken", b =>
@@ -4210,6 +4408,15 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                     b.ToTable("AbpTenantConnectionStrings", (string)null);
                 });
 
+            modelBuilder.Entity("AuroraStruct3D.Cameras.CameraOperationLog", b =>
+                {
+                    b.HasOne("AuroraStruct3D.Cameras.CameraDevice", null)
+                        .WithMany()
+                        .HasForeignKey("CameraDeviceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("AuroraStruct3D.Cameras.CameraParameter", b =>
                 {
                     b.HasOne("AuroraStruct3D.Cameras.CameraParameterSet", null)
@@ -4228,6 +4435,17 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("AuroraStruct3D.Motors.MotorAxis", b =>
+                {
+                    b.HasOne("AuroraStruct3D.SerialPorts.SerialPortConfig", "SerialPortConfig")
+                        .WithMany()
+                        .HasForeignKey("SerialPortConfigId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("SerialPortConfig");
+                });
+
             modelBuilder.Entity("AuroraStruct3D.Motors.MotorFaultRecord", b =>
                 {
                     b.HasOne("AuroraStruct3D.Motors.MotorAxis", null)
@@ -4241,6 +4459,15 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                 {
                     b.HasOne("AuroraStruct3D.Motors.MotorAxis", null)
                         .WithMany("MotionConfigs")
+                        .HasForeignKey("MotorAxisId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("AuroraStruct3D.Motors.MotorOperationLog", b =>
+                {
+                    b.HasOne("AuroraStruct3D.Motors.MotorAxis", null)
+                        .WithMany()
                         .HasForeignKey("MotorAxisId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();

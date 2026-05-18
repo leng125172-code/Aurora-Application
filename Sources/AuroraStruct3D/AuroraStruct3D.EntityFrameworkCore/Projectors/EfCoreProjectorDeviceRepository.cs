@@ -31,6 +31,23 @@ public class EfCoreProjectorDeviceRepository
     }
 
     /// <inheritdoc/>
+    public async Task<ProjectorDevice?> FindByHidAsync(
+        int vendorId,
+        int productId,
+        int deviceIndex = 0,
+        CancellationToken cancellationToken = default
+    )
+    {
+        AuroraStruct3DDbContext context = await GetDbContextAsync();
+        return await context
+            .ProjectorDevices.AsNoTracking()
+            .FirstOrDefaultAsync(
+                p => p.HidVendorId == vendorId && p.HidProductId == productId && p.HidDeviceIndex == deviceIndex,
+                cancellationToken
+            );
+    }
+
+    /// <inheritdoc/>
     public async Task<List<ProjectorDevice>> GetEnabledListAsync(
         CancellationToken cancellationToken = default
     )

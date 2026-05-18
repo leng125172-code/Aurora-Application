@@ -1,0 +1,380 @@
+"""
+AppUpdateClient.py
+功能：在 Windows 开发机上执行一键发布并部署到 RK3588。
+      流程：dotnet publish → 打 tar.gz 压缩包 → 分块并行上传 → 服务端合并/校验/解压。
+
+特性：
+    - 分块上传（默认每块 8 MB），多线程并行发送
+    - 每块独立 MD5 校验，上传后服务端验证
+    - 合并后全文件 MD5 二次校验
+    - 四阶段进度条：发布 / 压缩 / 上传 / 解压
+
+用法：
+    python AppUpdateClient.py [--host 10.127.135.143] [--port 9211]
+                              [--projects AuroraStruct3D.HttpApi.Host,AuroraStruct3D.DbMigrator]
+                              [--sync-only] [--workers 4] [--chunk-mb 8]
+
+依赖：
+    pip install tqdm
+"""
+
+import argparse
+import concurrent.futures
+import hashlib
+import json
+import socket
+import struct
+import subprocess
+import sys
+import tarfile
+import tempfile
+import threading
+from pathlib import Path
+
+# 自动安装 tqdm
+try:
+    from tqdm import tqdm
+except ImportError:
+    print("[提示] 正在安装 tqdm...")
+    subprocess.run([sys.executable, "-m", "pip", "install", "tqdm", "-q"], check=True)
+    from tqdm import tqdm  # type: ignore
+
+# 常量
+WORKSPACE_ROOT = Path(__file__).resolve().parent.parent.parent
+RUNTIME = "linux-arm64"
+FRAMEWORK = "net10.0"
+DEFAULT_PROJECTS = [
+    "AuroraStruct3D.HttpApi.Host",
+    "AuroraStruct3D.DbMigrator",
+]
+DEFAULT_HOST = "10.127.135.143"
+DEFAULT_PORT = 9211
+DEFAULT_WORKERS = 4
+DEFAULT_CHUNK_MB = 8
+
+
+def _send_msg(sock: socket.socket, data: dict) -> None:
+    payload = json.dumps(data, ensure_ascii=False).encode("utf-8")
+    sock.sendall(struct.pack(">I", len(payload)) + payload)
+
+
+def _recv_exactly(sock: socket.socket, n: int) -> bytes:
+    buf = bytearray()
+    while len(buf) < n:
+        chunk = sock.recv(n - len(buf))
+        if not chunk:
+            raise ConnectionError("连接意外关闭")
+        buf.extend(chunk)
+    return bytes(buf)
+
+
+def _recv_msg(sock: socket.socket) -> dict:
+    raw_len = _recv_exactly(sock, 4)
+    msg_len = struct.unpack(">I", raw_len)[0]
+    return json.loads(_recv_exactly(sock, msg_len).decode("utf-8"))
+
+
+def _make_conn(host: str, port: int, timeout: float = 30.0) -> socket.socket:
+    """创建并连接到服务端，连接失败时友好提示后退出。"""
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.settimeout(timeout)
+    try:
+        sock.connect((host, port))
+    except (ConnectionRefusedError, TimeoutError, OSError) as exc:
+        print(f"\n[错误] 无法连接 {host}:{port} — {exc}", file=sys.stderr)
+        print("       请确认 AppUpdateServer.py 已在 RK3588 上运行。", file=sys.stderr)
+        sys.exit(1)
+    return sock
+
+
+def _md5_of_bytes(data: bytes) -> str:
+    return hashlib.md5(data).hexdigest()
+
+
+def _md5_of_file(path: Path) -> str:
+    h = hashlib.md5()
+    with path.open("rb") as f:
+        for block in iter(lambda: f.read(65536), b""):
+            h.update(block)
+    return h.hexdigest()
+
+
+def publish_project(project_name: str, index: int, total: int) -> None:
+    """对指定项目执行 dotnet publish，实时输出编译日志。"""
+    csproj = (
+        WORKSPACE_ROOT / "Sources" / "AuroraStruct3D"
+        / project_name / f"{project_name}.csproj"
+    )
+    if not csproj.exists():
+        print(f"[错误] 找不到项目文件：{csproj}", file=sys.stderr)
+        sys.exit(1)
+
+    print(f"\n{'─' * 60}")
+    print(f"  [发布 {index}/{total}] {project_name}")
+    print(f"{'─' * 60}")
+    cmd = [
+        "dotnet", "publish", str(csproj),
+        "-c", "Release", "-r", RUNTIME,
+        "--self-contained", "true", "-f", FRAMEWORK, "-v", "minimal",
+    ]
+    print(f">>> {' '.join(cmd)}\n")
+    result = subprocess.run(cmd)
+    if result.returncode != 0:
+        print(f"\n[错误] dotnet publish 失败（退出码 {result.returncode}）", file=sys.stderr)
+        sys.exit(result.returncode)
+    print(f"[完成] {project_name} 发布成功")
+
+
+def create_archive(publish_dir: Path) -> Path:
+    """
+    将 publish_dir 下所有文件打包为 tar.gz。
+    归档路径相对于 publish_dir，服务端解压到 ~/Publish/ 后
+    得到 ~/Publish/linux-arm64/...
+    返回临时文件路径（调用方负责删除）。
+    """
+    all_files = [f for f in publish_dir.rglob("*") if f.is_file()]
+    print(f"\n{'─' * 60}")
+    print(f"  [压缩] 共 {len(all_files)} 个文件")
+    print(f"{'─' * 60}")
+
+    tmp = tempfile.NamedTemporaryFile(
+        suffix=".tar.gz", delete=False, prefix="aurora_publish_"
+    )
+    tmp.close()
+    tmp_path = Path(tmp.name)
+
+    with tarfile.open(tmp_path, mode="w:gz") as tar:
+        with tqdm(
+            total=len(all_files), desc="压缩进度", unit="文件",
+            ncols=72, colour="cyan",
+        ) as pbar:
+            for file in all_files:
+                arc_name = file.relative_to(publish_dir).as_posix()
+                tar.add(file, arcname=arc_name)
+                pbar.update(1)
+                pbar.set_postfix_str(arc_name[-38:] if len(arc_name) > 38 else arc_name)
+
+    size_mb = tmp_path.stat().st_size / 1024 / 1024
+    print(f"[压缩] 完成，大小: {size_mb:.1f} MB")
+    return tmp_path
+
+
+def _upload_chunk(
+    host: str,
+    port: int,
+    session_id: str,
+    chunk_id: int,
+    data: bytes,
+    pbar: tqdm,
+    error_event: threading.Event,
+) -> None:
+    """在独立 TCP 连接中上传单个分块，校验服务端 MD5 确认。"""
+    if error_event.is_set():
+        return
+
+    chunk_md5 = _md5_of_bytes(data)
+    sock = _make_conn(host, port, timeout=60.0)
+    try:
+        sock.settimeout(120.0)
+        _send_msg(sock, {
+            "action": "chunk",
+            "session_id": session_id,
+            "chunk_id": chunk_id,
+            "size": len(data),
+            "md5": chunk_md5,
+        })
+        resp = _recv_msg(sock)
+        if resp.get("status") != "ready":
+            raise RuntimeError(f"服务端拒绝: {resp}")
+        sock.sendall(data)
+        ack = _recv_msg(sock)
+        if ack.get("status") != "ok":
+            raise RuntimeError(f"MD5 校验失败: {ack.get('message')}")
+    except Exception as exc:
+        error_event.set()
+        raise RuntimeError(f"分块 {chunk_id} 上传失败: {exc}") from exc
+    finally:
+        sock.close()
+
+    pbar.update(len(data))
+
+
+def upload_and_deploy(
+    host: str, port: int, archive_path: Path,
+    workers: int, chunk_size: int,
+) -> None:
+    """分块并行上传压缩包，完成后触发服务端合并/校验/解压。"""
+    total_size = archive_path.stat().st_size
+    total_md5 = _md5_of_file(archive_path)
+
+    offsets: list[tuple[int, int]] = []
+    offset = 0
+    while offset < total_size:
+        sz = min(chunk_size, total_size - offset)
+        offsets.append((offset, sz))
+        offset += sz
+    total_chunks = len(offsets)
+
+    size_mb = total_size / 1024 / 1024
+    chunk_mb = chunk_size / 1024 / 1024
+    print(f"\n{'─' * 60}")
+    print(f"  [上传] {host}:{port}  大小: {size_mb:.1f} MB  "
+          f"分块: {total_chunks} × {chunk_mb:.0f} MB  线程: {workers}")
+    print(f"{'─' * 60}")
+
+    # 初始化会话
+    init_sock = _make_conn(host, port, timeout=30.0)
+    try:
+        _send_msg(init_sock, {
+            "action": "init",
+            "total_chunks": total_chunks,
+            "total_size": total_size,
+            "total_md5": total_md5,
+        })
+        resp = _recv_msg(init_sock)
+        if resp.get("status") != "ready":
+            print(f"[错误] 初始化失败: {resp}", file=sys.stderr)
+            sys.exit(1)
+        session_id: str = resp["session_id"]
+        print(f"[会话] session_id = {session_id[:8]}...")
+    finally:
+        init_sock.close()
+
+    # 并行上传所有分块
+    error_event = threading.Event()
+    errors: list[str] = []
+
+    with tqdm(
+        total=total_size, desc="上传进度", unit="B",
+        unit_scale=True, unit_divisor=1024, ncols=72, colour="green",
+    ) as pbar:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
+            futures: list[concurrent.futures.Future] = []
+            with archive_path.open("rb") as f:
+                for chunk_id, (off, sz) in enumerate(offsets):
+                    f.seek(off)
+                    data = f.read(sz)
+                    fut = pool.submit(
+                        _upload_chunk,
+                        host, port, session_id, chunk_id, data, pbar, error_event,
+                    )
+                    futures.append(fut)
+
+            for fut in concurrent.futures.as_completed(futures):
+                exc = fut.exception()
+                if exc:
+                    errors.append(str(exc))
+
+    if errors:
+        for e in errors:
+            print(f"[错误] {e}", file=sys.stderr)
+        sys.exit(1)
+
+    print(f"\n[上传] 全部 {total_chunks} 个分块完成，MD5={total_md5}")
+
+    # 触发服务端合并 + 解压
+    print(f"\n{'─' * 60}")
+    print(f"  [部署] 等待服务端合并 / 校验 / 解压...")
+    print(f"{'─' * 60}")
+
+    finalize_sock = _make_conn(host, port, timeout=30.0)
+    try:
+        finalize_sock.settimeout(None)
+        _send_msg(finalize_sock, {
+            "action": "finalize",
+            "session_id": session_id,
+            "total_md5": total_md5,
+        })
+
+        extract_pbar: tqdm | None = None
+        while True:
+            msg = _recv_msg(finalize_sock)
+            stage = msg.get("stage")
+            status = msg.get("status")
+
+            if stage == "merge":
+                print(f"  ▶ {msg.get('message', '合并中...')}")
+
+            elif stage == "merge_done":
+                print(f"  ✔ {msg.get('message', 'MD5 校验通过')}")
+
+            elif stage == "extract":
+                total_files = msg.get("total", 0)
+                current = msg.get("current", 0)
+                name = msg.get("name", "")
+                if extract_pbar is None:
+                    extract_pbar = tqdm(
+                        total=total_files, desc="解压进度", unit="文件",
+                        ncols=72, colour="yellow",
+                    )
+                extract_pbar.n = current
+                extract_pbar.set_postfix_str(name[-38:] if len(name) > 38 else name)
+                extract_pbar.refresh()
+
+            elif status == "done":
+                if extract_pbar:
+                    extract_pbar.close()
+                print(f"\n  ✔ {msg.get('message', '部署完成')}")
+                break
+
+            elif status == "error":
+                if extract_pbar:
+                    extract_pbar.close()
+                print(f"\n[错误] 服务端报告: {msg.get('message')}", file=sys.stderr)
+                sys.exit(1)
+
+    finally:
+        finalize_sock.close()
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="一键发布并部署到 RK3588（分块并行上传）")
+    parser.add_argument("--host", default=DEFAULT_HOST,
+                        help=f"RK3588 IP 地址（默认：{DEFAULT_HOST}）")
+    parser.add_argument("--port", type=int, default=DEFAULT_PORT,
+                        help=f"AppUpdateServer 端口（默认：{DEFAULT_PORT}）")
+    parser.add_argument("--projects", default=",".join(DEFAULT_PROJECTS),
+                        help=f"要发布的项目名，逗号分隔")
+    parser.add_argument("--sync-only", action="store_true",
+                        help="跳过 dotnet publish，仅将已有 Publish 目录打包上传")
+    parser.add_argument("--workers", type=int, default=DEFAULT_WORKERS,
+                        help=f"并行上传线程数（默认：{DEFAULT_WORKERS}）")
+    parser.add_argument("--chunk-mb", type=int, default=DEFAULT_CHUNK_MB,
+                        help=f"每个分块大小 MB（默认：{DEFAULT_CHUNK_MB}）")
+    args = parser.parse_args()
+
+    projects = [p.strip() for p in args.projects.split(",") if p.strip()]
+    publish_dir = WORKSPACE_ROOT / "Publish"
+    chunk_size = args.chunk_mb * 1024 * 1024
+
+    print("=" * 60)
+    print(f"  目标服务器 : {args.host}:{args.port}")
+    if args.sync_only:
+        print("  模式       : 仅同步（跳过 dotnet publish）")
+    else:
+        print(f"  发布项目   : {', '.join(projects)}")
+        print(f"  运行时     : {RUNTIME} / {FRAMEWORK} / Release / self-contained")
+    print(f"  上传线程   : {args.workers}  分块大小: {args.chunk_mb} MB")
+    print("=" * 60)
+
+    if not args.sync_only:
+        for idx, project in enumerate(projects, start=1):
+            publish_project(project, idx, len(projects))
+
+    if not publish_dir.exists():
+        print(f"[错误] Publish 目录不存在：{publish_dir}", file=sys.stderr)
+        sys.exit(1)
+
+    archive_path = create_archive(publish_dir)
+    try:
+        upload_and_deploy(args.host, args.port, archive_path, args.workers, chunk_size)
+    finally:
+        archive_path.unlink(missing_ok=True)
+
+    print("\n" + "=" * 60)
+    print("  所有步骤完成！")
+    print("=" * 60)
+
+
+if __name__ == "__main__":
+    main()

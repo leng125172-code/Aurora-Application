@@ -5,11 +5,23 @@ namespace AuroraStruct3D.DLP;
 /// </summary>
 public class DlpProjectorStatus
 {
-    /// <summary>投影机 IP 地址</summary>
-    public string IpAddress { get; init; } = string.Empty;
+    /// <summary>投影机连接方式</summary>
+    public string ConnectionType { get; init; } = string.Empty;
 
-    /// <summary>TCP 端口</summary>
+    /// <summary>投影机 IP 地址（TCP 模式）</summary>
+    public string? IpAddress { get; init; }
+
+    /// <summary>TCP 端口（TCP 模式）</summary>
     public int Port { get; init; }
+
+    /// <summary>USB HID 设备路径（USB 模式）</summary>
+    public string? HidDevicePath { get; init; }
+
+    /// <summary>HID 厂商 ID（USB 模式）</summary>
+    public int HidVendorId { get; init; }
+
+    /// <summary>HID 产品 ID（USB 模式）</summary>
+    public int HidProductId { get; init; }
 
     /// <summary>是否已连接</summary>
     public bool IsConnected { get; init; }
@@ -26,7 +38,8 @@ public class DlpProjectorStatus
 
 /// <summary>
 /// 腾聚（TJ）结构光投影机操作服务接口。
-/// 基于 TCP ASCII 协议实现，支持 linux-arm64 和 Windows 平台（无需本地 DLL）。
+/// 支持 TCP/IP 和 USB HID（Megawin EasyPOD 芯片）两种连接方式，协议均为 ASCII 文本命令（\r\n 结尾）。
+/// 全平台支持 linux-arm64 和 Windows，无需原生 DLL。
 /// </summary>
 public interface IDlpProjectorService
 {
@@ -46,9 +59,31 @@ public interface IDlpProjectorService
     Task ConnectAsync(string ip, int port, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// 通过 USB HID 连接投影机（Megawin EasyPOD 芯片，跨平台 Windows + Linux）
+    /// </summary>
+    /// <param name="vendorId">HID 厂商 ID（默认 0x0E6A）</param>
+    /// <param name="productId">HID 产品 ID（默认 0x0317）</param>
+    /// <param name="deviceIndex">设备索引（同一 VID/PID 多台时从 0 开始）</param>
+    /// <param name="cancellationToken">取消令牌</param>
+    Task ConnectHidAsync(
+        int vendorId = 0x0E6A,
+        int productId = 0x0317,
+        int deviceIndex = 0,
+        CancellationToken cancellationToken = default
+    );
+
+    /// <summary>
     /// 断开投影机连接
     /// </summary>
     Task DisconnectAsync();
+
+    /// <summary>
+    /// 绑定当前服务实例对应的投影机设备 ID（用于操作日志写入）。
+    /// 在连接投影机后调用，传入数据库中 ProjectorDevice 的 Guid。
+    /// 未调用此方法时操作日志不会写入。
+    /// </summary>
+    /// <param name="projectorDeviceId">投影机设备数据库 ID</param>
+    void SetProjectorDeviceId(Guid projectorDeviceId);
 
     /// <summary>
     /// 获取投影机当前状态（含连接状态、固件版本）

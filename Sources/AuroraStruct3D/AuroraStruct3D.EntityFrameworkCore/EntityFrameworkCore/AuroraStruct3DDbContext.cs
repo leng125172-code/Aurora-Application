@@ -1,6 +1,7 @@
 using AuroraStruct3D.Cameras;
 using AuroraStruct3D.Motors;
 using AuroraStruct3D.Projectors;
+using AuroraStruct3D.SerialPorts;
 using Lion.AbpPro.BasicManagement.UserRefreshTokens;
 using Lion.AbpPro.CodeManagement.DataTypes.Aggregates;
 using Lion.AbpPro.CodeManagement.EntityFrameworkCore;
@@ -86,17 +87,20 @@ namespace AuroraStruct3D.EntityFrameworkCore
         public DbSet<MasterData> MasterDatas { get; set; }
         public DbSet<MasterDataType> MasterDataTypes { get; set; }
         public DbSet<MasterDataValue> MasterDataValues { get; set; }
-
+        // ── 串口通讯模块 ────────────────────────────────────────────────────────────
+        public DbSet<SerialPortConfig> SerialPortConfigs { get; set; }
         // ── 相机模块 ──────────────────────────────────────────────────────────────
         public DbSet<CameraDevice> CameraDevices { get; set; }
         public DbSet<CameraParameterSet> CameraParameterSets { get; set; }
         public DbSet<CameraParameter> CameraParameters { get; set; }
+        public DbSet<CameraOperationLog> CameraOperationLogs { get; set; }
 
         // ── 电机模块 ──────────────────────────────────────────────────────────────
         public DbSet<MotorAxis> MotorAxes { get; set; }
         public DbSet<MotorMotionConfig> MotorMotionConfigs { get; set; }
         public DbSet<MotorFaultRecord> MotorFaultRecords { get; set; }
         public DbSet<MotorPrPath> MotorPrPaths { get; set; }
+        public DbSet<MotorOperationLog> MotorOperationLogs { get; set; }
 
         // ── DLP 投影机模块 ─────────────────────────────────────────────────────────
         public DbSet<ProjectorDevice> ProjectorDevices { get; set; }
@@ -140,6 +144,9 @@ namespace AuroraStruct3D.EntityFrameworkCore
 
             // 相机模块
             builder.ConfigureCamera();
+
+            // 串口通讯模块（必须在电机模块之前配置，因为电机轴有外镰关联）
+            builder.ConfigureSerialPort();
 
             // 电机模块
             builder.ConfigureMotor();

@@ -1,5 +1,8 @@
 using System.Collections.Frozen;
+using System.Diagnostics;
+using AuroraStruct3D.Motors;
 using AuroraStruct3D.RS485.Protocol;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace AuroraStruct3D.RS485;
@@ -15,9 +18,13 @@ public class MotorControlService : IMotorControlService, IDisposable
 {
     private readonly IRS485Port _port;
     private readonly ILogger<MotorControlService> _logger;
+    private readonly IServiceScopeFactory? _serviceScopeFactory;
 
     /// <summary>驱动字典（key = slave_id）</summary>
     private readonly FrozenDictionary<int, IMotorDriver> _drivers;
+
+    /// <summary>从机地址 → 数据库电机轴 ID 映射（用于操作日志写入）</summary>
+    private IReadOnlyDictionary<int, Guid> _axisIdBySlaveId = new Dictionary<int, Guid>();
 
     /// <summary>是否已释放资源</summary>
     private bool _disposed;
@@ -31,20 +38,33 @@ public class MotorControlService : IMotorControlService, IDisposable
     /// <param name="port">RS485 串口，必须对应 /dev/ttyS6</param>
     /// <param name="drivers">电机驱动集合，由 RS485Module 配置并注入</param>
     /// <param name="logger">日志记录器</param>
+    /// <param name="serviceScopeFactory">用于创建 DB Scope 写入操作日志（可选）</param>
     public MotorControlService(
         IRS485Port port,
         IEnumerable<IMotorDriver> drivers,
-        ILogger<MotorControlService> logger
+        ILogger<MotorControlService> logger,
+        IServiceScopeFactory? serviceScopeFactory = null
     )
     {
         _port = port;
         _logger = logger;
+        _serviceScopeFactory = serviceScopeFactory;
         _drivers = drivers.ToFrozenDictionary(d => d.SlaveId);
         ConfiguredMotorIds = [.. _drivers.Keys];
 
         _logger.LogInformation(
             "MotorControlService 初始化完成，已配置电机: [{Ids}]",
             string.Join(", ", ConfiguredMotorIds)
+        );
+    }
+
+    /// <inheritdoc/>
+    public void SetAxisIdMapping(IReadOnlyDictionary<int, Guid> axisIds)
+    {
+        _axisIdBySlaveId = axisIds;
+        _logger.LogInformation(
+            "MotorControlService 已注入轴 ID 映射，共 {Count} 条",
+            axisIds.Count
         );
     }
 
@@ -104,14 +124,38 @@ public class MotorControlService : IMotorControlService, IDisposable
     public async Task EnableAsync(int motorId, CancellationToken cancellationToken = default)
     {
         IMotorDriver driver = GetDriver(motorId);
-        await driver.EnableAsync(cancellationToken).ConfigureAwait(false);
+        Stopwatch sw = Stopwatch.StartNew();
+        try
+        {
+            await driver.EnableAsync(cancellationToken).ConfigureAwait(false);
+            sw.Stop();
+            RecordMotorLog(motorId, MotorOperationType.Enable, true, sw.ElapsedMilliseconds);
+        }
+        catch (Exception ex)
+        {
+            sw.Stop();
+            RecordMotorLog(motorId, MotorOperationType.Enable, false, sw.ElapsedMilliseconds, ex.Message);
+            throw;
+        }
     }
 
     /// <inheritdoc/>
     public async Task DisableAsync(int motorId, CancellationToken cancellationToken = default)
     {
         IMotorDriver driver = GetDriver(motorId);
-        await driver.DisableAsync(cancellationToken).ConfigureAwait(false);
+        Stopwatch sw = Stopwatch.StartNew();
+        try
+        {
+            await driver.DisableAsync(cancellationToken).ConfigureAwait(false);
+            sw.Stop();
+            RecordMotorLog(motorId, MotorOperationType.Disable, true, sw.ElapsedMilliseconds);
+        }
+        catch (Exception ex)
+        {
+            sw.Stop();
+            RecordMotorLog(motorId, MotorOperationType.Disable, false, sw.ElapsedMilliseconds, ex.Message);
+            throw;
+        }
     }
 
     /// <inheritdoc/>
@@ -123,7 +167,21 @@ public class MotorControlService : IMotorControlService, IDisposable
     )
     {
         IMotorDriver driver = GetDriver(motorId);
-        await driver.MoveAbsoluteAsync(position, speedRpm, cancellationToken).ConfigureAwait(false);
+        Stopwatch sw = Stopwatch.StartNew();
+        try
+        {
+            await driver.MoveAbsoluteAsync(position, speedRpm, cancellationToken).ConfigureAwait(false);
+            sw.Stop();
+            RecordMotorLog(motorId, MotorOperationType.MoveAbsolute, true, sw.ElapsedMilliseconds,
+                parameterSummary: $"位置={position}, 速度={speedRpm}rpm");
+        }
+        catch (Exception ex)
+        {
+            sw.Stop();
+            RecordMotorLog(motorId, MotorOperationType.MoveAbsolute, false, sw.ElapsedMilliseconds,
+                errorMessage: ex.Message, parameterSummary: $"位置={position}, 速度={speedRpm}rpm");
+            throw;
+        }
     }
 
     /// <inheritdoc/>
@@ -135,14 +193,40 @@ public class MotorControlService : IMotorControlService, IDisposable
     )
     {
         IMotorDriver driver = GetDriver(motorId);
-        await driver.MoveRelativeAsync(delta, speedRpm, cancellationToken).ConfigureAwait(false);
+        Stopwatch sw = Stopwatch.StartNew();
+        try
+        {
+            await driver.MoveRelativeAsync(delta, speedRpm, cancellationToken).ConfigureAwait(false);
+            sw.Stop();
+            RecordMotorLog(motorId, MotorOperationType.MoveRelative, true, sw.ElapsedMilliseconds,
+                parameterSummary: $"位移={delta}, 速度={speedRpm}rpm");
+        }
+        catch (Exception ex)
+        {
+            sw.Stop();
+            RecordMotorLog(motorId, MotorOperationType.MoveRelative, false, sw.ElapsedMilliseconds,
+                errorMessage: ex.Message, parameterSummary: $"位移={delta}, 速度={speedRpm}rpm");
+            throw;
+        }
     }
 
     /// <inheritdoc/>
     public async Task StopAsync(int motorId, CancellationToken cancellationToken = default)
     {
         IMotorDriver driver = GetDriver(motorId);
-        await driver.StopAsync(cancellationToken).ConfigureAwait(false);
+        Stopwatch sw = Stopwatch.StartNew();
+        try
+        {
+            await driver.StopAsync(cancellationToken).ConfigureAwait(false);
+            sw.Stop();
+            RecordMotorLog(motorId, MotorOperationType.Stop, true, sw.ElapsedMilliseconds);
+        }
+        catch (Exception ex)
+        {
+            sw.Stop();
+            RecordMotorLog(motorId, MotorOperationType.Stop, false, sw.ElapsedMilliseconds, ex.Message);
+            throw;
+        }
     }
 
     /// <inheritdoc/>
@@ -174,21 +258,57 @@ public class MotorControlService : IMotorControlService, IDisposable
     public async Task EmergencyStopAsync(int motorId, CancellationToken cancellationToken = default)
     {
         IMotorDriver driver = GetDriver(motorId);
-        await driver.EmergencyStopAsync(cancellationToken).ConfigureAwait(false);
+        Stopwatch sw = Stopwatch.StartNew();
+        try
+        {
+            await driver.EmergencyStopAsync(cancellationToken).ConfigureAwait(false);
+            sw.Stop();
+            RecordMotorLog(motorId, MotorOperationType.EmergencyStop, true, sw.ElapsedMilliseconds);
+        }
+        catch (Exception ex)
+        {
+            sw.Stop();
+            RecordMotorLog(motorId, MotorOperationType.EmergencyStop, false, sw.ElapsedMilliseconds, ex.Message);
+            throw;
+        }
     }
 
     /// <inheritdoc/>
     public async Task HomeAsync(int motorId, CancellationToken cancellationToken = default)
     {
         IMotorDriver driver = GetDriver(motorId);
-        await driver.HomeAsync(cancellationToken).ConfigureAwait(false);
+        Stopwatch sw = Stopwatch.StartNew();
+        try
+        {
+            await driver.HomeAsync(cancellationToken).ConfigureAwait(false);
+            sw.Stop();
+            RecordMotorLog(motorId, MotorOperationType.Home, true, sw.ElapsedMilliseconds);
+        }
+        catch (Exception ex)
+        {
+            sw.Stop();
+            RecordMotorLog(motorId, MotorOperationType.Home, false, sw.ElapsedMilliseconds, ex.Message);
+            throw;
+        }
     }
 
     /// <inheritdoc/>
     public async Task ClearFaultAsync(int motorId, CancellationToken cancellationToken = default)
     {
         IMotorDriver driver = GetDriver(motorId);
-        await driver.ClearFaultAsync(cancellationToken).ConfigureAwait(false);
+        Stopwatch sw = Stopwatch.StartNew();
+        try
+        {
+            await driver.ClearFaultAsync(cancellationToken).ConfigureAwait(false);
+            sw.Stop();
+            RecordMotorLog(motorId, MotorOperationType.ClearFault, true, sw.ElapsedMilliseconds);
+        }
+        catch (Exception ex)
+        {
+            sw.Stop();
+            RecordMotorLog(motorId, MotorOperationType.ClearFault, false, sw.ElapsedMilliseconds, ex.Message);
+            throw;
+        }
     }
 
     /// <inheritdoc/>
@@ -220,5 +340,64 @@ public class MotorControlService : IMotorControlService, IDisposable
         }
 
         return driver;
+    }
+
+    /// <summary>
+    /// fire-and-forget 写入电机操作日志，异常仅记录 Warning，不向上抛出
+    /// </summary>
+    private void RecordMotorLog(
+        int slaveId,
+        MotorOperationType operationType,
+        bool isSuccess,
+        long roundTripMs,
+        string? errorMessage = null,
+        string? parameterSummary = null
+    )
+    {
+        // 未注入映射或无 DI 容器时跳过
+        if (_serviceScopeFactory is null || !_axisIdBySlaveId.TryGetValue(slaveId, out Guid axisId))
+            return;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                using IServiceScope scope = _serviceScopeFactory.CreateScope();
+                IMotorOperationLogRepository? repo = scope
+                    .ServiceProvider.GetService<IMotorOperationLogRepository>();
+                if (repo is null)
+                    return;
+
+                MotorOperationLog log = isSuccess
+                    ? MotorOperationLog.Success(
+                        Guid.NewGuid(),
+                        axisId,
+                        slaveId,
+                        operationType,
+                        roundTripMs,
+                        parameterSummary: parameterSummary
+                    )
+                    : MotorOperationLog.Failure(
+                        Guid.NewGuid(),
+                        axisId,
+                        slaveId,
+                        operationType,
+                        errorMessage ?? "未知错误",
+                        roundTripMs,
+                        parameterSummary: parameterSummary
+                    );
+
+                await repo.InsertAsync(log).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(
+                    ex,
+                    "电机 {SlaveId} 写入操作日志失败（操作={Op}）",
+                    slaveId,
+                    operationType
+                );
+            }
+        });
     }
 }

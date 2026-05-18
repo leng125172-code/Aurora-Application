@@ -8,10 +8,20 @@ namespace AuroraStruct3D.Projectors;
 public interface IProjectorDeviceRepository : IRepository<ProjectorDevice, Guid>
 {
     /// <summary>
-    /// 根据 IP 地址查找投影机设备
+    /// 根据 IP 地址查找投影机设备（TCP 模式）
     /// </summary>
     Task<ProjectorDevice?> FindByIpAddressAsync(
         string ipAddress,
+        CancellationToken cancellationToken = default
+    );
+
+    /// <summary>
+    /// 根据 HID VID/PID 和设备索引查找投影机设备（USB HID 模式）
+    /// </summary>
+    Task<ProjectorDevice?> FindByHidAsync(
+        int vendorId,
+        int productId,
+        int deviceIndex = 0,
         CancellationToken cancellationToken = default
     );
 

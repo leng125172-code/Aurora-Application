@@ -1,6 +1,7 @@
 using AuroraStruct3D.Cameras;
 using AuroraStruct3D.Motors;
 using AuroraStruct3D.Projectors;
+using AuroraStruct3D.SerialPorts;
 using Microsoft.EntityFrameworkCore;
 
 namespace AuroraStruct3D.EntityFrameworkCore
@@ -17,6 +18,9 @@ namespace AuroraStruct3D.EntityFrameworkCore
         /// <summary>相机参数项集合</summary>
         DbSet<CameraParameter> CameraParameters { get; }
 
+        /// <summary>相机操作日志集合</summary>
+        DbSet<CameraOperationLog> CameraOperationLogs { get; }
+
         // ── 电机模块 ──────────────────────────────────────────────────────────────
 
         /// <summary>电机轴集合</summary>
@@ -30,6 +34,9 @@ namespace AuroraStruct3D.EntityFrameworkCore
 
         /// <summary>PR路径配置集合（雷赛iCL-RS专用）</summary>
         DbSet<MotorPrPath> MotorPrPaths { get; }
+
+        /// <summary>电机操作日志集合</summary>
+        DbSet<MotorOperationLog> MotorOperationLogs { get; }
 
         // ── DLP 投影机模块 ────────────────────────────────────────────────────
 

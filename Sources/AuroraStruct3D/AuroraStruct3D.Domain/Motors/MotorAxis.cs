@@ -1,3 +1,4 @@
+using AuroraStruct3D.SerialPorts;
 using Volo.Abp;
 using Volo.Abp.Domain.Entities.Auditing;
 
@@ -27,11 +28,11 @@ public class MotorAxis : FullAuditedAggregateRoot<Guid>
 
     // ─────────────────────────── 硬件连接配置 ───────────────────────────
 
-    /// <summary>RS485 串口设备路径（如 /dev/ttyS6）</summary>
-    public string PortName { get; private set; } = null!;
+    /// <summary>关联的串口通讯配置 ID（多个电机轴可共享同一 RS485 总线）</summary>
+    public Guid SerialPortConfigId { get; private set; }
 
-    /// <summary>波特率（默认 115200）</summary>
-    public int BaudRate { get; private set; }
+    /// <summary>关联的串口通讯配置导航属性（EF Core 加载用）</summary>
+    public SerialPortConfig? SerialPortConfig { get; private set; }
 
     /// <summary>Modbus / 私有协议 从机地址（1~247）</summary>
     public int SlaveId { get; private set; }
@@ -114,16 +115,14 @@ public class MotorAxis : FullAuditedAggregateRoot<Guid>
     /// <param name="id">聚合根ID</param>
     /// <param name="name">轴名称</param>
     /// <param name="axisIndex">轴序号</param>
-    /// <param name="portName">RS485串口路径</param>
-    /// <param name="baudRate">波特率</param>
-    /// <param name="slaveId">从机地址</param>
+    /// <param name="serialPortConfigId">关联的串口通讯配置 ID</param>
+    /// <param name="slaveId">从机地址（1~247）</param>
     /// <param name="brand">品牌协议类型</param>
     public MotorAxis(
         Guid id,
         string name,
         int axisIndex,
-        string portName,
-        int baudRate,
+        Guid serialPortConfigId,
         int slaveId,
         MotorBrand brand
     )
@@ -131,10 +130,7 @@ public class MotorAxis : FullAuditedAggregateRoot<Guid>
     {
         SetName(name);
         AxisIndex = axisIndex;
-
-        Check.NotNullOrWhiteSpace(portName, nameof(portName), MotorConsts.MaxPortNameLength);
-        PortName = portName;
-        BaudRate = baudRate;
+        SerialPortConfigId = serialPortConfigId;
         SlaveId = slaveId;
         Brand = brand;
 
@@ -226,6 +222,13 @@ public class MotorAxis : FullAuditedAggregateRoot<Guid>
         LastKnownSpeed = speed;
         IsHomed = isHomed;
         LastStatusUpdateAt = DateTime.UtcNow;
+        return this;
+    }
+
+    /// <summary>变更关联的串口通讯配置</summary>
+    public MotorAxis SetSerialPortConfig(Guid serialPortConfigId)
+    {
+        SerialPortConfigId = serialPortConfigId;
         return this;
     }
 

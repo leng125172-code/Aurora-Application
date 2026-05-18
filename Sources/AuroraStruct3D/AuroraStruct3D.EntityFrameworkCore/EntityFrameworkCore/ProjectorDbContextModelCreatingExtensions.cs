@@ -26,10 +26,16 @@ public static class ProjectorDbContextModelCreatingExtensions
             b.Property(x => x.Name).IsRequired().HasMaxLength(ProjectorConsts.MaxNameLength);
             b.Property(x => x.Description).HasMaxLength(ProjectorConsts.MaxDescriptionLength);
 
-            // 网络连接配置
-            b.Property(x => x.IpAddress)
-                .IsRequired()
-                .HasMaxLength(ProjectorConsts.MaxIpAddressLength);
+            // 连接方式
+            b.Property(x => x.ConnectionType).HasConversion<int>().IsRequired();
+
+            // TCP 连接配置（可空，仅 TCP 模式有效）
+            b.Property(x => x.IpAddress).HasMaxLength(ProjectorConsts.MaxIpAddressLength);
+
+            // USB HID 连接配置（仅 USB HID 模式有效）
+            b.Property(x => x.HidVendorId);
+            b.Property(x => x.HidProductId);
+            b.Property(x => x.HidDeviceIndex);
 
             // 设备信息
             b.Property(x => x.FirmwareVersion)
@@ -41,7 +47,13 @@ public static class ProjectorDbContextModelCreatingExtensions
 
             // 索引
             b.HasIndex(x => x.DeviceIndex).IsUnique();
-            b.HasIndex(x => x.IpAddress).IsUnique();
+            b.HasIndex(x => x.ConnectionType);
+            // TCP 模式：IpAddress 全局唯一（PostgreSQL 部分索引）
+            b.HasIndex(x => x.IpAddress).IsUnique().HasFilter($"\"{nameof(ProjectorDevice.IpAddress)}\" IS NOT NULL");
+            // HID 模式：(VendorId, ProductId, DeviceIndex) 树約
+            b.HasIndex(x => new { x.HidVendorId, x.HidProductId, x.HidDeviceIndex })
+                .IsUnique()
+                .HasFilter($"\"{nameof(ProjectorDevice.ConnectionType)}\" = 1");
             b.HasIndex(x => x.IsEnabled);
             b.HasIndex(x => x.ConnectionStatus);
 

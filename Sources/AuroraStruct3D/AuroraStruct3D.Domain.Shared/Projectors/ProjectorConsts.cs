@@ -20,8 +20,23 @@ public static class ProjectorConsts
     /// <summary>操作日志消息最大长度</summary>
     public const int MaxLogMessageLength = 512;
 
+    /// <summary>HID 设备路径最大长度（如 /dev/hidraw0、\\?\HID#...）</summary>
+    public const int MaxHidDevicePathLength = 256;
+
     /// <summary>数据库表名前缀</summary>
     public const string DbTablePrefix = "AbpPro";
+}
+
+/// <summary>
+/// 投影机物理连接方式
+/// </summary>
+public enum ProjectorConnectionType
+{
+    /// <summary>TCP/IP 网络连接（腾聚 TJ 协议默认端口 1234）</summary>
+    Tcp = 0,
+
+    /// <summary>USB HID 连接（Megawin EasyPOD 芯片，VID=0x0E6A，PID=0x0317，跨平台 Windows + Linux）</summary>
+    UsbHid = 1,
 }
 
 /// <summary>

@@ -14,6 +14,7 @@ import { LineChart } from 'echarts/charts'
 import { GridComponent, TooltipComponent, LegendComponent } from 'echarts/components'
 import { AnimatedCircularProgressBar } from '@/components/ui/animated-circular-progressbar'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
+import { BorderBeam } from '@/components/ui/border-beam'
 import { useAuthStore } from '@/stores/auth'
 import { httpClient } from '@/api/client'
 
@@ -225,9 +226,10 @@ onUnmounted(async () => {
         <h1 class="text-2xl font-bold tracking-tight">{{ t('menu.dashboard') }}</h1>
 
         <!-- 系统负载：圆形进度条 -->
-        <div :class="['grid gap-4 grid-cols-1', showBothNpuGpu ? 'md:grid-cols-4' : 'md:grid-cols-3']">
+        <div class="flex flex-wrap gap-4">
             <!-- CPU -->
-            <Card class="flex flex-col items-center py-5">
+            <Card class="relative flex flex-col items-center py-5 w-[250px] h-[250px]">
+                <BorderBeam :size="80" :duration="8" />
                 <CardHeader class="pb-2 text-center">
                     <CardTitle class="text-sm text-muted-foreground">{{ t('dashboard.cpu') }}</CardTitle>
                 </CardHeader>
@@ -248,7 +250,8 @@ onUnmounted(async () => {
             </Card>
 
             <!-- 内存 -->
-            <Card class="flex flex-col items-center py-5">
+            <Card class="relative flex flex-col items-center py-5 w-[250px] h-[250px]">
+                <BorderBeam :size="80" :duration="8" :delay="2" />
                 <CardHeader class="pb-2 text-center">
                     <CardTitle class="text-sm text-muted-foreground">{{ t('dashboard.memory') }}</CardTitle>
                 </CardHeader>
@@ -271,7 +274,8 @@ onUnmounted(async () => {
             </Card>
 
             <!-- NPU 卡片（仅当 NPU 和 GPU 同时存在时单独展示 NPU；否则在混合卡中显示）-->
-            <Card v-if="showBothNpuGpu" class="flex flex-col items-center py-5">
+            <Card v-if="showBothNpuGpu" class="relative flex flex-col items-center py-5 w-[250px] h-[250px]">
+                <BorderBeam :size="80" :duration="8" :delay="4" />
                 <CardHeader class="pb-2 text-center">
                     <CardTitle class="text-sm text-muted-foreground">{{ t('dashboard.npu') }}</CardTitle>
                 </CardHeader>
@@ -290,7 +294,8 @@ onUnmounted(async () => {
             </Card>
 
             <!-- GPU 卡片（仅当 NPU 和 GPU 同时存在时单独展示 GPU）-->
-            <Card v-if="showBothNpuGpu" class="flex flex-col items-center py-5">
+            <Card v-if="showBothNpuGpu" class="relative flex flex-col items-center py-5 w-[250px] h-[250px]">
+                <BorderBeam :size="80" :duration="8" :delay="6" />
                 <CardHeader class="pb-2 text-center">
                     <CardTitle class="text-sm text-muted-foreground">{{ t('dashboard.gpu') }}</CardTitle>
                 </CardHeader>
@@ -309,7 +314,8 @@ onUnmounted(async () => {
             </Card>
 
             <!-- NPU（Linux/RK3588）/ GPU（Windows）混合卡（仅当两者不同时存在时显示）-->
-            <Card v-else class="flex flex-col items-center py-5">
+            <Card v-else class="relative flex flex-col items-center py-5 w-[250px] h-[250px]">
+                <BorderBeam :size="80" :duration="8" :delay="4" />
                 <CardHeader class="pb-2 text-center">
                     <CardTitle class="text-sm text-muted-foreground">
                         {{ metrics.npuPercent >= 0 ? t('dashboard.npu') : t('dashboard.gpu') }}
@@ -351,7 +357,8 @@ onUnmounted(async () => {
         </div>
 
         <!-- 网络流量：速率摘要 + 折线图合并 -->
-        <Card>
+        <Card class="relative">
+            <BorderBeam :size="120" :duration="10" />
             <CardHeader>
                 <CardTitle class="text-base">{{ t('dashboard.traffic') }}</CardTitle>
                 <CardDescription>
@@ -375,7 +382,8 @@ onUnmounted(async () => {
         <!-- CAP + Hangfire 概览 -->
         <div class="grid gap-4 md:grid-cols-2">
             <!-- CAP 概览 -->
-            <Card>
+            <Card class="relative">
+                <BorderBeam :size="100" :duration="10" />
                 <CardHeader>
                     <CardTitle class="text-base">{{ t('dashboard.capOverview') }}</CardTitle>
                 </CardHeader>
@@ -406,7 +414,8 @@ onUnmounted(async () => {
             </Card>
 
             <!-- Hangfire 概览 -->
-            <Card>
+            <Card class="relative">
+                <BorderBeam :size="100" :duration="10" :delay="5" />
                 <CardHeader>
                     <CardTitle class="text-base">{{ t('dashboard.hangfireOverview') }}</CardTitle>
                 </CardHeader>

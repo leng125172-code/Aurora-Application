@@ -1,6 +1,7 @@
 using AuroraStruct3D.Cameras;
 using AuroraStruct3D.Motors;
 using AuroraStruct3D.Projectors;
+using AuroraStruct3D.SerialPorts;
 using Lion.AbpPro.CodeManagement.EntityFrameworkCore;
 using Lion.AbpPro.DynamicMenuManagement.EntityFrameworkCore;
 using Lion.AbpPro.FileManagement.EntityFrameworkCore;
@@ -41,13 +42,18 @@ namespace AuroraStruct3D.EntityFrameworkCore
                  * default repositories only for aggregate roots */
                 options.AddDefaultRepositories(includeAllEntities: true);
 
+                // 注册串口通讯模块自定义仓储
+                options.AddRepository<SerialPortConfig, EfCoreSerialPortConfigRepository>();
+
                 // 注册相机模块自定义仓储
                 options.AddRepository<CameraDevice, EfCoreCameraDeviceRepository>();
                 options.AddRepository<CameraParameterSet, EfCoreCameraParameterSetRepository>();
+                options.AddRepository<CameraOperationLog, EfCoreCameraOperationLogRepository>();
 
                 // 注册电机模块自定义仓储
                 options.AddRepository<MotorAxis, EfCoreMotorAxisRepository>();
                 options.AddRepository<MotorPrPath, EfCoreMotorPrPathRepository>();
+                options.AddRepository<MotorOperationLog, EfCoreMotorOperationLogRepository>();
 
                 // 注册 DLP 投影机模块自定义仓储
                 options.AddRepository<ProjectorDevice, EfCoreProjectorDeviceRepository>();

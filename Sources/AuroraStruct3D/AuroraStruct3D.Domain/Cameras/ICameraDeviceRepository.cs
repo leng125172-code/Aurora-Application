@@ -54,3 +54,46 @@ public interface ICameraDeviceRepository : IRepository<CameraDevice, Guid>
         CancellationToken cancellationToken = default
     );
 }
+
+/// <summary>
+/// 相机操作日志仓储接口
+/// </summary>
+public interface ICameraOperationLogRepository : IRepository<CameraOperationLog, Guid>
+{
+    /// <summary>
+    /// 分页查询指定相机的操作日志，按发生时间倒序
+    /// </summary>
+    /// <param name="cameraDeviceId">相机设备 ID</param>
+    /// <param name="skipCount">跳过条数</param>
+    /// <param name="maxResultCount">最大条数</param>
+    /// <param name="operationType">按操作类型过滤（可选）</param>
+    /// <param name="onlyFailures">仅返回失败记录</param>
+    /// <param name="cancellationToken">取消令牌</param>
+    Task<List<CameraOperationLog>> GetPagedListAsync(
+        Guid cameraDeviceId,
+        int skipCount,
+        int maxResultCount,
+        CameraOperationType? operationType = null,
+        bool onlyFailures = false,
+        CancellationToken cancellationToken = default
+    );
+
+    /// <summary>
+    /// 统计指定相机的操作日志总数
+    /// </summary>
+    Task<long> GetCountAsync(
+        Guid cameraDeviceId,
+        CameraOperationType? operationType = null,
+        bool onlyFailures = false,
+        CancellationToken cancellationToken = default
+    );
+
+    /// <summary>
+    /// 删除指定相机在某时间点之前的所有日志（用于日志清理）
+    /// </summary>
+    Task DeleteBeforeAsync(
+        Guid cameraDeviceId,
+        DateTime beforeUtc,
+        CancellationToken cancellationToken = default
+    );
+}

@@ -27,13 +27,25 @@ public class ProjectorDevice : FullAuditedAggregateRoot<Guid>
     /// <summary>是否启用（停用时不参与扫描和连接）</summary>
     public bool IsEnabled { get; private set; }
 
-    // ─────────────────────────── 网络连接配置 ───────────────────────────
+    // ─────────────────────────── 连接配置 ───────────────────────────
 
-    /// <summary>投影机 IP 地址（如 192.168.100.100）</summary>
-    public string IpAddress { get; private set; } = null!;
+    /// <summary>物理连接方式（TCP 或 USB HID）</summary>
+    public ProjectorConnectionType ConnectionType { get; private set; }
 
-    /// <summary>TCP 端口号（腾聚 TJ 系列固定为 1234）</summary>
+    /// <summary>投影机 IP 地址（仅 TCP 模式有效，如 192.168.100.100）</summary>
+    public string? IpAddress { get; private set; }
+
+    /// <summary>TCP 端口号（仅 TCP 模式有效，腾聚 TJ 系列固定为 1234）</summary>
     public int TcpPort { get; private set; }
+
+    /// <summary>USB HID 厂商 ID（仅 USB HID 模式有效，腾聚 TJ 默认 0x0E6A = 3690）</summary>
+    public int HidVendorId { get; private set; }
+
+    /// <summary>USB HID 产品 ID（仅 USB HID 模式有效，腾聚 TJ 默认 0x0317 = 791）</summary>
+    public int HidProductId { get; private set; }
+
+    /// <summary>USB HID 设备索引（同一 VID/PID 多台设备时用于区分，从 0 开始）</summary>
+    public int HidDeviceIndex { get; private set; }
 
     /// <summary>连接超时时间（毫秒，默认 5000）</summary>
     public int ConnectTimeoutMs { get; private set; }
@@ -83,7 +95,7 @@ public class ProjectorDevice : FullAuditedAggregateRoot<Guid>
     protected ProjectorDevice() { }
 
     /// <summary>
-    /// 创建新投影机设备
+    /// 创建 TCP 连接方式的投影机设备
     /// </summary>
     /// <param name="id">主键</param>
     /// <param name="name">设备名称</param>
@@ -103,8 +115,45 @@ public class ProjectorDevice : FullAuditedAggregateRoot<Guid>
     {
         SetName(name);
         DeviceIndex = deviceIndex;
+        ConnectionType = ProjectorConnectionType.Tcp;
         SetIpAddress(ipAddress);
         TcpPort = tcpPort;
+        ConnectTimeoutMs = connectTimeoutMs;
+
+        // 默认状态
+        ConnectionStatus = ProjectorConnectionStatus.Unknown;
+        LedStatus = ProjectorLedStatus.Unknown;
+        IsEnabled = true;
+        DeviceHardwareId = -1;
+    }
+
+    /// <summary>
+    /// 创建 USB HID 连接方式的投影机设备（Megawin EasyPOD 芯片）
+    /// </summary>
+    /// <param name="id">主键</param>
+    /// <param name="name">设备名称</param>
+    /// <param name="deviceIndex">序号</param>
+    /// <param name="hidVendorId">HID 厂商 ID（默认 0x0E6A 腾聚）</param>
+    /// <param name="hidProductId">HID 产品 ID（默认 0x0317）</param>
+    /// <param name="hidDeviceIndex">HID 设备索引（多台时区分，从 0 开始）</param>
+    /// <param name="connectTimeoutMs">连接超时（毫秒，默认 5000）</param>
+    public ProjectorDevice(
+        Guid id,
+        string name,
+        int deviceIndex,
+        int hidVendorId,
+        int hidProductId,
+        int hidDeviceIndex = 0,
+        int connectTimeoutMs = 5000
+    )
+        : base(id)
+    {
+        SetName(name);
+        DeviceIndex = deviceIndex;
+        ConnectionType = ProjectorConnectionType.UsbHid;
+        HidVendorId = hidVendorId;
+        HidProductId = hidProductId;
+        HidDeviceIndex = hidDeviceIndex;
         ConnectTimeoutMs = connectTimeoutMs;
 
         // 默认状态
@@ -127,7 +176,7 @@ public class ProjectorDevice : FullAuditedAggregateRoot<Guid>
         return this;
     }
 
-    /// <summary>设置 IP 地址</summary>
+    /// <summary>设置 IP 地址（TCP 模式）</summary>
     public ProjectorDevice SetIpAddress(string ipAddress)
     {
         IpAddress = Check.NotNullOrWhiteSpace(
@@ -135,6 +184,13 @@ public class ProjectorDevice : FullAuditedAggregateRoot<Guid>
             nameof(ipAddress),
             maxLength: ProjectorConsts.MaxIpAddressLength
         );
+        return this;
+    }
+
+    /// <summary>设置 USB HID 设备索引（USB HID 模式）</summary>
+    public ProjectorDevice SetHidDeviceIndex(int hidDeviceIndex)
+    {
+        HidDeviceIndex = hidDeviceIndex;
         return this;
     }
 

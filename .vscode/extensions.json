@@ -1,8 +1,37 @@
 {
     "recommendations": [
+        // ========== C# / .NET 后端开发 ==========
         "ms-dotnettools.csdevkit",
         "ms-dotnettools.csharp",
+        "ms-dotnettools.vscode-dotnet-runtime",
+
+        // ========== Vue3 + Vite + 前端 ==========
+        "vue.volar",
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+
+        // ========== Python 开发 ==========
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "ms-python.black-formatter",
+
+        // ========== Redis 缓存客户端 ==========
+        "cweijan.vscode-redis-client",
+        "cweijan.dbclient-jdbc",
+
+        // ========== 通用格式/编辑工具 ==========
+        "editorconfig.editorconfig",
+        "redhat.vscode-yaml",
+        "redhat.vscode-xml",
+        "yzhang.markdown-all-in-one",
+        "davidanson.vscode-markdownlint",
+
+        // ========== 终端/脚本 ==========
         "ms-vscode.powershell",
+        "foxundermoon.shell-format",
+
+        // ========== 部署/远程开发 ==========
+        "ms-azuretools.vscode-docker",
         "ms-vscode-remote.remote-ssh"
     ]
 }

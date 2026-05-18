@@ -7,25 +7,40 @@
 
     <ItemGroup>
         <ProjectReference Include="..\AuroraStruct3D.Domain\AuroraStruct3D.Domain.csproj" />
-        <ProjectReference Include="..\AuroraStruct3D.Application.Contracts\AuroraStruct3D.Application.Contracts.csproj" />
+        <ProjectReference
+            Include="..\AuroraStruct3D.Application.Contracts\AuroraStruct3D.Application.Contracts.csproj" />
+        <ProjectReference Include="..\AuroraStruct3D.DLP\AuroraStruct3D.DLP.csproj" />
+        <ProjectReference Include="..\AuroraStruct3D.RS485\AuroraStruct3D.RS485.csproj" />
         <ProjectReference Include="..\AuroraStruct3D.Tucam\AuroraStruct3D.Tucam.csproj" />
     </ItemGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\..\AuroraAbpPro\Lion.AbpPro.BasicManagement.Application\Lion.AbpPro.BasicManagement.Application.csproj" />
-        <ProjectReference Include="..\..\AuroraAbpPro\Lion.AbpPro.NotificationManagement.Application\Lion.AbpPro.NotificationManagement.Application.csproj" />
-        <ProjectReference Include="..\..\AuroraAbpPro\Lion.AbpPro.DataDictionaryManagement.Application\Lion.AbpPro.DataDictionaryManagement.Application.csproj" />
-        <ProjectReference Include="..\..\AuroraAbpPro\Lion.AbpPro.LanguageManagement.Application\Lion.AbpPro.LanguageManagement.Application.csproj" />
-        <ProjectReference Include="..\..\AuroraAbpPro\Lion.AbpPro.CodeManagement.Application\Lion.AbpPro.CodeManagement.Application.csproj" />
-        <ProjectReference Include="..\..\AuroraAbpPro\Lion.AbpPro.TemplateManagement.Application\Lion.AbpPro.TemplateManagement.Application.csproj" />
-        <ProjectReference Include="..\..\AuroraAbpPro\Lion.AbpPro.DynamicMenuManagement.Application\Lion.AbpPro.DynamicMenuManagement.Application.csproj" />
-        <ProjectReference Include="..\..\AuroraAbpPro\Lion.AbpPro.ImportExportManagement.Application\Lion.AbpPro.ImportExportManagement.Application.csproj" />
-        <ProjectReference Include="..\..\AuroraAbpPro\Lion.AbpPro.FileManagement.Application\Lion.AbpPro.FileManagement.Application.csproj" />
-        <ProjectReference Include="..\..\AuroraAbpPro\Lion.AbpPro.CacheManagement.Application\Lion.AbpPro.CacheManagement.Application.csproj" />
-        <ProjectReference Include="..\..\AuroraAbpPro\Lion.AbpPro.MasterDataManagement.Application\Lion.AbpPro.MasterDataManagement.Application.csproj" />
+        <ProjectReference
+            Include="..\..\AuroraAbpPro\Lion.AbpPro.BasicManagement.Application\Lion.AbpPro.BasicManagement.Application.csproj" />
+        <ProjectReference
+            Include="..\..\AuroraAbpPro\Lion.AbpPro.NotificationManagement.Application\Lion.AbpPro.NotificationManagement.Application.csproj" />
+        <ProjectReference
+            Include="..\..\AuroraAbpPro\Lion.AbpPro.DataDictionaryManagement.Application\Lion.AbpPro.DataDictionaryManagement.Application.csproj" />
+        <ProjectReference
+            Include="..\..\AuroraAbpPro\Lion.AbpPro.LanguageManagement.Application\Lion.AbpPro.LanguageManagement.Application.csproj" />
+        <ProjectReference
+            Include="..\..\AuroraAbpPro\Lion.AbpPro.CodeManagement.Application\Lion.AbpPro.CodeManagement.Application.csproj" />
+        <ProjectReference
+            Include="..\..\AuroraAbpPro\Lion.AbpPro.TemplateManagement.Application\Lion.AbpPro.TemplateManagement.Application.csproj" />
+        <ProjectReference
+            Include="..\..\AuroraAbpPro\Lion.AbpPro.DynamicMenuManagement.Application\Lion.AbpPro.DynamicMenuManagement.Application.csproj" />
+        <ProjectReference
+            Include="..\..\AuroraAbpPro\Lion.AbpPro.ImportExportManagement.Application\Lion.AbpPro.ImportExportManagement.Application.csproj" />
+        <ProjectReference
+            Include="..\..\AuroraAbpPro\Lion.AbpPro.FileManagement.Application\Lion.AbpPro.FileManagement.Application.csproj" />
+        <ProjectReference
+            Include="..\..\AuroraAbpPro\Lion.AbpPro.CacheManagement.Application\Lion.AbpPro.CacheManagement.Application.csproj" />
+        <ProjectReference
+            Include="..\..\AuroraAbpPro\Lion.AbpPro.MasterDataManagement.Application\Lion.AbpPro.MasterDataManagement.Application.csproj" />
     </ItemGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\..\AuroraAbpPro\Volo.Abp.BackgroundJobs.HangFire\Volo.Abp.BackgroundJobs.HangFire.csproj" />
+        <ProjectReference
+            Include="..\..\AuroraAbpPro\Volo.Abp.BackgroundJobs.HangFire\Volo.Abp.BackgroundJobs.HangFire.csproj" />
     </ItemGroup>
 </Project>

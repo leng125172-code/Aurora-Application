@@ -34,7 +34,7 @@ onMounted(async () => {
 </script>
 
 <template>
-    <div class="flex h-screen w-screen overflow-hidden bg-background text-foreground">
+    <div class="relative z-[1] flex h-full w-full overflow-hidden">
         <Sidebar />
         <div class="flex flex-1 flex-col overflow-hidden">
             <TopBar />

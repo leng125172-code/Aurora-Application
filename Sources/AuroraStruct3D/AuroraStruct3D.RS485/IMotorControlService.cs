@@ -108,4 +108,12 @@ public interface IMotorControlService
     /// 获取所有已配置的电机编号列表
     /// </summary>
     IReadOnlyList<int> ConfiguredMotorIds { get; }
+
+    /// <summary>
+    /// 注入从机地址到数据库电机轴 ID 的映射（用于操作日志写入）。
+    /// 在应用启动后、从数据库加载 MotorAxis 配置后调用。
+    /// 未调用此方法时操作日志不会写入数据库。
+    /// </summary>
+    /// <param name="axisIds">key = SlaveId（从机地址），value = MotorAxis 实体 ID</param>
+    void SetAxisIdMapping(IReadOnlyDictionary<int, Guid> axisIds);
 }

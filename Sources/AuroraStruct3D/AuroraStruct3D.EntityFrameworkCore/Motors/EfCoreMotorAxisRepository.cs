@@ -18,7 +18,7 @@ public class EfCoreMotorAxisRepository
 
     /// <inheritdoc/>
     public async Task<MotorAxis?> FindBySlaveIdAsync(
-        string portName,
+        Guid serialPortConfigId,
         int slaveId,
         CancellationToken cancellationToken = default
     )
@@ -27,21 +27,21 @@ public class EfCoreMotorAxisRepository
         return await context
             .MotorAxes.AsNoTracking()
             .FirstOrDefaultAsync(
-                m => m.PortName == portName && m.SlaveId == slaveId,
+                m => m.SerialPortConfigId == serialPortConfigId && m.SlaveId == slaveId,
                 cancellationToken
             );
     }
 
     /// <inheritdoc/>
     public async Task<List<MotorAxis>> GetListByPortAsync(
-        string portName,
+        Guid serialPortConfigId,
         CancellationToken cancellationToken = default
     )
     {
         AuroraStruct3DDbContext context = await GetDbContextAsync();
         return await context
             .MotorAxes.AsNoTracking()
-            .Where(m => m.PortName == portName)
+            .Where(m => m.SerialPortConfigId == serialPortConfigId)
             .OrderBy(m => m.AxisIndex)
             .ToListAsync(cancellationToken);
     }

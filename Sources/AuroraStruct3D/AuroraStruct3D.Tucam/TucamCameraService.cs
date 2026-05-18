@@ -1,6 +1,9 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
+using AuroraStruct3D.Cameras;
 using AuroraStruct3D.Tucam.Interop;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace AuroraStruct3D.Tucam;
@@ -11,9 +14,13 @@ namespace AuroraStruct3D.Tucam;
 public class TucamCameraService : ITucamCameraService, IDisposable
 {
     private readonly ILogger<TucamCameraService> _logger;
+    private readonly IServiceScopeFactory? _serviceScopeFactory;
 
     /// <summary>相机句柄字典，key为相机索引</summary>
     private readonly ConcurrentDictionary<int, IntPtr> _cameraHandles = new();
+
+    /// <summary>相机索引 → 数据库 CameraDevice.Id 映射（Host 启动后注入）</summary>
+    private IReadOnlyDictionary<int, Guid> _deviceIdByCameraIndex = new Dictionary<int, Guid>();
 
     /// <summary>SDK是否已初始化</summary>
     private bool _initialized;
@@ -21,9 +28,23 @@ public class TucamCameraService : ITucamCameraService, IDisposable
     /// <summary>是否已释放资源</summary>
     private bool _disposed;
 
-    public TucamCameraService(ILogger<TucamCameraService> logger)
+    public TucamCameraService(
+        ILogger<TucamCameraService> logger,
+        IServiceScopeFactory? serviceScopeFactory = null
+    )
     {
         _logger = logger;
+        _serviceScopeFactory = serviceScopeFactory;
+    }
+
+    /// <inheritdoc/>
+    public void SetCameraDeviceIdMapping(IReadOnlyDictionary<int, Guid> deviceIds)
+    {
+        _deviceIdByCameraIndex = deviceIds;
+        _logger.LogInformation(
+            "相机操作日志映射已注入，共 {Count} 个相机索引",
+            deviceIds.Count
+        );
     }
 
     /// <inheritdoc/>
@@ -80,13 +101,18 @@ public class TucamCameraService : ITucamCameraService, IDisposable
             return Task.CompletedTask;
         }
 
+        Stopwatch sw = Stopwatch.StartNew();
         var openParam = new TUCamOpen { uiIdxOpen = (uint)cameraIndex, hIdxTUCam = IntPtr.Zero };
 
         var ret = TUCamNative.TUCAM_Dev_Open(ref openParam);
+        sw.Stop();
+
         if (ret != TUCamRet.Success)
         {
+            string errorMsg = $"打开相机失败（索引: {cameraIndex}）: {ret}";
             _logger.LogError("打开相机 {Index} 失败，返回码: {RetCode}", cameraIndex, ret);
-            throw new InvalidOperationException($"打开相机失败（索引: {cameraIndex}）: {ret}");
+            RecordCameraLog(cameraIndex, CameraOperationType.Open, false, sw.ElapsedMilliseconds, errorMsg);
+            throw new InvalidOperationException(errorMsg);
         }
 
         _cameraHandles[cameraIndex] = openParam.hIdxTUCam;
@@ -95,6 +121,7 @@ public class TucamCameraService : ITucamCameraService, IDisposable
             cameraIndex,
             openParam.hIdxTUCam
         );
+        RecordCameraLog(cameraIndex, CameraOperationType.Open, true, sw.ElapsedMilliseconds);
         return Task.CompletedTask;
     }
 
@@ -109,14 +136,20 @@ public class TucamCameraService : ITucamCameraService, IDisposable
             return Task.CompletedTask;
         }
 
+        Stopwatch sw = Stopwatch.StartNew();
         var ret = TUCamNative.TUCAM_Dev_Close(handle);
+        sw.Stop();
+
         if (ret != TUCamRet.Success)
         {
+            string errorMsg = $"关闭相机返回: {ret}";
             _logger.LogWarning("关闭相机 {Index} 时返回: {RetCode}", cameraIndex, ret);
+            RecordCameraLog(cameraIndex, CameraOperationType.Close, false, sw.ElapsedMilliseconds, errorMsg);
         }
         else
         {
             _logger.LogInformation("相机 {Index} 已关闭", cameraIndex);
+            RecordCameraLog(cameraIndex, CameraOperationType.Close, true, sw.ElapsedMilliseconds);
         }
         return Task.CompletedTask;
     }
@@ -255,22 +288,32 @@ public class TucamCameraService : ITucamCameraService, IDisposable
         ThrowIfDisposed();
         IntPtr handle = GetHandle(cameraIndex);
 
+        Stopwatch sw = Stopwatch.StartNew();
+
         // 先分配帧缓冲区
         var frame = new TUCamFrame { uiRsdSize = 1 };
         var allocRet = TUCamNative.TUCAM_Buf_Alloc(handle, ref frame);
         if (allocRet != TUCamRet.Success)
         {
-            throw new InvalidOperationException($"分配帧缓冲区失败: {allocRet}");
+            sw.Stop();
+            string errorMsg = $"分配帧缓冲区失败: {allocRet}";
+            RecordCameraLog(cameraIndex, CameraOperationType.StartCapture, false, sw.ElapsedMilliseconds, errorMsg);
+            throw new InvalidOperationException(errorMsg);
         }
 
         var ret = TUCamNative.TUCAM_Cap_Start(handle, (uint)TUCamCaptureMode.Sequence);
+        sw.Stop();
+
         if (ret != TUCamRet.Success)
         {
             TUCamNative.TUCAM_Buf_Release(handle);
-            throw new InvalidOperationException($"启动采集失败: {ret}");
+            string errorMsg = $"启动采集失败: {ret}";
+            RecordCameraLog(cameraIndex, CameraOperationType.StartCapture, false, sw.ElapsedMilliseconds, errorMsg);
+            throw new InvalidOperationException(errorMsg);
         }
 
         _logger.LogInformation("相机 {Index} 开始连续采集", cameraIndex);
+        RecordCameraLog(cameraIndex, CameraOperationType.StartCapture, true, sw.ElapsedMilliseconds);
         return Task.CompletedTask;
     }
 
@@ -280,10 +323,14 @@ public class TucamCameraService : ITucamCameraService, IDisposable
         ThrowIfDisposed();
         IntPtr handle = GetHandle(cameraIndex);
 
+        Stopwatch sw = Stopwatch.StartNew();
         TUCamNative.TUCAM_Buf_AbortWait(handle);
         TUCamNative.TUCAM_Cap_Stop(handle);
         TUCamNative.TUCAM_Buf_Release(handle);
+        sw.Stop();
+
         _logger.LogInformation("相机 {Index} 已停止采集", cameraIndex);
+        RecordCameraLog(cameraIndex, CameraOperationType.StopCapture, true, sw.ElapsedMilliseconds);
         return Task.CompletedTask;
     }
 
@@ -325,6 +372,65 @@ public class TucamCameraService : ITucamCameraService, IDisposable
     public bool IsCameraOpen(int cameraIndex)
     {
         return _cameraHandles.ContainsKey(cameraIndex);
+    }
+
+    /// <summary>
+    /// 将相机操作记录写入数据库（fire-and-forget，失败仅记录警告不抛出）
+    /// </summary>
+    private void RecordCameraLog(
+        int cameraIndex,
+        CameraOperationType operationType,
+        bool isSuccess,
+        long roundTripMs,
+        string? errorMessage = null,
+        string? parameterSummary = null
+    )
+    {
+        if (_serviceScopeFactory is null)
+            return;
+
+        if (!_deviceIdByCameraIndex.TryGetValue(cameraIndex, out Guid cameraDeviceId))
+            return;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                using IServiceScope scope = _serviceScopeFactory.CreateScope();
+                ICameraOperationLogRepository repo = scope.ServiceProvider
+                    .GetRequiredService<ICameraOperationLogRepository>();
+
+                CameraOperationLog log = isSuccess
+                    ? CameraOperationLog.Success(
+                        Guid.NewGuid(),
+                        cameraDeviceId,
+                        cameraIndex,
+                        operationType,
+                        roundTripMs,
+                        parameterSummary
+                    )
+                    : CameraOperationLog.Failure(
+                        Guid.NewGuid(),
+                        cameraDeviceId,
+                        cameraIndex,
+                        operationType,
+                        errorMessage ?? string.Empty,
+                        roundTripMs,
+                        parameterSummary
+                    );
+
+                await repo.InsertAsync(log, autoSave: true);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(
+                    ex,
+                    "写入相机操作日志失败（CameraIndex={Index}, Operation={Op}）",
+                    cameraIndex,
+                    operationType
+                );
+            }
+        });
     }
 
     /// <summary>

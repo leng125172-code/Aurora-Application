@@ -319,27 +319,59 @@ public sealed class SystemMetricsCollector : IDisposable
 
     /// <summary>
     /// 读取 RK3588 NPU 使用率（/sys/kernel/debug/rknpu/load）。
+    /// 该文件需要 root 权限，优先尝试直接读取（若进程以 root 运行），
+    /// 否则退回到 sudo -n cat（需在 sudoers 中配置免密）。
     /// 返回多核均值，-1 表示不支持或读取失败。
     /// </summary>
     private static double GetLinuxRk3588NpuUsage()
     {
+        const string path = "/sys/kernel/debug/rknpu/load";
+
+        // 尝试直接读取（进程以 root 运行时可成功）
+        string? content = null;
         try
         {
-            const string path = "/sys/kernel/debug/rknpu/load";
-            if (!File.Exists(path))
-                return -1;
-            string content = File.ReadAllText(path);
-            // 格式示例：NPU load:  Core0: 12%, Core1:  8%, Core2:  5%,
-            MatchCollection matches = Regex.Matches(content, @"(\d+)%");
-            if (matches.Count == 0)
-                return -1;
-            double sum = matches.Cast<Match>().Sum(m => double.Parse(m.Groups[1].Value));
-            return Math.Round(sum / matches.Count, 1);
+            if (File.Exists(path))
+                content = File.ReadAllText(path);
         }
+        catch (UnauthorizedAccessException) { }
         catch
         {
             return -1;
         }
+
+        // 权限不足时，通过 sudo -n cat 读取（需配置 sudoers 免密）
+        if (content == null)
+        {
+            try
+            {
+                using System.Diagnostics.Process proc = new();
+                proc.StartInfo = new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = "sudo",
+                    ArgumentList = { "-n", "cat", path },
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                };
+                proc.Start();
+                content = proc.StandardOutput.ReadToEnd();
+                proc.WaitForExit(1000);
+                if (proc.ExitCode != 0 || string.IsNullOrWhiteSpace(content))
+                    return -1;
+            }
+            catch
+            {
+                return -1;
+            }
+        }
+
+        // 格式示例：NPU load:  Core0: 12%, Core1:  8%, Core2:  5%,
+        MatchCollection matches = Regex.Matches(content, @"(\d+)%");
+        if (matches.Count == 0)
+            return -1;
+        double sum = matches.Cast<Match>().Sum(m => double.Parse(m.Groups[1].Value));
+        return Math.Round(sum / matches.Count, 1);
     }
 
     /// <summary>

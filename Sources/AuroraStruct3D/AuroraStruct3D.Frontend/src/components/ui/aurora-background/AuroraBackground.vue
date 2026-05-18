@@ -37,7 +37,7 @@ const styles = computed(() => {
             v-bind="props"
             :class="
                 cn(
-                    `transition-bg relative flex h-screen flex-col items-center justify-center bg-zinc-50 text-slate-950 dark:bg-zinc-900`,
+                    `transition-bg relative flex h-screen flex-col items-center justify-center bg-background text-foreground`,
                     props.class
                 )
             "

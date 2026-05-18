@@ -1,29 +1,87 @@
 {
-    "markdown.validate.enabled": true,
+    // ==========================
+    // 基础编辑器配置
+    // ==========================
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+        "source.fixAll.eslint": "explicit"
+    },
+    "editor.codeLens": true,
+    "editor.tabSize": 2,
+    "editor.insertSpaces": true,
+    "editor.wordWrap": "on",
+
+    // ==========================
+    // C# / .NET 优化
+    // ==========================
     "dotnet.defaultSolution": "Aurora Application.slnx",
     "dotnet.server.useOmnisharp": false,
-    "editor.codeLens": true,
     "dotnet.codeLens.references.enabled": true,
+    "csharp.format.enable": true,
+    "csharp.semanticHighlighting.enabled": true,
+
+    // ==========================
+    // Anaconda3 完整版 自动识别（不用写路径！）
+    // ==========================
+    "python.terminal.activateEnvironment": true,
+    "python.analysis.autoImportCompletions": true,
+    "python.analysis.typeCheckingMode": "basic",
+    "[python]": {
+        "editor.defaultFormatter": "ms-python.black-formatter",
+        "editor.formatOnSave": true
+    },
+
+    // ==========================
+    // Vue / Vite / 前端
+    // ==========================
+    "vue.autoInsert.dotValue": true,
+    "[vue]": {
+        "editor.defaultFormatter": "esbenp.prettier-vscode"
+    },
+    "[javascript]": {
+        "editor.defaultFormatter": "esbenp.prettier-vscode"
+    },
+    "[typescript]": {
+        "editor.defaultFormatter": "esbenp.prettier-vscode"
+    },
+
+    // ==========================
+    // 文件排除（性能优化）
+    // ==========================
     "files.exclude": {
         "**\\bin": true,
         "**\\obj": true,
+        "**\\node_modules": true,
+        "**\\Logs": true,
+        "**\\__pycache__": true,
         "Builds": true,
-        "Publish": true
+        "Publish": true,
+        ".venv": true,
+        ".git": true
     },
     "search.exclude": {
         "**/bin": true,
         "**/obj": true,
         "**/node_modules": true,
         "**/Logs": true,
+        "**/__pycache__": true,
         "Builds": true,
-        "Publish": true
+        "Publish": true,
+        ".venv": true
     },
     "files.watcherExclude": {
         "**/bin/**": true,
         "**/obj/**": true,
         "**/node_modules/**": true,
         "**/Logs/**": true,
+        "**/__pycache__/**": true,
         "Builds/**": true,
-        "Publish/**": true
-    }
+        "Publish/**": true,
+        ".venv/**": true
+    },
+
+    // ==========================
+    // Markdown
+    // ==========================
+    "markdown.validate.enabled": true
 }

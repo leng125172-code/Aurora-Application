@@ -120,4 +120,10 @@ public interface ITucamCameraService
     /// </summary>
     /// <param name="cameraIndex">相机索引</param>
     bool IsCameraOpen(int cameraIndex);
+
+    /// <summary>
+    /// 注入相机设备索引 → 数据库 ID 的映射，用于写入操作日志
+    /// </summary>
+    /// <param name="deviceIds">key = SDK cameraIndex，value = CameraDevice.Id</param>
+    void SetCameraDeviceIdMapping(IReadOnlyDictionary<int, Guid> deviceIds);
 }

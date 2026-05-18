@@ -25,6 +25,12 @@ public static class CameraConsts
 
     /// <summary>数据库表名前缀</summary>
     public const string DbTablePrefix = "AbpPro";
+
+    /// <summary>操作日志参数摘要最大长度</summary>
+    public const int MaxOperationParameterSummaryLength = 128;
+
+    /// <summary>操作日志错误信息最大长度</summary>
+    public const int MaxOperationLogErrorMessageLength = 512;
 }
 
 /// <summary>
@@ -58,4 +64,28 @@ public enum CameraStatus
 
     /// <summary>已关闭</summary>
     Closed = 4,
+}
+
+/// <summary>
+/// 相机操作类型枚举（用于操作日志）
+/// </summary>
+public enum CameraOperationType
+{
+    /// <summary>SDK 初始化</summary>
+    Initialize = 0,
+
+    /// <summary>SDK 反初始化</summary>
+    Uninitialize = 1,
+
+    /// <summary>打开相机</summary>
+    Open = 2,
+
+    /// <summary>关闭相机</summary>
+    Close = 3,
+
+    /// <summary>启动采集</summary>
+    StartCapture = 4,
+
+    /// <summary>停止采集</summary>
+    StopCapture = 5,
 }

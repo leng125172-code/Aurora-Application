@@ -86,5 +86,32 @@ public static class CameraDbContextModelCreatingExtensions
             // 同一参数集内参数键不重复
             b.HasIndex(x => new { x.ParameterSetId, x.ParamKey }).IsUnique();
         });
+
+        // ── 相机操作日志表 ─────────────────────────────────────────────────────────
+        builder.Entity<CameraOperationLog>(b =>
+        {
+            b.ToTable($"{TablePrefix}CameraOperationLogs");
+            b.ConfigureByConvention();
+
+            b.Property(x => x.ParameterSummary)
+                .HasMaxLength(CameraConsts.MaxOperationParameterSummaryLength);
+
+            b.Property(x => x.ErrorMessage)
+                .HasMaxLength(CameraConsts.MaxOperationLogErrorMessageLength);
+
+            b.Property(x => x.OperationType).HasConversion<int>();
+
+            // 外键：操作日志从属于相机设备，相机删除时级联删除日志
+            b.HasOne<CameraDevice>()
+                .WithMany()
+                .HasForeignKey(x => x.CameraDeviceId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            b.HasIndex(x => x.CameraDeviceId);
+            b.HasIndex(x => x.OccurredAt);
+            b.HasIndex(x => new { x.CameraDeviceId, x.OccurredAt });
+            b.HasIndex(x => new { x.CameraDeviceId, x.IsSuccess });
+            b.HasIndex(x => new { x.CameraDeviceId, x.OperationType });
+        });
     }
 }
