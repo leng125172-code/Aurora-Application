@@ -18,6 +18,8 @@ namespace AuroraStruct3D.RS485.Ktech;
 /// </remarks>
 public class KtechMotorDriver : IMotorDriver
 {
+    private const string LogTag = "[Servo drive]";
+
     private readonly IRS485Port _port;
     private readonly ILogger<KtechMotorDriver> _logger;
 
@@ -64,7 +66,8 @@ public class KtechMotorDriver : IMotorDriver
         KtechStatusFrame frame = KtechFrame.ParseQueryStatusResponse(response, (byte)SlaveId);
 
         _logger.LogDebug(
-            "[KTECH SlaveId={Id}] 状态查询: 速度={Speed}, 位置={Pos}, 标志=0x{Flags:X2}",
+            "{Tag} [KTECH SlaveId={Id}] Status query: Speed={Speed}, Position={Pos}, Flags=0x{Flags:X2}",
+            LogTag,
             SlaveId,
             frame.SpeedRaw,
             frame.PositionRaw,
@@ -89,7 +92,11 @@ public class KtechMotorDriver : IMotorDriver
     /// <remarks>瓴控KTECH上电即使能，此方法为空操作，仅记录调试日志。</remarks>
     public Task EnableAsync(CancellationToken cancellationToken = default)
     {
-        _logger.LogDebug("[KTECH SlaveId={Id}] 无需使能（上电自动使能），跳过", SlaveId);
+        _logger.LogDebug(
+            "{Tag} [KTECH SlaveId={Id}] Enable skipped (auto-enabled after power on)",
+            LogTag,
+            SlaveId
+        );
         return Task.CompletedTask;
     }
 
@@ -97,7 +104,11 @@ public class KtechMotorDriver : IMotorDriver
     /// <remarks>瓴控KTECH不支持软件去使能，此方法为空操作，仅记录调试日志。</remarks>
     public Task DisableAsync(CancellationToken cancellationToken = default)
     {
-        _logger.LogDebug("[KTECH SlaveId={Id}] 无需去使能（硬件控制），跳过", SlaveId);
+        _logger.LogDebug(
+            "{Tag} [KTECH SlaveId={Id}] Disable skipped (hardware controlled)",
+            LogTag,
+            SlaveId
+        );
         return Task.CompletedTask;
     }
 
@@ -112,7 +123,8 @@ public class KtechMotorDriver : IMotorDriver
         // speedRpm 转换为 0.01dps：1 RPM = 360°/60s = 6°/s = 600 * 0.01°/s = 600 LSB
         uint maxSpeedCentidps = (uint)Math.Clamp((long)speedRpm * 600, 0, uint.MaxValue);
         _logger.LogInformation(
-            "[KTECH SlaveId={Id}] 绝对位置定位至 {Pos}(0.01°)，最大速度 {Speed}(0.01dps)",
+            "{Tag} [KTECH SlaveId={Id}] Move absolute to {Pos} (0.01deg), max speed {Speed} (0.01dps)",
+            LogTag,
             SlaveId,
             position,
             maxSpeedCentidps
@@ -136,7 +148,8 @@ public class KtechMotorDriver : IMotorDriver
         int incrementCentideg = (int)Math.Clamp(delta, int.MinValue, int.MaxValue);
         uint maxSpeedCentidps = (uint)Math.Clamp((long)speedRpm * 600, 0, uint.MaxValue);
         _logger.LogInformation(
-            "[KTECH SlaveId={Id}] 增量定位 {Delta}(0.01°)，最大速度 {Speed}(0.01dps)",
+            "{Tag} [KTECH SlaveId={Id}] Move relative by {Delta} (0.01deg), max speed {Speed} (0.01dps)",
+            LogTag,
             SlaveId,
             incrementCentideg,
             maxSpeedCentidps
@@ -152,7 +165,11 @@ public class KtechMotorDriver : IMotorDriver
     /// <inheritdoc/>
     public async Task StopAsync(CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("[KTECH SlaveId={Id}] 发送减速停止指令（CMD 0x81）", SlaveId);
+        _logger.LogInformation(
+            "{Tag} [KTECH SlaveId={Id}] Send decelerating stop command (CMD 0x81)",
+            LogTag,
+            SlaveId
+        );
         // CmdStopHold(0x81)：减速停止，保留使能状态
         byte[] request = KtechFrame.BuildCommandFrame((byte)SlaveId, KtechFrame.CmdStopHold);
         await _port.SendAndReceiveAsync(request, 0, 200, cancellationToken).ConfigureAwait(false);
@@ -161,7 +178,11 @@ public class KtechMotorDriver : IMotorDriver
     /// <inheritdoc/>
     public async Task EmergencyStopAsync(CancellationToken cancellationToken = default)
     {
-        _logger.LogWarning("[KTECH SlaveId={Id}] 发送紧急关闭指令（CMD 0x80）", SlaveId);
+        _logger.LogWarning(
+            "{Tag} [KTECH SlaveId={Id}] Send emergency shutdown command (CMD 0x80)",
+            LogTag,
+            SlaveId
+        );
         // CmdClose(0x80)：立即切断电机输出，最快停止
         byte[] request = KtechFrame.BuildCommandFrame((byte)SlaveId, KtechFrame.CmdClose);
         await _port.SendAndReceiveAsync(request, 0, 200, cancellationToken).ConfigureAwait(false);
@@ -175,7 +196,11 @@ public class KtechMotorDriver : IMotorDriver
     /// </remarks>
     public async Task HomeAsync(CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("[KTECH SlaveId={Id}] 执行回零（硬限位方式）", SlaveId);
+        _logger.LogInformation(
+            "{Tag} [KTECH SlaveId={Id}] Start homing (hard limit mode)",
+            LogTag,
+            SlaveId
+        );
         // TODO: 根据璀控官方文档确认回零命令字和参数
         byte[] request = KtechFrame.BuildCommandFrame((byte)SlaveId, KtechFrame.CmdRun);
         await _port.SendAndReceiveAsync(request, 0, 200, cancellationToken).ConfigureAwait(false);
@@ -184,7 +209,11 @@ public class KtechMotorDriver : IMotorDriver
     /// <inheritdoc/>
     public async Task ClearFaultAsync(CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("[KTECH SlaveId={Id}] 发送清除故障指令", SlaveId);
+        _logger.LogInformation(
+            "{Tag} [KTECH SlaveId={Id}] Send clear-fault command",
+            LogTag,
+            SlaveId
+        );
         // 尝试用 CmdRun 重新启动电机清除故障
         // TODO: 根据璀控官方文档确认清除故障的正确命令字
         byte[] request = KtechFrame.BuildCommandFrame((byte)SlaveId, KtechFrame.CmdRun);

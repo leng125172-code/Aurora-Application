@@ -1,4 +1,5 @@
 using AuroraStruct3D.Cameras;
+using AuroraStruct3D.DeviceState;
 using AuroraStruct3D.Motors;
 using AuroraStruct3D.Projectors;
 using AuroraStruct3D.SerialPorts;
@@ -61,6 +62,9 @@ namespace AuroraStruct3D.EntityFrameworkCore
                     ProjectorOperationLog,
                     EfCoreProjectorOperationLogRepository
                 >();
+
+                // 注册设备状态管理模块自定义仓储
+                options.AddRepository<DeviceStateLog, EfCoreDeviceStateLogRepository>();
             });
             Configure<AbpSequentialGuidGeneratorOptions>(options =>
             {

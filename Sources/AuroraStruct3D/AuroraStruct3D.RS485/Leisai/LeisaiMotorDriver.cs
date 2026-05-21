@@ -28,6 +28,8 @@ namespace AuroraStruct3D.RS485.Leisai;
 /// </remarks>
 public class LeisaiMotorDriver : IMotorDriver
 {
+    private const string LogTag = "[Servo drive]";
+
     private readonly IRS485Port _port;
     private readonly ILogger<LeisaiMotorDriver> _logger;
 
@@ -141,7 +143,8 @@ public class LeisaiMotorDriver : IMotorDriver
         long position = (long)((posHigh << 16) | posLow);
 
         _logger.LogDebug(
-            "[雷赛iCL-RS SlaveId={Id}] 状态字=0x{Status:X4}, 位置={Pos}, 速度={Speed}",
+            "{Tag} [Leisai iCL-RS SlaveId={Id}] StatusWord=0x{Status:X4}, Position={Pos}, Speed={Speed}",
+            LogTag,
             SlaveId,
             statusWord,
             position,
@@ -165,7 +168,7 @@ public class LeisaiMotorDriver : IMotorDriver
     /// <inheritdoc/>
     public async Task EnableAsync(CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("[雷赛iCL-RS SlaveId={Id}] 使能电机", SlaveId);
+        _logger.LogInformation("{Tag} [Leisai iCL-RS SlaveId={Id}] Enable servo", LogTag, SlaveId);
         await WriteRegisterAsync(RegControlWord, CtrlEnable, cancellationToken)
             .ConfigureAwait(false);
     }
@@ -173,7 +176,7 @@ public class LeisaiMotorDriver : IMotorDriver
     /// <inheritdoc/>
     public async Task DisableAsync(CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("[雷赛iCL-RS SlaveId={Id}] 去使能电机", SlaveId);
+        _logger.LogInformation("{Tag} [Leisai iCL-RS SlaveId={Id}] Disable servo", LogTag, SlaveId);
         await WriteRegisterAsync(RegControlWord, CtrlDisable, cancellationToken)
             .ConfigureAwait(false);
     }
@@ -186,7 +189,8 @@ public class LeisaiMotorDriver : IMotorDriver
     )
     {
         _logger.LogInformation(
-            "[雷赛iCL-RS SlaveId={Id}] 绝对运动到位置 {Pos}，速度 {Speed} RPM",
+            "{Tag} [Leisai iCL-RS SlaveId={Id}] Move absolute to {Pos} at {Speed} RPM",
+            LogTag,
             SlaveId,
             position,
             speedRpm
@@ -208,7 +212,8 @@ public class LeisaiMotorDriver : IMotorDriver
     )
     {
         _logger.LogInformation(
-            "[雷赛iCL-RS SlaveId={Id}] 相对运动 {Delta} 脉冲，速度 {Speed} RPM",
+            "{Tag} [Leisai iCL-RS SlaveId={Id}] Move relative by {Delta} pulses at {Speed} RPM",
+            LogTag,
             SlaveId,
             delta,
             speedRpm
@@ -223,14 +228,18 @@ public class LeisaiMotorDriver : IMotorDriver
     /// <inheritdoc/>
     public async Task StopAsync(CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("[雷赛iCL-RS SlaveId={Id}] 减速停止", SlaveId);
+        _logger.LogInformation(
+            "{Tag} [Leisai iCL-RS SlaveId={Id}] Decelerating stop",
+            LogTag,
+            SlaveId
+        );
         await WriteRegisterAsync(RegControlWord, CtrlStop, cancellationToken).ConfigureAwait(false);
     }
 
     /// <inheritdoc/>
     public async Task EmergencyStopAsync(CancellationToken cancellationToken = default)
     {
-        _logger.LogWarning("[雷赛iCL-RS SlaveId={Id}] 紧急停止", SlaveId);
+        _logger.LogWarning("{Tag} [Leisai iCL-RS SlaveId={Id}] Emergency stop", LogTag, SlaveId);
         await WriteRegisterAsync(RegControlWord, CtrlDisable, cancellationToken)
             .ConfigureAwait(false);
     }
@@ -243,7 +252,11 @@ public class LeisaiMotorDriver : IMotorDriver
     /// </remarks>
     public async Task HomeAsync(CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("[雷赛iCL-RS SlaveId={Id}] 执行回零（光电开关DI方式）", SlaveId);
+        _logger.LogInformation(
+            "{Tag} [Leisai iCL-RS SlaveId={Id}] Start homing (DI photoelectric sensor mode)",
+            LogTag,
+            SlaveId
+        );
         await WriteRegisterAsync(RegMotionMode, 0x0003, cancellationToken).ConfigureAwait(false); // 回零模式
         await WriteRegisterAsync(RegControlWord, CtrlStart, cancellationToken)
             .ConfigureAwait(false);
@@ -252,7 +265,7 @@ public class LeisaiMotorDriver : IMotorDriver
     /// <inheritdoc/>
     public async Task ClearFaultAsync(CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("[雷赛iCL-RS SlaveId={Id}] 清除故障", SlaveId);
+        _logger.LogInformation("{Tag} [Leisai iCL-RS SlaveId={Id}] Clear fault", LogTag, SlaveId);
         await WriteRegisterAsync(RegControlWord, CtrlClearFault, cancellationToken)
             .ConfigureAwait(false);
     }

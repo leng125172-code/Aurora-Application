@@ -253,6 +253,229 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                     b.ToTable("AbpProCameraParameterSets", (string)null);
                 });
 
+            modelBuilder.Entity("AuroraStruct3D.DeviceState.DeviceFault", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("CausedModeSwitch")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("ConcurrencyStamp")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("ConcurrencyStamp");
+
+                    b.Property<DateTime>("CreationTime")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("CreationTime");
+
+                    b.Property<Guid?>("CreatorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("CreatorId");
+
+                    b.Property<Guid?>("DeleterId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("DeleterId");
+
+                    b.Property<DateTime?>("DeletionTime")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("DeletionTime");
+
+                    b.Property<long?>("DurationMs")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("ExtraProperties")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("ExtraProperties");
+
+                    b.Property<string>("FaultCode")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<int>("FaultLevel")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("FaultMessage")
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
+
+                    b.Property<string>("FaultReason")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<bool>("IsAutoRecovered")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("IsDeleted");
+
+                    b.Property<bool>("IsResolved")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime?>("LastModificationTime")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("LastModificationTime");
+
+                    b.Property<Guid?>("LastModifierId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("LastModifierId");
+
+                    b.Property<DateTime>("OccurredAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("Remark")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<string>("ResolutionDescription")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<DateTime?>("ResolvedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("ResolverId")
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)");
+
+                    b.Property<string>("ResolverName")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<Guid?>("StateLogId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int?>("SwitchedToMode")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FaultLevel");
+
+                    b.HasIndex("IsResolved");
+
+                    b.HasIndex("OccurredAt");
+
+                    b.HasIndex("IsResolved", "FaultLevel");
+
+                    b.ToTable("AbpProDeviceFaults", (string)null);
+                });
+
+            modelBuilder.Entity("AuroraStruct3D.DeviceState.DeviceStateLog", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreationTime")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("CreationTime");
+
+                    b.Property<Guid?>("CreatorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("CreatorId");
+
+                    b.Property<Guid?>("DeleterId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("DeleterId");
+
+                    b.Property<DateTime?>("DeletionTime")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("DeletionTime");
+
+                    b.Property<long?>("DurationMs")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<Guid?>("FaultId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("IsDeleted");
+
+                    b.Property<bool>("IsModeChange")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsStatusChange")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsSuccessful")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsTransitionState")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime?>("LastModificationTime")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("LastModificationTime");
+
+                    b.Property<Guid?>("LastModifierId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("LastModifierId");
+
+                    b.Property<int>("NewMode")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("NewStatus")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("OccurredAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("OperatorId")
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)");
+
+                    b.Property<string>("OperatorName")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<int?>("PreviousMode")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("PreviousStatus")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("Remark")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<int>("Trigger")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FaultId");
+
+                    b.HasIndex("IsModeChange");
+
+                    b.HasIndex("IsStatusChange");
+
+                    b.HasIndex("NewStatus");
+
+                    b.HasIndex("OccurredAt");
+
+                    b.HasIndex("Trigger");
+
+                    b.ToTable("AbpProDeviceStateLogs", (string)null);
+                });
+
             modelBuilder.Entity("AuroraStruct3D.Motors.MotorAxis", b =>
                 {
                     b.Property<Guid>("Id")
@@ -671,6 +894,16 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
+                    b.Property<int>("BootImage")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(2);
+
+                    b.Property<int>("CheckerboardPixelSize")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(30);
+
                     b.Property<string>("ConcurrencyStamp")
                         .IsConcurrencyToken()
                         .IsRequired()
@@ -722,13 +955,12 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
 
+                    b.Property<int>("FlipMode")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
                     b.Property<int>("HidDeviceIndex")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("HidProductId")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("HidVendorId")
                         .HasColumnType("integer");
 
                     b.Property<string>("IpAddress")
@@ -743,6 +975,11 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
 
                     b.Property<bool>("IsEnabled")
                         .HasColumnType("boolean");
+
+                    b.Property<int>("LastColor")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(3);
 
                     b.Property<DateTime?>("LastCommunicationAt")
                         .HasColumnType("timestamp without time zone");
@@ -767,6 +1004,21 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("LastModifierId");
 
+                    b.Property<byte>("LedRgbB")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("smallint")
+                        .HasDefaultValue((byte)75);
+
+                    b.Property<byte>("LedRgbG")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("smallint")
+                        .HasDefaultValue((byte)75);
+
+                    b.Property<byte>("LedRgbR")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("smallint")
+                        .HasDefaultValue((byte)75);
+
                     b.Property<int>("LedStatus")
                         .HasColumnType("integer");
 
@@ -778,6 +1030,11 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                     b.Property<int>("TcpPort")
                         .HasColumnType("integer");
 
+                    b.Property<int>("TriggerMode")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
                     b.HasKey("Id");
 
                     b.HasIndex("ConnectionStatus");
@@ -787,15 +1044,15 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                     b.HasIndex("DeviceIndex")
                         .IsUnique();
 
+                    b.HasIndex("HidDeviceIndex")
+                        .IsUnique()
+                        .HasFilter("\"ConnectionType\" = 1");
+
                     b.HasIndex("IpAddress")
                         .IsUnique()
                         .HasFilter("\"IpAddress\" IS NOT NULL");
 
                     b.HasIndex("IsEnabled");
-
-                    b.HasIndex("HidVendorId", "HidProductId", "HidDeviceIndex")
-                        .IsUnique()
-                        .HasFilter("\"ConnectionType\" = 1");
 
                     b.ToTable("AbpProProjectors", (string)null);
                 });

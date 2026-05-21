@@ -38,13 +38,7 @@ public class ProjectorDevice : FullAuditedAggregateRoot<Guid>
     /// <summary>TCP 端口号（仅 TCP 模式有效，腾聚 TJ 系列固定为 1234）</summary>
     public int TcpPort { get; private set; }
 
-    /// <summary>USB HID 厂商 ID（仅 USB HID 模式有效，腾聚 TJ 默认 0x0E6A = 3690）</summary>
-    public int HidVendorId { get; private set; }
-
-    /// <summary>USB HID 产品 ID（仅 USB HID 模式有效，腾聚 TJ 默认 0x0317 = 791）</summary>
-    public int HidProductId { get; private set; }
-
-    /// <summary>USB HID 设备索引（同一 VID/PID 多台设备时用于区分，从 0 开始）</summary>
+    /// <summary>USB HID 设备索引（多台同型号设备时用于区分，从 0 开始；VID/PID 由 ProjectorConsts 固定）</summary>
     public int HidDeviceIndex { get; private set; }
 
     /// <summary>连接超时时间（毫秒，默认 5000）</summary>
@@ -71,6 +65,30 @@ public class ProjectorDevice : FullAuditedAggregateRoot<Guid>
 
     /// <summary>最后设置的显示模式（0=黑屏,1=白屏,2=十字,3=棋盘）</summary>
     public byte LastDisplayMode { get; private set; }
+
+    /// <summary>最后设置的颜色（多光谱模式）</summary>
+    public ProjectorColor LastColor { get; private set; }
+
+    /// <summary>棋盘格像素尺寸（像素，默认 30）</summary>
+    public int CheckerboardPixelSize { get; private set; }
+
+    /// <summary>图像翻转模式（默认不翻转）</summary>
+    public ProjectorFlipMode FlipMode { get; private set; }
+
+    /// <summary>触发模式（默认普通触发）</summary>
+    public ProjectorTriggerMode TriggerMode { get; private set; }
+
+    /// <summary>开机默认图案</summary>
+    public ProjectorBootImage BootImage { get; private set; }
+
+    /// <summary>LED 红色分量亮度（0~255，默认 75）</summary>
+    public byte LedRgbR { get; private set; }
+
+    /// <summary>LED 绿色分量亮度（0~255，默认 75）</summary>
+    public byte LedRgbG { get; private set; }
+
+    /// <summary>LED 蓝色分量亮度（0~255，默认 75）</summary>
+    public byte LedRgbB { get; private set; }
 
     /// <summary>最后一次成功通信时间</summary>
     public DateTime? LastCommunicationAt { get; private set; }
@@ -125,24 +143,28 @@ public class ProjectorDevice : FullAuditedAggregateRoot<Guid>
         LedStatus = ProjectorLedStatus.Unknown;
         IsEnabled = true;
         DeviceHardwareId = -1;
+        LastColor = ProjectorColor.White;
+        CheckerboardPixelSize = 30;
+        FlipMode = ProjectorFlipMode.None;
+        TriggerMode = ProjectorTriggerMode.Normal;
+        BootImage = ProjectorBootImage.Cross;
+        LedRgbR = 75;
+        LedRgbG = 75;
+        LedRgbB = 75;
     }
 
     /// <summary>
-    /// 创建 USB HID 连接方式的投影机设备（Megawin EasyPOD 芯片）
+    /// 创建 USB HID 连接方式的投影机设备（STM32 USB HID 芯片，VID/PID 由 ProjectorConsts 固定为 0x0483/0x5750）
     /// </summary>
     /// <param name="id">主键</param>
     /// <param name="name">设备名称</param>
     /// <param name="deviceIndex">序号</param>
-    /// <param name="hidVendorId">HID 厂商 ID（默认 0x0E6A 腾聚）</param>
-    /// <param name="hidProductId">HID 产品 ID（默认 0x0317）</param>
     /// <param name="hidDeviceIndex">HID 设备索引（多台时区分，从 0 开始）</param>
     /// <param name="connectTimeoutMs">连接超时（毫秒，默认 5000）</param>
     public ProjectorDevice(
         Guid id,
         string name,
         int deviceIndex,
-        int hidVendorId,
-        int hidProductId,
         int hidDeviceIndex = 0,
         int connectTimeoutMs = 5000
     )
@@ -151,8 +173,6 @@ public class ProjectorDevice : FullAuditedAggregateRoot<Guid>
         SetName(name);
         DeviceIndex = deviceIndex;
         ConnectionType = ProjectorConnectionType.UsbHid;
-        HidVendorId = hidVendorId;
-        HidProductId = hidProductId;
         HidDeviceIndex = hidDeviceIndex;
         ConnectTimeoutMs = connectTimeoutMs;
 
@@ -161,9 +181,15 @@ public class ProjectorDevice : FullAuditedAggregateRoot<Guid>
         LedStatus = ProjectorLedStatus.Unknown;
         IsEnabled = true;
         DeviceHardwareId = -1;
+        LastColor = ProjectorColor.White;
+        CheckerboardPixelSize = 30;
+        FlipMode = ProjectorFlipMode.None;
+        TriggerMode = ProjectorTriggerMode.Normal;
+        BootImage = ProjectorBootImage.Cross;
+        LedRgbR = 75;
+        LedRgbG = 75;
+        LedRgbB = 75;
     }
-
-    // ─────────────────────────── 方法 ───────────────────────────
 
     /// <summary>设置设备名称</summary>
     public ProjectorDevice SetName(string name)
@@ -251,6 +277,56 @@ public class ProjectorDevice : FullAuditedAggregateRoot<Guid>
     public ProjectorDevice UpdateDisplayMode(byte displayMode)
     {
         LastDisplayMode = displayMode;
+        LastCommunicationAt = DateTime.UtcNow;
+        return this;
+    }
+
+    /// <summary>更新颜色（多光谱模式）</summary>
+    public ProjectorDevice UpdateColor(ProjectorColor color)
+    {
+        LastColor = color;
+        LastCommunicationAt = DateTime.UtcNow;
+        return this;
+    }
+
+    /// <summary>更新棋盘格像素尺寸</summary>
+    public ProjectorDevice UpdateCheckerboardPixelSize(int pixelSize)
+    {
+        CheckerboardPixelSize = pixelSize;
+        LastCommunicationAt = DateTime.UtcNow;
+        return this;
+    }
+
+    /// <summary>更新图像翻转模式</summary>
+    public ProjectorDevice UpdateFlipMode(ProjectorFlipMode flipMode)
+    {
+        FlipMode = flipMode;
+        LastCommunicationAt = DateTime.UtcNow;
+        return this;
+    }
+
+    /// <summary>更新触发模式</summary>
+    public ProjectorDevice UpdateTriggerMode(ProjectorTriggerMode triggerMode)
+    {
+        TriggerMode = triggerMode;
+        LastCommunicationAt = DateTime.UtcNow;
+        return this;
+    }
+
+    /// <summary>更新开机默认图案</summary>
+    public ProjectorDevice UpdateBootImage(ProjectorBootImage bootImage)
+    {
+        BootImage = bootImage;
+        LastCommunicationAt = DateTime.UtcNow;
+        return this;
+    }
+
+    /// <summary>更新 LED RGB 分量亮度（仅 Aura Sync 模式）</summary>
+    public ProjectorDevice UpdateLedRgb(byte r, byte g, byte b)
+    {
+        LedRgbR = r;
+        LedRgbG = g;
+        LedRgbB = b;
         LastCommunicationAt = DateTime.UtcNow;
         return this;
     }

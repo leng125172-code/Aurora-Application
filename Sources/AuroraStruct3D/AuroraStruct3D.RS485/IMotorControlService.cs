@@ -110,6 +110,15 @@ public interface IMotorControlService
     IReadOnlyList<int> ConfiguredMotorIds { get; }
 
     /// <summary>
+    /// 从数据库配置初始化串口和电机驱动。
+    /// 在应用启动后、从数据库读取 SerialPortConfig 和 MotorAxis 后调用（一次）。
+    /// 多个串口各自创建独立的 RS485Port 实例，每条总线上的轴按品牌创建对应驱动。
+    /// </summary>
+    /// <param name="portConfigs">启用的串口配置列表（来自 AbpProSerialPortConfigs 表）</param>
+    /// <param name="enabledAxes">启用的电机轴列表（来自 AbpProMotorAxes 表，需包含 SerialPortConfig 导航属性）</param>
+    void Initialize(IReadOnlyList<AuroraStruct3D.SerialPorts.SerialPortConfig> portConfigs, IReadOnlyList<AuroraStruct3D.Motors.MotorAxis> enabledAxes);
+
+    /// <summary>
     /// 注入从机地址到数据库电机轴 ID 的映射（用于操作日志写入）。
     /// 在应用启动后、从数据库加载 MotorAxis 配置后调用。
     /// 未调用此方法时操作日志不会写入数据库。

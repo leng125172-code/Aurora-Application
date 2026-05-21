@@ -1,4 +1,5 @@
 using AuroraStruct3D.Cameras;
+using AuroraStruct3D.DeviceState;
 using AuroraStruct3D.Motors;
 using AuroraStruct3D.Projectors;
 using AuroraStruct3D.SerialPorts;
@@ -45,5 +46,13 @@ namespace AuroraStruct3D.EntityFrameworkCore
 
         /// <summary>DLP 投影机操作日志集合</summary>
         DbSet<ProjectorOperationLog> ProjectorOperationLogs { get; }
+
+        // ── 设备状态管理模块 ──────────────────────────────────────────────────────
+
+        /// <summary>设备状态切换日志集合</summary>
+        DbSet<DeviceStateLog> DeviceStateLogs { get; }
+
+        /// <summary>设备故障记录集合</summary>
+        DbSet<DeviceFault> DeviceFaults { get; }
     }
 }

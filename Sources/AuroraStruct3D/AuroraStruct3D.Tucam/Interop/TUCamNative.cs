@@ -151,4 +151,82 @@ public static class TUCamNative
     /// <summary>停止采集</summary>
     [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
     public static extern TUCamRet TUCAM_Cap_Stop(IntPtr hTUCam);
+
+    //
+    // ── 触发输出控制 ──────────────────────────────────────────────────────────────
+    //
+
+    /// <summary>设置触发输出参数（TUCAM_Cap_SetTriggerOut）</summary>
+    [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+    public static extern TUCamRet TUCAM_Cap_SetTriggerOut(
+        IntPtr hTUCam,
+        TUCamTrgOutAttr tgroutAttr
+    );
+
+    /// <summary>获取触发输出参数（TUCAM_Cap_GetTriggerOut）</summary>
+    [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+    public static extern TUCamRet TUCAM_Cap_GetTriggerOut(
+        IntPtr hTUCam,
+        ref TUCamTrgOutAttr pTgrOutAttr
+    );
+
+    //
+    // ── 计算ROI（测光/白平衡区域）────────────────────────────────────────────────
+    //
+
+    /// <summary>设置计算用ROI区域（用于白平衡/AE测光区域）</summary>
+    [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+    public static extern TUCamRet TUCAM_Calc_SetROI(IntPtr hTUCam, TUCamCalcRoiAttr roiAttr);
+
+    /// <summary>获取计算用ROI区域</summary>
+    [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+    public static extern TUCamRet TUCAM_Calc_GetROI(IntPtr hTUCam, ref TUCamCalcRoiAttr pRoiAttr);
+
+    //
+    // ── 供应商属性控制 ────────────────────────────────────────────────────────────
+    //
+
+    /// <summary>获取供应商属性值</summary>
+    [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+    public static extern TUCamRet TUCAM_Vendor_Prop_GetValue(
+        IntPtr hTUCam,
+        int nProp,
+        ref double pdbVal,
+        int nChn = 0
+    );
+
+    /// <summary>设置供应商属性值</summary>
+    [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+    public static extern TUCamRet TUCAM_Vendor_Prop_SetValue(
+        IntPtr hTUCam,
+        int nProp,
+        double dbVal,
+        int nChn = 0
+    );
+
+    //
+    // ── 寄存器读写 ────────────────────────────────────────────────────────────────
+    //
+
+    /// <summary>读取寄存器（可用于读取序列号 TUREG_SN）</summary>
+    [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+    public static extern TUCamRet TUCAM_Reg_Read(IntPtr hTUCam, ref TUCamRegRw regRW);
+
+    //
+    // ── 用户配置文件 ──────────────────────────────────────────────────────────────
+    //
+
+    /// <summary>加载用户配置文件（需在采集停止后调用）</summary>
+    [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
+    public static extern TUCamRet TUCAM_File_LoadProfiles(
+        IntPtr hTUCam,
+        [MarshalAs(UnmanagedType.LPStr)] string pPrfName
+    );
+
+    /// <summary>保存用户配置文件</summary>
+    [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
+    public static extern TUCamRet TUCAM_File_SaveProfiles(
+        IntPtr hTUCam,
+        [MarshalAs(UnmanagedType.LPStr)] string pPrfName
+    );
 }

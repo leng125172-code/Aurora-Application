@@ -3,10 +3,13 @@ using AuroraStruct3D.Endpoints;
 using AuroraStruct3D.HostedServices;
 using AuroraStruct3D.Hubs;
 using AuroraStruct3D.Motors;
+using AuroraStruct3D.Projectors;
 using AuroraStruct3D.RS485;
 using AuroraStruct3D.Services;
+using AuroraStruct3D.Streaming;
 using AuroraStruct3D.Tucam;
 using Lion.AbpPro.CAP;
+using Volo.Abp.AspNetCore.Mvc;
 using Volo.Abp.AspNetCore.Mvc.Libs;
 using Volo.Abp.Hangfire;
 
@@ -24,6 +27,17 @@ namespace AuroraStruct3D
     )]
     public partial class AuroraStruct3DHttpApiHostModule : AbpModule
     {
+        public override void PreConfigureServices(ServiceConfigurationContext context)
+        {
+            // 将 AuroraStruct3D 应用层的 AppService 注册为 ABP 动态 API 控制器
+            PreConfigure<AbpAspNetCoreMvcOptions>(options =>
+            {
+                options.ConventionalControllers.Create(
+                    typeof(AuroraStruct3DApplicationModule).Assembly
+                );
+            });
+        }
+
         public override void ConfigureServices(ServiceConfigurationContext context)
         {
             // 项目已改为纯 Vue SPA，不再依赖 ABP 的 wwwroot/libs 客户端库，禁用启动检查
@@ -50,8 +64,22 @@ namespace AuroraStruct3D
 
             // 注册后台广播服务，定期通过 SignalR 推送仪表盘统计数据
             context.Services.AddHostedService<DashboardBroadcastService>();
+            // 注册设备状态推送服务，订阅 IDeviceStateManager 事件并实时广播给 DeviceStateHub 客户端
+            context.Services.AddHostedService<DeviceStatePushService>();
             // 注册系统指标采集器（单例，维护两次采样之间的状态）
             context.Services.AddSingleton<SystemMetricsCollector>();
+
+            // 注册 RTP/MJPEG UDP 推流服务器（单例）
+            context.Services.AddSingleton<RtpMjpegServer>();
+            // 注册相机实时预览服务（同时实现 ICameraStreamingService 和 IHostedService）
+            context.Services.AddSingleton<CameraPreviewService>();
+            context.Services.AddSingleton<ICameraStreamingService>(sp =>
+                sp.GetRequiredService<CameraPreviewService>()
+            );
+            context.Services.AddHostedService(sp => sp.GetRequiredService<CameraPreviewService>());
+
+            // 为 SignalR 启用 MessagePack 协议（在 AddAbpProSignalR 之后调用）
+            context.Services.AddSignalR().AddMessagePackProtocol();
         }
 
         public override void OnApplicationInitialization(ApplicationInitializationContext context)
@@ -90,6 +118,10 @@ namespace AuroraStruct3D
                 endpoints.MapSystemInfoApi();
                 // 直接映射 DashboardHub，无需依赖 AbpAspNetCoreSignalRModule
                 endpoints.MapHub<DashboardHub>("/signalr-hubs/dashboard");
+                // 映射设备状态实时推送 Hub（允许匿名访问，登录前后均可连接）
+                endpoints.MapHub<DeviceStateHub>("/signalr-hubs/device-state");
+                endpoints.MapHub<ProjectorHub>("/signalr-hubs/projector");
+                endpoints.MapHub<CameraHub>("/signalr-hubs/camera");
                 endpoints.MapFallback(async httpContext =>
                 {
                     var path = httpContext.Request.Path.Value ?? string.Empty;
@@ -139,7 +171,7 @@ namespace AuroraStruct3D
             });
             app.UseAbpProConsul();
 
-            // 初始化电机轴 ID 映射（用于 MotorControlService 写入操作日志）
+            // 从数据库读取串口配置和电机轴，初始化 MotorControlService
             using (IServiceScope scope = context.ServiceProvider.CreateScope())
             {
                 IMotorAxisRepository motorRepo =
@@ -147,10 +179,19 @@ namespace AuroraStruct3D
                 IMotorControlService motorService =
                     scope.ServiceProvider.GetRequiredService<IMotorControlService>();
 
-                List<MotorAxis> axes = motorRepo
-                    .GetEnabledListAsync()
-                    .GetAwaiter()
-                    .GetResult();
+                // GetEnabledListAsync 已通过 Include 加载 SerialPortConfig 导航属性
+                List<MotorAxis> axes = motorRepo.GetEnabledListAsync().GetAwaiter().GetResult();
+
+                // 从轴中提取去重的串口配置列表（排除导航属性未加载的异常情况）
+                var portConfigs = axes.Where(a => a.SerialPortConfig != null)
+                    .Select(a => a.SerialPortConfig!)
+                    .DistinctBy(p => p.Id)
+                    .ToList();
+
+                // 用数据库配置创建串口实例和电机驱动
+                motorService.Initialize(portConfigs, axes);
+
+                // 注入 SlaveId → MotorAxis.Id 映射（用于操作日志写入数据库）
                 Dictionary<int, Guid> mapping = axes.ToDictionary(a => a.SlaveId, a => a.Id);
                 motorService.SetAxisIdMapping(mapping);
             }
@@ -172,6 +213,26 @@ namespace AuroraStruct3D
                     c => c.Id
                 );
                 tucamService.SetCameraDeviceIdMapping(cameraMapping);
+            }
+
+            // 初始化投影机设备 ID 映射（用于 DlpProjectorService 写入操作日志）
+            using (IServiceScope scope = context.ServiceProvider.CreateScope())
+            {
+                IProjectorDeviceRepository projectorRepo =
+                    scope.ServiceProvider.GetRequiredService<IProjectorDeviceRepository>();
+                IDlpProjectorService projectorService =
+                    scope.ServiceProvider.GetRequiredService<IDlpProjectorService>();
+
+                List<ProjectorDevice> projectors = projectorRepo
+                    .GetEnabledListAsync()
+                    .GetAwaiter()
+                    .GetResult();
+
+                Dictionary<int, Guid> projectorMapping = projectors
+                    .Where(p => p.ConnectionType == ProjectorConnectionType.UsbHid)
+                    .ToDictionary(p => p.HidDeviceIndex, p => p.Id);
+
+                projectorService.SetProjectorDeviceIdMapping(projectorMapping);
             }
         }
     }

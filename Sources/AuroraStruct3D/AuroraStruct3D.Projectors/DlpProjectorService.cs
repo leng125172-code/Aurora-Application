@@ -1,10 +1,9 @@
-using AuroraStruct3D.DLP.Protocol;
-using AuroraStruct3D.Projectors;
+using System.Diagnostics;
+using AuroraStruct3D.Projectors.Protocol;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using System.Diagnostics;
 
-namespace AuroraStruct3D.DLP;
+namespace AuroraStruct3D.Projectors;
 
 /// <summary>
 /// 腾聚（TJ）结构光投影机控制服务实现。
@@ -12,6 +11,8 @@ namespace AuroraStruct3D.DLP;
 /// </summary>
 public class DlpProjectorService : IDlpProjectorService, IDisposable
 {
+    private const string LogTag = "[Projector]";
+
     private readonly ILogger<DlpProjectorService> _logger;
     private readonly IServiceScopeFactory? _serviceScopeFactory;
 
@@ -32,6 +33,9 @@ public class DlpProjectorService : IDlpProjectorService, IDisposable
     // ── 关联的数据库设备 ID（用于操作日志写入） ─────────────────────
     private Guid _projectorDeviceId = Guid.Empty;
 
+    // ── HID 设备索引到数据库设备 ID 映射（用于自动绑定日志设备）────────
+    private IReadOnlyDictionary<int, Guid> _projectorDeviceIdMapping = new Dictionary<int, Guid>();
+
     public DlpProjectorService(
         ILogger<DlpProjectorService> logger,
         IServiceScopeFactory? serviceScopeFactory = null
@@ -45,6 +49,17 @@ public class DlpProjectorService : IDlpProjectorService, IDisposable
     public void SetProjectorDeviceId(Guid projectorDeviceId)
     {
         _projectorDeviceId = projectorDeviceId;
+    }
+
+    /// <inheritdoc/>
+    public void SetProjectorDeviceIdMapping(IReadOnlyDictionary<int, Guid> deviceIds)
+    {
+        _projectorDeviceIdMapping = deviceIds ?? new Dictionary<int, Guid>();
+        _logger.LogInformation(
+            "{Tag} DlpProjectorService device-ID mapping injected, total {Count} HID indexes",
+            LogTag,
+            _projectorDeviceIdMapping.Count
+        );
     }
 
     /// <inheritdoc/>
@@ -68,7 +83,12 @@ public class DlpProjectorService : IDlpProjectorService, IDisposable
             && _tcpClient.IsConnected
         )
         {
-            _logger.LogDebug("投影机 {Ip}:{Port} 已连接，跳过重复连接", ip, port);
+            _logger.LogDebug(
+                "{Tag} Projector {Ip}:{Port} already connected, skipping duplicate connect",
+                LogTag,
+                ip,
+                port
+            );
             return;
         }
 
@@ -83,8 +103,8 @@ public class DlpProjectorService : IDlpProjectorService, IDisposable
 
     /// <inheritdoc/>
     public async Task ConnectHidAsync(
-        int vendorId = 0x0E6A,
-        int productId = 0x0317,
+        int vendorId = 0x0483,
+        int productId = 0x5750,
         int deviceIndex = 0,
         CancellationToken cancellationToken = default
     )
@@ -99,7 +119,8 @@ public class DlpProjectorService : IDlpProjectorService, IDisposable
         )
         {
             _logger.LogDebug(
-                "投影机 HID 0x{Vid:X4}/0x{Pid:X4}[{Idx}] 已连接，跳过重复连接",
+                "{Tag} Projector HID 0x{Vid:X4}/0x{Pid:X4}[{Idx}] already connected, skipping duplicate connect",
+                LogTag,
                 vendorId,
                 productId,
                 deviceIndex
@@ -115,6 +136,16 @@ public class DlpProjectorService : IDlpProjectorService, IDisposable
         _useHid = true;
         _hidClient = new TjProjectorHidClient(vendorId, productId, _logger, deviceIndex);
         await _hidClient.ConnectAsync(cancellationToken).ConfigureAwait(false);
+
+        // 连接成功后按 HID 索引自动绑定数据库设备 ID，供操作日志落库使用。
+        if (_projectorDeviceIdMapping.TryGetValue(deviceIndex, out Guid deviceId))
+        {
+            _projectorDeviceId = deviceId;
+        }
+        else
+        {
+            _projectorDeviceId = Guid.Empty;
+        }
     }
 
     /// <summary>关闭当前客户端（TCP 或 HID）</summary>
@@ -139,7 +170,10 @@ public class DlpProjectorService : IDlpProjectorService, IDisposable
     {
         await CloseCurrentClientAsync().ConfigureAwait(false);
         _logger.LogInformation(
-            _useHid ? "投影机 HID 0x{Vid:X4}/0x{Pid:X4} 已断开连接" : "投影机 {Ip} 已断开连接",
+            _useHid
+                ? "{Tag} Projector HID 0x{Vid:X4}/0x{Pid:X4} disconnected"
+                : "{Tag} Projector {Ip} disconnected",
+            LogTag,
             _useHid ? (object)_currentHidVid : _currentIp,
             _useHid ? (object)_currentHidPid : string.Empty
         );
@@ -189,7 +223,7 @@ public class DlpProjectorService : IDlpProjectorService, IDisposable
     public async Task<bool> LedOnAsync(CancellationToken cancellationToken = default)
     {
         EnsureClient();
-        _logger.LogInformation("[投影机 {Device}] 开灯", DeviceId);
+        _logger.LogInformation("{Tag} [Device {Device}] LED on", LogTag, DeviceId);
         bool ok = await SendAndLogAsync(
                 TjProjectorCommands.LedOn,
                 ProjectorOperationType.LedOn,
@@ -208,7 +242,7 @@ public class DlpProjectorService : IDlpProjectorService, IDisposable
     public async Task<bool> LedOffAsync(CancellationToken cancellationToken = default)
     {
         EnsureClient();
-        _logger.LogInformation("[投影机 {Device}] 关灯", DeviceId);
+        _logger.LogInformation("{Tag} [Device {Device}] LED off", LogTag, DeviceId);
         bool ok = await SendAndLogAsync(
                 TjProjectorCommands.LedOff,
                 ProjectorOperationType.LedOff,
@@ -230,10 +264,18 @@ public class DlpProjectorService : IDlpProjectorService, IDisposable
 
         if (light is < 10 or > 200)
         {
-            throw new ArgumentOutOfRangeException(nameof(light), "亮度值必须在 10~200 范围内");
+            throw new ArgumentOutOfRangeException(
+                nameof(light),
+                "Brightness must be in range 10~200"
+            );
         }
 
-        _logger.LogInformation("[投影机 {Device}] 设置亮度 {Light}", DeviceId, light);
+        _logger.LogInformation(
+            "{Tag} [Device {Device}] Set brightness to {Light}",
+            LogTag,
+            DeviceId,
+            light
+        );
 
         // 亮度 > 175 时需先发送高亮使能命令（源码：TJSTPrjSetLight）
         if (light > 175)
@@ -241,7 +283,7 @@ public class DlpProjectorService : IDlpProjectorService, IDisposable
             bool hlOk = await SendAndLogAsync(
                     TjProjectorCommands.HighLightEnable,
                     ProjectorOperationType.SetLight,
-                    "高亮使能",
+                    "Enable highlight",
                     cancellationToken
                 )
                 .ConfigureAwait(false);
@@ -257,7 +299,7 @@ public class DlpProjectorService : IDlpProjectorService, IDisposable
         bool ok = await SendAndLogAsync(
                 cmd,
                 ProjectorOperationType.SetLight,
-                $"亮度={light}",
+                $"Brightness={light}",
                 cancellationToken
             )
             .ConfigureAwait(false);
@@ -277,7 +319,12 @@ public class DlpProjectorService : IDlpProjectorService, IDisposable
     )
     {
         EnsureClient();
-        _logger.LogInformation("[投影机 {Device}] 设置显示模式: {Mode}", DeviceId, mode);
+        _logger.LogInformation(
+            "{Tag} [Device {Device}] Set display mode: {Mode}",
+            LogTag,
+            DeviceId,
+            mode
+        );
 
         // 模式命令：'S' + ('0' + mode) + '\r' + '\n'（源码：TJSTPrjSetMode）
         char modeChar = (char)(TjProjectorCommands.SetModeOffsetBase + (byte)mode);
@@ -285,7 +332,7 @@ public class DlpProjectorService : IDlpProjectorService, IDisposable
         return await SendAndLogAsync(
                 cmd,
                 ProjectorOperationType.SetDisplayMode,
-                $"模式={mode}",
+                $"Mode={mode}",
                 cancellationToken
             )
             .ConfigureAwait(false);
@@ -298,7 +345,12 @@ public class DlpProjectorService : IDlpProjectorService, IDisposable
     )
     {
         EnsureClient();
-        _logger.LogInformation("[投影机 {Device}] 设置颜色: {Color}", DeviceId, color);
+        _logger.LogInformation(
+            "{Tag} [Device {Device}] Set color: {Color}",
+            LogTag,
+            DeviceId,
+            color
+        );
 
         string cmd = color switch
         {
@@ -311,7 +363,7 @@ public class DlpProjectorService : IDlpProjectorService, IDisposable
         return await SendAndLogAsync(
                 cmd,
                 ProjectorOperationType.SetColor,
-                $"颜色={color}",
+                $"Color={color}",
                 cancellationToken
             )
             .ConfigureAwait(false);
@@ -323,12 +375,16 @@ public class DlpProjectorService : IDlpProjectorService, IDisposable
     public async Task<bool> TriggerOnceAsync(CancellationToken cancellationToken = default)
     {
         EnsureClient();
-        _logger.LogInformation("[投影机 {Device}] 触发条纹投影（白色末尾）", DeviceId);
+        _logger.LogInformation(
+            "{Tag} [Device {Device}] Trigger one-shot pattern (white ending)",
+            LogTag,
+            DeviceId
+        );
         // nGray == 255 时使用 "T\r\n" 快速命令（源码：TJSTPrjTriggerOnce）
         return await SendAndLogAsync(
                 TjProjectorCommands.TriggerOnce,
                 ProjectorOperationType.TriggerOnce,
-                "末尾灰度=255(白)",
+                "EndGray=255(white)",
                 cancellationToken
             )
             .ConfigureAwait(false);
@@ -342,7 +398,8 @@ public class DlpProjectorService : IDlpProjectorService, IDisposable
     {
         EnsureClient();
         _logger.LogInformation(
-            "[投影机 {Device}] 触发条纹投影（末尾灰度={Gray}）",
+            "{Tag} [Device {Device}] Trigger one-shot pattern (end gray={Gray})",
+            LogTag,
             DeviceId,
             endGray
         );
@@ -363,7 +420,7 @@ public class DlpProjectorService : IDlpProjectorService, IDisposable
         return await SendAndLogAsync(
                 cmd,
                 ProjectorOperationType.TriggerOnce,
-                $"末尾灰度={endGray}",
+                $"EndGray={endGray}",
                 cancellationToken
             )
             .ConfigureAwait(false);
@@ -406,7 +463,7 @@ public class DlpProjectorService : IDlpProjectorService, IDisposable
             : _tcpClient?.IsConnected == true;
         if (!connected)
             throw new InvalidOperationException(
-                "投影机未连接，请先调用 ConnectAsync 或 ConnectHidAsync"
+                "Projector is not connected. Call ConnectAsync or ConnectHidAsync first."
             );
     }
 
@@ -427,7 +484,7 @@ public class DlpProjectorService : IDlpProjectorService, IDisposable
         {
             ok = await SendCommandCoreAsync(command, ct).ConfigureAwait(false);
             if (!ok)
-                errorMessage = "设备返回失败（无 ACK 或超时）";
+                errorMessage = "Device reported failure (no ACK or timeout)";
         }
         catch (Exception ex)
         {
@@ -476,8 +533,8 @@ public class DlpProjectorService : IDlpProjectorService, IDisposable
             try
             {
                 using IServiceScope scope = _serviceScopeFactory.CreateScope();
-                IProjectorOperationLogRepository? repo = scope
-                    .ServiceProvider.GetService<IProjectorOperationLogRepository>();
+                IProjectorOperationLogRepository? repo =
+                    scope.ServiceProvider.GetService<IProjectorOperationLogRepository>();
                 if (repo is null)
                     return;
 
@@ -494,7 +551,7 @@ public class DlpProjectorService : IDlpProjectorService, IDisposable
                         Guid.NewGuid(),
                         deviceId,
                         operationType,
-                        errorMessage ?? "未知错误",
+                        errorMessage ?? "Unknown error",
                         rawCommand,
                         parameterSummary,
                         (int)Math.Min(roundTripMs, int.MaxValue)
@@ -506,7 +563,8 @@ public class DlpProjectorService : IDlpProjectorService, IDisposable
             {
                 _logger.LogWarning(
                     ex,
-                    "[投影机 {Device}] 写入操作日志失败（操作={Op}）",
+                    "{Tag} [Device {Device}] Failed to write operation log (Operation={Op})",
+                    LogTag,
                     DeviceId,
                     operationType
                 );
@@ -541,5 +599,214 @@ public class DlpProjectorService : IDlpProjectorService, IDisposable
     {
         _tcpClient?.Dispose();
         _hidClient?.Dispose();
+    }
+
+    // ─── 高级控制（Phase 4 新增）────────────────────────────────
+
+    /// <inheritdoc/>
+    public async Task<bool> SetFlipAsync(
+        ProjectorFlipMode flip,
+        CancellationToken cancellationToken = default
+    )
+    {
+        EnsureClient();
+        _logger.LogInformation(
+            "{Tag} [Device {Device}] Set flip mode: {Flip}",
+            LogTag,
+            DeviceId,
+            flip
+        );
+        string cmd =
+            $"{TjProjectorCommands.SetFlipPrefix}{(int)flip}{TjProjectorCommands.CommandSuffix}";
+        return await SendAndLogAsync(
+                cmd,
+                ProjectorOperationType.SetFlip,
+                $"FlipMode={flip}",
+                cancellationToken
+            )
+            .ConfigureAwait(false);
+    }
+
+    /// <inheritdoc/>
+    public async Task<bool> SetTriggerModeAsync(
+        ProjectorTriggerMode mode,
+        CancellationToken cancellationToken = default
+    )
+    {
+        EnsureClient();
+        _logger.LogInformation(
+            "{Tag} [Device {Device}] Set trigger mode: {Mode}",
+            LogTag,
+            DeviceId,
+            mode
+        );
+        string cmd =
+            $"{TjProjectorCommands.SetTriggerModePrefix}{(int)mode}{TjProjectorCommands.CommandSuffix}";
+        return await SendAndLogAsync(
+                cmd,
+                ProjectorOperationType.SetTriggerMode,
+                $"TriggerMode={mode}",
+                cancellationToken
+            )
+            .ConfigureAwait(false);
+    }
+
+    /// <inheritdoc/>
+    public async Task<bool> SetBootImageAsync(
+        ProjectorBootImage image,
+        CancellationToken cancellationToken = default
+    )
+    {
+        EnsureClient();
+        _logger.LogInformation(
+            "{Tag} [Device {Device}] Set boot image: {Image}",
+            LogTag,
+            DeviceId,
+            image
+        );
+        string cmd =
+            $"{TjProjectorCommands.SetBootImagePrefix}{(int)image}{TjProjectorCommands.CommandSuffix}";
+        return await SendAndLogAsync(
+                cmd,
+                ProjectorOperationType.SetBootImage,
+                $"BootImage={image}",
+                cancellationToken
+            )
+            .ConfigureAwait(false);
+    }
+
+    /// <inheritdoc/>
+    public async Task<bool> SetCheckerboardPixelSizeAsync(
+        int pixelSize,
+        CancellationToken cancellationToken = default
+    )
+    {
+        EnsureClient();
+        _logger.LogInformation(
+            "{Tag} [Device {Device}] Set checkerboard pixel size: {Size}",
+            LogTag,
+            DeviceId,
+            pixelSize
+        );
+        string cmd =
+            $"{TjProjectorCommands.SetCheckerboardPixelPrefix}{pixelSize}{TjProjectorCommands.CommandSuffix}";
+        return await SendAndLogAsync(
+                cmd,
+                ProjectorOperationType.SetCheckerboardPixel,
+                $"PixelSize={pixelSize}",
+                cancellationToken
+            )
+            .ConfigureAwait(false);
+    }
+
+    /// <inheritdoc/>
+    public async Task<bool> SetRgbColorAsync(
+        byte r,
+        byte g,
+        byte b,
+        CancellationToken cancellationToken = default
+    )
+    {
+        EnsureClient();
+
+        // 将颜色分量 (0~255) 线性映射为 LED 亮度值 (0~175)
+        byte lr = (byte)Math.Round(r / 255.0 * 175);
+        byte lg = (byte)Math.Round(g / 255.0 * 175);
+        byte lb = (byte)Math.Round(b / 255.0 * 175);
+
+        _logger.LogInformation(
+            "{Tag} [Device {Device}] Set RGB color: color=#{R:X2}{G:X2}{B:X2} -> LED brightness R={LR} G={LG} B={LB}",
+            LogTag,
+            DeviceId,
+            r,
+            g,
+            b,
+            lr,
+            lg,
+            lb
+        );
+
+        // 协议：单条 LE r g b\r\n 同时使能彩光并设置 RGB 分量亮度（0~175）
+        string cmd =
+            $"{TjProjectorCommands.SetRgbColorPrefix}{lr} {lg} {lb}{TjProjectorCommands.CommandSuffix}";
+        return await SendAndLogAsync(
+                cmd,
+                ProjectorOperationType.SetRgbColor,
+                $"color=#{r:X2}{g:X2}{b:X2} LED={lr},{lg},{lb}",
+                cancellationToken
+            )
+            .ConfigureAwait(false);
+    }
+
+    /// <inheritdoc/>
+    public async Task<bool> SoftResetAsync(CancellationToken cancellationToken = default)
+    {
+        EnsureClient();
+        _logger.LogInformation("{Tag} [Device {Device}] Soft reset", LogTag, DeviceId);
+        return await SendAndLogAsync(
+                TjProjectorCommands.SoftReset,
+                ProjectorOperationType.SoftReset,
+                null,
+                cancellationToken
+            )
+            .ConfigureAwait(false);
+    }
+
+    /// <inheritdoc/>
+    public async Task<bool> SaveParamsAsync(CancellationToken cancellationToken = default)
+    {
+        EnsureClient();
+        _logger.LogInformation("{Tag} [Device {Device}] Save params to flash", LogTag, DeviceId);
+        return await SendAndLogAsync(
+                TjProjectorCommands.SaveParams,
+                ProjectorOperationType.SaveParams,
+                null,
+                cancellationToken
+            )
+            .ConfigureAwait(false);
+    }
+
+    /// <inheritdoc/>
+    public async Task<string?> ReadRegisterAsync(
+        int address,
+        CancellationToken cancellationToken = default
+    )
+    {
+        EnsureClient();
+        _logger.LogInformation(
+            "{Tag} [Device {Device}] Read register {Addr}",
+            LogTag,
+            DeviceId,
+            address
+        );
+        string cmd =
+            $"{TjProjectorCommands.ReadRegisterPrefix}{address}{TjProjectorCommands.CommandSuffix}";
+        return await SendCommandAndReadCoreAsync(cmd, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc/>
+    public async Task<bool> WriteRegisterAsync(
+        int address,
+        int value,
+        CancellationToken cancellationToken = default
+    )
+    {
+        EnsureClient();
+        _logger.LogInformation(
+            "{Tag} [Device {Device}] Write register {Addr}={Value}",
+            LogTag,
+            DeviceId,
+            address,
+            value
+        );
+        string cmd =
+            $"{TjProjectorCommands.WriteRegisterPrefix}{address} {value}{TjProjectorCommands.CommandSuffix}";
+        return await SendAndLogAsync(
+                cmd,
+                ProjectorOperationType.WriteRegister,
+                $"addr={address},val={value}",
+                cancellationToken
+            )
+            .ConfigureAwait(false);
     }
 }

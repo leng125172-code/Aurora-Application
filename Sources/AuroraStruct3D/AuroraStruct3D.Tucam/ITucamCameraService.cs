@@ -126,4 +126,80 @@ public interface ITucamCameraService
     /// </summary>
     /// <param name="deviceIds">key = SDK cameraIndex，value = CameraDevice.Id</param>
     void SetCameraDeviceIdMapping(IReadOnlyDictionary<int, Guid> deviceIds);
+
+    // ─── ROI 区域控制 ────────────────────────────────────────────────────────
+
+    /// <summary>获取当前硬件 ROI 区域</summary>
+    Task<TUCamRoiAttr> GetRoiAsync(int cameraIndex);
+
+    /// <summary>设置硬件 ROI 区域</summary>
+    Task SetRoiAsync(int cameraIndex, TUCamRoiAttr roi);
+
+    // ─── 触发模式 ─────────────────────────────────────────────────────────────
+
+    /// <summary>获取触发参数</summary>
+    Task<TUCamTriggerAttr> GetTriggerAsync(int cameraIndex);
+
+    /// <summary>设置触发参数</summary>
+    Task SetTriggerAsync(int cameraIndex, TUCamTriggerAttr trigger);
+
+    /// <summary>发送软件触发信号</summary>
+    Task DoSoftwareTriggerAsync(int cameraIndex);
+
+    // ─── 触发输出 ─────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// 获取触发输出参数
+    /// </summary>
+    /// <param name="cameraIndex">相机索引</param>
+    /// <param name="port">输出端口（0/1/2）</param>
+    Task<TUCamTrgOutAttr> GetTriggerOutAsync(int cameraIndex, int port);
+
+    /// <summary>设置触发输出参数</summary>
+    Task SetTriggerOutAsync(int cameraIndex, TUCamTrgOutAttr trgOut);
+
+    // ─── 计算 ROI（AE/WB 测光区域）─────────────────────────────────────────
+
+    /// <summary>获取自动曝光或白平衡的计算区域</summary>
+    Task<TUCamCalcRoiAttr> GetCalcRoiAsync(int cameraIndex, TUCamIdCalcRoi calcId);
+
+    /// <summary>设置自动曝光或白平衡的计算区域</summary>
+    Task SetCalcRoiAsync(int cameraIndex, TUCamCalcRoiAttr calcRoi);
+
+    // ─── 用户配置文件 ─────────────────────────────────────────────────────────
+
+    /// <summary>加载用户配置文件（需在停止采集后调用）</summary>
+    Task LoadProfilesAsync(int cameraIndex, string profileName);
+
+    /// <summary>保存用户配置文件</summary>
+    Task SaveProfilesAsync(int cameraIndex, string profileName);
+
+    // ─── 设备信息查询（数值型）────────────────────────────────────────────────
+
+    /// <summary>
+    /// 获取整型设备信息（如 CurrentWidth / CurrentHeight / Bus 等）
+    /// </summary>
+    Task<int> GetDeviceNumericInfoAsync(int cameraIndex, TUCamIdInfo infoId);
+
+    // ─── 属性/能力元数据 ──────────────────────────────────────────────────────
+
+    /// <summary>
+    /// 获取属性的元信息（包括取值范围 dbValMin/dbValMax 等）
+    /// </summary>
+    Task<TUCamPropAttr> GetPropertyAttrAsync(int cameraIndex, TUCamIdProp propId);
+
+    /// <summary>
+    /// 获取能力的元信息（包括可选值数量 nValMax 等）
+    /// </summary>
+    Task<TUCamCapaAttr> GetCapabilityAttrAsync(int cameraIndex, TUCamIdCapa capaId);
+
+    // ─── 原始帧抓取（用于单帧快照/RTP推流）──────────────────────────────────
+
+    /// <summary>
+    /// 抓取一帧并编码为 JPEG 字节数组（连续采集模式下调用）
+    /// </summary>
+    /// <param name="cameraIndex">相机索引</param>
+    /// <param name="timeoutMs">超时毫秒数，默认3000</param>
+    /// <returns>JPEG 编码的字节数组</returns>
+    Task<byte[]> GrabFrameRawAsync(int cameraIndex, int timeoutMs = 3000);
 }

@@ -24,6 +24,10 @@
         <ProjectReference Include="..\..\AuroraAbpPro\Volo.Abp.DistributedLocking\Volo.Abp.DistributedLocking.csproj" />
         <ProjectReference Include="..\..\AuroraAbpPro\Volo.Abp.BlobStoring.FileSystem\Volo.Abp.BlobStoring.FileSystem.csproj" />
         <PackageReference Include="DistributedLock.Redis" Version="1.1.0" />
+        <PackageReference
+            Include="Microsoft.AspNetCore.SignalR.Protocols.MessagePack"
+            Version="10.0.0"
+        />
         <ProjectReference Include="..\..\AuroraAbpPro\Lion.AbpPro.AspNetCore\Lion.AbpPro.AspNetCore.csproj" />
     </ItemGroup>
 
@@ -72,9 +76,14 @@
         <Message Importance="high" Text="正在构建前端 SPA（AuroraStruct3D.Frontend）..." />
         <Exec
             WorkingDirectory="$(SpaRoot)"
-            Command="npm ci"
+            Command="chcp 65001 > nul &amp;&amp; npm ci"
+            EnvironmentVariables="NO_COLOR=1;FORCE_COLOR=0"
             Condition="'$(Configuration)' == 'Release'"
         />
-        <Exec WorkingDirectory="$(SpaRoot)" Command="npm run build" />
+        <Exec
+            WorkingDirectory="$(SpaRoot)"
+            Command="chcp 65001 > nul &amp;&amp; npm run build"
+            EnvironmentVariables="NO_COLOR=1;FORCE_COLOR=0"
+        />
     </Target>
 </Project>

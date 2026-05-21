@@ -16,11 +16,9 @@ public interface IProjectorDeviceRepository : IRepository<ProjectorDevice, Guid>
     );
 
     /// <summary>
-    /// 根据 HID VID/PID 和设备索引查找投影机设备（USB HID 模式）
+    /// 根据 HID 设备索引查找投影机设备（USB HID 模式，VID/PID 由硬件固定）
     /// </summary>
     Task<ProjectorDevice?> FindByHidAsync(
-        int vendorId,
-        int productId,
         int deviceIndex = 0,
         CancellationToken cancellationToken = default
     );

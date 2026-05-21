@@ -1,4 +1,5 @@
 using AuroraStruct3D.Cameras;
+using AuroraStruct3D.DeviceState;
 using AuroraStruct3D.Motors;
 using AuroraStruct3D.Projectors;
 using AuroraStruct3D.SerialPorts;
@@ -87,8 +88,10 @@ namespace AuroraStruct3D.EntityFrameworkCore
         public DbSet<MasterData> MasterDatas { get; set; }
         public DbSet<MasterDataType> MasterDataTypes { get; set; }
         public DbSet<MasterDataValue> MasterDataValues { get; set; }
+
         // ── 串口通讯模块 ────────────────────────────────────────────────────────────
         public DbSet<SerialPortConfig> SerialPortConfigs { get; set; }
+
         // ── 相机模块 ──────────────────────────────────────────────────────────────
         public DbSet<CameraDevice> CameraDevices { get; set; }
         public DbSet<CameraParameterSet> CameraParameterSets { get; set; }
@@ -105,6 +108,10 @@ namespace AuroraStruct3D.EntityFrameworkCore
         // ── DLP 投影机模块 ─────────────────────────────────────────────────────────
         public DbSet<ProjectorDevice> ProjectorDevices { get; set; }
         public DbSet<ProjectorOperationLog> ProjectorOperationLogs { get; set; }
+
+        // ── 设备状态管理模块 ─────────────────────────────────────────────────────────
+        public DbSet<DeviceStateLog> DeviceStateLogs { get; set; }
+        public DbSet<DeviceFault> DeviceFaults { get; set; }
 
         public AuroraStruct3DDbContext(DbContextOptions<AuroraStruct3DDbContext> options)
             : base(options) { }
@@ -153,6 +160,9 @@ namespace AuroraStruct3D.EntityFrameworkCore
 
             // DLP 投影机模块
             builder.ConfigureProjector();
+
+            // 设备状态管理模块
+            builder.ConfigureDeviceState();
         }
     }
 }

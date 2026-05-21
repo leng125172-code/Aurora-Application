@@ -23,6 +23,12 @@ public static class ProjectorConsts
     /// <summary>HID 设备路径最大长度（如 /dev/hidraw0、\\?\HID#...）</summary>
     public const int MaxHidDevicePathLength = 256;
 
+    /// <summary>腾聚 TJ 系列投影机固定 USB HID 厂商 ID（STM32 USB HID 芯片，硬件固定，不可修改）</summary>
+    public const int HidVendorId = 0x0483;
+
+    /// <summary>腾聚 TJ 系列投影机固定 USB HID 产品 ID（STM32 USB HID 芯片，硬件固定，不可修改）</summary>
+    public const int HidProductId = 0x5750;
+
     /// <summary>数据库表名前缀</summary>
     public const string DbTablePrefix = "AbpPro";
 }
@@ -106,4 +112,133 @@ public enum ProjectorOperationType
 
     /// <summary>查询状态</summary>
     QueryStatus = 9,
+
+    /// <summary>设置图像翻转</summary>
+    SetFlip = 10,
+
+    /// <summary>设置触发模式</summary>
+    SetTriggerMode = 11,
+
+    /// <summary>设置开机默认图案</summary>
+    SetBootImage = 12,
+
+    /// <summary>设置棋盘格像素数</summary>
+    SetCheckerboardPixel = 13,
+
+    /// <summary>设置 RGB 颜色（彩光模式）</summary>
+    SetRgbColor = 14,
+
+    /// <summary>软复位</summary>
+    SoftReset = 15,
+
+    /// <summary>保存参数到设备内存</summary>
+    SaveParams = 16,
+
+    /// <summary>读取寄存器</summary>
+    ReadRegister = 17,
+
+    /// <summary>写入寄存器</summary>
+    WriteRegister = 18,
+}
+
+/// <summary>
+/// 图像翻转模式
+/// </summary>
+public enum ProjectorFlipMode
+{
+    /// <summary>不翻转（默认）</summary>
+    None = 0,
+
+    /// <summary>X 轴翻转</summary>
+    FlipX = 1,
+
+    /// <summary>Y 轴翻转</summary>
+    FlipY = 2,
+
+    /// <summary>XY 翻转</summary>
+    FlipXY = 3,
+}
+
+/// <summary>
+/// 触发模式
+/// </summary>
+public enum ProjectorTriggerMode
+{
+    /// <summary>普通触发模式 — 收到 T 指令后直接投射一组条纹</summary>
+    Normal = 0,
+
+    /// <summary>循环触发模式 — 收到 T 指令后循环投射当前组条纹</summary>
+    Loop = 1,
+
+    /// <summary>单帧触发模式 — 收到 T 后投射一张并保持，收到 N 切换到下一张</summary>
+    SingleFrame = 2,
+}
+
+/// <summary>
+/// 开机默认图案
+/// </summary>
+public enum ProjectorBootImage
+{
+    /// <summary>黑图像</summary>
+    Black = 0,
+
+    /// <summary>白图像</summary>
+    White = 1,
+
+    /// <summary>十字图像</summary>
+    Cross = 2,
+
+    /// <summary>棋盘格图像</summary>
+    Checkerboard = 3,
+
+    /// <summary>内部图像 1</summary>
+    Internal1 = 6,
+
+    /// <summary>内部图像 2</summary>
+    Internal2 = 7,
+}
+
+/// <summary>
+/// 投影机内容显示模式
+/// </summary>
+public enum ProjectorDisplayMode : byte
+{
+    /// <summary>黑屏</summary>
+    Black = 0,
+
+    /// <summary>白屏</summary>
+    White = 1,
+
+    /// <summary>十字线</summary>
+    Cross = 2,
+
+    /// <summary>棋盘格</summary>
+    Checkerboard = 3,
+
+    /// <summary>内部图像 1（S6）</summary>
+    Internal1 = 6,
+
+    /// <summary>内部图像 2（S7）</summary>
+    Internal2 = 7,
+}
+
+/// <summary>
+/// 投影机颜色（仅多光谱结构光投影机支持）
+/// </summary>
+public enum ProjectorColor : byte
+{
+    /// <summary>红色</summary>
+    Red = 0,
+
+    /// <summary>绿色</summary>
+    Green = 1,
+
+    /// <summary>蓝色</summary>
+    Blue = 2,
+
+    /// <summary>白色（全色）</summary>
+    White = 3,
+
+    /// <summary>彩光（Aura Sync RGB 模式）</summary>
+    AuraSync = 4,
 }

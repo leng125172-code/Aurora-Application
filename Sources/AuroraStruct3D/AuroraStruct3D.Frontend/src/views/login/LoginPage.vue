@@ -9,8 +9,7 @@ import { Label } from '@/components/ui/label'
 import { Card, CardHeader, CardDescription, CardContent, CardFooter } from '@/components/ui/card'
 import { BorderBeam } from '@/components/ui/border-beam'
 import { TextGlitch } from '@/components/ui/text-glitch'
-import ThemeToggle from '@/components/ThemeToggle.vue'
-import LangSwitcher from '@/components/LangSwitcher.vue'
+import LoginTopBar from '@/layouts/LoginTopBar.vue'
 import { loginAsync } from '@/api/auth'
 import { getApplicationConfigurationAsync } from '@/api/abp-application'
 import { useAuthStore } from '@/stores/auth'
@@ -69,10 +68,9 @@ async function handleSubmit(): Promise<void> {
 </script>
 
 <template>
-    <!-- 主题/语言切换按钮 -->
-    <div class="absolute right-4 top-4 z-[2] flex items-center gap-2">
-        <LangSwitcher />
-        <ThemeToggle />
+    <!-- 顶部导航栏（含设备状态徽章、故障横幅、语言/主题切换） -->
+    <div class="absolute inset-x-0 top-0 z-[2]">
+        <LoginTopBar />
     </div>
 
     <!-- 登录卡片 -->
@@ -97,12 +95,7 @@ async function handleSubmit(): Promise<void> {
                 </div>
                 <div class="space-y-2">
                     <Label for="login-username">{{ t('login.username') }}</Label>
-                    <Input
-                        id="login-username"
-                        v-model="username"
-                        autocomplete="username"
-                        @keyup.enter="handleSubmit"
-                    />
+                    <Input id="login-username" v-model="username" autocomplete="username" @keyup.enter="handleSubmit" />
                 </div>
                 <div class="space-y-2">
                     <Label for="login-password">{{ t('login.password') }}</Label>

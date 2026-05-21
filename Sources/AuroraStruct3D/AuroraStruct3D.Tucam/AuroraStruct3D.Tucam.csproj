@@ -3,6 +3,12 @@
     <Import Project="..\..\..\common.props" />
     <PropertyGroup>
         <TargetFramework>net10.0</TargetFramework>
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    </PropertyGroup>
+
+    <!-- Linux ARM64 平台条件编译定义 -->
+    <PropertyGroup Condition="'$(RuntimeIdentifier)' == 'linux-arm64'">
+        <DefineConstants>$(DefineConstants);RUNTIME_LINUX</DefineConstants>
     </PropertyGroup>
 
     <ItemGroup>
@@ -12,5 +18,23 @@
 
     <ItemGroup>
         <ProjectReference Include="..\..\AuroraAbpPro\Volo.Abp.BackgroundJobs.HangFire\Volo.Abp.BackgroundJobs.HangFire.csproj" />
+    </ItemGroup>
+
+    <!-- 图像编码：JPEG 帧押缩 -->
+    <ItemGroup>
+        <PackageReference Include="SkiaSharp" Version="3.119.0" />
+        <PackageReference
+            Include="SkiaSharp.NativeAssets.Linux"
+            Version="3.119.0"
+            Condition="'$(RuntimeIdentifier)' == 'linux-arm64'"
+        />
+    </ItemGroup>
+
+    <!-- Windows 平台可选 TUCam SDK DLL 引用（开发环境可选） -->
+    <ItemGroup Condition="Exists('C:\Program Files (x86)\TUCam_SDK\x64\TUCam.dll')">
+        <None Include="C:\Program Files (x86)\TUCam_SDK\x64\TUCam.dll">
+            <Link>TUCam.dll</Link>
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
     </ItemGroup>
 </Project>

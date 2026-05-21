@@ -1,27 +1,36 @@
 using System.Collections.Frozen;
 using System.Diagnostics;
+using System.IO.Ports;
 using AuroraStruct3D.Motors;
+using AuroraStruct3D.RS485.Ktech;
+using AuroraStruct3D.RS485.Leisai;
 using AuroraStruct3D.RS485.Protocol;
+using AuroraStruct3D.SerialPorts;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace AuroraStruct3D.RS485;
 
 /// <summary>
-/// 电机控制服务实现，统一管理三轴 RS485 电机：
-///   - 电机1（slave_id=1）：瓴控KTECH，CMD 0x9A 私有协议
-///   - 电机2（slave_id=2）：瓴控KTECH，CMD 0x9A 私有协议
-///   - 电机3（slave_id=3）：雷赛iCL-RS，Modbus RTU 协议
-/// 三个电机共享同一条 RS485 总线（/dev/ttyS6），由 RS485Port 内置互斥锁保障时序。
+/// 电机控制服务实现，统一管理多条 RS485 总线上的所有电机。
+/// 串口配置和电机信息从数据库读取，通过 Initialize 方法在启动时完成初始化。
 /// </summary>
 public class MotorControlService : IMotorControlService, IDisposable
 {
-    private readonly IRS485Port _port;
+    private const string LogTag = "[Servos]";
+
     private readonly ILogger<MotorControlService> _logger;
+    private readonly ILoggerFactory _loggerFactory;
     private readonly IServiceScopeFactory? _serviceScopeFactory;
 
-    /// <summary>驱动字典（key = slave_id）</summary>
-    private readonly FrozenDictionary<int, IMotorDriver> _drivers;
+    /// <summary>所有打开的串口实例（Dispose 时统一关闭）</summary>
+    private readonly List<IRS485Port> _ports = [];
+
+    /// <summary>驱动字典（key = slave_id，全局唯一）</summary>
+    private FrozenDictionary<int, IMotorDriver> _drivers = FrozenDictionary<
+        int,
+        IMotorDriver
+    >.Empty;
 
     /// <summary>从机地址 → 数据库电机轴 ID 映射（用于操作日志写入）</summary>
     private IReadOnlyDictionary<int, Guid> _axisIdBySlaveId = new Dictionary<int, Guid>();
@@ -30,30 +39,106 @@ public class MotorControlService : IMotorControlService, IDisposable
     private bool _disposed;
 
     /// <inheritdoc/>
-    public IReadOnlyList<int> ConfiguredMotorIds { get; }
+    public IReadOnlyList<int> ConfiguredMotorIds { get; private set; } = [];
 
     /// <summary>
-    /// 初始化电机控制服务
+    /// 初始化电机控制服务（不打开串口，不创建驱动，等待 Initialize 调用）
     /// </summary>
-    /// <param name="port">RS485 串口，必须对应 /dev/ttyS6</param>
-    /// <param name="drivers">电机驱动集合，由 RS485Module 配置并注入</param>
     /// <param name="logger">日志记录器</param>
+    /// <param name="loggerFactory">日志工厂，用于为各驱动创建类型化日志器</param>
     /// <param name="serviceScopeFactory">用于创建 DB Scope 写入操作日志（可选）</param>
     public MotorControlService(
-        IRS485Port port,
-        IEnumerable<IMotorDriver> drivers,
         ILogger<MotorControlService> logger,
+        ILoggerFactory loggerFactory,
         IServiceScopeFactory? serviceScopeFactory = null
     )
     {
-        _port = port;
         _logger = logger;
+        _loggerFactory = loggerFactory;
         _serviceScopeFactory = serviceScopeFactory;
-        _drivers = drivers.ToFrozenDictionary(d => d.SlaveId);
+    }
+
+    /// <inheritdoc/>
+    public void Initialize(
+        IReadOnlyList<SerialPortConfig> portConfigs,
+        IReadOnlyList<MotorAxis> enabledAxes
+    )
+    {
+        // 按串口 ID 分组电机轴
+        ILookup<Guid, MotorAxis> axesByPort = enabledAxes.ToLookup(a => a.SerialPortConfigId);
+        Dictionary<int, IMotorDriver> driverDict = new();
+
+        foreach (SerialPortConfig portConfig in portConfigs)
+        {
+            // 创建串口实例（枚举值与 System.IO.Ports 完全对齐，可安全强转）
+            RS485Port port = new(
+                portConfig.PortName,
+                portConfig.BaudRate,
+                _loggerFactory.CreateLogger<RS485Port>(),
+                (Parity)(int)portConfig.Parity,
+                portConfig.DataBits,
+                (StopBits)(int)portConfig.StopBits
+            );
+
+            // 尝试打开串口（开发环境串口不存在时记录警告，不崩溃启动）
+            try
+            {
+                port.Open();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(
+                    ex,
+                    "{Tag} Serial port [{Name}] {Port} open failed. Motors on this bus are unavailable (ignorable in dev mode).",
+                    LogTag,
+                    portConfig.DisplayName,
+                    portConfig.PortName
+                );
+            }
+
+            _ports.Add(port);
+
+            // 为该串口上的所有启用轴创建对应驱动
+            foreach (MotorAxis axis in axesByPort[portConfig.Id])
+            {
+                IMotorDriver driver = axis.Brand switch
+                {
+                    MotorBrand.KtechKtech => new KtechMotorDriver(
+                        axis.SlaveId,
+                        port,
+                        _loggerFactory.CreateLogger<KtechMotorDriver>()
+                    ),
+                    MotorBrand.LeisaiIclRs => new LeisaiMotorDriver(
+                        axis.SlaveId,
+                        port,
+                        _loggerFactory.CreateLogger<LeisaiMotorDriver>()
+                    ),
+                    _ => throw new NotSupportedException(
+                        $"Motor [{axis.Name}] brand {axis.Brand} is not supported for automatic driver creation"
+                    ),
+                };
+
+                // 全局 SlaveId 必须唯一（不同总线上的电机地址不可重复）
+                if (!driverDict.TryAdd(axis.SlaveId, driver))
+                {
+                    _logger.LogWarning(
+                        "{Tag} Motor [{Name}] slave address {SlaveId} conflicts with an existing motor and will be ignored. Ensure all motors have a globally unique SlaveId.",
+                        LogTag,
+                        axis.Name,
+                        axis.SlaveId
+                    );
+                }
+            }
+        }
+
+        _drivers = driverDict.ToFrozenDictionary();
         ConfiguredMotorIds = [.. _drivers.Keys];
 
         _logger.LogInformation(
-            "MotorControlService 初始化完成，已配置电机: [{Ids}]",
+            "{Tag} MotorControlService initialized. Buses: {PortCount}, Motors: {MotorCount} | [{Ids}]",
+            LogTag,
+            portConfigs.Count,
+            _drivers.Count,
             string.Join(", ", ConfiguredMotorIds)
         );
     }
@@ -63,7 +148,8 @@ public class MotorControlService : IMotorControlService, IDisposable
     {
         _axisIdBySlaveId = axisIds;
         _logger.LogInformation(
-            "MotorControlService 已注入轴 ID 映射，共 {Count} 条",
+            "{Tag} MotorControlService axis ID mapping injected, total {Count} entries",
+            LogTag,
             axisIds.Count
         );
     }
@@ -101,7 +187,8 @@ public class MotorControlService : IMotorControlService, IDisposable
             {
                 _logger.LogWarning(
                     ex,
-                    "查询电机 {Id}（{Brand}）状态失败",
+                    "{Tag} Failed to query motor {Id} ({Brand}) status. Returning fault status placeholder. Ensure the motor is properly connected and configured.",
+                    LogTag,
                     driver.SlaveId,
                     driver.Brand
                 );
@@ -134,7 +221,13 @@ public class MotorControlService : IMotorControlService, IDisposable
         catch (Exception ex)
         {
             sw.Stop();
-            RecordMotorLog(motorId, MotorOperationType.Enable, false, sw.ElapsedMilliseconds, ex.Message);
+            RecordMotorLog(
+                motorId,
+                MotorOperationType.Enable,
+                false,
+                sw.ElapsedMilliseconds,
+                ex.Message
+            );
             throw;
         }
     }
@@ -153,7 +246,13 @@ public class MotorControlService : IMotorControlService, IDisposable
         catch (Exception ex)
         {
             sw.Stop();
-            RecordMotorLog(motorId, MotorOperationType.Disable, false, sw.ElapsedMilliseconds, ex.Message);
+            RecordMotorLog(
+                motorId,
+                MotorOperationType.Disable,
+                false,
+                sw.ElapsedMilliseconds,
+                ex.Message
+            );
             throw;
         }
     }
@@ -170,16 +269,29 @@ public class MotorControlService : IMotorControlService, IDisposable
         Stopwatch sw = Stopwatch.StartNew();
         try
         {
-            await driver.MoveAbsoluteAsync(position, speedRpm, cancellationToken).ConfigureAwait(false);
+            await driver
+                .MoveAbsoluteAsync(position, speedRpm, cancellationToken)
+                .ConfigureAwait(false);
             sw.Stop();
-            RecordMotorLog(motorId, MotorOperationType.MoveAbsolute, true, sw.ElapsedMilliseconds,
-                parameterSummary: $"位置={position}, 速度={speedRpm}rpm");
+            RecordMotorLog(
+                motorId,
+                MotorOperationType.MoveAbsolute,
+                true,
+                sw.ElapsedMilliseconds,
+                parameterSummary: $"Position={position}, Speed={speedRpm}rpm"
+            );
         }
         catch (Exception ex)
         {
             sw.Stop();
-            RecordMotorLog(motorId, MotorOperationType.MoveAbsolute, false, sw.ElapsedMilliseconds,
-                errorMessage: ex.Message, parameterSummary: $"位置={position}, 速度={speedRpm}rpm");
+            RecordMotorLog(
+                motorId,
+                MotorOperationType.MoveAbsolute,
+                false,
+                sw.ElapsedMilliseconds,
+                errorMessage: ex.Message,
+                parameterSummary: $"Position={position}, Speed={speedRpm}rpm"
+            );
             throw;
         }
     }
@@ -196,16 +308,29 @@ public class MotorControlService : IMotorControlService, IDisposable
         Stopwatch sw = Stopwatch.StartNew();
         try
         {
-            await driver.MoveRelativeAsync(delta, speedRpm, cancellationToken).ConfigureAwait(false);
+            await driver
+                .MoveRelativeAsync(delta, speedRpm, cancellationToken)
+                .ConfigureAwait(false);
             sw.Stop();
-            RecordMotorLog(motorId, MotorOperationType.MoveRelative, true, sw.ElapsedMilliseconds,
-                parameterSummary: $"位移={delta}, 速度={speedRpm}rpm");
+            RecordMotorLog(
+                motorId,
+                MotorOperationType.MoveRelative,
+                true,
+                sw.ElapsedMilliseconds,
+                parameterSummary: $"Delta={delta}, Speed={speedRpm}rpm"
+            );
         }
         catch (Exception ex)
         {
             sw.Stop();
-            RecordMotorLog(motorId, MotorOperationType.MoveRelative, false, sw.ElapsedMilliseconds,
-                errorMessage: ex.Message, parameterSummary: $"位移={delta}, 速度={speedRpm}rpm");
+            RecordMotorLog(
+                motorId,
+                MotorOperationType.MoveRelative,
+                false,
+                sw.ElapsedMilliseconds,
+                errorMessage: ex.Message,
+                parameterSummary: $"Delta={delta}, Speed={speedRpm}rpm"
+            );
             throw;
         }
     }
@@ -224,7 +349,13 @@ public class MotorControlService : IMotorControlService, IDisposable
         catch (Exception ex)
         {
             sw.Stop();
-            RecordMotorLog(motorId, MotorOperationType.Stop, false, sw.ElapsedMilliseconds, ex.Message);
+            RecordMotorLog(
+                motorId,
+                MotorOperationType.Stop,
+                false,
+                sw.ElapsedMilliseconds,
+                ex.Message
+            );
             throw;
         }
     }
@@ -232,8 +363,8 @@ public class MotorControlService : IMotorControlService, IDisposable
     /// <inheritdoc/>
     public async Task StopAllAsync(CancellationToken cancellationToken = default)
     {
-        _logger.LogWarning("停止所有电机");
-        // 并行发送停止指令，RS485Port 内部互斥锁保证时序安全
+        _logger.LogWarning("{Tag} Stopping all motors", LogTag);
+        // Parallel stop commands, RS485Port internal mutex ensures timing safety
         IEnumerable<Task> stopTasks = _drivers.Values.Select(async driver =>
         {
             try
@@ -244,7 +375,8 @@ public class MotorControlService : IMotorControlService, IDisposable
             {
                 _logger.LogError(
                     ex,
-                    "停止电机 {Id}（{Brand}）时发生错误",
+                    "{Tag} Error occurred while stopping motor {Id} ({Brand})",
+                    LogTag,
                     driver.SlaveId,
                     driver.Brand
                 );
@@ -268,7 +400,13 @@ public class MotorControlService : IMotorControlService, IDisposable
         catch (Exception ex)
         {
             sw.Stop();
-            RecordMotorLog(motorId, MotorOperationType.EmergencyStop, false, sw.ElapsedMilliseconds, ex.Message);
+            RecordMotorLog(
+                motorId,
+                MotorOperationType.EmergencyStop,
+                false,
+                sw.ElapsedMilliseconds,
+                ex.Message
+            );
             throw;
         }
     }
@@ -287,7 +425,13 @@ public class MotorControlService : IMotorControlService, IDisposable
         catch (Exception ex)
         {
             sw.Stop();
-            RecordMotorLog(motorId, MotorOperationType.Home, false, sw.ElapsedMilliseconds, ex.Message);
+            RecordMotorLog(
+                motorId,
+                MotorOperationType.Home,
+                false,
+                sw.ElapsedMilliseconds,
+                ex.Message
+            );
             throw;
         }
     }
@@ -306,7 +450,13 @@ public class MotorControlService : IMotorControlService, IDisposable
         catch (Exception ex)
         {
             sw.Stop();
-            RecordMotorLog(motorId, MotorOperationType.ClearFault, false, sw.ElapsedMilliseconds, ex.Message);
+            RecordMotorLog(
+                motorId,
+                MotorOperationType.ClearFault,
+                false,
+                sw.ElapsedMilliseconds,
+                ex.Message
+            );
             throw;
         }
     }
@@ -320,8 +470,26 @@ public class MotorControlService : IMotorControlService, IDisposable
         }
 
         _disposed = true;
-        _port.Dispose();
-        _logger.LogInformation("MotorControlService 已释放，RS485串口已关闭");
+        foreach (IRS485Port port in _ports)
+        {
+            try
+            {
+                port.Dispose();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(
+                    ex,
+                    "{Tag} An exception occurred while releasing the serial port resources.",
+                    LogTag
+                );
+            }
+        }
+        _logger.LogInformation(
+            "{Tag} MotorControlService released, total serial bus ports closed: {Count}",
+            LogTag,
+            _ports.Count
+        );
     }
 
     /// <summary>
@@ -334,7 +502,7 @@ public class MotorControlService : IMotorControlService, IDisposable
         if (!_drivers.TryGetValue(motorId, out IMotorDriver? driver))
         {
             throw new ArgumentException(
-                $"电机编号 {motorId} 未配置，已配置的电机编号: [{string.Join(", ", ConfiguredMotorIds)}]",
+                $"Motor ID {motorId} is not configured. Configured motor IDs: [{string.Join(", ", ConfiguredMotorIds)}]",
                 nameof(motorId)
             );
         }
@@ -363,8 +531,8 @@ public class MotorControlService : IMotorControlService, IDisposable
             try
             {
                 using IServiceScope scope = _serviceScopeFactory.CreateScope();
-                IMotorOperationLogRepository? repo = scope
-                    .ServiceProvider.GetService<IMotorOperationLogRepository>();
+                IMotorOperationLogRepository? repo =
+                    scope.ServiceProvider.GetService<IMotorOperationLogRepository>();
                 if (repo is null)
                     return;
 
@@ -382,7 +550,7 @@ public class MotorControlService : IMotorControlService, IDisposable
                         axisId,
                         slaveId,
                         operationType,
-                        errorMessage ?? "未知错误",
+                        errorMessage ?? "Unknown error",
                         roundTripMs,
                         parameterSummary: parameterSummary
                     );
@@ -393,7 +561,8 @@ public class MotorControlService : IMotorControlService, IDisposable
             {
                 _logger.LogWarning(
                     ex,
-                    "电机 {SlaveId} 写入操作日志失败（操作={Op}）",
+                    "{Tag} Failed to write operation log for motor {SlaveId} (Operation={Op})",
+                    LogTag,
                     slaveId,
                     operationType
                 );

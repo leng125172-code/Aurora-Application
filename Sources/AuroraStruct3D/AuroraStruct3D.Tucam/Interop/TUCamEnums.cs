@@ -248,6 +248,27 @@ public enum TUCamIdProp : int
     /// <summary>帧率</summary>
     FrameRate = 0x19,
 
+    /// <summary>AE目标灰度</summary>
+    AverageGray = 0x21,
+
+    /// <summary>AE目标灰度阈值</summary>
+    AverageGrayThreshold = 0x22,
+
+    /// <summary>AE最大曝光时间限制</summary>
+    ExposureMax = 0x25,
+
+    /// <summary>AE最小曝光时间限制</summary>
+    ExposureMin = 0x26,
+
+    /// <summary>AE最大增益限制</summary>
+    GainMax = 0x27,
+
+    /// <summary>AE最小增益限制</summary>
+    GainMin = 0x28,
+
+    /// <summary>自动色阶忽略百分比（AE测光比例）</summary>
+    AutoLevelPercentage = 0x2A,
+
     /// <summary>温度目标值</summary>
     TemperatureTarget = 0x2B,
 }
@@ -295,6 +316,123 @@ public enum TUCamIdInfo : int
 
     /// <summary>是否已连接</summary>
     ConnectStatus = 0x18,
+
+    /// <summary>USB总缓冲帧数</summary>
+    TotalBufFrames = 0x19,
+
+    /// <summary>USB当前缓冲帧数（近似展示触发计数器）</summary>
+    CurrentBufFrames = 0x1A,
+
+    /// <summary>FPGA温度</summary>
+    FpgaTemperature = 0x13,
+
+    /// <summary>PCBA温度</summary>
+    PcbaTemperature = 0x14,
+}
+
+/// <summary>
+/// 触发输出端口枚举（对应SDK TUCAM_OUTPUTTRG_PORT）
+/// </summary>
+public enum TUCamOutputTrgPort : int
+{
+    /// <summary>输出口一</summary>
+    Port1 = 0x00,
+
+    /// <summary>输出口二</summary>
+    Port2 = 0x01,
+
+    /// <summary>输出口三</summary>
+    Port3 = 0x02,
+}
+
+/// <summary>
+/// 触发输出模式（信号来源）枚举（对应SDK TUCAM_OUTPUTTRG_KIND）
+/// </summary>
+public enum TUCamOutputTrgKind : int
+{
+    /// <summary>低电平</summary>
+    Low = 0x00,
+
+    /// <summary>高电平</summary>
+    High = 0x01,
+
+    /// <summary>触发输入直通</summary>
+    TriggerIn = 0x02,
+
+    /// <summary>曝光开始</summary>
+    ExposureStart = 0x03,
+
+    /// <summary>全局曝光</summary>
+    ExposureGlobal = 0x04,
+
+    /// <summary>读取结束</summary>
+    ReadEnd = 0x05,
+
+    /// <summary>触发就绪</summary>
+    TriggerReady = 0x06,
+}
+
+/// <summary>
+/// 触发输出边沿枚举（对应SDK TUCAM_OUTPUTTRG_EDGE）
+/// </summary>
+public enum TUCamOutputTrgEdge : int
+{
+    /// <summary>上升沿</summary>
+    Rising = 0x00,
+
+    /// <summary>下降沿</summary>
+    Falling = 0x01,
+}
+
+/// <summary>
+/// 计算ROI类型枚举（白平衡/自动曝光测光区域）（对应SDK TUCAM_IDCROI）
+/// </summary>
+public enum TUCamIdCalcRoi : int
+{
+    /// <summary>白平衡计算区域</summary>
+    WhiteBalance = 0x00,
+
+    /// <summary>黑平衡计算区域</summary>
+    BlackBalance = 0x01,
+
+    /// <summary>黑电平偏移计算区域</summary>
+    BlackLevelOffset = 0x02,
+
+    /// <summary>自动对焦计算区域</summary>
+    Focus = 0x03,
+
+    /// <summary>自动曝光测光计算区域</summary>
+    ExposureTime = 0x04,
+}
+
+/// <summary>
+/// 供应商属性ID枚举（对应SDK TUCAM_IDVPROP）
+/// </summary>
+public enum TUCamIdVProp : int
+{
+    /// <summary>Flash地址</summary>
+    AddrFlash = 0x00,
+
+    /// <summary>HDR高增B偏移</summary>
+    HdrHgBOffset = 0x03,
+
+    /// <summary>HDR低增B偏移</summary>
+    HdrLgBOffset = 0x04,
+
+    /// <summary>FPN使能</summary>
+    FpnEnable = 0x07,
+
+    /// <summary>工作时间</summary>
+    WorkingTime = 0x08,
+
+    /// <summary>HDR低值</summary>
+    HdrLValue = 0x0E,
+
+    /// <summary>HDR高值</summary>
+    HdrHValue = 0x0F,
+
+    /// <summary>最大帧率</summary>
+    MaxFrameRate = 0x1B,
 }
 
 /// <summary>

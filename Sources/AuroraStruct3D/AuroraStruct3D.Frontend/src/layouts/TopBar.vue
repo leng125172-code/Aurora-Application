@@ -13,10 +13,14 @@ import {
 } from '@/components/ui/dropdown-menu'
 import ThemeToggle from '@/components/ThemeToggle.vue'
 import LangSwitcher from '@/components/LangSwitcher.vue'
+import DeviceStatusBadge from '@/components/device-state/DeviceStatusBadge.vue'
+import DeviceModeSwitcher from '@/components/device-state/DeviceModeSwitcher.vue'
 import { useAuthStore } from '@/stores/auth'
+import { useDeviceStateStore } from '@/stores/deviceState'
 import { logoutAsync } from '@/api/auth'
 
 const auth = useAuthStore()
+const deviceStateStore = useDeviceStateStore()
 const router = useRouter()
 const { t } = useI18n()
 
@@ -33,6 +37,9 @@ async function handleLogout(): Promise<void> {
             {{ auth.currentUser?.userName ?? '' }}
         </div>
         <div class="flex items-center gap-2">
+            <!-- 设备状态徽章 + 模式切换 -->
+            <DeviceStatusBadge :status="deviceStateStore.state?.status" />
+            <DeviceModeSwitcher :device-state="deviceStateStore.state" />
             <LangSwitcher />
             <ThemeToggle />
             <DropdownMenu>

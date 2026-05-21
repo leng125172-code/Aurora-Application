@@ -60,6 +60,42 @@ const routes: RouteRecordRaw[] = [
                 component: () => import('@/views/system/SystemInfoPage.vue'),
                 meta: { requiresAuth: true, title: 'menu.systemInfo' },
             },
+            {
+                path: 'device-state/faults',
+                name: 'FaultHistory',
+                component: () => import('@/views/device-state/FaultHistoryPage.vue'),
+                meta: { requiresAuth: true, title: 'menu.faultHistory' },
+            },
+            {
+                path: 'device-state/logs',
+                name: 'StateLog',
+                component: () => import('@/views/device-state/StateLogPage.vue'),
+                meta: { requiresAuth: true, title: 'menu.stateLog' },
+            },
+            {
+                path: 'projectors',
+                name: 'ProjectorManage',
+                component: () => import('@/views/projectors/ProjectorManagePage.vue'),
+                meta: { requiresAuth: true, title: 'menu.projectorManage' },
+            },
+            {
+                path: 'projectors/:id/control',
+                name: 'ProjectorControl',
+                component: () => import('@/views/projectors/ProjectorControlPage.vue'),
+                meta: { requiresAuth: true, title: 'menu.projectorControl' },
+            },
+            {
+                path: 'cameras',
+                name: 'CameraManage',
+                component: () => import('@/views/cameras/CameraManagePage.vue'),
+                meta: { requiresAuth: true, title: 'menu.cameraManage' },
+            },
+            {
+                path: 'cameras/:id/control',
+                name: 'CameraControl',
+                component: () => import('@/views/cameras/CameraControlPage.vue'),
+                meta: { requiresAuth: true, title: 'menu.cameraControl' },
+            },
             // 系统管理路由已移除（仅供后台调试使用）
         ],
     },

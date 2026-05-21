@@ -9,6 +9,10 @@ import {
     Activity,
     Gauge,
     Info,
+    AlertTriangle,
+    ScrollText,
+    Monitor,
+    Camera,
     ChevronDown,
     ChevronRight,
 } from 'lucide-vue-next'
@@ -204,6 +208,75 @@ function navigate(path: string, tab?: string): void {
             >
                 <Info class="size-4 shrink-0" />
                 {{ t('menu.systemInfo') }}
+            </button>
+
+            <!-- 设备状态 -->
+            <div class="px-3 py-1 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                {{ t('menu.deviceState') }}
+            </div>
+
+            <!-- 故障历史 -->
+            <button
+                :class="
+                    cn(
+                        'flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors text-left',
+                        isExactActive('/device-state/faults')
+                            ? 'bg-accent text-accent-foreground'
+                            : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                    )
+                "
+                @click="navigate('/device-state/faults')"
+            >
+                <AlertTriangle class="size-4 shrink-0" />
+                {{ t('menu.faultHistory') }}
+            </button>
+
+            <!-- 状态日志 -->
+            <button
+                :class="
+                    cn(
+                        'flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors text-left',
+                        isExactActive('/device-state/logs')
+                            ? 'bg-accent text-accent-foreground'
+                            : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                    )
+                "
+                @click="navigate('/device-state/logs')"
+            >
+                <ScrollText class="size-4 shrink-0" />
+                {{ t('menu.stateLog') }}
+            </button>
+
+            <!-- 投影机管理 -->
+            <button
+                :class="
+                    cn(
+                        'flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors text-left',
+                        isExactActive('/projectors')
+                            ? 'bg-accent text-accent-foreground'
+                            : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                    )
+                "
+                @click="navigate('/projectors')"
+            >
+                <Monitor class="size-4 shrink-0" />
+                {{ t('menu.projectorManage') }}
+            </button>
+
+            <!-- 相机管理 -->
+            <button
+                :class="
+                    cn(
+                        'flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors text-left',
+                        isExactActive('/cameras')
+                            ? 'bg-accent text-accent-foreground'
+                            : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                    )
+                "
+                @click="navigate('/cameras')"
+            >
+                <Camera class="size-4 shrink-0" />
+                {{ t('menu.cameraManage') }}
             </button>
         </nav>
     </aside>

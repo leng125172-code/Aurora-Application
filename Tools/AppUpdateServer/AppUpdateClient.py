@@ -29,6 +29,7 @@ import sys
 import tarfile
 import tempfile
 import threading
+import time
 from pathlib import Path
 
 # 自动安装 tqdm
@@ -51,6 +52,8 @@ DEFAULT_HOST = "10.127.135.143"
 DEFAULT_PORT = 9211
 DEFAULT_WORKERS = 4
 DEFAULT_CHUNK_MB = 8
+# UDP 发现端口 = TCP 端口 - 1
+DISCOVERY_PORT = DEFAULT_PORT - 1
 
 
 def _send_msg(sock: socket.socket, data: dict) -> None:
@@ -99,11 +102,78 @@ def _md5_of_file(path: Path) -> str:
     return h.hexdigest()
 
 
+def _get_local_ips() -> list[str]:
+    """获取本机所有 IPv4 地址（排除 127.x.x.x）。"""
+    ips: list[str] = []
+    try:
+        for info in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET):
+            ip = info[4][0]
+            if not ip.startswith("127."):
+                ips.append(ip)
+    except Exception:
+        pass
+    return ips or ["192.168.1.1"]
+
+
+def scan_for_servers(timeout: float = 2.0) -> list[dict]:
+    """
+    UDP 广播扫描局域网内的 AppUpdateServer。
+    返回 [{"host": ..., "port": ..., "name": ...}, ...]。
+    """
+    results: list[dict] = []
+    seen: set[str] = set()
+
+    # 构建广播地址列表：255.255.255.255 + 每个本机子网广播
+    broadcast_addrs: set[str] = {"255.255.255.255"}
+    for ip in _get_local_ips():
+        parts = ip.rsplit(".", 1)
+        if len(parts) == 2:
+            broadcast_addrs.add(f"{parts[0]}.255")
+
+    req = json.dumps({"action": "discover"}).encode("utf-8")
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+    sock.settimeout(0.2)
+    sock.bind(("", 0))
+    try:
+        for addr in broadcast_addrs:
+            try:
+                sock.sendto(req, (addr, DISCOVERY_PORT))
+            except Exception:
+                pass
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            try:
+                data, (host, _) = sock.recvfrom(4096)
+                if host in seen:
+                    continue
+                seen.add(host)
+                resp = json.loads(data.decode("utf-8"))
+                if resp.get("status") == "ok":
+                    results.append(
+                        {
+                            "host": host,
+                            "port": resp.get("port", DEFAULT_PORT),
+                            "name": resp.get("name", "Unknown"),
+                        }
+                    )
+            except socket.timeout:
+                pass
+            except Exception:
+                pass
+    finally:
+        sock.close()
+    return results
+
+
 def publish_project(project_name: str, index: int, total: int) -> None:
     """对指定项目执行 dotnet publish，实时输出编译日志。"""
     csproj = (
-        WORKSPACE_ROOT / "Sources" / "AuroraStruct3D"
-        / project_name / f"{project_name}.csproj"
+        WORKSPACE_ROOT
+        / "Sources"
+        / "AuroraStruct3D"
+        / project_name
+        / f"{project_name}.csproj"
     )
     if not csproj.exists():
         print(f"[错误] 找不到项目文件：{csproj}", file=sys.stderr)
@@ -113,14 +183,27 @@ def publish_project(project_name: str, index: int, total: int) -> None:
     print(f"  [发布 {index}/{total}] {project_name}")
     print(f"{'─' * 60}")
     cmd = [
-        "dotnet", "publish", str(csproj),
-        "-c", "Release", "-r", RUNTIME,
-        "--self-contained", "true", "-f", FRAMEWORK, "-v", "minimal",
+        "dotnet",
+        "publish",
+        str(csproj),
+        "-c",
+        "Release",
+        "-r",
+        RUNTIME,
+        "--self-contained",
+        "true",
+        "-f",
+        FRAMEWORK,
+        "-v",
+        "minimal",
     ]
     print(f">>> {' '.join(cmd)}\n")
     result = subprocess.run(cmd)
     if result.returncode != 0:
-        print(f"\n[错误] dotnet publish 失败（退出码 {result.returncode}）", file=sys.stderr)
+        print(
+            f"\n[错误] dotnet publish 失败（退出码 {result.returncode}）",
+            file=sys.stderr,
+        )
         sys.exit(result.returncode)
     print(f"[完成] {project_name} 发布成功")
 
@@ -145,8 +228,11 @@ def create_archive(publish_dir: Path) -> Path:
 
     with tarfile.open(tmp_path, mode="w:gz") as tar:
         with tqdm(
-            total=len(all_files), desc="压缩进度", unit="文件",
-            ncols=72, colour="cyan",
+            total=len(all_files),
+            desc="压缩进度",
+            unit="文件",
+            ncols=72,
+            colour="cyan",
         ) as pbar:
             for file in all_files:
                 arc_name = file.relative_to(publish_dir).as_posix()
@@ -176,13 +262,16 @@ def _upload_chunk(
     sock = _make_conn(host, port, timeout=60.0)
     try:
         sock.settimeout(120.0)
-        _send_msg(sock, {
-            "action": "chunk",
-            "session_id": session_id,
-            "chunk_id": chunk_id,
-            "size": len(data),
-            "md5": chunk_md5,
-        })
+        _send_msg(
+            sock,
+            {
+                "action": "chunk",
+                "session_id": session_id,
+                "chunk_id": chunk_id,
+                "size": len(data),
+                "md5": chunk_md5,
+            },
+        )
         resp = _recv_msg(sock)
         if resp.get("status") != "ready":
             raise RuntimeError(f"服务端拒绝: {resp}")
@@ -200,8 +289,11 @@ def _upload_chunk(
 
 
 def upload_and_deploy(
-    host: str, port: int, archive_path: Path,
-    workers: int, chunk_size: int,
+    host: str,
+    port: int,
+    archive_path: Path,
+    workers: int,
+    chunk_size: int,
 ) -> None:
     """分块并行上传压缩包，完成后触发服务端合并/校验/解压。"""
     total_size = archive_path.stat().st_size
@@ -218,19 +310,24 @@ def upload_and_deploy(
     size_mb = total_size / 1024 / 1024
     chunk_mb = chunk_size / 1024 / 1024
     print(f"\n{'─' * 60}")
-    print(f"  [上传] {host}:{port}  大小: {size_mb:.1f} MB  "
-          f"分块: {total_chunks} × {chunk_mb:.0f} MB  线程: {workers}")
+    print(
+        f"  [上传] {host}:{port}  大小: {size_mb:.1f} MB  "
+        f"分块: {total_chunks} × {chunk_mb:.0f} MB  线程: {workers}"
+    )
     print(f"{'─' * 60}")
 
     # 初始化会话
     init_sock = _make_conn(host, port, timeout=30.0)
     try:
-        _send_msg(init_sock, {
-            "action": "init",
-            "total_chunks": total_chunks,
-            "total_size": total_size,
-            "total_md5": total_md5,
-        })
+        _send_msg(
+            init_sock,
+            {
+                "action": "init",
+                "total_chunks": total_chunks,
+                "total_size": total_size,
+                "total_md5": total_md5,
+            },
+        )
         resp = _recv_msg(init_sock)
         if resp.get("status") != "ready":
             print(f"[错误] 初始化失败: {resp}", file=sys.stderr)
@@ -245,8 +342,13 @@ def upload_and_deploy(
     errors: list[str] = []
 
     with tqdm(
-        total=total_size, desc="上传进度", unit="B",
-        unit_scale=True, unit_divisor=1024, ncols=72, colour="green",
+        total=total_size,
+        desc="上传进度",
+        unit="B",
+        unit_scale=True,
+        unit_divisor=1024,
+        ncols=72,
+        colour="green",
     ) as pbar:
         with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
             futures: list[concurrent.futures.Future] = []
@@ -256,7 +358,13 @@ def upload_and_deploy(
                     data = f.read(sz)
                     fut = pool.submit(
                         _upload_chunk,
-                        host, port, session_id, chunk_id, data, pbar, error_event,
+                        host,
+                        port,
+                        session_id,
+                        chunk_id,
+                        data,
+                        pbar,
+                        error_event,
                     )
                     futures.append(fut)
 
@@ -280,11 +388,14 @@ def upload_and_deploy(
     finalize_sock = _make_conn(host, port, timeout=30.0)
     try:
         finalize_sock.settimeout(None)
-        _send_msg(finalize_sock, {
-            "action": "finalize",
-            "session_id": session_id,
-            "total_md5": total_md5,
-        })
+        _send_msg(
+            finalize_sock,
+            {
+                "action": "finalize",
+                "session_id": session_id,
+                "total_md5": total_md5,
+            },
+        )
 
         extract_pbar: tqdm | None = None
         while True:
@@ -304,8 +415,11 @@ def upload_and_deploy(
                 name = msg.get("name", "")
                 if extract_pbar is None:
                     extract_pbar = tqdm(
-                        total=total_files, desc="解压进度", unit="文件",
-                        ncols=72, colour="yellow",
+                        total=total_files,
+                        desc="解压进度",
+                        unit="文件",
+                        ncols=72,
+                        colour="yellow",
                     )
                 extract_pbar.n = current
                 extract_pbar.set_postfix_str(name[-38:] if len(name) > 38 else name)
@@ -328,27 +442,78 @@ def upload_and_deploy(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="一键发布并部署到 RK3588（分块并行上传）")
-    parser.add_argument("--host", default=DEFAULT_HOST,
-                        help=f"RK3588 IP 地址（默认：{DEFAULT_HOST}）")
-    parser.add_argument("--port", type=int, default=DEFAULT_PORT,
-                        help=f"AppUpdateServer 端口（默认：{DEFAULT_PORT}）")
-    parser.add_argument("--projects", default=",".join(DEFAULT_PROJECTS),
-                        help=f"要发布的项目名，逗号分隔")
-    parser.add_argument("--sync-only", action="store_true",
-                        help="跳过 dotnet publish，仅将已有 Publish 目录打包上传")
-    parser.add_argument("--workers", type=int, default=DEFAULT_WORKERS,
-                        help=f"并行上传线程数（默认：{DEFAULT_WORKERS}）")
-    parser.add_argument("--chunk-mb", type=int, default=DEFAULT_CHUNK_MB,
-                        help=f"每个分块大小 MB（默认：{DEFAULT_CHUNK_MB}）")
+    parser = argparse.ArgumentParser(
+        description="一键发布并部署到 RK3588（分块并行上传）"
+    )
+    parser.add_argument(
+        "--host", default="", help="RK3588 IP 地址（不指定则自动扫描局域网）"
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=DEFAULT_PORT,
+        help=f"AppUpdateServer 端口（默认：{DEFAULT_PORT}）",
+    )
+    parser.add_argument(
+        "--projects",
+        default=",".join(DEFAULT_PROJECTS),
+        help="要发布的项目名，逗号分隔",
+    )
+    parser.add_argument(
+        "--sync-only",
+        action="store_true",
+        help="跳过 dotnet publish，仅将已有 Publish 目录打包上传",
+    )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=DEFAULT_WORKERS,
+        help=f"并行上传线程数（默认：{DEFAULT_WORKERS}）",
+    )
+    parser.add_argument(
+        "--chunk-mb",
+        type=int,
+        default=DEFAULT_CHUNK_MB,
+        help=f"每个分块大小 MB（默认：{DEFAULT_CHUNK_MB}）",
+    )
     args = parser.parse_args()
+
+    # 自动发现服务端
+    host = args.host.strip()
+    port = args.port
+    if not host:
+        print(f"正在扫描局域网（UDP 广播，最多 2 秒）...")
+        servers = scan_for_servers(timeout=2.0)
+        if not servers:
+            print(
+                f"[错误] 未找到任何 AppUpdateServer，请用 --host 手动指定 IP",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        if len(servers) == 1:
+            host = servers[0]["host"]
+            port = servers[0]["port"]
+            print(f"自动选择服务器: {servers[0]['name']}  {host}:{port}")
+        else:
+            print("\n发现多个服务器，请选择:")
+            for i, s in enumerate(servers, 1):
+                print(f"  [{i}] {s['name']}  {s['host']}:{s['port']}")
+            while True:
+                try:
+                    choice = int(input("\n输入编号：").strip())
+                    if 1 <= choice <= len(servers):
+                        host = servers[choice - 1]["host"]
+                        port = servers[choice - 1]["port"]
+                        break
+                except (ValueError, KeyboardInterrupt):
+                    pass
 
     projects = [p.strip() for p in args.projects.split(",") if p.strip()]
     publish_dir = WORKSPACE_ROOT / "Publish"
     chunk_size = args.chunk_mb * 1024 * 1024
 
     print("=" * 60)
-    print(f"  目标服务器 : {args.host}:{args.port}")
+    print(f"  目标服务器 : {host}:{port}")
     if args.sync_only:
         print("  模式       : 仅同步（跳过 dotnet publish）")
     else:
@@ -367,7 +532,7 @@ def main() -> None:
 
     archive_path = create_archive(publish_dir)
     try:
-        upload_and_deploy(args.host, args.port, archive_path, args.workers, chunk_size)
+        upload_and_deploy(host, port, archive_path, args.workers, chunk_size)
     finally:
         archive_path.unlink(missing_ok=True)
 

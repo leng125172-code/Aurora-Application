@@ -1,8 +1,8 @@
+using System.Text;
 using HidSharp;
 using Microsoft.Extensions.Logging;
-using System.Text;
 
-namespace AuroraStruct3D.DLP.Protocol;
+namespace AuroraStruct3D.Projectors.Protocol;
 
 /// <summary>
 /// 腾聚投影机 USB HID 通信客户端（跨平台，Windows + Linux ARM64）。
@@ -17,12 +17,14 @@ namespace AuroraStruct3D.DLP.Protocol;
 /// </summary>
 public sealed class TjProjectorHidClient : IDisposable
 {
-    // ─── 腾聚 TJ 投影机默认 USB HID 标识 ─────────────────────────
-    /// <summary>腾聚 TJ 投影机默认 HID 厂商 ID（Megawin EasyPOD 芯片）</summary>
-    public const int DefaultVendorId = 0x0E6A;
+    private const string LogTag = "[Projector]";
 
-    /// <summary>腾聚 TJ 投影机默认 HID 产品 ID</summary>
-    public const int DefaultProductId = 0x0317;
+    // ─── 腾聚 TJ 投影机默认 USB HID 标识 ─────────────────────────
+    /// <summary>腾聚 TJ 投影机默认 HID 厂商 ID（VID 0x0483）</summary>
+    public const int DefaultVendorId = 0x0483;
+
+    /// <summary>腾聚 TJ 投影机默认 HID 产品 ID（PID 0x5750）</summary>
+    public const int DefaultProductId = 0x5750;
 
     private readonly int _vendorId;
     private readonly int _productId;
@@ -43,12 +45,7 @@ public sealed class TjProjectorHidClient : IDisposable
     /// <param name="productId">HID 产品 ID（默认 0x0317）</param>
     /// <param name="logger">日志记录器</param>
     /// <param name="deviceIndex">设备索引（同一 VID/PID 多台时从 0 开始区分）</param>
-    public TjProjectorHidClient(
-        int vendorId,
-        int productId,
-        ILogger logger,
-        int deviceIndex = 0
-    )
+    public TjProjectorHidClient(int vendorId, int productId, ILogger logger, int deviceIndex = 0)
     {
         _vendorId = vendorId;
         _productId = productId;
@@ -67,28 +64,29 @@ public sealed class TjProjectorHidClient : IDisposable
             () =>
             {
                 // 枚举所有匹配 VID/PID 的 HID 设备
-                HidDevice[] devices = DeviceList.Local
-                    .GetHidDevices(_vendorId, _productId)
+                HidDevice[] devices = DeviceList
+                    .Local.GetHidDevices(_vendorId, _productId)
                     .ToArray();
 
                 if (devices.Length == 0)
                 {
                     throw new InvalidOperationException(
-                        $"未找到 VID=0x{_vendorId:X4} PID=0x{_productId:X4} 的 HID 设备，"
-                            + "请确认设备已插入并在 Linux 上具备 /dev/hidraw* 读写权限"
+                        $"{LogTag} HID device with VID=0x{_vendorId:X4} PID=0x{_productId:X4} not found. "
+                            + "Ensure the device is connected and /dev/hidraw* permissions are granted on Linux."
                     );
                 }
 
                 if (_deviceIndex >= devices.Length)
                 {
                     throw new InvalidOperationException(
-                        $"设备索引 {_deviceIndex} 超出范围（共找到 {devices.Length} 台设备）"
+                        $"{LogTag} Device index {_deviceIndex} is out of range (found {devices.Length} device(s))."
                     );
                 }
 
                 _device = devices[_deviceIndex];
                 _logger.LogInformation(
-                    "HID 设备已找到（第 {Index} 台）：{Path}",
+                    "{Tag} HID device selected (index {Index}): {Path}",
+                    LogTag,
                     _deviceIndex,
                     _device.DevicePath
                 );
@@ -97,8 +95,8 @@ public sealed class TjProjectorHidClient : IDisposable
                 {
                     _device = null;
                     throw new InvalidOperationException(
-                        $"无法打开 HID 设备 {_device?.DevicePath}。"
-                            + "Linux 请检查 /dev/hidraw* 权限；Windows 请确认设备未被其他程序占用"
+                        $"{LogTag} Cannot open HID device {_device?.DevicePath}. "
+                            + "On Linux, check /dev/hidraw* permissions; on Windows, ensure no other process is using it."
                     );
                 }
 
@@ -107,7 +105,8 @@ public sealed class TjProjectorHidClient : IDisposable
                 _stream.WriteTimeout = 3000;
 
                 _logger.LogInformation(
-                    "HID 连接成功：OutputReport={Out}B, InputReport={In}B",
+                    "{Tag} HID connected: OutputReport={Out}B, InputReport={In}B",
+                    LogTag,
                     _device.GetMaxOutputReportLength(),
                     _device.GetMaxInputReportLength()
                 );
@@ -139,12 +138,17 @@ public sealed class TjProjectorHidClient : IDisposable
         {
             EnsureConnected();
             WriteToDevice(command);
-            _logger.LogDebug("HID 发送: {Cmd}", command.TrimEnd('\r', '\n'));
+            _logger.LogDebug("{Tag} HID TX: {Cmd}", LogTag, command.TrimEnd('\r', '\n'));
             return true;
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "HID 发送命令失败: {Cmd}", command.TrimEnd('\r', '\n'));
+            _logger.LogWarning(
+                ex,
+                "{Tag} HID send command failed: {Cmd}",
+                LogTag,
+                command.TrimEnd('\r', '\n')
+            );
             return false;
         }
         finally
@@ -167,15 +171,20 @@ public sealed class TjProjectorHidClient : IDisposable
         {
             EnsureConnected();
             WriteToDevice(command);
-            _logger.LogDebug("HID 发送: {Cmd}", command.TrimEnd('\r', '\n'));
+            _logger.LogDebug("{Tag} HID TX: {Cmd}", LogTag, command.TrimEnd('\r', '\n'));
 
             string? response = ReadFromDevice();
-            _logger.LogDebug("HID 接收: {Response}", response);
+            _logger.LogDebug("{Tag} HID RX: {Response}", LogTag, response);
             return response;
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "HID 收发命令失败: {Cmd}", command.TrimEnd('\r', '\n'));
+            _logger.LogWarning(
+                ex,
+                "{Tag} HID send/receive failed: {Cmd}",
+                LogTag,
+                command.TrimEnd('\r', '\n')
+            );
             return null;
         }
         finally
@@ -219,15 +228,15 @@ public sealed class TjProjectorHidClient : IDisposable
             return null;
 
         // 跳过 buf[0]（报告 ID），从 buf[1] 开始解析 ASCII
-        return Encoding.ASCII
-            .GetString(buf, 1, bytesRead - 1)
-            .TrimEnd('\0', '\r', '\n');
+        return Encoding.ASCII.GetString(buf, 1, bytesRead - 1).TrimEnd('\0', '\r', '\n');
     }
 
     private void EnsureConnected()
     {
         if (_stream == null)
-            throw new InvalidOperationException("HID 设备未连接，请先调用 ConnectAsync");
+            throw new InvalidOperationException(
+                $"{LogTag} HID device is not connected. Call ConnectAsync first."
+            );
     }
 
     /// <inheritdoc/>

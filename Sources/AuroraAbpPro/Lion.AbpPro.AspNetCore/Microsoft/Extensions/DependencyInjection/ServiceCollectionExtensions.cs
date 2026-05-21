@@ -100,21 +100,33 @@ public static class ServiceCollectionExtensions
                 AbpProAspNetCoreConsts.DefaultCorsPolicyName,
                 builder =>
                 {
-                    builder
-                        .WithOrigins(
-                            corsOptions
-                                .CorsOrigins.Split(",", StringSplitOptions.RemoveEmptyEntries)
-                                .Select(o => o.RemovePostFix("/"))
-                                .ToArray()
-                        )
-                        //.WithAbpExposedHeaders()
-                        .SetIsOriginAllowedToAllowWildcardSubdomains()
-                        .AllowAnyHeader()
-                        .AllowAnyMethod()
-                        //.AllowCredentials()
-                        // https://www.cnblogs.com/JulianHuang/p/14225515.html
-                        // https://learn.microsoft.com/zh-cn/aspnet/core/security/cors?view=aspnetcore-7.0
-                        .SetPreflightMaxAge((TimeSpan.FromHours(24)));
+                    // CorsOrigins 配置为 * 时，允许所有来源（关闭跨域限制）
+                    if (corsOptions.CorsOrigins.Trim() == "*")
+                    {
+                        builder
+                            .SetIsOriginAllowed(_ => true)
+                            .AllowAnyHeader()
+                            .AllowAnyMethod()
+                            .SetPreflightMaxAge(TimeSpan.FromHours(24));
+                    }
+                    else
+                    {
+                        builder
+                            .WithOrigins(
+                                corsOptions
+                                    .CorsOrigins.Split(",", StringSplitOptions.RemoveEmptyEntries)
+                                    .Select(o => o.RemovePostFix("/"))
+                                    .ToArray()
+                            )
+                            //.WithAbpExposedHeaders()
+                            .SetIsOriginAllowedToAllowWildcardSubdomains()
+                            .AllowAnyHeader()
+                            .AllowAnyMethod()
+                            //.AllowCredentials()
+                            // https://www.cnblogs.com/JulianHuang/p/14225515.html
+                            // https://learn.microsoft.com/zh-cn/aspnet/core/security/cors?view=aspnetcore-7.0
+                            .SetPreflightMaxAge(TimeSpan.FromHours(24));
+                    }
                 }
             );
         });

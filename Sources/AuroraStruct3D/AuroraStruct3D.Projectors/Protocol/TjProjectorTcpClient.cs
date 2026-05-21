@@ -2,7 +2,7 @@ using System.Net.Sockets;
 using System.Text;
 using Microsoft.Extensions.Logging;
 
-namespace AuroraStruct3D.DLP.Protocol;
+namespace AuroraStruct3D.Projectors.Protocol;
 
 /// <summary>
 /// 腾聚（TJ）结构光投影机 TCP 通信客户端。
@@ -11,6 +11,8 @@ namespace AuroraStruct3D.DLP.Protocol;
 /// </summary>
 internal sealed class TjProjectorTcpClient : IDisposable
 {
+    private const string LogTag = "[Projector]";
+
     private readonly string _ip;
     private readonly int _port;
     private readonly ILogger _logger;
@@ -65,7 +67,7 @@ internal sealed class TjProjectorTcpClient : IDisposable
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
             {
                 throw new InvalidOperationException(
-                    $"连接投影机 {_ip}:{_port} 超时（{ConnectTimeoutMs}ms）"
+                    $"{LogTag} Connecting to projector {_ip}:{_port} timed out ({ConnectTimeoutMs} ms)."
                 );
             }
 
@@ -73,7 +75,12 @@ internal sealed class TjProjectorTcpClient : IDisposable
             _stream.ReadTimeout = ReadTimeoutMs;
             _stream.WriteTimeout = 500;
 
-            _logger.LogInformation("投影机 TCP 连接成功：{Ip}:{Port}", _ip, _port);
+            _logger.LogInformation(
+                "{Tag} Projector TCP connected: {Ip}:{Port}",
+                LogTag,
+                _ip,
+                _port
+            );
         }
         finally
         {
@@ -112,14 +119,20 @@ internal sealed class TjProjectorTcpClient : IDisposable
             EnsureConnected();
             byte[] data = Encoding.ASCII.GetBytes(command);
             await _stream!.WriteAsync(data, cancellationToken).ConfigureAwait(false);
-            _logger.LogDebug("[投影机 {Ip}] 发送命令: {Cmd}", _ip, command.TrimEnd('\r', '\n'));
+            _logger.LogDebug(
+                "{Tag} [IP {Ip}] TX command: {Cmd}",
+                LogTag,
+                _ip,
+                command.TrimEnd('\r', '\n')
+            );
             return true;
         }
         catch (Exception ex)
         {
             _logger.LogWarning(
                 ex,
-                "[投影机 {Ip}] 发送命令失败: {Cmd}",
+                "{Tag} [IP {Ip}] Send command failed: {Cmd}",
+                LogTag,
                 _ip,
                 command.TrimEnd('\r', '\n')
             );
@@ -174,7 +187,8 @@ internal sealed class TjProjectorTcpClient : IDisposable
 
             string response = Encoding.ASCII.GetString(buffer, 0, bytesRead).TrimEnd('\r', '\n');
             _logger.LogDebug(
-                "[投影机 {Ip}] 命令 {Cmd} → 响应: {Resp}",
+                "{Tag} [IP {Ip}] Command {Cmd} -> Response: {Resp}",
+                LogTag,
                 _ip,
                 command.TrimEnd('\r', '\n'),
                 response
@@ -185,7 +199,8 @@ internal sealed class TjProjectorTcpClient : IDisposable
         {
             _logger.LogWarning(
                 ex,
-                "[投影机 {Ip}] 发送命令并读取响应失败: {Cmd}",
+                "{Tag} [IP {Ip}] Send command and read response failed: {Cmd}",
+                LogTag,
                 _ip,
                 command.TrimEnd('\r', '\n')
             );
@@ -203,7 +218,7 @@ internal sealed class TjProjectorTcpClient : IDisposable
         if (!IsConnected)
         {
             throw new InvalidOperationException(
-                $"投影机 {_ip}:{_port} 未连接，请先调用 ConnectAsync"
+                $"{LogTag} Projector {_ip}:{_port} is not connected. Call ConnectAsync first."
             );
         }
     }

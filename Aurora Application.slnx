@@ -977,7 +977,13 @@
             <Platform Solution="*|x64" Project="x64" />
             <Platform Solution="*|x86" Project="x86" />
         </Project>
-        <Project Path="Sources/AuroraStruct3D/AuroraStruct3D.DLP/AuroraStruct3D.DLP.csproj">
+        <Project Path="Sources/AuroraStruct3D/AuroraStruct3D.DeviceStateManagement/AuroraStruct3D.DeviceStateManagement.csproj">
+            <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraStruct3D/AuroraStruct3D.Projectors/AuroraStruct3D.Projectors.csproj">
             <Platform Solution="*|Any CPU" Project="x64" />
             <Platform Solution="*|arm64" Project="arm64" />
             <Platform Solution="*|x64" Project="x64" />

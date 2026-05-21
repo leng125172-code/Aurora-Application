@@ -9,6 +9,8 @@ namespace AuroraStruct3D.RS485.Protocol;
 /// </summary>
 public sealed class RS485Port : IRS485Port
 {
+    private const string LogTag = "[Serial port]";
+
     private readonly SerialPort _serialPort;
     private readonly ILogger<RS485Port> _logger;
 
@@ -68,7 +70,8 @@ public sealed class RS485Port : IRS485Port
         _serialPort.DiscardInBuffer();
         _serialPort.DiscardOutBuffer();
         _logger.LogInformation(
-            "RS485串口 {Port} 已打开，波特率: {Baud}",
+            "{Tag} RS485 port {Port} opened at baud rate {Baud}",
+            LogTag,
             _serialPort.PortName,
             _serialPort.BaudRate
         );
@@ -83,7 +86,7 @@ public sealed class RS485Port : IRS485Port
         }
 
         _serialPort.Close();
-        _logger.LogInformation("RS485串口 {Port} 已关闭", _serialPort.PortName);
+        _logger.LogInformation("{Tag} RS485 port {Port} closed", LogTag, _serialPort.PortName);
     }
 
     /// <inheritdoc/>
@@ -98,7 +101,9 @@ public sealed class RS485Port : IRS485Port
 
         if (!_serialPort.IsOpen)
         {
-            throw new InvalidOperationException($"串口 {PortName} 未打开，请先调用 Open()");
+            throw new InvalidOperationException(
+                $"{LogTag} RS485 port {PortName} is not open. Call Open() first."
+            );
         }
 
         // 获取总线互斥锁，确保半双工时序正确
@@ -116,7 +121,8 @@ public sealed class RS485Port : IRS485Port
             await _serialPort.BaseStream.FlushAsync(cancellationToken).ConfigureAwait(false);
 
             _logger.LogDebug(
-                "RS485发送 [{Port}]: {Hex}",
+                "{Tag} RS485 TX [{Port}]: {Hex}",
+                LogTag,
                 PortName,
                 Convert.ToHexString(request, 0, request.Length)
             );
@@ -134,7 +140,12 @@ public sealed class RS485Port : IRS485Port
                 )
                 .ConfigureAwait(false);
 
-            _logger.LogDebug("RS485接收 [{Port}]: {Hex}", PortName, Convert.ToHexString(response));
+            _logger.LogDebug(
+                "{Tag} RS485 RX [{Port}]: {Hex}",
+                LogTag,
+                PortName,
+                Convert.ToHexString(response)
+            );
             return response;
         }
         finally
@@ -170,7 +181,7 @@ public sealed class RS485Port : IRS485Port
                 if (read == 0)
                 {
                     throw new TimeoutException(
-                        $"串口 {PortName} 读取超时，已接收 {received}/{length} 字节"
+                        $"{LogTag} Read timeout on port {PortName}, received {received}/{length} bytes."
                     );
                 }
 
@@ -180,7 +191,7 @@ public sealed class RS485Port : IRS485Port
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
             throw new TimeoutException(
-                $"串口 {PortName} 响应超时（{timeoutMs}ms），已接收 {received}/{length} 字节"
+                $"{LogTag} Response timeout on port {PortName} ({timeoutMs} ms), received {received}/{length} bytes."
             );
         }
 
@@ -199,6 +210,6 @@ public sealed class RS485Port : IRS485Port
         Close();
         _serialPort.Dispose();
         _busSemaphore.Dispose();
-        _logger.LogDebug("RS485Port ({Port}) 资源已释放", PortName);
+        _logger.LogDebug("{Tag} RS485Port ({Port}) disposed", LogTag, PortName);
     }
 }

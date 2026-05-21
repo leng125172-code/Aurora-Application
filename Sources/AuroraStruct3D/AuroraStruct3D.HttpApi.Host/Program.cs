@@ -6,7 +6,7 @@ public class Program
     {
         Log.Logger = new LoggerConfiguration()
             .WriteTo.Async(c => c.File("Logs/logs.txt"))
-            .WriteTo.Async(c => c.Console())
+            .WriteTo.Console(new AuroraStruct3D.Services.TagColoredTextFormatter())
             .CreateBootstrapLogger();
 
         try
@@ -22,6 +22,10 @@ public class Program
                         SerilogToEsExtensions.SetSerilogConfiguration(
                             loggerConfiguration,
                             context.Configuration
+                        );
+                        // 主 Serilog 使用自定义彩色控制台格式化器（替代 appsettings 中的默认 Console sink）
+                        loggerConfiguration.WriteTo.Console(
+                            new AuroraStruct3D.Services.TagColoredTextFormatter()
                         );
                     }
                 );

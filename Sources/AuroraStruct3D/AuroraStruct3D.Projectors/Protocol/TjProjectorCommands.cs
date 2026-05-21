@@ -1,4 +1,4 @@
-namespace AuroraStruct3D.DLP;
+namespace AuroraStruct3D.Projectors;
 
 /// <summary>
 /// 腾聚（TJ）结构光投影机 ASCII 协议命令字常量。
@@ -66,40 +66,38 @@ internal static class TjProjectorCommands
 
     /// <summary>指定末尾灰度的触发命令结尾</summary>
     public const string CommandSuffix = "\r\n";
+
+    // ─── 高级控制命令（Phase 4 新增）──────────────────────────────
+
+    /// <summary>设置图像翻转命令前缀（完整命令如 "S9 0\r\n"，参数为 ProjectorFlipMode 的整数值）</summary>
+    public const string SetFlipPrefix = "S9 ";
+
+    /// <summary>设置触发模式命令前缀（完整命令如 "B 0\r\n"，参数为 ProjectorTriggerMode 的整数值）</summary>
+    public const string SetTriggerModePrefix = "B ";
+
+    /// <summary>设置开机图案命令前缀（完整命令如 "S8 2\r\n"，参数为 ProjectorBootImage 的整数值）</summary>
+    public const string SetBootImagePrefix = "S8 ";
+
+    /// <summary>设置 RGB 彩光分量亮度命令前缀（完整命令如 "LE 92 94 94\r\n"，一条命令同时使能并设置 R G B）</summary>
+    public const string SetRgbColorPrefix = "LE ";
+
+    /// <summary>设置棋盘格像素尺寸命令前缀（完整命令如 "S11 30\r\n"）</summary>
+    public const string SetCheckerboardPixelPrefix = "S11 ";
+
+    /// <summary>软复位命令（重启投影机固件）</summary>
+    public const string SoftReset = "X\r\n";
+
+    /// <summary>保存参数到内部 Flash 命令（MS = Make Save）</summary>
+    public const string SaveParams = "MS\r\n";
+
+    /// <summary>读寄存器命令前缀（完整命令如 "pr 3\r\n"）</summary>
+    public const string ReadRegisterPrefix = "pr ";
+
+    /// <summary>写寄存器命令前缀（完整命令如 "pw 3 1\r\n"）</summary>
+    public const string WriteRegisterPrefix = "pw ";
 }
 
 /// <summary>
 /// 投影机内容显示模式
 /// </summary>
-public enum ProjectorDisplayMode : byte
-{
-    /// <summary>黑屏</summary>
-    Black = 0,
-
-    /// <summary>白屏</summary>
-    White = 1,
-
-    /// <summary>十字线</summary>
-    Cross = 2,
-
-    /// <summary>棋盘格</summary>
-    Checkerboard = 3,
-}
-
-/// <summary>
-/// 投影机颜色（仅多光谱结构光投影机支持）
-/// </summary>
-public enum ProjectorColor : byte
-{
-    /// <summary>红色</summary>
-    Red = 0,
-
-    /// <summary>绿色</summary>
-    Green = 1,
-
-    /// <summary>蓝色</summary>
-    Blue = 2,
-
-    /// <summary>白色（全色）</summary>
-    White = 3,
-}
+// ProjectorDisplayMode 和 ProjectorColor 已移至 AuroraStruct3D.Domain.Shared/Projectors/ProjectorConsts.cs

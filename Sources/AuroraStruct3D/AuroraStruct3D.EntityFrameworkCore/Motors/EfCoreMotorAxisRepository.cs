@@ -54,6 +54,7 @@ public class EfCoreMotorAxisRepository
         AuroraStruct3DDbContext context = await GetDbContextAsync();
         return await context
             .MotorAxes.AsNoTracking()
+            .Include(m => m.SerialPortConfig)
             .Where(m => m.IsEnabled)
             .OrderBy(m => m.AxisIndex)
             .ToListAsync(cancellationToken);

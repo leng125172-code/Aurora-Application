@@ -1,4 +1,4 @@
-namespace AuroraStruct3D.DLP;
+namespace AuroraStruct3D.Projectors;
 
 /// <summary>
 /// 腾聚结构光投影机状态信息
@@ -66,8 +66,8 @@ public interface IDlpProjectorService
     /// <param name="deviceIndex">设备索引（同一 VID/PID 多台时从 0 开始）</param>
     /// <param name="cancellationToken">取消令牌</param>
     Task ConnectHidAsync(
-        int vendorId = 0x0E6A,
-        int productId = 0x0317,
+        int vendorId = 0x0483,
+        int productId = 0x5750,
         int deviceIndex = 0,
         CancellationToken cancellationToken = default
     );
@@ -84,6 +84,13 @@ public interface IDlpProjectorService
     /// </summary>
     /// <param name="projectorDeviceId">投影机设备数据库 ID</param>
     void SetProjectorDeviceId(Guid projectorDeviceId);
+
+    /// <summary>
+    /// 注入 HID 设备索引到投影机设备 ID 的映射（用于自动绑定操作日志设备 ID）。
+    /// 通常在应用启动时由数据库读取后注入。
+    /// </summary>
+    /// <param name="deviceIds">HID 设备索引 -> ProjectorDevice.Id</param>
+    void SetProjectorDeviceIdMapping(IReadOnlyDictionary<int, Guid> deviceIds);
 
     /// <summary>
     /// 获取投影机当前状态（含连接状态、固件版本）
@@ -159,6 +166,77 @@ public interface IDlpProjectorService
     /// <returns>响应文本，超时时返回 null</returns>
     Task<string?> SendRawCommandAndReadAsync(
         string command,
+        CancellationToken cancellationToken = default
+    );
+
+    // ─── 高级控制（Phase 3 新增）────────────────────────────────
+
+    /// <summary>
+    /// 设置图像翻转模式（None/FlipX/FlipY/FlipXY）
+    /// </summary>
+    Task<bool> SetFlipAsync(ProjectorFlipMode flip, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 设置触发模式（Normal/Loop/SingleFrame）
+    /// </summary>
+    Task<bool> SetTriggerModeAsync(
+        ProjectorTriggerMode mode,
+        CancellationToken cancellationToken = default
+    );
+
+    /// <summary>
+    /// 设置开机默认图案
+    /// </summary>
+    Task<bool> SetBootImageAsync(
+        ProjectorBootImage image,
+        CancellationToken cancellationToken = default
+    );
+
+    /// <summary>
+    /// 设置棋盘格像素尺寸（像素，建议范围 5~100）
+    /// </summary>
+    Task<bool> SetCheckerboardPixelSizeAsync(
+        int pixelSize,
+        CancellationToken cancellationToken = default
+    );
+
+    /// <summary>
+    /// 设置 RGB 分量亮度（Aura Sync 彩光模式）
+    /// </summary>
+    /// <param name="r">红色分量（0~255）</param>
+    /// <param name="g">绿色分量（0~255）</param>
+    /// <param name="b">蓝色分量（0~255）</param>
+    Task<bool> SetRgbColorAsync(
+        byte r,
+        byte g,
+        byte b,
+        CancellationToken cancellationToken = default
+    );
+
+    /// <summary>
+    /// 软复位（发送 X 指令重启投影机固件）
+    /// </summary>
+    Task<bool> SoftResetAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 保存当前参数到设备内部非易失性存储
+    /// </summary>
+    Task<bool> SaveParamsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 读取指定寄存器值
+    /// </summary>
+    /// <param name="address">寄存器地址（如 0 对应 "pr 0\r\n"）</param>
+    Task<string?> ReadRegisterAsync(int address, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 写入指定寄存器值
+    /// </summary>
+    /// <param name="address">寄存器地址</param>
+    /// <param name="value">写入值</param>
+    Task<bool> WriteRegisterAsync(
+        int address,
+        int value,
         CancellationToken cancellationToken = default
     );
 }

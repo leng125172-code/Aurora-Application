@@ -32,8 +32,6 @@ public class EfCoreProjectorDeviceRepository
 
     /// <inheritdoc/>
     public async Task<ProjectorDevice?> FindByHidAsync(
-        int vendorId,
-        int productId,
         int deviceIndex = 0,
         CancellationToken cancellationToken = default
     )
@@ -42,7 +40,9 @@ public class EfCoreProjectorDeviceRepository
         return await context
             .ProjectorDevices.AsNoTracking()
             .FirstOrDefaultAsync(
-                p => p.HidVendorId == vendorId && p.HidProductId == productId && p.HidDeviceIndex == deviceIndex,
+                p =>
+                    p.ConnectionType == ProjectorConnectionType.UsbHid
+                    && p.HidDeviceIndex == deviceIndex,
                 cancellationToken
             );
     }

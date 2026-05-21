@@ -196,3 +196,66 @@ public struct TUCamFrame
     /// <summary>图像数据缓冲区指针</summary>
     public IntPtr pBuffer;
 }
+
+/// <summary>
+/// 触发输出属性结构体（对应 TUCAM_TRGOUT_ATTR）
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+public struct TUCamTrgOutAttr
+{
+    /// <summary>输出端口编号（输入/输出）</summary>
+    public int nTgrOutPort;
+
+    /// <summary>输出模式/信号来源（输入/输出）</summary>
+    public int nTgrOutMode;
+
+    /// <summary>边沿模式（0:上升沿 1:下降沿）</summary>
+    public int nEdgeMode;
+
+    /// <summary>延迟时间（输入/输出）</summary>
+    public int nDelayTm;
+
+    /// <summary>脉冲宽度（输入/输出）</summary>
+    public int nWidth;
+}
+
+/// <summary>
+/// 计算ROI属性结构体（用于白平衡/AE区域，对应 TUCAM_CALC_ROI_ATTR）
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+public struct TUCamCalcRoiAttr
+{
+    /// <summary>ROI使能开关</summary>
+    public int bEnable;
+
+    /// <summary>计算类型ID（TUCAM_IDCROI）</summary>
+    public int idCalc;
+
+    /// <summary>水平偏移</summary>
+    public int nHOffset;
+
+    /// <summary>垂直偏移</summary>
+    public int nVOffset;
+
+    /// <summary>ROI宽度</summary>
+    public int nWidth;
+
+    /// <summary>ROI高度</summary>
+    public int nHeight;
+}
+
+/// <summary>
+/// 寄存器读写结构体（对应 TUCAM_REG_RW）
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+public struct TUCamRegRw
+{
+    /// <summary>寄存器类型（TUREG_SN / TUREG_DATA 等）</summary>
+    public int nRegType;
+
+    /// <summary>数据缓冲区指针</summary>
+    public IntPtr pBuf;
+
+    /// <summary>缓冲区大小（字节）</summary>
+    public int nBufSize;
+}
