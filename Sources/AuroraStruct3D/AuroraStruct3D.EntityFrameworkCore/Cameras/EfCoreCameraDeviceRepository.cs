@@ -103,4 +103,20 @@ public class EfCoreCameraDeviceRepository
                 .ThenInclude(s => s.Parameters)
             .FirstOrDefaultAsync(c => c.Id == id, cancellationToken);
     }
+
+    /// <inheritdoc/>
+    public async Task<int> GetDeviceIndexByIdAsync(
+        Guid id,
+        CancellationToken cancellationToken = default
+    )
+    {
+        // AsNoTracking 投影查询，仅获取 DeviceIndex，不加载或跟踪完整实体
+        // 避免在长时间 SDK 操作期间 EF Core 变更跟踪引发并发冲突
+        AuroraStruct3DDbContext context = await GetDbContextAsync();
+        return await context
+            .CameraDevices.AsNoTracking()
+            .Where(c => c.Id == id)
+            .Select(c => c.DeviceIndex)
+            .FirstAsync(cancellationToken);
+    }
 }

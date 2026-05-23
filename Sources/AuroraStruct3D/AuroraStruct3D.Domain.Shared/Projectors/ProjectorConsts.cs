@@ -29,6 +29,9 @@ public static class ProjectorConsts
     /// <summary>腾聚 TJ 系列投影机固定 USB HID 产品 ID（STM32 USB HID 芯片，硬件固定，不可修改）</summary>
     public const int HidProductId = 0x5750;
 
+    /// <summary>默认连接超时时间（毫秒）</summary>
+    public const int DefaultConnectTimeoutMs = 5000;
+
     /// <summary>数据库表名前缀</summary>
     public const string DbTablePrefix = "AbpPro";
 }

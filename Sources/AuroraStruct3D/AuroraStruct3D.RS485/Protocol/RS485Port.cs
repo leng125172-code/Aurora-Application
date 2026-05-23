@@ -127,13 +127,27 @@ public sealed class RS485Port : IRS485Port
                 Convert.ToHexString(request, 0, request.Length)
             );
 
-            if (expectedResponseLength <= 0)
+            if (expectedResponseLength == 0)
             {
                 return [];
             }
 
+            if (expectedResponseLength < 0)
+            {
+                byte[] idleResponse = await ReceiveUntilIdleAsync(timeoutMs, cancellationToken)
+                    .ConfigureAwait(false);
+
+                _logger.LogDebug(
+                    "{Tag} RS485 RX [{Port}]: {Hex}",
+                    LogTag,
+                    PortName,
+                    Convert.ToHexString(idleResponse)
+                );
+                return idleResponse;
+            }
+
             // 等待并接收响应帧
-            byte[] response = await ReceiveExactAsync(
+            byte[] exactResponse = await ReceiveExactAsync(
                     expectedResponseLength,
                     timeoutMs,
                     cancellationToken
@@ -144,9 +158,9 @@ public sealed class RS485Port : IRS485Port
                 "{Tag} RS485 RX [{Port}]: {Hex}",
                 LogTag,
                 PortName,
-                Convert.ToHexString(response)
+                Convert.ToHexString(exactResponse)
             );
-            return response;
+            return exactResponse;
         }
         finally
         {
@@ -196,6 +210,47 @@ public sealed class RS485Port : IRS485Port
         }
 
         return buffer;
+    }
+
+    /// <summary>
+    /// 读取串口响应直到短暂空闲或整体超时，适用于串口调试助手这类未知长度响应。
+    /// </summary>
+    private async Task<byte[]> ReceiveUntilIdleAsync(
+        int timeoutMs,
+        CancellationToken cancellationToken
+    )
+    {
+        using CancellationTokenSource timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(
+            cancellationToken
+        );
+        timeoutCts.CancelAfter(timeoutMs);
+
+        using MemoryStream stream = new();
+        byte[] buffer = new byte[256];
+
+        while (!timeoutCts.IsCancellationRequested)
+        {
+            try
+            {
+                using CancellationTokenSource idleCts = CancellationTokenSource.CreateLinkedTokenSource(
+                    timeoutCts.Token
+                );
+                idleCts.CancelAfter(stream.Length == 0 ? timeoutMs : 30);
+                int read = await _serialPort
+                    .BaseStream.ReadAsync(buffer.AsMemory(0, buffer.Length), idleCts.Token)
+                    .ConfigureAwait(false);
+                if (read > 0)
+                {
+                    stream.Write(buffer, 0, read);
+                }
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                break;
+            }
+        }
+
+        return stream.ToArray();
     }
 
     /// <inheritdoc/>

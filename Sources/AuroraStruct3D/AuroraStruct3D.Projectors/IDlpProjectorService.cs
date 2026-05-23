@@ -93,6 +93,15 @@ public interface IDlpProjectorService
     void SetProjectorDeviceIdMapping(IReadOnlyDictionary<int, Guid> deviceIds);
 
     /// <summary>
+    /// 枚举当前连接的 HID 投影机数量（不建立连接，仅探测设备）。
+    /// 跨平台支持 Windows 和 Linux ARM64。
+    /// </summary>
+    /// <param name="vendorId">HID 厂商 ID</param>
+    /// <param name="productId">HID 产品 ID</param>
+    /// <returns>匹配 VID/PID 的 HID 设备数量</returns>
+    int GetHidDeviceCount(int vendorId, int productId);
+
+    /// <summary>
     /// 获取投影机当前状态（含连接状态、固件版本）
     /// </summary>
     Task<DlpProjectorStatus> GetStatusAsync(CancellationToken cancellationToken = default);

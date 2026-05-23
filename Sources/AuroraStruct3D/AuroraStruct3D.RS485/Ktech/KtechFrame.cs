@@ -4,13 +4,10 @@ namespace AuroraStruct3D.RS485.Ktech;
 /// 瓴控KTECH电机 CMD 0x9A 帧定义与校验工具
 /// </summary>
 /// <remarks>
-/// KTECH私有协议帧结构（13字节响应示例）：
-/// [3e] [9a] [SlaveId] [B3] [B4] [B5] [B6] [B7] [B8] [B9] [B10] [B11] [CHK]
-///  帧头  CMD  从机地址  ← 速度(uint16) → ← 位置(uint16) →   状态字节组         校验和
-///
-/// 校验和算法（从CMD字节到最后数据字节的累加和 XOR 0x82）：
-/// CHK = (Σ bytes[1..11]) &amp; 0xFF ^ 0x82
-/// 注：此算法根据已知两帧数据推导得出，建议与瓴控官方文档核对。
+/// KTECH查询协议帧结构参考 Tools/scan_rs485_motors.py：
+/// 请求：[3E][9A][SlaveId][00][CMD_SUM]
+/// 响应：[3E][9A][SlaveId][07][CMD_SUM][DATA0..DATA6][DATA_SUM]
+/// CMD_SUM 为帧头到数据长度的累加和低 8 位，DATA_SUM 为 7 字节数据累加和低 8 位。
 /// </remarks>
 public static class KtechFrame
 {
@@ -19,6 +16,12 @@ public static class KtechFrame
 
     /// <summary>查询状态命令字</summary>
     public const byte CmdQueryStatus = 0x9A;
+
+    /// <summary>查询状态请求数据长度</summary>
+    public const byte QueryRequestDataLength = 0x00;
+
+    /// <summary>查询状态响应数据长度</summary>
+    public const byte QueryResponseDataLength = 0x07;
 
     /// <summary>电机运行命令（从关闭状态切换到运行状态，开启电机输出）</summary>
     public const byte CmdRun = 0x88;
@@ -56,14 +59,17 @@ public static class KtechFrame
     /// <summary>
     /// 构造「查询电机状态」请求帧（CMD 0x9A）
     /// </summary>
-    /// <param name="slaveId">从机地址（1~247）</param>
-    /// <returns>4字节请求帧</returns>
+    /// <param name="slaveId">从机地址（1~32）</param>
+    /// <returns>5字节请求帧</returns>
     public static byte[] BuildQueryStatusFrame(byte slaveId)
     {
-        // 请求帧：[3e] [9a] [slaveId] [chk]
-        // 校验和 = (0x9a + slaveId + 0x7E) & 0xFF
-        byte chk = ComputeChecksum([CmdQueryStatus, slaveId]);
-        return [FrameHeader, CmdQueryStatus, slaveId, chk];
+        byte commandChecksum = ComputeChecksum([
+            FrameHeader,
+            CmdQueryStatus,
+            slaveId,
+            QueryRequestDataLength,
+        ]);
+        return [FrameHeader, CmdQueryStatus, slaveId, QueryRequestDataLength, commandChecksum];
     }
 
     /// <summary>
@@ -200,12 +206,27 @@ public static class KtechFrame
             throw new InvalidDataException($"从机地址不匹配，期望 {slaveId}，实际 {frame[2]}");
         }
 
-        // 校验和验证：计算 bytes[1..11] 的校验和
-        byte computedChk = ComputeChecksum(frame[1..12]);
-        if (frame[12] != computedChk)
+        if (frame[3] != QueryResponseDataLength)
         {
             throw new InvalidDataException(
-                $"KTECH校验和错误，期望 0x{computedChk:X2}，实际 0x{frame[12]:X2}，"
+                $"KTECH响应数据长度错误，期望 0x{QueryResponseDataLength:X2}，实际 0x{frame[3]:X2}"
+            );
+        }
+
+        byte computedCommandChecksum = ComputeChecksum(frame[..4]);
+        if (frame[4] != computedCommandChecksum)
+        {
+            throw new InvalidDataException(
+                $"KTECH命令校验和错误，期望 0x{computedCommandChecksum:X2}，实际 0x{frame[4]:X2}，"
+                    + $"帧数据: {Convert.ToHexString(frame)}"
+            );
+        }
+
+        byte computedDataChecksum = ComputeChecksum(frame[5..12]);
+        if (frame[12] != computedDataChecksum)
+        {
+            throw new InvalidDataException(
+                $"KTECH数据校验和错误，期望 0x{computedDataChecksum:X2}，实际 0x{frame[12]:X2}，"
                     + $"帧数据: {Convert.ToHexString(frame)}"
             );
         }
@@ -213,30 +234,23 @@ public static class KtechFrame
         return new KtechStatusFrame
         {
             SlaveId = frame[2],
-            // 字节3~4：速度值（大端序uint16）
-            SpeedRaw = (ushort)((frame[3] << 8) | frame[4]),
-            // 字节5~6：位置值（大端序uint16）
-            PositionRaw = (ushort)((frame[5] << 8) | frame[6]),
-            // 字节7：状态标志字节
-            StatusFlags = frame[7],
-            // 字节8~9：扩展数据
-            ExtData1 = (ushort)((frame[8] << 8) | frame[9]),
-            // 字节10~11：扩展数据2
-            ExtData2 = (ushort)((frame[10] << 8) | frame[11]),
+            // 数据字节0~1：速度值（大端序uint16）
+            SpeedRaw = (ushort)((frame[5] << 8) | frame[6]),
+            // 数据字节2~3：位置值（大端序uint16）
+            PositionRaw = (ushort)((frame[7] << 8) | frame[8]),
+            // 数据字节4：状态标志字节
+            StatusFlags = frame[9],
+            // 数据字节5~6：扩展数据
+            ExtData1 = (ushort)((frame[10] << 8) | frame[11]),
+            ExtData2 = 0,
         };
     }
 
     /// <summary>
-    /// 计算 KTECH 帧校验和
+    /// 计算 KTECH 帧累加和低 8 位。
     /// </summary>
-    /// <param name="data">参与校验的字节序列（从CMD字节起到最后数据字节）</param>
-    /// <returns>校验和字节</returns>
-    /// <remarks>
-    /// 经已知帧数据推导：CHK = (Σ data) &amp; 0xFF ^ 0x82
-    /// 两帧验证：
-    ///   Motor1: sum=0x21E → 0x1E ^ 0x82 = 0x9C ✓
-    ///   Motor2: sum=0x243 → 0x43 ^ 0x82 = 0xC1 ✓
-    /// </remarks>
+    /// <param name="data">参与校验的字节序列。</param>
+    /// <returns>累加和低 8 位。</returns>
     public static byte ComputeChecksum(ReadOnlySpan<byte> data)
     {
         int sum = 0;
@@ -244,8 +258,7 @@ public static class KtechFrame
         {
             sum += b;
         }
-
-        return (byte)((sum & 0xFF) ^ 0x82);
+        return (byte)(sum & 0xFF);
     }
 }
 
@@ -258,27 +271,27 @@ public class KtechStatusFrame
     public byte SlaveId { get; init; }
 
     /// <summary>
-    /// 原始速度值（字节3~4，大端序，单位待官方文档确认，可能为 RPM 或 pulse/s）
+    /// 原始速度值（数据字节0~1，大端序，单位待官方文档确认，可能为 RPM 或 pulse/s）
     /// </summary>
     public ushort SpeedRaw { get; init; }
 
     /// <summary>
-    /// 原始位置值（字节5~6，大端序，单位待官方文档确认，可能为 pulse）
+    /// 原始位置值（数据字节2~3，大端序，单位待官方文档确认，可能为 pulse）
     /// </summary>
     public ushort PositionRaw { get; init; }
 
     /// <summary>
-    /// 状态标志字节（字节7）：
+    /// 状态标志字节（数据字节4）：
     /// bit0 - 使能状态（1=使能）
     /// bit3 - 运动中（1=运动中）
     /// 其余位含义待官方文档确认
     /// </summary>
     public byte StatusFlags { get; init; }
 
-    /// <summary>扩展数据1（字节8~9）</summary>
+    /// <summary>扩展数据1（数据字节5~6）</summary>
     public ushort ExtData1 { get; init; }
 
-    /// <summary>扩展数据2（字节10~11）</summary>
+    /// <summary>扩展数据2（当前查询响应未提供，保留兼容）</summary>
     public ushort ExtData2 { get; init; }
 
     /// <summary>根据 StatusFlags 判断电机是否已使能</summary>

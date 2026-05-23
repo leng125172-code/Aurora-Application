@@ -53,6 +53,15 @@ public interface ICameraDeviceRepository : IRepository<CameraDevice, Guid>
         Guid id,
         CancellationToken cancellationToken = default
     );
+
+    /// <summary>
+    /// 仅查询相机的 SDK 设备索引（AsNoTracking 投影查询，不加载完整实体）。
+    /// 用于长时间 SDK 操作前的索引获取，避免 EF Core 在操作期间跟踪实体导致并发异常。
+    /// </summary>
+    /// <param name="id">相机数据库 ID</param>
+    /// <param name="cancellationToken">取消令牌</param>
+    /// <returns>SDK 设备索引</returns>
+    Task<int> GetDeviceIndexByIdAsync(Guid id, CancellationToken cancellationToken = default);
 }
 
 /// <summary>

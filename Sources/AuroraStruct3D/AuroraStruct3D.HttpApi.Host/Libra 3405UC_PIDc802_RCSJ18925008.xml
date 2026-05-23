@@ -1,0 +1,25 @@
+<?TUXML version="1.0" encoding="UTF-8"?>
+<Cam_Libra3405UC Using="DftParameter">
+    <ParameterSets Name="DftParameter">
+        <Resolution>0</Resolution>
+        <BitOfDepth>16</BitOfDepth>
+        <GlobalGain>0</GlobalGain>
+        <FMExposure>0</FMExposure>
+        <LNExposure>10000</LNExposure>
+        <WhiteBalance>2</WhiteBalance>
+        <Sharpness>0</Sharpness>
+        <ATWBalanceType>1</ATWBalanceType>
+        <Gamma>100</Gamma>
+        <Contrast>128</Contrast>
+        <LeftLevels>0</LeftLevels>
+        <RightLevels>255</RightLevels>
+        <HistogramStatistic>0</HistogramStatistic>
+        <AutoLevels>0</AutoLevels>
+        <VerticalCorrection>1</VerticalCorrection>
+        <RotateR90>0</RotateR90>
+        <RotateL90>0</RotateL90>
+        <TimeStampEn>1</TimeStampEn>
+        <Visibility>0</Visibility>
+        <IgnorePercentage>10</IgnorePercentage>
+    </ParameterSets>
+</Cam_Libra3405UC>

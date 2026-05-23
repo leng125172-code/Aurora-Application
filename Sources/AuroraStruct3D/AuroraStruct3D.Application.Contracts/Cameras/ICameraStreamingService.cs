@@ -13,7 +13,20 @@ public interface ICameraStreamingService
     /// <param name="cameraId">相机设备 ID</param>
     /// <param name="connectionId">SignalR 连接 ID（精准推帧，null 表示全组播）</param>
     /// <param name="enableRtp">是否同时开启 RTP/MJPEG UDP 流</param>
-    Task StartPreviewAsync(Guid cameraId, string? connectionId, bool enableRtp);
+    /// <param name="imageRotationAngle">图像顺时针旋转角度（度）</param>
+    Task StartPreviewAsync(
+        Guid cameraId,
+        string? connectionId,
+        bool enableRtp,
+        int imageRotationAngle
+    );
+
+    /// <summary>
+    /// 更新正在预览中的软件图像旋转角度；未预览时直接忽略
+    /// </summary>
+    /// <param name="cameraId">相机设备 ID</param>
+    /// <param name="imageRotationAngle">图像顺时针旋转角度（度）</param>
+    Task UpdatePreviewRotationAsync(Guid cameraId, int imageRotationAngle);
 
     /// <summary>
     /// 停止指定相机的实时推流

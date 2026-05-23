@@ -14,18 +14,9 @@ import { MessagePackHubProtocol } from '@microsoft/signalr-protocol-msgpack'
 import {
     type CameraDeviceDto,
     type CameraDeviceInfoDto,
-    type CameraImageParamsDto,
-    type SetCameraImageParamsDto,
-    type CameraAcquisitionParamsDto,
-    type SetCameraAcquisitionParamsDto,
-    type CameraTriggerParamsDto,
-    type SetCameraTriggerParamsDto,
-    type CameraCustomParamsDto,
-    type SetCameraCustomParamsDto,
     type CameraLiveMetricsDto,
     type CameraRtpEndpointDto,
     type CameraSnapshotDto,
-    type CameraUserProfileDto,
     type StartCameraPreviewDto,
     type GetCameraListDto,
     type UpdateCameraDeviceDto,
@@ -36,21 +27,25 @@ import {
     closeCamera,
     scanCameras,
     getCameraDeviceInfo as getDeviceInfo,
-    getCameraImageParams as getImageParams,
-    setCameraImageParams as setImageParams,
-    getCameraAcquisitionParams as getAcquisitionParams,
-    setCameraAcquisitionParams as setAcquisitionParams,
-    getCameraTriggerParams as getTriggerParams,
-    setCameraTriggerParams as setTriggerParams,
-    getCameraCustomParams as getCustomParams,
-    setCameraCustomParams as setCustomParams,
     takeSnapshot,
     startPreview,
     stopPreview,
     doSoftwareTrigger,
+    doExposureAutoOncePulse,
     getRtpEndpoint,
-    loadUserProfile,
-    saveUserProfile,
+    getCameraImageRotationAngle,
+    setCameraImageRotationAngle,
+    type GenICamNodeGetInput,
+    type GenICamBatchGetResultDto,
+    type GenICamNodeSetInput,
+    type CameraNodeMapDto,
+    type CameraStateDto,
+    batchGetGenICamParams as apiBatchGetGenICamParams,
+    setGenICamParam as apiSetGenICamParam,
+    executeGenICamCommand as apiExecuteGenICamCommand,
+    getCameraNodeMap as apiGetCameraNodeMap,
+    refreshCameraNodeMap as apiRefreshCameraNodeMap,
+    readCameraNodes as apiReadCameraNodes,
 } from '@/api/cameras'
 
 export const useCameraStore = defineStore('camera', () => {
@@ -68,10 +63,53 @@ export const useCameraStore = defineStore('camera', () => {
     const previewFrames = ref<Map<string, string>>(new Map())
     /** 实时运行指标，key 为相机 ID */
     const liveMetrics = ref<Map<string, CameraLiveMetricsDto>>(new Map())
+    /** 实时相机状态（CameraStateDto），key 为相机 ID */
+    const cameraStates = ref<Map<string, CameraStateDto>>(new Map())
+    /** 动态 NodeMap 缓存，key 为相机 ID */
+    const nodeMaps = ref<Map<string, CameraNodeMapDto>>(new Map())
 
     let connection: signalR.HubConnection | null = null
 
     // ─── 辅助函数 ─────────────────────────────────────────────────────────────
+
+    type LiveMetricsWire = Partial<CameraLiveMetricsDto> & Record<string, unknown>
+
+    function toNumber(value: unknown, fallback = 0): number {
+        if (typeof value === 'number' && Number.isFinite(value)) return value
+        if (typeof value === 'string') {
+            const parsed = Number(value)
+            if (Number.isFinite(parsed)) return parsed
+        }
+        return fallback
+    }
+
+    /** SignalR MessagePack 会保留 C# PascalCase 属性名，这里统一转成前端 camelCase。 */
+    function normalizeLiveMetrics(raw: LiveMetricsWire): CameraLiveMetricsDto {
+        return {
+            fpgaTemperature: toNumber(raw.fpgaTemperature ?? raw.FpgaTemperature),
+            sensorTemperature: toNumber(raw.sensorTemperature ?? raw.SensorTemperature),
+            frameRate: toNumber(raw.frameRate ?? raw.FrameRate),
+            aeStatus: toNumber(raw.aeStatus ?? raw.AeStatus),
+            currentBufFrames: toNumber(raw.currentBufFrames ?? raw.CurrentBufFrames),
+        }
+    }
+
+    function normalizeFrameBytes(frame: Uint8Array | ArrayBuffer | number[] | ArrayLike<number>): Uint8Array {
+        if (frame instanceof Uint8Array) return Uint8Array.from(frame)
+        if (frame instanceof ArrayBuffer) return new Uint8Array(frame.slice(0))
+        if (Array.isArray(frame)) return Uint8Array.from(frame)
+        if (ArrayBuffer.isView(frame)) {
+            const view = frame as ArrayBufferView
+            return new Uint8Array(view.buffer.slice(view.byteOffset, view.byteOffset + view.byteLength))
+        }
+        return Uint8Array.from(frame)
+    }
+
+    function toBlobArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+        const copy = new Uint8Array(bytes.byteLength)
+        copy.set(bytes)
+        return copy.buffer
+    }
 
     /** 用最新数据更新列表中某台相机 */
     function _applyUpdate(updated: CameraDeviceDto) {
@@ -90,49 +128,70 @@ export const useCameraStore = defineStore('camera', () => {
 
     /** 启动 SignalR Hub 连接（使用 MessagePack 协议，二进制帧无 base64 开销） */
     async function startHub() {
-        if (connection) return
-
-        connection = new signalR.HubConnectionBuilder()
-            .withUrl('/signalr-hubs/camera', { skipNegotiation: false })
-            .withHubProtocol(new MessagePackHubProtocol())
-            .withAutomaticReconnect()
-            .configureLogging(signalR.LogLevel.Warning)
-            .build()
-
-        // 接收相机状态推送（连接时及状态变化时触发）
-        connection.on('ReceiveCameraStateAsync', (cameraId: string, _state: string) => {
-            // 状态变化时刷新对应相机完整数据
-            void refreshCamera(cameraId)
-        })
-
-        // 接收 JPEG 预览帧（30FPS 限速）
-        connection.on('ReceiveCameraFrameAsync', (cameraId: string, frame: Uint8Array) => {
-            // 释放旧的 ObjectURL，避免内存泄漏
-            const oldUrl = previewFrames.value.get(cameraId)
-            if (oldUrl) URL.revokeObjectURL(oldUrl)
-
-            const blob = new Blob([frame.buffer as ArrayBuffer], { type: 'image/jpeg' })
-            const url = URL.createObjectURL(blob)
-            previewFrames.value.set(cameraId, url)
-        })
-
-        // 接收实时运行指标（每 2 秒推送）
-        connection.on('ReceiveLiveMetricsAsync', (cameraId: string, metrics: CameraLiveMetricsDto) => {
-            liveMetrics.value.set(cameraId, metrics)
-        })
-
-        connection.onclose(() => {
-            hubConnected.value = false
-        })
-        connection.onreconnected(() => {
+        if (connection?.state === signalR.HubConnectionState.Connected) {
             hubConnected.value = true
-        })
+            return
+        }
+
+        if (connection && connection.state !== signalR.HubConnectionState.Disconnected) {
+            throw new Error(`相机实时连接尚未就绪：${connection.state}`)
+        }
+
+        if (!connection) {
+            connection = new signalR.HubConnectionBuilder()
+                .withUrl('/signalr-hubs/camera', { skipNegotiation: false })
+                .withHubProtocol(new MessagePackHubProtocol())
+                .withAutomaticReconnect()
+                .configureLogging(signalR.LogLevel.Warning)
+                .build()
+
+            // 接收相机状态推送（连接时及状态变化时触发，已迁移到 CameraStateDto 单参数）
+            connection.on('ReceiveCameraStateAsync', (state: CameraStateDto) => {
+                if (!state || !state.cameraId) return
+                cameraStates.value.set(state.cameraId, state)
+                // 状态变化时刷新对应相机完整数据（保持旧逻辑：列表项与详情同步）
+                void refreshCamera(state.cameraId)
+            })
+
+            // 接收 JPEG 预览帧（30FPS 限速）
+            connection.on('ReceiveCameraFrameAsync', (cameraId: string, frame: Uint8Array | ArrayBuffer | number[]) => {
+                try {
+                    const bytes = normalizeFrameBytes(frame)
+                    if (bytes.byteLength === 0) return
+
+                    const oldUrl = previewFrames.value.get(cameraId)
+                    const blob = new Blob([toBlobArrayBuffer(bytes)], { type: 'image/jpeg' })
+                    const url = URL.createObjectURL(blob)
+                    previewFrames.value.set(cameraId, url)
+
+                    if (oldUrl) {
+                        window.setTimeout(() => URL.revokeObjectURL(oldUrl), 1000)
+                    }
+                } catch (error) {
+                    console.warn('接收相机预览帧失败', error)
+                }
+            })
+
+            // 接收实时运行指标（每 2 秒推送）
+            connection.on('ReceiveLiveMetricsAsync', (cameraId: string, metrics: LiveMetricsWire) => {
+                liveMetrics.value.set(cameraId, normalizeLiveMetrics(metrics))
+            })
+
+            connection.onclose(() => {
+                hubConnected.value = false
+            })
+            connection.onreconnected(() => {
+                hubConnected.value = true
+            })
+        }
 
         try {
             await connection.start()
             hubConnected.value = true
-        } catch {
+        } catch (error) {
             hubConnected.value = false
+            connection = null
+            throw error
         }
     }
 
@@ -204,36 +263,13 @@ export const useCameraStore = defineStore('camera', () => {
         return await getDeviceInfo(id)
     }
 
-    async function fetchImageParams(id: string): Promise<CameraImageParamsDto> {
-        return await getImageParams(id)
+    async function fetchImageRotationAngle(id: string): Promise<number> {
+        return await getCameraImageRotationAngle(id)
     }
 
-    async function applyImageParams(id: string, dto: SetCameraImageParamsDto): Promise<void> {
-        await setImageParams(id, dto)
-    }
-
-    async function fetchAcquisitionParams(id: string): Promise<CameraAcquisitionParamsDto> {
-        return await getAcquisitionParams(id)
-    }
-
-    async function applyAcquisitionParams(id: string, dto: SetCameraAcquisitionParamsDto): Promise<void> {
-        await setAcquisitionParams(id, dto)
-    }
-
-    async function fetchTriggerParams(id: string): Promise<CameraTriggerParamsDto> {
-        return await getTriggerParams(id)
-    }
-
-    async function applyTriggerParams(id: string, dto: SetCameraTriggerParamsDto): Promise<void> {
-        await setTriggerParams(id, dto)
-    }
-
-    async function fetchCustomParams(id: string): Promise<CameraCustomParamsDto> {
-        return await getCustomParams(id)
-    }
-
-    async function applyCustomParams(id: string, dto: SetCameraCustomParamsDto): Promise<void> {
-        await setCustomParams(id, dto)
+    async function applyImageRotationAngle(id: string, angle: number): Promise<void> {
+        await setCameraImageRotationAngle(id, angle)
+        await refreshCamera(id)
     }
 
     // ─── 预览控制 ─────────────────────────────────────────────────────────────
@@ -243,7 +279,14 @@ export const useCameraStore = defineStore('camera', () => {
     }
 
     async function startCameraPreview(id: string, dto: StartCameraPreviewDto): Promise<void> {
-        await startPreview(id, dto)
+        await startHub()
+        const connectionId = connection?.connectionId ?? dto.connectionId
+        if (!connectionId) {
+            throw new Error('相机实时连接未就绪，无法启动预览')
+        }
+
+        await startPreview(id, { ...dto, connectionId })
+        await refreshCamera(id)
     }
 
     async function stopCameraPreview(id: string): Promise<void> {
@@ -252,24 +295,54 @@ export const useCameraStore = defineStore('camera', () => {
         const url = previewFrames.value.get(id)
         if (url) URL.revokeObjectURL(url)
         previewFrames.value.delete(id)
+        await refreshCamera(id)
     }
 
     async function softTrigger(id: string): Promise<void> {
         await doSoftwareTrigger(id)
     }
 
+    async function exposureAutoOncePulse(id: string): Promise<void> {
+        await doExposureAutoOncePulse(id)
+    }
+
     async function fetchRtpEndpoint(id: string): Promise<CameraRtpEndpointDto> {
         return await getRtpEndpoint(id)
     }
 
-    // ─── 用户配置文件 ─────────────────────────────────────────────────────────
+    // ─── 通用 GenICam 节点读写 ───────────────────────────────────────────────
 
-    async function loadProfile(id: string, dto: CameraUserProfileDto): Promise<void> {
-        await loadUserProfile(id, dto)
+    async function batchGetGenICamParams(id: string, nodes: GenICamNodeGetInput[]): Promise<GenICamBatchGetResultDto> {
+        return apiBatchGetGenICamParams(id, nodes)
     }
 
-    async function saveProfile(id: string, dto: CameraUserProfileDto): Promise<void> {
-        await saveUserProfile(id, dto)
+    async function setGenICamParam(id: string, input: GenICamNodeSetInput): Promise<void> {
+        await apiSetGenICamParam(id, input)
+    }
+
+    async function executeGenICamCommand(id: string, nodeName: string): Promise<void> {
+        await apiExecuteGenICamCommand(id, nodeName)
+    }
+
+    // ─── 动态 NodeMap ─────────────────────────────────────────────────────────
+
+    /** 拉取并缓存指定相机的 NodeMap 快照 */
+    async function fetchNodeMap(id: string): Promise<CameraNodeMapDto> {
+        const map = await apiGetCameraNodeMap(id)
+        nodeMaps.value.set(id, map)
+        return map
+    }
+
+    /** 强制刷新 NodeMap（重新枚举 + 探测依赖） */
+    async function refreshNodeMap(id: string): Promise<CameraNodeMapDto> {
+        const map = await apiRefreshCameraNodeMap(id)
+        nodeMaps.value.set(id, map)
+        return map
+    }
+
+    /** 批量读取节点最新值（用于 Selector 切换后局部刷新） */
+    async function readNodes(id: string, nodes: GenICamNodeGetInput[]): Promise<GenICamBatchGetResultDto> {
+        return apiReadCameraNodes(id, nodes)
     }
 
     return {
@@ -280,6 +353,8 @@ export const useCameraStore = defineStore('camera', () => {
         hubConnected,
         previewFrames,
         liveMetrics,
+        cameraStates,
+        nodeMaps,
         // Hub
         startHub,
         stopHub,
@@ -295,22 +370,22 @@ export const useCameraStore = defineStore('camera', () => {
         scan,
         // 参数读写
         fetchDeviceInfo,
-        fetchImageParams,
-        applyImageParams,
-        fetchAcquisitionParams,
-        applyAcquisitionParams,
-        fetchTriggerParams,
-        applyTriggerParams,
-        fetchCustomParams,
-        applyCustomParams,
+        fetchImageRotationAngle,
+        applyImageRotationAngle,
         // 预览
         snapshot,
         startCameraPreview,
         stopCameraPreview,
         softTrigger,
+        exposureAutoOncePulse,
         fetchRtpEndpoint,
-        // 配置文件
-        loadProfile,
-        saveProfile,
+        // GenICam 通用节点读写
+        batchGetGenICamParams,
+        setGenICamParam,
+        executeGenICamCommand,
+        // 动态 NodeMap
+        fetchNodeMap,
+        refreshNodeMap,
+        readNodes,
     }
 })

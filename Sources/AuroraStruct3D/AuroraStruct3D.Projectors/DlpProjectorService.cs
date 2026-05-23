@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using AuroraStruct3D.Projectors.Protocol;
+using HidSharp;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -60,6 +61,26 @@ public class DlpProjectorService : IDlpProjectorService, IDisposable
             LogTag,
             _projectorDeviceIdMapping.Count
         );
+    }
+
+    /// <inheritdoc/>
+    public int GetHidDeviceCount(int vendorId, int productId)
+    {
+        try
+        {
+            return DeviceList.Local.GetHidDevices(vendorId, productId).Count();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(
+                ex,
+                "{Tag} GetHidDeviceCount(VID=0x{Vid:X4} PID=0x{Pid:X4}) 枚举失败",
+                LogTag,
+                vendorId,
+                productId
+            );
+            return 0;
+        }
     }
 
     /// <inheritdoc/>

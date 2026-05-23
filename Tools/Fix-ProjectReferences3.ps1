@@ -2,10 +2,10 @@ param([string]$SourcesPath = "D:\GitRepos\Aurora Application\Sources\AuroraAbpPr
 
 function Get-RelPath([string]$fromDir, [string]$toFile) {
     $fromDir = [IO.Path]::GetFullPath($fromDir).TrimEnd([IO.Path]::DirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar
-    $toFile  = [IO.Path]::GetFullPath($toFile)
+    $toFile = [IO.Path]::GetFullPath($toFile)
     $fromUri = [Uri]$fromDir
-    $toUri   = [Uri]$toFile
-    $relUri  = $fromUri.MakeRelativeUri($toUri)
+    $toUri = [Uri]$toFile
+    $relUri = $fromUri.MakeRelativeUri($toUri)
     return [Uri]::UnescapeDataString($relUri.ToString()).Replace('/', [IO.Path]::DirectorySeparatorChar)
 }
 
@@ -17,12 +17,12 @@ Get-ChildItem $SourcesPath -Filter "*.csproj" -Recurse | ForEach-Object {
 Write-Host "Index: $($index.Count) projects"
 
 $fixedFiles = 0
-$fixedRefs  = 0
-$notFound   = @()
+$fixedRefs = 0
+$notFound = @()
 
 Get-ChildItem $SourcesPath -Filter "*.csproj" -Recurse | ForEach-Object {
     $csprojPath = $_.FullName
-    $csprojDir  = $_.DirectoryName
+    $csprojDir = $_.DirectoryName
 
     try { [xml]$doc = Get-Content $csprojPath -Raw -Encoding UTF8 }
     catch { Write-Warning "Parse failed: $csprojPath"; return }
@@ -63,3 +63,5 @@ if ($notFound.Count -gt 0) {
     Write-Host "Not found ($($notFound.Count)):"
     foreach ($item in $notFound) { Write-Host "  $item" }
 }
+
+

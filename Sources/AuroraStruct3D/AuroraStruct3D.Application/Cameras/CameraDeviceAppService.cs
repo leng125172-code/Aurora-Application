@@ -1,6 +1,7 @@
 using AuroraStruct3D.Cameras.Dtos;
 using AuroraStruct3D.DeviceState;
 using AuroraStruct3D.Tucam;
+using AuroraStruct3D.Tucam.GenICam;
 using AuroraStruct3D.Tucam.Interop;
 using Microsoft.Extensions.Logging;
 using Volo.Abp;
@@ -116,17 +117,42 @@ public class CameraDeviceAppService : AuroraStruct3DAppService, ICameraDeviceApp
     {
         int count = await _tucamService.InitializeAsync();
 
+        // 扫描过程中同步构建索引→设备ID映射，供操作日志使用
+        var deviceIdMap = new Dictionary<int, Guid>();
+
         for (int i = 0; i < count; i++)
         {
+            // 扫描阶段无需打开相机，直接按索引读取型号
+            string model = await _tucamService.GetModelByIndexAsync(i);
+
             CameraDevice? existing = await _cameraDeviceRepository.FindByDeviceIndexAsync(i);
             if (existing == null)
             {
-                // 自动创建数据库记录
+                // 自动创建数据库记录，附带型号信息
                 var newCamera = new CameraDevice(GuidGenerator.Create(), $"相机 #{i}", i);
+                if (!string.IsNullOrEmpty(model))
+                {
+                    newCamera.UpdateHardwareInfo(model, null);
+                }
                 await _cameraDeviceRepository.InsertAsync(newCamera);
-                Logger.LogInformation("自动注册相机设备，索引: {Index}", i);
+                Logger.LogInformation("自动注册相机设备，索引: {Index}，型号: {Model}", i, model);
+                deviceIdMap[i] = newCamera.Id;
+            }
+            else
+            {
+                if (!string.IsNullOrEmpty(model) && existing.Model != model)
+                {
+                    // 型号有变化时更新（保留已有序列号）
+                    existing.UpdateHardwareInfo(model, existing.SerialNumber);
+                    await _cameraDeviceRepository.UpdateAsync(existing);
+                    Logger.LogInformation("更新相机 {Index} 型号: {Model}", i, model);
+                }
+                deviceIdMap[i] = existing.Id;
             }
         }
+
+        // 扫描完成后刷新 TucamCameraService 的操作日志映射，防止外键违规
+        _tucamService.SetCameraDeviceIdMapping(deviceIdMap);
 
         return count;
     }
@@ -138,9 +164,9 @@ public class CameraDeviceAppService : AuroraStruct3DAppService, ICameraDeviceApp
 
         await _tucamService.OpenCameraAsync(camera.DeviceIndex);
 
-        // 读取硬件信息并更新数据库
+        // 读取硬件信息并更新数据库（保留已有序列号）
         string model = await _tucamService.GetCameraModelAsync(camera.DeviceIndex);
-        camera.UpdateHardwareInfo(model, null);
+        camera.UpdateHardwareInfo(model, camera.SerialNumber);
         camera.SetStatus(CameraStatus.Ready);
         await _cameraDeviceRepository.UpdateAsync(camera);
     }
@@ -240,10 +266,14 @@ public class CameraDeviceAppService : AuroraStruct3DAppService, ICameraDeviceApp
             TUCamIdInfo.CurrentHeight
         );
 
-        // 固件/FPGA版本通过 GetValueInfo 字符串读取
-        string firmwareVersion = string.Empty;
+        // 通过 GenICam DeviceVersion 节点读取固件版本（ElementAttr 方式）
+        string firmwareVersion =
+            await _tucamService.GetGenICamStringAsync(idx, "DeviceVersion") ?? string.Empty;
         string fpgaVersion = string.Empty;
-        string serialNumber = string.Empty;
+
+        // 通过 GenICam String 节点读取设备序列号（Expert/RO）
+        string serialNumber =
+            await _tucamService.GetGenICamStringAsync(idx, "DeviceSerialNumber") ?? string.Empty;
 
         return new CameraDeviceInfoDto
         {
@@ -258,479 +288,38 @@ public class CameraDeviceAppService : AuroraStruct3DAppService, ICameraDeviceApp
         };
     }
 
-    // ─── 手动控制：图像参数 ─────────────────────────────────────────────────
+    // ─── 手动控制：图像旋转角度（软件端旋转）────────────────────────────────
 
     /// <inheritdoc/>
-    public async Task<CameraImageParamsDto> GetImageParamsAsync(Guid id)
+    public async Task<int> GetImageRotationAngleAsync(Guid id)
     {
-        int idx = await GetDeviceIndexAsync(id);
-        EnsureCameraOpen(idx);
-
-        TUCamRoiAttr roi = await _tucamService.GetRoiAsync(idx);
-        int bitDepth = await _tucamService.GetCapabilityValueAsync(idx, TUCamIdCapa.BitOfDepth);
-        int horizontal = await _tucamService.GetCapabilityValueAsync(idx, TUCamIdCapa.Horizontal);
-        int vertical = await _tucamService.GetCapabilityValueAsync(idx, TUCamIdCapa.Vertical);
-        int binningSum = await _tucamService.GetCapabilityValueAsync(idx, TUCamIdCapa.BinningSum);
-        int gammaEnabled = await _tucamService.GetCapabilityValueAsync(
-            idx,
-            TUCamIdCapa.EnableGamma
-        );
-        double gamma = await _tucamService.GetPropertyValueAsync(idx, TUCamIdProp.Gamma);
-        double contrast = await _tucamService.GetPropertyValueAsync(idx, TUCamIdProp.Contrast);
-        double brightness = await _tucamService.GetPropertyValueAsync(idx, TUCamIdProp.Brightness);
-        double frameRate = await _tucamService.GetPropertyValueAsync(idx, TUCamIdProp.FrameRate);
-
-        TUCamPropAttr frameRateAttr = await _tucamService.GetPropertyAttrAsync(
-            idx,
-            TUCamIdProp.FrameRate
-        );
-
-        return new CameraImageParamsDto
-        {
-            RoiEnabled = roi.bEnable != 0,
-            RoiHOffset = roi.nHOffset,
-            RoiVOffset = roi.nVOffset,
-            RoiWidth = roi.nWidth,
-            RoiHeight = roi.nHeight,
-            PixelDepth = (CameraPixelDepth)bitDepth,
-            HorizontalFlip = horizontal != 0,
-            VerticalFlip = vertical != 0,
-            Binning = (CameraBinningMode)binningSum,
-            GammaEnabled = gammaEnabled != 0,
-            Gamma = gamma,
-            Contrast = contrast,
-            Brightness = brightness,
-            FrameRate = frameRate,
-            FrameRateMax = frameRateAttr.dbValMax,
-        };
+        CameraDevice camera = await _cameraDeviceRepository.GetAsync(id);
+        return camera.ImageRotationAngle;
     }
 
     /// <inheritdoc/>
-    public async Task<CameraImageParamsDto> SetImageParamsAsync(
-        Guid id,
-        SetCameraImageParamsDto input
-    )
+    public async Task SetImageRotationAngleAsync(Guid id, SetCameraRotationAngleDto input)
     {
         EnsureManualOrMaintenanceMode();
-        int idx = await GetDeviceIndexAsync(id);
-        EnsureCameraOpen(idx);
-
-        // ROI 区域（所有ROI字段同时设置）
-        if (
-            input.RoiEnabled.HasValue
-            || input.RoiHOffset.HasValue
-            || input.RoiVOffset.HasValue
-            || input.RoiWidth.HasValue
-            || input.RoiHeight.HasValue
-        )
+        CameraDevice camera = await _cameraDeviceRepository.GetAsync(id);
+        try
         {
-            TUCamRoiAttr roi = await _tucamService.GetRoiAsync(idx);
-            if (input.RoiEnabled.HasValue)
-                roi.bEnable = input.RoiEnabled.Value ? 1 : 0;
-            if (input.RoiHOffset.HasValue)
-                roi.nHOffset = input.RoiHOffset.Value;
-            if (input.RoiVOffset.HasValue)
-                roi.nVOffset = input.RoiVOffset.Value;
-            if (input.RoiWidth.HasValue)
-                roi.nWidth = input.RoiWidth.Value;
-            if (input.RoiHeight.HasValue)
-                roi.nHeight = input.RoiHeight.Value;
-            await _tucamService.SetRoiAsync(idx, roi);
+            camera.SetImageRotationAngle(input.Angle);
         }
-
-        if (input.PixelDepth.HasValue)
+        catch (ArgumentOutOfRangeException)
         {
-            await _tucamService.SetCapabilityValueAsync(
-                idx,
-                TUCamIdCapa.BitOfDepth,
-                (int)input.PixelDepth.Value
-            );
+            throw new UserFriendlyException("图像旋转角度仅支持 0、90、180、270 度");
         }
-        if (input.HorizontalFlip.HasValue)
+        await _cameraDeviceRepository.UpdateAsync(camera);
+        if (_streamingService != null)
         {
-            await _tucamService.SetCapabilityValueAsync(
-                idx,
-                TUCamIdCapa.Horizontal,
-                input.HorizontalFlip.Value ? 1 : 0
-            );
+            await _streamingService.UpdatePreviewRotationAsync(id, camera.ImageRotationAngle);
         }
-        if (input.VerticalFlip.HasValue)
-        {
-            await _tucamService.SetCapabilityValueAsync(
-                idx,
-                TUCamIdCapa.Vertical,
-                input.VerticalFlip.Value ? 1 : 0
-            );
-        }
-        if (input.Binning.HasValue)
-        {
-            await _tucamService.SetCapabilityValueAsync(
-                idx,
-                TUCamIdCapa.BinningSum,
-                (int)input.Binning.Value
-            );
-        }
-        if (input.GammaEnabled.HasValue)
-        {
-            await _tucamService.SetCapabilityValueAsync(
-                idx,
-                TUCamIdCapa.EnableGamma,
-                input.GammaEnabled.Value ? 1 : 0
-            );
-        }
-        if (input.Gamma.HasValue)
-        {
-            await _tucamService.SetPropertyValueAsync(idx, TUCamIdProp.Gamma, input.Gamma.Value);
-        }
-        if (input.Contrast.HasValue)
-        {
-            await _tucamService.SetPropertyValueAsync(
-                idx,
-                TUCamIdProp.Contrast,
-                input.Contrast.Value
-            );
-        }
-        if (input.Brightness.HasValue)
-        {
-            await _tucamService.SetPropertyValueAsync(
-                idx,
-                TUCamIdProp.Brightness,
-                input.Brightness.Value
-            );
-        }
-        if (input.FrameRate.HasValue)
-        {
-            await _tucamService.SetPropertyValueAsync(
-                idx,
-                TUCamIdProp.FrameRate,
-                input.FrameRate.Value
-            );
-        }
-
-        return await GetImageParamsAsync(id);
     }
 
-    // ─── 手动控制：采集参数 ─────────────────────────────────────────────────
-
-    /// <inheritdoc/>
-    public async Task<CameraAcquisitionParamsDto> GetAcquisitionParamsAsync(Guid id)
-    {
-        int idx = await GetDeviceIndexAsync(id);
-        EnsureCameraOpen(idx);
-
-        int aeMode = await _tucamService.GetCapabilityValueAsync(idx, TUCamIdCapa.AutoExposureMode);
-        int aeStatus = await _tucamService.GetCapabilityValueAsync(idx, TUCamIdCapa.AutoExposure);
-        int gainMode = await _tucamService.GetCapabilityValueAsync(idx, TUCamIdCapa.Shutter);
-        double aeTargetGray = await _tucamService.GetPropertyValueAsync(
-            idx,
-            TUCamIdProp.AverageGray
-        );
-        double aeMaxExposure = await _tucamService.GetPropertyValueAsync(
-            idx,
-            TUCamIdProp.ExposureMax
-        );
-        double aeMinExposure = await _tucamService.GetPropertyValueAsync(
-            idx,
-            TUCamIdProp.ExposureMin
-        );
-        double exposure = await _tucamService.GetPropertyValueAsync(idx, TUCamIdProp.ExposureTime);
-        double globalGain = await _tucamService.GetPropertyValueAsync(idx, TUCamIdProp.GlobalGain);
-
-        return new CameraAcquisitionParamsDto
-        {
-            AeMode = (CameraAutoExposureMode)aeMode,
-            AeStatus = aeStatus,
-            GainMode = (CameraGainMode)gainMode,
-            AeTargetGray = aeTargetGray,
-            AeMaxExposure = aeMaxExposure,
-            AeMinExposure = aeMinExposure,
-            ExposureTime = exposure,
-            GlobalGain = globalGain,
-        };
-    }
-
-    /// <inheritdoc/>
-    public async Task<CameraAcquisitionParamsDto> SetAcquisitionParamsAsync(
-        Guid id,
-        SetCameraAcquisitionParamsDto input
-    )
-    {
-        EnsureManualOrMaintenanceMode();
-        int idx = await GetDeviceIndexAsync(id);
-        EnsureCameraOpen(idx);
-
-        if (input.AeMode.HasValue)
-        {
-            await _tucamService.SetCapabilityValueAsync(
-                idx,
-                TUCamIdCapa.AutoExposureMode,
-                (int)input.AeMode.Value
-            );
-        }
-        if (input.GainMode.HasValue)
-        {
-            await _tucamService.SetCapabilityValueAsync(
-                idx,
-                TUCamIdCapa.Shutter,
-                (int)input.GainMode.Value
-            );
-        }
-        if (input.AeTargetGray.HasValue)
-        {
-            await _tucamService.SetPropertyValueAsync(
-                idx,
-                TUCamIdProp.AverageGray,
-                input.AeTargetGray.Value
-            );
-        }
-        if (input.AeMaxExposure.HasValue)
-        {
-            await _tucamService.SetPropertyValueAsync(
-                idx,
-                TUCamIdProp.ExposureMax,
-                input.AeMaxExposure.Value
-            );
-        }
-        if (input.AeMinExposure.HasValue)
-        {
-            await _tucamService.SetPropertyValueAsync(
-                idx,
-                TUCamIdProp.ExposureMin,
-                input.AeMinExposure.Value
-            );
-        }
-        if (input.ExposureTime.HasValue)
-        {
-            await _tucamService.SetPropertyValueAsync(
-                idx,
-                TUCamIdProp.ExposureTime,
-                input.ExposureTime.Value
-            );
-        }
-        if (input.GlobalGain.HasValue)
-        {
-            await _tucamService.SetPropertyValueAsync(
-                idx,
-                TUCamIdProp.GlobalGain,
-                input.GlobalGain.Value
-            );
-        }
-
-        return await GetAcquisitionParamsAsync(id);
-    }
-
-    // ─── 手动控制：触发参数 ─────────────────────────────────────────────────
-
-    /// <inheritdoc/>
-    public async Task<CameraTriggerParamsDto> GetTriggerParamsAsync(Guid id)
-    {
-        int idx = await GetDeviceIndexAsync(id);
-        EnsureCameraOpen(idx);
-
-        TUCamTriggerAttr trigger = await _tucamService.GetTriggerAsync(idx);
-        TUCamTrgOutAttr out1 = await _tucamService.GetTriggerOutAsync(idx, 0);
-        TUCamTrgOutAttr out2 = await _tucamService.GetTriggerOutAsync(idx, 1);
-        TUCamTrgOutAttr out3 = await _tucamService.GetTriggerOutAsync(idx, 2);
-
-        return new CameraTriggerParamsDto
-        {
-            TriggerMode = trigger.nTgrMode,
-            ExpMode = trigger.nExpMode,
-            EdgeMode = trigger.nEdgeMode,
-            DelayTm = trigger.nDelayTm,
-            Frames = trigger.nFrames,
-            BufFrames = trigger.nBufFrames,
-            TriggerOut1 = MapTrgOut(out1),
-            TriggerOut2 = MapTrgOut(out2),
-            TriggerOut3 = MapTrgOut(out3),
-        };
-    }
-
-    /// <inheritdoc/>
-    public async Task<CameraTriggerParamsDto> SetTriggerParamsAsync(
-        Guid id,
-        SetCameraTriggerParamsDto input
-    )
-    {
-        EnsureManualOrMaintenanceMode();
-        int idx = await GetDeviceIndexAsync(id);
-        EnsureCameraOpen(idx);
-
-        if (
-            input.TriggerMode.HasValue
-            || input.ExpMode.HasValue
-            || input.EdgeMode.HasValue
-            || input.DelayTm.HasValue
-            || input.Frames.HasValue
-            || input.BufFrames.HasValue
-        )
-        {
-            TUCamTriggerAttr trigger = await _tucamService.GetTriggerAsync(idx);
-            if (input.TriggerMode.HasValue)
-                trigger.nTgrMode = input.TriggerMode.Value;
-            if (input.ExpMode.HasValue)
-                trigger.nExpMode = input.ExpMode.Value;
-            if (input.EdgeMode.HasValue)
-                trigger.nEdgeMode = input.EdgeMode.Value;
-            if (input.DelayTm.HasValue)
-                trigger.nDelayTm = input.DelayTm.Value;
-            if (input.Frames.HasValue)
-                trigger.nFrames = input.Frames.Value;
-            if (input.BufFrames.HasValue)
-                trigger.nBufFrames = input.BufFrames.Value;
-            await _tucamService.SetTriggerAsync(idx, trigger);
-        }
-
-        if (input.TriggerOut1 != null)
-        {
-            await _tucamService.SetTriggerOutAsync(idx, MapTrgOutDto(input.TriggerOut1));
-        }
-        if (input.TriggerOut2 != null)
-        {
-            await _tucamService.SetTriggerOutAsync(idx, MapTrgOutDto(input.TriggerOut2));
-        }
-        if (input.TriggerOut3 != null)
-        {
-            await _tucamService.SetTriggerOutAsync(idx, MapTrgOutDto(input.TriggerOut3));
-        }
-
-        return await GetTriggerParamsAsync(id);
-    }
-
-    // ─── 手动控制：自定义参数 ───────────────────────────────────────────────
-
-    /// <inheritdoc/>
-    public async Task<CameraCustomParamsDto> GetCustomParamsAsync(Guid id)
-    {
-        int idx = await GetDeviceIndexAsync(id);
-        EnsureCameraOpen(idx);
-
-        int wbMode = await _tucamService.GetCapabilityValueAsync(idx, TUCamIdCapa.AutoWhiteBalance);
-        double gainR = await _tucamService.GetPropertyValueAsync(idx, TUCamIdProp.ChannelGain, 1);
-        double gainG = await _tucamService.GetPropertyValueAsync(idx, TUCamIdProp.ChannelGain, 2);
-        double gainB = await _tucamService.GetPropertyValueAsync(idx, TUCamIdProp.ChannelGain, 3);
-        double saturation = await _tucamService.GetPropertyValueAsync(idx, TUCamIdProp.Saturation);
-        double colorTemp = await _tucamService.GetPropertyValueAsync(
-            idx,
-            TUCamIdProp.ColorTemperature
-        );
-        int ledEnabled = await _tucamService.GetCapabilityValueAsync(idx, TUCamIdCapa.EnableImgPro);
-        int currentBufFrames = await _tucamService.GetDeviceNumericInfoAsync(
-            idx,
-            TUCamIdInfo.CurrentBufFrames
-        );
-
-        TUCamCalcRoiAttr wbCalcRoi = await _tucamService.GetCalcRoiAsync(
-            idx,
-            TUCamIdCalcRoi.WhiteBalance
-        );
-
-        return new CameraCustomParamsDto
-        {
-            WbMode = (CameraWhiteBalanceMode)wbMode,
-            ChannelGainR = gainR,
-            ChannelGainG = gainG,
-            ChannelGainB = gainB,
-            Saturation = saturation,
-            ColorTemperature = colorTemp,
-            LedEnabled = ledEnabled != 0,
-            CurrentBufFrames = currentBufFrames,
-            WbCalcRoi = new CameraCalcRoiDto
-            {
-                Enabled = wbCalcRoi.bEnable != 0,
-                HOffset = wbCalcRoi.nHOffset,
-                VOffset = wbCalcRoi.nVOffset,
-                Width = wbCalcRoi.nWidth,
-                Height = wbCalcRoi.nHeight,
-            },
-        };
-    }
-
-    /// <inheritdoc/>
-    public async Task<CameraCustomParamsDto> SetCustomParamsAsync(
-        Guid id,
-        SetCameraCustomParamsDto input
-    )
-    {
-        EnsureManualOrMaintenanceMode();
-        int idx = await GetDeviceIndexAsync(id);
-        EnsureCameraOpen(idx);
-
-        if (input.WbMode.HasValue)
-        {
-            await _tucamService.SetCapabilityValueAsync(
-                idx,
-                TUCamIdCapa.AutoWhiteBalance,
-                (int)input.WbMode.Value
-            );
-        }
-        if (input.ChannelGainR.HasValue)
-        {
-            await _tucamService.SetPropertyValueAsync(
-                idx,
-                TUCamIdProp.ChannelGain,
-                input.ChannelGainR.Value,
-                1
-            );
-        }
-        if (input.ChannelGainG.HasValue)
-        {
-            await _tucamService.SetPropertyValueAsync(
-                idx,
-                TUCamIdProp.ChannelGain,
-                input.ChannelGainG.Value,
-                2
-            );
-        }
-        if (input.ChannelGainB.HasValue)
-        {
-            await _tucamService.SetPropertyValueAsync(
-                idx,
-                TUCamIdProp.ChannelGain,
-                input.ChannelGainB.Value,
-                3
-            );
-        }
-        if (input.Saturation.HasValue)
-        {
-            await _tucamService.SetPropertyValueAsync(
-                idx,
-                TUCamIdProp.Saturation,
-                input.Saturation.Value
-            );
-        }
-        if (input.ColorTemperature.HasValue)
-        {
-            await _tucamService.SetPropertyValueAsync(
-                idx,
-                TUCamIdProp.ColorTemperature,
-                input.ColorTemperature.Value
-            );
-        }
-        if (input.LedEnabled.HasValue)
-        {
-            await _tucamService.SetCapabilityValueAsync(
-                idx,
-                TUCamIdCapa.EnableImgPro,
-                input.LedEnabled.Value ? 1 : 0
-            );
-        }
-        if (input.WbCalcRoi != null)
-        {
-            TUCamCalcRoiAttr calcRoi = new TUCamCalcRoiAttr
-            {
-                idCalc = (int)TUCamIdCalcRoi.WhiteBalance,
-                bEnable = input.WbCalcRoi.Enabled ? 1 : 0,
-                nHOffset = input.WbCalcRoi.HOffset,
-                nVOffset = input.WbCalcRoi.VOffset,
-                nWidth = input.WbCalcRoi.Width,
-                nHeight = input.WbCalcRoi.Height,
-            };
-            await _tucamService.SetCalcRoiAsync(idx, calcRoi);
-        }
-
-        return await GetCustomParamsAsync(id);
-    }
+    // 注：原 typed 参数方法（GetImageParams/PostImageParams/GetAcquisitionParams/PostAcquisitionParams/
+    // GetTriggerParams/PostTriggerParams/GetCustomParams/PostCustomParams）已删除，
+    // 前端改用 GetNodeMapAsync + SetGenICamParamAsync 完成所有动态参数读写。
 
     // ─── 手动控制：快照与预览 ───────────────────────────────────────────────
 
@@ -738,20 +327,46 @@ public class CameraDeviceAppService : AuroraStruct3DAppService, ICameraDeviceApp
     public async Task<CameraSnapshotDto> TakeSnapshotAsync(Guid id)
     {
         EnsureManualOrMaintenanceMode();
-        int idx = await GetDeviceIndexAsync(id);
+        CameraDevice camera = await _cameraDeviceRepository.GetAsync(id);
+        int idx = camera.DeviceIndex;
         EnsureCameraOpen(idx);
 
-        // 启动单次连续采集 → 抓一帧 → 停止
-        await _tucamService.StartCaptureAsync(idx);
+        bool startedForSnapshot = false;
         try
         {
-            byte[] jpegBytes = await _tucamService.GrabFrameRawAsync(idx, timeoutMs: 5000);
+            if (!_tucamService.IsCapturing(idx))
+            {
+                await _tucamService.StartCaptureAsync(idx);
+                startedForSnapshot = true;
+            }
+
+            // 动态计算抓帧超时：取当前曝光时间（微秒）× 2 + 1s 裕量，最少 8s
+            int grabTimeoutMs = 8000;
+            try
+            {
+                long exposureUs = await _tucamService.GetGenICamIntAsync(idx, "ExposureTime");
+                int exposureMs = (int)(exposureUs / 1000L);
+                grabTimeoutMs = Math.Max(exposureMs * 2 + 1000, 8000);
+            }
+            catch
+            {
+                // 读取失败则使用默认 8s
+            }
+
+            byte[] jpegBytes = await _tucamService.GrabFrameRawAsync(
+                idx,
+                timeoutMs: grabTimeoutMs,
+                imageRotationAngle: camera.ImageRotationAngle
+            );
             string dataUri = "data:image/jpeg;base64," + Convert.ToBase64String(jpegBytes);
             return new CameraSnapshotDto { DataUri = dataUri, CapturedAt = DateTime.UtcNow };
         }
         finally
         {
-            await _tucamService.StopCaptureAsync(idx);
+            if (startedForSnapshot)
+            {
+                await _tucamService.StopCaptureAsync(idx);
+            }
         }
     }
 
@@ -765,10 +380,18 @@ public class CameraDeviceAppService : AuroraStruct3DAppService, ICameraDeviceApp
             throw new UserFriendlyException("推流服务不可用，请检查 Host 模块配置");
         }
 
-        int idx = await GetDeviceIndexAsync(id);
+        CameraDevice camera = await _cameraDeviceRepository.GetAsync(id);
+        int idx = camera.DeviceIndex;
         EnsureCameraOpen(idx);
 
-        await _streamingService.StartPreviewAsync(id, input.ConnectionId, input.EnableRtp);
+        await _streamingService.StartPreviewAsync(
+            id,
+            input.ConnectionId,
+            input.EnableRtp,
+            camera.ImageRotationAngle
+        );
+        camera.SetStatus(CameraStatus.Capturing);
+        await _cameraDeviceRepository.UpdateAsync(camera);
         Logger.LogInformation("相机 {Id} 开始实时预览", id);
     }
 
@@ -780,7 +403,14 @@ public class CameraDeviceAppService : AuroraStruct3DAppService, ICameraDeviceApp
             return;
         }
 
+        CameraDevice camera = await _cameraDeviceRepository.GetAsync(id);
         await _streamingService.StopPreviewAsync(id);
+        camera.SetStatus(
+            _tucamService.IsCameraOpen(camera.DeviceIndex)
+                ? CameraStatus.Ready
+                : CameraStatus.Closed
+        );
+        await _cameraDeviceRepository.UpdateAsync(camera);
         Logger.LogInformation("相机 {Id} 停止实时预览", id);
     }
 
@@ -795,6 +425,16 @@ public class CameraDeviceAppService : AuroraStruct3DAppService, ICameraDeviceApp
     }
 
     /// <inheritdoc/>
+    public async Task DoExposureAutoOncePulseAsync(Guid id)
+    {
+        EnsureManualOrMaintenanceMode();
+        int idx = await GetDeviceIndexAsync(id);
+        EnsureCameraOpen(idx);
+
+        await _tucamService.ExecuteGenICamCommandAsync(idx, "ExposureAutoOncePulse");
+    }
+
+    /// <inheritdoc/>
     public Task<CameraRtpEndpointDto> GetRtpEndpointAsync(Guid id)
     {
         if (_streamingService == null)
@@ -806,28 +446,136 @@ public class CameraDeviceAppService : AuroraStruct3DAppService, ICameraDeviceApp
         return Task.FromResult(endpoint ?? new CameraRtpEndpointDto());
     }
 
-    // ─── 手动控制：用户配置文件 ─────────────────────────────────────────────
+    // ─── 通用 GenICam 节点读写 ───────────────────────────────────────────────
 
     /// <inheritdoc/>
-    public async Task LoadUserProfileAsync(Guid id, CameraUserProfileDto input)
+    public async Task<GenICamNodeResultDto> GetGenICamParamAsync(
+        Guid id,
+        [Microsoft.AspNetCore.Mvc.FromQuery] GenICamNodeGetInput input
+    )
     {
-        EnsureManualOrMaintenanceMode();
         int idx = await GetDeviceIndexAsync(id);
         EnsureCameraOpen(idx);
-
-        await _tucamService.LoadProfilesAsync(idx, input.ProfileName);
-        Logger.LogInformation("相机 {Id} 已加载配置文件 '{Profile}'", id, input.ProfileName);
+        try
+        {
+            string? value = input.DataType switch
+            {
+                "float" => (await _tucamService.GetGenICamFloatAsync(idx, input.NodeName)).ToString(
+                    System.Globalization.CultureInfo.InvariantCulture
+                ),
+                "string" => await _tucamService.GetGenICamStringAsync(idx, input.NodeName),
+                _ => (await _tucamService.GetGenICamIntAsync(idx, input.NodeName)).ToString(),
+            };
+            return new GenICamNodeResultDto
+            {
+                NodeName = input.NodeName,
+                Value = value,
+                Success = true,
+            };
+        }
+        catch (Exception ex)
+        {
+            return new GenICamNodeResultDto
+            {
+                NodeName = input.NodeName,
+                Success = false,
+                ErrorMessage = ex.Message,
+            };
+        }
     }
 
     /// <inheritdoc/>
-    public async Task SaveUserProfileAsync(Guid id, CameraUserProfileDto input)
+    public async Task<GenICamBatchGetResultDto> BatchGetGenICamParamsAsync(
+        Guid id,
+        GenICamBatchGetInput input
+    )
+    {
+        int idx = await GetDeviceIndexAsync(id);
+        EnsureCameraOpen(idx);
+
+        GenICamNodeResultDto[] results = await Task.WhenAll(
+            input.Nodes.Select(async node =>
+            {
+                try
+                {
+                    string? value = node.DataType switch
+                    {
+                        "float" => (
+                            await _tucamService.GetGenICamFloatAsync(idx, node.NodeName)
+                        ).ToString(System.Globalization.CultureInfo.InvariantCulture),
+                        "string" => await _tucamService.GetGenICamStringAsync(idx, node.NodeName),
+                        _ => (
+                            await _tucamService.GetGenICamIntAsync(idx, node.NodeName)
+                        ).ToString(),
+                    };
+                    return new GenICamNodeResultDto
+                    {
+                        NodeName = node.NodeName,
+                        Value = value,
+                        Success = true,
+                    };
+                }
+                catch (Exception ex)
+                {
+                    return new GenICamNodeResultDto
+                    {
+                        NodeName = node.NodeName,
+                        Success = false,
+                        ErrorMessage = ex.Message,
+                    };
+                }
+            })
+        );
+
+        return new GenICamBatchGetResultDto { Results = results.ToList() };
+    }
+
+    /// <inheritdoc/>
+    public async Task SetGenICamParamAsync(Guid id, GenICamNodeSetInput input)
     {
         EnsureManualOrMaintenanceMode();
         int idx = await GetDeviceIndexAsync(id);
         EnsureCameraOpen(idx);
 
-        await _tucamService.SaveProfilesAsync(idx, input.ProfileName);
-        Logger.LogInformation("相机 {Id} 已保存配置文件 '{Profile}'", id, input.ProfileName);
+        switch (input.DataType)
+        {
+            case "float":
+                if (
+                    !double.TryParse(
+                        input.Value,
+                        System.Globalization.NumberStyles.Float,
+                        System.Globalization.CultureInfo.InvariantCulture,
+                        out double dblVal
+                    )
+                )
+                {
+                    throw new UserFriendlyException($"无法将值 '{input.Value}' 解析为浮点数");
+                }
+                await _tucamService.SetGenICamFloatAsync(idx, input.NodeName, dblVal);
+                break;
+            case "string":
+                await _tucamService.SetGenICamStringAsync(idx, input.NodeName, input.Value);
+                break;
+            default: // "int" / "enum" / "bool"
+                if (!long.TryParse(input.Value, out long longVal))
+                {
+                    throw new UserFriendlyException($"无法将值 '{input.Value}' 解析为整数");
+                }
+                await _tucamService.SetGenICamIntAsync(idx, input.NodeName, longVal);
+                break;
+        }
+    }
+
+    /// <inheritdoc/>
+    public async Task ExecuteGenICamCommandAsync(
+        Guid id,
+        [Microsoft.AspNetCore.Mvc.FromBody] string nodeName
+    )
+    {
+        EnsureManualOrMaintenanceMode();
+        int idx = await GetDeviceIndexAsync(id);
+        EnsureCameraOpen(idx);
+        await _tucamService.ExecuteGenICamCommandAsync(idx, nodeName);
     }
 
     // ─── 辅助方法 ─────────────────────────────────────────────────────────
@@ -862,33 +610,233 @@ public class CameraDeviceAppService : AuroraStruct3DAppService, ICameraDeviceApp
     }
 
     /// <summary>
-    /// 根据数据库 ID 查询相机的 SDK 索引
+    /// 根据数据库 ID 查询相机的 SDK 索引。
+    /// 使用 AsNoTracking 投影查询，避免 EF Core 跟踪完整实体，
+    /// 防止在长时间 SDK 操作期间（如图像采集）UoW 完成时触发并发异常。
     /// </summary>
     private async Task<int> GetDeviceIndexAsync(Guid id)
     {
-        CameraDevice camera = await _cameraDeviceRepository.GetAsync(id);
-        return camera.DeviceIndex;
+        return await _cameraDeviceRepository.GetDeviceIndexByIdAsync(id);
     }
 
-    /// <summary>将 TUCamTrgOutAttr 映射为 DTO</summary>
-    private static CameraTriggerOutDto MapTrgOut(TUCamTrgOutAttr attr) =>
-        new CameraTriggerOutDto
-        {
-            Port = attr.nTgrOutPort,
-            Mode = attr.nTgrOutMode,
-            EdgeMode = attr.nEdgeMode,
-            DelayTm = attr.nDelayTm,
-            Width = attr.nWidth,
-        };
+    // ─── GenICam 动态 NodeMap API（前端动态生成 UI）────────────────────────────
 
-    /// <summary>将 DTO 映射为 TUCamTrgOutAttr</summary>
-    private static TUCamTrgOutAttr MapTrgOutDto(CameraTriggerOutDto dto) =>
-        new TUCamTrgOutAttr
+    /// <inheritdoc/>
+    public async Task<CameraNodeMapDto> GetNodeMapAsync(Guid id)
+    {
+        int idx = await GetDeviceIndexAsync(id);
+        EnsureCameraOpen(idx);
+
+        GenICamNodeMap? nodeMap = _tucamService.GetCachedNodeMap(idx);
+        GenICamDependencyGraph? depGraph = _tucamService.GetCachedDependencyGraph(idx);
+
+        if (nodeMap == null)
         {
-            nTgrOutPort = dto.Port,
-            nTgrOutMode = dto.Mode,
-            nEdgeMode = dto.EdgeMode,
-            nDelayTm = dto.DelayTm,
-            nWidth = dto.Width,
+            // 缓存尚未就绪：返回空骨架，前端可轮询或调用 Refresh
+            return new CameraNodeMapDto { CameraId = id, EnumeratedAt = DateTime.UtcNow };
+        }
+
+        return MapNodeMapToDto(id, nodeMap, depGraph);
+    }
+
+    /// <inheritdoc/>
+    public async Task<CameraNodeMapDto> RefreshNodeMapAsync(Guid id)
+    {
+        EnsureManualOrMaintenanceMode();
+        int idx = await GetDeviceIndexAsync(id);
+        EnsureCameraOpen(idx);
+
+        await _tucamService.RefreshGenICamNodeMapAsync(idx);
+
+        GenICamNodeMap? nodeMap = _tucamService.GetCachedNodeMap(idx);
+        GenICamDependencyGraph? depGraph = _tucamService.GetCachedDependencyGraph(idx);
+
+        if (nodeMap == null)
+        {
+            throw new UserFriendlyException("GenICam NodeMap 刷新失败，请检查相机连接状态。");
+        }
+
+        return MapNodeMapToDto(id, nodeMap, depGraph);
+    }
+
+    /// <inheritdoc/>
+    public async Task<GenICamBatchGetResultDto> ReadNodesAsync(Guid id, GenICamBatchGetInput input)
+    {
+        int idx = await GetDeviceIndexAsync(id);
+        EnsureCameraOpen(idx);
+
+        List<string> names = input
+            .Nodes.Select(n => n.NodeName)
+            .Where(n => !string.IsNullOrWhiteSpace(n))
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
+        IReadOnlyList<GenICamNodeValue> values = await _tucamService.ReadGenICamNodesAsync(
+            idx,
+            names
+        );
+
+        return new GenICamBatchGetResultDto
+        {
+            Results = values
+                .Select(v => new GenICamNodeResultDto
+                {
+                    NodeName = v.NodeName,
+                    Value = v.Value,
+                    Success = v.Success,
+                    ErrorMessage = v.Error,
+                })
+                .ToList(),
         };
+    }
+
+    /// <summary>将 double 中的 NaN/±Infinity 标准化为可被 JSON 序列化的有限值</summary>
+    private static double SanitizeDouble(double value)
+    {
+        if (double.IsNaN(value))
+            return 0d;
+        if (double.IsPositiveInfinity(value))
+            return double.MaxValue;
+        if (double.IsNegativeInfinity(value))
+            return double.MinValue;
+        return value;
+    }
+
+    /// <summary>将 SDK 缓存的 NodeMap 与依赖图映射为前端 DTO</summary>
+    private static CameraNodeMapDto MapNodeMapToDto(
+        Guid cameraId,
+        GenICamNodeMap nodeMap,
+        GenICamDependencyGraph? depGraph
+    )
+    {
+        List<GenICamNodeDto> allNodes = nodeMap
+            .Nodes.Select(meta => new GenICamNodeDto
+            {
+                NodeName = meta.NodeName,
+                DisplayName = meta.DisplayName,
+                XmlScope = meta.XmlScope,
+                Level = meta.Level,
+                NodeType = meta.Type.ToString(),
+                Access = meta.Access.ToString(),
+                Visibility = meta.Visibility.ToString(),
+                Representation = meta.Representation,
+                Unit = meta.Unit,
+                Description = meta.Description,
+                IsLocked = meta.IsLocked,
+                IntMin = meta.IntMin,
+                IntMax = meta.IntMax,
+                IntStep = meta.IntStep,
+                FloatMin = SanitizeDouble(meta.FloatMin),
+                FloatMax = SanitizeDouble(meta.FloatMax),
+                FloatStep = SanitizeDouble(meta.FloatStep),
+                CurrentValue = meta.CurrentValue,
+                EnumEntries = meta
+                    .EnumEntries.Select(e => new GenICamEnumEntryDto
+                    {
+                        Value = e.Value,
+                        Symbolic = e.Symbolic,
+                        DisplayName = e.DisplayName,
+                        IsAvailable = e.IsAvailable,
+                    })
+                    .ToList(),
+                PollingTime = meta.PollingTime,
+                DisplayPrecision = meta.DisplayPrecision,
+            })
+            .ToList();
+
+        // 按 Category 节点 + Level 构建层级分组：
+        // 节点列表来自 SDK，顺序为先父 Category 再其子节点；
+        // 同 XmlScope 内子节点 Level = 父 Category.Level + 1。
+        // 算法：维护 Category 栈，遇到 Category 入栈，遇到普通节点归到栈顶 Category。
+        string categoryTypeName = TuElemType.Category.ToString();
+        List<GenICamCategoryDto> categories = new();
+        Dictionary<string, GenICamCategoryDto> categoryByName = new(StringComparer.Ordinal);
+        GenICamCategoryDto? fallbackCategory = null;
+        Stack<GenICamNodeDto> categoryStack = new();
+        int currentXmlScope = int.MinValue;
+
+        GenICamCategoryDto EnsureFallback()
+        {
+            if (fallbackCategory is null)
+            {
+                fallbackCategory = new GenICamCategoryDto
+                {
+                    Name = string.Empty,
+                    DisplayName = "其它",
+                };
+                categories.Add(fallbackCategory);
+            }
+            return fallbackCategory;
+        }
+
+        foreach (GenICamNodeDto node in allNodes)
+        {
+            // XmlScope 切换时清空栈，避免跨域错位
+            if (node.XmlScope != currentXmlScope)
+            {
+                currentXmlScope = node.XmlScope;
+                categoryStack.Clear();
+            }
+
+            // 弹出所有 Level >= 当前节点 Level 的 Category（同级或更深）
+            while (categoryStack.Count > 0 && categoryStack.Peek().Level >= node.Level)
+            {
+                categoryStack.Pop();
+            }
+
+            if (node.NodeType == categoryTypeName)
+            {
+                // 创建 Category 容器并入栈；同名 Category 复用
+                if (!categoryByName.TryGetValue(node.NodeName, out GenICamCategoryDto? dto))
+                {
+                    dto = new GenICamCategoryDto
+                    {
+                        Name = node.NodeName,
+                        DisplayName = string.IsNullOrWhiteSpace(node.DisplayName)
+                            ? node.NodeName
+                            : node.DisplayName,
+                    };
+                    categories.Add(dto);
+                    categoryByName[node.NodeName] = dto;
+                }
+                categoryStack.Push(node);
+                continue;
+            }
+
+            if (categoryStack.Count > 0)
+            {
+                string parentName = categoryStack.Peek().NodeName;
+                categoryByName[parentName].Nodes.Add(node);
+            }
+            else
+            {
+                EnsureFallback().Nodes.Add(node);
+            }
+        }
+
+        // 移除空的 Category（仅作为中间层、自身无直属节点的容器）
+        categories = categories.Where(c => c.Nodes.Count > 0).ToList();
+
+        List<GenICamDependencyDto> deps =
+            depGraph
+                ?.Edges.Select(e => new GenICamDependencyDto
+                {
+                    SelectorNode = e.SelectorNode,
+                    OptionValue = e.OptionValue,
+                    OptionLabel = e.OptionLabel,
+                    AffectedNode = e.AffectedNode,
+                    ChangeSummary = e.ChangeSummary,
+                })
+                .ToList()
+            ?? new List<GenICamDependencyDto>();
+
+        return new CameraNodeMapDto
+        {
+            CameraId = cameraId,
+            EnumeratedAt = nodeMap.EnumeratedAt,
+            Categories = categories,
+            AllNodes = allNodes,
+            Dependencies = deps,
+        };
+    }
 }

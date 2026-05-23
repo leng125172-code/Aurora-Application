@@ -30,11 +30,29 @@
         />
     </ItemGroup>
 
-    <!-- Windows 平台可选 TUCam SDK DLL 引用（开发环境可选） -->
-    <ItemGroup Condition="Exists('C:\Program Files (x86)\TUCam_SDK\x64\TUCam.dll')">
-        <None Include="C:\Program Files (x86)\TUCam_SDK\x64\TUCam.dll">
-            <Link>TUCam.dll</Link>
+    <!-- Windows x64 平台：复制 x64_all 下全部运行时文件（含 GenApi / OnnxRuntime 等依赖） -->
+    <ItemGroup Condition="Exists('C:\Program Files (x86)\TUCam_SDK\runtime\x64_all') AND '$(Platform)' != 'x86'">
+        <None Include="C:\Program Files (x86)\TUCam_SDK\runtime\x64_all\*.*">
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+    </ItemGroup>
+
+    <!-- Windows x86 平台：复制 x86 目录下全部运行时文件 -->
+    <ItemGroup Condition="Exists('C:\Program Files (x86)\TUCam_SDK\runtime\x86') AND '$(Platform)' == 'x86'">
+        <None Include="C:\Program Files (x86)\TUCam_SDK\runtime\x86\*.*">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+    </ItemGroup>
+
+    <!-- Linux ARM64 平台：复制 TUCam_aarch64 下全部运行时共享库（含 GenICam 依赖） -->
+    <ItemGroup Condition="'$(RuntimeIdentifier)' == 'linux-arm64'">
+        <None Include="$(MSBuildThisFileDirectory)..\..\..\Documents\TUCam_aarch64\lib\*.so*">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+            <TargetPath>%(Filename)%(Extension)</TargetPath>
+        </None>
+        <None Include="$(MSBuildThisFileDirectory)..\..\..\Documents\TUCam_aarch64\lib\CtiConfig.ini">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+            <TargetPath>%(Filename)%(Extension)</TargetPath>
         </None>
     </ItemGroup>
 </Project>

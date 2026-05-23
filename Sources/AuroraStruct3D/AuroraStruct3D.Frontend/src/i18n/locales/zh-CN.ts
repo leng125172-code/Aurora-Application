@@ -50,6 +50,8 @@ export default {
         projectorControl: '投影机控制',
         cameraManage: '相机管理',
         cameraControl: '相机控制',
+        serialPortManage: '485 串口管理',
+        motorDeviceManage: '485 电机管理',
     },
     dashboard: {
         cpu: 'CPU 负载',

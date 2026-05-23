@@ -114,7 +114,11 @@ public class SerialPortConfig : FullAuditedAggregateRoot<Guid>
         SerialPortHandshake handshake = SerialPortHandshake.None
     )
     {
-        Check.Positive(baudRate, nameof(baudRate));
+        if (baudRate != 0 && !SerialPortConsts.SupportedBaudRates.Contains(baudRate))
+        {
+            throw new BusinessException("SerialPorts:UnsupportedBaudRate")
+                .WithData("BaudRate", baudRate);
+        }
         Check.Range(dataBits, nameof(dataBits), 5, 8);
 
         BaudRate = baudRate;

@@ -13,6 +13,8 @@ import {
     ScrollText,
     Monitor,
     Camera,
+    Cable,
+    Cpu,
     ChevronDown,
     ChevronRight,
 } from 'lucide-vue-next'
@@ -277,6 +279,38 @@ function navigate(path: string, tab?: string): void {
             >
                 <Camera class="size-4 shrink-0" />
                 {{ t('menu.cameraManage') }}
+            </button>
+
+            <!-- 485 串口管理 -->
+            <button
+                :class="
+                    cn(
+                        'flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors text-left',
+                        isExactActive('/serial-ports')
+                            ? 'bg-accent text-accent-foreground'
+                            : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                    )
+                "
+                @click="navigate('/serial-ports')"
+            >
+                <Cable class="size-4 shrink-0" />
+                {{ t('menu.serialPortManage') }}
+            </button>
+
+            <!-- 485 电机设备管理 -->
+            <button
+                :class="
+                    cn(
+                        'flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors text-left',
+                        isExactActive('/motors')
+                            ? 'bg-accent text-accent-foreground'
+                            : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                    )
+                "
+                @click="navigate('/motors')"
+            >
+                <Cpu class="size-4 shrink-0" />
+                {{ t('menu.motorDeviceManage') }}
             </button>
         </nav>
     </aside>

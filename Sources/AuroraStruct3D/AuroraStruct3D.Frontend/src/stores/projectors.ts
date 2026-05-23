@@ -12,8 +12,6 @@ import * as signalR from '@microsoft/signalr'
 import {
     type ProjectorDeviceDto,
     type GetProjectorListDto,
-    type CreateTcpProjectorDeviceDto,
-    type CreateHidProjectorDeviceDto,
     type UpdateProjectorDeviceDto,
     type SetProjectorLightDto,
     type SetProjectorDisplayModeDto,
@@ -27,10 +25,8 @@ import {
     type WriteProjectorRegisterDto,
     getProjectorList,
     getProjector,
-    createTcpProjector,
-    createHidProjector,
+    scanProjectors,
     updateProjector,
-    deleteProjector,
     connectProjector,
     disconnectProjector,
     projectorLedOn,
@@ -161,30 +157,18 @@ export const useProjectorStore = defineStore('projector', () => {
 
     // ─── CRUD ─────────────────────────────────────────────────────────────────
 
-    async function createTcp(dto: CreateTcpProjectorDeviceDto): Promise<ProjectorDeviceDto> {
-        const created = await createTcpProjector(dto)
-        projectors.value.push(created)
-        return created
-    }
-
-    async function createHid(dto: CreateHidProjectorDeviceDto): Promise<ProjectorDeviceDto> {
-        const created = await createHidProjector(dto)
-        projectors.value.push(created)
-        return created
+    /** 扫描 USB HID 投影机，自动同步数据库记录，返回检测到的数量 */
+    async function scan(): Promise<number> {
+        const count = await scanProjectors()
+        // 扫描完成后刷新列表
+        await fetchList()
+        return count
     }
 
     async function update(id: string, dto: UpdateProjectorDeviceDto): Promise<ProjectorDeviceDto> {
         const updated = await updateProjector(id, dto)
         _applyUpdate(updated)
         return updated
-    }
-
-    async function remove(id: string) {
-        await deleteProjector(id)
-        projectors.value = projectors.value.filter((p) => p.id !== id)
-        if (selectedProjector.value?.id === id) {
-            selectedProjector.value = null
-        }
     }
 
     // ─── 连接控制 ─────────────────────────────────────────────────────────────
@@ -301,10 +285,8 @@ export const useProjectorStore = defineStore('projector', () => {
         refreshProjector,
         selectProjector,
         // CRUD
-        createTcp,
-        createHid,
+        scan,
         update,
-        remove,
         // 连接
         connect,
         disconnect,

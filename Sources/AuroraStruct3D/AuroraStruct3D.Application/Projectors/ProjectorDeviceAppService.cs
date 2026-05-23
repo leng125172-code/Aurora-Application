@@ -18,18 +18,21 @@ public class ProjectorDeviceAppService : AuroraStruct3DAppService, IProjectorDev
     private readonly IProjectorOperationLogRepository _operationLogRepository;
     private readonly IProjectorConnectionPool _connectionPool;
     private readonly IDeviceStateManager _deviceStateManager;
+    private readonly IDlpProjectorService _dlpProjectorService;
 
     public ProjectorDeviceAppService(
         IProjectorDeviceRepository projectorDeviceRepository,
         IProjectorOperationLogRepository operationLogRepository,
         IProjectorConnectionPool connectionPool,
-        IDeviceStateManager deviceStateManager
+        IDeviceStateManager deviceStateManager,
+        IDlpProjectorService dlpProjectorService
     )
     {
         _projectorDeviceRepository = projectorDeviceRepository;
         _operationLogRepository = operationLogRepository;
         _connectionPool = connectionPool;
         _deviceStateManager = deviceStateManager;
+        _dlpProjectorService = dlpProjectorService;
     }
 
     // ─── 设备 CRUD ────────────────────────────────────────────────────────
@@ -74,69 +77,42 @@ public class ProjectorDeviceAppService : AuroraStruct3DAppService, IProjectorDev
     }
 
     /// <inheritdoc/>
-    public async Task<ProjectorDeviceDto> CreateTcpAsync(CreateTcpProjectorDeviceDto input)
+    public async Task<int> ScanProjectorsAsync()
     {
-        // 检查 DeviceIndex 唯一
-        await EnsureDeviceIndexUniqueAsync(input.DeviceIndex);
-
-        // 检查 IP 地址唯一
-        ProjectorDevice? existing = await _projectorDeviceRepository.FindByIpAddressAsync(
-            input.IpAddress
+        // 探测当前连接的 HID 投影机数量
+        int count = _dlpProjectorService.GetHidDeviceCount(
+            ProjectorConsts.HidVendorId,
+            ProjectorConsts.HidProductId
         );
-        if (existing != null)
+
+        // 对每个检测到的 HID 索引，确保数据库中存在对应记录
+        for (int i = 0; i < count; i++)
         {
-            throw new UserFriendlyException(
-                $"IP 地址 {input.IpAddress} 已被设备 [{existing.Name}] 占用"
-            );
+            ProjectorDevice? existing = await _projectorDeviceRepository.FindByHidAsync(i);
+            if (existing == null)
+            {
+                // 新设备：取当前设备数作为 DeviceIndex
+                List<ProjectorDevice> all = await _projectorDeviceRepository.GetListOrderedAsync();
+                int nextIndex = all.Count;
+                ProjectorDevice device = new(
+                    GuidGenerator.Create(),
+                    $"投影机 {i}",
+                    nextIndex,
+                    i,
+                    ProjectorConsts.DefaultConnectTimeoutMs
+                );
+                await _projectorDeviceRepository.InsertAsync(device);
+            }
         }
 
-        ProjectorDevice device = new(
-            GuidGenerator.Create(),
-            input.Name,
-            input.DeviceIndex,
-            input.IpAddress,
-            input.TcpPort,
-            input.ConnectTimeoutMs
-        );
-        device.SetDescription(input.Description);
-        if (!input.IsEnabled)
-            device.Disable();
+        // 重建并传播 HidDeviceIndex -> ProjectorDevice.Id 映射
+        List<ProjectorDevice> devices = await _projectorDeviceRepository.GetListOrderedAsync();
+        Dictionary<int, Guid> mapping = devices
+            .Where(d => d.ConnectionType == ProjectorConnectionType.UsbHid)
+            .ToDictionary(d => d.HidDeviceIndex, d => d.Id);
+        _dlpProjectorService.SetProjectorDeviceIdMapping(mapping);
 
-        await _projectorDeviceRepository.InsertAsync(device);
-        return device.ToDto();
-    }
-
-    /// <inheritdoc/>
-    public async Task<ProjectorDeviceDto> CreateHidAsync(CreateHidProjectorDeviceDto input)
-    {
-        // 检查 DeviceIndex 唯一
-        await EnsureDeviceIndexUniqueAsync(input.DeviceIndex);
-
-        // 检查 HID 组合唯一
-        // 检查 HidDeviceIndex 唯一（VID/PID 为硬件固定，不存储）
-        ProjectorDevice? existing = await _projectorDeviceRepository.FindByHidAsync(
-            input.HidDeviceIndex
-        );
-        if (existing != null)
-        {
-            throw new UserFriendlyException(
-                $"HID 设备索引 [{input.HidDeviceIndex}] 已被设备 [{existing.Name}] 占用"
-            );
-        }
-
-        ProjectorDevice device = new(
-            GuidGenerator.Create(),
-            input.Name,
-            input.DeviceIndex,
-            input.HidDeviceIndex,
-            input.ConnectTimeoutMs
-        );
-        device.SetDescription(input.Description);
-        if (!input.IsEnabled)
-            device.Disable();
-
-        await _projectorDeviceRepository.InsertAsync(device);
-        return device.ToDto();
+        return count;
     }
 
     /// <inheritdoc/>
@@ -152,14 +128,6 @@ public class ProjectorDeviceAppService : AuroraStruct3DAppService, IProjectorDev
 
         await _projectorDeviceRepository.UpdateAsync(device);
         return device.ToDto();
-    }
-
-    /// <inheritdoc/>
-    public async Task DeleteAsync(Guid id)
-    {
-        // 断开并移除连接
-        await _connectionPool.RemoveAsync(id);
-        await _projectorDeviceRepository.DeleteAsync(id);
     }
 
     // ─── 连接管理 ─────────────────────────────────────────────────────────
@@ -434,6 +402,8 @@ public class ProjectorDeviceAppService : AuroraStruct3DAppService, IProjectorDev
                 input.ProjectorDeviceId
             );
             device.UpdateLedRgb(input.R, input.G, input.B);
+            // RGB 自定义色对应"神光同步（AuraSync）"颜色模式
+            device.UpdateColor(ProjectorColor.AuraSync);
             await _projectorDeviceRepository.UpdateAsync(device);
         }
         return ok;

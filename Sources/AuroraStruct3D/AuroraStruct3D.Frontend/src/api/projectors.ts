@@ -124,25 +124,6 @@ export interface ProjectorOperationLogDto {
 
 // ─── 输入 DTO ────────────────────────────────────────────────────────────────
 
-export interface CreateTcpProjectorDeviceDto {
-    name: string
-    deviceIndex: number
-    description?: string
-    isEnabled: boolean
-    ipAddress: string
-    tcpPort?: number
-    connectTimeoutMs?: number
-}
-
-export interface CreateHidProjectorDeviceDto {
-    name: string
-    deviceIndex: number
-    description?: string
-    isEnabled: boolean
-    hidDeviceIndex?: number
-    connectTimeoutMs?: number
-}
-
 export interface UpdateProjectorDeviceDto {
     name: string
     description?: string
@@ -233,27 +214,16 @@ export async function getProjector(id: string): Promise<ProjectorDeviceDto> {
     return data
 }
 
-/** 添加 TCP 投影机 */
-export async function createTcpProjector(dto: CreateTcpProjectorDeviceDto): Promise<ProjectorDeviceDto> {
-    const { data } = await httpClient.post<ProjectorDeviceDto>(`${BASE}/tcp`, dto)
-    return data
-}
-
-/** 添加 USB HID 投影机 */
-export async function createHidProjector(dto: CreateHidProjectorDeviceDto): Promise<ProjectorDeviceDto> {
-    const { data } = await httpClient.post<ProjectorDeviceDto>(`${BASE}/hid`, dto)
-    return data
-}
-
 /** 更新投影机信息 */
 export async function updateProjector(id: string, dto: UpdateProjectorDeviceDto): Promise<ProjectorDeviceDto> {
     const { data } = await httpClient.put<ProjectorDeviceDto>(`${BASE}/${id}`, dto)
     return data
 }
 
-/** 删除投影机 */
-export async function deleteProjector(id: string): Promise<void> {
-    await httpClient.delete(`${BASE}/${id}`)
+/** 扫描 USB HID 投影机，自动同步数据库记录，返回检测到的数量 */
+export async function scanProjectors(): Promise<number> {
+    const { data } = await httpClient.post<number>(`${BASE}/scan`)
+    return data
 }
 
 // ─── 连接 ────────────────────────────────────────────────────────────────────

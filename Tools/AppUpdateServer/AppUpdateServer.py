@@ -52,6 +52,9 @@ _sessions_lock = threading.Lock()
 _SERVICE_NAME = "AuroraStruct3D.HttpApi.Host"
 _MIGRATOR_NAME = "AuroraStruct3D.DbMigrator"
 
+# SkiaSharp 在 Ubuntu ARM64 上编码 JPEG 时需要的系统原生依赖。
+_NATIVE_DEPENDENCY_PACKAGES = ("libuuid1", "libfontconfig1")
+
 
 # ── 消息帧工具 ──────────────────────────────────────────────────────────────────
 
@@ -268,7 +271,8 @@ def _action_finalize(conn: socket.socket, msg: dict) -> None:
     _send_msg(conn, {"status": "done", "message": done_msg})
     print(f"[完成] {done_msg}")
 
-    # ── 部署后流程：DbMigrator → 确保服务注册 → 启动 ──────────────────────────
+    # ── 部署后流程：原生依赖 → DbMigrator → 确保服务注册 → 启动 ────────────────
+    _ensure_native_dependencies()
     _run_migrator()
     _ensure_system_service()
     _start_managed_service()
@@ -320,6 +324,74 @@ def _run_cmd(cmd: list, desc: str, timeout: int = 120) -> int:
         return -1
 
 
+def _is_debian_package_installed(package_name: str) -> bool:
+    """检查 Debian/Ubuntu 软件包是否已安装。"""
+    result = subprocess.run(
+        ["dpkg-query", "-W", "-f=${Status}", package_name],
+        capture_output=True,
+        text=True,
+    )
+    return result.returncode == 0 and "install ok installed" in result.stdout
+
+
+def _ensure_native_dependencies() -> None:
+    """安装 Host 在 RK3588 上运行所需的系统原生依赖。"""
+    if shutil.which("apt-get") is None or shutil.which("dpkg-query") is None:
+        print("[部署] 当前系统不支持 apt/dpkg，跳过原生依赖检查")
+        return
+
+    missing = [
+        package_name
+        for package_name in _NATIVE_DEPENDENCY_PACKAGES
+        if not _is_debian_package_installed(package_name)
+    ]
+    if not missing:
+        print("[部署] SkiaSharp 原生依赖已安装")
+        return
+
+    print(f"[部署] 缺少原生依赖：{', '.join(missing)}")
+    if _run_cmd(["sudo", "apt-get", "update"], "刷新 apt 索引", timeout=180) != 0:
+        print("[部署] apt 索引刷新失败，原生依赖可能仍缺失")
+        return
+
+    _run_cmd(
+        [
+            "sudo",
+            "env",
+            "DEBIAN_FRONTEND=noninteractive",
+            "apt-get",
+            "install",
+            "-y",
+            *missing,
+        ],
+        "安装 SkiaSharp 原生依赖",
+        timeout=300,
+    )
+
+
+def _find_libuuid_preload_path():
+    """查找 libuuid.so.1 路径，用于修复 SkiaSharp 的 uuid_parse 符号解析。"""
+    candidates = (
+        "/lib/aarch64-linux-gnu/libuuid.so.1",
+        "/usr/lib/aarch64-linux-gnu/libuuid.so.1",
+        "/lib/x86_64-linux-gnu/libuuid.so.1",
+        "/usr/lib/x86_64-linux-gnu/libuuid.so.1",
+    )
+    for candidate in candidates:
+        if Path(candidate).exists():
+            return candidate
+
+    try:
+        output = subprocess.check_output(["ldconfig", "-p"], text=True)
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        return None
+
+    for line in output.splitlines():
+        if "libuuid.so.1" in line and "=>" in line:
+            return line.split("=>", 1)[1].strip()
+    return None
+
+
 def _stop_managed_service() -> None:
     """解压前停止被管理的目标服务（先尝试系统 systemctl，再 pkill）。"""
     import time
@@ -364,6 +436,8 @@ def _ensure_system_service() -> None:
     service_file = service_dir / f"{_SERVICE_NAME}.service"
     dll = TARGET_ROOT / "linux-arm64" / _SERVICE_NAME / f"{_SERVICE_NAME}.dll"
     work_dir = dll.parent
+    libuuid_path = _find_libuuid_preload_path()
+    preload_line = f"Environment=LD_PRELOAD={libuuid_path}\n" if libuuid_path else ""
 
     if service_file.exists():
         print(f"[部署] 系统服务 {_SERVICE_NAME} 已存在，跳过创建")
@@ -376,6 +450,7 @@ def _ensure_system_service() -> None:
         "[Service]\n"
         "Type=simple\n"
         f"WorkingDirectory={work_dir}\n"
+        f"{preload_line}"
         f"ExecStart=sudo dotnet {dll}"
         f' --urls "http://0.0.0.0:5000;https://0.0.0.0:5001"\n'
         "Restart=on-failure\n"

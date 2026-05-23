@@ -1,6 +1,31 @@
+using AuroraStruct3D.Tucam.GenICam;
 using AuroraStruct3D.Tucam.Interop;
 
 namespace AuroraStruct3D.Tucam;
+
+/// <summary>
+/// 单个 GenICam 节点的读取结果（动态值快照）
+/// </summary>
+public class GenICamNodeValue
+{
+    /// <summary>节点名称</summary>
+    public string NodeName { get; init; } = string.Empty;
+
+    /// <summary>是否读取成功</summary>
+    public bool Success { get; init; }
+
+    /// <summary>节点当前值（统一字符串表示）</summary>
+    public string? Value { get; init; }
+
+    /// <summary>当前访问模式（动态可能因 Selector 切换而变化）</summary>
+    public TuAccessMode Access { get; init; }
+
+    /// <summary>是否被锁定</summary>
+    public bool IsLocked { get; init; }
+
+    /// <summary>错误描述（仅失败时填充）</summary>
+    public string? Error { get; init; }
+}
 
 /// <summary>
 /// 相机帧数据，封装从TUCam SDK获取的原始帧信息
@@ -55,11 +80,18 @@ public interface ITucamCameraService
     Task CloseCameraAsync(int cameraIndex);
 
     /// <summary>
-    /// 获取相机型号信息
+    /// 获取相机型号信息（需相机已打开）
     /// </summary>
     /// <param name="cameraIndex">相机索引</param>
     /// <returns>相机型号字符串</returns>
     Task<string> GetCameraModelAsync(int cameraIndex);
+
+    /// <summary>
+    /// 按设备索引读取相机型号（无需打开相机，适用于扫描阶段）
+    /// </summary>
+    /// <param name="cameraIndex">相机索引</param>
+    /// <returns>相机型号字符串</returns>
+    Task<string> GetModelByIndexAsync(int cameraIndex);
 
     /// <summary>
     /// 获取属性值（浮点型，如曝光时间、增益等）
@@ -120,6 +152,13 @@ public interface ITucamCameraService
     /// </summary>
     /// <param name="cameraIndex">相机索引</param>
     bool IsCameraOpen(int cameraIndex);
+
+    /// <summary>
+    /// 检查指定相机是否正在连续采集
+    /// </summary>
+    /// <param name="cameraIndex">相机索引</param>
+    /// <returns>正在采集且采集缓冲有效时返回 true</returns>
+    bool IsCapturing(int cameraIndex);
 
     /// <summary>
     /// 注入相机设备索引 → 数据库 ID 的映射，用于写入操作日志
@@ -200,6 +239,105 @@ public interface ITucamCameraService
     /// </summary>
     /// <param name="cameraIndex">相机索引</param>
     /// <param name="timeoutMs">超时毫秒数，默认3000</param>
+    /// <param name="maxWidth">JPEG 输出最大宽度，0 表示保持原始宽度</param>
+    /// <param name="jpegQuality">JPEG 编码质量，范围 1-100</param>
+    /// <param name="imageRotationAngle">图像顺时针旋转角度（度，支持 0/90/180/270）</param>
     /// <returns>JPEG 编码的字节数组</returns>
-    Task<byte[]> GrabFrameRawAsync(int cameraIndex, int timeoutMs = 3000);
+    Task<byte[]> GrabFrameRawAsync(
+        int cameraIndex,
+        int timeoutMs = 3000,
+        int maxWidth = 0,
+        int jpegQuality = 85,
+        int imageRotationAngle = 0
+    );
+
+    // ─── GenICam 原生节点访问 ─────────────────────────────────────────────────
+
+    /// <summary>
+    /// 通过 GenICam 节点名称读取整型值
+    /// </summary>
+    /// <param name="cameraIndex">相机索引</param>
+    /// <param name="nodeName">GenICam 节点名称</param>
+    /// <returns>节点当前值，读取失败时返回 0</returns>
+    Task<long> GetGenICamIntAsync(int cameraIndex, string nodeName);
+
+    /// <summary>
+    /// 通过 GenICam 节点名称写入整型值
+    /// </summary>
+    /// <param name="cameraIndex">相机索引</param>
+    /// <param name="nodeName">GenICam 节点名称</param>
+    /// <param name="value">要写入的值</param>
+    Task SetGenICamIntAsync(int cameraIndex, string nodeName, long value);
+
+    /// <summary>
+    /// 通过 GenICam 节点名称读取浮点值
+    /// </summary>
+    /// <param name="cameraIndex">相机索引</param>
+    /// <param name="nodeName">GenICam 节点名称</param>
+    /// <returns>节点当前值，读取失败时返回 0.0</returns>
+    Task<double> GetGenICamFloatAsync(int cameraIndex, string nodeName);
+
+    /// <summary>
+    /// 通过 GenICam 节点名称写入浮点值
+    /// </summary>
+    /// <param name="cameraIndex">相机索引</param>
+    /// <param name="nodeName">GenICam 节点名称</param>
+    /// <param name="value">要写入的值</param>
+    Task SetGenICamFloatAsync(int cameraIndex, string nodeName, double value);
+
+    /// <summary>
+    /// 执行 GenICam Command 节点（如 ExposureAutoOncePulse）
+    /// </summary>
+    /// <param name="cameraIndex">相机索引</param>
+    /// <param name="nodeName">GenICam 命令节点名称</param>
+    Task ExecuteGenICamCommandAsync(int cameraIndex, string nodeName);
+
+    /// <summary>
+    /// 通过 GenICam 节点名称读取字符串值（String 类型节点，如 DeviceSerialNumber）
+    /// </summary>
+    /// <param name="cameraIndex">相机索引</param>
+    /// <param name="nodeName">GenICam 节点名称</param>
+    /// <returns>读取到的字符串；节点不可访问或为空时返回 null</returns>
+    Task<string?> GetGenICamStringAsync(int cameraIndex, string nodeName);
+
+    /// <summary>
+    /// 通过 GenICam 节点名称写入字符串值（String 类型节点，如 DeviceUserID）
+    /// </summary>
+    /// <param name="cameraIndex">相机索引</param>
+    /// <param name="nodeName">GenICam 节点名称</param>
+    /// <param name="value">要写入的字符串值</param>
+    Task SetGenICamStringAsync(int cameraIndex, string nodeName, string value);
+
+    // ─── GenICam 动态 NodeMap 与依赖图 ─────────────────────────────────────────
+
+    /// <summary>
+    /// 获取已缓存的 GenICam NodeMap 快照；
+    /// 若尚未首次枚举（例如相机未打开或预跑未完成），返回 null。
+    /// </summary>
+    /// <param name="cameraIndex">相机索引</param>
+    GenICamNodeMap? GetCachedNodeMap(int cameraIndex);
+
+    /// <summary>
+    /// 获取已缓存的选择器依赖图；尚未探测则返回 null。
+    /// </summary>
+    /// <param name="cameraIndex">相机索引</param>
+    GenICamDependencyGraph? GetCachedDependencyGraph(int cameraIndex);
+
+    /// <summary>
+    /// 重新枚举 GenICam NodeMap 并探测选择器依赖（覆盖原有缓存）。
+    /// 调用方需自行确保此时相机未在采集，否则可能影响 SDK 状态。
+    /// </summary>
+    /// <param name="cameraIndex">相机索引</param>
+    Task<GenICamNodeMap> RefreshGenICamNodeMapAsync(int cameraIndex);
+
+    /// <summary>
+    /// 按节点名批量读取节点当前值与动态访问模式（不刷新整张 NodeMap，只查值）。
+    /// 根据缓存的节点类型自动选择 Int / Float / String / Enumeration 读取方式。
+    /// </summary>
+    /// <param name="cameraIndex">相机索引</param>
+    /// <param name="nodeNames">节点名列表</param>
+    Task<IReadOnlyList<GenICamNodeValue>> ReadGenICamNodesAsync(
+        int cameraIndex,
+        IReadOnlyList<string> nodeNames
+    );
 }

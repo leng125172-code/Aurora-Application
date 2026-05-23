@@ -29,6 +29,8 @@ public static class MotorDbContextModelCreatingExtensions
             b.Property(x => x.Model).HasMaxLength(MotorConsts.MaxBrandLength);
             b.Property(x => x.Status).HasConversion<int>();
             b.Property(x => x.HomeMethod).HasConversion<int>();
+            b.Property(x => x.MinRotationAngle);
+            b.Property(x => x.MaxRotationAngle);
 
             b.HasIndex(x => x.AxisIndex).IsUnique();
             b.HasIndex(x => x.IsEnabled);
@@ -103,8 +105,7 @@ public static class MotorDbContextModelCreatingExtensions
             b.ToTable($"{TablePrefix}MotorOperationLogs");
             b.ConfigureByConvention();
 
-            b.Property(x => x.CommandCode)
-                .HasMaxLength(MotorConsts.MaxCommandCodeLength);
+            b.Property(x => x.CommandCode).HasMaxLength(MotorConsts.MaxCommandCodeLength);
             b.Property(x => x.ParameterSummary)
                 .HasMaxLength(MotorConsts.MaxOperationParameterSummaryLength);
             b.Property(x => x.ErrorMessage)

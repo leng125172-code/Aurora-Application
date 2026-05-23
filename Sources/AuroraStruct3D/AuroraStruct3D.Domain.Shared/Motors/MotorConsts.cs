@@ -26,6 +26,9 @@ public static class MotorConsts
     /// <summary>PR路径名称最大长度（雷赛电机）</summary>
     public const int MaxPrPathNameLength = 64;
 
+    /// <summary>瓴控单圈角度单位上限（0.01°，36000 表示一圈）</summary>
+    public const long KtechSingleTurnAngleUnits = 36000;
+
     /// <summary>数据库表名前缀</summary>
     public const string DbTablePrefix = "AbpPro";
 

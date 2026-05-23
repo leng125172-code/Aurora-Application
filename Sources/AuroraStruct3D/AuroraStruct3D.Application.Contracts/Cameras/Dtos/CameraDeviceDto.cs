@@ -43,6 +43,9 @@ public class CameraDeviceDto : FullAuditedEntityDto<Guid>
     /// <summary>当前激活的参数集ID</summary>
     public Guid? ActiveParameterSetId { get; set; }
 
+    /// <summary>图像顺时针旋转角度（度）</summary>
+    public int ImageRotationAngle { get; set; }
+
     /// <summary>参数集数量</summary>
     public int ParameterSetCount { get; set; }
 }

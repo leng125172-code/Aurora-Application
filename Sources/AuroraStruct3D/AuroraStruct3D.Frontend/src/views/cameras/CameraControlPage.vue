@@ -1,25 +1,12 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+// 动态 GenICam 驱动的相机控制页面
+// 左侧：按 NodeMap.categories 动态渲染参数分组
+// 右侧：预览 / 快照 / 旋转角度（软件端）/ 实时指标 / 快捷操作
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useCameraStore } from '@/stores/cameras'
-import {
-    CameraStatus,
-    CameraAutoExposureMode,
-    CameraGainMode,
-    CameraBinningMode,
-    CameraPixelDepth,
-    CameraWhiteBalanceMode,
-    type CameraDeviceInfoDto,
-    type CameraImageParamsDto,
-    type SetCameraImageParamsDto,
-    type CameraAcquisitionParamsDto,
-    type SetCameraAcquisitionParamsDto,
-    type CameraTriggerParamsDto,
-    type SetCameraTriggerParamsDto,
-    type CameraCustomParamsDto,
-    type SetCameraCustomParamsDto,
-    type CameraLiveMetricsDto,
-} from '@/api/cameras'
+import { CameraStatus, type CameraLiveMetricsDto, type GenICamNodeDto } from '@/api/cameras'
+import GenICamCategoryCard from '@/components/camera/GenICamCategoryCard.vue'
 import { toast } from 'vue-sonner'
 
 const route = useRoute()
@@ -29,40 +16,144 @@ const store = useCameraStore()
 // ─── 当前设备 ─────────────────────────────────────────────────────────────
 const deviceId = computed<string>(() => route.params.id as string)
 const device = computed(() => store.cameras.find((c) => c.id === deviceId.value) ?? store.selectedCamera)
-const isOpen = computed(
-    () => device.value?.status === CameraStatus.Ready || device.value?.status === CameraStatus.Capturing
-)
+const realtimeState = computed(() => store.cameraStates.get(deviceId.value) ?? null)
+const isOpen = computed(() => {
+    const status = realtimeState.value?.status ?? device.value?.status
+    return status === CameraStatus.Ready || status === CameraStatus.Capturing
+})
 const previewUrl = computed(() => store.previewFrames.get(deviceId.value) ?? null)
 const metrics = computed<CameraLiveMetricsDto | null>(() => store.liveMetrics.get(deviceId.value) ?? null)
 
-// ─── 设备信息 ─────────────────────────────────────────────────────────────
-const deviceInfo = ref<CameraDeviceInfoDto | null>(null)
+// ─── NodeMap ─────────────────────────────────────────────────────────────
+const nodeMap = computed(() => store.nodeMaps.get(deviceId.value) ?? null)
+const nodeMapLoading = ref(false)
+/** 节点最新值缓存（nodeName -> value） */
+const nodeValues = ref<Record<string, string | null>>({})
+/** 各分组刷新中标记 */
+const categoryLoading = ref<Record<string, boolean>>({})
 
-// ─── 图像参数 ─────────────────────────────────────────────────────────────
-const imageParams = ref<CameraImageParamsDto | null>(null)
-const imageParamsEditing = ref(false)
-const imgForm = ref<SetCameraImageParamsDto>({})
+/** Selector -> 受影响节点的反向索引，写入 selector 后批量刷新被影响节点 */
+const selectorDependencyIndex = computed<Record<string, string[]>>(() => {
+    const map: Record<string, string[]> = {}
+    if (!nodeMap.value) return map
+    for (const dep of nodeMap.value.dependencies) {
+        if (!map[dep.selectorNode]) map[dep.selectorNode] = []
+        if (!map[dep.selectorNode].includes(dep.affectedNode)) {
+            map[dep.selectorNode].push(dep.affectedNode)
+        }
+    }
+    return map
+})
 
-// ─── 采集参数 ─────────────────────────────────────────────────────────────
-const acquisitionParams = ref<CameraAcquisitionParamsDto | null>(null)
-const acquisitionParamsEditing = ref(false)
-const acqForm = ref<SetCameraAcquisitionParamsDto>({})
+// ─── Visibility 筛选 ─────────────────────────────────────────────────────
+const visibility = ref<'Beginner' | 'Expert' | 'Guru'>('Beginner')
 
-// ─── 触发参数 ─────────────────────────────────────────────────────────────
-const triggerParams = ref<CameraTriggerParamsDto | null>(null)
-const triggerEditing = ref(false)
-const trgForm = ref<SetCameraTriggerParamsDto>({})
+// ─── NodeMap 加载与节点值初始化 ──────────────────────────────────────────
+async function loadNodeMap(forceRefresh = false) {
+    if (!isOpen.value) return
+    nodeMapLoading.value = true
+    try {
+        const map = forceRefresh ? await store.refreshNodeMap(deviceId.value) : await store.fetchNodeMap(deviceId.value)
+        // 使用 NodeMap 携带的 currentValue 初始化值缓存
+        const initial: Record<string, string | null> = {}
+        for (const n of map.allNodes) {
+            initial[n.nodeName] = n.currentValue
+        }
+        nodeValues.value = initial
+    } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e)
+        toast.error(`加载 NodeMap 失败：${msg}`)
+    } finally {
+        nodeMapLoading.value = false
+    }
+}
 
-// ─── 自定义参数（WB / LED）────────────────────────────────────────────────
-const customParams = ref<CameraCustomParamsDto | null>(null)
-const customEditing = ref(false)
-const customForm = ref<SetCameraCustomParamsDto>({})
+/** 批量读取指定节点最新值 */
+async function readNodes(nodeNames: string[]) {
+    if (nodeNames.length === 0 || !nodeMap.value) return
+    const lookup = new Map(nodeMap.value.allNodes.map((n) => [n.nodeName, n]))
+    const inputs = nodeNames
+        .map((name) => lookup.get(name))
+        .filter((n): n is GenICamNodeDto => !!n && n.nodeType !== 'Command' && n.nodeType !== 'Category')
+        .map((n) => ({
+            nodeName: n.nodeName,
+            dataType: n.nodeType === 'Float' ? 'float' : n.nodeType === 'String' ? 'string' : 'int',
+        }))
+    if (inputs.length === 0) return
+    try {
+        const result = await store.readNodes(deviceId.value, inputs)
+        for (const r of result.results) {
+            nodeValues.value[r.nodeName] = r.success ? r.value : null
+        }
+    } catch {
+        // 忽略：保留上次值
+    }
+}
 
-// ─── 预览控制 ─────────────────────────────────────────────────────────────
+/** 刷新单个分组中所有可读节点 */
+async function refreshCategory(categoryName: string) {
+    if (!nodeMap.value) return
+    const cat = nodeMap.value.categories.find((c) => c.name === categoryName)
+    if (!cat) return
+    categoryLoading.value[categoryName] = true
+    try {
+        await readNodes(cat.nodes.map((n) => n.nodeName))
+    } finally {
+        categoryLoading.value[categoryName] = false
+    }
+}
+
+/** 节点写入后回调：刷新该节点自身 + 所有受其依赖的节点 */
+async function onNodeUpdated(node: GenICamNodeDto, _newValue: string) {
+    const toRefresh = new Set<string>([node.nodeName])
+    const affected = selectorDependencyIndex.value[node.nodeName] ?? []
+    for (const a of affected) toRefresh.add(a)
+    await readNodes(Array.from(toRefresh))
+}
+
+// ─── 旋转角度（软件端，不在 GenICam NodeMap 内）────────────────────────
+const savedRotationAngle = ref(0)
+const rotationAngle = ref(0)
+const rotationSaving = ref(false)
+const rotationDirty = computed(() => savedRotationAngle.value !== rotationAngle.value)
+const rotationOptions = [
+    { value: 0, label: '0°' },
+    { value: 90, label: '90°' },
+    { value: 180, label: '180°' },
+    { value: 270, label: '270°' },
+]
+
+async function loadImageParams() {
+    if (!isOpen.value) return
+    try {
+        const angle = await store.fetchImageRotationAngle(deviceId.value)
+        savedRotationAngle.value = angle
+        rotationAngle.value = angle
+    } catch {
+        /* 忽略 */
+    }
+}
+
+async function saveRotationAngle() {
+    rotationSaving.value = true
+    try {
+        await store.applyImageRotationAngle(deviceId.value, rotationAngle.value)
+        savedRotationAngle.value = rotationAngle.value
+        toast.success('旋转角度已保存')
+    } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e)
+        toast.error(`保存失败：${msg}`)
+    } finally {
+        rotationSaving.value = false
+    }
+}
+
+// ─── 预览控制 ────────────────────────────────────────────────────────────
 const previewing = ref(false)
+const previewTab = ref<'video' | 'snapshot'>('video')
+const snapshotUri = ref<string | null>(null)
 const busy = ref(false)
 
-// ─── 通用执行包装 ──────────────────────────────────────────────────────────
 async function run(fn: () => Promise<void>) {
     busy.value = true
     try {
@@ -72,194 +163,38 @@ async function run(fn: () => Promise<void>) {
     }
 }
 
-// ─── 加载各节参数 ─────────────────────────────────────────────────────────
-
-async function loadDeviceInfo() {
-    try {
-        deviceInfo.value = await store.fetchDeviceInfo(deviceId.value)
-    } catch {
-        /* 忽略 */
-    }
-}
-
-async function loadImageParams() {
-    try {
-        const p = await store.fetchImageParams(deviceId.value)
-        imageParams.value = p
-        imgForm.value = {
-            roiEnabled: p.roiEnabled,
-            roiHOffset: p.roiHOffset,
-            roiVOffset: p.roiVOffset,
-            roiWidth: p.roiWidth,
-            roiHeight: p.roiHeight,
-            pixelDepth: p.pixelDepth,
-            horizontalFlip: p.horizontalFlip,
-            verticalFlip: p.verticalFlip,
-            binning: p.binning,
-            gammaEnabled: p.gammaEnabled,
-            gamma: p.gamma,
-            contrast: p.contrast,
-            brightness: p.brightness,
-            frameRate: p.frameRate,
-        }
-    } catch {
-        /* 忽略 */
-    }
-}
-
-async function loadAcquisitionParams() {
-    try {
-        const p = await store.fetchAcquisitionParams(deviceId.value)
-        acquisitionParams.value = p
-        acqForm.value = {
-            aeMode: p.aeMode,
-            aeTargetGray: p.aeTargetGray,
-            aeMaxExposure: p.aeMaxExposure,
-            aeMinExposure: p.aeMinExposure,
-            gainMode: p.gainMode,
-            exposureTime: p.exposureTime,
-            globalGain: p.globalGain,
-        }
-    } catch {
-        /* 忽略 */
-    }
-}
-
-async function loadTriggerParams() {
-    try {
-        const p = await store.fetchTriggerParams(deviceId.value)
-        triggerParams.value = p
-        trgForm.value = {
-            triggerMode: p.triggerMode,
-            expMode: p.expMode,
-            edgeMode: p.edgeMode,
-            delayTm: p.delayTm,
-            frames: p.frames,
-            bufFrames: p.bufFrames,
-        }
-    } catch {
-        /* 忽略 */
-    }
-}
-
-async function loadCustomParams() {
-    try {
-        const p = await store.fetchCustomParams(deviceId.value)
-        customParams.value = p
-        customForm.value = {
-            wbMode: p.wbMode,
-            channelGainR: p.channelGainR,
-            channelGainG: p.channelGainG,
-            channelGainB: p.channelGainB,
-            saturation: p.saturation,
-            colorTemperature: p.colorTemperature,
-            ledEnabled: p.ledEnabled,
-        }
-    } catch {
-        /* 忽略 */
-    }
-}
-
-async function loadAll() {
-    if (!isOpen.value) return
-    await Promise.all([
-        loadDeviceInfo(),
-        loadImageParams(),
-        loadAcquisitionParams(),
-        loadTriggerParams(),
-        loadCustomParams(),
-    ])
-}
-
-// ─── 取消编辑 ─────────────────────────────────────────────────────────────
-
-function cancelImageParams() {
-    imageParamsEditing.value = false
-    void loadImageParams()
-}
-
-function cancelAcquisitionParams() {
-    acquisitionParamsEditing.value = false
-    void loadAcquisitionParams()
-}
-
-function cancelTriggerParams() {
-    triggerEditing.value = false
-    void loadTriggerParams()
-}
-
-function cancelCustomParams() {
-    customEditing.value = false
-    void loadCustomParams()
-}
-
-// ─── 保存操作 ─────────────────────────────────────────────────────────────
-
-async function saveImageParams() {
-    await run(async () => {
-        await store.applyImageParams(deviceId.value, imgForm.value)
-        toast.success('图像参数已保存')
-        imageParamsEditing.value = false
-        await loadImageParams()
-    })
-}
-
-async function saveAcquisitionParams() {
-    await run(async () => {
-        await store.applyAcquisitionParams(deviceId.value, acqForm.value)
-        toast.success('采集参数已保存')
-        acquisitionParamsEditing.value = false
-        await loadAcquisitionParams()
-    })
-}
-
-async function saveTriggerParams() {
-    await run(async () => {
-        await store.applyTriggerParams(deviceId.value, trgForm.value)
-        toast.success('触发参数已保存')
-        triggerEditing.value = false
-        await loadTriggerParams()
-    })
-}
-
-async function saveCustomParams() {
-    await run(async () => {
-        await store.applyCustomParams(deviceId.value, customForm.value)
-        toast.success('自定义参数已保存')
-        customEditing.value = false
-        await loadCustomParams()
-    })
-}
-
-// ─── 预览控制 ─────────────────────────────────────────────────────────────
-
 async function togglePreview() {
     if (previewing.value) {
-        await run(async () => {
-            await store.stopCameraPreview(deviceId.value)
-            previewing.value = false
-            toast.success('预览已停止')
-        })
-    } else {
-        await run(async () => {
-            await store.startCameraPreview(deviceId.value, {
-                connectionId: undefined,
-                enableRtp: false,
+        try {
+            await run(async () => {
+                await store.stopCameraPreview(deviceId.value)
+                previewing.value = false
+                toast.success('预览已停止')
             })
-            previewing.value = true
-            toast.success('预览已启动（SignalR 30FPS）')
-        })
+        } catch (e: unknown) {
+            const msg = e instanceof Error ? e.message : String(e)
+            toast.error(`停止预览失败：${msg}`)
+        }
+    } else {
+        try {
+            await run(async () => {
+                await store.startCameraPreview(deviceId.value, { enableRtp: false })
+                previewing.value = true
+                toast.success('预览已启动（SignalR）')
+            })
+        } catch (e: unknown) {
+            previewing.value = false
+            const msg = e instanceof Error ? e.message : String(e)
+            toast.error(`启动预览失败：${msg}`)
+        }
     }
 }
 
 async function onSnapshot() {
     await run(async () => {
         const snap = await store.snapshot(deviceId.value)
-        // 在新标签页打开快照
-        const win = window.open()
-        if (win) {
-            win.document.write(`<img src="${snap.dataUri}" style="max-width:100%" />`)
-        }
+        snapshotUri.value = snap.dataUri
+        previewTab.value = 'snapshot'
         toast.success(`快照已拍摄：${new Date(snap.capturedAt).toLocaleTimeString()}`)
     })
 }
@@ -271,53 +206,53 @@ async function onSoftTrigger() {
     })
 }
 
-// ─── 枚举选项 ─────────────────────────────────────────────────────────────
+async function onExposureAutoOncePulse() {
+    await run(async () => {
+        await store.exposureAutoOncePulse(deviceId.value)
+        toast.success('单次自动曝光已触发')
+    })
+}
 
-const aeModeOptions = [
-    { value: CameraAutoExposureMode.Off, label: '关闭' },
-    { value: CameraAutoExposureMode.Once, label: '单次' },
-    { value: CameraAutoExposureMode.Continuous, label: '连续' },
-]
+function displayMetric(value: number | null | undefined, digits = 1): string {
+    if (typeof value !== 'number' || !Number.isFinite(value)) return '—'
+    return value.toFixed(digits)
+}
 
-const gainModeOptions = [
-    { value: CameraGainMode.Hdr, label: 'HDR' },
-    { value: CameraGainMode.High, label: '高增益' },
-    { value: CameraGainMode.Low, label: '低增益' },
-]
+// ─── 全部刷新 ────────────────────────────────────────────────────────────
+async function refreshAll() {
+    if (!nodeMap.value) {
+        await loadNodeMap(false)
+    } else {
+        // 串行读取每个分组，避免并发占用 DbContext
+        for (const cat of nodeMap.value.categories) {
+            await refreshCategory(cat.name)
+        }
+    }
+    await loadImageParams()
+}
 
-const binningOptions = [
-    { value: CameraBinningMode.Off, label: '关闭' },
-    { value: CameraBinningMode.X2, label: '×2' },
-    { value: CameraBinningMode.X4, label: '×4' },
-]
-
-const pixelDepthOptions = [
-    { value: CameraPixelDepth.Bit8, label: '8 bit' },
-    { value: CameraPixelDepth.Bit12, label: '12 bit' },
-]
-
-const wbModeOptions = [
-    { value: CameraWhiteBalanceMode.Manual, label: '手动' },
-    { value: CameraWhiteBalanceMode.Once, label: '单次' },
-    { value: CameraWhiteBalanceMode.Continuous, label: '连续' },
-]
-
-// ─── 侦听设备打开状态，自动加载参数 ──────────────────────────────────────
+// ─── 侦听 / 生命周期 ─────────────────────────────────────────────────────
 watch(isOpen, (val) => {
-    if (val) void loadAll()
+    if (val) {
+        void loadNodeMap(false)
+        void loadImageParams()
+    }
 })
 
 onMounted(async () => {
+    await store.startHub()
     if (!device.value) {
         await store.refreshCamera(deviceId.value).catch(() => {
             void router.push({ name: 'CameraManage' })
         })
     }
-    await loadAll()
+    if (isOpen.value) {
+        void loadNodeMap(false)
+        void loadImageParams()
+    }
 })
 
 onUnmounted(async () => {
-    // 离开控制页时停止预览
     if (previewing.value) {
         await store.stopCameraPreview(deviceId.value).catch(() => {})
     }
@@ -326,541 +261,128 @@ onUnmounted(async () => {
 
 <template>
     <div class="flex flex-col gap-4 p-4">
-        <!-- 顶部标题与状态 -->
-        <div class="flex items-center justify-between">
-            <div class="flex items-center gap-3">
+        <!-- ── 顶部标题栏 ── -->
+        <div class="flex flex-wrap items-center gap-3">
+            <button
+                class="rounded border px-2 py-1 text-xs hover:bg-muted/50"
+                @click="void router.push({ name: 'CameraManage' })"
+            >
+                ← 返回
+            </button>
+            <h1 class="text-lg font-semibold">{{ device?.name ?? '相机控制' }}</h1>
+            <span
+                :class="[
+                    'rounded px-2 py-0.5 text-xs font-medium',
+                    isOpen ? 'bg-green-100 text-green-700' : 'bg-muted text-muted-foreground',
+                ]"
+            >
+                {{ isOpen ? '已打开' : '已关闭' }}
+            </span>
+            <span class="text-xs text-muted-foreground">SN: {{ device?.serialNumber ?? '—' }}</span>
+            <span v-if="realtimeState?.isXmlLoaded === false" class="text-xs text-amber-500">
+                GenICam NodeMap 加载中…
+            </span>
+
+            <div class="ml-auto flex items-center gap-2">
+                <!-- Visibility 筛选 -->
+                <label class="text-xs text-muted-foreground">可见性</label>
+                <select v-model="visibility" class="rounded border px-2 py-1 text-xs focus:outline-none">
+                    <option value="Beginner">Beginner</option>
+                    <option value="Expert">Expert</option>
+                    <option value="Guru">Guru</option>
+                </select>
+                <!-- 重新枚举（强制 NodeMap 刷新） -->
                 <button
-                    class="rounded border px-2 py-1 text-xs hover:bg-muted/50"
-                    @click="void router.push({ name: 'CameraManage' })"
+                    :disabled="!isOpen || nodeMapLoading"
+                    class="rounded border px-2 py-1 text-xs hover:bg-muted/50 disabled:opacity-40"
+                    @click="void loadNodeMap(true)"
                 >
-                    ← 返回
+                    {{ nodeMapLoading ? '枚举中…' : '重新枚举' }}
                 </button>
-                <h1 class="text-lg font-semibold">
-                    {{ device?.name ?? '相机控制' }}
-                </h1>
-                <span
-                    :class="[
-                        'rounded px-2 py-0.5 text-xs font-medium',
-                        isOpen ? 'bg-green-100 text-green-700' : 'bg-muted text-muted-foreground',
-                    ]"
+                <!-- 全部刷新 -->
+                <button
+                    :disabled="!isOpen"
+                    class="rounded border px-2 py-1 text-xs hover:bg-muted/50 disabled:opacity-40"
+                    @click="void refreshAll()"
                 >
-                    {{ isOpen ? '已打开' : '已关闭' }}
-                </span>
-            </div>
-            <div class="flex items-center gap-2">
-                <span class="text-xs text-muted-foreground">SN: {{ device?.serialNumber ?? '—' }}</span>
+                    全部刷新
+                </button>
             </div>
         </div>
 
-        <div class="grid grid-cols-[1fr_320px] gap-4">
-            <!-- 左侧参数面板 -->
-            <div class="flex flex-col gap-4">
-                <!-- ── 设备信息 ── -->
-                <section class="rounded-lg border">
-                    <div class="flex items-center justify-between border-b px-4 py-2">
-                        <span class="text-sm font-medium">设备信息</span>
-                        <button
-                            :disabled="!isOpen"
-                            class="text-xs text-primary hover:underline disabled:opacity-40"
-                            @click="loadDeviceInfo"
-                        >
-                            刷新
-                        </button>
-                    </div>
-                    <div v-if="deviceInfo" class="grid grid-cols-2 gap-x-4 gap-y-1.5 p-4 text-sm">
-                        <div class="text-muted-foreground">型号</div>
-                        <div>{{ deviceInfo.model }}</div>
-                        <div class="text-muted-foreground">序列号</div>
-                        <div class="font-mono">{{ deviceInfo.serialNumber }}</div>
-                        <div class="text-muted-foreground">固件版本</div>
-                        <div>{{ deviceInfo.firmwareVersion }}</div>
-                        <div class="text-muted-foreground">FPGA 版本</div>
-                        <div>{{ deviceInfo.fpgaVersion }}</div>
-                        <div class="text-muted-foreground">图像分辨率</div>
-                        <div>{{ deviceInfo.currentWidth }} × {{ deviceInfo.currentHeight }}</div>
-                        <div class="text-muted-foreground">FPGA 温度</div>
-                        <div>{{ deviceInfo.fpgaTemperature }} °C</div>
-                        <div class="text-muted-foreground">传感器温度</div>
-                        <div>{{ deviceInfo.sensorTemperature.toFixed(1) }} °C</div>
-                    </div>
-                    <div v-else class="px-4 py-3 text-sm text-muted-foreground">
-                        {{ isOpen ? '加载中…' : '请先打开相机' }}
-                    </div>
-                </section>
-
-                <!-- ── 图像参数 ── -->
-                <section class="rounded-lg border">
-                    <div class="flex items-center justify-between border-b px-4 py-2">
-                        <span class="text-sm font-medium">图像参数</span>
-                        <div class="flex gap-2">
-                            <button
-                                v-if="!imageParamsEditing"
-                                :disabled="!isOpen"
-                                class="text-xs text-primary hover:underline disabled:opacity-40"
-                                @click="imageParamsEditing = true"
-                            >
-                                编辑
-                            </button>
-                            <template v-else>
-                                <button
-                                    class="text-xs text-muted-foreground hover:underline"
-                                    @click="cancelImageParams"
-                                >
-                                    取消
-                                </button>
-                                <button
-                                    :disabled="busy"
-                                    class="text-xs text-primary hover:underline disabled:opacity-40"
-                                    @click="saveImageParams"
-                                >
-                                    保存
-                                </button>
-                            </template>
-                        </div>
-                    </div>
-                    <div v-if="imageParams" class="p-4">
-                        <div class="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-                            <!-- 像素位深 -->
-                            <label class="text-muted-foreground">像素位深</label>
-                            <div v-if="!imageParamsEditing">
-                                {{ imgForm.pixelDepth === CameraPixelDepth.Bit8 ? '8 bit' : '12 bit' }}
-                            </div>
-                            <select
-                                v-else
-                                v-model="imgForm.pixelDepth"
-                                class="rounded border bg-background px-1 py-0.5 text-sm"
-                            >
-                                <option v-for="opt in pixelDepthOptions" :key="opt.value" :value="opt.value">
-                                    {{ opt.label }}
-                                </option>
-                            </select>
-
-                            <!-- Binning -->
-                            <label class="text-muted-foreground">Binning</label>
-                            <div v-if="!imageParamsEditing">
-                                {{ binningOptions.find((o) => o.value === imgForm.binning)?.label }}
-                            </div>
-                            <select
-                                v-else
-                                v-model="imgForm.binning"
-                                class="rounded border bg-background px-1 py-0.5 text-sm"
-                            >
-                                <option v-for="opt in binningOptions" :key="opt.value" :value="opt.value">
-                                    {{ opt.label }}
-                                </option>
-                            </select>
-
-                            <!-- 帧率 -->
-                            <label class="text-muted-foreground">目标帧率</label>
-                            <div v-if="!imageParamsEditing">
-                                {{ imgForm.frameRate }} FPS（最大 {{ imageParams.frameRateMax }}）
-                            </div>
-                            <input
-                                v-else
-                                v-model.number="imgForm.frameRate"
-                                type="number"
-                                min="1"
-                                class="rounded border bg-background px-1 py-0.5 text-sm"
-                            />
-
-                            <!-- 水平翻转 -->
-                            <label class="text-muted-foreground">水平翻转</label>
-                            <div v-if="!imageParamsEditing">{{ imgForm.horizontalFlip ? '是' : '否' }}</div>
-                            <input v-else v-model="imgForm.horizontalFlip" type="checkbox" />
-
-                            <!-- 垂直翻转 -->
-                            <label class="text-muted-foreground">垂直翻转</label>
-                            <div v-if="!imageParamsEditing">{{ imgForm.verticalFlip ? '是' : '否' }}</div>
-                            <input v-else v-model="imgForm.verticalFlip" type="checkbox" />
-
-                            <!-- Gamma -->
-                            <label class="text-muted-foreground">Gamma 使能</label>
-                            <div v-if="!imageParamsEditing">{{ imgForm.gammaEnabled ? '开启' : '关闭' }}</div>
-                            <input v-else v-model="imgForm.gammaEnabled" type="checkbox" />
-
-                            <label class="text-muted-foreground">Gamma 值</label>
-                            <div v-if="!imageParamsEditing">{{ imgForm.gamma }}</div>
-                            <input
-                                v-else
-                                v-model.number="imgForm.gamma"
-                                type="number"
-                                step="0.01"
-                                class="rounded border bg-background px-1 py-0.5 text-sm"
-                            />
-
-                            <!-- ROI -->
-                            <label class="text-muted-foreground">ROI 使能</label>
-                            <div v-if="!imageParamsEditing">{{ imgForm.roiEnabled ? '开启' : '关闭' }}</div>
-                            <input v-else v-model="imgForm.roiEnabled" type="checkbox" />
-
-                            <template v-if="imageParamsEditing && imgForm.roiEnabled">
-                                <label class="text-muted-foreground">ROI 位置 (X, Y)</label>
-                                <div class="flex gap-1">
-                                    <input
-                                        v-model.number="imgForm.roiHOffset"
-                                        type="number"
-                                        min="0"
-                                        class="w-20 rounded border bg-background px-1 py-0.5 text-sm"
-                                        placeholder="X"
-                                    />
-                                    <input
-                                        v-model.number="imgForm.roiVOffset"
-                                        type="number"
-                                        min="0"
-                                        class="w-20 rounded border bg-background px-1 py-0.5 text-sm"
-                                        placeholder="Y"
-                                    />
-                                </div>
-                                <label class="text-muted-foreground">ROI 大小 (W×H)</label>
-                                <div class="flex gap-1">
-                                    <input
-                                        v-model.number="imgForm.roiWidth"
-                                        type="number"
-                                        min="1"
-                                        class="w-20 rounded border bg-background px-1 py-0.5 text-sm"
-                                        placeholder="W"
-                                    />
-                                    <input
-                                        v-model.number="imgForm.roiHeight"
-                                        type="number"
-                                        min="1"
-                                        class="w-20 rounded border bg-background px-1 py-0.5 text-sm"
-                                        placeholder="H"
-                                    />
-                                </div>
-                            </template>
-                        </div>
-                    </div>
-                    <div v-else class="px-4 py-3 text-sm text-muted-foreground">
-                        {{ isOpen ? '加载中…' : '请先打开相机' }}
-                    </div>
-                </section>
-
-                <!-- ── 采集参数 ── -->
-                <section class="rounded-lg border">
-                    <div class="flex items-center justify-between border-b px-4 py-2">
-                        <span class="text-sm font-medium">采集参数（曝光 / 增益）</span>
-                        <div class="flex gap-2">
-                            <button
-                                v-if="!acquisitionParamsEditing"
-                                :disabled="!isOpen"
-                                class="text-xs text-primary hover:underline disabled:opacity-40"
-                                @click="acquisitionParamsEditing = true"
-                            >
-                                编辑
-                            </button>
-                            <template v-else>
-                                <button
-                                    class="text-xs text-muted-foreground hover:underline"
-                                    @click="cancelAcquisitionParams"
-                                >
-                                    取消
-                                </button>
-                                <button
-                                    :disabled="busy"
-                                    class="text-xs text-primary hover:underline disabled:opacity-40"
-                                    @click="saveAcquisitionParams"
-                                >
-                                    保存
-                                </button>
-                            </template>
-                        </div>
-                    </div>
-                    <div v-if="acquisitionParams" class="grid grid-cols-2 gap-x-4 gap-y-2 p-4 text-sm">
-                        <label class="text-muted-foreground">AE 模式</label>
-                        <div v-if="!acquisitionParamsEditing">
-                            {{ aeModeOptions.find((o) => o.value === acqForm.aeMode)?.label }}
-                        </div>
-                        <select
-                            v-else
-                            v-model="acqForm.aeMode"
-                            class="rounded border bg-background px-1 py-0.5 text-sm"
-                        >
-                            <option v-for="opt in aeModeOptions" :key="opt.value" :value="opt.value">
-                                {{ opt.label }}
-                            </option>
-                        </select>
-
-                        <label class="text-muted-foreground">曝光时间 (μs)</label>
-                        <div v-if="!acquisitionParamsEditing">{{ acqForm.exposureTime }}</div>
-                        <input
-                            v-else
-                            v-model.number="acqForm.exposureTime"
-                            type="number"
-                            min="1"
-                            class="rounded border bg-background px-1 py-0.5 text-sm"
-                        />
-
-                        <label class="text-muted-foreground">增益模式</label>
-                        <div v-if="!acquisitionParamsEditing">
-                            {{ gainModeOptions.find((o) => o.value === acqForm.gainMode)?.label }}
-                        </div>
-                        <select
-                            v-else
-                            v-model="acqForm.gainMode"
-                            class="rounded border bg-background px-1 py-0.5 text-sm"
-                        >
-                            <option v-for="opt in gainModeOptions" :key="opt.value" :value="opt.value">
-                                {{ opt.label }}
-                            </option>
-                        </select>
-
-                        <label class="text-muted-foreground">全局增益</label>
-                        <div v-if="!acquisitionParamsEditing">{{ acqForm.globalGain }}</div>
-                        <input
-                            v-else
-                            v-model.number="acqForm.globalGain"
-                            type="number"
-                            step="0.1"
-                            class="rounded border bg-background px-1 py-0.5 text-sm"
-                        />
-
-                        <template v-if="acqForm.aeMode !== CameraAutoExposureMode.Off">
-                            <label class="text-muted-foreground">AE 目标灰度</label>
-                            <div v-if="!acquisitionParamsEditing">{{ acqForm.aeTargetGray }}</div>
-                            <input
-                                v-else
-                                v-model.number="acqForm.aeTargetGray"
-                                type="number"
-                                min="0"
-                                max="255"
-                                class="rounded border bg-background px-1 py-0.5 text-sm"
-                            />
-
-                            <label class="text-muted-foreground">AE 最大曝光 (μs)</label>
-                            <div v-if="!acquisitionParamsEditing">{{ acqForm.aeMaxExposure }}</div>
-                            <input
-                                v-else
-                                v-model.number="acqForm.aeMaxExposure"
-                                type="number"
-                                min="1"
-                                class="rounded border bg-background px-1 py-0.5 text-sm"
-                            />
-
-                            <label class="text-muted-foreground">AE 最小曝光 (μs)</label>
-                            <div v-if="!acquisitionParamsEditing">{{ acqForm.aeMinExposure }}</div>
-                            <input
-                                v-else
-                                v-model.number="acqForm.aeMinExposure"
-                                type="number"
-                                min="1"
-                                class="rounded border bg-background px-1 py-0.5 text-sm"
-                            />
-                        </template>
-                    </div>
-                    <div v-else class="px-4 py-3 text-sm text-muted-foreground">
-                        {{ isOpen ? '加载中…' : '请先打开相机' }}
-                    </div>
-                </section>
-
-                <!-- ── 触发参数 ── -->
-                <section class="rounded-lg border">
-                    <div class="flex items-center justify-between border-b px-4 py-2">
-                        <span class="text-sm font-medium">触发参数</span>
-                        <div class="flex gap-2">
-                            <button
-                                v-if="!triggerEditing"
-                                :disabled="!isOpen"
-                                class="text-xs text-primary hover:underline disabled:opacity-40"
-                                @click="triggerEditing = true"
-                            >
-                                编辑
-                            </button>
-                            <template v-else>
-                                <button
-                                    class="text-xs text-muted-foreground hover:underline"
-                                    @click="cancelTriggerParams"
-                                >
-                                    取消
-                                </button>
-                                <button
-                                    :disabled="busy"
-                                    class="text-xs text-primary hover:underline disabled:opacity-40"
-                                    @click="saveTriggerParams"
-                                >
-                                    保存
-                                </button>
-                            </template>
-                        </div>
-                    </div>
-                    <div v-if="triggerParams" class="grid grid-cols-2 gap-x-4 gap-y-2 p-4 text-sm">
-                        <label class="text-muted-foreground">触发模式</label>
-                        <div v-if="!triggerEditing">{{ trgForm.triggerMode }}</div>
-                        <select
-                            v-else
-                            v-model="trgForm.triggerMode"
-                            class="rounded border bg-background px-1 py-0.5 text-sm"
-                        >
-                            <option :value="0">0 - 连续</option>
-                            <option :value="1">1 - 标准</option>
-                            <option :value="2">2 - 同步</option>
-                            <option :value="3">3 - 全局</option>
-                            <option :value="4">4 - 软件</option>
-                        </select>
-
-                        <label class="text-muted-foreground">曝光模式</label>
-                        <div v-if="!triggerEditing">{{ trgForm.expMode === 0 ? '全局' : '电子滚动' }}</div>
-                        <select
-                            v-else
-                            v-model="trgForm.expMode"
-                            class="rounded border bg-background px-1 py-0.5 text-sm"
-                        >
-                            <option :value="0">全局</option>
-                            <option :value="1">电子滚动</option>
-                        </select>
-
-                        <label class="text-muted-foreground">触发边沿</label>
-                        <div v-if="!triggerEditing">{{ trgForm.edgeMode === 0 ? '上升沿' : '下降沿' }}</div>
-                        <select
-                            v-else
-                            v-model="trgForm.edgeMode"
-                            class="rounded border bg-background px-1 py-0.5 text-sm"
-                        >
-                            <option :value="0">上升沿</option>
-                            <option :value="1">下降沿</option>
-                        </select>
-
-                        <label class="text-muted-foreground">延迟时间</label>
-                        <div v-if="!triggerEditing">{{ trgForm.delayTm }}</div>
-                        <input
-                            v-else
-                            v-model.number="trgForm.delayTm"
-                            type="number"
-                            min="0"
-                            class="rounded border bg-background px-1 py-0.5 text-sm"
-                        />
-
-                        <label class="text-muted-foreground">单次触发帧数</label>
-                        <div v-if="!triggerEditing">{{ trgForm.frames }}</div>
-                        <input
-                            v-else
-                            v-model.number="trgForm.frames"
-                            type="number"
-                            min="1"
-                            class="rounded border bg-background px-1 py-0.5 text-sm"
-                        />
-
-                        <label class="text-muted-foreground">缓冲帧数</label>
-                        <div v-if="!triggerEditing">{{ trgForm.bufFrames }}</div>
-                        <input
-                            v-else
-                            v-model.number="trgForm.bufFrames"
-                            type="number"
-                            min="1"
-                            class="rounded border bg-background px-1 py-0.5 text-sm"
-                        />
-                    </div>
-                    <div v-else class="px-4 py-3 text-sm text-muted-foreground">
-                        {{ isOpen ? '加载中…' : '请先打开相机' }}
-                    </div>
-                </section>
-
-                <!-- ── 自定义参数 ── -->
-                <section class="rounded-lg border">
-                    <div class="flex items-center justify-between border-b px-4 py-2">
-                        <span class="text-sm font-medium">自定义参数（白平衡 / LED）</span>
-                        <div class="flex gap-2">
-                            <button
-                                v-if="!customEditing"
-                                :disabled="!isOpen"
-                                class="text-xs text-primary hover:underline disabled:opacity-40"
-                                @click="customEditing = true"
-                            >
-                                编辑
-                            </button>
-                            <template v-else>
-                                <button
-                                    class="text-xs text-muted-foreground hover:underline"
-                                    @click="cancelCustomParams"
-                                >
-                                    取消
-                                </button>
-                                <button
-                                    :disabled="busy"
-                                    class="text-xs text-primary hover:underline disabled:opacity-40"
-                                    @click="saveCustomParams"
-                                >
-                                    保存
-                                </button>
-                            </template>
-                        </div>
-                    </div>
-                    <div v-if="customParams" class="grid grid-cols-2 gap-x-4 gap-y-2 p-4 text-sm">
-                        <label class="text-muted-foreground">白平衡模式</label>
-                        <div v-if="!customEditing">
-                            {{ wbModeOptions.find((o) => o.value === customForm.wbMode)?.label }}
-                        </div>
-                        <select
-                            v-else
-                            v-model="customForm.wbMode"
-                            class="rounded border bg-background px-1 py-0.5 text-sm"
-                        >
-                            <option v-for="opt in wbModeOptions" :key="opt.value" :value="opt.value">
-                                {{ opt.label }}
-                            </option>
-                        </select>
-
-                        <label class="text-muted-foreground">R 通道增益</label>
-                        <div v-if="!customEditing">{{ customForm.channelGainR }}</div>
-                        <input
-                            v-else
-                            v-model.number="customForm.channelGainR"
-                            type="number"
-                            step="0.01"
-                            class="rounded border bg-background px-1 py-0.5 text-sm"
-                        />
-
-                        <label class="text-muted-foreground">G 通道增益</label>
-                        <div v-if="!customEditing">{{ customForm.channelGainG }}</div>
-                        <input
-                            v-else
-                            v-model.number="customForm.channelGainG"
-                            type="number"
-                            step="0.01"
-                            class="rounded border bg-background px-1 py-0.5 text-sm"
-                        />
-
-                        <label class="text-muted-foreground">B 通道增益</label>
-                        <div v-if="!customEditing">{{ customForm.channelGainB }}</div>
-                        <input
-                            v-else
-                            v-model.number="customForm.channelGainB"
-                            type="number"
-                            step="0.01"
-                            class="rounded border bg-background px-1 py-0.5 text-sm"
-                        />
-
-                        <label class="text-muted-foreground">饱和度</label>
-                        <div v-if="!customEditing">{{ customForm.saturation }}</div>
-                        <input
-                            v-else
-                            v-model.number="customForm.saturation"
-                            type="number"
-                            step="1"
-                            class="rounded border bg-background px-1 py-0.5 text-sm"
-                        />
-
-                        <label class="text-muted-foreground">LED 使能</label>
-                        <div v-if="!customEditing">{{ customForm.ledEnabled ? '开启' : '关闭' }}</div>
-                        <input v-else v-model="customForm.ledEnabled" type="checkbox" />
-                    </div>
-                    <div v-else class="px-4 py-3 text-sm text-muted-foreground">
-                        {{ isOpen ? '加载中…' : '请先打开相机' }}
-                    </div>
-                </section>
+        <!-- ── 主体：左侧动态分组 + 右侧预览面板 ── -->
+        <div class="grid grid-cols-[1fr_340px] items-start gap-4">
+            <!-- 左侧：动态 NodeMap 渲染 -->
+            <div class="grid grid-cols-2 gap-4">
+                <template v-if="nodeMap && nodeMap.categories.length > 0">
+                    <GenICamCategoryCard
+                        v-for="cat in nodeMap.categories"
+                        :key="cat.name"
+                        :camera-id="deviceId"
+                        :category="cat"
+                        :values="nodeValues"
+                        :visibility="visibility"
+                        :disabled="!isOpen"
+                        :loading="categoryLoading[cat.name]"
+                        @refresh="void refreshCategory(cat.name)"
+                        @node-updated="(n, v) => void onNodeUpdated(n, v)"
+                    />
+                </template>
+                <div v-else class="col-span-2 rounded-lg border p-6 text-center text-sm text-muted-foreground">
+                    {{
+                        isOpen
+                            ? nodeMapLoading
+                                ? '正在加载 NodeMap…'
+                                : '暂无 NodeMap 数据，请点击右上角"重新枚举"'
+                            : '请先打开相机'
+                    }}
+                </div>
             </div>
 
-            <!-- 右侧预览面板 -->
-            <div class="flex flex-col gap-3">
-                <!-- 预览图 -->
-                <div class="overflow-hidden rounded-lg border bg-black">
-                    <div class="flex items-center justify-between border-b border-white/10 px-3 py-1.5">
-                        <span class="text-xs text-white/70">实时预览（SignalR 30FPS）</span>
-                        <span :class="['size-2 rounded-full', previewing ? 'bg-green-400' : 'bg-white/20']" />
-                    </div>
-                    <div class="flex aspect-[4/3] items-center justify-center">
-                        <img v-if="previewUrl" :src="previewUrl" class="h-full w-full object-contain" alt="相机预览" />
-                        <span v-else class="text-xs text-white/30">无画面</span>
+            <!-- 右侧：预览面板（粘性定位） -->
+            <div class="sticky top-4 flex flex-col gap-3 rounded-lg border p-3">
+                <!-- Tab 切换 -->
+                <div class="flex items-center gap-1 border-b pb-2">
+                    <button
+                        :class="[
+                            'px-2 py-0.5 text-xs',
+                            previewTab === 'video'
+                                ? 'font-medium text-primary'
+                                : 'text-muted-foreground hover:text-foreground',
+                        ]"
+                        @click="previewTab = 'video'"
+                    >
+                        视频预览
+                    </button>
+                    <button
+                        :class="[
+                            'px-2 py-0.5 text-xs',
+                            previewTab === 'snapshot'
+                                ? 'font-medium text-primary'
+                                : 'text-muted-foreground hover:text-foreground',
+                        ]"
+                        @click="previewTab = 'snapshot'"
+                    >
+                        图像快照
+                    </button>
+                </div>
+
+                <!-- 图像显示区域 -->
+                <div class="relative aspect-video overflow-hidden rounded bg-black">
+                    <img
+                        v-if="previewTab === 'video' && previewUrl"
+                        :src="previewUrl"
+                        class="h-full w-full object-contain"
+                        alt="实时预览"
+                    />
+                    <img
+                        v-else-if="previewTab === 'snapshot' && snapshotUri"
+                        :src="snapshotUri"
+                        class="h-full w-full object-contain"
+                        alt="快照"
+                    />
+                    <div v-else class="flex h-full items-center justify-center text-xs text-white/40">
+                        {{ previewTab === 'video' ? (previewing ? '等待帧…' : '预览未启动') : '尚无快照' }}
                     </div>
                 </div>
 
@@ -869,49 +391,86 @@ onUnmounted(async () => {
                     <button
                         :disabled="!isOpen || busy"
                         :class="[
-                            'flex-1 rounded border py-1.5 text-sm disabled:opacity-40',
-                            previewing
-                                ? 'border-orange-400 text-orange-500 hover:bg-orange-50'
-                                : 'border-green-500 text-green-600 hover:bg-green-50',
+                            'flex-1 rounded border px-2 py-1.5 text-xs font-medium disabled:opacity-40',
+                            previewing ? 'bg-red-50 text-red-600 hover:bg-red-100' : 'hover:bg-muted/50',
                         ]"
-                        @click="togglePreview"
+                        @click="void togglePreview()"
                     >
                         {{ previewing ? '停止预览' : '开始预览' }}
                     </button>
                     <button
                         :disabled="!isOpen || busy"
-                        class="rounded border px-3 py-1.5 text-sm hover:bg-muted/50 disabled:opacity-40"
-                        @click="onSnapshot"
+                        class="rounded border px-2 py-1.5 text-xs hover:bg-muted/50 disabled:opacity-40"
+                        @click="void onSnapshot()"
                     >
                         快照
                     </button>
                 </div>
 
-                <!-- 软触发按钮 -->
-                <button
-                    :disabled="!isOpen || busy"
-                    class="w-full rounded border py-1.5 text-sm hover:bg-muted/50 disabled:opacity-40"
-                    @click="onSoftTrigger"
-                >
-                    软件触发
-                </button>
+                <div class="flex items-center gap-2 border-t pt-2 text-xs">
+                    <span class="shrink-0 text-muted-foreground">旋转角度</span>
+                    <select
+                        v-model.number="rotationAngle"
+                        :disabled="!isOpen || rotationSaving"
+                        class="min-w-0 flex-1 rounded border px-2 py-1 text-xs focus:outline-none disabled:opacity-40"
+                    >
+                        <option v-for="option in rotationOptions" :key="option.value" :value="option.value">
+                            {{ option.label }}
+                        </option>
+                    </select>
+                    <button
+                        :disabled="!isOpen || rotationSaving || !rotationDirty"
+                        class="rounded border px-2 py-1 text-xs hover:bg-muted/50 disabled:opacity-40"
+                        @click="void saveRotationAngle()"
+                    >
+                        {{ rotationSaving ? '保存中…' : '保存' }}
+                    </button>
+                </div>
 
-                <!-- 实时指标 -->
-                <section v-if="metrics" class="rounded-lg border p-3">
-                    <div class="mb-2 text-xs font-medium text-muted-foreground">实时指标</div>
-                    <div class="grid grid-cols-2 gap-x-2 gap-y-1 text-xs">
-                        <div class="text-muted-foreground">帧率</div>
-                        <div>{{ metrics.frameRate.toFixed(1) }} FPS</div>
-                        <div class="text-muted-foreground">FPGA 温度</div>
-                        <div>{{ metrics.fpgaTemperature }} °C</div>
-                        <div class="text-muted-foreground">传感器温度</div>
-                        <div>{{ metrics.sensorTemperature.toFixed(1) }} °C</div>
-                        <div class="text-muted-foreground">AE 状态</div>
-                        <div>{{ metrics.aeStatus === 1 ? '运行中' : '停止' }}</div>
-                        <div class="text-muted-foreground">缓冲帧数</div>
-                        <div>{{ metrics.currentBufFrames }}</div>
+                <!-- 实时运行指标 -->
+                <div v-if="metrics" class="grid grid-cols-2 gap-x-2 gap-y-1 text-xs">
+                    <span class="text-muted-foreground">帧率</span>
+                    <span>{{ displayMetric(metrics.frameRate) }} fps</span>
+                    <span class="text-muted-foreground">FPGA 温度</span>
+                    <span>{{ displayMetric(metrics.fpgaTemperature, 0) }} °C</span>
+                    <span class="text-muted-foreground">传感器温度</span>
+                    <span>{{ displayMetric(metrics.sensorTemperature) }} °C</span>
+                    <span class="text-muted-foreground">AE 状态</span>
+                    <span>{{ metrics.aeStatus === 1 ? '运行中' : '空闲' }}</span>
+                    <span class="text-muted-foreground">缓冲帧数</span>
+                    <span>{{ displayMetric(metrics.currentBufFrames, 0) }}</span>
+                </div>
+
+                <!-- 快捷操作 -->
+                <div class="flex flex-col gap-1.5 border-t pt-2">
+                    <span class="text-xs font-medium text-muted-foreground">快捷操作</span>
+                    <div class="flex gap-2">
+                        <button
+                            :disabled="!isOpen || busy"
+                            class="flex-1 rounded border px-2 py-1.5 text-xs hover:bg-muted/50 disabled:opacity-40"
+                            @click="void onSoftTrigger()"
+                        >
+                            软触发
+                        </button>
+                        <button
+                            :disabled="!isOpen || busy"
+                            class="flex-1 rounded border px-2 py-1.5 text-xs hover:bg-muted/50 disabled:opacity-40"
+                            @click="void onExposureAutoOncePulse()"
+                        >
+                            单次自动曝光
+                        </button>
                     </div>
-                </section>
+                </div>
+
+                <!-- 设备基本信息 -->
+                <div v-if="device" class="border-t pt-2 text-xs text-muted-foreground">
+                    <div>型号：{{ device.model ?? '—' }}</div>
+                    <div>固件：{{ device.firmwareVersion ?? '—' }}</div>
+                    <div>状态：{{ realtimeState?.statusText ?? device.statusText }}</div>
+                    <div v-if="realtimeState?.sensorTemperature != null">
+                        实时传感器温度：{{ realtimeState.sensorTemperature.toFixed(1) }} °C
+                    </div>
+                </div>
             </div>
         </div>
     </div>

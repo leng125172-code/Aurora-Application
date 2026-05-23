@@ -34,6 +34,9 @@ public class CameraDevice : FullAuditedAggregateRoot<Guid>
     /// <summary>当前激活的参数集ID（可为空，表示使用默认值）</summary>
     public Guid? ActiveParameterSetId { get; private set; }
 
+    /// <summary>图像顺时针旋转角度（度，仅支持 0/90/180/270）</summary>
+    public int ImageRotationAngle { get; private set; }
+
     /// <summary>该相机下的所有参数集</summary>
     public ICollection<CameraParameterSet> ParameterSets { get; private set; } =
         new List<CameraParameterSet>();
@@ -54,6 +57,7 @@ public class CameraDevice : FullAuditedAggregateRoot<Guid>
         DeviceIndex = deviceIndex;
         Status = CameraStatus.Unknown;
         IsEnabled = true;
+        ImageRotationAngle = 0;
     }
 
     /// <summary>设置相机名称</summary>
@@ -110,5 +114,34 @@ public class CameraDevice : FullAuditedAggregateRoot<Guid>
     {
         ActiveParameterSetId = parameterSetId;
         return this;
+    }
+
+    /// <summary>
+    /// 设置图像顺时针旋转角度。
+    /// </summary>
+    /// <param name="angle">旋转角度，仅支持 0、90、180、270 度。</param>
+    /// <returns>当前相机设备实体。</returns>
+    public CameraDevice SetImageRotationAngle(int angle)
+    {
+        ImageRotationAngle = NormalizeImageRotationAngle(angle);
+        return this;
+    }
+
+    private static int NormalizeImageRotationAngle(int angle)
+    {
+        int normalizedAngle = angle % 360;
+        if (normalizedAngle < 0)
+        {
+            normalizedAngle += 360;
+        }
+
+        return normalizedAngle switch
+        {
+            0 or 90 or 180 or 270 => normalizedAngle,
+            _ => throw new ArgumentOutOfRangeException(
+                nameof(angle),
+                "图像旋转角度仅支持 0、90、180、270 度"
+            ),
+        };
     }
 }

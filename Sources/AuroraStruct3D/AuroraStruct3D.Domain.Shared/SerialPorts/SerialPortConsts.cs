@@ -16,6 +16,28 @@ public static class SerialPortConsts
 
     /// <summary>数据库表名前缀</summary>
     public const string DbTablePrefix = "AbpPro";
+
+    /// <summary>支持的常用串口波特率，覆盖 110 到 921600</summary>
+    public static readonly int[] SupportedBaudRates =
+    [
+        110,
+        300,
+        600,
+        1200,
+        2400,
+        4800,
+        9600,
+        14400,
+        19200,
+        38400,
+        57600,
+        115200,
+        128000,
+        230400,
+        256000,
+        460800,
+        921600,
+    ];
 }
 
 /// <summary>

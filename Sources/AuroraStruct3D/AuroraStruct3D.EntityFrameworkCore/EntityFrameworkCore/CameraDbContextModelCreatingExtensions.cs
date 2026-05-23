@@ -32,6 +32,8 @@ public static class CameraDbContextModelCreatingExtensions
 
             b.Property(x => x.Status).HasConversion<int>();
 
+            b.Property(x => x.ImageRotationAngle).HasDefaultValue(0);
+
             b.HasIndex(x => x.DeviceIndex).IsUnique();
             b.HasIndex(x => x.IsEnabled);
 

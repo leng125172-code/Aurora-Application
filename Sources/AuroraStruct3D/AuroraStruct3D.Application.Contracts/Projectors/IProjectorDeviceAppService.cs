@@ -22,24 +22,16 @@ public interface IProjectorDeviceAppService : IApplicationService
     Task<ProjectorDeviceDto> GetAsync(Guid id);
 
     /// <summary>
-    /// 创建 TCP 连接方式的投影机设备
+    /// 扫描当前连接的 USB HID 投影机，自动同步数据库记录（新增未知设备，保留已有设备）。
+    /// 仅处理 HID 类型投影机；TCP 类型设备不受影响。
     /// </summary>
-    Task<ProjectorDeviceDto> CreateTcpAsync(CreateTcpProjectorDeviceDto input);
-
-    /// <summary>
-    /// 创建 USB HID 连接方式的投影机设备
-    /// </summary>
-    Task<ProjectorDeviceDto> CreateHidAsync(CreateHidProjectorDeviceDto input);
+    /// <returns>检测到的 HID 投影机数量</returns>
+    Task<int> ScanProjectorsAsync();
 
     /// <summary>
     /// 更新投影机设备基本信息
     /// </summary>
     Task<ProjectorDeviceDto> UpdateAsync(Guid id, UpdateProjectorDeviceDto input);
-
-    /// <summary>
-    /// 删除投影机设备
-    /// </summary>
-    Task DeleteAsync(Guid id);
 
     // ─── 连接管理 ─────────────────────────────────────────────────────────
 

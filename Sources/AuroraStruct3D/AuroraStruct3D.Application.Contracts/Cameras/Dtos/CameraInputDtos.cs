@@ -169,341 +169,6 @@ public class CameraDeviceInfoDto
     public int CurrentHeight { get; set; }
 }
 
-// ─── 手动控制：图像参数 ──────────────────────────────────────────────────────
-
-/// <summary>
-/// 相机图像采集参数 DTO（ROI、位深、翻转、Binning、图像处理参数等）
-/// </summary>
-public class CameraImageParamsDto
-{
-    /// <summary>ROI 使能</summary>
-    public bool RoiEnabled { get; set; }
-
-    /// <summary>ROI 水平偏移（像素）</summary>
-    public int RoiHOffset { get; set; }
-
-    /// <summary>ROI 垂直偏移（像素）</summary>
-    public int RoiVOffset { get; set; }
-
-    /// <summary>ROI 宽度</summary>
-    public int RoiWidth { get; set; }
-
-    /// <summary>ROI 高度</summary>
-    public int RoiHeight { get; set; }
-
-    /// <summary>像素位深度</summary>
-    public CameraPixelDepth PixelDepth { get; set; }
-
-    /// <summary>水平镜像</summary>
-    public bool HorizontalFlip { get; set; }
-
-    /// <summary>垂直镜像</summary>
-    public bool VerticalFlip { get; set; }
-
-    /// <summary>Binning 模式</summary>
-    public CameraBinningMode Binning { get; set; }
-
-    /// <summary>Gamma 使能</summary>
-    public bool GammaEnabled { get; set; }
-
-    /// <summary>Gamma 值</summary>
-    public double Gamma { get; set; }
-
-    /// <summary>对比度</summary>
-    public double Contrast { get; set; }
-
-    /// <summary>亮度</summary>
-    public double Brightness { get; set; }
-
-    /// <summary>目标帧率</summary>
-    public double FrameRate { get; set; }
-
-    /// <summary>当前最大帧率（只读）</summary>
-    public double FrameRateMax { get; set; }
-}
-
-/// <summary>
-/// 设置图像参数请求 DTO
-/// </summary>
-public class SetCameraImageParamsDto
-{
-    /// <summary>ROI 使能</summary>
-    public bool? RoiEnabled { get; set; }
-
-    /// <summary>ROI 水平偏移（像素）</summary>
-    public int? RoiHOffset { get; set; }
-
-    /// <summary>ROI 垂直偏移（像素）</summary>
-    public int? RoiVOffset { get; set; }
-
-    /// <summary>ROI 宽度</summary>
-    public int? RoiWidth { get; set; }
-
-    /// <summary>ROI 高度</summary>
-    public int? RoiHeight { get; set; }
-
-    /// <summary>像素位深度</summary>
-    public CameraPixelDepth? PixelDepth { get; set; }
-
-    /// <summary>水平镜像</summary>
-    public bool? HorizontalFlip { get; set; }
-
-    /// <summary>垂直镜像</summary>
-    public bool? VerticalFlip { get; set; }
-
-    /// <summary>Binning 模式</summary>
-    public CameraBinningMode? Binning { get; set; }
-
-    /// <summary>Gamma 使能</summary>
-    public bool? GammaEnabled { get; set; }
-
-    /// <summary>Gamma 值</summary>
-    public double? Gamma { get; set; }
-
-    /// <summary>对比度</summary>
-    public double? Contrast { get; set; }
-
-    /// <summary>亮度</summary>
-    public double? Brightness { get; set; }
-
-    /// <summary>目标帧率</summary>
-    public double? FrameRate { get; set; }
-}
-
-// ─── 手动控制：采集参数 ──────────────────────────────────────────────────────
-
-/// <summary>
-/// 相机采集参数 DTO（AE、增益、曝光等）
-/// </summary>
-public class CameraAcquisitionParamsDto
-{
-    /// <summary>自动曝光模式</summary>
-    public CameraAutoExposureMode AeMode { get; set; }
-
-    /// <summary>当前 AE 状态（0=未运行 1=运行中，只读）</summary>
-    public int AeStatus { get; set; }
-
-    /// <summary>AE 目标灰度值</summary>
-    public double AeTargetGray { get; set; }
-
-    /// <summary>AE 最大曝光时间限制（μs）</summary>
-    public double AeMaxExposure { get; set; }
-
-    /// <summary>AE 最小曝光时间限制（μs）</summary>
-    public double AeMinExposure { get; set; }
-
-    /// <summary>增益模式（HDR/High/Low）</summary>
-    public CameraGainMode GainMode { get; set; }
-
-    /// <summary>曝光时间（μs）</summary>
-    public double ExposureTime { get; set; }
-
-    /// <summary>全局增益</summary>
-    public double GlobalGain { get; set; }
-}
-
-/// <summary>
-/// 设置采集参数请求 DTO
-/// </summary>
-public class SetCameraAcquisitionParamsDto
-{
-    /// <summary>自动曝光模式</summary>
-    public CameraAutoExposureMode? AeMode { get; set; }
-
-    /// <summary>AE 目标灰度值</summary>
-    public double? AeTargetGray { get; set; }
-
-    /// <summary>AE 最大曝光时间限制（μs）</summary>
-    public double? AeMaxExposure { get; set; }
-
-    /// <summary>AE 最小曝光时间限制（μs）</summary>
-    public double? AeMinExposure { get; set; }
-
-    /// <summary>增益模式</summary>
-    public CameraGainMode? GainMode { get; set; }
-
-    /// <summary>曝光时间（μs）</summary>
-    public double? ExposureTime { get; set; }
-
-    /// <summary>全局增益</summary>
-    public double? GlobalGain { get; set; }
-}
-
-// ─── 手动控制：触发参数 ──────────────────────────────────────────────────────
-
-/// <summary>
-/// 触发输出端口参数 DTO
-/// </summary>
-public class CameraTriggerOutDto
-{
-    /// <summary>端口编号（0/1/2）</summary>
-    public int Port { get; set; }
-
-    /// <summary>输出模式/信号来源</summary>
-    public int Mode { get; set; }
-
-    /// <summary>边沿模式（0=上升沿 1=下降沿）</summary>
-    public int EdgeMode { get; set; }
-
-    /// <summary>延迟时间</summary>
-    public int DelayTm { get; set; }
-
-    /// <summary>脉冲宽度</summary>
-    public int Width { get; set; }
-}
-
-/// <summary>
-/// 相机触发参数 DTO
-/// </summary>
-public class CameraTriggerParamsDto
-{
-    /// <summary>触发模式（0=连续 1=标准 2=同步 3=全局 4=软件）</summary>
-    public int TriggerMode { get; set; }
-
-    /// <summary>曝光模式（0=全局 1=电子滚动）</summary>
-    public int ExpMode { get; set; }
-
-    /// <summary>触发边沿（0=上升 1=下降）</summary>
-    public int EdgeMode { get; set; }
-
-    /// <summary>延迟时间</summary>
-    public int DelayTm { get; set; }
-
-    /// <summary>单次触发帧数</summary>
-    public int Frames { get; set; }
-
-    /// <summary>缓冲帧数</summary>
-    public int BufFrames { get; set; }
-
-    /// <summary>触发输出端口 1 参数</summary>
-    public CameraTriggerOutDto TriggerOut1 { get; set; } = new();
-
-    /// <summary>触发输出端口 2 参数</summary>
-    public CameraTriggerOutDto TriggerOut2 { get; set; } = new();
-
-    /// <summary>触发输出端口 3 参数</summary>
-    public CameraTriggerOutDto TriggerOut3 { get; set; } = new();
-}
-
-/// <summary>
-/// 设置触发参数请求 DTO
-/// </summary>
-public class SetCameraTriggerParamsDto
-{
-    /// <summary>触发模式</summary>
-    public int? TriggerMode { get; set; }
-
-    /// <summary>曝光模式</summary>
-    public int? ExpMode { get; set; }
-
-    /// <summary>触发边沿</summary>
-    public int? EdgeMode { get; set; }
-
-    /// <summary>延迟时间</summary>
-    public int? DelayTm { get; set; }
-
-    /// <summary>单次触发帧数</summary>
-    public int? Frames { get; set; }
-
-    /// <summary>缓冲帧数</summary>
-    public int? BufFrames { get; set; }
-
-    /// <summary>触发输出端口 1 参数（null 表示不修改）</summary>
-    public CameraTriggerOutDto? TriggerOut1 { get; set; }
-
-    /// <summary>触发输出端口 2 参数</summary>
-    public CameraTriggerOutDto? TriggerOut2 { get; set; }
-
-    /// <summary>触发输出端口 3 参数</summary>
-    public CameraTriggerOutDto? TriggerOut3 { get; set; }
-}
-
-// ─── 手动控制：自定义参数（颜色/WB/LED）─────────────────────────────────────
-
-/// <summary>
-/// 白平衡计算区域 DTO
-/// </summary>
-public class CameraCalcRoiDto
-{
-    /// <summary>计算区域使能</summary>
-    public bool Enabled { get; set; }
-
-    /// <summary>水平偏移（像素）</summary>
-    public int HOffset { get; set; }
-
-    /// <summary>垂直偏移（像素）</summary>
-    public int VOffset { get; set; }
-
-    /// <summary>宽度</summary>
-    public int Width { get; set; }
-
-    /// <summary>高度</summary>
-    public int Height { get; set; }
-}
-
-/// <summary>
-/// 相机自定义参数 DTO（白平衡通道增益、饱和度、色温、LED 等）
-/// </summary>
-public class CameraCustomParamsDto
-{
-    /// <summary>白平衡模式</summary>
-    public CameraWhiteBalanceMode WbMode { get; set; }
-
-    /// <summary>R 通道增益</summary>
-    public double ChannelGainR { get; set; }
-
-    /// <summary>G 通道增益</summary>
-    public double ChannelGainG { get; set; }
-
-    /// <summary>B 通道增益</summary>
-    public double ChannelGainB { get; set; }
-
-    /// <summary>饱和度</summary>
-    public double Saturation { get; set; }
-
-    /// <summary>色温</summary>
-    public double ColorTemperature { get; set; }
-
-    /// <summary>白平衡计算区域</summary>
-    public CameraCalcRoiDto WbCalcRoi { get; set; } = new();
-
-    /// <summary>LED 使能</summary>
-    public bool LedEnabled { get; set; }
-
-    /// <summary>当前缓冲帧数（近似触发计数器，只读）</summary>
-    public int CurrentBufFrames { get; set; }
-}
-
-/// <summary>
-/// 设置自定义参数请求 DTO
-/// </summary>
-public class SetCameraCustomParamsDto
-{
-    /// <summary>白平衡模式</summary>
-    public CameraWhiteBalanceMode? WbMode { get; set; }
-
-    /// <summary>R 通道增益</summary>
-    public double? ChannelGainR { get; set; }
-
-    /// <summary>G 通道增益</summary>
-    public double? ChannelGainG { get; set; }
-
-    /// <summary>B 通道增益</summary>
-    public double? ChannelGainB { get; set; }
-
-    /// <summary>饱和度</summary>
-    public double? Saturation { get; set; }
-
-    /// <summary>色温</summary>
-    public double? ColorTemperature { get; set; }
-
-    /// <summary>白平衡计算区域</summary>
-    public CameraCalcRoiDto? WbCalcRoi { get; set; }
-
-    /// <summary>LED 使能</summary>
-    public bool? LedEnabled { get; set; }
-}
-
 // ─── 手动控制：实时指标 ──────────────────────────────────────────────────────
 
 /// <summary>
@@ -565,13 +230,79 @@ public class CameraSnapshotDto
     public DateTime CapturedAt { get; set; }
 }
 
-// ─── 手动控制：用户配置文件 ──────────────────────────────────────────────────
+// ─── 通用 GenICam 节点读写 ────────────────────────────────────────────────────
 
 /// <summary>
-/// 加载或保存用户配置文件请求 DTO
+/// 读取单个 GenICam 节点请求 DTO
 /// </summary>
-public class CameraUserProfileDto
+public class GenICamNodeGetInput
 {
-    /// <summary>配置文件名称（对应 SDK profileName 参数）</summary>
-    public string ProfileName { get; set; } = string.Empty;
+    /// <summary>GenICam 节点名称（区分大小写）</summary>
+    public string NodeName { get; set; } = string.Empty;
+
+    /// <summary>数据类型："int" / "float" / "string"（enum 和 bool 也用 "int" 表示）</summary>
+    public string DataType { get; set; } = "int";
+}
+
+/// <summary>
+/// 批量读取 GenICam 节点请求 DTO
+/// </summary>
+public class GenICamBatchGetInput
+{
+    /// <summary>要读取的节点列表</summary>
+    public List<GenICamNodeGetInput> Nodes { get; set; } = new();
+}
+
+/// <summary>
+/// 单个 GenICam 节点读取结果 DTO
+/// </summary>
+public class GenICamNodeResultDto
+{
+    /// <summary>节点名称</summary>
+    public string NodeName { get; set; } = string.Empty;
+
+    /// <summary>节点值（统一转为字符串；浮点数使用 InvariantCulture 序列化）</summary>
+    public string? Value { get; set; }
+
+    /// <summary>读取是否成功</summary>
+    public bool Success { get; set; }
+
+    /// <summary>失败时的错误信息</summary>
+    public string? ErrorMessage { get; set; }
+}
+
+/// <summary>
+/// 批量读取 GenICam 节点结果 DTO
+/// </summary>
+public class GenICamBatchGetResultDto
+{
+    /// <summary>各节点读取结果</summary>
+    public List<GenICamNodeResultDto> Results { get; set; } = new();
+}
+
+/// <summary>
+/// 写入单个 GenICam 节点请求 DTO
+/// </summary>
+public class GenICamNodeSetInput
+{
+    /// <summary>GenICam 节点名称</summary>
+    public string NodeName { get; set; } = string.Empty;
+
+    /// <summary>数据类型："int" / "float" / "string"（enum 和 bool 也用 "int" 表示）</summary>
+    public string DataType { get; set; } = "int";
+
+    /// <summary>要写入的值（字符串序列化；浮点数使用 InvariantCulture）</summary>
+    public string Value { get; set; } = string.Empty;
+}
+
+
+// ─── 手动控制：图像旋转角度 ─────────────────────────────────────────────
+
+/// <summary>
+/// 设置相机软件端图像旋转角度（仅支持 0/90/180/270）
+/// </summary>
+public class SetCameraRotationAngleDto
+{
+    /// <summary>旋转角度，允许值：0、90、180、270</summary>
+    public int Angle { get; set; }
 }

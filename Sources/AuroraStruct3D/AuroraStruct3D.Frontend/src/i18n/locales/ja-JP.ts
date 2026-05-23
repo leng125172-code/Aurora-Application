@@ -46,6 +46,8 @@ export default {
         deviceState: 'デバイス状態',
         faultHistory: '障害履歴',
         stateLog: '状態ログ',
+        serialPortManage: 'RS485 シリアル',
+        motorDeviceManage: 'RS485 モーター',
     },
     layout: {
         logout: 'ログアウト',

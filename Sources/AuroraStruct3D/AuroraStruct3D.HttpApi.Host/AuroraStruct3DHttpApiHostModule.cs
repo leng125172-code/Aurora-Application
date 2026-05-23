@@ -2,6 +2,7 @@ using AuroraStruct3D.Cameras;
 using AuroraStruct3D.Endpoints;
 using AuroraStruct3D.HostedServices;
 using AuroraStruct3D.Hubs;
+using AuroraStruct3D.Jobs;
 using AuroraStruct3D.Motors;
 using AuroraStruct3D.Projectors;
 using AuroraStruct3D.RS485;
@@ -11,6 +12,7 @@ using AuroraStruct3D.Tucam;
 using Lion.AbpPro.CAP;
 using Volo.Abp.AspNetCore.Mvc;
 using Volo.Abp.AspNetCore.Mvc.Libs;
+using Volo.Abp.BackgroundJobs;
 using Volo.Abp.Hangfire;
 
 namespace AuroraStruct3D
@@ -234,6 +236,25 @@ namespace AuroraStruct3D
 
                 projectorService.SetProjectorDeviceIdMapping(projectorMapping);
             }
+        }
+
+        /// <summary>
+        /// 异步初始化钩子：在同步初始化完成后，通过 Hangfire 触发相机和投影机扫描 Job。
+        /// </summary>
+        public override async Task OnApplicationInitializationAsync(
+            ApplicationInitializationContext context
+        )
+        {
+            await base.OnApplicationInitializationAsync(context);
+
+            IBackgroundJobManager jobManager =
+                context.ServiceProvider.GetRequiredService<IBackgroundJobManager>();
+
+            // 触发相机 SDK 初始化 + 扫描 Job
+            await jobManager.EnqueueAsync(new CameraInitScanJobArgs());
+
+            // 触发投影机扫描 Job
+            await jobManager.EnqueueAsync(new ProjectorInitScanJobArgs());
         }
     }
 }

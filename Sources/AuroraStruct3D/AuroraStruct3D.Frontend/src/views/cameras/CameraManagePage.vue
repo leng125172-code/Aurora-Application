@@ -8,6 +8,9 @@ import { toast } from 'vue-sonner'
 const router = useRouter()
 const store = useCameraStore()
 
+// ─── 扫描状态 ──────────────────────────────────────────────────────────────
+const scanning = ref(false)
+
 // ─── 编辑对话框状态 ────────────────────────────────────────────────────────
 const showEditDialog = ref(false)
 const editingId = ref('')
@@ -40,11 +43,14 @@ async function handleClose(id: string) {
 }
 
 async function handleScan() {
+    scanning.value = true
     try {
         const count = await store.scan()
         toast.success(`扫描完成，发现 ${count} 台相机`)
     } catch {
         // 忽略
+    } finally {
+        scanning.value = false
     }
 }
 
@@ -122,10 +128,12 @@ onMounted(() => {
                     刷新
                 </button>
                 <button
-                    class="rounded bg-primary px-3 py-1.5 text-sm text-primary-foreground hover:bg-primary/90"
+                    class="rounded bg-primary px-3 py-1.5 text-sm text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
+                    :disabled="scanning"
                     @click="handleScan"
                 >
-                    扫描设备
+                    <span v-if="scanning">扫描中…</span>
+                    <span v-else>扫描设备</span>
                 </button>
             </div>
         </div>

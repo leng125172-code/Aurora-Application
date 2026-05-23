@@ -108,6 +108,8 @@ const rgbHex = computed({
 })
 async function onApplyRgb() {
     await run(() => store.setRgb({ projectorDeviceId: deviceId.value, r: rgbR.value, g: rgbG.value, b: rgbB.value }))
+    // RGB 应用后保持 AuraSync 标签选中状态（防止 watch(device) 跳回白光标签）
+    selectedColor.value = ProjectorColor.AuraSync
 }
 
 // ─── 翻转模式 ─────────────────────────────────────────────────────────────

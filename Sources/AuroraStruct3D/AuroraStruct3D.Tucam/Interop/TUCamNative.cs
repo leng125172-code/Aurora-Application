@@ -229,4 +229,55 @@ public static class TUCamNative
         IntPtr hTUCam,
         [MarshalAs(UnmanagedType.LPStr)] string pPrfName
     );
+
+    //
+    // ── GenICam 节点访问 ──────────────────────────────────────────────────────────
+    //
+
+    /// <summary>
+    /// 查询 GenICam 节点属性元数据（含类型、访问模式、值范围等）。
+    /// pName 为节点名称指针（独立参数），pNote 用于接收节点元数据。
+    /// </summary>
+    [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+    public static extern TUCamRet TUCAM_GenICam_ElementAttr(
+        IntPtr hTUCam,
+        ref TucamElement pNote,
+        IntPtr pName,
+        int xml
+    );
+
+    /// <summary>
+    /// 枚举 GenICam 节点：传入上一个节点名称（或种子 "Root" / 空 / null），SDK 返回下一个节点元数据。
+    /// 用于动态遍历整个 NodeMap，配合 ElementAttr 使用。
+    /// </summary>
+    [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+    public static extern TUCamRet TUCAM_GenICam_ElementAttrNext(
+        IntPtr hTUCam,
+        ref TucamElement pNote,
+        IntPtr pName,
+        int xml
+    );
+
+    /// <summary>
+    /// 读取 GenICam 节点的当前值及元数据（含范围/默认值等）。
+    /// 调用前须将 pNote.pName 设为指向节点名称的 ANSI 字符串指针（由调用方管理内存）。
+    /// </summary>
+    [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+    public static extern TUCamRet TUCAM_GenICam_GetElementValue(
+        IntPtr hTUCam,
+        ref TucamElement pNote,
+        int xml
+    );
+
+    /// <summary>
+    /// 写入 GenICam 节点值。
+    /// 调用前须先调用 TUCAM_GenICam_GetElementValue 填充节点元数据，
+    /// 再修改 uValue 后调用此接口，pNote.pName 须在整个调用过程中保持有效。
+    /// </summary>
+    [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+    public static extern TUCamRet TUCAM_GenICam_SetElementValue(
+        IntPtr hTUCam,
+        ref TucamElement pNote,
+        int xml
+    );
 }

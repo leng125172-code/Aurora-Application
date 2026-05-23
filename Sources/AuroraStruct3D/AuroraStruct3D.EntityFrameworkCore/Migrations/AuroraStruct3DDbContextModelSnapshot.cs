@@ -67,6 +67,11 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                         .HasColumnType("text")
                         .HasColumnName("ExtraProperties");
 
+                    b.Property<int>("ImageRotationAngle")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
                     b.Property<bool>("IsDeleted")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
@@ -568,6 +573,12 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
 
                     b.Property<DateTime?>("LastStatusUpdateAt")
                         .HasColumnType("timestamp without time zone");
+
+                    b.Property<long?>("MaxRotationAngle")
+                        .HasColumnType("bigint");
+
+                    b.Property<long?>("MinRotationAngle")
+                        .HasColumnType("bigint");
 
                     b.Property<string>("Model")
                         .HasMaxLength(64)

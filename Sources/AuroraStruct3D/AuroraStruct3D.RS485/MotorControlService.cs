@@ -23,8 +23,11 @@ public class MotorControlService : IMotorControlService, IDisposable
     private readonly ILoggerFactory _loggerFactory;
     private readonly IServiceScopeFactory? _serviceScopeFactory;
 
-    /// <summary>所有打开的串口实例（Dispose 时统一关闭）</summary>
-    private readonly List<IRS485Port> _ports = [];
+    /// <summary>串口配置 ID → 串口实例，作为电机控制和串口调试的唯一运行态入口</summary>
+    private readonly Dictionary<Guid, IRS485Port> _portsByConfigId = [];
+
+    /// <summary>串口配置 ID → 运行态参数签名，用于参数变化时重建串口</summary>
+    private readonly Dictionary<Guid, string> _portSignaturesByConfigId = [];
 
     /// <summary>驱动字典（key = slave_id，全局唯一）</summary>
     private FrozenDictionary<int, IMotorDriver> _drivers = FrozenDictionary<
@@ -64,6 +67,13 @@ public class MotorControlService : IMotorControlService, IDisposable
         IReadOnlyList<MotorAxis> enabledAxes
     )
     {
+        foreach (IRS485Port oldPort in _portsByConfigId.Values)
+        {
+            oldPort.Dispose();
+        }
+        _portsByConfigId.Clear();
+        _portSignaturesByConfigId.Clear();
+
         // 按串口 ID 分组电机轴
         ILookup<Guid, MotorAxis> axesByPort = enabledAxes.ToLookup(a => a.SerialPortConfigId);
         Dictionary<int, IMotorDriver> driverDict = new();
@@ -71,19 +81,15 @@ public class MotorControlService : IMotorControlService, IDisposable
         foreach (SerialPortConfig portConfig in portConfigs)
         {
             // 创建串口实例（枚举值与 System.IO.Ports 完全对齐，可安全强转）
-            RS485Port port = new(
-                portConfig.PortName,
-                portConfig.BaudRate,
-                _loggerFactory.CreateLogger<RS485Port>(),
-                (Parity)(int)portConfig.Parity,
-                portConfig.DataBits,
-                (StopBits)(int)portConfig.StopBits
-            );
+            IRS485Port port = GetOrCreateSerialPort(portConfig);
 
             // 尝试打开串口（开发环境串口不存在时记录警告，不崩溃启动）
             try
             {
-                port.Open();
+                if (portConfig.IsEnabled && portConfig.BaudRate > 0)
+                {
+                    port.Open();
+                }
             }
             catch (Exception ex)
             {
@@ -95,8 +101,6 @@ public class MotorControlService : IMotorControlService, IDisposable
                     portConfig.PortName
                 );
             }
-
-            _ports.Add(port);
 
             // 为该串口上的所有启用轴创建对应驱动
             foreach (MotorAxis axis in axesByPort[portConfig.Id])
@@ -156,6 +160,64 @@ public class MotorControlService : IMotorControlService, IDisposable
 
     /// <inheritdoc/>
     public bool IsMotorConfigured(int motorId) => _drivers.ContainsKey(motorId);
+
+    /// <inheritdoc/>
+    public bool IsSerialPortOpen(Guid serialPortConfigId)
+    {
+        return _portsByConfigId.TryGetValue(serialPortConfigId, out IRS485Port? port)
+            && port.IsOpen;
+    }
+
+    /// <inheritdoc/>
+    public Task OpenSerialPortAsync(
+        SerialPortConfig portConfig,
+        CancellationToken cancellationToken = default
+    )
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (portConfig.BaudRate <= 0)
+        {
+            throw new InvalidOperationException(
+                $"{LogTag} Serial port {portConfig.PortName} has no baud rate configured."
+            );
+        }
+
+        IRS485Port port = GetOrCreateSerialPort(portConfig);
+        port.Open();
+        return Task.CompletedTask;
+    }
+
+    /// <inheritdoc/>
+    public void CloseSerialPort(Guid serialPortConfigId)
+    {
+        if (_portsByConfigId.TryGetValue(serialPortConfigId, out IRS485Port? port))
+        {
+            port.Close();
+        }
+    }
+
+    /// <inheritdoc/>
+    public async Task<byte[]> SendRawAsync(
+        SerialPortConfig portConfig,
+        byte[] request,
+        int expectedResponseLength = -1,
+        int timeoutMs = 500,
+        CancellationToken cancellationToken = default
+    )
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        IRS485Port port = GetOrCreateSerialPort(portConfig);
+        if (!port.IsOpen)
+        {
+            port.Open();
+        }
+
+        return await port
+            .SendAndReceiveAsync(request, expectedResponseLength, timeoutMs, cancellationToken)
+            .ConfigureAwait(false);
+    }
 
     /// <inheritdoc/>
     public async Task<MotorStatus> QueryStatusAsync(
@@ -470,7 +532,7 @@ public class MotorControlService : IMotorControlService, IDisposable
         }
 
         _disposed = true;
-        foreach (IRS485Port port in _ports)
+        foreach (IRS485Port port in _portsByConfigId.Values)
         {
             try
             {
@@ -488,7 +550,56 @@ public class MotorControlService : IMotorControlService, IDisposable
         _logger.LogInformation(
             "{Tag} MotorControlService released, total serial bus ports closed: {Count}",
             LogTag,
-            _ports.Count
+            _portsByConfigId.Count
+        );
+    }
+
+    /// <summary>
+    /// 根据串口配置创建或复用串口实例，参数变化时会安全重建。
+    /// </summary>
+    private IRS485Port GetOrCreateSerialPort(SerialPortConfig portConfig)
+    {
+        string signature = CreatePortSignature(portConfig);
+        if (
+            _portsByConfigId.TryGetValue(portConfig.Id, out IRS485Port? existingPort)
+            && _portSignaturesByConfigId.TryGetValue(portConfig.Id, out string? existingSignature)
+            && existingSignature == signature
+        )
+        {
+            return existingPort;
+        }
+
+        if (_portsByConfigId.TryGetValue(portConfig.Id, out IRS485Port? oldPort))
+        {
+            oldPort.Dispose();
+        }
+
+        RS485Port newPort = new(
+            portConfig.PortName,
+            portConfig.BaudRate > 0 ? portConfig.BaudRate : 9600,
+            _loggerFactory.CreateLogger<RS485Port>(),
+            (Parity)(int)portConfig.Parity,
+            portConfig.DataBits,
+            (StopBits)(int)portConfig.StopBits
+        );
+        _portsByConfigId[portConfig.Id] = newPort;
+        _portSignaturesByConfigId[portConfig.Id] = signature;
+        return newPort;
+    }
+
+    /// <summary>
+    /// 生成串口运行参数签名，用于判断是否需要重建底层 SerialPort。
+    /// </summary>
+    private static string CreatePortSignature(SerialPortConfig portConfig)
+    {
+        return string.Join(
+            '|',
+            portConfig.PortName,
+            portConfig.BaudRate,
+            portConfig.DataBits,
+            (int)portConfig.Parity,
+            (int)portConfig.StopBits,
+            (int)portConfig.Handshake
         );
     }
 

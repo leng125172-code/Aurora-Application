@@ -23,9 +23,9 @@ export enum CameraAutoExposureMode {
 }
 
 export enum CameraGainMode {
-    Hdr = 0,
-    High = 1,
-    Low = 2,
+    HighCapacity = 0,
+    Balanced = 1,
+    Sensitive = 2,
 }
 
 export enum CameraBinningMode {
@@ -35,14 +35,14 @@ export enum CameraBinningMode {
 }
 
 export enum CameraPixelDepth {
-    Bit8 = 0,
-    Bit12 = 1,
+    HighDepth12bit = 0,
+    Speed8bit = 1,
 }
 
 export enum CameraWhiteBalanceMode {
     Manual = 0,
-    Once = 1,
-    Continuous = 2,
+    Automatic = 1,
+    Preset = 2,
 }
 
 // ─── 基础 DTO ────────────────────────────────────────────────────────────────
@@ -60,6 +60,7 @@ export interface CameraDeviceDto {
     readonly isEnabled: boolean
     readonly status: CameraStatus
     readonly statusText: string
+    readonly imageRotationAngle: number
 
     readonly model: string | null
     readonly serialNumber: string | null
@@ -94,125 +95,6 @@ export interface CameraDeviceInfoDto {
     readonly currentHeight: number
 }
 
-export interface CameraImageParamsDto {
-    roiEnabled: boolean
-    roiHOffset: number
-    roiVOffset: number
-    roiWidth: number
-    roiHeight: number
-    pixelDepth: CameraPixelDepth
-    horizontalFlip: boolean
-    verticalFlip: boolean
-    binning: CameraBinningMode
-    gammaEnabled: boolean
-    gamma: number
-    contrast: number
-    brightness: number
-    frameRate: number
-    frameRateMax: number
-}
-
-export interface SetCameraImageParamsDto {
-    roiEnabled?: boolean
-    roiHOffset?: number
-    roiVOffset?: number
-    roiWidth?: number
-    roiHeight?: number
-    pixelDepth?: CameraPixelDepth
-    horizontalFlip?: boolean
-    verticalFlip?: boolean
-    binning?: CameraBinningMode
-    gammaEnabled?: boolean
-    gamma?: number
-    contrast?: number
-    brightness?: number
-    frameRate?: number
-}
-
-export interface CameraAcquisitionParamsDto {
-    aeMode: CameraAutoExposureMode
-    aeStatus: number
-    aeTargetGray: number
-    aeMaxExposure: number
-    aeMinExposure: number
-    gainMode: CameraGainMode
-    exposureTime: number
-    globalGain: number
-}
-
-export interface SetCameraAcquisitionParamsDto {
-    aeMode?: CameraAutoExposureMode
-    aeTargetGray?: number
-    aeMaxExposure?: number
-    aeMinExposure?: number
-    gainMode?: CameraGainMode
-    exposureTime?: number
-    globalGain?: number
-}
-
-export interface CameraTriggerOutDto {
-    port: number
-    mode: number
-    edgeMode: number
-    delayTm: number
-    width: number
-}
-
-export interface CameraTriggerParamsDto {
-    triggerMode: number
-    expMode: number
-    edgeMode: number
-    delayTm: number
-    frames: number
-    bufFrames: number
-    triggerOut1: CameraTriggerOutDto
-    triggerOut2: CameraTriggerOutDto
-    triggerOut3: CameraTriggerOutDto
-}
-
-export interface SetCameraTriggerParamsDto {
-    triggerMode?: number
-    expMode?: number
-    edgeMode?: number
-    delayTm?: number
-    frames?: number
-    bufFrames?: number
-    triggerOut1?: CameraTriggerOutDto
-    triggerOut2?: CameraTriggerOutDto
-    triggerOut3?: CameraTriggerOutDto
-}
-
-export interface CameraCalcRoiDto {
-    enabled: boolean
-    hOffset: number
-    vOffset: number
-    width: number
-    height: number
-}
-
-export interface CameraCustomParamsDto {
-    wbMode: CameraWhiteBalanceMode
-    channelGainR: number
-    channelGainG: number
-    channelGainB: number
-    saturation: number
-    colorTemperature: number
-    wbCalcRoi: CameraCalcRoiDto
-    ledEnabled: boolean
-    currentBufFrames: number
-}
-
-export interface SetCameraCustomParamsDto {
-    wbMode?: CameraWhiteBalanceMode
-    channelGainR?: number
-    channelGainG?: number
-    channelGainB?: number
-    saturation?: number
-    colorTemperature?: number
-    wbCalcRoi?: CameraCalcRoiDto
-    ledEnabled?: boolean
-}
-
 export interface CameraSnapshotDto {
     readonly dataUri: string
     readonly capturedAt: string
@@ -234,10 +116,6 @@ export interface CameraLiveMetricsDto {
     readonly frameRate: number
     readonly aeStatus: number
     readonly currentBufFrames: number
-}
-
-export interface CameraUserProfileDto {
-    profileName: string
 }
 
 // ─── API 函数 ────────────────────────────────────────────────────────────────
@@ -288,68 +166,6 @@ export async function getCameraDeviceInfo(id: string): Promise<CameraDeviceInfoD
     return data
 }
 
-// ─── 图像参数 ─────────────────────────────────────────────────────────────────
-
-/** 获取图像采集参数 */
-export async function getCameraImageParams(id: string): Promise<CameraImageParamsDto> {
-    const { data } = await httpClient.get<CameraImageParamsDto>(`${BASE}/${id}/image-params`)
-    return data
-}
-
-/** 设置图像采集参数 */
-export async function setCameraImageParams(id: string, dto: SetCameraImageParamsDto): Promise<CameraImageParamsDto> {
-    const { data } = await httpClient.post<CameraImageParamsDto>(`${BASE}/${id}/image-params`, dto)
-    return data
-}
-
-// ─── 采集参数 ─────────────────────────────────────────────────────────────────
-
-/** 获取采集参数 */
-export async function getCameraAcquisitionParams(id: string): Promise<CameraAcquisitionParamsDto> {
-    const { data } = await httpClient.get<CameraAcquisitionParamsDto>(`${BASE}/${id}/acquisition-params`)
-    return data
-}
-
-/** 设置采集参数 */
-export async function setCameraAcquisitionParams(
-    id: string,
-    dto: SetCameraAcquisitionParamsDto
-): Promise<CameraAcquisitionParamsDto> {
-    const { data } = await httpClient.post<CameraAcquisitionParamsDto>(`${BASE}/${id}/acquisition-params`, dto)
-    return data
-}
-
-// ─── 触发参数 ─────────────────────────────────────────────────────────────────
-
-/** 获取触发参数 */
-export async function getCameraTriggerParams(id: string): Promise<CameraTriggerParamsDto> {
-    const { data } = await httpClient.get<CameraTriggerParamsDto>(`${BASE}/${id}/trigger-params`)
-    return data
-}
-
-/** 设置触发参数 */
-export async function setCameraTriggerParams(
-    id: string,
-    dto: SetCameraTriggerParamsDto
-): Promise<CameraTriggerParamsDto> {
-    const { data } = await httpClient.post<CameraTriggerParamsDto>(`${BASE}/${id}/trigger-params`, dto)
-    return data
-}
-
-// ─── 自定义参数 ───────────────────────────────────────────────────────────────
-
-/** 获取自定义参数 */
-export async function getCameraCustomParams(id: string): Promise<CameraCustomParamsDto> {
-    const { data } = await httpClient.get<CameraCustomParamsDto>(`${BASE}/${id}/custom-params`)
-    return data
-}
-
-/** 设置自定义参数 */
-export async function setCameraCustomParams(id: string, dto: SetCameraCustomParamsDto): Promise<CameraCustomParamsDto> {
-    const { data } = await httpClient.post<CameraCustomParamsDto>(`${BASE}/${id}/custom-params`, dto)
-    return data
-}
-
 // ─── 快照与预览 ───────────────────────────────────────────────────────────────
 
 /** 单帧快照 */
@@ -373,20 +189,193 @@ export async function doSoftwareTrigger(id: string): Promise<void> {
     await httpClient.post(`${BASE}/${id}/do-software-trigger`)
 }
 
+/** 触发单次自动曝光（ExposureAutoOncePulse 命令节点） */
+export async function doExposureAutoOncePulse(id: string): Promise<void> {
+    await httpClient.post(`${BASE}/${id}/do-exposure-auto-once-pulse`)
+}
+
 /** 获取 RTP 推流端点信息 */
 export async function getRtpEndpoint(id: string): Promise<CameraRtpEndpointDto> {
     const { data } = await httpClient.get<CameraRtpEndpointDto>(`${BASE}/${id}/rtp-endpoint`)
     return data
 }
 
-// ─── 用户配置文件 ─────────────────────────────────────────────────────────────
+// ─── GenICam 通用节点读写 ─────────────────────────────────────────────────────
 
-/** 加载用户配置文件 */
-export async function loadUserProfile(id: string, dto: CameraUserProfileDto): Promise<void> {
-    await httpClient.post(`${BASE}/${id}/load-user-profile`, dto)
+/** GenICam 单节点读取请求 */
+export interface GenICamNodeGetInput {
+    nodeName: string
+    /** 'int' | 'float' | 'string' */
+    dataType: string
 }
 
-/** 保存用户配置文件 */
-export async function saveUserProfile(id: string, dto: CameraUserProfileDto): Promise<void> {
-    await httpClient.post(`${BASE}/${id}/save-user-profile`, dto)
+/** GenICam 单节点读取结果 */
+export interface GenICamNodeResultDto {
+    nodeName: string
+    /** 统一字符串化的值；null 表示读取失败 */
+    value: string | null
+    success: boolean
+    errorMessage?: string | null
+}
+
+/** GenICam 批量读取结果 */
+export interface GenICamBatchGetResultDto {
+    results: GenICamNodeResultDto[]
+}
+
+/** GenICam 单节点写入请求 */
+export interface GenICamNodeSetInput {
+    nodeName: string
+    /** 'int' | 'float' | 'string' */
+    dataType: string
+    value: string
+}
+
+/** 读取单个 GenICam 节点值 */
+export async function getGenICamParam(id: string, input: GenICamNodeGetInput): Promise<GenICamNodeResultDto> {
+    const { data } = await httpClient.get<GenICamNodeResultDto>(`${BASE}/${id}/gen-iCam-param`, {
+        params: input,
+    })
+    return data
+}
+
+/** 批量读取多个 GenICam 节点值 */
+export async function batchGetGenICamParams(
+    id: string,
+    nodes: GenICamNodeGetInput[]
+): Promise<GenICamBatchGetResultDto> {
+    const { data } = await httpClient.post<GenICamBatchGetResultDto>(`${BASE}/${id}/batch-get-gen-iCam-params`, {
+        nodes,
+    })
+    return data
+}
+
+/** 写入单个 GenICam 节点值 */
+export async function setGenICamParam(id: string, input: GenICamNodeSetInput): Promise<void> {
+    await httpClient.post(`${BASE}/${id}/set-gen-iCam-param`, input)
+}
+
+/** 执行 GenICam 命令节点 */
+export async function executeGenICamCommand(id: string, nodeName: string): Promise<void> {
+    await httpClient.post(`${BASE}/${id}/execute-gen-iCam-command`, nodeName, {
+        headers: { 'Content-Type': 'application/json' },
+    })
+}
+
+// ─── 动态 GenICam NodeMap（前端基于此动态渲染参数面板）──────────────────────
+
+/** GenICam 枚举条目 DTO */
+export interface GenICamEnumEntryDto {
+    value: number
+    symbolic: string
+    displayName: string
+    isAvailable: boolean
+}
+
+/** GenICam 节点 DTO（完整元信息 + 首次枚举值快照） */
+export interface GenICamNodeDto {
+    nodeName: string
+    displayName: string
+    xmlScope: number
+    level: number
+    /** 节点类型：Integer / Float / Enumeration / Boolean / String / Command / Category 等 */
+    nodeType: string
+    /** 访问模式：ReadOnly / WriteOnly / ReadWrite / NotImplemented / NotAvailable */
+    access: string
+    /** 可见性：Beginner / Expert / Guru / Invisible */
+    visibility: string
+    representation: number
+    unit?: string | null
+    description?: string | null
+    isLocked: boolean
+    intMin: number
+    intMax: number
+    intStep: number
+    floatMin: number
+    floatMax: number
+    floatStep: number
+    currentValue: string | null
+    enumEntries: GenICamEnumEntryDto[]
+    pollingTime: number
+    displayPrecision: number
+}
+
+/** GenICam Category 分组 DTO */
+export interface GenICamCategoryDto {
+    name: string
+    displayName: string
+    nodes: GenICamNodeDto[]
+}
+
+/** Selector → AffectedNode 依赖项 */
+export interface GenICamDependencyDto {
+    selectorNode: string
+    optionValue: number
+    optionLabel: string
+    affectedNode: string
+    changeSummary: string
+}
+
+/** 相机 NodeMap 完整快照 */
+export interface CameraNodeMapDto {
+    cameraId: string
+    enumeratedAt: string
+    categories: GenICamCategoryDto[]
+    allNodes: GenICamNodeDto[]
+    dependencies: GenICamDependencyDto[]
+}
+
+/** 批量节点读取请求 */
+export interface GenICamBatchGetInput {
+    nodes: GenICamNodeGetInput[]
+}
+
+/** 获取相机当前缓存的 GenICam NodeMap（若首次仍在预跑会返回空骨架） */
+export async function getCameraNodeMap(id: string): Promise<CameraNodeMapDto> {
+    const { data } = await httpClient.get<CameraNodeMapDto>(`${BASE}/${id}/node-map`)
+    return data
+}
+
+/** 强制重新枚举 GenICam NodeMap 并重新探测依赖 */
+export async function refreshCameraNodeMap(id: string): Promise<CameraNodeMapDto> {
+    const { data } = await httpClient.post<CameraNodeMapDto>(`${BASE}/${id}/refresh-node-map`)
+    return data
+}
+
+/** 批量读取节点当前值（不刷新 NodeMap，仅查值） */
+export async function readCameraNodes(id: string, nodes: GenICamNodeGetInput[]): Promise<GenICamBatchGetResultDto> {
+    const { data } = await httpClient.post<GenICamBatchGetResultDto>(`${BASE}/${id}/read-nodes`, {
+        nodes,
+    })
+    return data
+}
+
+// ─── 相机实时状态（SignalR 推送 DTO 对应 TypeScript 类型）────────────────────
+
+/** SignalR `ReceiveCameraStateAsync` 推送的完整状态 DTO */
+export interface CameraStateDto {
+    cameraId: string
+    status: number
+    statusText: string
+    isCapturing: boolean
+    isXmlLoaded: boolean
+    sensorTemperature: number | null
+    fpgaTemperature: number | null
+    lastErrorMessage: string | null
+    changedAt: string
+}
+
+// ─── 图像旋转角度（软件端旋转）──────────────────────────────────────────────
+
+export interface SetCameraRotationAngleDto {
+    angle: number
+}
+
+export async function getCameraImageRotationAngle(id: string): Promise<number> {
+    const res = await httpClient.get<number>(`/api/app/camera-device/${id}/image-rotation-angle`)
+    return res.data
+}
+
+export async function setCameraImageRotationAngle(id: string, angle: number): Promise<void> {
+    await httpClient.put(`/api/app/camera-device/${id}/image-rotation-angle`, { angle })
 }

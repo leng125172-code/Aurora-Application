@@ -50,6 +50,8 @@ export default {
         projectorControl: 'Projector Control',
         cameraManage: 'Camera Management',
         cameraControl: 'Camera Control',
+        serialPortManage: 'RS485 Ports',
+        motorDeviceManage: 'RS485 Motors',
     },
     layout: {
         logout: 'Logout',

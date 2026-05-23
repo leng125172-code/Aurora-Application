@@ -15,11 +15,10 @@ public interface ICameraHub
     Task ReceiveCameraFrameAsync(string cameraId, byte[] frame);
 
     /// <summary>
-    /// 推送相机状态变更通知
+    /// 推送相机状态变更通知（统一使用 CameraStateDto 携带完整状态快照）
     /// </summary>
-    /// <param name="cameraId">相机设备 ID</param>
-    /// <param name="status">状态字符串（如 Ready / Capturing / Closed）</param>
-    Task ReceiveCameraStateAsync(string cameraId, string status);
+    /// <param name="state">相机状态 DTO（含温度、采集状态、NodeMap 加载标记等）</param>
+    Task ReceiveCameraStateAsync(CameraStateDto state);
 
     /// <summary>
     /// 推送相机实时运行指标（温度/帧率/AE状态等）

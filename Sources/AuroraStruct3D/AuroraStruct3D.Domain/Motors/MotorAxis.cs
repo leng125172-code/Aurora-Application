@@ -74,6 +74,12 @@ public class MotorAxis : FullAuditedAggregateRoot<Guid>
     /// <summary>负向软件限位（脉冲数）</summary>
     public long SoftLimitNegative { get; private set; }
 
+    /// <summary>旋转角度最小值（瓴控单圈角度，0.01°单位）</summary>
+    public long? MinRotationAngle { get; private set; }
+
+    /// <summary>旋转角度最大值（瓴控单圈角度，0.01°单位）</summary>
+    public long? MaxRotationAngle { get; private set; }
+
     // ─────────────────────────── 运行状态快照（实时刷新，不做历史追踪） ───────────────────────────
 
     /// <summary>当前设备状态</summary>
@@ -148,6 +154,8 @@ public class MotorAxis : FullAuditedAggregateRoot<Guid>
         SoftLimitEnabled = false;
         SoftLimitPositive = int.MaxValue;
         SoftLimitNegative = int.MinValue;
+        MinRotationAngle = null;
+        MaxRotationAngle = null;
 
         Status = MotorDeviceStatus.Unknown;
         IsEnabled = true;
@@ -214,6 +222,26 @@ public class MotorAxis : FullAuditedAggregateRoot<Guid>
         return this;
     }
 
+    /// <summary>设置瓴控单圈旋转角度范围</summary>
+    public MotorAxis SetRotationAngleRange(long? minRotationAngle, long? maxRotationAngle)
+    {
+        ValidateRotationAngle(minRotationAngle);
+        ValidateRotationAngle(maxRotationAngle);
+
+        if (
+            minRotationAngle.HasValue
+            && maxRotationAngle.HasValue
+            && minRotationAngle.Value > maxRotationAngle.Value
+        )
+        {
+            throw new ArgumentException("旋转角度最小值不能大于最大值");
+        }
+
+        MinRotationAngle = minRotationAngle;
+        MaxRotationAngle = maxRotationAngle;
+        return this;
+    }
+
     /// <summary>更新运行状态快照（由后台服务定期调用）</summary>
     public MotorAxis UpdateStatus(MotorDeviceStatus status, long position, int speed, bool isHomed)
     {
@@ -252,5 +280,20 @@ public class MotorAxis : FullAuditedAggregateRoot<Guid>
     {
         IsEnabled = enabled;
         return this;
+    }
+
+    private static void ValidateRotationAngle(long? angle)
+    {
+        if (!angle.HasValue)
+        {
+            return;
+        }
+
+        if (angle.Value < 0 || angle.Value > MotorConsts.KtechSingleTurnAngleUnits)
+        {
+            throw new ArgumentException(
+                $"旋转角度必须在 0~{MotorConsts.KtechSingleTurnAngleUnits}（0.01°）之间"
+            );
+        }
     }
 }

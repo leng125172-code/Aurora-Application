@@ -31,6 +31,7 @@ public static class CameraObjectMapperExtensions
             Description = entity.Description,
             IsEnabled = entity.IsEnabled,
             ActiveParameterSetId = entity.ActiveParameterSetId,
+            ImageRotationAngle = entity.ImageRotationAngle,
             ParameterSetCount = entity.ParameterSets?.Count ?? 0,
         };
     }

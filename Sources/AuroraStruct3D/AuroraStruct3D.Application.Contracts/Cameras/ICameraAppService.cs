@@ -62,56 +62,17 @@ public interface ICameraDeviceAppService : IApplicationService
     /// </summary>
     Task<CameraDeviceInfoDto> GetDeviceInfoAsync(Guid id);
 
-    // ─── 手动控制：图像参数 ─────────────────────────────────────────────────
+    // ─── 手动控制：图像旋转角度（软件端旋转）────────────────────────────────
 
     /// <summary>
-    /// 获取图像采集参数（ROI/位深/翻转/Binning/Gamma/对比度/亮度/帧率）
+    /// 获取相机软件端图像旋转角度（0/90/180/270）
     /// </summary>
-    Task<CameraImageParamsDto> GetImageParamsAsync(Guid id);
+    Task<int> GetImageRotationAngleAsync(Guid id);
 
     /// <summary>
-    /// 设置图像采集参数
+    /// 设置相机软件端图像旋转角度（仅在手动或检修模式下允许）
     /// </summary>
-    Task<CameraImageParamsDto> SetImageParamsAsync(Guid id, SetCameraImageParamsDto input);
-
-    // ─── 手动控制：采集参数 ─────────────────────────────────────────────────
-
-    /// <summary>
-    /// 获取采集参数（AE/曝光/增益）
-    /// </summary>
-    Task<CameraAcquisitionParamsDto> GetAcquisitionParamsAsync(Guid id);
-
-    /// <summary>
-    /// 设置采集参数
-    /// </summary>
-    Task<CameraAcquisitionParamsDto> SetAcquisitionParamsAsync(
-        Guid id,
-        SetCameraAcquisitionParamsDto input
-    );
-
-    // ─── 手动控制：触发参数 ─────────────────────────────────────────────────
-
-    /// <summary>
-    /// 获取触发参数（触发模式/边沿/延迟/输出端口）
-    /// </summary>
-    Task<CameraTriggerParamsDto> GetTriggerParamsAsync(Guid id);
-
-    /// <summary>
-    /// 设置触发参数
-    /// </summary>
-    Task<CameraTriggerParamsDto> SetTriggerParamsAsync(Guid id, SetCameraTriggerParamsDto input);
-
-    // ─── 手动控制：自定义参数 ───────────────────────────────────────────────
-
-    /// <summary>
-    /// 获取自定义参数（WB通道增益/饱和度/色温/LED/触发计数）
-    /// </summary>
-    Task<CameraCustomParamsDto> GetCustomParamsAsync(Guid id);
-
-    /// <summary>
-    /// 设置自定义参数
-    /// </summary>
-    Task<CameraCustomParamsDto> SetCustomParamsAsync(Guid id, SetCameraCustomParamsDto input);
+    Task SetImageRotationAngleAsync(Guid id, SetCameraRotationAngleDto input);
 
     // ─── 手动控制：快照与预览 ───────────────────────────────────────────────
 
@@ -136,21 +97,59 @@ public interface ICameraDeviceAppService : IApplicationService
     Task DoSoftwareTriggerAsync(Guid id);
 
     /// <summary>
+    /// 触发单次自动曝光（ExposureAutoOncePulse 命令节点）
+    /// </summary>
+    Task DoExposureAutoOncePulseAsync(Guid id);
+
+    /// <summary>
     /// 获取 RTP/MJPEG UDP 推流端点信息
     /// </summary>
     Task<CameraRtpEndpointDto> GetRtpEndpointAsync(Guid id);
 
-    // ─── 手动控制：用户配置文件 ─────────────────────────────────────────────
+    // ─── 通用 GenICam 节点读写 ───────────────────────────────────────────────
 
     /// <summary>
-    /// 加载用户配置文件（需在停止采集后调用）
+    /// 读取单个 GenICam 节点值（返回字符串表示；浮点数用 InvariantCulture 序列化）
     /// </summary>
-    Task LoadUserProfileAsync(Guid id, CameraUserProfileDto input);
+    Task<GenICamNodeResultDto> GetGenICamParamAsync(
+        Guid id,
+        [Microsoft.AspNetCore.Mvc.FromQuery] GenICamNodeGetInput input
+    );
 
     /// <summary>
-    /// 保存用户配置文件
+    /// 批量读取多个 GenICam 节点值（并行读取，单个失败不影响其他节点）
     /// </summary>
-    Task SaveUserProfileAsync(Guid id, CameraUserProfileDto input);
+    Task<GenICamBatchGetResultDto> BatchGetGenICamParamsAsync(Guid id, GenICamBatchGetInput input);
+
+    /// <summary>
+    /// 写入单个 GenICam 节点值（支持 int / float / string 类型）
+    /// </summary>
+    Task SetGenICamParamAsync(Guid id, GenICamNodeSetInput input);
+
+    /// <summary>
+    /// 执行 GenICam 命令节点
+    /// </summary>
+    Task ExecuteGenICamCommandAsync(Guid id, [Microsoft.AspNetCore.Mvc.FromBody] string nodeName);
+
+    // ─── GenICam 动态 NodeMap（前端按节点信息动态生成 UI 用）──────────────────
+
+    /// <summary>
+    /// 获取相机当前缓存的 GenICam NodeMap 与依赖图。
+    /// 若相机刚打开尚未完成预跑，会返回 IsXmlLoaded=false（Categories/AllNodes 可能为空）。
+    /// </summary>
+    Task<CameraNodeMapDto> GetNodeMapAsync(Guid id);
+
+    /// <summary>
+    /// 强制重新枚举 GenICam NodeMap 并重新探测选择器依赖（覆盖原缓存）。
+    /// 必须在相机已打开且未在采集时调用。
+    /// </summary>
+    Task<CameraNodeMapDto> RefreshNodeMapAsync(Guid id);
+
+    /// <summary>
+    /// 批量读取若干 GenICam 节点的当前值与动态访问模式（不刷新 NodeMap，只查值）。
+    /// 用于在选择器节点变更后局部刷新依赖节点。
+    /// </summary>
+    Task<GenICamBatchGetResultDto> ReadNodesAsync(Guid id, GenICamBatchGetInput input);
 }
 
 /// <summary>

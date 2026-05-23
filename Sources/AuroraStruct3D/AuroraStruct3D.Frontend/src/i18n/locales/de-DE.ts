@@ -46,6 +46,8 @@ export default {
         deviceState: 'Gerätestatus',
         faultHistory: 'Fehlerhistorie',
         stateLog: 'Statusprotokoll',
+        serialPortManage: 'RS485-Schnittstellen',
+        motorDeviceManage: 'RS485-Motoren',
     },
     layout: {
         logout: 'Abmelden',

@@ -96,6 +96,18 @@ const routes: RouteRecordRaw[] = [
                 component: () => import('@/views/cameras/CameraControlPage.vue'),
                 meta: { requiresAuth: true, title: 'menu.cameraControl' },
             },
+            {
+                path: 'serial-ports',
+                name: 'SerialPortManage',
+                component: () => import('@/views/serial-ports/SerialPortManagePage.vue'),
+                meta: { requiresAuth: true, title: 'menu.serialPortManage' },
+            },
+            {
+                path: 'motors',
+                name: 'MotorDeviceManage',
+                component: () => import('@/views/motors/MotorDeviceManagePage.vue'),
+                meta: { requiresAuth: true, title: 'menu.motorDeviceManage' },
+            },
             // 系统管理路由已移除（仅供后台调试使用）
         ],
     },

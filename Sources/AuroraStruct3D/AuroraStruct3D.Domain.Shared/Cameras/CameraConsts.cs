@@ -89,3 +89,75 @@ public enum CameraOperationType
     /// <summary>停止采集</summary>
     StopCapture = 5,
 }
+
+/// <summary>
+/// 相机自动曝光模式枚举
+/// </summary>
+public enum CameraAutoExposureMode
+{
+    /// <summary>关闭自动曝光，使用手动曝光</summary>
+    Off = 0,
+
+    /// <summary>单次自动曝光后锁定</summary>
+    Once = 1,
+
+    /// <summary>持续自动曝光</summary>
+    Continuous = 2,
+}
+
+/// <summary>
+/// 相机增益模式枚举（对应 GenICam GainMode 节点：0=HighCapacity/1=Balanced/2=Sensitive）
+/// </summary>
+public enum CameraGainMode
+{
+    /// <summary>高容量模式（全阱容量最大，动态范围最广）</summary>
+    HighCapacity = 0,
+
+    /// <summary>平衡模式（兼顾动态范围与灵敏度）</summary>
+    Balanced = 1,
+
+    /// <summary>高灵敏度模式（低光照首选）</summary>
+    Sensitive = 2,
+}
+
+/// <summary>
+/// 相机 Binning 模式枚举
+/// </summary>
+public enum CameraBinningMode
+{
+    /// <summary>关闭 Binning（1×1）</summary>
+    Off = 0,
+
+    /// <summary>2×2 Binning</summary>
+    X2 = 1,
+
+    /// <summary>4×4 Binning</summary>
+    X4 = 2,
+}
+
+/// <summary>
+/// 相机像素位深度枚举（对应 GenICam PixelSize 节点：0=HighDepth12bit，1=Speed8bit）
+/// </summary>
+public enum CameraPixelDepth
+{
+    /// <summary>12 位高深度模式</summary>
+    HighDepth12bit = 0,
+
+    /// <summary>8 位高速模式</summary>
+    Speed8bit = 1,
+}
+
+/// <summary>
+/// 相机白平衡模式枚举（对应 GenICam BalanceWhiteAuto 节点：0=Manual/1=Automatic/2=Preset）
+/// </summary>
+public enum CameraWhiteBalanceMode
+{
+    /// <summary>手动白平衡，使用手动通道增益</summary>
+    Manual = 0,
+
+    /// <summary>自动白平衡</summary>
+    Automatic = 1,
+
+    /// <summary>预设白平衡</summary>
+    Preset = 2,
+}
