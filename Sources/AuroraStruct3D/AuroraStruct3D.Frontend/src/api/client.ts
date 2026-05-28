@@ -7,6 +7,7 @@ import { toast } from 'vue-sonner'
 import { useAuthStore } from '@/stores/auth'
 import { router } from '@/router'
 import type { AbpRemoteError } from '@/types/abp'
+import { getClientSessionId } from '@/utils/clientSession'
 
 // 生产环境同源；开发环境由 Vite 代理转发到 44315
 const baseURL = '/'
@@ -26,6 +27,8 @@ httpClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
         // ABP 多租户解析头
         config.headers.set('__tenant', auth.tenantId)
     }
+    // 每个标签页独有的设备会话标识（Soft-Exclusive Session ownership key）
+    config.headers.set('X-Client-Session-Id', getClientSessionId())
     // 默认接受语言；后续由 i18n Store 同步
     if (!config.headers.has('Accept-Language')) {
         const culture = localStorage.getItem('aurora.culture') || 'zh-CN'

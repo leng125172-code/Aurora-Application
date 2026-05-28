@@ -42,6 +42,12 @@ public static class MotorConsts
 
     /// <summary>操作日志错误消息最大长度</summary>
     public const int MaxOperationLogErrorMessageLength = 512;
+
+    /// <summary>KTECH 设备标识符（驱动器名/电机名/ChipId）最大长度</summary>
+    public const int MaxKtechIdentifierLength = 64;
+
+    /// <summary>KTECH 版本号字符串最大长度（如 V12.34）</summary>
+    public const int MaxKtechVersionLength = 16;
 }
 
 /// <summary>

@@ -7,21 +7,21 @@
         <div class="relative z-10 space-y-6">
             <!-- 标题 -->
             <div class="text-center pt-4">
-                <SparklesText text="API 接口文档" class="text-3xl font-bold" />
+                <SparklesText :text="t('swaggerPage.title')" class="text-3xl font-bold" />
                 <p class="text-muted-foreground mt-2 text-sm">
-                    共 {{ groups.length }} 个分组 · {{ totalEndpoints }} 个接口
+                    {{ t('swaggerPage.summary', { groups: groups.length, endpoints: totalEndpoints }) }}
                 </p>
             </div>
 
             <!-- 工具栏 -->
             <div class="flex flex-wrap gap-3 items-center">
-                <Input v-model="searchText" placeholder="搜索接口路径或描述..." class="flex-1 min-w-48" />
+                <Input v-model="searchText" :placeholder="t('swaggerPage.searchPlaceholder')" class="flex-1 min-w-48" />
                 <Select v-model="filterMethod">
                     <SelectTrigger class="w-36">
-                        <SelectValue placeholder="全部方法" />
+                        <SelectValue :placeholder="t('swaggerPage.allMethods')" />
                     </SelectTrigger>
                     <SelectContent>
-                        <SelectItem value="ALL">全部方法</SelectItem>
+                        <SelectItem value="ALL">{{ t('swaggerPage.allMethods') }}</SelectItem>
                         <SelectItem value="GET">GET</SelectItem>
                         <SelectItem value="POST">POST</SelectItem>
                         <SelectItem value="PUT">PUT</SelectItem>
@@ -30,7 +30,7 @@
                     </SelectContent>
                 </Select>
                 <Button variant="outline" size="sm" @click="toggleAll">
-                    {{ allExpanded ? '全部收起' : '全部展开' }}
+                    {{ allExpanded ? t('swaggerPage.collapseAll') : t('swaggerPage.expandAll') }}
                 </Button>
             </div>
 
@@ -61,7 +61,7 @@
                     :force-expand="allExpanded"
                 />
                 <div v-if="filteredGroups.length === 0" class="text-center text-muted-foreground py-12">
-                    未找到匹配的接口
+                    {{ t('swaggerPage.noResults') }}
                 </div>
             </div>
         </div>
@@ -70,6 +70,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { fetchSwaggerDocument, groupEndpointsByTag } from '@/api/swagger'
 import type { SwaggerDocument, ApiGroup } from '@/types/swagger'
 import ApiGroupPanel from './ApiGroupPanel.vue'
@@ -80,6 +81,8 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { SparklesText } from '@/components/ui/sparkles-text'
 import { InteractiveGridPattern } from '@/components/ui/interactive-grid-pattern'
+
+const { t } = useI18n()
 
 const doc = ref<SwaggerDocument | null>(null)
 const groups = ref<ApiGroup[]>([])
@@ -119,7 +122,7 @@ onMounted(async () => {
         doc.value = await fetchSwaggerDocument()
         groups.value = groupEndpointsByTag(doc.value)
     } catch (e: unknown) {
-        error.value = e instanceof Error ? e.message : '加载失败'
+        error.value = e instanceof Error ? e.message : t('swaggerPage.loadFailed')
     } finally {
         loading.value = false
     }

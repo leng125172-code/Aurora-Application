@@ -142,6 +142,13 @@ public class GenICamDependencyDto
 
     /// <summary>变化摘要（Access/Visibility/Value/Range 之一或多个）</summary>
     public string ChangeSummary { get; set; } = string.Empty;
+
+    /// <summary>
+    /// 切换到该选项后，受影响节点的新 Access 状态（仅在含 Access 变化时有值，
+    /// 如 "ReadOnly" / "ReadWrite" / "NotAvailable"）。
+    /// 前端写节点成功后可直接用此字段本地更新 access，无需重新枚举。
+    /// </summary>
+    public string? NewAccess { get; set; }
 }
 
 /// <summary>

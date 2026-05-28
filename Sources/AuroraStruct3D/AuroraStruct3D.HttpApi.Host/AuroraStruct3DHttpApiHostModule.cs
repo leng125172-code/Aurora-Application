@@ -1,3 +1,4 @@
+using System.Net;
 using AuroraStruct3D.Cameras;
 using AuroraStruct3D.Endpoints;
 using AuroraStruct3D.HostedServices;
@@ -7,9 +8,12 @@ using AuroraStruct3D.Motors;
 using AuroraStruct3D.Projectors;
 using AuroraStruct3D.RS485;
 using AuroraStruct3D.Services;
+using AuroraStruct3D.Sessions;
 using AuroraStruct3D.Streaming;
 using AuroraStruct3D.Tucam;
 using Lion.AbpPro.CAP;
+using Microsoft.AspNetCore.Server.Kestrel.Core;
+using Volo.Abp.AspNetCore.ExceptionHandling;
 using Volo.Abp.AspNetCore.Mvc;
 using Volo.Abp.AspNetCore.Mvc.Libs;
 using Volo.Abp.BackgroundJobs;
@@ -64,6 +68,12 @@ namespace AuroraStruct3D
                 .AddAbpProCap()
                 .AddAbpProHangfire();
 
+            // 移除 Kestrel 上传大小限制，支持大型三维文件上传
+            context.Services.Configure<KestrelServerOptions>(options =>
+            {
+                options.Limits.MaxRequestBodySize = null;
+            });
+
             // 注册后台广播服务，定期通过 SignalR 推送仪表盘统计数据
             context.Services.AddHostedService<DashboardBroadcastService>();
             // 注册设备状态推送服务，订阅 IDeviceStateManager 事件并实时广播给 DeviceStateHub 客户端
@@ -79,6 +89,14 @@ namespace AuroraStruct3D
                 sp.GetRequiredService<CameraPreviewService>()
             );
             context.Services.AddHostedService(sp => sp.GetRequiredService<CameraPreviewService>());
+
+            // 注册设备会话广播器（单例）：订阅 IDeviceOperationSessionManager.SessionChanged 并实时推送至 SignalR
+            context.Services.AddSingleton<DeviceSessionBroadcaster>();
+
+            // 映射 AuroraStruct3D:DeviceOccupied 错误代码为 HTTP 409 Conflict
+            Configure<AbpExceptionHttpStatusCodeOptions>(options =>
+                options.Map(AuroraStruct3DDomainErrorCodes.DeviceOccupied, HttpStatusCode.Conflict)
+            );
 
             // 为 SignalR 启用 MessagePack 协议（在 AddAbpProSignalR 之后调用）
             context.Services.AddSignalR().AddMessagePackProtocol();
@@ -124,6 +142,11 @@ namespace AuroraStruct3D
                 endpoints.MapHub<DeviceStateHub>("/signalr-hubs/device-state");
                 endpoints.MapHub<ProjectorHub>("/signalr-hubs/projector");
                 endpoints.MapHub<CameraHub>("/signalr-hubs/camera");
+                endpoints.MapHub<MotorScanHub>("/signalr-hubs/motor-scan");
+                endpoints.MapHub<KtechMotorHub>("/signalr-hubs/ktech-motor");
+                endpoints.MapHub<LeisaiMotorHub>("/signalr-hubs/leisai-motor");
+                // 产品数模转换进度推送 Hub
+                endpoints.MapHub<ProductModelHub>("/signalr-hubs/product-model");
                 endpoints.MapFallback(async httpContext =>
                 {
                     var path = httpContext.Request.Path.Value ?? string.Empty;

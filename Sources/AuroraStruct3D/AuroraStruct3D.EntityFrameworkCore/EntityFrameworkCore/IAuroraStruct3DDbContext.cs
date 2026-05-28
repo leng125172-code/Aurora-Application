@@ -1,6 +1,7 @@
 using AuroraStruct3D.Cameras;
 using AuroraStruct3D.DeviceState;
 using AuroraStruct3D.Motors;
+using AuroraStruct3D.ProductModels;
 using AuroraStruct3D.Projectors;
 using AuroraStruct3D.SerialPorts;
 using Microsoft.EntityFrameworkCore;
@@ -54,5 +55,10 @@ namespace AuroraStruct3D.EntityFrameworkCore
 
         /// <summary>设备故障记录集合</summary>
         DbSet<DeviceFault> DeviceFaults { get; }
+
+        // ── 产品三维数模模块 ──────────────────────────────────────────────────────
+
+        /// <summary>产品三维数模集合</summary>
+        DbSet<ProductModel> ProductModels { get; }
     }
 }

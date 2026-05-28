@@ -116,6 +116,12 @@ export interface CameraLiveMetricsDto {
     readonly frameRate: number
     readonly aeStatus: number
     readonly currentBufFrames: number
+    /** 对焦清晰度评分（0-100，越高越清晰） */
+    readonly focusScore: number
+    /** 曝光质量评分（0-100，越高曝光越适中） */
+    readonly apertureScore: number
+    /** 光圈调节建议：0=良好, 1=缩小光圈, 2=增大光圈 */
+    readonly apertureHint: number
 }
 
 // ─── API 函数 ────────────────────────────────────────────────────────────────
@@ -216,6 +222,8 @@ export interface GenICamNodeResultDto {
     value: string | null
     success: boolean
     errorMessage?: string | null
+    /** 节点当前访问模式（ReadOnly / ReadWrite / WriteOnly 等）；读取失败时为 null */
+    access?: string | null
 }
 
 /** GenICam 批量读取结果 */
@@ -314,6 +322,8 @@ export interface GenICamDependencyDto {
     optionLabel: string
     affectedNode: string
     changeSummary: string
+    /** 切换到该选项后，受影响节点的新 Access 状态（如 "ReadOnly" / "ReadWrite"）；无 Access 变化时为 null */
+    newAccess?: string | null
 }
 
 /** 相机 NodeMap 完整快照 */
@@ -378,4 +388,33 @@ export async function getCameraImageRotationAngle(id: string): Promise<number> {
 
 export async function setCameraImageRotationAngle(id: string, angle: number): Promise<void> {
     await httpClient.put(`/api/app/camera-device/${id}/image-rotation-angle`, { angle })
+}
+
+// ─── 页面刷新/重连后一次性恢复 UI 状态 ──────────────────────────────────────
+
+/** GenICam 节点增量变更（SignalR OnGenICamNodesChangedAsync 推送）*/
+export interface GenICamNodeChangeDto {
+    nodeName: string
+    value: string | null
+    access: string | null
+    isLocked: boolean
+}
+
+/** 相机完整快照状态（前端刷新/重连后调用 GetCameraSnapshotStateAsync 恢复 UI）*/
+export interface CameraSnapshotStateDto {
+    cameraId: string
+    nodeMap: CameraNodeMapDto | null
+    triggerMode: number
+    triggerModeSymbol: string
+    isPreviewing: boolean
+    isCapturing: boolean
+    rtpEndpoint: CameraRtpEndpointDto | null
+    cameraStatus: string
+    snapshotAt: string
+}
+
+/** 获取相机当前完整运行状态快照，用于页面刷新/返回/重连后恢复 UI */
+export async function getCameraSnapshotState(id: string): Promise<CameraSnapshotStateDto> {
+    const { data } = await httpClient.get<CameraSnapshotStateDto>(`${BASE}/${id}/camera-snapshot-state`)
+    return data
 }

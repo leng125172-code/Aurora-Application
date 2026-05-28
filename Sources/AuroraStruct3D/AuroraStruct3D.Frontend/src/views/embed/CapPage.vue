@@ -3,28 +3,25 @@
  * CAP 消息仪表盘，含5个子页：仪表盘/发布/接收/订阅者/节点。
  * 通过 route.query.tab 切换子页，使用 REST API 加载数据，SignalR 实时推送仪表盘统计。
  */
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import * as signalR from '@microsoft/signalr'
-import VChart from 'vue-echarts'
-import { use } from 'echarts/core'
-import { CanvasRenderer } from 'echarts/renderers'
-import { BarChart } from 'echarts/charts'
-import { GridComponent, TooltipComponent, LegendComponent } from 'echarts/components'
-import { RefreshCw, RotateCcw } from 'lucide-vue-next'
+import * as echarts from 'echarts'
+import { RefreshCw, RotateCcw } from '@lucide/vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
+import { BorderBeam } from '@/components/ui/border-beam'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
 import { httpClient } from '@/api/client'
 import { useAuthStore } from '@/stores/auth'
-
-use([CanvasRenderer, BarChart, GridComponent, TooltipComponent, LegendComponent])
+import { useThemeStore } from '@/stores/theme'
 
 const { t } = useI18n()
 const route = useRoute()
 const authStore = useAuthStore()
+const themeStore = useThemeStore()
 
 const activeTab = computed(() => (route.query.tab as string) || 'dashboard')
 
@@ -83,54 +80,61 @@ async function loadStats(): Promise<void> {
     }
 }
 
-const chartOption = ref({
-    tooltip: { trigger: 'axis' as const },
-    legend: { data: [t('cap.publishSucceeded'), t('cap.consumeSucceeded')], top: 4 },
-    grid: { top: 36, bottom: 24, left: 48, right: 12 },
-    xAxis: {
-        type: 'category' as const,
-        data: [t('cap.succeeded'), t('cap.failed')],
-        axisTick: { show: false },
-        axisLine: { lineStyle: { color: 'rgba(128,128,128,0.2)' } },
-        axisLabel: { fontSize: 11 },
-    },
-    yAxis: {
-        type: 'value' as const,
-        axisLabel: { fontSize: 10 },
-        splitLine: { lineStyle: { color: 'rgba(128,128,128,0.15)' } },
-    },
-    series: [
-        {
-            name: t('cap.publishSucceeded'),
-            type: 'bar' as const,
-            data: [0, 0],
-            barMaxWidth: 48,
-            itemStyle: { color: '#22c55e', borderRadius: [4, 4, 0, 0] },
-        },
-        {
-            name: t('cap.consumeSucceeded'),
-            type: 'bar' as const,
-            data: [0, 0],
-            barMaxWidth: 48,
-            itemStyle: { color: '#3b82f6', borderRadius: [4, 4, 0, 0] },
-        },
-    ],
-})
+const capChartEl = ref<HTMLDivElement | null>(null)
+let capChart: echarts.ECharts | null = null
 
-function updateChart(): void {
-    chartOption.value = {
-        ...chartOption.value,
+/** 构建 CAP 统计柱状图 ECharts option。 */
+function buildCapOption() {
+    const cats = [t('cap.succeeded'), t('cap.failed')]
+    const isDark = themeStore.isDark
+    return {
+        backgroundColor: 'transparent',
+        textStyle: { color: isDark ? '#e5e7eb' : '#374151', fontSize: 11 },
+        tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+        legend: {
+            top: 0,
+            right: 0,
+            textStyle: { color: isDark ? '#e5e7eb' : '#374151', fontSize: 11 },
+        },
+        grid: { top: 36, bottom: 36, left: 50, right: 12, containLabel: false },
+        xAxis: {
+            type: 'category',
+            data: cats,
+            axisLabel: { fontSize: 11 },
+        },
+        yAxis: {
+            type: 'value',
+            minInterval: 1,
+            splitLine: { lineStyle: { color: isDark ? '#374151' : '#e5e7eb' } },
+        },
         series: [
             {
-                ...chartOption.value.series[0],
+                name: t('cap.publishSucceeded'),
+                type: 'bar',
                 data: [stats.value.publishSucceeded ?? 0, stats.value.publishFailed ?? 0],
+                itemStyle: { color: '#22c55e' },
             },
             {
-                ...chartOption.value.series[1],
+                name: t('cap.consumeSucceeded'),
+                type: 'bar',
                 data: [stats.value.consumeSucceeded ?? 0, stats.value.consumeFailed ?? 0],
+                itemStyle: { color: '#3b82f6' },
             },
         ],
     }
+}
+
+/** 初始化 CAP 统计柱状图 ECharts 实例。 */
+function initCapChart(): void {
+    if (!capChartEl.value) return
+    capChart?.dispose()
+    capChart = echarts.init(capChartEl.value, themeStore.isDark ? 'dark' : undefined, { renderer: 'canvas' })
+    capChart.setOption(buildCapOption())
+}
+
+/** 仅更新柱状图数据，不重建实例。 */
+function updateChart(): void {
+    capChart?.setOption(buildCapOption())
 }
 
 // ── 消息列表（发布/接收）─────────────────────────────────────────────────────
@@ -156,6 +160,11 @@ async function loadMessages(page = 1): Promise<void> {
     } finally {
         loading.value = false
     }
+}
+
+function selectStatus(s: string): void {
+    messageStatus.value = s
+    loadMessages(1)
 }
 
 async function requeue(id: number | string, type: MessageType): Promise<void> {
@@ -218,7 +227,22 @@ function loadCurrentTab(): void {
     }
 }
 
-watch(activeTab, () => loadCurrentTab())
+watch(activeTab, async (tab) => {
+    loadCurrentTab()
+    if (tab === 'dashboard') {
+        // v-if 切回仪表盘时 div 已重新创建，需重新初始化图表
+        await nextTick()
+        initCapChart()
+    }
+})
+
+watch(
+    () => themeStore.isDark,
+    () => {
+        // 主题变化时重新初始化图表以应用新颜色方案
+        initCapChart()
+    }
+)
 
 // ── SignalR ────────────────────────────────────────────────────────────────────
 let connection: signalR.HubConnection | null = null
@@ -271,9 +295,15 @@ function formatTime(iso?: string): string {
 onMounted(async () => {
     loadCurrentTab()
     await startSignalR()
+    // 初始 tab 是仪表盘时初始化柱状图
+    if (activeTab.value === 'dashboard') {
+        await nextTick()
+        initCapChart()
+    }
 })
 
 onUnmounted(async () => {
+    capChart?.dispose()
     if (connection) {
         connection.off('ReceiveCapStats')
         await connection.stop()
@@ -328,13 +358,14 @@ onUnmounted(async () => {
                     </CardContent>
                 </Card>
             </div>
-            <Card>
+            <Card class="relative">
+                <BorderBeam :size="120" :duration="10" />
                 <CardHeader>
                     <CardTitle class="text-base">{{ t('cap.statistics') }}</CardTitle>
                     <CardDescription>{{ t('cap.publishDesc') }} / {{ t('cap.consumeDesc') }}</CardDescription>
                 </CardHeader>
                 <CardContent>
-                    <VChart :option="chartOption" style="height: 280px; width: 100%" autoresize />
+                    <div ref="capChartEl" style="height: 280px; width: 100%" />
                 </CardContent>
             </Card>
         </template>
@@ -348,7 +379,7 @@ onUnmounted(async () => {
                     :key="s"
                     :variant="messageStatus === s ? 'default' : 'outline'"
                     size="sm"
-                    @click="messageStatus = s; loadMessages(1)"
+                    @click="selectStatus(s)"
                 >
                     {{ t('cap.' + s) }}
                 </Button>

@@ -1,0 +1,155 @@
+﻿# KTECH Struct Layout Report
+
+生成时间: 2026-05-25 14:16:07
+运行时: .NET 9.0.16, OS=Microsoft Windows 10.0.26200
+
+## saveCalibMsMfMh_struct (MS/MF/MH 通用标定)
+
+- CLR Type: `KtechStructSizeProbe.saveCalibMsMfMh_struct`
+- `Marshal.SizeOf<T>()` = **28 字节**
+
+| # | FieldName | Type | Offset (dec) | Offset (hex) | Size |
+|---|-----------|------|--------------|--------------|------|
+| 1 | `motorPoles` | `u8` | 0 | 0x00 | 1 |
+| 2 | `encoderType` | `u8` | 1 | 0x01 | 1 |
+| 3 | `encoderPos` | `u8` | 2 | 0x02 | 1 |
+| 4 | `motorPhaseSequence` | `u8` | 3 | 0x03 | 1 |
+| 5 | `motorEncoder_alignBias` | `u32` | 4 | 0x04 | 4 |
+| 6 | `motorEncoder_alignRatio` | `u16` | 8 | 0x08 | 2 |
+| 7 | `motorEncoder_alignVoltage` | `u16` | 10 | 0x0A | 2 |
+| 8 | `motorEncoder_alignFlag` | `u8` | 12 | 0x0C | 1 |
+|   | *(padding)* | — | 13 | 0x0D | 3 |
+| 9 | `encoder_offset` | `u32` | 16 | 0x10 | 4 |
+| 10 | `encoder_offsetFlag` | `u8` | 20 | 0x14 | 1 |
+|   | *(padding)* | — | 21 | 0x15 | 3 |
+| 11 | `savedFlag` | `u32` | 24 | 0x18 | 4 |
+
+**有效字段总字节**: 22，**填充字节**: 6
+
+## saveCalibMg_struct (MG/MG_E 标定)
+
+- CLR Type: `KtechStructSizeProbe.saveCalibMg_struct`
+- `Marshal.SizeOf<T>()` = **108 字节**
+
+| # | FieldName | Type | Offset (dec) | Offset (hex) | Size |
+|---|-----------|------|--------------|--------------|------|
+| 1 | `motorPoles` | `u8` | 0 | 0x00 | 1 |
+| 2 | `encoderType` | `u8` | 1 | 0x01 | 1 |
+| 3 | `encoderPos` | `u8` | 2 | 0x02 | 1 |
+| 4 | `motorPhaseSequence` | `u8` | 3 | 0x03 | 1 |
+| 5 | `motorEncoder_alignBias` | `u32` | 4 | 0x04 | 4 |
+| 6 | `motorEncoder_alignRatio` | `u16` | 8 | 0x08 | 2 |
+| 7 | `motorEncoder_alignVoltage` | `u16` | 10 | 0x0A | 2 |
+| 8 | `motorEncoder_alignFlag` | `u8` | 12 | 0x0C | 1 |
+|   | *(padding)* | — | 13 | 0x0D | 1 |
+| 9 | `alignValueList1` | `u16` | 14 | 0x0E | 2 |
+| 10 | `alignValueList2` | `u16` | 16 | 0x10 | 2 |
+| 11 | `alignValueList3` | `u16` | 18 | 0x12 | 2 |
+| 12 | `alignValueList4` | `u16` | 20 | 0x14 | 2 |
+| 13 | `alignValueList5` | `u16` | 22 | 0x16 | 2 |
+| 14 | `alignValueList6` | `u16` | 24 | 0x18 | 2 |
+| 15 | `alignValueList7` | `u16` | 26 | 0x1A | 2 |
+| 16 | `alignValueList8` | `u16` | 28 | 0x1C | 2 |
+| 17 | `alignValueList9` | `u16` | 30 | 0x1E | 2 |
+| 18 | `alignValueList10` | `u16` | 32 | 0x20 | 2 |
+| 19 | `alignValueList11` | `u16` | 34 | 0x22 | 2 |
+| 20 | `alignValueList12` | `u16` | 36 | 0x24 | 2 |
+| 21 | `alignValueList13` | `u16` | 38 | 0x26 | 2 |
+| 22 | `alignValueList14` | `u16` | 40 | 0x28 | 2 |
+| 23 | `alignValueList15` | `u16` | 42 | 0x2A | 2 |
+| 24 | `alignValueList16` | `u16` | 44 | 0x2C | 2 |
+| 25 | `alignValueList17` | `u16` | 46 | 0x2E | 2 |
+| 26 | `alignValueList18` | `u16` | 48 | 0x30 | 2 |
+| 27 | `alignValueList19` | `u16` | 50 | 0x32 | 2 |
+| 28 | `alignValueList20` | `u16` | 52 | 0x34 | 2 |
+| 29 | `alignValueList21` | `u16` | 54 | 0x36 | 2 |
+| 30 | `alignValueList22` | `u16` | 56 | 0x38 | 2 |
+| 31 | `alignValueList23` | `u16` | 58 | 0x3A | 2 |
+| 32 | `alignValueList24` | `u16` | 60 | 0x3C | 2 |
+| 33 | `alignValueList25` | `u16` | 62 | 0x3E | 2 |
+| 34 | `alignValueList26` | `u16` | 64 | 0x40 | 2 |
+| 35 | `alignValueList27` | `u16` | 66 | 0x42 | 2 |
+| 36 | `alignValueList28` | `u16` | 68 | 0x44 | 2 |
+| 37 | `alignValueList29` | `u16` | 70 | 0x46 | 2 |
+| 38 | `alignValueList30` | `u16` | 72 | 0x48 | 2 |
+| 39 | `alignValueList31` | `u16` | 74 | 0x4A | 2 |
+| 40 | `alignValueList32` | `u16` | 76 | 0x4C | 2 |
+|   | *(padding)* | — | 78 | 0x4E | 2 |
+| 41 | `encoder_offset` | `u32` | 80 | 0x50 | 4 |
+| 42 | `encoder_offsetFlag` | `u8` | 84 | 0x54 | 1 |
+| 43 | `reductionRatio` | `u8` | 85 | 0x55 | 1 |
+|   | *(padding)* | — | 86 | 0x56 | 2 |
+| 44 | `encoderRelateValue` | `u32` | 88 | 0x58 | 4 |
+| 45 | `encoderRelateValueFlag` | `u8` | 92 | 0x5C | 1 |
+|   | *(padding)* | — | 93 | 0x5D | 3 |
+| 46 | `encoder2_offset` | `u32` | 96 | 0x60 | 4 |
+| 47 | `encoder2_offsetFlag` | `u8` | 100 | 0x64 | 1 |
+|   | *(padding)* | — | 101 | 0x65 | 3 |
+| 48 | `savedFlag` | `u32` | 104 | 0x68 | 4 |
+
+**有效字段总字节**: 97，**填充字节**: 11
+
+## saveSetting_t (全型号设置)
+
+- CLR Type: `KtechStructSizeProbe.saveSetting_t`
+- `Marshal.SizeOf<T>()` = **104 字节**
+
+| # | FieldName | Type | Offset (dec) | Offset (hex) | Size |
+|---|-----------|------|--------------|--------------|------|
+| 1 | `driverId` | `u8` | 0 | 0x00 | 1 |
+| 2 | `busType` | `u8` | 1 | 0x01 | 1 |
+| 3 | `rs485BaudRate` | `u8` | 2 | 0x02 | 1 |
+| 4 | `canBaudRate` | `u8` | 3 | 0x03 | 1 |
+| 5 | `broadcastMode` | `u8` | 4 | 0x04 | 1 |
+| 6 | `spinDirection` | `u8` | 5 | 0x05 | 1 |
+| 7 | `protectMotorTempEnable` | `u8` | 6 | 0x06 | 1 |
+| 8 | `protectDriverTempEnable` | `u8` | 7 | 0x07 | 1 |
+| 9 | `protectUnderVoltageEnable` | `u8` | 8 | 0x08 | 1 |
+| 10 | `protectOverVoltageEnable` | `u8` | 9 | 0x09 | 1 |
+| 11 | `protectOverCurrentEnable` | `u8` | 10 | 0x0A | 1 |
+| 12 | `protectShortCircuitEnable` | `u8` | 11 | 0x0B | 1 |
+| 13 | `protectStallEnable` | `u8` | 12 | 0x0C | 1 |
+| 14 | `protectLostInputEnable` | `u8` | 13 | 0x0D | 1 |
+| 15 | `protectMotorTemp` | `u8` | 14 | 0x0E | 1 |
+| 16 | `protectDriverTemp` | `u8` | 15 | 0x0F | 1 |
+| 17 | `protectUnderVoltage` | `u16` | 16 | 0x10 | 2 |
+| 18 | `protectOverVoltage` | `u16` | 18 | 0x12 | 2 |
+| 19 | `protectOverCurrent` | `u16` | 20 | 0x14 | 2 |
+| 20 | `protectOverCurrentTime` | `u16` | 22 | 0x16 | 2 |
+| 21 | `protectStallTime` | `u16` | 24 | 0x18 | 2 |
+| 22 | `protectLostInputTime` | `u16` | 26 | 0x1A | 2 |
+| 23 | `brakeResEnable` | `u8` | 28 | 0x1C | 1 |
+|   | *(padding)* | — | 29 | 0x1D | 1 |
+| 24 | `brakeResOnVoltage` | `u16` | 30 | 0x1E | 2 |
+| 25 | `inputType` | `u8` | 32 | 0x20 | 1 |
+| 26 | `pwmInputControlMode` | `u8` | 33 | 0x21 | 1 |
+| 27 | `pwmInputMinValue` | `u16` | 34 | 0x22 | 2 |
+| 28 | `pwmInputMaxValue` | `u16` | 36 | 0x24 | 2 |
+| 29 | `pwmInputCenterValue` | `u16` | 38 | 0x26 | 2 |
+| 30 | `pwmInputDeadband` | `u16` | 40 | 0x28 | 2 |
+| 31 | `pwmToTorqueRatio` | `u16` | 42 | 0x2A | 2 |
+| 32 | `pwmToSpeedRatio` | `u16` | 44 | 0x2C | 2 |
+| 33 | `pwmToAngleRatio` | `u16` | 46 | 0x2E | 2 |
+| 34 | `pulsesPerCircle` | `u16` | 48 | 0x30 | 2 |
+| 35 | `anglePidKp` | `u16` | 50 | 0x32 | 2 |
+| 36 | `anglePidKi` | `u16` | 52 | 0x34 | 2 |
+| 37 | `anglePidKd` | `u16` | 54 | 0x36 | 2 |
+| 38 | `speedPidKp` | `u16` | 56 | 0x38 | 2 |
+| 39 | `speedPidKi` | `u16` | 58 | 0x3A | 2 |
+| 40 | `speedPidKd` | `u16` | 60 | 0x3C | 2 |
+| 41 | `currentPidKp` | `u16` | 62 | 0x3E | 2 |
+| 42 | `currentPidKi` | `u16` | 64 | 0x40 | 2 |
+| 43 | `currentPidKd` | `u16` | 66 | 0x42 | 2 |
+| 44 | `maxTorque` | `s16` | 68 | 0x44 | 2 |
+|   | *(padding)* | — | 70 | 0x46 | 2 |
+| 45 | `maxSpeed` | `s32` | 72 | 0x48 | 4 |
+|   | *(padding)* | — | 76 | 0x4C | 4 |
+| 46 | `maxAngle` | `s64` | 80 | 0x50 | 8 |
+| 47 | `currentRamp` | `s16` | 88 | 0x58 | 2 |
+|   | *(padding)* | — | 90 | 0x5A | 2 |
+| 48 | `speedRamp` | `s32` | 92 | 0x5C | 4 |
+| 49 | `uniqueId` | `u32` | 96 | 0x60 | 4 |
+| 50 | `savedFlag` | `u32` | 100 | 0x64 | 4 |
+
+**有效字段总字节**: 95，**填充字节**: 9
+

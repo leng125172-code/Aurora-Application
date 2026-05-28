@@ -35,8 +35,8 @@ namespace Hangfire.PostgreSql.Entities
 
         public DateTime? FetchedAt { get; set; }
 
-        public string StateName { get; set; }
-        public string StateReason { get; set; }
-        public string StateData { get; set; }
+        public string? StateName { get; set; }
+        public string? StateReason { get; set; }
+        public string? StateData { get; set; }
     }
 }

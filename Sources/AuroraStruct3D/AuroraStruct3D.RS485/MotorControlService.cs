@@ -162,6 +162,30 @@ public class MotorControlService : IMotorControlService, IDisposable
     public bool IsMotorConfigured(int motorId) => _drivers.ContainsKey(motorId);
 
     /// <inheritdoc/>
+    public KtechMotorDriver? GetKtechMotorDriver(int slaveId)
+    {
+        return _drivers.TryGetValue(slaveId, out IMotorDriver? driver)
+            ? driver as KtechMotorDriver
+            : null;
+    }
+
+    /// <inheritdoc/>
+    public IReadOnlyList<KtechMotorDriver> KtechDrivers =>
+        [.. _drivers.Values.OfType<KtechMotorDriver>().OrderBy(d => d.SlaveId)];
+
+    /// <inheritdoc/>
+    public LeisaiMotorDriver? GetLeisaiMotorDriver(int slaveId)
+    {
+        return _drivers.TryGetValue(slaveId, out IMotorDriver? driver)
+            ? driver as LeisaiMotorDriver
+            : null;
+    }
+
+    /// <inheritdoc/>
+    public IReadOnlyList<LeisaiMotorDriver> LeisaiDrivers =>
+        [.. _drivers.Values.OfType<LeisaiMotorDriver>().OrderBy(d => d.SlaveId)];
+
+    /// <inheritdoc/>
     public bool IsSerialPortOpen(Guid serialPortConfigId)
     {
         return _portsByConfigId.TryGetValue(serialPortConfigId, out IRS485Port? port)
@@ -214,8 +238,12 @@ public class MotorControlService : IMotorControlService, IDisposable
             port.Open();
         }
 
-        return await port
-            .SendAndReceiveAsync(request, expectedResponseLength, timeoutMs, cancellationToken)
+        return await port.SendAndReceiveAsync(
+                request,
+                expectedResponseLength,
+                timeoutMs,
+                cancellationToken
+            )
             .ConfigureAwait(false);
     }
 

@@ -35,4 +35,30 @@ public interface IRS485Port : IDisposable
         int timeoutMs = 500,
         CancellationToken cancellationToken = default
     );
+
+    /// <summary>
+    /// 获取总线互斥锁；返回的 disposable 释放时归还锁。
+    /// 仅供需要在多次原子读写之间保持互斥的高级场景（如 Ymodem 升级）使用。
+    /// </summary>
+    Task<IDisposable> AcquireBusLockAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 原始字节写入（绕过帧封装，必须在持有总线锁的上下文中使用）
+    /// </summary>
+    Task WriteRawAsync(
+        ReadOnlyMemory<byte> data,
+        int timeoutMs,
+        CancellationToken cancellationToken = default
+    );
+
+    /// <summary>
+    /// 原始字节读取一字节（持有总线锁中使用）。
+    /// 超时返回 -1。
+    /// </summary>
+    Task<int> ReadRawByteAsync(int timeoutMs, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 清空输入缓冲区（持有总线锁中使用）
+    /// </summary>
+    void DiscardInputBuffer();
 }

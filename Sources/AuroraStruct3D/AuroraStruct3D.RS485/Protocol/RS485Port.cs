@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IO.Ports;
 using Microsoft.Extensions.Logging;
 
@@ -114,17 +115,27 @@ public sealed class RS485Port : IRS485Port
             _serialPort.DiscardInBuffer();
             _serialPort.DiscardOutBuffer();
 
-            // 发送请求帧
-            await _serialPort
-                .BaseStream.WriteAsync(request, cancellationToken)
-                .ConfigureAwait(false);
-            await _serialPort.BaseStream.FlushAsync(cancellationToken).ConfigureAwait(false);
+            // 发送请求帧。说明：Linux 下 SerialPort.WriteTimeout 对 BaseStream.WriteAsync
+            // 并不总是生效（无应答/未接终端时可能永久阻塞），这里额外用 linked CTS 强制超时，
+            // 避免单个串口卡死整个扫描流程
+            using (
+                CancellationTokenSource writeCts = CancellationTokenSource.CreateLinkedTokenSource(
+                    cancellationToken
+                )
+            )
+            {
+                writeCts.CancelAfter(timeoutMs);
+                await _serialPort
+                    .BaseStream.WriteAsync(request, writeCts.Token)
+                    .ConfigureAwait(false);
+                await _serialPort.BaseStream.FlushAsync(writeCts.Token).ConfigureAwait(false);
+            }
 
             _logger.LogDebug(
                 "{Tag} RS485 TX [{Port}]: {Hex}",
                 LogTag,
                 PortName,
-                Convert.ToHexString(request, 0, request.Length)
+                FormatHexForLog(request)
             );
 
             if (expectedResponseLength == 0)
@@ -141,7 +152,7 @@ public sealed class RS485Port : IRS485Port
                     "{Tag} RS485 RX [{Port}]: {Hex}",
                     LogTag,
                     PortName,
-                    Convert.ToHexString(idleResponse)
+                    FormatHexForLog(idleResponse)
                 );
                 return idleResponse;
             }
@@ -158,7 +169,7 @@ public sealed class RS485Port : IRS485Port
                 "{Tag} RS485 RX [{Port}]: {Hex}",
                 LogTag,
                 PortName,
-                Convert.ToHexString(exactResponse)
+                FormatHexForLog(exactResponse)
             );
             return exactResponse;
         }
@@ -168,8 +179,18 @@ public sealed class RS485Port : IRS485Port
         }
     }
 
+    private static string FormatHexForLog(ReadOnlySpan<byte> data)
+    {
+        return data.Length == 0
+            ? string.Empty
+            : BitConverter.ToString(data.ToArray()).Replace('-', ' ');
+    }
+
     /// <summary>
-    /// 精确读取指定字节数的响应数据，带超时控制
+    /// 精确读取指定字节数的响应数据，带超时控制。
+    /// 实现说明：采用 <see cref="SerialPort.BytesToRead"/> 轮询而非向 BaseStream.ReadAsync
+    /// 传入 CancellationToken，规避 .NET SerialStream 在 Token 取消时抛 IOException 并
+    /// 将底层流拖入异常态的问题（与 <see cref="ReceiveUntilIdleAsync"/> 同理）。
     /// </summary>
     private async Task<byte[]> ReceiveExactAsync(
         int length,
@@ -179,34 +200,30 @@ public sealed class RS485Port : IRS485Port
     {
         byte[] buffer = new byte[length];
         int received = 0;
-        using CancellationTokenSource cts = CancellationTokenSource.CreateLinkedTokenSource(
-            cancellationToken
-        );
-        cts.CancelAfter(timeoutMs);
+        Stopwatch sw = Stopwatch.StartNew();
 
-        try
+        while (received < length)
         {
-            while (received < length)
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (sw.ElapsedMilliseconds >= timeoutMs)
             {
-                int read = await _serialPort
-                    .BaseStream.ReadAsync(buffer.AsMemory(received, length - received), cts.Token)
-                    .ConfigureAwait(false);
+                throw new TimeoutException(
+                    $"{LogTag} Response timeout on port {PortName} ({timeoutMs} ms), received {received}/{length} bytes."
+                );
+            }
 
-                if (read == 0)
-                {
-                    throw new TimeoutException(
-                        $"{LogTag} Read timeout on port {PortName}, received {received}/{length} bytes."
-                    );
-                }
-
+            int available = _serialPort.BytesToRead;
+            if (available > 0)
+            {
+                int toRead = Math.Min(available, length - received);
+                int read = _serialPort.Read(buffer, received, toRead);
                 received += read;
             }
-        }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
-        {
-            throw new TimeoutException(
-                $"{LogTag} Response timeout on port {PortName} ({timeoutMs} ms), received {received}/{length} bytes."
-            );
+            else
+            {
+                await Task.Delay(2, cancellationToken).ConfigureAwait(false);
+            }
         }
 
         return buffer;
@@ -214,39 +231,56 @@ public sealed class RS485Port : IRS485Port
 
     /// <summary>
     /// 读取串口响应直到短暂空闲或整体超时，适用于串口调试助手这类未知长度响应。
+    /// 实现说明：采用 <see cref="SerialPort.BytesToRead"/> 轮询而非 cancel pending ReadAsync。
+    /// 原因是 .NET 的 <c>SerialStream.EndRead</c> 在 CancellationToken 取消时会抛
+    /// <see cref="IOException"/>("The I/O operation has been aborted")，并把底层流拖入异常态，
+    /// 影响后续读写。轮询方案规避此坑。
     /// </summary>
     private async Task<byte[]> ReceiveUntilIdleAsync(
         int timeoutMs,
         CancellationToken cancellationToken
     )
     {
-        using CancellationTokenSource timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(
-            cancellationToken
-        );
-        timeoutCts.CancelAfter(timeoutMs);
+        // 首字节最长等待 timeoutMs；首字节到达后，30ms 内未有新字节则视为空闲完成
+        const int IdleQuietMs = 30;
+        const int PollIntervalMs = 5;
 
+        Stopwatch overall = Stopwatch.StartNew();
+        Stopwatch sinceLast = new();
         using MemoryStream stream = new();
-        byte[] buffer = new byte[256];
+        byte[] tmp = new byte[256];
 
-        while (!timeoutCts.IsCancellationRequested)
+        while (true)
         {
-            try
+            cancellationToken.ThrowIfCancellationRequested();
+
+            int available = _serialPort.BytesToRead;
+            if (available > 0)
             {
-                using CancellationTokenSource idleCts = CancellationTokenSource.CreateLinkedTokenSource(
-                    timeoutCts.Token
-                );
-                idleCts.CancelAfter(stream.Length == 0 ? timeoutMs : 30);
-                int read = await _serialPort
-                    .BaseStream.ReadAsync(buffer.AsMemory(0, buffer.Length), idleCts.Token)
-                    .ConfigureAwait(false);
+                int toRead = Math.Min(available, tmp.Length);
+                int read = _serialPort.Read(tmp, 0, toRead);
                 if (read > 0)
                 {
-                    stream.Write(buffer, 0, read);
+                    stream.Write(tmp, 0, read);
+                    sinceLast.Restart();
                 }
             }
-            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            else
             {
-                break;
+                // 无数据可读：根据是否已有累计数据，判断是用整体超时还是空闲超时
+                if (stream.Length == 0)
+                {
+                    if (overall.ElapsedMilliseconds >= timeoutMs)
+                    {
+                        break;
+                    }
+                }
+                else if (sinceLast.ElapsedMilliseconds >= IdleQuietMs)
+                {
+                    break;
+                }
+
+                await Task.Delay(PollIntervalMs, cancellationToken).ConfigureAwait(false);
             }
         }
 
@@ -266,5 +300,90 @@ public sealed class RS485Port : IRS485Port
         _serialPort.Dispose();
         _busSemaphore.Dispose();
         _logger.LogDebug("{Tag} RS485Port ({Port}) disposed", LogTag, PortName);
+    }
+
+    /// <inheritdoc/>
+    public async Task<IDisposable> AcquireBusLockAsync(
+        CancellationToken cancellationToken = default
+    )
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        await _busSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
+        return new BusLockReleaser(_busSemaphore);
+    }
+
+    /// <inheritdoc/>
+    public async Task WriteRawAsync(
+        ReadOnlyMemory<byte> data,
+        int timeoutMs,
+        CancellationToken cancellationToken = default
+    )
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (!_serialPort.IsOpen)
+        {
+            throw new InvalidOperationException($"{LogTag} RS485 port {PortName} is not open.");
+        }
+        using CancellationTokenSource writeCts = CancellationTokenSource.CreateLinkedTokenSource(
+            cancellationToken
+        );
+        writeCts.CancelAfter(timeoutMs);
+        await _serialPort.BaseStream.WriteAsync(data, writeCts.Token).ConfigureAwait(false);
+        await _serialPort.BaseStream.FlushAsync(writeCts.Token).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc/>
+    public async Task<int> ReadRawByteAsync(
+        int timeoutMs,
+        CancellationToken cancellationToken = default
+    )
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (!_serialPort.IsOpen)
+        {
+            throw new InvalidOperationException($"{LogTag} RS485 port {PortName} is not open.");
+        }
+        byte[] one = new byte[1];
+        using CancellationTokenSource readCts = CancellationTokenSource.CreateLinkedTokenSource(
+            cancellationToken
+        );
+        readCts.CancelAfter(timeoutMs);
+        try
+        {
+            int read = await _serialPort
+                .BaseStream.ReadAsync(one.AsMemory(0, 1), readCts.Token)
+                .ConfigureAwait(false);
+            return read > 0 ? one[0] : -1;
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return -1;
+        }
+    }
+
+    /// <inheritdoc/>
+    public void DiscardInputBuffer()
+    {
+        if (_serialPort.IsOpen)
+        {
+            _serialPort.DiscardInBuffer();
+        }
+    }
+
+    /// <summary>总线锁释放器</summary>
+    private sealed class BusLockReleaser : IDisposable
+    {
+        private SemaphoreSlim? _semaphore;
+
+        public BusLockReleaser(SemaphoreSlim semaphore)
+        {
+            _semaphore = semaphore;
+        }
+
+        public void Dispose()
+        {
+            SemaphoreSlim? sem = Interlocked.Exchange(ref _semaphore, null);
+            sem?.Release();
+        }
     }
 }

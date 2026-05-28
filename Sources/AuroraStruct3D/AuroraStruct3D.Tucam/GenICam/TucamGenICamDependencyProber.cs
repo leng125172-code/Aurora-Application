@@ -191,7 +191,18 @@ public static class TucamGenICamDependencyProber
                 continue;
             }
 
-            sink.Add(MakeEdge(selector, option, after.NodeName, string.Join("; ", changedFields)));
+            // 提取受影响节点的新 Access 状态（供前端免重枚举更新 Access）
+            string? newAccess = before.Access != after.Access ? after.Access.ToString() : null;
+
+            sink.Add(
+                MakeEdge(
+                    selector,
+                    option,
+                    after.NodeName,
+                    string.Join("; ", changedFields),
+                    newAccess
+                )
+            );
         }
     }
 
@@ -199,7 +210,8 @@ public static class TucamGenICamDependencyProber
         GenICamNodeMeta selector,
         GenICamEnumEntry option,
         string affected,
-        string summary
+        string summary,
+        string? newAccess = null
     )
     {
         return new GenICamDependencyEdge
@@ -209,19 +221,15 @@ public static class TucamGenICamDependencyProber
             OptionLabel = option.Symbolic,
             AffectedNode = affected,
             ChangeSummary = summary,
+            NewAccess = newAccess,
         };
     }
 
     private static bool IsSelectorCandidate(GenICamNodeMeta n)
     {
-        return n.Type == TuElemType.Enumeration
-            && n.Access == TuAccessMode.ReadWrite
-            && (
-                n.NodeName.Contains("Selector", StringComparison.OrdinalIgnoreCase)
-                || n.NodeName.EndsWith("Select", StringComparison.OrdinalIgnoreCase)
-                || n.NodeName.EndsWith("Mode", StringComparison.OrdinalIgnoreCase)
-                || n.NodeName.Contains("Port", StringComparison.OrdinalIgnoreCase)
-            );
+        // Option B：放宽到所有可写枚举节点，确保 ExposureAuto/GainAuto/BalanceWhiteAuto 等
+        // 非 *Selector/*Mode 命名也能被探测进依赖图（噪声由 IsVolatileValueOnlyChange 过滤）。
+        return n.Type == TuElemType.Enumeration && n.Access == TuAccessMode.ReadWrite;
     }
 
     private static bool AreEquivalentValues(string? before, string? after)

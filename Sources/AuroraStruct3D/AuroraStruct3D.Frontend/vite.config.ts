@@ -84,7 +84,7 @@ export default defineConfig(({ mode }) => {
                     import.meta.url,
                 ),
             ),
-            chunkSizeWarningLimit: 1000,
+            chunkSizeWarningLimit: 1200,
             // 每次构建前清空 outDir，避免旧 hash 产物残留导致编码乱码
             emptyOutDir: true,
             // 生产环境也生成sourcemap，方便调试3D和WebSocket相关问题
@@ -106,6 +106,11 @@ export default defineConfig(({ mode }) => {
             },
 
             rollupOptions: {
+                // 过滤第三方包（signalr、vueuse 等）中 Rolldown 无法识别位置的 #__PURE__ 注解警告
+                onwarn(warning, warn) {
+                    if (warning.code === 'INVALID_ANNOTATION') return
+                    warn(warning)
+                },
                 output: {
                     // 👇 禁用所有文件名哈希（核心配置）
                     // 入口文件名称（无哈希）
@@ -115,7 +120,7 @@ export default defineConfig(({ mode }) => {
                     // 静态资源文件名称（无哈希）
                     assetFileNames: "assets/[name].[ext]",
 
-                    // 简单的代码分包，避免单 chunk 过大（Vite 8 / rolldown 要求函数形式）
+                    // 代码分包，避免单 chunk 过大（Vite 8 / rolldown 要求函数形式）
                     manualChunks(id: string) {
                         if (!id.includes("node_modules")) return;
                         if (
@@ -136,7 +141,33 @@ export default defineConfig(({ mode }) => {
                             )
                         )
                             return "ui";
-                        // 其他第三方库统一打包到vendor
+                        // echarts 体积最大，单独分包
+                        if (
+                            /[\\/]node_modules[\\/](echarts|zrender)[\\/]/.test(
+                                id,
+                            )
+                        )
+                            return "echarts";
+                        // SignalR 单独分包
+                        if (
+                            /[\\/]node_modules[\\/]@microsoft[\\/]signalr[\\/]/.test(
+                                id,
+                            )
+                        )
+                            return "signalr";
+                        // VueUse 单独分包
+                        if (
+                            /[\\/]node_modules[\\/]@vueuse[\\/]/.test(id)
+                        )
+                            return "vueuse";
+                        // 动画库单独分包
+                        if (
+                            /[\\/]node_modules[\\/](motion-v|motion)[\\/]/.test(
+                                id,
+                            )
+                        )
+                            return "motion";
+                        // 其他第三方库统一打包到 vendor
                         return "vendor";
                     },
                 },

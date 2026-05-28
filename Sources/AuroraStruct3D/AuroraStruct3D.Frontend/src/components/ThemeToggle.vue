@@ -1,5 +1,5 @@
-<script setup lang="ts">
-import { Moon, Sun, Monitor } from 'lucide-vue-next'
+﻿<script setup lang="ts">
+import { Moon, Sun, Monitor } from '@lucide/vue'
 import { Button } from '@/components/ui/button'
 import {
     DropdownMenu,
@@ -29,7 +29,7 @@ function onSelect(value: string): void {
             </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-            <DropdownMenuRadioGroup :model-value="theme.mode" @update:model-value="onSelect">
+            <DropdownMenuRadioGroup :model-value="theme.mode" @update:model-value="(v) => onSelect(v as string)">
                 <DropdownMenuRadioItem value="light">
                     <Sun class="mr-2 size-4" />
                     {{ t('layout.themeLight') }}

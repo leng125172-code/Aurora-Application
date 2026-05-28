@@ -22,6 +22,7 @@ import argparse
 import concurrent.futures
 import hashlib
 import json
+import re
 import socket
 import struct
 import subprocess
@@ -30,6 +31,7 @@ import tarfile
 import tempfile
 import threading
 import time
+from collections import Counter
 from pathlib import Path
 
 # 自动安装 tqdm
@@ -167,7 +169,7 @@ def scan_for_servers(timeout: float = 2.0) -> list[dict]:
 
 
 def publish_project(project_name: str, index: int, total: int) -> None:
-    """对指定项目执行 dotnet publish，实时输出编译日志。"""
+    """对指定项目执行 dotnet publish，实时输出编译日志，并按类别统计错误/警告。"""
     csproj = (
         WORKSPACE_ROOT
         / "Sources"
@@ -198,13 +200,85 @@ def publish_project(project_name: str, index: int, total: int) -> None:
         "minimal",
     ]
     print(f">>> {' '.join(cmd)}\n")
-    result = subprocess.run(cmd)
-    if result.returncode != 0:
+
+    # 同时匹配英文 "error CS1234:" / "warning CS1234:" 与中文 "错误 CS1234:" / "警告 CS1234:"
+    # MSBuild 错误（MSB1234）和 NuGet 警告（NU1234）也一并捕获
+    diag_re = re.compile(
+        r"\b(?P<level>error|warning|错误|警告)\s+" r"(?P<code>[A-Z]{1,5}\d{3,5})\s*:",
+        re.IGNORECASE,
+    )
+    error_codes: Counter[str] = Counter()
+    warning_codes: Counter[str] = Counter()
+    # 记录每个 code 的首条消息样例，便于排查
+    sample_lines: dict[str, str] = {}
+    # 行去重：避免同一警告在多 TFM/多次引用中被重复统计
+    seen_signatures: set[tuple[str, str, str]] = set()
+
+    proc = subprocess.Popen(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        bufsize=1,
+    )
+    assert proc.stdout is not None
+    try:
+        for raw_line in proc.stdout:
+            line = raw_line.rstrip()
+            # 透传原始日志
+            print(line)
+            m = diag_re.search(line)
+            if not m:
+                continue
+            code = m.group("code").upper()
+            level = m.group("level").lower()
+            is_error = level in ("error", "错误")
+            # 提取诊断消息中位置（文件:行:列）做去重签名
+            loc_match = re.search(r"([^\s(]+)\((\d+),(\d+)\)", line)
+            signature = (
+                code,
+                loc_match.group(0) if loc_match else line.strip(),
+                "E" if is_error else "W",
+            )
+            if signature in seen_signatures:
+                continue
+            seen_signatures.add(signature)
+            if is_error:
+                error_codes[code] += 1
+            else:
+                warning_codes[code] += 1
+            sample_lines.setdefault(code, line.strip())
+    finally:
+        return_code = proc.wait()
+
+    # 输出分类统计
+    total_errors = sum(error_codes.values())
+    total_warnings = sum(warning_codes.values())
+    print(f"\n{'─' * 60}")
+    print(f"  [统计] {project_name}  错误: {total_errors}  警告: {total_warnings}")
+    print(f"{'─' * 60}")
+    if error_codes:
+        print("  错误分类：")
+        for code, count in error_codes.most_common():
+            print(f"    {code:<10} × {count}")
+            sample = sample_lines.get(code, "")
+            if sample:
+                print(f"      ↳ {sample[:120]}")
+    if warning_codes:
+        print("  警告分类：")
+        for code, count in warning_codes.most_common():
+            print(f"    {code:<10} × {count}")
+    if not error_codes and not warning_codes:
+        print("  ✔ 无错误、无警告")
+
+    if return_code != 0:
         print(
-            f"\n[错误] dotnet publish 失败（退出码 {result.returncode}）",
+            f"\n[错误] dotnet publish 失败（退出码 {return_code}）",
             file=sys.stderr,
         )
-        sys.exit(result.returncode)
+        sys.exit(return_code)
     print(f"[完成] {project_name} 发布成功")
 
 

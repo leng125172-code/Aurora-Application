@@ -1,9 +1,9 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { RefreshCw, Server, Cpu, MemoryStick, Clock, Package } from 'lucide-vue-next'
+import { RefreshCw, Server, Package } from '@lucide/vue'
 import { Button } from '@/components/ui/button'
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { httpClient } from '@/api/client'
@@ -88,7 +88,7 @@ function formatDateTime(iso: string | null | undefined): string {
     })
 }
 
-function cpuColor(pct: number): string {
+function cpuColor(pct: number): 'destructive' | 'secondary' | 'default' {
     if (pct >= 90) return 'destructive'
     if (pct >= 70) return 'secondary'
     return 'default'

@@ -1,32 +1,29 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 /**
  * Hangfire 任务仪表盘，含5个子页：仪表盘/作业/重试/周期性作业/服务器。
  * 通过 route.query.tab 切换子页，SignalR 实时推送仪表盘统计数字。
  * API 数据来源：/api/hangfire/* (见 HangfireRouteActionProvider)
  */
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import * as signalR from '@microsoft/signalr'
-import VChart from 'vue-echarts'
-import { use } from 'echarts/core'
-import { CanvasRenderer } from 'echarts/renderers'
-import { LineChart } from 'echarts/charts'
-import { GridComponent, TooltipComponent, LegendComponent } from 'echarts/components'
-import { RefreshCw, PlayCircle, Trash2, RotateCcw } from 'lucide-vue-next'
+import * as echarts from 'echarts'
+import { RefreshCw, PlayCircle, Trash2, RotateCcw } from '@lucide/vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
+import { BorderBeam } from '@/components/ui/border-beam'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
 import { httpClient } from '@/api/client'
 import { useAuthStore } from '@/stores/auth'
-
-use([CanvasRenderer, LineChart, GridComponent, TooltipComponent, LegendComponent])
+import { useThemeStore } from '@/stores/theme'
 
 const { t } = useI18n()
 const route = useRoute()
 const authStore = useAuthStore()
+const themeStore = useThemeStore()
 
 const activeTab = computed(() => (route.query.tab as string) || 'dashboard')
 
@@ -107,57 +104,83 @@ async function loadStats(): Promise<void> {
     }
 }
 
-const trendChartOption = ref({
-    tooltip: { trigger: 'axis' as const },
-    legend: { data: [t('hangfire.succeeded'), t('hangfire.failed')], top: 4 },
-    grid: { top: 36, bottom: 24, left: 48, right: 12 },
-    xAxis: {
-        type: 'category' as const,
-        data: [] as string[],
-        axisLabel: { fontSize: 10 },
-        axisTick: { show: false },
-        axisLine: { lineStyle: { color: 'rgba(128,128,128,0.2)' } },
-    },
-    yAxis: {
-        type: 'value' as const,
-        minInterval: 1,
-        axisLabel: { fontSize: 10 },
-        splitLine: { lineStyle: { color: 'rgba(128,128,128,0.15)' } },
-    },
-    series: [
-        {
-            name: t('hangfire.succeeded'),
-            type: 'line' as const,
-            smooth: true,
-            showSymbol: false,
-            data: [] as number[],
-            itemStyle: { color: 'rgb(34,197,94)' },
-            areaStyle: { color: 'rgba(34,197,94,0.12)' },
-        },
-        {
-            name: t('hangfire.failed'),
-            type: 'line' as const,
-            smooth: true,
-            showSymbol: false,
-            data: [] as number[],
-            itemStyle: { color: 'rgb(239,68,68)' },
-            areaStyle: { color: 'rgba(239,68,68,0.10)' },
-        },
-    ],
-})
+const trendChartEl = ref<HTMLDivElement | null>(null)
+let trendChart: echarts.ECharts | null = null
 
-function updateChart(): void {
+/** 从 dailyHistory 提取排序后的日期、成功数、失败数 */
+function buildTrendData(): { dates: string[]; succeeded: number[]; failed: number[] } {
     const s = dailyHistory.value.succeeded ?? {}
     const f = dailyHistory.value.failed ?? {}
     const allDates = Array.from(new Set([...Object.keys(s), ...Object.keys(f)])).sort()
-    trendChartOption.value = {
-        ...trendChartOption.value,
-        xAxis: { ...trendChartOption.value.xAxis, data: allDates.map((d) => d.substring(0, 10)) },
+    return {
+        dates: allDates.map((d) => d.substring(0, 10)),
+        succeeded: allDates.map((d) => s[d] ?? 0),
+        failed: allDates.map((d) => f[d] ?? 0),
+    }
+}
+
+/** 构建趋势折线图 ECharts option。 */
+function buildTrendOption() {
+    const { dates, succeeded, failed } = buildTrendData()
+    const isDark = themeStore.isDark
+    return {
+        backgroundColor: 'transparent',
+        textStyle: { color: isDark ? '#e5e7eb' : '#374151', fontSize: 11 },
+        tooltip: { trigger: 'axis' },
+        legend: {
+            top: 0,
+            right: 0,
+            textStyle: { color: isDark ? '#e5e7eb' : '#374151', fontSize: 11 },
+        },
+        grid: { top: 36, bottom: 36, left: 50, right: 12, containLabel: false },
+        xAxis: {
+            type: 'category',
+            data: dates,
+            axisLabel: { fontSize: 10 },
+            splitLine: { show: false },
+        },
+        yAxis: {
+            type: 'value',
+            minInterval: 1,
+            axisLabel: { fontSize: 10 },
+            splitLine: { lineStyle: { color: isDark ? '#374151' : '#e5e7eb' } },
+        },
         series: [
-            { ...trendChartOption.value.series[0], data: allDates.map((d) => s[d] ?? 0) },
-            { ...trendChartOption.value.series[1], data: allDates.map((d) => f[d] ?? 0) },
+            {
+                name: t('hangfire.succeeded'),
+                type: 'line',
+                smooth: true,
+                showSymbol: false,
+                data: succeeded,
+                lineStyle: { color: 'rgb(34,197,94)', width: 1.5 },
+                itemStyle: { color: 'rgb(34,197,94)' },
+                areaStyle: { color: 'rgba(34,197,94,0.12)' },
+            },
+            {
+                name: t('hangfire.failed'),
+                type: 'line',
+                smooth: true,
+                showSymbol: false,
+                data: failed,
+                lineStyle: { color: 'rgb(239,68,68)', width: 1.5 },
+                itemStyle: { color: 'rgb(239,68,68)' },
+                areaStyle: { color: 'rgba(239,68,68,0.10)' },
+            },
         ],
     }
+}
+
+/** 初始化趋势折线图 ECharts 实例。 */
+function initTrendChart(): void {
+    if (!trendChartEl.value) return
+    trendChart?.dispose()
+    trendChart = echarts.init(trendChartEl.value, themeStore.isDark ? 'dark' : undefined, { renderer: 'canvas' })
+    trendChart.setOption(buildTrendOption())
+}
+
+/** 仅更新图表数据，不重建实例。 */
+function updateChart(): void {
+    trendChart?.setOption(buildTrendOption())
 }
 
 // ── 作业列表 ─────────────────────────────────────────────────────────────────
@@ -275,7 +298,22 @@ function loadCurrentTab(): void {
     }
 }
 
-watch(activeTab, () => loadCurrentTab())
+watch(activeTab, async (tab) => {
+    loadCurrentTab()
+    if (tab === 'dashboard') {
+        // v-if 切回仪表盘时 div 已重新创建，需重新初始化图表
+        await nextTick()
+        initTrendChart()
+    }
+})
+
+watch(
+    () => themeStore.isDark,
+    () => {
+        // 主题变化时重新初始化图表以应用新颜色方案
+        initTrendChart()
+    }
+)
 
 // ── SignalR ──────────────────────────────────────────────────────────────────
 let connection: signalR.HubConnection | null = null
@@ -402,8 +440,14 @@ const STAT_CARDS = [
 onMounted(async () => {
     loadCurrentTab()
     await startSignalR()
+    // 初始 tab 是仪表盘时初始化趋势图
+    if (activeTab.value === 'dashboard') {
+        await nextTick()
+        initTrendChart()
+    }
 })
 onUnmounted(async () => {
+    trendChart?.dispose()
     if (connection) {
         connection.off('ReceiveHangfireStats')
         await connection.stop()
@@ -433,13 +477,14 @@ onUnmounted(async () => {
                     </CardContent>
                 </Card>
             </div>
-            <Card>
+            <Card class="relative">
+                <BorderBeam :size="120" :duration="10" />
                 <CardHeader>
                     <CardTitle class="text-base">{{ t('hangfire.dailyTrend') }}</CardTitle>
                     <CardDescription>{{ t('hangfire.dailyTrendDesc') }}</CardDescription>
                 </CardHeader>
                 <CardContent>
-                    <VChart :option="trendChartOption" style="height: 280px; width: 100%" autoresize />
+                    <div ref="trendChartEl" style="height: 280px; width: 100%" />
                 </CardContent>
             </Card>
         </template>
@@ -520,7 +565,7 @@ onUnmounted(async () => {
                             <TableRow>
                                 <TableHead>{{ t('hangfire.jobId') }}</TableHead>
                                 <TableHead>{{ t('hangfire.jobName') }}</TableHead>
-                                <TableHead>错误信息</TableHead>
+                                <TableHead>{{ t('hangfire.errorMessage') }}</TableHead>
                                 <TableHead class="text-right">{{ t('common.action') }}</TableHead>
                             </TableRow>
                         </TableHeader>

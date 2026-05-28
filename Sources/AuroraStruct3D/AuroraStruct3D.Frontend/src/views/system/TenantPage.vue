@@ -1,11 +1,11 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 /**
  * 租户管理页面：分页查询、创建、删除（仅宿主租户可见）
  */
 import { ref, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
-import { Plus, RefreshCw, Search, Trash2 } from 'lucide-vue-next'
+import { Plus, RefreshCw, Search, Trash2 } from '@lucide/vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'

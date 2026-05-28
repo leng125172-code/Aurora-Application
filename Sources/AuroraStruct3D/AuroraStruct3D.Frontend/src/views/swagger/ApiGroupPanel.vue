@@ -10,7 +10,9 @@
         >
             <span class="font-semibold text-sm">{{ group.tag }}</span>
             <div class="flex items-center gap-2">
-                <Badge variant="secondary">{{ group.endpoints.length }} 个接口</Badge>
+                <Badge variant="secondary">
+                    {{ t('swaggerPage.endpointCount', { count: group.endpoints.length }) }}
+                </Badge>
                 <span class="text-muted-foreground text-xs">{{ isOpen ? '▲' : '▼' }}</span>
             </div>
         </button>
@@ -26,10 +28,13 @@
 
 <script setup lang="ts">
 import { ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { ApiGroup, SwaggerDocument } from '@/types/swagger'
 import { Badge } from '@/components/ui/badge'
 import { GlowBorder } from '@/components/ui/glow-border'
 import ApiEndpointRow from './ApiEndpointRow.vue'
+
+const { t } = useI18n()
 
 const props = defineProps<{
     group: ApiGroup

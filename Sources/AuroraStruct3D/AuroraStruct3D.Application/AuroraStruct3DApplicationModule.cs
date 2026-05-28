@@ -1,4 +1,6 @@
 using AuroraStruct3D.DeviceState;
+using AuroraStruct3D.Ktech;
+using AuroraStruct3D.Leisai;
 using AuroraStruct3D.Projectors;
 using AuroraStruct3D.RS485;
 using AuroraStruct3D.Tucam;
@@ -10,6 +12,7 @@ using Lion.AbpPro.FileManagement;
 using Lion.AbpPro.ImportExportManagement;
 using Lion.AbpPro.MasterDataManagement;
 using Lion.AbpPro.TemplateManagement;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace AuroraStruct3D
 {
@@ -43,6 +46,15 @@ namespace AuroraStruct3D
 
             // 注册设备状态管理器为单例（来自 AuroraStruct3D.DeviceStateManagement 项目）
             context.Services.AddDeviceStateManagement();
+
+            // 注册瓴控 KTECH 实时数据采集后台服务
+            // KtechSamplerStateStore 作为单例共享给 HostedService 与 AppService
+            context.Services.AddSingleton<KtechSamplerStateStore>();
+            context.Services.AddHostedService<KtechSamplerHostedService>();
+
+            // 注册雷赛 iCL-RS 实时数据采集后台服务
+            context.Services.AddSingleton<LeisaiSamplerStateStore>();
+            context.Services.AddHostedService<LeisaiSamplerHostedService>();
         }
     }
 }

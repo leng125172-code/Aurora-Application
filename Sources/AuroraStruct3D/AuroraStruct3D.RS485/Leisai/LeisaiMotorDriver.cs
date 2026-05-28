@@ -298,12 +298,12 @@ public class LeisaiMotorDriver : IMotorDriver
     }
 
     /// <summary>
-    /// 写单个 Modbus 保持寄存器
+    /// 写单个 Modbus 保持寄存器（FC06，公共方法，操作台/采样器复用）
     /// </summary>
-    private async Task WriteRegisterAsync(
+    public async Task WriteRegisterAsync(
         ushort address,
         ushort value,
-        CancellationToken cancellationToken
+        CancellationToken cancellationToken = default
     )
     {
         byte[] request = ModbusRtuHelper.BuildWriteSingleRegister((byte)SlaveId, address, value);
@@ -312,4 +312,206 @@ public class LeisaiMotorDriver : IMotorDriver
             .SendAndReceiveAsync(request, responseLen, 500, cancellationToken)
             .ConfigureAwait(false);
     }
+
+    /// <summary>
+    /// 读取单个保持寄存器（FC03，quantity=1）
+    /// </summary>
+    public async Task<ushort> ReadRegisterAsync(
+        ushort address,
+        CancellationToken cancellationToken = default
+    )
+    {
+        ushort[] regs = await ReadRegistersAsync(address, 1, cancellationToken)
+            .ConfigureAwait(false);
+        return regs.Length > 0 ? regs[0] : (ushort)0;
+    }
+
+    /// <summary>
+    /// 批量读取保持寄存器（FC03）
+    /// </summary>
+    public async Task<ushort[]> ReadRegistersAsync(
+        ushort startAddress,
+        ushort quantity,
+        CancellationToken cancellationToken = default
+    )
+    {
+        byte[] request = ModbusRtuHelper.BuildReadHoldingRegisters(
+            (byte)SlaveId,
+            startAddress,
+            quantity
+        );
+        int responseLen = ModbusRtuHelper.GetReadResponseLength(quantity);
+        byte[] response = await _port
+            .SendAndReceiveAsync(request, responseLen, 500, cancellationToken)
+            .ConfigureAwait(false);
+        return ModbusRtuHelper.ParseReadHoldingRegisters(response, (byte)SlaveId);
+    }
+
+    /// <summary>
+    /// 批量写入保持寄存器（FC16）
+    /// </summary>
+    public async Task WriteRegistersAsync(
+        ushort startAddress,
+        ushort[] values,
+        CancellationToken cancellationToken = default
+    )
+    {
+        byte[] request = ModbusRtuHelper.BuildWriteMultipleRegisters(
+            (byte)SlaveId,
+            startAddress,
+            values
+        );
+        int responseLen = ModbusRtuHelper.GetWriteResponseLength();
+        await _port
+            .SendAndReceiveAsync(request, responseLen, 500, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// 采集一次完整状态快照，用于实时推送。
+    /// 任意子读取失败时返回的快照 IsSuccess=false，FailureReason 填异常消息。
+    /// </summary>
+    /// <param name="cancellationToken">取消令牌</param>
+    /// <returns>状态快照元组（不含 AxisId，由上层 Sampler 注入）</returns>
+    public async Task<LeisaiStateSnapshot> SampleStateAsync(
+        CancellationToken cancellationToken = default
+    )
+    {
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var snapshot = new LeisaiStateSnapshot { SlaveId = SlaveId, IsSuccess = false };
+
+        try
+        {
+            // 1) 状态字 0x1003 + 触发字 0x6002
+            snapshot.StatusWord = await ReadRegisterAsync(0x1003, cancellationToken)
+                .ConfigureAwait(false);
+            snapshot.TriggerWord = await ReadRegisterAsync(0x6002, cancellationToken)
+                .ConfigureAwait(false);
+
+            // 2) 位置：0x602A 高 16 + 0x602B 低 16（命令位置），0x602C 高 + 0x602D 低（实际位置）
+            ushort[] posRegs = await ReadRegistersAsync(0x602A, 4, cancellationToken)
+                .ConfigureAwait(false);
+            snapshot.CommandPosition = (int)((posRegs[0] << 16) | posRegs[1]);
+            snapshot.ActualPosition = (int)((posRegs[2] << 16) | posRegs[3]);
+
+            // 3) 速度判定：四步法
+            (snapshot.EffectiveSpeed, snapshot.SpeedSource, snapshot.TriggerMode) =
+                await ResolveSpeedAsync(
+                        snapshot.StatusWord,
+                        snapshot.TriggerWord,
+                        cancellationToken
+                    )
+                    .ConfigureAwait(false);
+
+            // 4) 母线电压 0x0177（单位 0.1V）
+            ushort voltageRaw = await ReadRegisterAsync(0x0177, cancellationToken)
+                .ConfigureAwait(false);
+            snapshot.BusVoltageVolt = voltageRaw / 10.0;
+
+            // 5) IO 状态 0x0179 输入 / 0x017B 输出
+            snapshot.InputIoBitmap = await ReadRegisterAsync(0x0179, cancellationToken)
+                .ConfigureAwait(false);
+            snapshot.OutputIoBitmap = await ReadRegisterAsync(0x017B, cancellationToken)
+                .ConfigureAwait(false);
+
+            // 6) 故障 0x2203 + PR 警告 0x601D
+            snapshot.CurrentFaultCode = await ReadRegisterAsync(0x2203, cancellationToken)
+                .ConfigureAwait(false);
+            snapshot.PrWarningCode = await ReadRegisterAsync(0x601D, cancellationToken)
+                .ConfigureAwait(false);
+
+            snapshot.IsSuccess = true;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            snapshot.IsSuccess = false;
+            snapshot.FailureReason = ex.Message;
+            _logger.LogWarning(
+                ex,
+                "{Tag} [Leisai iCL-RS SlaveId={Id}] SampleStateAsync 失败：{Msg}",
+                LogTag,
+                SlaveId,
+                ex.Message
+            );
+        }
+        finally
+        {
+            sw.Stop();
+            snapshot.ElapsedMs = (int)sw.ElapsedMilliseconds;
+        }
+
+        return snapshot;
+    }
+
+    /// <summary>
+    /// 四步法判定当前生效速度与来源：
+    ///   1) 0x1003 bit2==0 → 停止；
+    ///   2) 0x6002==0x0120 → 回零中（Phase 1 暂返回 0）；
+    ///   3) 0x6002 高字节==0x01 → PR{P} 模式，读 0x6203 + 8*P；
+    ///   4) 0x6002==0 且 bit2==1 → JOG，读 0x6027。
+    /// </summary>
+    private async Task<(int Speed, string Source, string Mode)> ResolveSpeedAsync(
+        ushort statusWord,
+        ushort triggerWord,
+        CancellationToken cancellationToken
+    )
+    {
+        bool moving = (statusWord & 0x0004) != 0;
+        if (!moving)
+        {
+            return (0, "Stop", "Idle");
+        }
+
+        if (triggerWord == 0x0120)
+        {
+            return (0, "Homing", "Homing");
+        }
+
+        // 0x010P：PR 路径 0..15（高字节 0x01，低字节 0x00..0x0F）
+        if ((triggerWord & 0xFF00) == 0x0100)
+        {
+            int pathIndex = triggerWord & 0x000F;
+            ushort prSpeedAddr = (ushort)(0x6203 + 8 * pathIndex);
+            ushort sp = await ReadRegisterAsync(prSpeedAddr, cancellationToken)
+                .ConfigureAwait(false);
+            return ((short)sp, $"PR{pathIndex}", $"PR{pathIndex}");
+        }
+
+        if (triggerWord == 0x0000 && moving)
+        {
+            ushort jogSpeed = await ReadRegisterAsync(0x6027, cancellationToken)
+                .ConfigureAwait(false);
+            return ((short)jogSpeed, "JOG", "JOG");
+        }
+
+        return (0, "Unknown", "Unknown");
+    }
+}
+
+/// <summary>
+/// 采样器返回的轻量快照（不含 AxisId / TimestampMs，由上层 Sampler 注入），
+/// 与 Application.Contracts 中的 DTO 解耦。
+/// </summary>
+public class LeisaiStateSnapshot
+{
+    public int SlaveId { get; set; }
+    public int ElapsedMs { get; set; }
+    public bool IsSuccess { get; set; }
+    public string? FailureReason { get; set; }
+    public ushort StatusWord { get; set; }
+    public ushort TriggerWord { get; set; }
+    public string TriggerMode { get; set; } = "Idle";
+    public int CommandPosition { get; set; }
+    public int ActualPosition { get; set; }
+    public int EffectiveSpeed { get; set; }
+    public string SpeedSource { get; set; } = "Stop";
+    public double BusVoltageVolt { get; set; }
+    public ushort InputIoBitmap { get; set; }
+    public ushort OutputIoBitmap { get; set; }
+    public ushort CurrentFaultCode { get; set; }
+    public ushort PrWarningCode { get; set; }
 }

@@ -35,6 +35,8 @@
     // Vue / Vite / 前端
     // ==========================
     "vue.autoInsert.dotValue": true,
+    // 使用项目本地 TypeScript（而非 VS Code 内置版本），确保 TS6 + moduleResolution:bundler 正常工作
+    "typescript.tsdk": "Sources/AuroraStruct3D/AuroraStruct3D.Frontend/node_modules/typescript/lib",
     "[vue]": {
         "editor.defaultFormatter": "esbenp.prettier-vscode"
     },
@@ -42,7 +44,7 @@
         "editor.defaultFormatter": "esbenp.prettier-vscode"
     },
     "[typescript]": {
-        "editor.defaultFormatter": "esbenp.prettier-vscode"
+        "editor.defaultFormatter": "vscode.typescript-language-features"
     },
 
     // ==========================
@@ -85,5 +87,6 @@
     // ==========================
     "markdown.validate.enabled": true,
     "python-envs.defaultEnvManager": "ms-python.python:conda",
-    "python-envs.defaultPackageManager": "ms-python.python:conda"
+    "python-envs.defaultPackageManager": "ms-python.python:conda",
+    "js/ts.tsdk.path": "Sources/AuroraStruct3D/AuroraStruct3D.Frontend/node_modules/typescript/lib"
 }

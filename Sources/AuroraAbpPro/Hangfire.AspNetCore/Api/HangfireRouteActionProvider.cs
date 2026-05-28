@@ -3,6 +3,8 @@
 
 using System;
 using System.Collections.Generic;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Hangfire.States;
 using Hangfire.Storage;
 using Hangfire.Storage.Monitoring;
@@ -14,6 +16,27 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Hangfire.Api
 {
     /// <summary>
+    /// 将 System.Type 序列化为其完整类型名称字符串，
+    /// 避免 System.Text.Json 在序列化 Hangfire Job.Type 时抛出 NotSupportedException。
+    /// </summary>
+    internal sealed class TypeToStringJsonConverter : JsonConverter<Type>
+    {
+        /// <inheritdoc/>
+        public override Type? Read(
+            ref Utf8JsonReader reader,
+            Type typeToConvert,
+            JsonSerializerOptions options
+        ) => null; // 反序列化暂不支持
+
+        /// <inheritdoc/>
+        public override void Write(
+            Utf8JsonWriter writer,
+            Type value,
+            JsonSerializerOptions options
+        ) => writer.WriteStringValue(value?.FullName);
+    }
+
+    /// <summary>
     /// Hangfire 监控 REST API 的路由注册提供者。
     /// 所有接口统一挂载在指定路径前缀下，默认 /api/hangfire。
     /// </summary>
@@ -21,6 +44,16 @@ namespace Hangfire.Api
     {
         private readonly IEndpointRouteBuilder _builder;
         private readonly string _prefix;
+
+        /// <summary>
+        /// 用于序列化含有 System.Type 属性的 Hangfire 作业对象的 JSON 选项。
+        /// </summary>
+        private static readonly JsonSerializerOptions _jobSerializerOptions = new(
+            JsonSerializerDefaults.Web
+        )
+        {
+            Converters = { new TypeToStringJsonConverter() },
+        };
 
         /// <summary>
         /// 构造函数
@@ -100,7 +133,7 @@ namespace Hangfire.Api
                         var details = GetMonitor(sp).JobDetails(jobId);
                         if (details == null)
                             return Results.NotFound();
-                        return Results.Ok(details);
+                        return Results.Json(details, _jobSerializerOptions);
                     }
                 )
                 .WithTags("Hangfire")
@@ -121,7 +154,7 @@ namespace Hangfire.Api
                     ) =>
                     {
                         var jobs = GetMonitor(sp).EnqueuedJobs(queue, from, perPage);
-                        return Results.Ok(jobs);
+                        return Results.Json(jobs, _jobSerializerOptions);
                     }
                 )
                 .WithTags("Hangfire")
@@ -140,7 +173,7 @@ namespace Hangfire.Api
                     ) =>
                     {
                         var jobs = GetMonitor(sp).FetchedJobs(queue, from, perPage);
-                        return Results.Ok(jobs);
+                        return Results.Json(jobs, _jobSerializerOptions);
                     }
                 )
                 .WithTags("Hangfire")
@@ -154,7 +187,7 @@ namespace Hangfire.Api
                     (IServiceProvider sp, int from = 0, int perPage = 20) =>
                     {
                         var jobs = GetMonitor(sp).ScheduledJobs(from, perPage);
-                        return Results.Ok(jobs);
+                        return Results.Json(jobs, _jobSerializerOptions);
                     }
                 )
                 .WithTags("Hangfire")
@@ -168,7 +201,7 @@ namespace Hangfire.Api
                     (IServiceProvider sp, int from = 0, int perPage = 20) =>
                     {
                         var jobs = GetMonitor(sp).ProcessingJobs(from, perPage);
-                        return Results.Ok(jobs);
+                        return Results.Json(jobs, _jobSerializerOptions);
                     }
                 )
                 .WithTags("Hangfire")
@@ -182,7 +215,7 @@ namespace Hangfire.Api
                     (IServiceProvider sp, int from = 0, int perPage = 20) =>
                     {
                         var jobs = GetMonitor(sp).SucceededJobs(from, perPage);
-                        return Results.Ok(jobs);
+                        return Results.Json(jobs, _jobSerializerOptions);
                     }
                 )
                 .WithTags("Hangfire")
@@ -196,7 +229,7 @@ namespace Hangfire.Api
                     (IServiceProvider sp, int from = 0, int perPage = 20) =>
                     {
                         var jobs = GetMonitor(sp).FailedJobs(from, perPage);
-                        return Results.Ok(jobs);
+                        return Results.Json(jobs, _jobSerializerOptions);
                     }
                 )
                 .WithTags("Hangfire")
@@ -210,7 +243,7 @@ namespace Hangfire.Api
                     (IServiceProvider sp, int from = 0, int perPage = 20) =>
                     {
                         var jobs = GetMonitor(sp).DeletedJobs(from, perPage);
-                        return Results.Ok(jobs);
+                        return Results.Json(jobs, _jobSerializerOptions);
                     }
                 )
                 .WithTags("Hangfire")

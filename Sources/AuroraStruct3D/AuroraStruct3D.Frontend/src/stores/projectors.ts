@@ -94,7 +94,7 @@ export const useProjectorStore = defineStore('projector', () => {
         })
 
         // 接收连接状态变更事件
-        connection.on('ReceiveProjectorConnectionChangedAsync', (id: string, status: string) => {
+        connection.on('ReceiveProjectorConnectionChangedAsync', (id: string, _status: string) => {
             const p = projectors.value.find((x) => x.id === id)
             if (p) {
                 // 触发一次完整查询以刷新数据
@@ -103,7 +103,7 @@ export const useProjectorStore = defineStore('projector', () => {
         })
 
         // 接收 LED 状态变更事件
-        connection.on('ReceiveProjectorLedChangedAsync', (id: string, ledStatus: string) => {
+        connection.on('ReceiveProjectorLedChangedAsync', (id: string, _ledStatus: string) => {
             void refreshProjector(id)
         })
 

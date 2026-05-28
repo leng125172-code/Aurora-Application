@@ -190,6 +190,15 @@ public class CameraLiveMetricsDto
 
     /// <summary>当前 USB 缓冲帧数（近似触发计数）</summary>
     public int CurrentBufFrames { get; set; }
+
+    /// <summary>对焦清晰度评分（0-100，越高越清晰；仅预览时有效）</summary>
+    public float FocusScore { get; set; }
+
+    /// <summary>曝光质量评分（0-100，越高曝光越适中；仅预览时有效）</summary>
+    public float ApertureScore { get; set; }
+
+    /// <summary>光圈调节建议（0=良好, 1=缩小光圈, 2=增大光圈）</summary>
+    public int ApertureHint { get; set; }
 }
 
 // ─── 手动控制：预览与快照 ────────────────────────────────────────────────────
@@ -269,6 +278,9 @@ public class GenICamNodeResultDto
 
     /// <summary>失败时的错误信息</summary>
     public string? ErrorMessage { get; set; }
+
+    /// <summary>节点当前访问模式（"ReadOnly" / "ReadWrite" / "WriteOnly" 等）；读取失败时为 null</summary>
+    public string? Access { get; set; }
 }
 
 /// <summary>
@@ -281,20 +293,65 @@ public class GenICamBatchGetResultDto
 }
 
 /// <summary>
-/// 写入单个 GenICam 节点请求 DTO
+/// 写入 GenICam 节点请求 DTO。
+/// 兼容两种 JSON 格式：
+/// <list type="bullet">
+/// <item>单节点：<c>{"nodeName":"X","dataType":"float","value":"45.0"}</c></item>
+/// <item>批量：<c>{"nodes":[{"nodeName":"X","value":"45.0"},{...}]}</c></item>
+/// </list>
+/// 当 <see cref="Nodes"/> 非 null 时进入批量模式，节点类型由后端从缓存 NodeMap 自动推断。
 /// </summary>
 public class GenICamNodeSetInput
+{
+    // ─── 单节点模式 ───────────────────────────────────────────────────────────
+
+    /// <summary>GenICam 节点名称（单节点模式）</summary>
+    public string? NodeName { get; set; }
+
+    /// <summary>数据类型："int" / "float" / "string"（enum 和 bool 也用 "int" 表示；单节点模式）</summary>
+    public string DataType { get; set; } = "int";
+
+    /// <summary>要写入的值，字符串序列化（单节点模式）</summary>
+    public string? Value { get; set; }
+
+    // ─── 批量模式 ─────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// 批量节点列表（批量模式）。非 null 时忽略 NodeName / DataType / Value 字段。
+    /// 每个条目只需 nodeName + value，类型由后端从缓存 NodeMap 自动推断。
+    /// </summary>
+    public List<GenICamBatchSetItem>? Nodes { get; set; }
+}
+
+/// <summary>
+/// 批量写入 GenICam 节点的单个条目（无需指定类型）
+/// </summary>
+public class GenICamBatchSetItem
 {
     /// <summary>GenICam 节点名称</summary>
     public string NodeName { get; set; } = string.Empty;
 
-    /// <summary>数据类型："int" / "float" / "string"（enum 和 bool 也用 "int" 表示）</summary>
-    public string DataType { get; set; } = "int";
-
-    /// <summary>要写入的值（字符串序列化；浮点数使用 InvariantCulture）</summary>
+    /// <summary>要写入的值（字符串序列化）</summary>
     public string Value { get; set; } = string.Empty;
 }
 
+/// <summary>
+/// GenICam 节点增量变更推送 DTO（SignalR OnGenICamNodesChangedAsync 使用）
+/// </summary>
+public class GenICamNodeChangeDto
+{
+    /// <summary>节点名称</summary>
+    public string NodeName { get; set; } = string.Empty;
+
+    /// <summary>当前值（统一字符串表示，读取失败时为 null）</summary>
+    public string? Value { get; set; }
+
+    /// <summary>当前访问模式（"ReadOnly" / "ReadWrite" / "WriteOnly" / "NotAvailable" 等）</summary>
+    public string? Access { get; set; }
+
+    /// <summary>是否被锁定</summary>
+    public bool IsLocked { get; set; }
+}
 
 // ─── 手动控制：图像旋转角度 ─────────────────────────────────────────────
 

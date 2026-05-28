@@ -1,11 +1,11 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 /**
  * MiniProfiler 仪表盘：调用 /profiler/results-list 获取会话列表，
  * 点击行后调用 /profiler/results 拉取详细计时数据。
  */
 import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { RefreshCw, ChevronDown, ChevronRight } from 'lucide-vue-next'
+import { RefreshCw, ChevronDown, ChevronRight } from '@lucide/vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'

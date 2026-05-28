@@ -83,4 +83,20 @@ public class CameraHub : AbpHub<ICameraHub>
     {
         await Clients.All.ReceiveCameraStateAsync(state);
     }
+
+    /// <summary>
+    /// 客户端在断线重连或页面刷新后调用：在 30s 宽限期内续约指定相机的预览会话，
+    /// 将会话的 ConnectionId 重新指向当前连接，避免预览被宽限期到期时误回收。
+    /// </summary>
+    /// <param name="cameraId">相机设备 ID</param>
+    /// <returns>true 表示成功取消挂起停止；false 表示该相机当前不在宽限期内</returns>
+    public Task<bool> ReattachPreviewAsync(string cameraId)
+    {
+        if (!Guid.TryParse(cameraId, out Guid id))
+        {
+            return Task.FromResult(false);
+        }
+        bool canceled = _cameraPreviewService.ReattachPreviewAsync(id, Context.ConnectionId);
+        return Task.FromResult(canceled);
+    }
 }

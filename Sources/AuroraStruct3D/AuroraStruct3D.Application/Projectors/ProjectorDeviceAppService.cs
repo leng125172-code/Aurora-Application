@@ -1,5 +1,6 @@
 using AuroraStruct3D.DeviceState;
 using AuroraStruct3D.Projectors.Dtos;
+using AuroraStruct3D.Sessions;
 using Microsoft.Extensions.Logging;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
@@ -19,13 +20,17 @@ public class ProjectorDeviceAppService : AuroraStruct3DAppService, IProjectorDev
     private readonly IProjectorConnectionPool _connectionPool;
     private readonly IDeviceStateManager _deviceStateManager;
     private readonly IDlpProjectorService _dlpProjectorService;
+    private readonly IDeviceOperationSessionManager _sessionManager;
+    private readonly ICurrentClientSession _currentClientSession;
 
     public ProjectorDeviceAppService(
         IProjectorDeviceRepository projectorDeviceRepository,
         IProjectorOperationLogRepository operationLogRepository,
         IProjectorConnectionPool connectionPool,
         IDeviceStateManager deviceStateManager,
-        IDlpProjectorService dlpProjectorService
+        IDlpProjectorService dlpProjectorService,
+        IDeviceOperationSessionManager sessionManager,
+        ICurrentClientSession currentClientSession
     )
     {
         _projectorDeviceRepository = projectorDeviceRepository;
@@ -33,6 +38,8 @@ public class ProjectorDeviceAppService : AuroraStruct3DAppService, IProjectorDev
         _connectionPool = connectionPool;
         _deviceStateManager = deviceStateManager;
         _dlpProjectorService = dlpProjectorService;
+        _sessionManager = sessionManager;
+        _currentClientSession = currentClientSession;
     }
 
     // ─── 设备 CRUD ────────────────────────────────────────────────────────
@@ -224,6 +231,7 @@ public class ProjectorDeviceAppService : AuroraStruct3DAppService, IProjectorDev
     public async Task<bool> LedOnAsync(Guid id)
     {
         EnsureManualOrMaintenanceMode();
+        await EnsureOrAcquireSessionAsync(id, DeviceType.Projector);
         IDlpProjectorService svc = GetConnectedService(id);
         bool ok = await svc.LedOnAsync();
         if (ok)
@@ -239,6 +247,7 @@ public class ProjectorDeviceAppService : AuroraStruct3DAppService, IProjectorDev
     public async Task<bool> LedOffAsync(Guid id)
     {
         EnsureManualOrMaintenanceMode();
+        await EnsureOrAcquireSessionAsync(id, DeviceType.Projector);
         IDlpProjectorService svc = GetConnectedService(id);
         bool ok = await svc.LedOffAsync();
         if (ok)
@@ -254,6 +263,7 @@ public class ProjectorDeviceAppService : AuroraStruct3DAppService, IProjectorDev
     public async Task<bool> SetLightAsync(SetProjectorLightDto input)
     {
         EnsureManualOrMaintenanceMode();
+        await EnsureOrAcquireSessionAsync(input.ProjectorDeviceId, DeviceType.Projector);
         IDlpProjectorService svc = GetConnectedService(input.ProjectorDeviceId);
 
         // 硬件限制：在红/绿/蓝颜色模式下直接改亮度不会生效，
@@ -292,6 +302,7 @@ public class ProjectorDeviceAppService : AuroraStruct3DAppService, IProjectorDev
     public async Task<bool> SetDisplayModeAsync(SetProjectorDisplayModeDto input)
     {
         EnsureManualOrMaintenanceMode();
+        await EnsureOrAcquireSessionAsync(input.ProjectorDeviceId, DeviceType.Projector);
         IDlpProjectorService svc = GetConnectedService(input.ProjectorDeviceId);
         bool ok = await svc.SetDisplayModeAsync(input.Mode);
         if (ok)
@@ -309,6 +320,7 @@ public class ProjectorDeviceAppService : AuroraStruct3DAppService, IProjectorDev
     public async Task<bool> SetColorAsync(SetProjectorColorDto input)
     {
         EnsureManualOrMaintenanceMode();
+        await EnsureOrAcquireSessionAsync(input.ProjectorDeviceId, DeviceType.Projector);
         IDlpProjectorService svc = GetConnectedService(input.ProjectorDeviceId);
         bool ok = await svc.SetColorAsync(input.Color);
         if (ok)
@@ -326,6 +338,7 @@ public class ProjectorDeviceAppService : AuroraStruct3DAppService, IProjectorDev
     public async Task<bool> SetFlipAsync(SetProjectorFlipDto input)
     {
         EnsureManualOrMaintenanceMode();
+        await EnsureOrAcquireSessionAsync(input.ProjectorDeviceId, DeviceType.Projector);
         IDlpProjectorService svc = GetConnectedService(input.ProjectorDeviceId);
         bool ok = await svc.SetFlipAsync(input.FlipMode);
         if (ok)
@@ -343,6 +356,7 @@ public class ProjectorDeviceAppService : AuroraStruct3DAppService, IProjectorDev
     public async Task<bool> SetTriggerModeAsync(SetProjectorTriggerModeDto input)
     {
         EnsureManualOrMaintenanceMode();
+        await EnsureOrAcquireSessionAsync(input.ProjectorDeviceId, DeviceType.Projector);
         IDlpProjectorService svc = GetConnectedService(input.ProjectorDeviceId);
         bool ok = await svc.SetTriggerModeAsync(input.TriggerMode);
         if (ok)
@@ -360,6 +374,7 @@ public class ProjectorDeviceAppService : AuroraStruct3DAppService, IProjectorDev
     public async Task<bool> SetBootImageAsync(SetProjectorBootImageDto input)
     {
         EnsureManualOrMaintenanceMode();
+        await EnsureOrAcquireSessionAsync(input.ProjectorDeviceId, DeviceType.Projector);
         IDlpProjectorService svc = GetConnectedService(input.ProjectorDeviceId);
         bool ok = await svc.SetBootImageAsync(input.BootImage);
         if (ok)
@@ -377,6 +392,7 @@ public class ProjectorDeviceAppService : AuroraStruct3DAppService, IProjectorDev
     public async Task<bool> SetCheckerboardPixelSizeAsync(SetProjectorCheckerboardDto input)
     {
         EnsureManualOrMaintenanceMode();
+        await EnsureOrAcquireSessionAsync(input.ProjectorDeviceId, DeviceType.Projector);
         IDlpProjectorService svc = GetConnectedService(input.ProjectorDeviceId);
         bool ok = await svc.SetCheckerboardPixelSizeAsync(input.PixelSize);
         if (ok)
@@ -394,6 +410,7 @@ public class ProjectorDeviceAppService : AuroraStruct3DAppService, IProjectorDev
     public async Task<bool> SetRgbColorAsync(SetProjectorRgbDto input)
     {
         EnsureManualOrMaintenanceMode();
+        await EnsureOrAcquireSessionAsync(input.ProjectorDeviceId, DeviceType.Projector);
         IDlpProjectorService svc = GetConnectedService(input.ProjectorDeviceId);
         bool ok = await svc.SetRgbColorAsync(input.R, input.G, input.B);
         if (ok)
@@ -415,6 +432,7 @@ public class ProjectorDeviceAppService : AuroraStruct3DAppService, IProjectorDev
     public async Task<bool> TriggerOnceAsync(TriggerProjectorDto input)
     {
         EnsureManualOrMaintenanceMode();
+        await EnsureOrAcquireSessionAsync(input.ProjectorDeviceId, DeviceType.Projector);
         IDlpProjectorService svc = GetConnectedService(input.ProjectorDeviceId);
         return await svc.TriggerOnceAsync(input.EndGray);
     }
@@ -425,6 +443,7 @@ public class ProjectorDeviceAppService : AuroraStruct3DAppService, IProjectorDev
     public async Task<bool> SoftResetAsync(Guid id)
     {
         EnsureManualOrMaintenanceMode();
+        await EnsureOrAcquireSessionAsync(id, DeviceType.Projector);
         IDlpProjectorService svc = GetConnectedService(id);
         return await svc.SoftResetAsync();
     }
@@ -433,6 +452,7 @@ public class ProjectorDeviceAppService : AuroraStruct3DAppService, IProjectorDev
     public async Task<bool> SaveParamsAsync(Guid id)
     {
         EnsureManualOrMaintenanceMode();
+        await EnsureOrAcquireSessionAsync(id, DeviceType.Projector);
         IDlpProjectorService svc = GetConnectedService(id);
         return await svc.SaveParamsAsync();
     }
@@ -449,6 +469,7 @@ public class ProjectorDeviceAppService : AuroraStruct3DAppService, IProjectorDev
     public async Task<bool> WriteRegisterAsync(WriteProjectorRegisterDto input)
     {
         EnsureManualOrMaintenanceMode();
+        await EnsureOrAcquireSessionAsync(input.ProjectorDeviceId, DeviceType.Projector);
         IDlpProjectorService svc = GetConnectedService(input.ProjectorDeviceId);
         return await svc.WriteRegisterAsync(input.Address, input.Value);
     }
@@ -491,8 +512,32 @@ public class ProjectorDeviceAppService : AuroraStruct3DAppService, IProjectorDev
 
     // ─── 辅助 ─────────────────────────────────────────────────────────────
 
-    /// <summary>
-    /// 校验当前设备运行模式是否为手动或检修模式；不满足时抛出 <see cref="UserFriendlyException"/>。
+    /// <summary>    /// 检查并获取设备独占会话。
+    /// </summary>
+    private Task EnsureOrAcquireSessionAsync(Guid deviceId, DeviceType deviceType)
+    {
+        string? clientSessionId = _currentClientSession.SessionId;
+        if (string.IsNullOrWhiteSpace(clientSessionId))
+        {
+            return Task.CompletedTask;
+        }
+
+        string? userId = CurrentUser.Id?.ToString();
+        string userName = CurrentUser.Name ?? CurrentUser.UserName ?? clientSessionId[..8] + "...";
+
+        _sessionManager.TryAcquire(
+            deviceId,
+            deviceType,
+            clientSessionId,
+            userId,
+            userName,
+            force: false
+        );
+
+        return Task.CompletedTask;
+    }
+
+    /// <summary>    /// 校验当前设备运行模式是否为手动或检修模式；不满足时抛出 <see cref="UserFriendlyException"/>。
     /// 投影机手动控制接口专属校验，联机/自动模式下禁止执行。
     /// </summary>
     private void EnsureManualOrMaintenanceMode()

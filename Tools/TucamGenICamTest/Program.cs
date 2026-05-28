@@ -848,10 +848,10 @@ internal static class Program
 
             if (getRet == TUCAM_SUCCESS && (e.Access == 2 || e.Access == 4))
             {
-                pNewVal = Marshal.StringToHGlobalAnsi("TucamTestID");
+                pNewVal = Marshal.StringToHGlobalAnsi("2");
                 e.pTransfer = pNewVal;
                 int setRet = TUCamNative.TUCAM_GenICam_SetElementValue(h, ref e, TU_CAMERA_XML);
-                Console.WriteLine($"  Set(\"TucamTestID\"): ret={setRet}");
+                Console.WriteLine($"  Set(\"2\"): ret={setRet}");
                 if (setRet == TUCAM_SUCCESS)
                 {
                     e.pName = pName;

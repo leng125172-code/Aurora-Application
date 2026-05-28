@@ -1,5 +1,5 @@
-<script setup lang="ts">
-import { computed, ref } from 'vue'
+﻿<script setup lang="ts">
+import { ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import {
@@ -15,9 +15,10 @@ import {
     Camera,
     Cable,
     Cpu,
+    Box,
     ChevronDown,
     ChevronRight,
-} from 'lucide-vue-next'
+} from '@lucide/vue'
 import { cn } from '@/lib/utils'
 
 const route = useRoute()
@@ -311,6 +312,22 @@ function navigate(path: string, tab?: string): void {
             >
                 <Cpu class="size-4 shrink-0" />
                 {{ t('menu.motorDeviceManage') }}
+            </button>
+
+            <!-- 三维数模管理 -->
+            <button
+                :class="
+                    cn(
+                        'flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors text-left',
+                        isExactActive('/product-models')
+                            ? 'bg-accent text-accent-foreground'
+                            : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                    )
+                "
+                @click="navigate('/product-models')"
+            >
+                <Box class="size-4 shrink-0" />
+                {{ t('menu.productModelManage') }}
             </button>
         </nav>
     </aside>

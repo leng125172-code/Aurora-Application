@@ -93,3 +93,64 @@
 - 确保代码兼容ABP框架，避免出现框架不支持的语法或用法
 
 - 贴合Aurora框架的整体风格，保持代码一致性
+
+## 构建命令
+
+```
+# 后端（在解决方案根目录）
+dotnet build "Aurora Application.slnx"
+
+# 启动后端 HTTP 主机
+dotnet run --project Sources/AuroraStruct3D/AuroraStruct3D.HttpApi.Host/AuroraStruct3D.HttpApi.Host.csproj
+
+# 前端（在 Sources/AuroraStruct3D/AuroraStruct3D.Frontend/）
+npm run dev          # 开发模式
+npm run build        # 生产构建
+npm run type-check   # TypeScript 类型检查
+
+# EF Core 迁移（在解决方案根目录）
+dotnet ef migrations add <MigrationName> \
+  --project Sources/AuroraStruct3D/AuroraStruct3D.EntityFrameworkCore \
+  --startup-project Sources/AuroraStruct3D/AuroraStruct3D.HttpApi.Host
+```
+
+## ABP 自动 API 强制规范
+
+**绝对禁止手动创建 Controller**。所有 HTTP 接口通过应用服务接口自动生成：
+
+- 应用服务接口继承 `IApplicationService`，ABP 自动生成对应 REST 端点
+- 路由规则：`/api/app/{resource}/{action}`（如 `IProductModelAppService.GetListAsync` → `GET /api/app/product-model`）
+- 在应用服务方法上使用 `[Authorize(XxxPermissions.Yyy)]` 配置权限
+- 文件上传/下载使用 `IRemoteStreamContent`（ABP 标准接口）
+- 参考文件：`Sources/AuroraStruct3D/AuroraStruct3D.Application/Motors/MotorDeviceAppService.cs`
+
+## BLOB 存储约定
+
+- 使用 `[BlobContainerName("容器名")]` 特性标记空容器类（位于 Domain 层）
+- 注入 `IBlobContainer<T>`，调用 `SaveAsync` / `GetAsync` / `DeleteAsync`
+- FileSystem basePath 在 `appsettings.json` 中配置（见 `Volo.Abp.BlobStoring` 节）
+- 参考代码：`Sources/AuroraAbpPro/**/FileManagement/FileAppService.cs`
+
+## Hangfire 后台任务约定
+
+- 项目已启用 `Volo.Abp.BackgroundJobs.Hangfire`（见 Application 层 GlobalUsings）
+- Job 类实现无参数 `Execute` 方法，用 `[AutomaticRetry(Attempts = N)]` 控制重试
+- 在 AppService 中注入 `IBackgroundJobClient`，调用 `client.Enqueue<TJob>(() => job.Execute(args))` 入队
+- Hangfire 仪表盘路由：`/hangfire`（前端嵌入页 `embed/hangfire`）
+- 参考代码：`Sources/AuroraStruct3D/AuroraStruct3D.Application/Cameras/Jobs/`
+
+## 前端 API 调用约定
+
+- 一律使用 `src/api/httpClient`（axios 实例）调用后端，**不使用** ABP HttpApi.Client
+- API 模块按业务分文件（如 `src/api/product-models.ts`），导出类型定义 + async 函数
+- 文件上传使用 `FormData` + `onUploadProgress` 回调 + `AbortController` 支持取消
+- 参考文件：`Sources/AuroraStruct3D/AuroraStruct3D.Frontend/src/api/management.ts`
+
+## 前端 UI 组件约定
+
+- **禁止自定义原生控件样式**，只使用 shadcn-vue 组件（`@/components/ui/`）+ Inspira UI 动画组件
+- Pinia Store 放 `src/stores/`，按业务命名；`defineStore` 使用组合式 API 写法（`setup` store）
+- 路由文件：`src/router/index.ts`，懒加载（`() => import('@/views/xxx/XxxPage.vue')`）
+- Toast 通知使用 `vue-sonner`（`toast.success` / `toast.error`）
+- 图标库：`lucide-vue-next`
+- 参考页面：`Sources/AuroraStruct3D/AuroraStruct3D.Frontend/src/views/system/UserPage.vue`

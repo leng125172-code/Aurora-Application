@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.IO.Ports;
 using AuroraStruct3D.Motors.Dtos;
@@ -6,6 +7,7 @@ using AuroraStruct3D.RS485.Ktech;
 using AuroraStruct3D.RS485.Modbus;
 using AuroraStruct3D.RS485.Protocol;
 using AuroraStruct3D.SerialPorts;
+using AuroraStruct3D.Sessions;
 using Microsoft.Extensions.Logging;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
@@ -30,18 +32,27 @@ public class MotorDeviceAppService : AuroraStruct3DAppService, IMotorDeviceAppSe
     private readonly ISerialPortConfigRepository _serialPortConfigRepository;
     private readonly IMotorControlService _motorControlService;
     private readonly ILoggerFactory _loggerFactory;
+    private readonly IDeviceOperationSessionManager _sessionManager;
+    private readonly ICurrentClientSession _currentClientSession;
+    private readonly IMotorScanProgressNotifier _scanProgressNotifier;
 
     public MotorDeviceAppService(
         IMotorAxisRepository motorAxisRepository,
         ISerialPortConfigRepository serialPortConfigRepository,
         IMotorControlService motorControlService,
-        ILoggerFactory loggerFactory
+        ILoggerFactory loggerFactory,
+        IDeviceOperationSessionManager sessionManager,
+        ICurrentClientSession currentClientSession,
+        IMotorScanProgressNotifier scanProgressNotifier
     )
     {
         _motorAxisRepository = motorAxisRepository;
         _serialPortConfigRepository = serialPortConfigRepository;
         _motorControlService = motorControlService;
         _loggerFactory = loggerFactory;
+        _sessionManager = sessionManager;
+        _currentClientSession = currentClientSession;
+        _scanProgressNotifier = scanProgressNotifier;
     }
 
     /// <inheritdoc/>
@@ -119,138 +130,420 @@ public class MotorDeviceAppService : AuroraStruct3DAppService, IMotorDeviceAppSe
         List<SerialPortConfig> portConfigs = await _serialPortConfigRepository.GetListAsync();
         int[] baudRates = GetMotorScanBaudRates(input.BaudRates);
 
-        Stopwatch stopwatch = Stopwatch.StartNew();
-        int triedCount = 0;
-        List<DiscoveredMotorDeviceDto> discovered = new();
-        List<MotorAxis> allAxes = await _motorAxisRepository.GetListAsync();
-        int nextAxisIndex = allAxes.Count == 0 ? 0 : allAxes.Max(axis => axis.AxisIndex) + 1;
-
+        // 扫描期间释放所有已占用串口，避免与电机控制服务冲突
         foreach (SerialPortConfig portConfig in portConfigs)
         {
-            foreach (int baudRate in baudRates)
-            {
-                bool foundOnCurrentBaud = false;
-                _motorControlService.CloseSerialPort(portConfig.Id);
+            _motorControlService.CloseSerialPort(portConfig.Id);
+        }
 
-                using RS485Port probePort = new(
-                    portConfig.PortName,
-                    baudRate,
-                    _loggerFactory.CreateLogger<RS485Port>(),
-                    Parity.None,
-                    8,
-                    StopBits.One
+        Stopwatch stopwatch = Stopwatch.StartNew();
+        ScanCounters counters = new();
+        int totalPorts = portConfigs.Count;
+        ConcurrentBag<ScanCandidate> candidates = new();
+
+        await NotifyProgressAsync(
+            new MotorScanProgressDto
+            {
+                Kind = MotorScanProgressKind.Started,
+                Message = $"开始扫描，共 {totalPorts} 个串口、{baudRates.Length} 个波特率",
+                TotalPorts = totalPorts,
+                ElapsedMs = 0,
+            }
+        );
+
+        // 一个串口一个 Task，串口内仍按波特率串行（同一物理总线无法同时跑两个波特率）
+        IEnumerable<Task> scanTasks = portConfigs.Select(portConfig =>
+            Task.Run(async () =>
+            {
+                await NotifyProgressAsync(
+                    new MotorScanProgressDto
+                    {
+                        Kind = MotorScanProgressKind.PortStarted,
+                        Message = $"开始扫描串口 {portConfig.PortName}",
+                        SerialPortConfigId = portConfig.Id,
+                        PortName = portConfig.PortName,
+                        TotalPorts = totalPorts,
+                        FinishedPorts = counters.FinishedPorts,
+                        TriedCount = counters.TriedCount,
+                        FoundCount = counters.FoundCount,
+                        ElapsedMs = stopwatch.ElapsedMilliseconds,
+                    }
                 );
 
+                int portFoundCount = 0;
+                // 整体扫描预算：避免 Linux 下个别串口因驱动异常导致 Read/Write 永久阻塞，
+                // 一旦超过预算就让本端口快速失败，保证 Task.WhenAll 能及时返回
+                using CancellationTokenSource portBudgetCts = new(TimeSpan.FromSeconds(45));
+                bool portBudgetExceeded = false;
                 try
                 {
-                    probePort.Open();
-                }
-                catch (Exception ex)
-                {
-                    Logger.LogWarning(
-                        ex,
-                        "串口 {PortName} 以 {BaudRate} 打开失败，跳过该串口",
-                        portConfig.PortName,
-                        baudRate
-                    );
-                    break;
-                }
-
-                (int ktechStartSlaveId, int ktechEndSlaveId) = GetClampedScanRange(
-                    input.StartSlaveId,
-                    input.EndSlaveId,
-                    KtechMinSlaveId,
-                    KtechMaxSlaveId
-                );
-                for (int slaveId = ktechStartSlaveId; slaveId <= ktechEndSlaveId; slaveId++)
-                {
-                    triedCount++;
-                    MotorStatus? ktechStatus = await ProbeKtechAsync(
-                        probePort,
-                        slaveId,
-                        input.ProbeTimeoutMs
-                    );
-                    if (ktechStatus is not null)
+                    foreach (int baudRate in baudRates)
                     {
-                        Guid axisId = await UpsertDiscoveredAxisAsync(
-                            portConfig,
+                        if (portBudgetCts.IsCancellationRequested)
+                        {
+                            portBudgetExceeded = true;
+                            break;
+                        }
+                        bool foundOnCurrentBaud = false;
+                        using RS485Port probePort = new(
+                            portConfig.PortName,
                             baudRate,
-                            slaveId,
-                            MotorBrand.KtechKtech,
-                            ktechStatus,
-                            () => nextAxisIndex++
+                            _loggerFactory.CreateLogger<RS485Port>(),
+                            Parity.None,
+                            8,
+                            StopBits.One
                         );
-                        discovered.Add(
-                            ToDiscoveredDto(
-                                portConfig,
-                                baudRate,
-                                slaveId,
-                                MotorBrand.KtechKtech,
-                                axisId
-                            )
+
+                        try
+                        {
+                            // SerialPort.Open 在 Linux 上偶发会阻塞（无效串口或被独占），
+                            // 这里强制超时，避免单个串口拖死整个 Task.WhenAll
+                            await Task.Run(() => probePort.Open())
+                                .WaitAsync(TimeSpan.FromSeconds(2));
+                        }
+                        catch (Exception ex)
+                        {
+                            Logger.LogWarning(
+                                ex,
+                                "串口 {PortName} 以 {BaudRate} 打开失败，跳过该串口",
+                                portConfig.PortName,
+                                baudRate
+                            );
+                            await NotifyProgressAsync(
+                                new MotorScanProgressDto
+                                {
+                                    Kind = MotorScanProgressKind.PortError,
+                                    Message = $"串口 {portConfig.PortName} 打开失败：{ex.Message}",
+                                    SerialPortConfigId = portConfig.Id,
+                                    PortName = portConfig.PortName,
+                                    BaudRate = baudRate,
+                                    TotalPorts = totalPorts,
+                                    FinishedPorts = counters.FinishedPorts,
+                                    TriedCount = counters.TriedCount,
+                                    FoundCount = counters.FoundCount,
+                                    ElapsedMs = stopwatch.ElapsedMilliseconds,
+                                }
+                            );
+                            break;
+                        }
+
+                        try
+                        {
+                            foundOnCurrentBaud |= await ProbeRangeAsync(
+                                    probePort,
+                                    portConfig,
+                                    baudRate,
+                                    input,
+                                    candidates,
+                                    MotorBrand.KtechKtech,
+                                    (port, slaveId) =>
+                                        ProbeKtechAsync(port, slaveId, input.ProbeTimeoutMs),
+                                    KtechMinSlaveId,
+                                    KtechMaxSlaveId,
+                                    counters,
+                                    stopwatch,
+                                    totalPorts
+                                )
+                                .WaitAsync(portBudgetCts.Token);
+
+                            foundOnCurrentBaud |= await ProbeRangeAsync(
+                                    probePort,
+                                    portConfig,
+                                    baudRate,
+                                    input,
+                                    candidates,
+                                    MotorBrand.LeisaiIclRs,
+                                    (port, slaveId) =>
+                                        ProbeLeisaiAsync(port, slaveId, input.ProbeTimeoutMs),
+                                    LeisaiMinSlaveId,
+                                    LeisaiMaxSlaveId,
+                                    counters,
+                                    stopwatch,
+                                    totalPorts
+                                )
+                                .WaitAsync(portBudgetCts.Token);
+                        }
+                        catch (OperationCanceledException)
+                        {
+                            // 端口整体预算超时，跳出全部波特率循环
+                            portBudgetExceeded = true;
+                            break;
+                        }
+
+                        if (foundOnCurrentBaud)
+                        {
+                            portFoundCount++;
+                            break;
+                        }
+                    }
+                }
+                finally
+                {
+                    if (portBudgetExceeded)
+                    {
+                        Logger.LogWarning(
+                            "串口 {PortName} 扫描整体超时（>45s），可能驱动/硬件无应答，已强制放弃",
+                            portConfig.PortName
                         );
-                        foundOnCurrentBaud = true;
+                        await NotifyProgressAsync(
+                            new MotorScanProgressDto
+                            {
+                                Kind = MotorScanProgressKind.PortError,
+                                Message =
+                                    $"串口 {portConfig.PortName} 整体扫描超时（>45s），已放弃",
+                                SerialPortConfigId = portConfig.Id,
+                                PortName = portConfig.PortName,
+                                TotalPorts = totalPorts,
+                                FinishedPorts = counters.FinishedPorts,
+                                TriedCount = counters.TriedCount,
+                                FoundCount = counters.FoundCount,
+                                ElapsedMs = stopwatch.ElapsedMilliseconds,
+                            }
+                        );
                     }
 
-                    await Task.Delay(ScanProbeIntervalMs);
-                }
-
-                (int leisaiStartSlaveId, int leisaiEndSlaveId) = GetClampedScanRange(
-                    input.StartSlaveId,
-                    input.EndSlaveId,
-                    LeisaiMinSlaveId,
-                    LeisaiMaxSlaveId
-                );
-                for (int slaveId = leisaiStartSlaveId; slaveId <= leisaiEndSlaveId; slaveId++)
-                {
-                    triedCount++;
-                    MotorStatus? leisaiStatus = await ProbeLeisaiAsync(
-                        probePort,
-                        slaveId,
-                        input.ProbeTimeoutMs
+                    int finishedSnapshot = counters.IncrementFinishedPorts();
+                    await NotifyProgressAsync(
+                        new MotorScanProgressDto
+                        {
+                            Kind = MotorScanProgressKind.PortFinished,
+                            Message =
+                                portFoundCount > 0
+                                    ? $"串口 {portConfig.PortName} 扫描完成，发现设备"
+                                    : $"串口 {portConfig.PortName} 扫描完成，未发现设备",
+                            SerialPortConfigId = portConfig.Id,
+                            PortName = portConfig.PortName,
+                            Found = portFoundCount > 0,
+                            TotalPorts = totalPorts,
+                            FinishedPorts = finishedSnapshot,
+                            TriedCount = counters.TriedCount,
+                            FoundCount = counters.FoundCount,
+                            ElapsedMs = stopwatch.ElapsedMilliseconds,
+                        }
                     );
-                    if (leisaiStatus is not null)
-                    {
-                        Guid axisId = await UpsertDiscoveredAxisAsync(
-                            portConfig,
-                            baudRate,
-                            slaveId,
-                            MotorBrand.LeisaiIclRs,
-                            leisaiStatus,
-                            () => nextAxisIndex++
-                        );
-                        discovered.Add(
-                            ToDiscoveredDto(
-                                portConfig,
-                                baudRate,
-                                slaveId,
-                                MotorBrand.LeisaiIclRs,
-                                axisId
-                            )
-                        );
-                        foundOnCurrentBaud = true;
-                    }
-
-                    await Task.Delay(ScanProbeIntervalMs);
                 }
+            })
+        );
 
-                if (foundOnCurrentBaud)
-                {
-                    break;
-                }
-            }
+        await Task.WhenAll(scanTasks);
+
+        // 探测阶段结束，回到主线程串行写库，避免 EF Core DbContext 并发问题
+        List<MotorAxis> allAxes = await _motorAxisRepository.GetListAsync();
+        int nextAxisIndex = allAxes.Count == 0 ? 0 : allAxes.Max(axis => axis.AxisIndex) + 1;
+        List<DiscoveredMotorDeviceDto> discovered = new();
+
+        foreach (
+            ScanCandidate candidate in candidates
+                .OrderBy(item => item.PortConfig.PortName, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(item => item.SlaveId)
+        )
+        {
+            Guid axisId = await UpsertDiscoveredAxisAsync(
+                candidate.PortConfig,
+                candidate.BaudRate,
+                candidate.SlaveId,
+                candidate.Brand,
+                candidate.Status,
+                () => nextAxisIndex++
+            );
+            discovered.Add(
+                ToDiscoveredDto(
+                    candidate.PortConfig,
+                    candidate.BaudRate,
+                    candidate.SlaveId,
+                    candidate.Brand,
+                    axisId
+                )
+            );
         }
 
         await ReinitializeMotorControlAsync();
         stopwatch.Stop();
 
+        await NotifyProgressAsync(
+            new MotorScanProgressDto
+            {
+                Kind = MotorScanProgressKind.Completed,
+                Message = $"扫描完成，尝试 {counters.TriedCount} 次，发现 {discovered.Count} 台",
+                TotalPorts = totalPorts,
+                FinishedPorts = counters.FinishedPorts,
+                TriedCount = counters.TriedCount,
+                FoundCount = discovered.Count,
+                ElapsedMs = stopwatch.ElapsedMilliseconds,
+            }
+        );
+
         return new ScanMotorDevicesResultDto
         {
-            TriedCount = triedCount,
+            TriedCount = counters.TriedCount,
             FoundCount = discovered.Count,
             ElapsedMs = stopwatch.ElapsedMilliseconds,
             Items = discovered,
         };
+    }
+
+    /// <summary>
+    /// 按协议范围对指定品牌进行从机地址扫描，将命中结果加入候选集合并推送进度。
+    /// </summary>
+    private async Task<bool> ProbeRangeAsync(
+        IRS485Port port,
+        SerialPortConfig portConfig,
+        int baudRate,
+        ScanMotorDevicesInput input,
+        ConcurrentBag<ScanCandidate> candidates,
+        MotorBrand brand,
+        Func<IRS485Port, int, Task<ProbeAttemptResult>> probeFunc,
+        int protocolMinSlaveId,
+        int protocolMaxSlaveId,
+        ScanCounters counters,
+        Stopwatch stopwatch,
+        int totalPorts
+    )
+    {
+        (int startSlaveId, int endSlaveId) = GetClampedScanRange(
+            input.StartSlaveId,
+            input.EndSlaveId,
+            protocolMinSlaveId,
+            protocolMaxSlaveId
+        );
+
+        bool anyFound = false;
+        for (int slaveId = startSlaveId; slaveId <= endSlaveId; slaveId++)
+        {
+            int triedSnapshot = counters.IncrementTried();
+
+            ProbeAttemptResult probeResult = await probeFunc(port, slaveId);
+            MotorStatus? status = probeResult.Status;
+            int foundSnapshot = counters.FoundCount;
+
+            if (status is not null)
+            {
+                foundSnapshot = counters.IncrementFound();
+                anyFound = true;
+                candidates.Add(new ScanCandidate(portConfig, baudRate, slaveId, brand, status));
+
+                await NotifyProgressAsync(
+                    new MotorScanProgressDto
+                    {
+                        Kind = MotorScanProgressKind.DeviceFound,
+                        Message =
+                            $"{portConfig.PortName} @ {baudRate} ID={slaveId} 发现 {GetBrandText(brand)}"
+                            + $" | TX={probeResult.TxHex} | RX={probeResult.RxHex}",
+                        SerialPortConfigId = portConfig.Id,
+                        PortName = portConfig.PortName,
+                        BaudRate = baudRate,
+                        SlaveId = slaveId,
+                        Brand = GetBrandText(brand),
+                        Found = true,
+                        TxHex = probeResult.TxHex,
+                        RxHex = probeResult.RxHex,
+                        TotalPorts = totalPorts,
+                        FinishedPorts = counters.FinishedPorts,
+                        TriedCount = triedSnapshot,
+                        FoundCount = foundSnapshot,
+                        ElapsedMs = stopwatch.ElapsedMilliseconds,
+                    }
+                );
+            }
+            else
+            {
+                await NotifyProgressAsync(
+                    new MotorScanProgressDto
+                    {
+                        Kind = MotorScanProgressKind.Probing,
+                        Message =
+                            $"{portConfig.PortName} @ {baudRate} ID={slaveId} 无响应"
+                            + $" | TX={probeResult.TxHex}"
+                            + (
+                                string.IsNullOrWhiteSpace(probeResult.RxHex)
+                                    ? string.Empty
+                                    : $" | RX={probeResult.RxHex}"
+                            )
+                            + (
+                                string.IsNullOrWhiteSpace(probeResult.ErrorMessage)
+                                    ? string.Empty
+                                    : $" | 错误={probeResult.ErrorMessage}"
+                            ),
+                        SerialPortConfigId = portConfig.Id,
+                        PortName = portConfig.PortName,
+                        BaudRate = baudRate,
+                        SlaveId = slaveId,
+                        Brand = GetBrandText(brand),
+                        Found = false,
+                        TxHex = probeResult.TxHex,
+                        RxHex = probeResult.RxHex,
+                        ErrorMessage = probeResult.ErrorMessage,
+                        TotalPorts = totalPorts,
+                        FinishedPorts = counters.FinishedPorts,
+                        TriedCount = triedSnapshot,
+                        FoundCount = foundSnapshot,
+                        ElapsedMs = stopwatch.ElapsedMilliseconds,
+                    }
+                );
+            }
+
+            await Task.Delay(ScanProbeIntervalMs);
+        }
+
+        return anyFound;
+    }
+
+    /// <summary>
+    /// 包裹一次进度推送，吞掉推送异常，确保扫描主流程不被影响。
+    /// </summary>
+    private async Task NotifyProgressAsync(MotorScanProgressDto progress)
+    {
+        try
+        {
+            await _scanProgressNotifier.NotifyAsync(progress);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogDebug(ex, "推送电机扫描进度失败：{Message}", ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// 并行探测阶段产生的候选结果（仅用于扫描内部，不暴露到 DTO）。
+    /// </summary>
+    private sealed record ScanCandidate(
+        SerialPortConfig PortConfig,
+        int BaudRate,
+        int SlaveId,
+        MotorBrand Brand,
+        MotorStatus Status
+    );
+
+    /// <summary>
+    /// 单次探测结果（包含业务状态与串口帧详情）。
+    /// </summary>
+    private sealed record ProbeAttemptResult(
+        MotorStatus? Status,
+        string TxHex,
+        string? RxHex,
+        string? ErrorMessage
+    );
+
+    /// <summary>
+    /// 跨线程共享的扫描计数器，使用 Interlocked 保证读写安全。
+    /// </summary>
+    private sealed class ScanCounters
+    {
+        private int _tried;
+        private int _found;
+        private int _finishedPorts;
+
+        public int TriedCount => Volatile.Read(ref _tried);
+
+        public int FoundCount => Volatile.Read(ref _found);
+
+        public int FinishedPorts => Volatile.Read(ref _finishedPorts);
+
+        public int IncrementTried() => Interlocked.Increment(ref _tried);
+
+        public int IncrementFound() => Interlocked.Increment(ref _found);
+
+        public int IncrementFinishedPorts() => Interlocked.Increment(ref _finishedPorts);
     }
 
     /// <inheritdoc/>
@@ -503,73 +796,98 @@ public class MotorDeviceAppService : AuroraStruct3DAppService, IMotorDeviceAppSe
     /// <summary>
     /// 探测雷赛 Modbus RTU 状态寄存器。
     /// </summary>
-    private static async Task<MotorStatus?> ProbeLeisaiAsync(
+    private static async Task<ProbeAttemptResult> ProbeLeisaiAsync(
         IRS485Port port,
         int slaveId,
         int timeoutMs
     )
     {
+        byte[] request = ModbusRtuHelper.BuildReadHoldingRegisters((byte)slaveId, 0x1003, 1);
+        string txHex = ToSpacedHex(request);
+        string? rxHex = null;
+
         try
         {
-            byte[] request = ModbusRtuHelper.BuildReadHoldingRegisters((byte)slaveId, 0x1003, 1);
             byte[] response = await port.SendAndReceiveAsync(
                 request,
                 ModbusRtuHelper.GetReadResponseLength(1),
                 timeoutMs
             );
+            rxHex = ToSpacedHex(response);
             ushort[] registers = ModbusRtuHelper.ParseReadHoldingRegisters(response, (byte)slaveId);
             ushort statusWord = registers[0];
-            return new MotorStatus
-            {
-                MotorId = slaveId,
-                Brand = "雷赛iCL-RS",
-                IsEnabled = (statusWord & 0x0002) != 0,
-                IsMoving = (statusWord & 0x0004) != 0,
-                HasFault = (statusWord & 0x0008) != 0,
-                IsHomed = (statusWord & 0x0010) != 0,
-                RawStatusWord = statusWord,
-            };
+            return new ProbeAttemptResult(
+                new MotorStatus
+                {
+                    MotorId = slaveId,
+                    Brand = "雷赛iCL-RS",
+                    IsEnabled = (statusWord & 0x0002) != 0,
+                    IsMoving = (statusWord & 0x0004) != 0,
+                    HasFault = (statusWord & 0x0008) != 0,
+                    IsHomed = (statusWord & 0x0010) != 0,
+                    RawStatusWord = statusWord,
+                },
+                txHex,
+                rxHex,
+                null
+            );
         }
-        catch
+        catch (Exception ex)
         {
-            return null;
+            return new ProbeAttemptResult(null, txHex, rxHex, ex.Message);
         }
     }
 
     /// <summary>
     /// 探测瓴控 KTECH 查询状态帧。
     /// </summary>
-    private static async Task<MotorStatus?> ProbeKtechAsync(
+    private static async Task<ProbeAttemptResult> ProbeKtechAsync(
         IRS485Port port,
         int slaveId,
         int timeoutMs
     )
     {
+        byte[] request = KtechFrame.BuildQueryStatusFrame((byte)slaveId);
+        string txHex = ToSpacedHex(request);
+        string? rxHex = null;
+
         try
         {
-            byte[] request = KtechFrame.BuildQueryStatusFrame((byte)slaveId);
             byte[] response = await port.SendAndReceiveAsync(
                 request,
                 KtechFrame.QueryResponseLength,
                 timeoutMs
             );
+            rxHex = ToSpacedHex(response);
             KtechStatusFrame frame = KtechFrame.ParseQueryStatusResponse(response, (byte)slaveId);
-            return new MotorStatus
-            {
-                MotorId = slaveId,
-                Brand = "瓴控KTECH",
-                IsEnabled = frame.IsEnabled,
-                IsMoving = frame.IsMoving,
-                HasFault = frame.HasFault,
-                CurrentPosition = frame.PositionRaw,
-                CurrentSpeed = frame.SpeedRaw,
-                RawStatusWord = frame.StatusFlags,
-            };
+            return new ProbeAttemptResult(
+                new MotorStatus
+                {
+                    MotorId = slaveId,
+                    Brand = "瓴控KTECH",
+                    IsEnabled = frame.IsEnabled,
+                    IsMoving = frame.IsMoving,
+                    HasFault = frame.HasFault,
+                    CurrentPosition = frame.PositionRaw,
+                    CurrentSpeed = frame.SpeedRaw,
+                    RawStatusWord = frame.StatusFlags,
+                },
+                txHex,
+                rxHex,
+                null
+            );
         }
-        catch
+        catch (Exception ex)
         {
-            return null;
+            return new ProbeAttemptResult(null, txHex, rxHex, ex.Message);
         }
+    }
+
+    private static string ToSpacedHex(ReadOnlySpan<byte> data)
+    {
+        return data.Length == 0
+            ? string.Empty
+            : string.Join(" ", data.ToArray().Select(static b => b.ToString("X2")));
     }
 
     /// <summary>
@@ -627,10 +945,29 @@ public class MotorDeviceAppService : AuroraStruct3DAppService, IMotorDeviceAppSe
 
     /// <summary>
     /// 准备电机命令运行态，必要时从数据库重建电机控制服务。
+    /// 同时检等并获取设备独占会话，防止多标签页并发操作电机。
     /// </summary>
     private async Task<MotorAxis> PrepareAxisForCommandAsync(Guid id)
     {
         MotorAxis axis = await _motorAxisRepository.GetAsync(id);
+
+        // 设备独占会话检查：防止多标签页并发操作同一台电机
+        string? clientSessionId = _currentClientSession.SessionId;
+        if (!string.IsNullOrWhiteSpace(clientSessionId))
+        {
+            string? userId = CurrentUser.Id?.ToString();
+            string userName =
+                CurrentUser.Name ?? CurrentUser.UserName ?? clientSessionId[..8] + "...";
+            _sessionManager.TryAcquire(
+                id,
+                DeviceType.Motor,
+                clientSessionId,
+                userId,
+                userName,
+                force: false
+            );
+        }
+
         if (!_motorControlService.IsMotorConfigured(axis.SlaveId))
         {
             await ReinitializeMotorControlAsync();
@@ -746,8 +1083,6 @@ public class MotorDeviceAppService : AuroraStruct3DAppService, IMotorDeviceAppSe
             Model = axis.Model,
             Status = axis.Status,
             StatusText = GetStatusText(axis.Status),
-            LastKnownPosition = axis.LastKnownPosition,
-            LastKnownSpeed = axis.LastKnownSpeed,
             IsHomed = axis.IsHomed,
             LastStatusUpdateAt = axis.LastStatusUpdateAt,
             MinRotationAngle = axis.MinRotationAngle,

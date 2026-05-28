@@ -32,6 +32,7 @@ import tempfile
 import threading
 import uuid
 from pathlib import Path
+from typing import Optional
 
 # ── 常量 ────────────────────────────────────────────────────────────────────────
 # socket 接收块大小（256 KB）
@@ -40,17 +41,98 @@ RECV_CHUNK = 256 * 1024
 # UDP 发现服务端口（TCP 端口 - 1）
 DISCOVERY_PORT = 9210
 
-# 解压目标根目录（~/Publish/）
-TARGET_ROOT = Path.home() / "Publish"
+# 受管账号 —— sudo 运行时 Path.home() 会解析为 /root，这里硬编码为 linaro
+_TARGET_USER = "linaro"
+_USER_HOME = Path(f"/home/{_TARGET_USER}")
+
+# 解压目标根目录——明确指向 /home/linaro/Publish
+TARGET_ROOT = _USER_HOME / "Publish"
 
 # 全局会话字典：session_id → session_info
 _sessions: dict[str, dict] = {}
 _sessions_lock = threading.Lock()
 
-# ── 受管服务名称 ───────────────────────────────────────────────────────────────────
+# ── 受管服务名称 ──────────────────────────────────────────────────────────
 # 被本更新服务器管理的目标应用
 _SERVICE_NAME = "AuroraStruct3D.HttpApi.Host"
 _MIGRATOR_NAME = "AuroraStruct3D.DbMigrator"
+
+# ── 本身的桌面/系统服务配置 ─────────────────────────────────────────────────────
+_UPDATE_SERVER_SERVICE_NAME = "aurora-update-server"
+_APP_INSTALL_DIR = _USER_HOME / "AppUpdate"
+# GUI 管理界面（仅供桌面快捷方式手动启动，systemd 服务不要用它，它需要 X11）
+_APP_GUI_ENTRY = _APP_INSTALL_DIR / "AppUpdateServerApp.py"
+# systemd 服务真正的入口：纯网络服务，无 GUI 依赖
+_APP_SERVER_ENTRY = _APP_INSTALL_DIR / "AppUpdateServer.py"
+_APP_ICON_PATH = _APP_INSTALL_DIR / "Assets" / "Application.png"
+_DESKTOP_FILE = (
+    _USER_HOME
+    / ".local"
+    / "share"
+    / "applications"
+    / f"{_UPDATE_SERVER_SERVICE_NAME}.desktop"
+)
+# GNOME 登录后自动启动的 .desktop 文件（用于 GUI 管理界面，需 sudo）
+_AUTOSTART_FILE = (
+    _USER_HOME / ".config" / "autostart" / f"{_UPDATE_SERVER_SERVICE_NAME}.desktop"
+)
+_UPDATE_SERVER_SERVICE_FILE = (
+    Path("/etc/systemd/system") / f"{_UPDATE_SERVER_SERVICE_NAME}.service"
+)
+_HTTPAPI_SERVICE_FILE = Path("/etc/systemd/system") / f"{_SERVICE_NAME}.service"
+# HttpApi.Host 的 systemd drop-in 目录——里面的旧覆盖文件（如 skia-libuuid.conf）
+# 会用 /root/Publish 等旧路径覆盖 ExecStart，必须清理
+_HTTPAPI_DROPIN_DIR = Path("/etc/systemd/system") / f"{_SERVICE_NAME}.service.d"
+
+# 桌面快捷方式模板
+_DESKTOP_ENTRY_TEMPLATE = """[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Aurora 更新服务器
+Name[en]=Aurora Update Server
+Comment=RK3588 应用更新接收服务管理工具
+Comment[en]=RK3588 Application Update Server Manager
+Exec=sudo python3 {gui}
+Path={work}
+Icon={icon}
+Terminal=false
+Categories=Utility;System;
+StartupNotify=true
+"""
+
+# HttpApi.Host systemd 服务模板（内置 SkiaSharp 所需的 libuuid LD_PRELOAD）
+_HTTPAPI_UNIT_TEMPLATE = """[Unit]
+Description=Aurora Struct3D HTTP API Host Service
+After=network.target network-online.target
+Wants=network-online.target
+Requires=network.target
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+WorkingDirectory={work}
+ExecStart=/usr/bin/dotnet {dll} --urls "http://0.0.0.0:5000;https://0.0.0.0:5001"
+Environment=DOTNET_CLI_HOME=/tmp
+Environment=ASPNETCORE_ENVIRONMENT=Production
+Environment=LD_PRELOAD={libuuid}
+
+Restart=on-failure
+RestartSec=5
+RestartPreventExitStatus=0
+
+TimeoutStopSec=30
+KillMode=mixed
+KillSignal=SIGTERM
+FinalKillSignal=SIGKILL
+
+StandardOutput=journal+console
+StandardError=journal+console
+SyslogIdentifier=aurora-struct3d-api
+
+[Install]
+WantedBy=multi-user.target
+"""
 
 # SkiaSharp 在 Ubuntu ARM64 上编码 JPEG 时需要的系统原生依赖。
 _NATIVE_DEPENDENCY_PACKAGES = ("libuuid1", "libfontconfig1")
@@ -86,6 +168,17 @@ def _recv_msg(sock: socket.socket) -> dict:
 # ── action 处理器 ───────────────────────────────────────────────────────────────
 
 
+def _safe_send(conn: socket.socket | None, data: dict) -> bool:
+    """向 conn 发送消息，如果连接已断开则返回 False（不抛异常）。"""
+    if conn is None:
+        return False
+    try:
+        _send_msg(conn, data)
+        return True
+    except (OSError, ConnectionError, BrokenPipeError):
+        return False
+
+
 def _action_init(conn: socket.socket, msg: dict) -> None:
     """创建新的上传会话，向客户端返回 session_id。"""
     session_id = str(uuid.uuid4())
@@ -101,7 +194,8 @@ def _action_init(conn: socket.socket, msg: dict) -> None:
         }
     size_mb = int(msg["total_size"]) / 1024 / 1024
     print(
-        f"[会话] 创建 {session_id[:8]}  分块数={msg['total_chunks']}  大小={size_mb:.1f} MB"
+        f"[会话] 创建 {session_id[:8]}  分块数={msg['total_chunks']}  大小={size_mb:.1f} MB",
+        flush=True,
     )
     _send_msg(conn, {"status": "ready", "session_id": session_id})
 
@@ -154,7 +248,9 @@ def _action_chunk(conn: socket.socket, msg: dict) -> None:
         count = len(session["received"])
         total = session["total_chunks"]
     print(
-        f"\r[分块] 已接收 {count}/{total}  chunk_{chunk_id:05d} ✓", end="", flush=True
+        f"\r[分块] 已接收 {count}/{total}  chunk_{chunk_id:05d} ✓",
+        end="",
+        flush=True,
     )
     _send_msg(conn, {"status": "ok", "chunk_id": chunk_id})
 
@@ -188,8 +284,10 @@ def _action_finalize(conn: socket.socket, msg: dict) -> None:
     merged_path = session_dir / "merged.tar.gz"
 
     # ── 合并分块 ──────────────────────────────────────────────────────────────
-    print(f"\n[合并] 合并 {total_chunks} 个分块...")
-    _send_msg(conn, {"stage": "merge", "message": f"正在合并 {total_chunks} 个分块..."})
+    print(f"\n[合并] 合并 {total_chunks} 个分块...", flush=True)
+    _safe_send(
+        conn, {"stage": "merge", "message": f"正在合并 {total_chunks} 个分块..."}
+    )
 
     h = hashlib.md5()
     with merged_path.open("wb") as out:
@@ -202,7 +300,7 @@ def _action_finalize(conn: socket.socket, msg: dict) -> None:
 
     actual_total_md5 = h.hexdigest()
     if actual_total_md5 != expected_total_md5:
-        _send_msg(
+        _safe_send(
             conn,
             {
                 "status": "error",
@@ -219,12 +317,12 @@ def _action_finalize(conn: socket.socket, msg: dict) -> None:
         return
 
     size_mb = merged_path.stat().st_size / 1024 / 1024
-    print(f"[合并] MD5 校验通过  {size_mb:.1f} MB")
-    _send_msg(
+    print(f"[合并] MD5 校验通过  {size_mb:.1f} MB", flush=True)
+    _safe_send(
         conn, {"stage": "merge_done", "message": f"合并校验通过（{size_mb:.1f} MB）"}
     )
     # ── 停止目标服务（解压前确保服务已停止）──────────────────────────
-    _send_msg(conn, {"stage": "stopping", "message": f"正在停止 {_SERVICE_NAME}..."})
+    _safe_send(conn, {"stage": "stopping", "message": f"正在停止 {_SERVICE_NAME}..."})
     _stop_managed_service()
     # ── 解压 ──────────────────────────────────────────────────────────────────
     target_dir = TARGET_ROOT
@@ -234,7 +332,8 @@ def _action_finalize(conn: socket.socket, msg: dict) -> None:
         shutil.rmtree(arm64_dir)
     arm64_dir.mkdir(parents=True, exist_ok=True)
 
-    print(f"[解压] 目标: {target_dir}")
+    print(f"[解压] 目标: {target_dir}", flush=True)
+    client_alive = True
     with tarfile.open(merged_path, mode="r:gz") as tar:
         members = tar.getmembers()
         total_files = len(members)
@@ -249,17 +348,25 @@ def _action_finalize(conn: socket.socket, msg: dict) -> None:
                     end="",
                     flush=True,
                 )
-            _send_msg(
-                conn,
-                {
-                    "stage": "extract",
-                    "current": idx,
-                    "total": total_files,
-                    "name": member.name,
-                },
-            )
+            # 客户端可能在任意时刻断开，一旦推送失败就不再尝试，避免拖慢部署流程
+            if client_alive:
+                ok = _safe_send(
+                    conn,
+                    {
+                        "stage": "extract",
+                        "current": idx,
+                        "total": total_files,
+                        "name": member.name,
+                    },
+                )
+                if not ok:
+                    client_alive = False
+                    print(
+                        "\n[解压] 客户端连接已断开，后续部署仍会继续在服务端进行",
+                        flush=True,
+                    )
 
-    print()
+    print(flush=True)
     _fix_exec_permissions(target_dir)
 
     # ── 清理会话 ──────────────────────────────────────────────────────────────
@@ -268,14 +375,20 @@ def _action_finalize(conn: socket.socket, msg: dict) -> None:
         _sessions.pop(session_id, None)
 
     done_msg = f"已解压 {total_files} 个文件到 {target_dir}"
-    _send_msg(conn, {"status": "done", "message": done_msg})
-    print(f"[完成] {done_msg}")
+    _safe_send(conn, {"status": "done", "message": done_msg})
+    print(f"[完成] {done_msg}", flush=True)
 
     # ── 部署后流程：原生依赖 → DbMigrator → 确保服务注册 → 启动 ────────────────
-    _ensure_native_dependencies()
-    _run_migrator()
-    _ensure_system_service()
-    _start_managed_service()
+    # 以下步骤不再依赖 conn，即使客户端提前断开也会继续执行
+    print("[部署] 开始部署后流程...", flush=True)
+    try:
+        _ensure_native_dependencies()
+        _run_migrator()
+        _ensure_system_service()
+        _start_managed_service()
+        print("[部署] ✓ 部署后流程全部完成", flush=True)
+    except Exception as exc:
+        print(f"[部署] ✗ 部署后流程异常：{exc}", flush=True)
 
 
 def _fix_exec_permissions(base_dir: Path) -> None:
@@ -298,29 +411,32 @@ def _fix_exec_permissions(base_dir: Path) -> None:
 # ── 受管服务部署辅助 ───────────────────────────────────────────────────────────────────
 
 
-def _run_cmd(cmd: list, desc: str, timeout: int = 120) -> int:
+def _run_cmd(
+    cmd: list, desc: str, timeout: int = 120, cwd: Optional[str] = None
+) -> int:
     """执行外部命令，将 stdout/stderr 逐行打印，返回退出码。"""
-    print(f"[部署] {desc}...")
+    print(f"[部署] {desc}...", flush=True)
     try:
         result = subprocess.run(
             cmd,
             capture_output=True,
             text=True,
             timeout=timeout,
+            cwd=cwd,
         )
         for line in (result.stdout + result.stderr).strip().splitlines():
             if line:
-                print(f"[部署]   {line}")
+                print(f"[部署]   {line}", flush=True)
         if result.returncode == 0:
-            print(f"[部署] ✓ {desc}")
+            print(f"[部署] ✓ {desc}", flush=True)
         else:
-            print(f"[部署] ✗ {desc}（退出码 {result.returncode}）")
+            print(f"[部署] ✗ {desc}（退出码 {result.returncode}）", flush=True)
         return result.returncode
     except subprocess.TimeoutExpired:
-        print(f"[部署] ✗ {desc} 超时（{timeout}s）")
+        print(f"[部署] ✗ {desc} 超时（{timeout}s）", flush=True)
         return -1
     except Exception as exc:
-        print(f"[部署] ✗ {desc} 异常: {exc}")
+        print(f"[部署] ✗ {desc} 异常: {exc}", flush=True)
         return -1
 
 
@@ -393,7 +509,7 @@ def _find_libuuid_preload_path():
 
 
 def _stop_managed_service() -> None:
-    """解压前停止被管理的目标服务（先尝试系统 systemctl，再 pkill）。"""
+    """解压前可靠地停止被管理的目标服务：systemctl stop → pkill → 轮询验证（总超时 30s）。"""
     import time
 
     # 检查系统级服务是否活跃
@@ -407,70 +523,159 @@ def _stop_managed_service() -> None:
             f"停止系统服务 {_SERVICE_NAME}",
             timeout=30,
         )
-    else:
-        # 服务不活跃，尝试按进程名 kill
-        _run_cmd(
-            ["sudo", "pkill", "-f", _SERVICE_NAME],
-            f"Kill 进程 {_SERVICE_NAME}",
-            timeout=10,
+
+    # 无论 systemctl 是否成功，都额外干掉所有 dotnet 进程（包括 dotnet run 启动的）
+    _run_cmd(
+        ["sudo", "pkill", "-f", f"dotnet.*{_SERVICE_NAME}"],
+        f"pkill dotnet 进程（{_SERVICE_NAME}）",
+        timeout=10,
+    )
+
+    # 轮询确认进程已退出，最多 30s
+    deadline = time.time() + 30
+    while time.time() < deadline:
+        check = subprocess.run(
+            ["pgrep", "-f", f"dotnet.*{_SERVICE_NAME}"],
+            capture_output=True,
+            text=True,
         )
-    time.sleep(1)  # 等待进程完全退出
+        if check.returncode != 0:
+            print(f"[部署] ✓ {_SERVICE_NAME} 进程已完全退出", flush=True)
+            return
+        time.sleep(1)
+
+    # 最后一步强杀
+    print(f"[部署] ⚠ {_SERVICE_NAME} 30s 内未退出，发送 SIGKILL", flush=True)
+    _run_cmd(
+        ["sudo", "pkill", "-9", "-f", f"dotnet.*{_SERVICE_NAME}"],
+        f"强杀 dotnet 进程（{_SERVICE_NAME}）",
+        timeout=5,
+    )
+    time.sleep(2)
 
 
 def _run_migrator() -> None:
     """运行 DbMigrator 更新数据库及迁移。"""
-    dll = TARGET_ROOT / "linux-arm64" / _MIGRATOR_NAME / f"{_MIGRATOR_NAME}.dll"
+    work_dir = TARGET_ROOT / "linux-arm64" / _MIGRATOR_NAME
+    dll = work_dir / f"{_MIGRATOR_NAME}.dll"
     if not dll.exists():
         print(f"[部署] DbMigrator 未找到（{dll}），跳过")
         return
     _run_cmd(
-        ["sudo", "dotnet", str(dll)],
+        ["sudo", "/usr/bin/dotnet", str(dll)],
         "DbMigrator 更新数据库",
         timeout=180,
+        cwd=str(work_dir),
+    )
+
+
+def _write_root_file(path: Path, content: str, desc: str) -> bool:
+    """使用 sudo 将 content 写入需要 root 权限的 path，返回是否成功。"""
+    with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False) as tmp:
+        tmp.write(content)
+        tmp_path = tmp.name
+    try:
+        rc = _run_cmd(
+            ["sudo", "install", "-m", "0644", tmp_path, str(path)],
+            desc,
+            timeout=15,
+        )
+        return rc == 0
+    finally:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+
+
+def _content_equal(path: Path, expected: str) -> bool:
+    """检查文件现有内容是否与期望一致（去除末尾空白后比对）。"""
+    try:
+        actual = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return False
+    return actual.rstrip() == expected.rstrip()
+
+
+def _ensure_desktop_entry() -> None:
+    """检查/创建桌面快捷方式及 GNOME 自启条目。
+
+    两个 .desktop 文件使用同一模板，位置不同：
+    - ~/.local/share/applications/...   → 应用菜单可点击
+    - ~/.config/autostart/...           → GNOME 登录后自动拉起
+    """
+    content = _DESKTOP_ENTRY_TEMPLATE.format(
+        gui=_APP_GUI_ENTRY,
+        work=_APP_INSTALL_DIR,
+        icon=_APP_ICON_PATH,
+    )
+    for target, label in (
+        (_DESKTOP_FILE, "桌面快捷方式"),
+        (_AUTOSTART_FILE, "GNOME 自启条目"),
+    ):
+        if target.exists() and _content_equal(target, content):
+            print(f"[启动] {label}已是最新：{target}", flush=True)
+            continue
+        try:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(content, encoding="utf-8")
+            target.chmod(0o755)
+            # 修正 sudo 运行时 owner 变 root 的问题
+            subprocess.run(
+                [
+                    "sudo",
+                    "chown",
+                    f"{_TARGET_USER}:{_TARGET_USER}",
+                    str(target),
+                ],
+                capture_output=True,
+            )
+            print(f"[启动] 已写入{label}：{target}", flush=True)
+        except OSError as exc:
+            print(f"[启动] ⚠ 写入{label}失败：{exc}", flush=True)
+
+
+def _cleanup_httpapi_dropins() -> None:
+    """删除 HttpApi.Host 的 systemd drop-in 覆盖目录（如残留的 skia-libuuid.conf）。
+
+    这些历史 drop-in 文件可能用 /root/Publish 等错误路径覆盖 ExecStart，
+    本模板已经把 LD_PRELOAD 整合进主 unit，drop-in 不再需要。
+    """
+    if not _HTTPAPI_DROPIN_DIR.exists():
+        return
+    print(
+        f"[部署] 清理历史 drop-in 目录：{_HTTPAPI_DROPIN_DIR}",
+        flush=True,
+    )
+    _run_cmd(
+        ["sudo", "rm", "-rf", str(_HTTPAPI_DROPIN_DIR)],
+        f"删除 {_HTTPAPI_DROPIN_DIR}",
+        timeout=10,
     )
 
 
 def _ensure_system_service() -> None:
-    """若系统级 systemd 服务不存在则创建并 enable。服务文件放于 /etc/systemd/system/。"""
-    service_dir = Path("/etc/systemd/system")
-    service_file = service_dir / f"{_SERVICE_NAME}.service"
+    """检查/创建 HttpApi.Host 系统服务文件（不一致则重写），并 daemon-reload + enable。"""
     dll = TARGET_ROOT / "linux-arm64" / _SERVICE_NAME / f"{_SERVICE_NAME}.dll"
     work_dir = dll.parent
-    libuuid_path = _find_libuuid_preload_path()
-    preload_line = f"Environment=LD_PRELOAD={libuuid_path}\n" if libuuid_path else ""
+    libuuid = _find_libuuid_preload_path() or "/lib/aarch64-linux-gnu/libuuid.so.1"
+    content = _HTTPAPI_UNIT_TEMPLATE.format(work=work_dir, dll=dll, libuuid=libuuid)
 
-    if service_file.exists():
-        print(f"[部署] 系统服务 {_SERVICE_NAME} 已存在，跳过创建")
+    # 清理可能存在的历史 drop-in 覆盖文件（如 skia-libuuid.conf 用了 /root/Publish）
+    _cleanup_httpapi_dropins()
 
-    print(f"[部署] 创建系统服务 {_SERVICE_NAME}...")
-    unit = (
-        "[Unit]\n"
-        f"Description={_SERVICE_NAME}\n"
-        "After=network.target\n\n"
-        "[Service]\n"
-        "Type=simple\n"
-        f"WorkingDirectory={work_dir}\n"
-        f"{preload_line}"
-        f"ExecStart=sudo dotnet {dll}"
-        f' --urls "http://0.0.0.0:5000;https://0.0.0.0:5001"\n'
-        "Restart=on-failure\n"
-        "RestartSec=5\n"
-        "StandardOutput=journal\n"
-        "StandardError=journal\n\n"
-        "[Install]\n"
-        "WantedBy=multi-user.target\n"
-    )
-    with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False) as tmp:
-        tmp.write(unit)
-        tmp_path = tmp.name
+    if _HTTPAPI_SERVICE_FILE.exists() and _content_equal(
+        _HTTPAPI_SERVICE_FILE, content
+    ):
+        print(f"[部署] 系统服务 {_SERVICE_NAME} 已是最新", flush=True)
+    else:
+        print(f"[部署] 写入系统服务文件 {_HTTPAPI_SERVICE_FILE.name}", flush=True)
+        if not _write_root_file(
+            _HTTPAPI_SERVICE_FILE, content, f"写入 {_SERVICE_NAME}.service"
+        ):
+            return
+        _run_cmd(["sudo", "systemctl", "daemon-reload"], "daemon-reload", timeout=15)
 
-    _run_cmd(
-        ["sudo", "install", "-m", "0644", tmp_path, str(service_file)],
-        f"写入系统服务文件 {service_file.name}",
-        timeout=15,
-    )
-    _run_cmd(["sudo", "rm", "-f", tmp_path], "清理临时服务文件", timeout=10)
-    _run_cmd(["sudo", "systemctl", "daemon-reload"], "daemon-reload", timeout=15)
     _run_cmd(
         ["sudo", "systemctl", "enable", _SERVICE_NAME],
         f"enable {_SERVICE_NAME}",
@@ -603,6 +808,13 @@ def _kill_pids(pids: list[int]) -> None:
 
 
 def main() -> None:
+    # 行缓冲，确保 systemd journal 实时可见
+    try:
+        sys.stdout.reconfigure(line_buffering=True)
+        sys.stderr.reconfigure(line_buffering=True)
+    except AttributeError:
+        pass
+
     parser = argparse.ArgumentParser(description="RK3588 应用更新接收服务")
     parser.add_argument("--host", default="0.0.0.0", help="监听地址（默认：0.0.0.0）")
     parser.add_argument("--port", type=int, default=9211, help="监听端口（默认：9211）")
@@ -612,6 +824,19 @@ def main() -> None:
         help="端口被占用时自动终止旧进程并重新绑定",
     )
     args = parser.parse_args()
+
+    # ── 启动前自检：桌面快捷方式 / GNOME 自启条目 ─────────────────
+    _ensure_desktop_entry()
+    # 如果 HttpApi.Host 的 dll 已存在，也顺带刷新它的 unit 文件，
+    # 避免历史遗留的旧路径（如 /root/Publish）持续报错
+    _httpapi_dll = TARGET_ROOT / "linux-arm64" / _SERVICE_NAME / f"{_SERVICE_NAME}.dll"
+    if _httpapi_dll.exists():
+        _ensure_system_service()
+    else:
+        print(
+            f"[启动] 跳过 HttpApi unit 自检：{_httpapi_dll} 暂不存在",
+            flush=True,
+        )
 
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as srv:
         srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -624,9 +849,12 @@ def main() -> None:
             if args.force:
                 if pids:
                     _kill_pids(pids)
-                    print(f"[强制] 旧进程已终止，重新绑定端口 {args.port}")
+                    print(f"[强制] 旧进程已终止，重新绑定端口 {args.port}", flush=True)
                 else:
-                    print(f"[警告] 端口 {args.port} 被占用但未能定位进程，请手动释放")
+                    print(
+                        f"[警告] 端口 {args.port} 被占用但未能定位进程，请手动释放",
+                        flush=True,
+                    )
                     sys.exit(1)
                 srv.bind((args.host, args.port))
             else:
@@ -636,12 +864,13 @@ def main() -> None:
                     f"       手动终止: kill {' '.join(str(p) for p in pids)}\n"
                     f"       或使用 --force 参数自动终止旧进程并重启。",
                     file=sys.stderr,
+                    flush=True,
                 )
                 sys.exit(1)
 
         srv.listen(20)  # 并行分块上传需要更大的 backlog
-        print(f"[服务器] 监听 {args.host}:{args.port}，等待连接...")
-        print(f"[服务器] 解压目标根目录: {TARGET_ROOT}")
+        print(f"[服务器] 监听 {args.host}:{args.port}，等待连接...", flush=True)
+        print(f"[服务器] 解压目标根目录: {TARGET_ROOT}", flush=True)
 
         # 启动 UDP 发现服务（守护线程）
         threading.Thread(
@@ -657,7 +886,7 @@ def main() -> None:
                 )
                 t.start()
             except KeyboardInterrupt:
-                print("\n[服务器] 收到中断信号，退出。")
+                print("\n[服务器] 收到中断信号，退出。", flush=True)
                 break
 
 

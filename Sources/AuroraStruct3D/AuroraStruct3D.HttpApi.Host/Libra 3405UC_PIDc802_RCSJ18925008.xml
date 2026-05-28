@@ -12,7 +12,7 @@
         <Gamma>100</Gamma>
         <Contrast>128</Contrast>
         <LeftLevels>0</LeftLevels>
-        <RightLevels>255</RightLevels>
+        <RightLevels>4095</RightLevels>
         <HistogramStatistic>0</HistogramStatistic>
         <AutoLevels>0</AutoLevels>
         <VerticalCorrection>1</VerticalCorrection>

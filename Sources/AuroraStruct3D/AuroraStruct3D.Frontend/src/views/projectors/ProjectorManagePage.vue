@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { useProjectorStore } from '@/stores/projectors'
 import {
     type UpdateProjectorDeviceDto,
@@ -11,6 +12,7 @@ import {
 } from '@/api/projectors'
 import { toast } from 'vue-sonner'
 
+const { t } = useI18n()
 const router = useRouter()
 const store = useProjectorStore()
 
@@ -21,7 +23,7 @@ async function handleScan() {
     scanning.value = true
     try {
         const count = await store.scan()
-        toast.success(`扫描完成，检测到 ${count} 台投影机`)
+        toast.success(t('projector.scanSuccess', { count }))
     } catch {
         // httpClient 已统一弹 toast
     } finally {
@@ -46,7 +48,7 @@ async function handleUpdate() {
     updating.value = true
     try {
         await store.update(editingProjector.value.id, editForm.value)
-        toast.success('更新成功')
+        toast.success(t('projector.updateSuccess'))
         showEditDialog.value = false
     } catch {
         // 忽略
@@ -60,7 +62,7 @@ async function handleUpdate() {
 async function handleConnect(id: string) {
     try {
         await store.connect(id)
-        toast.success('连接成功')
+        toast.success(t('projector.connectSuccess'))
     } catch {
         // 忽略
     }
@@ -69,7 +71,7 @@ async function handleConnect(id: string) {
 async function handleDisconnect(id: string) {
     try {
         await store.disconnect(id)
-        toast.success('已断开')
+        toast.success(t('projector.disconnectSuccess'))
     } catch {
         // 忽略
     }
@@ -107,38 +109,38 @@ onMounted(() => {
 <template>
     <div class="flex flex-col gap-4 p-4">
         <div class="flex items-center justify-between">
-            <h1 class="text-lg font-semibold">投影机设备管理</h1>
+            <h1 class="text-lg font-semibold">{{ t('projector.title') }}</h1>
             <div class="flex gap-2">
                 <button class="rounded border px-3 py-1.5 text-sm hover:bg-muted/50" @click="void store.fetchList()">
-                    刷新
+                    {{ t('projector.refresh') }}
                 </button>
                 <button
                     :disabled="scanning"
                     class="rounded bg-primary px-3 py-1.5 text-sm text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
                     @click="handleScan"
                 >
-                    {{ scanning ? '扫描中…' : '扫描投影机' }}
+                    {{ scanning ? t('projector.scanning') : t('projector.scan') }}
                 </button>
             </div>
         </div>
 
         <!-- 设备列表 -->
-        <div v-if="store.loading" class="py-8 text-center text-sm text-muted-foreground">加载中…</div>
+        <div v-if="store.loading" class="py-8 text-center text-sm text-muted-foreground">{{ t('common.loading') }}</div>
         <div v-else-if="store.projectors.length === 0" class="py-8 text-center text-sm text-muted-foreground">
-            暂无投影机设备，请点击"扫描投影机"检测已连接设备
+            {{ t('projector.noDevices') }}
         </div>
         <div v-else class="overflow-auto rounded-lg border">
             <table class="w-full min-w-[900px] text-sm">
                 <thead class="border-b bg-muted/50">
                     <tr>
-                        <th class="px-3 py-2 text-left font-medium">序号</th>
-                        <th class="px-3 py-2 text-left font-medium">名称</th>
-                        <th class="px-3 py-2 text-left font-medium">连接方式</th>
-                        <th class="px-3 py-2 text-left font-medium">地址</th>
-                        <th class="px-3 py-2 text-left font-medium">连接状态</th>
-                        <th class="px-3 py-2 text-left font-medium">LED</th>
-                        <th class="px-3 py-2 text-left font-medium">固件版本</th>
-                        <th class="px-3 py-2 text-left font-medium">操作</th>
+                        <th class="px-3 py-2 text-left font-medium">{{ t('projector.index') }}</th>
+                        <th class="px-3 py-2 text-left font-medium">{{ t('projector.name') }}</th>
+                        <th class="px-3 py-2 text-left font-medium">{{ t('projector.connectionType') }}</th>
+                        <th class="px-3 py-2 text-left font-medium">{{ t('projector.address') }}</th>
+                        <th class="px-3 py-2 text-left font-medium">{{ t('projector.connectionStatus') }}</th>
+                        <th class="px-3 py-2 text-left font-medium">{{ t('projector.led') }}</th>
+                        <th class="px-3 py-2 text-left font-medium">{{ t('projector.firmware') }}</th>
+                        <th class="px-3 py-2 text-left font-medium">{{ t('common.actions') }}</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -169,27 +171,27 @@ onMounted(() => {
                                     class="rounded border px-2 py-0.5 text-xs hover:bg-muted/50"
                                     @click="goToControl(p.id)"
                                 >
-                                    控制
+                                    {{ t('projector.control') }}
                                 </button>
                                 <button
                                     v-if="p.connectionStatus !== ProjectorConnectionStatus.Connected"
                                     class="rounded border px-2 py-0.5 text-xs text-green-600 hover:bg-green-50"
                                     @click="handleConnect(p.id)"
                                 >
-                                    连接
+                                    {{ t('projector.connect') }}
                                 </button>
                                 <button
                                     v-else
                                     class="rounded border px-2 py-0.5 text-xs text-orange-500 hover:bg-orange-50"
                                     @click="handleDisconnect(p.id)"
                                 >
-                                    断开
+                                    {{ t('projector.disconnect') }}
                                 </button>
                                 <button
                                     class="rounded border px-2 py-0.5 text-xs hover:bg-muted/50"
                                     @click="handleEdit(p)"
                                 >
-                                    编辑
+                                    {{ t('common.edit') }}
                                 </button>
                             </div>
                         </td>
@@ -205,14 +207,14 @@ onMounted(() => {
             @click.self="showEditDialog = false"
         >
             <div class="w-[420px] rounded-lg border bg-background p-6 shadow-lg">
-                <h2 class="mb-4 text-base font-semibold">编辑投影机</h2>
+                <h2 class="mb-4 text-base font-semibold">{{ t('projector.editTitle') }}</h2>
                 <div class="flex flex-col gap-3">
                     <label class="flex flex-col gap-1 text-sm">
-                        名称
+                        {{ t('projector.name') }}
                         <input v-model="editForm.name" class="rounded border bg-background px-2 py-1.5 text-sm" />
                     </label>
                     <label class="flex flex-col gap-1 text-sm">
-                        描述
+                        {{ t('common.description') }}
                         <input
                             v-model="editForm.description"
                             class="rounded border bg-background px-2 py-1.5 text-sm"
@@ -220,7 +222,7 @@ onMounted(() => {
                     </label>
                     <label class="flex items-center gap-2 text-sm">
                         <input v-model="editForm.isEnabled" type="checkbox" />
-                        启用
+                        {{ t('projector.enabled') }}
                     </label>
                 </div>
                 <div class="mt-5 flex justify-end gap-2">
@@ -228,14 +230,14 @@ onMounted(() => {
                         class="rounded border px-4 py-1.5 text-sm text-muted-foreground hover:bg-muted/50"
                         @click="showEditDialog = false"
                     >
-                        取消
+                        {{ t('common.cancel') }}
                     </button>
                     <button
                         :disabled="updating"
                         class="rounded bg-primary px-4 py-1.5 text-sm text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
                         @click="handleUpdate"
                     >
-                        {{ updating ? '保存中…' : '保存' }}
+                        {{ updating ? t('common.saving') : t('common.save') }}
                     </button>
                 </div>
             </div>

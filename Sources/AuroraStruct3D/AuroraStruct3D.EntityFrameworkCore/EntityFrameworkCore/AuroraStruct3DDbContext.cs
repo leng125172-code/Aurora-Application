@@ -1,6 +1,7 @@
 using AuroraStruct3D.Cameras;
 using AuroraStruct3D.DeviceState;
 using AuroraStruct3D.Motors;
+using AuroraStruct3D.ProductModels;
 using AuroraStruct3D.Projectors;
 using AuroraStruct3D.SerialPorts;
 using Lion.AbpPro.BasicManagement.UserRefreshTokens;
@@ -113,6 +114,9 @@ namespace AuroraStruct3D.EntityFrameworkCore
         public DbSet<DeviceStateLog> DeviceStateLogs { get; set; }
         public DbSet<DeviceFault> DeviceFaults { get; set; }
 
+        // ── 产品三维数模模块 ─────────────────────────────────────────────────────────
+        public DbSet<ProductModel> ProductModels { get; set; }
+
         public AuroraStruct3DDbContext(DbContextOptions<AuroraStruct3DDbContext> options)
             : base(options) { }
 
@@ -163,6 +167,9 @@ namespace AuroraStruct3D.EntityFrameworkCore
 
             // 设备状态管理模块
             builder.ConfigureDeviceState();
+
+            // 产品三维数模模块
+            builder.ConfigureProductModel();
         }
     }
 }

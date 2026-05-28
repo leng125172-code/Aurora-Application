@@ -1,5 +1,5 @@
-<script setup lang="ts">
-import { Languages } from 'lucide-vue-next'
+﻿<script setup lang="ts">
+import { Languages } from '@lucide/vue'
 import { useI18n } from 'vue-i18n'
 import { Button } from '@/components/ui/button'
 import {
@@ -39,7 +39,7 @@ function onSelect(value: string): void {
             </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-            <DropdownMenuRadioGroup :model-value="locale" @update:model-value="onSelect">
+            <DropdownMenuRadioGroup :model-value="locale" @update:model-value="(v) => onSelect(v as string)">
                 <DropdownMenuRadioItem v-for="lang in langs" :key="lang.code" :value="lang.code">
                     {{ lang.label }}
                 </DropdownMenuRadioItem>

@@ -56,12 +56,6 @@ public class MotorAxisDto : EntityDto<Guid>
     /// <summary>运行状态文本</summary>
     public string StatusText { get; set; } = string.Empty;
 
-    /// <summary>当前位置</summary>
-    public long LastKnownPosition { get; set; }
-
-    /// <summary>当前速度</summary>
-    public int LastKnownSpeed { get; set; }
-
     /// <summary>是否已回零</summary>
     public bool IsHomed { get; set; }
 

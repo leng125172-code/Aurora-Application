@@ -43,6 +43,29 @@ public class MotorAxis : FullAuditedAggregateRoot<Guid>
     /// <summary>电机型号（如 iCL42-RS06、MF4005 等，可选）</summary>
     public string? Model { get; private set; }
 
+    // ─────────────────────────── KTECH 设备信息（在线读取后缓存，仅 KTECH 品牌有效） ───────────────────────────
+
+    /// <summary>KTECH 设备类型代码（CMD 0x1F 返回的 ushort，如 MS=8209/MF=8225/MG=8241）</summary>
+    public int? KtechDeviceTypeCode { get; private set; }
+
+    /// <summary>驱动器名称（CMD 0x12 返回的前 20 字节 ASCII）</summary>
+    public string? KtechDriverName { get; private set; }
+
+    /// <summary>电机名称（CMD 0x12 返回的 21~40 字节 ASCII）</summary>
+    public string? KtechMotorName { get; private set; }
+
+    /// <summary>芯片 ID（CMD 0x12 返回的 41~52 字节 hex 字符串）</summary>
+    public string? KtechChipId { get; private set; }
+
+    /// <summary>硬件版本（如 V1.0）</summary>
+    public string? KtechHardwareVersion { get; private set; }
+
+    /// <summary>电机版本（如 V1.0）</summary>
+    public string? KtechMotorVersion { get; private set; }
+
+    /// <summary>固件版本（如 V1.0）</summary>
+    public string? KtechFirmwareVersion { get; private set; }
+
     // ─────────────────────────── 回原点配置 ───────────────────────────
 
     /// <summary>回零方式</summary>
@@ -279,6 +302,48 @@ public class MotorAxis : FullAuditedAggregateRoot<Guid>
     public MotorAxis SetEnabled(bool enabled)
     {
         IsEnabled = enabled;
+        return this;
+    }
+
+    /// <summary>更新 KTECH 设备识别信息（来自 CMD 0x1F + CMD 0x12 的读取结果，可分次更新）</summary>
+    public MotorAxis SetKtechDeviceInfo(
+        int? deviceTypeCode = null,
+        string? driverName = null,
+        string? motorName = null,
+        string? chipId = null,
+        string? hardwareVersion = null,
+        string? motorVersion = null,
+        string? firmwareVersion = null
+    )
+    {
+        if (deviceTypeCode.HasValue)
+        {
+            KtechDeviceTypeCode = deviceTypeCode.Value;
+        }
+        if (driverName != null)
+        {
+            KtechDriverName = driverName;
+        }
+        if (motorName != null)
+        {
+            KtechMotorName = motorName;
+        }
+        if (chipId != null)
+        {
+            KtechChipId = chipId;
+        }
+        if (hardwareVersion != null)
+        {
+            KtechHardwareVersion = hardwareVersion;
+        }
+        if (motorVersion != null)
+        {
+            KtechMotorVersion = motorVersion;
+        }
+        if (firmwareVersion != null)
+        {
+            KtechFirmwareVersion = firmwareVersion;
+        }
         return this;
     }
 

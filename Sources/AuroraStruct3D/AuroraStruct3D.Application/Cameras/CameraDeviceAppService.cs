@@ -1,5 +1,6 @@
 using AuroraStruct3D.Cameras.Dtos;
 using AuroraStruct3D.DeviceState;
+using AuroraStruct3D.Sessions;
 using AuroraStruct3D.Tucam;
 using AuroraStruct3D.Tucam.GenICam;
 using AuroraStruct3D.Tucam.Interop;
@@ -22,12 +23,16 @@ public class CameraDeviceAppService : AuroraStruct3DAppService, ICameraDeviceApp
     private readonly ITucamCameraService _tucamService;
     private readonly IDeviceStateManager _deviceStateManager;
     private readonly ICameraStreamingService? _streamingService;
+    private readonly IDeviceOperationSessionManager _sessionManager;
+    private readonly ICurrentClientSession _currentClientSession;
 
     public CameraDeviceAppService(
         ICameraDeviceRepository cameraDeviceRepository,
         ICameraParameterSetRepository parameterSetRepository,
         ITucamCameraService tucamService,
         IDeviceStateManager deviceStateManager,
+        IDeviceOperationSessionManager sessionManager,
+        ICurrentClientSession currentClientSession,
         ICameraStreamingService? streamingService = null
     )
     {
@@ -35,6 +40,8 @@ public class CameraDeviceAppService : AuroraStruct3DAppService, ICameraDeviceApp
         _parameterSetRepository = parameterSetRepository;
         _tucamService = tucamService;
         _deviceStateManager = deviceStateManager;
+        _sessionManager = sessionManager;
+        _currentClientSession = currentClientSession;
         _streamingService = streamingService;
     }
 
@@ -301,6 +308,7 @@ public class CameraDeviceAppService : AuroraStruct3DAppService, ICameraDeviceApp
     public async Task SetImageRotationAngleAsync(Guid id, SetCameraRotationAngleDto input)
     {
         EnsureManualOrMaintenanceMode();
+        await EnsureOrAcquireSessionAsync(id, DeviceType.Camera);
         CameraDevice camera = await _cameraDeviceRepository.GetAsync(id);
         try
         {
@@ -327,9 +335,21 @@ public class CameraDeviceAppService : AuroraStruct3DAppService, ICameraDeviceApp
     public async Task<CameraSnapshotDto> TakeSnapshotAsync(Guid id)
     {
         EnsureManualOrMaintenanceMode();
+        await EnsureOrAcquireSessionAsync(id, DeviceType.Camera);
         CameraDevice camera = await _cameraDeviceRepository.GetAsync(id);
         int idx = camera.DeviceIndex;
         EnsureCameraOpen(idx);
+
+        // 读取当前 TriggerMode 以决定抓帧策略（0=FreeRunning, 1=Standard(外触发), 2=Software）
+        long triggerMode = 0;
+        try
+        {
+            triggerMode = await _tucamService.GetGenICamIntAsync(idx, "TriggerMode");
+        }
+        catch
+        {
+            // 读取失败按 FreeRunning 处理
+        }
 
         bool startedForSnapshot = false;
         try
@@ -353,11 +373,41 @@ public class CameraDeviceAppService : AuroraStruct3DAppService, ICameraDeviceApp
                 // 读取失败则使用默认 8s
             }
 
-            byte[] jpegBytes = await _tucamService.GrabFrameRawAsync(
-                idx,
-                timeoutMs: grabTimeoutMs,
-                imageRotationAngle: camera.ImageRotationAngle
-            );
+            // Software 触发模式：必须先发软件触发，否则 WaitForFrame 永远不会返回
+            if (triggerMode == 2)
+            {
+                await _tucamService.DoSoftwareTriggerAsync(idx);
+            }
+            else if (triggerMode == 1)
+            {
+                // Standard 外触发：依赖外部硬件触发信号，若长时间无信号给出友好提示
+                // 这里仍正常等待，但拉长超时到 15s
+                grabTimeoutMs = Math.Max(grabTimeoutMs, 15000);
+            }
+
+            byte[] jpegBytes;
+            try
+            {
+                (jpegBytes, _) = await _tucamService.GrabFrameRawAsync(
+                    idx,
+                    timeoutMs: grabTimeoutMs,
+                    imageRotationAngle: camera.ImageRotationAngle
+                );
+            }
+            catch (InvalidOperationException ex)
+            {
+                bool isExternalTriggerTimeout =
+                    triggerMode == 1
+                    && ex.Message.Contains("Timeout", StringComparison.OrdinalIgnoreCase);
+                if (isExternalTriggerTimeout)
+                {
+                    throw new UserFriendlyException(
+                        "外触发模式下未在超时时间内收到硬件触发信号，请确认触发线路正常或切换至自由运行模式后再试。"
+                    );
+                }
+                throw;
+            }
+
             string dataUri = "data:image/jpeg;base64," + Convert.ToBase64String(jpegBytes);
             return new CameraSnapshotDto { DataUri = dataUri, CapturedAt = DateTime.UtcNow };
         }
@@ -374,6 +424,7 @@ public class CameraDeviceAppService : AuroraStruct3DAppService, ICameraDeviceApp
     public async Task StartPreviewAsync(Guid id, StartCameraPreviewDto input)
     {
         EnsureManualOrMaintenanceMode();
+        await EnsureOrAcquireSessionAsync(id, DeviceType.Camera);
 
         if (_streamingService == null)
         {
@@ -388,7 +439,8 @@ public class CameraDeviceAppService : AuroraStruct3DAppService, ICameraDeviceApp
             id,
             input.ConnectionId,
             input.EnableRtp,
-            camera.ImageRotationAngle
+            camera.ImageRotationAngle,
+            clientSessionId: _currentClientSession.SessionId
         );
         camera.SetStatus(CameraStatus.Capturing);
         await _cameraDeviceRepository.UpdateAsync(camera);
@@ -418,8 +470,27 @@ public class CameraDeviceAppService : AuroraStruct3DAppService, ICameraDeviceApp
     public async Task DoSoftwareTriggerAsync(Guid id)
     {
         EnsureManualOrMaintenanceMode();
+        await EnsureOrAcquireSessionAsync(id, DeviceType.Camera);
         int idx = await GetDeviceIndexAsync(id);
         EnsureCameraOpen(idx);
+
+        // 仅 Software 触发模式（TriggerMode=2）下允许发送软件触发
+        long triggerMode = 0;
+        try
+        {
+            triggerMode = await _tucamService.GetGenICamIntAsync(idx, "TriggerMode");
+        }
+        catch
+        {
+            // 读取失败按未知处理，仍允许触发避免误拦截
+        }
+
+        if (triggerMode != 2)
+        {
+            throw new UserFriendlyException(
+                "当前 TriggerMode 不是 Software（软件触发）模式，发送软件触发无效。请先将 TriggerMode 切换为 Software。"
+            );
+        }
 
         await _tucamService.DoSoftwareTriggerAsync(idx);
     }
@@ -534,8 +605,66 @@ public class CameraDeviceAppService : AuroraStruct3DAppService, ICameraDeviceApp
     public async Task SetGenICamParamAsync(Guid id, GenICamNodeSetInput input)
     {
         EnsureManualOrMaintenanceMode();
+        await EnsureOrAcquireSessionAsync(id, DeviceType.Camera);
         int idx = await GetDeviceIndexAsync(id);
         EnsureCameraOpen(idx);
+
+        // 收集本次实际写入成功的节点名，稍后聚合受影响节点统一回读 + SignalR 推送
+        HashSet<string> writtenNodes = new(StringComparer.Ordinal);
+
+        // ─── 批量模式：JSON 含 nodes 数组，类型由 NodeMap 缓存自动推断 ────────────
+        if (input.Nodes is { Count: > 0 })
+        {
+            GenICamNodeMap? nodeMap = _tucamService.GetCachedNodeMap(idx);
+            foreach (GenICamBatchSetItem item in input.Nodes)
+            {
+                if (string.IsNullOrWhiteSpace(item.NodeName))
+                {
+                    continue;
+                }
+
+                TuElemType? nodeType = null;
+                if (
+                    nodeMap is not null
+                    && nodeMap.NodesByName.TryGetValue(item.NodeName, out GenICamNodeMeta? meta)
+                )
+                {
+                    nodeType = meta.Type;
+                }
+
+                // Command / Category / Port 节点不参与写入，静默跳过
+                if (nodeType is TuElemType.Command or TuElemType.Category or TuElemType.Port)
+                {
+                    Logger.LogDebug("批量 Set 跳过 {Type} 节点: {Name}", nodeType, item.NodeName);
+                    continue;
+                }
+
+                try
+                {
+                    await SetSingleNodeByTypeAsync(idx, item.NodeName, item.Value, nodeType);
+                    writtenNodes.Add(item.NodeName);
+                }
+                catch (Exception ex)
+                {
+                    // 单个节点失败不阻断批量，记录警告后继续
+                    Logger.LogWarning(
+                        ex,
+                        "批量 Set {Name}='{Value}' 失败，跳过继续",
+                        item.NodeName,
+                        item.Value
+                    );
+                }
+            }
+
+            await PushAffectedNodeChangesAsync(id, idx, writtenNodes);
+            return;
+        }
+
+        // ─── 单节点模式：JSON 含 nodeName / dataType / value ──────────────────────
+        if (string.IsNullOrWhiteSpace(input.NodeName))
+        {
+            throw new UserFriendlyException("未提供 nodeName，也未提供 nodes 列表");
+        }
 
         switch (input.DataType)
         {
@@ -554,7 +683,11 @@ public class CameraDeviceAppService : AuroraStruct3DAppService, ICameraDeviceApp
                 await _tucamService.SetGenICamFloatAsync(idx, input.NodeName, dblVal);
                 break;
             case "string":
-                await _tucamService.SetGenICamStringAsync(idx, input.NodeName, input.Value);
+                await _tucamService.SetGenICamStringAsync(
+                    idx,
+                    input.NodeName,
+                    input.Value ?? string.Empty
+                );
                 break;
             default: // "int" / "enum" / "bool"
                 if (!long.TryParse(input.Value, out long longVal))
@@ -563,6 +696,144 @@ public class CameraDeviceAppService : AuroraStruct3DAppService, ICameraDeviceApp
                 }
                 await _tucamService.SetGenICamIntAsync(idx, input.NodeName, longVal);
                 break;
+        }
+
+        writtenNodes.Add(input.NodeName);
+        await PushAffectedNodeChangesAsync(id, idx, writtenNodes);
+    }
+
+    /// <summary>
+    /// 聚合本次写入节点 + 依赖图中受影响节点，批量回读后通过 SignalR 推送增量变更
+    /// </summary>
+    private async Task PushAffectedNodeChangesAsync(
+        Guid cameraId,
+        int idx,
+        HashSet<string> writtenNodes
+    )
+    {
+        if (writtenNodes.Count == 0 || _streamingService == null)
+        {
+            return;
+        }
+
+        try
+        {
+            // 聚合自身 + 依赖图中受影响节点
+            HashSet<string> targets = new(writtenNodes, StringComparer.Ordinal);
+            GenICamDependencyGraph? graph = _tucamService.GetCachedDependencyGraph(idx);
+            if (graph is not null)
+            {
+                foreach (string written in writtenNodes)
+                {
+                    if (
+                        graph.AffectedBySelector.TryGetValue(
+                            written,
+                            out IReadOnlyList<string>? affected
+                        )
+                    )
+                    {
+                        foreach (string a in affected)
+                        {
+                            targets.Add(a);
+                        }
+                    }
+                }
+            }
+
+            IReadOnlyList<GenICamNodeValue> values = await _tucamService.ReadGenICamNodesAsync(
+                idx,
+                targets.ToList()
+            );
+
+            // 将回读结果同步写回服务端 NodeMap 缓存，保持与硬件一致，
+            // 避免页面刷新时从缓存读到枚举时的过期初始值
+            _tucamService.UpdateCachedNodeValues(idx, values);
+
+            List<GenICamNodeChangeDto> changes = values
+                .Where(v => v.Success)
+                .Select(v => new GenICamNodeChangeDto
+                {
+                    NodeName = v.NodeName,
+                    Value = v.Value,
+                    Access = v.Access.ToString(),
+                    IsLocked = v.IsLocked,
+                })
+                .ToList();
+
+            if (changes.Count > 0)
+            {
+                await _streamingService.NotifyGenICamNodesChangedAsync(cameraId, changes);
+            }
+        }
+        catch (Exception ex)
+        {
+            // 推送失败不影响 Set 操作主流程
+            Logger.LogWarning(ex, "相机 {Id} 推送 GenICam 节点变更失败", cameraId);
+        }
+    }
+
+    /// <summary>
+    /// 按节点类型（来自 NodeMap 缓存或 Fallback 推断）写入单个节点
+    /// </summary>
+    private async Task SetSingleNodeByTypeAsync(
+        int idx,
+        string nodeName,
+        string value,
+        TuElemType? nodeType
+    )
+    {
+        if (nodeType == TuElemType.Float)
+        {
+            if (
+                !double.TryParse(
+                    value,
+                    System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    out double dbl
+                )
+            )
+            {
+                Logger.LogWarning("Set {Name} 失败：无法解析浮点值 '{Value}'", nodeName, value);
+                return;
+            }
+            await _tucamService.SetGenICamFloatAsync(idx, nodeName, dbl);
+        }
+        else if (nodeType == TuElemType.String)
+        {
+            await _tucamService.SetGenICamStringAsync(idx, nodeName, value);
+        }
+        else if (nodeType is not null)
+        {
+            // Integer / Enumeration / Boolean 均用整数写入
+            if (!long.TryParse(value, out long lng))
+            {
+                Logger.LogWarning("Set {Name} 失败：无法解析整数值 '{Value}'", nodeName, value);
+                return;
+            }
+            await _tucamService.SetGenICamIntAsync(idx, nodeName, lng);
+        }
+        else
+        {
+            // NodeMap 缓存缺失时 Fallback：long → double → string
+            if (long.TryParse(value, out long lngFb))
+            {
+                await _tucamService.SetGenICamIntAsync(idx, nodeName, lngFb);
+            }
+            else if (
+                double.TryParse(
+                    value,
+                    System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    out double dblFb
+                )
+            )
+            {
+                await _tucamService.SetGenICamFloatAsync(idx, nodeName, dblFb);
+            }
+            else
+            {
+                await _tucamService.SetGenICamStringAsync(idx, nodeName, value);
+            }
         }
     }
 
@@ -573,12 +844,42 @@ public class CameraDeviceAppService : AuroraStruct3DAppService, ICameraDeviceApp
     )
     {
         EnsureManualOrMaintenanceMode();
+        await EnsureOrAcquireSessionAsync(id, DeviceType.Camera);
         int idx = await GetDeviceIndexAsync(id);
         EnsureCameraOpen(idx);
         await _tucamService.ExecuteGenICamCommandAsync(idx, nodeName);
     }
 
     // ─── 辅助方法 ─────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// 检查并获取设备独占会话。
+    /// 若当前标签页已持有该设备会话，则续期并返回；若设备无人，则自动获取会话。
+    /// 若设备已被其他标签页占用，则抛出 <see cref="DeviceOccupiedException"/>（HTTP 409）。
+    /// </summary>
+    private Task EnsureOrAcquireSessionAsync(Guid deviceId, DeviceType deviceType)
+    {
+        string? clientSessionId = _currentClientSession.SessionId;
+        if (string.IsNullOrWhiteSpace(clientSessionId))
+        {
+            // 无 clientSessionId（如内部调用）：跳过独占检查
+            return Task.CompletedTask;
+        }
+
+        string? userId = CurrentUser.Id?.ToString();
+        string userName = CurrentUser.Name ?? CurrentUser.UserName ?? clientSessionId[..8] + "...";
+
+        _sessionManager.TryAcquire(
+            deviceId,
+            deviceType,
+            clientSessionId,
+            userId,
+            userName,
+            force: false
+        );
+
+        return Task.CompletedTask;
+    }
 
     /// <summary>
     /// 校验当前设备运行模式是否为手动或检修模式；不满足时抛出 UserFriendlyException
@@ -656,6 +957,19 @@ public class CameraDeviceAppService : AuroraStruct3DAppService, ICameraDeviceApp
             throw new UserFriendlyException("GenICam NodeMap 刷新失败，请检查相机连接状态。");
         }
 
+        // NodeMap 整体重新枚举完成，广播给所有客户端，由前端拉取最新整表
+        if (_streamingService != null)
+        {
+            try
+            {
+                await _streamingService.NotifyGenICamNodeMapReloadedAsync(id, nodeMap.EnumeratedAt);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning(ex, "相机 {Id} 推送 NodeMap reload 事件失败", id);
+            }
+        }
+
         return MapNodeMapToDto(id, nodeMap, depGraph);
     }
 
@@ -685,6 +999,8 @@ public class CameraDeviceAppService : AuroraStruct3DAppService, ICameraDeviceApp
                     Value = v.Value,
                     Success = v.Success,
                     ErrorMessage = v.Error,
+                    // 读取成功时返回最新 Access，便于前端无需重新枚举即可同步节点可写状态
+                    Access = v.Success ? v.Access.ToString() : null,
                 })
                 .ToList(),
         };
@@ -826,6 +1142,7 @@ public class CameraDeviceAppService : AuroraStruct3DAppService, ICameraDeviceApp
                     OptionLabel = e.OptionLabel,
                     AffectedNode = e.AffectedNode,
                     ChangeSummary = e.ChangeSummary,
+                    NewAccess = e.NewAccess,
                 })
                 .ToList()
             ?? new List<GenICamDependencyDto>();
@@ -838,5 +1155,58 @@ public class CameraDeviceAppService : AuroraStruct3DAppService, ICameraDeviceApp
             AllNodes = allNodes,
             Dependencies = deps,
         };
+    }
+
+    /// <inheritdoc/>
+    public async Task<CameraSnapshotStateDto> GetCameraSnapshotStateAsync(Guid id)
+    {
+        // 1. 基础校验与索引解析
+        CameraDevice camera = await _cameraDeviceRepository.GetAsync(id);
+        int idx = camera.DeviceIndex;
+
+        CameraSnapshotStateDto snapshot = new CameraSnapshotStateDto
+        {
+            CameraId = id,
+            CameraStatus = camera.Status.ToString(),
+            SnapshotAt = DateTime.UtcNow,
+        };
+
+        // 相机未打开则只回填基础状态，避免触发任何 SDK 读写
+        if (!_tucamService.IsCameraOpen(idx))
+        {
+            return snapshot;
+        }
+
+        // 2. NodeMap 快照（缓存若未就绪返回空骨架，与 GetNodeMapAsync 行为一致）
+        GenICamNodeMap? nodeMap = _tucamService.GetCachedNodeMap(idx);
+        GenICamDependencyGraph? depGraph = _tucamService.GetCachedDependencyGraph(idx);
+        snapshot.NodeMap = nodeMap is not null
+            ? MapNodeMapToDto(id, nodeMap, depGraph)
+            : new CameraNodeMapDto { CameraId = id, EnumeratedAt = DateTime.UtcNow };
+
+        // 3. TriggerMode（读取失败回退为 0=FreeRunning）
+        try
+        {
+            snapshot.TriggerMode = await _tucamService.GetGenICamIntAsync(idx, "TriggerMode");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogDebug(ex, "相机 {Id} 读取 TriggerMode 失败，按 FreeRunning 处理", id);
+            snapshot.TriggerMode = 0;
+        }
+        snapshot.TriggerModeSymbol = snapshot.TriggerMode switch
+        {
+            0 => "FreeRunning",
+            1 => "Standard",
+            2 => "Software",
+            _ => "Unknown",
+        };
+
+        // 4. 运行态：预览/采集/RTP 端点
+        snapshot.IsPreviewing = _streamingService?.IsPreviewActive(id) ?? false;
+        snapshot.IsCapturing = _tucamService.IsCapturing(idx);
+        snapshot.RtpEndpoint = _streamingService?.GetRtpEndpoint(id);
+
+        return snapshot;
     }
 }

@@ -32,6 +32,15 @@ public static class MotorDbContextModelCreatingExtensions
             b.Property(x => x.MinRotationAngle);
             b.Property(x => x.MaxRotationAngle);
 
+            // KTECH 设备识别信息（在线读取后缓存）
+            b.Property(x => x.KtechDeviceTypeCode);
+            b.Property(x => x.KtechDriverName).HasMaxLength(MotorConsts.MaxKtechIdentifierLength);
+            b.Property(x => x.KtechMotorName).HasMaxLength(MotorConsts.MaxKtechIdentifierLength);
+            b.Property(x => x.KtechChipId).HasMaxLength(MotorConsts.MaxKtechIdentifierLength);
+            b.Property(x => x.KtechHardwareVersion).HasMaxLength(MotorConsts.MaxKtechVersionLength);
+            b.Property(x => x.KtechMotorVersion).HasMaxLength(MotorConsts.MaxKtechVersionLength);
+            b.Property(x => x.KtechFirmwareVersion).HasMaxLength(MotorConsts.MaxKtechVersionLength);
+
             b.HasIndex(x => x.AxisIndex).IsUnique();
             b.HasIndex(x => x.IsEnabled);
             // 同一总线（SerialPortConfig）上的从机地址必须全局唯一

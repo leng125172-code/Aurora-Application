@@ -40,12 +40,15 @@ import {
     type GenICamNodeSetInput,
     type CameraNodeMapDto,
     type CameraStateDto,
+    type GenICamNodeChangeDto,
+    type CameraSnapshotStateDto,
     batchGetGenICamParams as apiBatchGetGenICamParams,
     setGenICamParam as apiSetGenICamParam,
     executeGenICamCommand as apiExecuteGenICamCommand,
     getCameraNodeMap as apiGetCameraNodeMap,
     refreshCameraNodeMap as apiRefreshCameraNodeMap,
     readCameraNodes as apiReadCameraNodes,
+    getCameraSnapshotState as apiGetCameraSnapshotState,
 } from '@/api/cameras'
 
 export const useCameraStore = defineStore('camera', () => {
@@ -67,6 +70,35 @@ export const useCameraStore = defineStore('camera', () => {
     const cameraStates = ref<Map<string, CameraStateDto>>(new Map())
     /** 动态 NodeMap 缓存，key 为相机 ID */
     const nodeMaps = ref<Map<string, CameraNodeMapDto>>(new Map())
+    /** 已订阅快照状态恢复的相机 ID 集合（sessionStorage 持久化，重连时用于批量恢复） */
+    const subscribedCameraIds = ref<Set<string>>(new Set())
+
+    /** sessionStorage key */
+    const SESSION_KEY = 'camera:subscribedIds'
+
+    /** 从 sessionStorage 恢复订阅集合 */
+    function _loadSubscribedIds() {
+        try {
+            const raw = sessionStorage.getItem(SESSION_KEY)
+            if (raw) {
+                const ids: string[] = JSON.parse(raw)
+                subscribedCameraIds.value = new Set(ids)
+            }
+        } catch {
+            // 忽略解析失败
+        }
+    }
+
+    /** 持久化订阅集合到 sessionStorage */
+    function _saveSubscribedIds() {
+        try {
+            sessionStorage.setItem(SESSION_KEY, JSON.stringify([...subscribedCameraIds.value]))
+        } catch {
+            // 忽略写入失败
+        }
+    }
+
+    _loadSubscribedIds()
 
     let connection: signalR.HubConnection | null = null
 
@@ -91,6 +123,9 @@ export const useCameraStore = defineStore('camera', () => {
             frameRate: toNumber(raw.frameRate ?? raw.FrameRate),
             aeStatus: toNumber(raw.aeStatus ?? raw.AeStatus),
             currentBufFrames: toNumber(raw.currentBufFrames ?? raw.CurrentBufFrames),
+            focusScore: toNumber(raw.focusScore ?? raw.FocusScore),
+            apertureScore: toNumber(raw.apertureScore ?? raw.ApertureScore),
+            apertureHint: toNumber(raw.apertureHint ?? raw.ApertureHint),
         }
     }
 
@@ -141,7 +176,7 @@ export const useCameraStore = defineStore('camera', () => {
             connection = new signalR.HubConnectionBuilder()
                 .withUrl('/signalr-hubs/camera', { skipNegotiation: false })
                 .withHubProtocol(new MessagePackHubProtocol())
-                .withAutomaticReconnect()
+                .withAutomaticReconnect([0, 2000, 5000, 10000])
                 .configureLogging(signalR.LogLevel.Warning)
                 .build()
 
@@ -177,11 +212,37 @@ export const useCameraStore = defineStore('camera', () => {
                 liveMetrics.value.set(cameraId, normalizeLiveMetrics(metrics))
             })
 
+            // 接收 GenICam 节点增量变更推送（Set 节点或 Selector 切换触发）
+            connection.on('OnGenICamNodesChangedAsync', (cameraId: string, changes: GenICamNodeChangeDto[]) => {
+                const nodeMap = nodeMaps.value.get(cameraId)
+                if (!nodeMap || !changes?.length) return
+                for (const change of changes) {
+                    const node = nodeMap.allNodes.find((n) => n.nodeName === change.nodeName)
+                    if (!node) continue
+                    if (change.value !== null) node.currentValue = change.value
+                    if (change.access !== null) node.access = change.access
+                    node.isLocked = change.isLocked
+                }
+            })
+
+            // 接收 NodeMap 整体重新枚举通知（RefreshNodeMap 后），前端重新拉取完整表
+            connection.on('OnGenICamNodeMapReloadedAsync', (cameraId: string, _enumeratedAt: string) => {
+                void fetchNodeMap(cameraId)
+            })
+
             connection.onclose(() => {
                 hubConnected.value = false
             })
-            connection.onreconnected(() => {
+            connection.onreconnected(async () => {
                 hubConnected.value = true
+                // 重连后批量恢复所有已订阅相机的状态（触发 Reattach + 读取最新快照）
+                for (const id of subscribedCameraIds.value) {
+                    try {
+                        await loadCameraSnapshotState(id)
+                    } catch {
+                        // 忽略单台相机恢复失败，不影响其他
+                    }
+                }
             })
         }
 
@@ -318,6 +379,34 @@ export const useCameraStore = defineStore('camera', () => {
 
     async function setGenICamParam(id: string, input: GenICamNodeSetInput): Promise<void> {
         await apiSetGenICamParam(id, input)
+
+        // 写入成功后，利用依赖图本地更新受影响节点的 Access，无需重新枚举
+        const nodeMap = nodeMaps.value.get(id)
+        if (!nodeMap) return
+
+        // 只处理整数/枚举类型的节点（float/string 不会是选择器）
+        if (input.dataType !== 'int' && input.dataType !== 'enum') return
+
+        const newIntValue = parseInt(input.value, 10)
+        if (isNaN(newIntValue)) return
+
+        // 找到所有 selectorNode = 该节点且 optionValue = 新选中值的依赖边
+        const affectedEdges = nodeMap.dependencies.filter(
+            (dep) => dep.selectorNode === input.nodeName && dep.optionValue === newIntValue && dep.newAccess != null
+        )
+        if (affectedEdges.length === 0) return
+
+        // 构建受影响节点的最新 access 映射（同一选项下可能有多条边指向同一节点，取最后一条）
+        const accessMap = new Map<string, string>()
+        for (const edge of affectedEdges) {
+            if (edge.newAccess) accessMap.set(edge.affectedNode, edge.newAccess)
+        }
+
+        // normalize 后 allNodes 和 categories.nodes 共享引用，只需更新 allNodes 即可
+        for (const node of nodeMap.allNodes) {
+            const newAccess = accessMap.get(node.nodeName)
+            if (newAccess) node.access = newAccess
+        }
     }
 
     async function executeGenICamCommand(id: string, nodeName: string): Promise<void> {
@@ -326,16 +415,28 @@ export const useCameraStore = defineStore('camera', () => {
 
     // ─── 动态 NodeMap ─────────────────────────────────────────────────────────
 
+    /**
+     * 让 categories.nodes 和 allNodes 共享同一对象引用。
+     * JSON 反序列化后两者是独立副本，normalize 后修改 allNodes[x] 即可同时反映到 categories。
+     */
+    function normalizeNodeMap(map: CameraNodeMapDto): CameraNodeMapDto {
+        const index = new Map(map.allNodes.map((n) => [n.nodeName, n]))
+        for (const cat of map.categories) {
+            cat.nodes = cat.nodes.map((n) => index.get(n.nodeName) ?? n)
+        }
+        return map
+    }
+
     /** 拉取并缓存指定相机的 NodeMap 快照 */
     async function fetchNodeMap(id: string): Promise<CameraNodeMapDto> {
-        const map = await apiGetCameraNodeMap(id)
+        const map = normalizeNodeMap(await apiGetCameraNodeMap(id))
         nodeMaps.value.set(id, map)
         return map
     }
 
     /** 强制刷新 NodeMap（重新枚举 + 探测依赖） */
     async function refreshNodeMap(id: string): Promise<CameraNodeMapDto> {
-        const map = await apiRefreshCameraNodeMap(id)
+        const map = normalizeNodeMap(await apiRefreshCameraNodeMap(id))
         nodeMaps.value.set(id, map)
         return map
     }
@@ -343,6 +444,37 @@ export const useCameraStore = defineStore('camera', () => {
     /** 批量读取节点最新值（用于 Selector 切换后局部刷新） */
     async function readNodes(id: string, nodes: GenICamNodeGetInput[]): Promise<GenICamBatchGetResultDto> {
         return apiReadCameraNodes(id, nodes)
+    }
+
+    /**
+     * 页面刷新/路由返回/SignalR 重连后调用：
+     * 一次往返拉取相机完整运行状态快照，恢复 NodeMap 缓存、预览状态等 UI 状态。
+     * 同时向 Hub 发送 ReattachPreview，续约宽限期内的预览会话。
+     */
+    async function loadCameraSnapshotState(id: string): Promise<CameraSnapshotStateDto> {
+        await startHub()
+
+        // 向 Hub 续约预览（取消宽限期停止）；若未在宽限期内则静默忽略
+        try {
+            if (connection?.state === signalR.HubConnectionState.Connected) {
+                await connection.invoke<boolean>('ReattachPreviewAsync', id)
+            }
+        } catch {
+            // 忽略续约失败
+        }
+
+        const snapshot = await apiGetCameraSnapshotState(id)
+
+        // 恢复 NodeMap 缓存
+        if (snapshot.nodeMap) {
+            nodeMaps.value.set(id, normalizeNodeMap(snapshot.nodeMap))
+        }
+
+        // 记录订阅，持久化以便重连时批量恢复
+        subscribedCameraIds.value.add(id)
+        _saveSubscribedIds()
+
+        return snapshot
     }
 
     return {
@@ -355,6 +487,7 @@ export const useCameraStore = defineStore('camera', () => {
         liveMetrics,
         cameraStates,
         nodeMaps,
+        subscribedCameraIds,
         // Hub
         startHub,
         stopHub,
@@ -387,5 +520,6 @@ export const useCameraStore = defineStore('camera', () => {
         fetchNodeMap,
         refreshNodeMap,
         readNodes,
+        loadCameraSnapshotState,
     }
 })

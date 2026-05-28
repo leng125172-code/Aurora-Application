@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { DeviceRunMode, DeviceRunModeLabels, switchModeAsync, type DeviceStateDto } from '@/api/device-state'
@@ -16,7 +15,6 @@ interface Props {
 const props = defineProps<Props>()
 
 const auth = useAuthStore()
-const { t } = useI18n()
 
 /** 仅在已登录且 canSwitchMode 时允许操作 */
 const isDisabled = computed<boolean>(() => {
@@ -48,7 +46,7 @@ async function handleChange(value: string): Promise<void> {
 </script>
 
 <template>
-    <Select :model-value="currentMode" :disabled="isDisabled" @update:model-value="handleChange">
+    <Select :model-value="currentMode" :disabled="isDisabled" @update:model-value="(v) => handleChange(v as string)">
         <SelectTrigger class="h-7 w-24 text-xs">
             <SelectValue placeholder="模式" />
         </SelectTrigger>

@@ -53,20 +53,22 @@ const busy = ref(false)
 watch(
     () => props.value,
     () => {
-        if (!editing.value) editingValue.value = props.value ?? ''
+        // Bug 3：<input type="number"> + v-model 会把 ref 内部值 cast 为 number，
+        // 强制转 String 保证后续发送给后端是字符串、避免 JSON 反序列化失败。
+        if (!editing.value) editingValue.value = String(props.value ?? '')
     },
     { immediate: true }
 )
 
 function startEdit() {
     if (!canWrite.value) return
-    editingValue.value = props.value ?? ''
+    editingValue.value = String(props.value ?? '')
     editing.value = true
 }
 
 function cancelEdit() {
     editing.value = false
-    editingValue.value = props.value ?? ''
+    editingValue.value = String(props.value ?? '')
 }
 
 async function saveEdit() {
@@ -74,15 +76,17 @@ async function saveEdit() {
         toast.warning('请输入有效值')
         return
     }
+    // Bug 3：强制转字符串后再发送，避免 <input type="number"> 让 v-model 变成 number。
+    const payload = String(editingValue.value ?? '')
     busy.value = true
     try {
         await store.setGenICamParam(props.cameraId, {
             nodeName: props.node.nodeName,
             dataType: apiDataType.value,
-            value: editingValue.value,
+            value: payload,
         })
         editing.value = false
-        emit('updated', props.node, editingValue.value)
+        emit('updated', props.node, payload)
         toast.success(`${props.node.displayName} 已保存`)
     } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : String(e)

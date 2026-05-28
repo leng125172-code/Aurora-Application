@@ -1,9 +1,11 @@
 <script setup lang="ts">
 // 动态渲染一个 GenICam Category 分组卡片
 // 内部根据 Visibility 过滤后逐节点渲染 GenICamNodeField
+// 视觉风格参考 Dashboard 页面：使用 Card/CardHeader/CardTitle/CardContent
 import { computed } from 'vue'
 import type { GenICamCategoryDto, GenICamNodeDto } from '@/api/cameras'
 import GenICamNodeField from './GenICamNodeField.vue'
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 
 const props = defineProps<{
     cameraId: string
@@ -40,9 +42,11 @@ const visibleNodes = computed<GenICamNodeDto[]>(() => {
 </script>
 
 <template>
-    <div class="rounded-lg border">
-        <div class="flex items-center justify-between border-b bg-muted/30 px-3 py-2">
-            <span class="text-sm font-semibold">{{ category.displayName || category.name }}</span>
+    <Card class="relative">
+        <CardHeader class="flex flex-row items-center justify-between space-y-0 py-3">
+            <CardTitle class="text-sm font-semibold">
+                {{ category.displayName || category.name }}
+            </CardTitle>
             <button
                 :disabled="disabled || loading"
                 class="text-xs text-primary hover:underline disabled:opacity-40"
@@ -50,20 +54,22 @@ const visibleNodes = computed<GenICamNodeDto[]>(() => {
             >
                 {{ loading ? '加载中…' : '刷新' }}
             </button>
-        </div>
-        <div class="divide-y">
-            <template v-if="visibleNodes.length === 0">
-                <div class="px-3 py-4 text-center text-xs text-muted-foreground">无 {{ visibility }} 可见参数</div>
-            </template>
-            <GenICamNodeField
-                v-for="node in visibleNodes"
-                :key="node.nodeName"
-                :camera-id="cameraId"
-                :node="node"
-                :value="values[node.nodeName] ?? node.currentValue"
-                :disabled="disabled"
-                @updated="(n, v) => emit('node-updated', n, v)"
-            />
-        </div>
-    </div>
+        </CardHeader>
+        <CardContent class="p-0">
+            <div class="divide-y border-t">
+                <template v-if="visibleNodes.length === 0">
+                    <div class="px-3 py-4 text-center text-xs text-muted-foreground">无 {{ visibility }} 可见参数</div>
+                </template>
+                <GenICamNodeField
+                    v-for="node in visibleNodes"
+                    :key="node.nodeName"
+                    :camera-id="cameraId"
+                    :node="node"
+                    :value="values[node.nodeName] ?? node.currentValue"
+                    :disabled="disabled"
+                    @updated="(n, v) => emit('node-updated', n, v)"
+                />
+            </div>
+        </CardContent>
+    </Card>
 </template>

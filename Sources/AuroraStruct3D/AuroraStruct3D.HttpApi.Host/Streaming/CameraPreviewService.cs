@@ -2,10 +2,12 @@ using System.Collections.Concurrent;
 using AuroraStruct3D.Cameras;
 using AuroraStruct3D.Cameras.Dtos;
 using AuroraStruct3D.Hubs;
+using AuroraStruct3D.Sessions;
 using AuroraStruct3D.Tucam;
 using AuroraStruct3D.Tucam.Interop;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
+using Volo.Abp.Threading;
 using Volo.Abp.Uow;
 
 namespace AuroraStruct3D.Streaming;
@@ -17,8 +19,8 @@ namespace AuroraStruct3D.Streaming;
 /// </summary>
 public class CameraPreviewService : ICameraStreamingService, IHostedService, IDisposable
 {
-    /// <summary>指标推送间隔（毫秒）</summary>
-    private const int MetricsPushIntervalMs = 2000;
+    /// <summary>指标推送间隔（毫秒）——设为 500ms 以便对焦微调时得到及时评分反馈</summary>
+    private const int MetricsPushIntervalMs = 500;
 
     /// <summary>
     /// SignalR 推帧最大帧率（FPS）。
@@ -39,13 +41,40 @@ public class CameraPreviewService : ICameraStreamingService, IHostedService, IDi
     /// <summary>SignalR 推帧最小间隔（毫秒），由 <see cref="SignalRMaxFps"/> 推导</summary>
     private const long SignalRFrameIntervalMs = 1000 / SignalRMaxFps;
 
+    /// <summary>Software 触发模式下预览自动触发节拍（FPS）；过高会拖垮曝光时间长的相机</summary>
+    private const int SoftwareTriggerPreviewFps = 10;
+
+    /// <summary>Software 触发模式下两次软件触发的最小间隔（毫秒）</summary>
+    private const int SoftwareTriggerIntervalMs = 1000 / SoftwareTriggerPreviewFps;
+
+    /// <summary>Standard 外触发模式下单次 WaitForFrame 超时（毫秒），等待硬件触发到来</summary>
+    private const int ExternalTriggerWaitTimeoutMs = 8000;
+
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly IHubContext<CameraHub, ICameraHub> _hubContext;
     private readonly RtpMjpegServer _rtpServer;
     private readonly ILogger<CameraPreviewService> _logger;
+    private readonly IDeviceOperationSessionManager _sessionManager;
 
     /// <summary>相机 ID → 预览会话（仅当预览激活时存在）</summary>
     private readonly ConcurrentDictionary<Guid, CameraPreviewSession> _sessions = new();
+
+    /// <summary>
+    /// 相机 ID → 宽限期定时停止任务的取消令牌。
+    /// 用于在浏览器刷新、网络抖动等场景下保留 30s 续约窗口；
+    /// 客户端在窗口内重新订阅时调用 <see cref="ReattachPreviewAsync"/> 取消该停止。
+    /// </summary>
+    private readonly ConcurrentDictionary<Guid, CancellationTokenSource> _pendingStops = new();
+
+    /// <summary>
+    /// Per-camera 互斥锁，防止同一台相机的 Start/Stop 操作并发执行导致
+    /// TUCAM_Buf_Alloc 返回 Excluded。不同相机使用不同的 key，互不阻塞，
+    /// 两台相机可同时进行采集。
+    /// </summary>
+    private readonly ConcurrentDictionary<Guid, SemaphoreSlim> _cameraLocks = new();
+
+    /// <summary>客户端断开后保留预览的宽限期（毫秒）</summary>
+    private const int DisconnectGracePeriodMs = 30_000;
 
     private CancellationTokenSource _cts = new();
     private bool _disposed;
@@ -54,13 +83,15 @@ public class CameraPreviewService : ICameraStreamingService, IHostedService, IDi
         IServiceScopeFactory scopeFactory,
         IHubContext<CameraHub, ICameraHub> hubContext,
         RtpMjpegServer rtpServer,
-        ILogger<CameraPreviewService> logger
+        ILogger<CameraPreviewService> logger,
+        IDeviceOperationSessionManager sessionManager
     )
     {
         _scopeFactory = scopeFactory;
         _hubContext = hubContext;
         _rtpServer = rtpServer;
         _logger = logger;
+        _sessionManager = sessionManager;
     }
 
     // ─── IHostedService ─────────────────────────────────────────────────────
@@ -89,15 +120,65 @@ public class CameraPreviewService : ICameraStreamingService, IHostedService, IDi
 
     // ─── ICameraStreamingService ────────────────────────────────────────────
 
+    /// <summary>获取或创建指定相机的互斥信号量</summary>
+    private SemaphoreSlim GetCameraLock(Guid cameraId) =>
+        _cameraLocks.GetOrAdd(cameraId, _ => new SemaphoreSlim(1, 1));
+
     /// <inheritdoc/>
     public async Task StartPreviewAsync(
         Guid cameraId,
         string? connectionId,
         bool enableRtp,
-        int imageRotationAngle
+        int imageRotationAngle,
+        string? clientSessionId = null,
+        bool forceSession = false
     )
     {
-        // 若已有会话，先停止
+        // per-camera 互斥：防止并发 Start/Stop 造成 TUCAM_Buf_Alloc: Excluded。
+        // 不同相机使用各自的信号量，两台相机可同时采集。
+        SemaphoreSlim cameraLock = GetCameraLock(cameraId);
+        await cameraLock.WaitAsync();
+        try
+        {
+            await StartPreviewCoreAsync(
+                cameraId,
+                connectionId,
+                enableRtp,
+                imageRotationAngle,
+                clientSessionId,
+                forceSession
+            );
+        }
+        finally
+        {
+            cameraLock.Release();
+        }
+    }
+
+    /// <summary>真正执行预览启动的内部方法，调用方需已持有 per-camera 互斥锁</summary>
+    private async Task StartPreviewCoreAsync(
+        Guid cameraId,
+        string? connectionId,
+        bool enableRtp,
+        int imageRotationAngle,
+        string? clientSessionId,
+        bool forceSession
+    )
+    {
+        // 获取或续期设备独占会话（预览会话为无限期，直至预览停止才释放）
+        if (!string.IsNullOrWhiteSpace(clientSessionId))
+        {
+            _sessionManager.TryAcquire(
+                cameraId,
+                DeviceType.Camera,
+                clientSessionId,
+                userId: null,
+                userName: "PreviewSession",
+                force: forceSession,
+                neverExpire: true
+            );
+        }
+        // 若已有会话，先停止（此处已在锁内，不会与其他 Start 并发）
         if (_sessions.ContainsKey(cameraId))
         {
             await StopSessionAsync(cameraId);
@@ -170,7 +251,17 @@ public class CameraPreviewService : ICameraStreamingService, IHostedService, IDi
     /// <inheritdoc/>
     public async Task StopPreviewAsync(Guid cameraId)
     {
-        await StopSessionAsync(cameraId);
+        // per-camera 互斥：防止 Stop 与并发 Start 交错
+        SemaphoreSlim cameraLock = GetCameraLock(cameraId);
+        await cameraLock.WaitAsync();
+        try
+        {
+            await StopSessionAsync(cameraId);
+        }
+        finally
+        {
+            cameraLock.Release();
+        }
     }
 
     /// <inheritdoc/>
@@ -185,15 +276,16 @@ public class CameraPreviewService : ICameraStreamingService, IHostedService, IDi
     }
 
     /// <summary>
-    /// 停止指定 SignalR 连接启动的全部预览会话。
-    /// 用于浏览器刷新、关闭标签页、网络断开等客户端无法显式调用停止接口的场景。
+    /// 客户端连接断开时调用：进入 30s 宽限期，期间若客户端通过 <see cref="ReattachPreviewAsync"/>
+    /// 重新订阅则取消停止，否则到期后自动释放该会话。
+    /// 用于浏览器刷新、关闭标签页、网络抖动等场景。
     /// </summary>
     /// <param name="connectionId">SignalR 连接 ID</param>
-    public async Task StopPreviewByConnectionAsync(string connectionId)
+    public Task StopPreviewByConnectionAsync(string connectionId)
     {
         if (string.IsNullOrWhiteSpace(connectionId))
         {
-            return;
+            return Task.CompletedTask;
         }
 
         List<Guid> cameraIds = _sessions
@@ -205,18 +297,148 @@ public class CameraPreviewService : ICameraStreamingService, IHostedService, IDi
 
         foreach (Guid cameraId in cameraIds)
         {
-            CameraPreviewSession? stoppedSession = await StopSessionAsync(cameraId);
-            if (stoppedSession is null)
-            {
-                continue;
-            }
+            ScheduleDelayedStop(cameraId, connectionId);
+        }
 
-            await UpdateCameraStatusAfterAutoStopAsync(
+        return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// 客户端在宽限期内重新订阅相机预览：取消挂起的延迟停止，并将会话连接 ID 续约为新连接。
+    /// 由 <c>GetCameraSnapshotStateAsync</c> 在前端调用时间接触发。
+    /// </summary>
+    /// <param name="cameraId">相机 ID</param>
+    /// <param name="newConnectionId">新的 SignalR 连接 ID；为空表示切换为全组播模式</param>
+    /// <returns>true 表示有挂起的停止被取消（即续约成功）；false 表示无需取消</returns>
+    public bool ReattachPreviewAsync(Guid cameraId, string? newConnectionId)
+    {
+        bool canceled = false;
+        if (_pendingStops.TryRemove(cameraId, out CancellationTokenSource? cts))
+        {
+            try
+            {
+                cts.Cancel();
+            }
+            catch
+            {
+                // 忽略：可能已被释放
+            }
+            try
+            {
+                cts.Dispose();
+            }
+            catch
+            {
+                // 忽略
+            }
+            canceled = true;
+        }
+
+        if (_sessions.TryGetValue(cameraId, out CameraPreviewSession? session))
+        {
+            session.ReassignConnectionId(newConnectionId);
+        }
+
+        if (canceled)
+        {
+            _logger.LogInformation(
+                "相机 {Id} 预览会话续约成功，新 ConnectionId={ConnectionId}",
                 cameraId,
-                stoppedSession.DeviceIndex,
-                connectionId
+                newConnectionId ?? "广播"
             );
         }
+
+        return canceled;
+    }
+
+    /// <summary>
+    /// 安排相机预览在 30s 宽限期后自动停止；若到期前已调用 <see cref="ReattachPreviewAsync"/>，则取消停止。
+    /// </summary>
+    private void ScheduleDelayedStop(Guid cameraId, string staleConnectionId)
+    {
+        CancellationTokenSource cts = new CancellationTokenSource();
+        _pendingStops.AddOrUpdate(
+            cameraId,
+            cts,
+            (_, oldCts) =>
+            {
+                try
+                {
+                    oldCts.Cancel();
+                }
+                catch
+                {
+                    // 忽略
+                }
+                try
+                {
+                    oldCts.Dispose();
+                }
+                catch
+                {
+                    // 忽略
+                }
+                return cts;
+            }
+        );
+
+        _logger.LogInformation(
+            "相机 {Id} 已进入 {GraceMs}ms 宽限期，客户端可在期间重连恢复预览（旧 ConnectionId={ConnectionId}）",
+            cameraId,
+            DisconnectGracePeriodMs,
+            staleConnectionId
+        );
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(DisconnectGracePeriodMs, cts.Token);
+
+                // 宽限期到期，若会话仍指向旧连接（未被续约）则真正停止
+                if (
+                    _sessions.TryGetValue(cameraId, out CameraPreviewSession? session)
+                    && string.Equals(
+                        session.ConnectionId,
+                        staleConnectionId,
+                        StringComparison.Ordinal
+                    )
+                )
+                {
+                    CameraPreviewSession? stoppedSession = await StopSessionAsync(cameraId);
+                    if (stoppedSession is not null)
+                    {
+                        await UpdateCameraStatusAfterAutoStopAsync(
+                            cameraId,
+                            stoppedSession.DeviceIndex,
+                            staleConnectionId
+                        );
+                    }
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                // 客户端在宽限期内重连，已取消
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "相机 {Id} 宽限期到期清理异常", cameraId);
+            }
+            finally
+            {
+                _pendingStops.TryRemove(
+                    new KeyValuePair<Guid, CancellationTokenSource>(cameraId, cts)
+                );
+                try
+                {
+                    cts.Dispose();
+                }
+                catch
+                {
+                    // 忽略
+                }
+            }
+        });
     }
 
     /// <inheritdoc/>
@@ -230,6 +452,54 @@ public class CameraPreviewService : ICameraStreamingService, IHostedService, IDi
 
         // 使用本机 IP（由调用方根据请求上下文确定更好，这里返回占位符）
         return _rtpServer.GetEndpoint(cameraId, "0.0.0.0");
+    }
+
+    /// <inheritdoc/>
+    public bool IsPreviewActive(Guid cameraId)
+    {
+        return _sessions.ContainsKey(cameraId);
+    }
+
+    /// <inheritdoc/>
+    public async Task NotifyGenICamNodesChangedAsync(
+        Guid cameraId,
+        List<GenICamNodeChangeDto> changes
+    )
+    {
+        if (changes is null || changes.Count == 0)
+        {
+            return;
+        }
+
+        try
+        {
+            await _hubContext.Clients.All.OnGenICamNodesChangedAsync(cameraId.ToString(), changes);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(
+                ex,
+                "相机 {Id} OnGenICamNodesChangedAsync 推送失败（共 {Count} 项）",
+                cameraId,
+                changes.Count
+            );
+        }
+    }
+
+    /// <inheritdoc/>
+    public async Task NotifyGenICamNodeMapReloadedAsync(Guid cameraId, DateTime enumeratedAt)
+    {
+        try
+        {
+            await _hubContext.Clients.All.OnGenICamNodeMapReloadedAsync(
+                cameraId.ToString(),
+                enumeratedAt
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "相机 {Id} OnGenICamNodeMapReloadedAsync 推送失败", cameraId);
+        }
     }
 
     // ─── 推流循环 ────────────────────────────────────────────────────────────
@@ -250,10 +520,56 @@ public class CameraPreviewService : ICameraStreamingService, IHostedService, IDi
         ITucamCameraService tucamService =
             scope.ServiceProvider.GetRequiredService<ITucamCameraService>();
 
-        _logger.LogDebug("相机 {Id} (index={Idx}) 预览线程开始运行", cameraId, deviceIndex);
+        _logger.LogInformation("相机 {Id} (index={Idx}) 预览线程开始运行", cameraId, deviceIndex);
+
+        // 读取当前 TriggerMode 决定预览策略：
+        //   0 = FreeRunning（连续自由出帧，最常用）
+        //   1 = Standard（外部硬件触发，需等待硬件信号）
+        //   2 = Software（每帧由软件触发，需主动 DoSoftwareTrigger）
+        long triggerMode = 0;
+        try
+        {
+            triggerMode = tucamService
+                .GetGenICamIntAsync(deviceIndex, "TriggerMode")
+                .GetAwaiter()
+                .GetResult();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(
+                ex,
+                "相机 {Id} 读取 TriggerMode 失败，按 FreeRunning 模式预览",
+                cameraId
+            );
+        }
+
+        _logger.LogInformation(
+            "相机 {Id} 预览线程采用 TriggerMode={Mode} 策略",
+            cameraId,
+            triggerMode switch
+            {
+                1 => "Standard(外触发)",
+                2 => "Software(软触发)",
+                _ => "FreeRunning(自由运行)",
+            }
+        );
+
+        // 按 TriggerMode 计算单次 WaitForFrame 超时（Standard 模式拉长等待硬件触发）
+        int waitTimeoutMs = triggerMode == 1 ? ExternalTriggerWaitTimeoutMs : 2000;
 
         long metricsLastSent = Environment.TickCount64;
-        long signalRLastSent = 0; // 上一次向 SignalR 推帧的时间戳（毫秒）
+        long signalRLastSent = 0; // 上一次向 SignalR 推帧的时间戳（毫秒），初始化为 0 触发首帧立即编码
+        long softwareTriggerLastSent = 0; // Software 模式下上一次软件触发的时间戳
+        int consecutiveTimeouts = 0; // Bug 4 诊断：连续超时计数器（成功拽帧清零）
+
+        // 缓存上次编码帧的质量评分，供 drain 帧期间的指标推送复用
+        FrameQualityScore lastQuality = default;
+
+        // drain 节流：WaitForFrame 两次调用之间的最小间隔（含 drain 调用耗时）。
+        // 目的：两台相机同时预览时，当一台相机在 drain 路径内休眠，另一台可获得 USB 带宽。
+        // 典型 JPEG 编码耗时 ~300ms（ARM64，2448×2048），远大于此间隔，
+        // 故 drain 睡眠主要在编码完成、下一次 SignalR 推帧到期之前的空窗期发挥作用。
+        const int DrainThrottleMs = 40; // ≈25fps drain 节拍，匹配相机典型最大帧率
 
         try
         {
@@ -264,63 +580,183 @@ public class CameraPreviewService : ICameraStreamingService, IHostedService, IDi
                     break;
                 }
 
-                byte[] jpegFrame;
-                try
+                // Software 触发模式：按固定节拍主动发软件触发，避免 WaitForFrame 永久阻塞
+                if (triggerMode == 2)
                 {
-                    // 抓帧（最多等待 2000ms，若超时跳过本帧继续循环）
-                    // 超时是正常现象（曝光时间 > 2s 或帧率极低），不做告警
-                    jpegFrame = tucamService
-                        .GrabFrameRawAsync(
-                            deviceIndex,
-                            2000,
-                            SignalRPreviewMaxWidth,
-                            SignalRPreviewJpegQuality,
-                            currentSession.ImageRotationAngle
-                        )
-                        .GetAwaiter()
-                        .GetResult();
-                }
-                catch (OperationCanceledException)
-                {
-                    break;
-                }
-                catch (InvalidOperationException ex)
-                    when (ex.Message.Contains("Timeout", StringComparison.OrdinalIgnoreCase))
-                {
-                    // WaitForFrame 超时属于预期行为（帧率低于轮询间隔），静默跳过
-                    continue;
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "相机 {Id} 抓帧失败，跳过本帧", cameraId);
-                    continue;
+                    long nowTrig = Environment.TickCount64;
+                    if (nowTrig - softwareTriggerLastSent >= SoftwareTriggerIntervalMs)
+                    {
+                        try
+                        {
+                            tucamService
+                                .DoSoftwareTriggerAsync(deviceIndex)
+                                .GetAwaiter()
+                                .GetResult();
+                            softwareTriggerLastSent = nowTrig;
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogWarning(
+                                ex,
+                                "相机 {Id} 预览线程软件触发失败，本轮跳过",
+                                cameraId
+                            );
+                        }
+                    }
                 }
 
-                // SignalR 推帧：限速至 SignalRMaxFps，防止浏览器过载
-                long now = Environment.TickCount64;
-                if (now - signalRLastSent >= SignalRFrameIntervalMs)
-                {
-                    PushFrameAsync(cameraId, jpegFrame, connectionId).GetAwaiter().GetResult();
-                    signalRLastSent = now;
-                }
+                // ── 决定本轮是否需要编码并推送 ────────────────────────────────────────
+                // signalRLastSent 在编码完成后才更新（见下方），因此编码刚结束的第一轮
+                // now - signalRLastSent ≈ 0，会进入 drain 路径，为其他相机释放 USB 带宽。
+                long iterStart = Environment.TickCount64;
+                bool needSignalR = iterStart - signalRLastSent >= SignalRFrameIntervalMs;
+                bool needPushFrame = needSignalR || enableRtp;
 
-                // RTP 副流推帧（不限速，全速运行，支持 120FPS+）
-                if (enableRtp)
+                if (needPushFrame)
                 {
+                    // ── 完整抓帧路径：WaitForFrame + JPEG 编码 ────────────────────────
+                    byte[] jpegFrame;
+                    FrameQualityScore frameQuality;
                     try
                     {
-                        _rtpServer.SendFrame(cameraId, jpegFrame);
+                        (jpegFrame, frameQuality) = tucamService
+                            .GrabFrameRawAsync(
+                                deviceIndex,
+                                waitTimeoutMs,
+                                SignalRPreviewMaxWidth,
+                                SignalRPreviewJpegQuality,
+                                currentSession.ImageRotationAngle
+                            )
+                            .GetAwaiter()
+                            .GetResult();
+                        lastQuality = frameQuality;
+                        consecutiveTimeouts = 0;
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        break;
+                    }
+                    catch (InvalidOperationException ex)
+                        when (ex.Message.Contains("Timeout", StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (triggerMode == 1)
+                        {
+                            continue;
+                        }
+
+                        consecutiveTimeouts++;
+                        // 首次超时即记录信息，后续每 2 次升级为警告（USB 带宽冲突会快速触发）
+                        if (consecutiveTimeouts == 1)
+                        {
+                            _logger.LogInformation(
+                                "相机 {Id} (index={Idx}) WaitForFrame 首次超时（TriggerMode={Mode}），可能 SDK 采集线程未启动或 USB 带宽不足；详情：{Msg}",
+                                cameraId,
+                                deviceIndex,
+                                triggerMode,
+                                ex.Message
+                            );
+                        }
+                        else if (consecutiveTimeouts % 2 == 0)
+                        {
+                            _logger.LogWarning(
+                                "相机 {Id} (index={Idx}) 已连续 {Count} 次 WaitForFrame 超时（TriggerMode={Mode}），SDK 采集线程可能已退出，建议停止预览后重新启动",
+                                cameraId,
+                                deviceIndex,
+                                consecutiveTimeouts,
+                                triggerMode
+                            );
+                        }
+                        continue;
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogWarning(ex, "相机 {Id} RTP 推帧失败", cameraId);
+                        _logger.LogWarning(ex, "相机 {Id} 抓帧失败，跳过本帧", cameraId);
+                        continue;
+                    }
+
+                    // SignalR 推帧：编码完成后检查时间窗，在此之后更新时间戳（而非编码前），
+                    // 使下一轮迭代 now - signalRLastSent ≈ 0，进入 drain 路径，释放 USB 带宽。
+                    long afterEncode = Environment.TickCount64;
+                    if (afterEncode - signalRLastSent >= SignalRFrameIntervalMs)
+                    {
+                        PushFrameAsync(cameraId, jpegFrame, connectionId).GetAwaiter().GetResult();
+                        signalRLastSent = afterEncode; // 编码完成后才更新，下一轮进入 drain
+                    }
+
+                    // RTP 副流推帧（不限速，全速运行，支持 120FPS+）
+                    if (enableRtp)
+                    {
+                        try
+                        {
+                            _rtpServer.SendFrame(cameraId, jpegFrame);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogWarning(ex, "相机 {Id} RTP 推帧失败", cameraId);
+                        }
+                    }
+                }
+                else
+                {
+                    // ── Drain 路径：仅消费帧，不编码，为其他相机让出 USB 带宽 ────────────
+                    // drain 超时使用较短值，避免长时间阻塞导致节流间隔失效
+                    int drainTimeoutMs = Math.Min(waitTimeoutMs, DrainThrottleMs - 2);
+                    try
+                    {
+                        bool drained = tucamService
+                            .DrainFrameAsync(deviceIndex, drainTimeoutMs)
+                            .GetAwaiter()
+                            .GetResult();
+                        if (drained)
+                        {
+                            consecutiveTimeouts = 0;
+                        }
+                        else if (triggerMode != 1)
+                        {
+                            // drain 超时：相机未出帧（FreeRunning 模式下属于异常）
+                            consecutiveTimeouts++;
+                            // drain 路径 38ms 一次，10 次 ≈ 380ms 才警告，避免噪声
+                            if (consecutiveTimeouts % 25 == 0)
+                            {
+                                _logger.LogWarning(
+                                    "相机 {Id} (index={Idx}) drain 已连续 {Count} 次超时（TriggerMode={Mode}），SDK 采集线程可能已退出",
+                                    cameraId,
+                                    deviceIndex,
+                                    consecutiveTimeouts,
+                                    triggerMode
+                                );
+                            }
+                        }
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        break;
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "相机 {Id} drain 帧失败，跳过", cameraId);
+                    }
+
+                    // 休眠剩余时间，控制 WaitForFrame 调用节拍，
+                    // 让 USB 总线在此期间可被其他相机使用（USB back-pressure 生效）
+                    long elapsed = Environment.TickCount64 - iterStart;
+                    int sleepMs = (int)Math.Max(0, DrainThrottleMs - elapsed);
+                    if (sleepMs > 0)
+                    {
+                        Thread.Sleep(sleepMs);
                     }
                 }
 
-                // 周期性推送实时指标
+                // 周期性推送实时指标（含对焦/光圈评分，使用缓存的 lastQuality）
                 if (Environment.TickCount64 - metricsLastSent >= MetricsPushIntervalMs)
                 {
-                    PushLiveMetricsAsync(cameraId, deviceIndex, tucamService, connectionId)
+                    PushLiveMetricsAsync(
+                            cameraId,
+                            deviceIndex,
+                            tucamService,
+                            connectionId,
+                            lastQuality
+                        )
                         .GetAwaiter()
                         .GetResult();
                     metricsLastSent = Environment.TickCount64;
@@ -382,7 +818,8 @@ public class CameraPreviewService : ICameraStreamingService, IHostedService, IDi
         Guid cameraId,
         int deviceIndex,
         ITucamCameraService tucamService,
-        string? connectionId
+        string? connectionId,
+        FrameQualityScore quality
     )
     {
         try
@@ -415,6 +852,9 @@ public class CameraPreviewService : ICameraStreamingService, IHostedService, IDi
                 FrameRate = frameRate,
                 AeStatus = aeStatus,
                 CurrentBufFrames = bufFrames,
+                FocusScore = quality.FocusScore,
+                ApertureScore = quality.ApertureScore,
+                ApertureHint = (int)quality.ApertureHint,
             };
 
             string cameraIdStr = cameraId.ToString();
@@ -448,6 +888,9 @@ public class CameraPreviewService : ICameraStreamingService, IHostedService, IDi
         {
             await Task.Run(() => session.Thread.Join(TimeSpan.FromSeconds(2)));
         }
+
+        // 系统强制释放：null 表示不检查 clientSessionId（无论谁持有都释放）
+        _sessionManager.Release(cameraId, clientSessionId: null);
 
         _logger.LogInformation("相机 {Id} 实时预览已停止", cameraId);
         return session;
@@ -590,7 +1033,15 @@ internal sealed class CameraPreviewSession
     public Thread Thread { get; }
 
     /// <summary>发起预览的 SignalR 连接 ID（null 表示全组播）</summary>
-    public string? ConnectionId { get; }
+    public string? ConnectionId { get; private set; }
+
+    /// <summary>
+    /// 在 SignalR 客户端重连后重新绑定连接 ID，用于宽限期内的会话续约。
+    /// </summary>
+    public void ReassignConnectionId(string? newConnectionId)
+    {
+        ConnectionId = newConnectionId;
+    }
 
     /// <summary>是否启用 RTP 副流</summary>
     public bool EnableRtp { get; }

@@ -1,11 +1,11 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 /**
  * 用户管理页面：分页查询、创建、重置密码、锁定/禁用
  */
 import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
-import { Lock, Plus, RefreshCw, Search, KeyRound, Trash2 } from 'lucide-vue-next'
+import { Lock, Plus, RefreshCw, Search, KeyRound, Trash2 } from '@lucide/vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'

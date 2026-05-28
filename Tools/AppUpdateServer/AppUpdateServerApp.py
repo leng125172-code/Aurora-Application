@@ -7,7 +7,7 @@ Aurora 应用更新服务器 — 图形界面管理程序（tkinter 版）
 功能：
     · 图形化启动 / 停止 AppUpdateServer 服务
     · 实时彩色日志显示
-    · 开机自启管理（Linux systemd 系统服务 / Windows 注册表）
+    · 开机自启管理（Linux GNOME autostart .desktop / Windows 注册表）
     · 侧边栏实时显示本机所有 IP 地址，IP 变化自动刷新
     · 一键构建 .deb 安装包（仅 Linux）
 
@@ -59,22 +59,19 @@ THEME = {
     "select_bg": "#094771",
 }
 
-# systemd 系统服务模板
-_SYSTEMD_TEMPLATE = """\
-[Unit]
-Description=Aurora Update Server
-After=network.target
-
-[Service]
-Type=simple
-ExecStart={python} {script}
-Restart=on-failure
-RestartSec=5
-StandardOutput=journal
-StandardError=journal
-
-[Install]
-WantedBy=multi-user.target
+# GNOME autostart .desktop 模板（登录后由桌面会话拉起 GUI，需要 sudo 以便后续操作系统文件）
+_AUTOSTART_DESKTOP_TEMPLATE = """[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Aurora 更新服务器
+Name[en]=Aurora Update Server
+Comment=RK3588 应用更新接收服务管理工具
+Exec=sudo {python} {script}
+Icon={icon}
+Terminal=false
+Categories=Utility;System;
+StartupNotify=true
+X-GNOME-Autostart-enabled=true
 """
 
 _DESKTOP_TEMPLATE = """\
@@ -136,10 +133,14 @@ def get_all_ips() -> list:
 
 # ── 开机启动管理 ─────────────────────────────────────────────────────────────────
 class AutostartManager:
-    """跨平台开机启动管理（Linux systemd 系统服务 / Windows 注册表）。"""
+    """跨平台开机启动管理（Linux GNOME autostart .desktop / Windows 注册表）。"""
 
-    _SVC_DIR = Path("/etc/systemd/system")
-    _SVC_FILE = _SVC_DIR / f"{APP_ID}.service"
+    # RK3588 目标用户固定为 linaro，autostart 目录硬编码避免 sudo 下 Path.home() 指向 /root
+    _TARGET_USER = "linaro"
+    _AUTOSTART_DIR = Path(f"/home/{_TARGET_USER}/.config/autostart")
+    _AUTOSTART_FILE = _AUTOSTART_DIR / f"{APP_ID}.desktop"
+    # 历史遗留路径，启用/禁用时顺带清理
+    _LEGACY_SYSTEM_SVC_FILE = Path("/etc/systemd/system") / f"{APP_ID}.service"
     _LEGACY_USER_SVC_FILE = (
         Path.home() / ".config" / "systemd" / "user" / f"{APP_ID}.service"
     )
@@ -149,7 +150,7 @@ class AutostartManager:
     @classmethod
     def is_enabled(cls) -> bool:
         if platform.system() == "Linux":
-            return cls._SVC_FILE.exists()
+            return cls._AUTOSTART_FILE.exists()
         if platform.system() == "Windows":
             try:
                 import winreg
@@ -180,37 +181,47 @@ class AutostartManager:
     @classmethod
     def _enable_linux(cls) -> tuple:
         try:
-            # 兼容旧版本：先停用并清理用户级服务，避免与系统服务并存导致混淆。
-            subprocess.run(
-                ["systemctl", "--user", "disable", "--now", APP_ID],
-                check=False,
-                capture_output=True,
-            )
-            if cls._LEGACY_USER_SVC_FILE.exists():
-                cls._LEGACY_USER_SVC_FILE.unlink()
-                subprocess.run(
-                    ["systemctl", "--user", "daemon-reload"],
-                    check=False,
-                    capture_output=True,
-                )
+            # 兼容旧版本：清理遗留的 systemd 用户/系统服务
+            cls._cleanup_legacy_systemd()
 
-            unit = _SYSTEMD_TEMPLATE.format(
+            icon_path = ASSETS_DIR / "Application.png"
+            content = _AUTOSTART_DESKTOP_TEMPLATE.format(
                 python=sys.executable,
                 script=str(Path(__file__).resolve()),
+                icon=str(icon_path),
             )
-            tmp_file = Path("/tmp") / f"{APP_ID}.service"
-            tmp_file.write_text(
-                unit,
-                encoding="utf-8",
+            tmp_file = Path("/tmp") / f"{APP_ID}.desktop"
+            tmp_file.write_text(content, encoding="utf-8")
+
+            # 确保 autostart 目录存在且归属目标用户
+            subprocess.run(
+                [
+                    "sudo",
+                    "install",
+                    "-d",
+                    "-o",
+                    cls._TARGET_USER,
+                    "-g",
+                    cls._TARGET_USER,
+                    "-m",
+                    "0755",
+                    str(cls._AUTOSTART_DIR),
+                ],
+                check=True,
+                capture_output=True,
             )
             subprocess.run(
                 [
                     "sudo",
                     "install",
+                    "-o",
+                    cls._TARGET_USER,
+                    "-g",
+                    cls._TARGET_USER,
                     "-m",
                     "0644",
                     str(tmp_file),
-                    str(cls._SVC_FILE),
+                    str(cls._AUTOSTART_FILE),
                 ],
                 check=True,
                 capture_output=True,
@@ -220,37 +231,62 @@ class AutostartManager:
                 check=False,
                 capture_output=True,
             )
-            subprocess.run(
-                ["sudo", "systemctl", "daemon-reload"],
-                check=True,
-                capture_output=True,
-            )
-            subprocess.run(
-                ["sudo", "systemctl", "enable", APP_ID],
-                check=True,
-                capture_output=True,
-            )
-            return True, f"已创建并启用 systemd 系统服务:\n{cls._SVC_FILE}"
+            return True, f"已写入 GNOME 自启条目:\n{cls._AUTOSTART_FILE}"
+        except subprocess.CalledProcessError as exc:
+            err = exc.stderr.decode(errors="replace") if exc.stderr else str(exc)
+            return False, f"启用失败: {err}"
         except Exception as exc:
             return False, f"启用失败: {exc}"
 
     @classmethod
     def _disable_linux(cls) -> tuple:
         try:
-            subprocess.run(
-                ["sudo", "systemctl", "disable", "--now", APP_ID],
-                capture_output=True,
-            )
-            if cls._SVC_FILE.exists():
+            # 顺带清理遗留的 systemd 服务
+            cls._cleanup_legacy_systemd()
+            if cls._AUTOSTART_FILE.exists():
                 subprocess.run(
-                    ["sudo", "rm", "-f", str(cls._SVC_FILE)],
+                    ["sudo", "rm", "-f", str(cls._AUTOSTART_FILE)],
                     check=False,
                     capture_output=True,
                 )
-            subprocess.run(["sudo", "systemctl", "daemon-reload"], capture_output=True)
-            return True, "已禁用并删除 systemd 系统服务"
+            return True, "已删除 GNOME 自启条目"
         except Exception as exc:
             return False, f"禁用失败: {exc}"
+
+    @classmethod
+    def _cleanup_legacy_systemd(cls) -> None:
+        """清理旧版本残留的 systemd 服务，幂等。"""
+        subprocess.run(
+            ["systemctl", "--user", "disable", "--now", APP_ID],
+            check=False,
+            capture_output=True,
+        )
+        if cls._LEGACY_USER_SVC_FILE.exists():
+            try:
+                cls._LEGACY_USER_SVC_FILE.unlink()
+            except OSError:
+                pass
+            subprocess.run(
+                ["systemctl", "--user", "daemon-reload"],
+                check=False,
+                capture_output=True,
+            )
+        subprocess.run(
+            ["sudo", "systemctl", "disable", "--now", APP_ID],
+            check=False,
+            capture_output=True,
+        )
+        if cls._LEGACY_SYSTEM_SVC_FILE.exists():
+            subprocess.run(
+                ["sudo", "rm", "-f", str(cls._LEGACY_SYSTEM_SVC_FILE)],
+                check=False,
+                capture_output=True,
+            )
+            subprocess.run(
+                ["sudo", "systemctl", "daemon-reload"],
+                check=False,
+                capture_output=True,
+            )
 
     @classmethod
     def _enable_windows(cls) -> tuple:
@@ -440,7 +476,9 @@ class DebBuildThread(threading.Thread):
                 textwrap.dedent(f"""\
                 #!/bin/sh
                 set -e
+                sudo rm -f /home/linaro/.config/autostart/{APP_ID}.desktop 2>/dev/null || true
                 sudo systemctl disable --now {APP_ID} 2>/dev/null || true
+                sudo rm -f /etc/systemd/system/{APP_ID}.service 2>/dev/null || true
                 echo "Aurora Update Server 已卸载。"
             """),
                 encoding="utf-8",

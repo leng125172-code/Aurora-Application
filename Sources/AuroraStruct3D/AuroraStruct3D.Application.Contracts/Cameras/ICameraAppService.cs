@@ -122,7 +122,7 @@ public interface ICameraDeviceAppService : IApplicationService
     Task<GenICamBatchGetResultDto> BatchGetGenICamParamsAsync(Guid id, GenICamBatchGetInput input);
 
     /// <summary>
-    /// 写入单个 GenICam 节点值（支持 int / float / string 类型）
+    /// 写入 GenICam 节点值。同时兼容单节点格式和批量格式（通过 nodes 字段区分）。
     /// </summary>
     Task SetGenICamParamAsync(Guid id, GenICamNodeSetInput input);
 
@@ -150,6 +150,12 @@ public interface ICameraDeviceAppService : IApplicationService
     /// 用于在选择器节点变更后局部刷新依赖节点。
     /// </summary>
     Task<GenICamBatchGetResultDto> ReadNodesAsync(Guid id, GenICamBatchGetInput input);
+
+    /// <summary>
+    /// 一次性获取相机当前完整运行状态快照（NodeMap + 触发模式 + 预览/采集状态 + RTP 端点）。
+    /// 前端在页面刷新、路由返回或 SignalR 重连后调用，用于一次往返恢复 UI 状态。
+    /// </summary>
+    Task<CameraSnapshotStateDto> GetCameraSnapshotStateAsync(Guid id);
 }
 
 /// <summary>

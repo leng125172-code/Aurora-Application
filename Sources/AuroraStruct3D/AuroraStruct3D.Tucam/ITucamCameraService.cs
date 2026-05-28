@@ -52,6 +52,36 @@ public class CameraFrameData
 }
 
 /// <summary>
+/// 帧图像质量评分（对焦清晰度 + 曝光质量），随实时预览帧一同计算并推送至前端。
+/// </summary>
+public record struct FrameQualityScore
+{
+    /// <summary>对焦清晰度评分（0-100，越高越清晰）</summary>
+    public float FocusScore { get; init; }
+
+    /// <summary>曝光质量评分（0-100，越高曝光越适中）</summary>
+    public float ApertureScore { get; init; }
+
+    /// <summary>光圈（曝光）调节建议方向</summary>
+    public ApertureHint ApertureHint { get; init; }
+}
+
+/// <summary>
+/// 光圈（曝光）调节建议方向
+/// </summary>
+public enum ApertureHint
+{
+    /// <summary>曝光良好，无需调节</summary>
+    Good = 0,
+
+    /// <summary>曝光过度，建议缩小光圈</summary>
+    Decrease = 1,
+
+    /// <summary>曝光不足，建议增大光圈</summary>
+    Increase = 2,
+}
+
+/// <summary>
 /// TUCam相机操作服务接口
 /// </summary>
 public interface ITucamCameraService
@@ -242,14 +272,24 @@ public interface ITucamCameraService
     /// <param name="maxWidth">JPEG 输出最大宽度，0 表示保持原始宽度</param>
     /// <param name="jpegQuality">JPEG 编码质量，范围 1-100</param>
     /// <param name="imageRotationAngle">图像顺时针旋转角度（度，支持 0/90/180/270）</param>
-    /// <returns>JPEG 编码的字节数组</returns>
-    Task<byte[]> GrabFrameRawAsync(
+    /// <returns>JPEG 字节数组及对应帧的图像质量评分</returns>
+    Task<(byte[] JpegBytes, FrameQualityScore Quality)> GrabFrameRawAsync(
         int cameraIndex,
         int timeoutMs = 3000,
         int maxWidth = 0,
         int jpegQuality = 85,
         int imageRotationAngle = 0
     );
+
+    /// <summary>
+    /// 仅抓取并丢弃一帧（不进行 JPEG 编码或质量评分），用于快速清空 SDK 环形缓冲区。
+    /// 当预览循环不需要推送新帧时调用，防止环形缓冲区溢出（Ring buffer full）导致
+    /// USB 总线被单台相机打满、其他相机无法获得带宽。
+    /// </summary>
+    /// <param name="cameraIndex">相机索引</param>
+    /// <param name="timeoutMs">等待帧超时时间（毫秒），超时返回 false</param>
+    /// <returns>true 表示成功消费了一帧；false 表示超时无帧或采集未启动</returns>
+    Task<bool> DrainFrameAsync(int cameraIndex, int timeoutMs = 1000);
 
     // ─── GenICam 原生节点访问 ─────────────────────────────────────────────────
 
@@ -340,4 +380,13 @@ public interface ITucamCameraService
         int cameraIndex,
         IReadOnlyList<string> nodeNames
     );
+
+    /// <summary>
+    /// 将一批节点的回读结果（Value / Access / IsLocked）同步写回服务端 NodeMap 缓存。
+    /// 在 SetGenICamParam 成功写入并回读后调用，确保缓存与硬件实际值一致，
+    /// 避免页面刷新时从缓存读到过期的初始枚举值。
+    /// </summary>
+    /// <param name="cameraIndex">相机索引</param>
+    /// <param name="values">回读结果列表（仅 Success=true 的条目会被写回）</param>
+    void UpdateCachedNodeValues(int cameraIndex, IReadOnlyList<GenICamNodeValue> values);
 }

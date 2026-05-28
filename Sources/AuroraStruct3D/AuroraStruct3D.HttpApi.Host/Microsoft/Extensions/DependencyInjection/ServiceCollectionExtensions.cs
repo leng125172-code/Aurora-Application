@@ -135,6 +135,21 @@ public static class ServiceCollectionExtensions
                     fileSystem.BasePath = "C:\\my-files";
                 });
             });
+
+            // 三维数模专属容器，使用本地文件系统存储
+            options.Containers.Configure<AuroraStruct3D.ProductModels.ProductModelBlobContainer>(
+                container =>
+                {
+                    container.UseFileSystem(fileSystem =>
+                    {
+                        fileSystem.BasePath = Path.Combine(
+                            AppContext.BaseDirectory,
+                            "files",
+                            "product-models"
+                        );
+                    });
+                }
+            );
         });
         return service;
     }

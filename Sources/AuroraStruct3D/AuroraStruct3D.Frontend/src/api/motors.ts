@@ -37,8 +37,6 @@ export interface MotorAxisDto {
     readonly model: string | null
     readonly status: MotorDeviceStatus
     readonly statusText: string
-    readonly lastKnownPosition: number
-    readonly lastKnownSpeed: number
     readonly isHomed: boolean
     readonly lastStatusUpdateAt: string | null
     readonly minRotationAngle: number | null
@@ -91,6 +89,39 @@ export interface ScanMotorDevicesResultDto {
     readonly foundCount: number
     readonly elapsedMs: number
     readonly items: DiscoveredMotorDeviceDto[]
+}
+
+/**
+ * 电机扫描进度事件类型（与后端 MotorScanProgressKind 枚举对齐）。
+ */
+export enum MotorScanProgressKind {
+    Started = 0,
+    PortStarted = 1,
+    Probing = 2,
+    DeviceFound = 3,
+    PortFinished = 4,
+    PortError = 5,
+    Completed = 6,
+}
+
+/**
+ * 后端通过 SignalR 推送的扫描进度 DTO。
+ */
+export interface MotorScanProgressDto {
+    readonly kind: MotorScanProgressKind
+    readonly timestamp: string
+    readonly message: string
+    readonly serialPortConfigId?: string | null
+    readonly portName?: string | null
+    readonly baudRate?: number | null
+    readonly slaveId?: number | null
+    readonly brand?: string | null
+    readonly found?: boolean | null
+    readonly totalPorts: number
+    readonly finishedPorts: number
+    readonly triedCount: number
+    readonly foundCount: number
+    readonly elapsedMs?: number | null
 }
 
 export interface MoveMotorInput {

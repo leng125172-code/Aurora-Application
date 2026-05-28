@@ -4,24 +4,20 @@
  * 实时网络流量折线图（上行/下行）、CAP 和 Hangfire 概览卡片。
  * 所有实时数据通过 SignalR ReceiveSystemMetrics 推送更新。
  */
-import { ref, onMounted, onUnmounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed, nextTick, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import * as signalR from '@microsoft/signalr'
-import VChart from 'vue-echarts'
-import { use } from 'echarts/core'
-import { CanvasRenderer } from 'echarts/renderers'
-import { LineChart } from 'echarts/charts'
-import { GridComponent, TooltipComponent, LegendComponent } from 'echarts/components'
+import * as echarts from 'echarts'
 import { AnimatedCircularProgressBar } from '@/components/ui/animated-circular-progressbar'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { BorderBeam } from '@/components/ui/border-beam'
 import { useAuthStore } from '@/stores/auth'
+import { useThemeStore } from '@/stores/theme'
 import { httpClient } from '@/api/client'
-
-use([CanvasRenderer, LineChart, GridComponent, TooltipComponent, LegendComponent])
 
 const { t } = useI18n()
 const authStore = useAuthStore()
+const themeStore = useThemeStore()
 
 // ── 系统指标 ─────────────────────────────────────────────────────────────────
 interface SystemMetrics {
@@ -72,73 +68,83 @@ const hangfireStats = ref<HangfireStats>({})
 const MAX_POINTS = 60
 const uploadHistory = ref<number[]>(Array(MAX_POINTS).fill(0))
 const downloadHistory = ref<number[]>(Array(MAX_POINTS).fill(0))
-const timeLabels = ref<string[]>(Array.from({ length: MAX_POINTS }, (_, i) => `${(MAX_POINTS - i) * 5}s`))
+
+const trafficChartEl = ref<HTMLDivElement | null>(null)
+let trafficChart: echarts.ECharts | null = null
 
 function pushNetworkPoint(send: number, recv: number): void {
     uploadHistory.value.push(send)
     if (uploadHistory.value.length > MAX_POINTS) uploadHistory.value.shift()
     downloadHistory.value.push(recv)
     if (downloadHistory.value.length > MAX_POINTS) downloadHistory.value.shift()
-    refreshChartOption()
+    updateChart()
 }
 
-// 上行色：rgb(249, 204, 131)  下行色：rgb(135, 195, 255)
-const trafficChartOption = ref({
-    tooltip: {
-        trigger: 'axis',
-        formatter: (params: unknown[]) => {
-            return (params as Array<{ seriesName: string; value: number }>)
-                .map((p) => `${p.seriesName}: ${formatBytes(p.value, true)}`)
-                .join('<br/>')
+/** 构建网络流量图表 ECharts option。 */
+function buildTrafficOption() {
+    const isDark = themeStore.isDark
+    return {
+        backgroundColor: 'transparent',
+        textStyle: { color: isDark ? '#e5e7eb' : '#374151', fontSize: 11 },
+        tooltip: { trigger: 'axis', axisPointer: { type: 'cross' } },
+        legend: {
+            top: 0,
+            right: 0,
+            textStyle: { color: isDark ? '#e5e7eb' : '#374151', fontSize: 11 },
         },
-    },
-    legend: { data: [t('dashboard.upload'), t('dashboard.download')], top: 4 },
-    grid: { top: 36, bottom: 24, left: 60, right: 12 },
-    xAxis: {
-        type: 'category',
-        data: timeLabels.value,
-        axisLabel: { show: false },
-        axisTick: { show: false },
-        axisLine: { lineStyle: { color: 'rgba(128,128,128,0.2)' } },
-    },
-    yAxis: {
-        type: 'value',
-        axisLabel: {
-            formatter: (v: number) => formatBytes(v, true),
-            fontSize: 10,
+        grid: { top: 32, bottom: 8, left: 70, right: 12, containLabel: false },
+        xAxis: {
+            type: 'category',
+            show: false,
+            data: Array.from({ length: MAX_POINTS }, (_, i) => i),
         },
-        splitLine: { lineStyle: { color: 'rgba(128,128,128,0.15)' } },
-    },
-    series: [
-        {
-            name: t('dashboard.upload'),
-            type: 'line',
-            smooth: true,
-            showSymbol: false,
-            data: uploadHistory.value.slice(),
-            itemStyle: { color: 'rgb(249,204,131)' },
-            areaStyle: { color: 'rgba(249,204,131,0.12)' },
+        yAxis: {
+            type: 'value',
+            minInterval: 1,
+            axisLabel: { fontSize: 10, formatter: (val: number) => formatBytes(val, true) },
+            splitLine: { lineStyle: { color: isDark ? '#374151' : '#e5e7eb' } },
         },
-        {
-            name: t('dashboard.download'),
-            type: 'line',
-            smooth: true,
-            showSymbol: false,
-            data: downloadHistory.value.slice(),
-            itemStyle: { color: 'rgb(135,195,255)' },
-            areaStyle: { color: 'rgba(135,195,255,0.12)' },
-        },
-    ],
-})
-
-function refreshChartOption(): void {
-    trafficChartOption.value = {
-        ...trafficChartOption.value,
         series: [
-            { ...trafficChartOption.value.series[0], data: uploadHistory.value.slice() },
-            { ...trafficChartOption.value.series[1], data: downloadHistory.value.slice() },
+            {
+                name: t('dashboard.upload'),
+                type: 'line',
+                smooth: true,
+                showSymbol: false,
+                data: uploadHistory.value.slice(),
+                lineStyle: { color: 'rgb(249,204,131)', width: 1.5 },
+                itemStyle: { color: 'rgb(249,204,131)' },
+                areaStyle: { color: 'rgba(249,204,131,0.12)' },
+            },
+            {
+                name: t('dashboard.download'),
+                type: 'line',
+                smooth: true,
+                showSymbol: false,
+                data: downloadHistory.value.slice(),
+                lineStyle: { color: 'rgb(135,195,255)', width: 1.5 },
+                itemStyle: { color: 'rgb(135,195,255)' },
+                areaStyle: { color: 'rgba(135,195,255,0.12)' },
+            },
         ],
     }
+}
+
+/** 初始化网络流量 ECharts 图表。 */
+function initTrafficChart(): void {
+    if (!trafficChartEl.value) return
+    trafficChart?.dispose()
+    trafficChart = echarts.init(trafficChartEl.value, themeStore.isDark ? 'dark' : undefined, { renderer: 'canvas' })
+    trafficChart.setOption(buildTrafficOption())
+}
+
+/** 仅更新图表数据，不重建实例。 */
+function updateChart(): void {
+    trafficChart?.setOption(buildTrafficOption())
+}
+
+/** 响应窗口尺寸变化，重绘图表。 */
+function handleTrafficResize(): void {
+    trafficChart?.resize()
 }
 
 // ── 工具函数 ──────────────────────────────────────────────────────────────────
@@ -208,12 +214,25 @@ async function startSignalR(): Promise<void> {
     }
 }
 
+watch(
+    () => themeStore.isDark,
+    () => {
+        // 主题变化时重新初始化图表以应用新颜色方案
+        initTrafficChart()
+    }
+)
+
 onMounted(async () => {
     await loadInitialData()
     await startSignalR()
+    await nextTick()
+    initTrafficChart()
+    window.addEventListener('resize', handleTrafficResize)
 })
 
 onUnmounted(async () => {
+    trafficChart?.dispose()
+    window.removeEventListener('resize', handleTrafficResize)
     if (connection) {
         await connection.stop()
         connection = null
@@ -375,7 +394,7 @@ onUnmounted(async () => {
                 </CardDescription>
             </CardHeader>
             <CardContent class="pr-4">
-                <VChart :option="trafficChartOption" style="height: 220px; width: 100%" autoresize />
+                <div ref="trafficChartEl" style="height: 220px; width: 100%" />
             </CardContent>
         </Card>
 

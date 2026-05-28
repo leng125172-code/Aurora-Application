@@ -26,7 +26,7 @@ public sealed class GenICamNodeMeta
     public TuElemType Type { get; init; }
 
     /// <summary>访问模式</summary>
-    public TuAccessMode Access { get; init; }
+    public TuAccessMode Access { get; set; }
 
     /// <summary>可见性</summary>
     public TuVisibility Visibility { get; init; }
@@ -41,7 +41,7 @@ public sealed class GenICamNodeMeta
     public string? Description { get; init; }
 
     /// <summary>是否被锁定（运行态不可写）</summary>
-    public bool IsLocked { get; init; }
+    public bool IsLocked { get; set; }
 
     /// <summary>整数型最小值（仅 Integer/Enumeration 有效）</summary>
     public long IntMin { get; init; }
@@ -62,7 +62,7 @@ public sealed class GenICamNodeMeta
     public double FloatStep { get; init; }
 
     /// <summary>当前值（统一转字符串：浮点用 InvariantCulture）</summary>
-    public string? CurrentValue { get; init; }
+    public string? CurrentValue { get; set; }
 
     /// <summary>枚举条目列表（仅 Enumeration / Boolean 有效）</summary>
     public IReadOnlyList<GenICamEnumEntry> EnumEntries { get; init; } =
@@ -128,6 +128,13 @@ public sealed class GenICamDependencyEdge
 
     /// <summary>变化摘要（Access/Visibility/Value/Range/EnumEntries 之一或多个）</summary>
     public string ChangeSummary { get; init; } = string.Empty;
+
+    /// <summary>
+    /// 切换到该选项后，受影响节点的新 Access 状态（仅当变化包含 Access 时有值，
+    /// 例如 "ReadOnly" / "ReadWrite" / "NotAvailable"）。
+    /// 前端可据此在写节点后直接更新本地 Access，无需重新枚举。
+    /// </summary>
+    public string? NewAccess { get; init; }
 }
 
 /// <summary>

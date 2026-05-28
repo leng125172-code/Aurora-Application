@@ -1,0 +1,365 @@
+  姝ｅ湪纭畾瑕佽繕鍘熺殑椤圭洰鈥?
+  鎵€鏈夐」鐩潎鏄渶鏂扮殑锛屾棤娉曡繕鍘熴€?
+  Hangfire.Core -> D:\GitRepos\Aurora Application\Builds\Debug\Hangfire.Core\net10.0\Hangfire.Core.dll
+  DotNetCore.CAP -> D:\GitRepos\Aurora Application\Builds\Debug\DotNetCore.CAP\net10.0\DotNetCore.CAP.dll
+  Hangfire.PostgreSql -> D:\GitRepos\Aurora Application\Builds\Debug\Hangfire.PostgreSql\net10.0\Hangfire.PostgreSql.dll
+  Volo.Abp.Core -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.Core\net10.0\Volo.Abp.Core.dll
+  Volo.Abp.Auditing.Contracts -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.Auditing.Contracts\net10.0\Volo.Abp.Auditing.Contracts.dll
+  Volo.Abp.Security -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.Security\net10.0\Volo.Abp.Security.dll
+  MiniProfiler.Shared -> D:\GitRepos\Aurora Application\Builds\Debug\MiniProfiler.Shared\net10.0\MiniProfiler.Shared.dll
+  Volo.Abp.Uow -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.Uow\net10.0\Volo.Abp.Uow.dll
+  Volo.Abp.Threading -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.Threading\net10.0\Volo.Abp.Threading.dll
+  Volo.Abp.BackgroundJobs.Domain.Shared -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.BackgroundJobs.Domain.Shared\net10.0\Volo.Abp.BackgroundJobs.Domain.Shared.dll
+  Hangfire.NetCore -> D:\GitRepos\Aurora Application\Builds\Debug\Hangfire.NetCore\net10.0\Hangfire.NetCore.dll
+  Volo.Abp.Castle.Core -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.Castle.Core\net10.0\Volo.Abp.Castle.Core.dll
+  Volo.Abp.VirtualFileSystem -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.VirtualFileSystem\net10.0\Volo.Abp.VirtualFileSystem.dll
+  DotNetCore.CAP.RabbitMQ -> D:\GitRepos\Aurora Application\Builds\Debug\DotNetCore.CAP.RabbitMQ\net10.0\DotNetCore.CAP.RabbitMQ.dll
+  DotNetCore.CAP.InMemoryStorage -> D:\GitRepos\Aurora Application\Builds\Debug\DotNetCore.CAP.InMemoryStorage\net10.0\DotNetCore.CAP.InMemoryStorage.dll
+  Volo.Abp.Guids -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.Guids\net10.0\Volo.Abp.Guids.dll
+  DotNetCore.CAP.PostgreSql -> D:\GitRepos\Aurora Application\Builds\Debug\DotNetCore.CAP.PostgreSql\net10.0\DotNetCore.CAP.PostgreSql.dll
+  DotNetCore.CAP.MySql -> D:\GitRepos\Aurora Application\Builds\Debug\DotNetCore.CAP.MySql\net10.0\DotNetCore.CAP.MySql.dll
+  DotNetCore.CAP.Dashboard -> D:\GitRepos\Aurora Application\Builds\Debug\DotNetCore.CAP.Dashboard\net10.0\DotNetCore.CAP.Dashboard.dll
+  Volo.Abp.Json.Abstractions -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.Json.Abstractions\net10.0\Volo.Abp.Json.Abstractions.dll
+  Volo.Abp -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp\net10.0\Volo.Abp.dll
+  Volo.Abp.Serialization -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.Serialization\net10.0\Volo.Abp.Serialization.dll
+  Volo.Abp.Autofac -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.Autofac\net10.0\Volo.Abp.Autofac.dll
+  Volo.Abp.Localization.Abstractions -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.Localization.Abstractions\net10.0\Volo.Abp.Localization.Abstractions.dll
+  Hangfire.AspNetCore -> D:\GitRepos\Aurora Application\Builds\Debug\Hangfire.AspNetCore\net10.0\Hangfire.AspNetCore.dll
+  Volo.Abp.DistributedLocking.Abstractions -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.DistributedLocking.Abstractions\net10.0\Volo.Abp.DistributedLocking.Abstractions.dll
+  Volo.Abp.Validation.Abstractions -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.Validation.Abstractions\net10.0\Volo.Abp.Validation.Abstractions.dll
+  姝ｅ湪鏋勫缓鍓嶇 SPA锛圓uroraStruct3D.Frontend锛?..
+  WorkingDirectory: D:\GitRepos\Aurora Application\Sources\AuroraStruct3D\AuroraStruct3D.Frontend
+  ProcessStartInfo.WorkingDirectory: D:\GitRepos\Aurora Application\Sources\AuroraStruct3D\AuroraStruct3D.Frontend\
+  Savorboard.CAP.InMemoryMessageQueue -> D:\GitRepos\Aurora Application\Builds\Debug\Savorboard.CAP.InMemoryMessageQueue\net10.0\Savorboard.CAP.InMemoryMessageQueue.dll
+  Volo.Abp.DistributedLocking -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.DistributedLocking\net10.0\Volo.Abp.DistributedLocking.dll
+  MiniProfiler.EntityFrameworkCore -> D:\GitRepos\Aurora Application\Builds\Debug\MiniProfiler.EntityFrameworkCore\net10.0\MiniProfiler.EntityFrameworkCore.dll
+  Volo.Abp.ObjectExtending -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.ObjectExtending\net10.0\Volo.Abp.ObjectExtending.dll
+  MiniProfiler.AspNetCore -> D:\GitRepos\Aurora Application\Builds\Debug\MiniProfiler.AspNetCore\net10.0\MiniProfiler.AspNetCore.dll
+  Volo.Abp.EventBus.Abstractions -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.EventBus.Abstractions\net10.0\Volo.Abp.EventBus.Abstractions.dll
+  Volo.Abp.Data -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.Data\net10.0\Volo.Abp.Data.dll
+  Volo.Abp.Settings -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.Settings\net10.0\Volo.Abp.Settings.dll
+  Volo.Abp.BackgroundWorkers -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.BackgroundWorkers\net10.0\Volo.Abp.BackgroundWorkers.dll
+  Volo.Abp.Localization -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.Localization\net10.0\Volo.Abp.Localization.dll
+  Volo.Abp.Validation -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.Validation\net10.0\Volo.Abp.Validation.dll
+  Volo.Abp.MultiTenancy.Abstractions -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.MultiTenancy.Abstractions\net10.0\Volo.Abp.MultiTenancy.Abstractions.dll
+  Volo.Abp.Timing -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.Timing\net10.0\Volo.Abp.Timing.dll
+  Volo.Abp.Ddd.Application.Contracts -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.Ddd.Application.Contracts\net10.0\Volo.Abp.Ddd.Application.Contracts.dll
+  Volo.Abp.TenantManagement.Domain.Shared -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.TenantManagement.Domain.Shared\net10.0\Volo.Abp.TenantManagement.Domain.Shared.dll
+  Volo.Abp.AuditLogging.Domain.Shared -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.AuditLogging.Domain.Shared\net10.0\Volo.Abp.AuditLogging.Domain.Shared.dll
+  Volo.Abp.Json.SystemTextJson -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.Json.SystemTextJson\net10.0\Volo.Abp.Json.SystemTextJson.dll
+  Volo.Abp.FeatureManagement.Domain.Shared -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.FeatureManagement.Domain.Shared\net10.0\Volo.Abp.FeatureManagement.Domain.Shared.dll
+  Volo.Abp.Json -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.Json\net10.0\Volo.Abp.Json.dll
+  Volo.Abp.MultiTenancy -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.MultiTenancy\net10.0\Volo.Abp.MultiTenancy.dll
+  Volo.Abp.Authorization.Abstractions -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.Authorization.Abstractions\net10.0\Volo.Abp.Authorization.Abstractions.dll
+  
+  > aurora-struct3d-frontend@1.0.0 build
+  > vite build
+  
+  Volo.Abp.BlobStoring -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.BlobStoring\net10.0\Volo.Abp.BlobStoring.dll
+  Volo.Abp.Caching -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.Caching\net10.0\Volo.Abp.Caching.dll
+  Volo.Abp.EventBus -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.EventBus\net10.0\Volo.Abp.EventBus.dll
+  Volo.Abp.Authorization -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.Authorization\net10.0\Volo.Abp.Authorization.dll
+  Volo.Abp.FeatureManagement.Application.Contracts -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.FeatureManagement.Application.Contracts\net10.0\Volo.Abp.FeatureManagement.Application.Contracts.dll
+  Volo.Abp.AspNetCore.Abstractions -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.AspNetCore.Abstractions\net10.0\Volo.Abp.AspNetCore.Abstractions.dll
+  Volo.Abp.Caching.StackExchangeRedis -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.Caching.StackExchangeRedis\net10.0\Volo.Abp.Caching.StackExchangeRedis.dll
+  Volo.Abp.TenantManagement.Application.Contracts -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.TenantManagement.Application.Contracts\net10.0\Volo.Abp.TenantManagement.Application.Contracts.dll
+  Volo.Abp.Auditing -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.Auditing\net10.0\Volo.Abp.Auditing.dll
+  Volo.Abp.ExceptionHandling -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.ExceptionHandling\net10.0\Volo.Abp.ExceptionHandling.dll
+  Volo.Abp.RemoteServices -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.RemoteServices\net10.0\Volo.Abp.RemoteServices.dll
+  Volo.Abp.Ddd.Domain.Shared -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.Ddd.Domain.Shared\net10.0\Volo.Abp.Ddd.Domain.Shared.dll
+  Volo.Abp.Specifications -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.Specifications\net10.0\Volo.Abp.Specifications.dll
+  Volo.Abp.BlobStoring.FileSystem -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.BlobStoring.FileSystem\net10.0\Volo.Abp.BlobStoring.FileSystem.dll
+  Volo.Abp.HangFire -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.HangFire\net10.0\Volo.Abp.HangFire.dll
+  Volo.Abp.ObjectMapping -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.ObjectMapping\net10.0\Volo.Abp.ObjectMapping.dll
+  Volo.Abp.Http.Abstractions -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.Http.Abstractions\net10.0\Volo.Abp.Http.Abstractions.dll
+  Volo.Abp.BackgroundJobs.Abstractions -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.BackgroundJobs.Abstractions\net10.0\Volo.Abp.BackgroundJobs.Abstractions.dll
+  Volo.Abp.Ddd.Domain -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.Ddd.Domain\net10.0\Volo.Abp.Ddd.Domain.dll
+  Volo.Abp.GlobalFeatures -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.GlobalFeatures\net10.0\Volo.Abp.GlobalFeatures.dll
+  Volo.Abp.Mapperly -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.Mapperly\net10.0\Volo.Abp.Mapperly.dll
+  Volo.Abp.TenantManagement.Domain -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.TenantManagement.Domain\net10.0\Volo.Abp.TenantManagement.Domain.dll
+  Volo.Abp.BackgroundJobs.HangFire -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.BackgroundJobs.HangFire\net10.0\Volo.Abp.BackgroundJobs.HangFire.dll
+  vite v8.0.10 building client environment for production...
+  [2K
+C:\Users\zhengkai\.nuget\packages\microsoft.visualstudio.javascript.sdk\1.0.4902498\Sdk\Sdk.targets(293,3): warning : Creating Warning brace-expansion: Large numeric range defeats documented `max` DoS protection, (Package: brace-expansion, Severity: moderate) [D:\GitRepos\Aurora Application\Sources\AuroraStruct3D\AuroraStruct3D.Frontend\AuroraStruct3D.Frontend.esproj]
+  transforming...閴?3309 modules transformed.
+  rendering chunks...
+  computing gzip size...
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/index.html                             1.00 kB 閳?gzip:   0.39 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/border-beam.css                 0.39 kB 閳?gzip:   0.24 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/SwaggerPage.css                 0.59 kB 閳?gzip:   0.18 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/DashboardPage.css               1.19 kB 閳?gzip:   0.42 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/LoginPage.css                   1.97 kB 閳?gzip:   0.53 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/index.css                     165.92 kB 閳?gzip:  27.20 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/_plugin-vue_export-helper.js    0.08 kB 閳?gzip:   0.09 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/utils.js                        0.11 kB 閳?gzip:   0.12 kB 閳?map:     0.67 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/CardFooter.js                   0.36 kB 閳?gzip:   0.28 kB 閳?map:     1.00 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/CardHeader.js                   0.36 kB 閳?gzip:   0.28 kB 閳?map:     1.01 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/CardDescription.js              0.37 kB 閳?gzip:   0.28 kB 閳?map:     1.02 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/CardTitle.js                    0.37 kB 閳?gzip:   0.29 kB 閳?map:     1.03 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/CardContent.js                  0.60 kB 閳?gzip:   0.33 kB 閳?map:     1.96 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/rolldown-runtime.js             0.61 kB 閳?gzip:   0.39 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/NotFoundPage.js                 0.74 kB 閳?gzip:   0.44 kB 閳?map:     2.02 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/auth.js                         0.88 kB 閳?gzip:   0.49 kB 閳?map:     3.84 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/input.js                        0.89 kB 閳?gzip:   0.54 kB 閳?map:     5.37 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/badge.js                        0.94 kB 閳?gzip:   0.51 kB 閳?map:     2.48 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/border-beam.js                  1.33 kB 閳?gzip:   0.74 kB 閳?map:     4.22 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/deviceSession.js                1.41 kB 閳?gzip:   0.59 kB 閳?map:     9.45 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/button.js                       1.54 kB 閳?gzip:   0.77 kB 閳?map:     3.82 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/TableHeader.js                  1.70 kB 閳?gzip:   0.58 kB 閳?map:     6.36 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/SelectValue.js                  4.70 kB 閳?gzip:   1.62 kB 閳?map:    17.12 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/projectors.js                   5.08 kB 閳?gzip:   1.55 kB 閳?map:    30.08 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/ProfilerPage.js                 5.24 kB 閳?gzip:   1.75 kB 閳?map:    31.12 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/LoginPage.js                    5.77 kB 閳?gzip:   2.37 kB 閳?map:    29.08 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/CameraManagePage.js             6.02 kB 閳?gzip:   2.30 kB 閳?map:    26.59 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/ProjectorManagePage.js          6.07 kB 閳?gzip:   2.31 kB 閳?map:    27.47 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/abp-application.js              6.12 kB 閳?gzip:   2.34 kB 閳?map:    26.60 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/StateLogPage.js                 6.66 kB 閳?gzip:   2.12 kB 閳?map:    32.86 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/FaultHistoryPage.js             6.69 kB 閳?gzip:   2.30 kB 閳?map:    34.62 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/cameras.js                      7.41 kB 閳?gzip:   2.81 kB 閳?map:    46.28 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/SystemInfoPage.js               8.28 kB 閳?gzip:   2.59 kB 閳?map:    37.56 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/CapPage.js                     10.43 kB 閳?gzip:   3.00 kB 閳?map:    53.36 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/MainLayout.js                  11.25 kB 閳?gzip:   3.02 kB 閳?map:    53.79 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/ProjectorControlPage.js        12.73 kB 閳?gzip:   3.65 kB 閳?map:    67.65 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/DashboardPage.js               12.86 kB 閳?gzip:   3.47 kB 閳?map:    61.66 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/HangfirePage.js                13.50 kB 閳?gzip:   3.50 kB 閳?map:    71.78 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/SerialPortManagePage.js        15.46 kB 閳?gzip:   4.88 kB 閳?map:    74.36 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/CameraControlPage.js           18.00 kB 閳?gzip:   6.02 kB 閳?map:    97.83 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/SwaggerPage.js                 20.53 kB 閳?gzip:   6.96 kB 閳?map:    82.95 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/MotorDeviceManagePage.js       24.76 kB 閳?gzip:   7.33 kB 閳?map:   125.84 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/vue.js                         30.74 kB 閳?gzip:  12.07 kB 閳?map:   236.23 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/index.js                       51.73 kB 閳?gzip:  18.05 kB 閳?map:   106.79 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/ui.js                         134.42 kB 閳?gzip:  40.75 kB 閳?map:   897.92 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/i18n.js                       164.92 kB 閳?gzip:  59.77 kB 閳?map:   880.65 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/vendor.js                     854.36 kB 閳?gzip: 278.29 kB 閳?map: 4,346.18 kB
+  
+  閴?built in 3.46s
+  Volo.Abp.EntityFrameworkCore -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.EntityFrameworkCore\net10.0\Volo.Abp.EntityFrameworkCore.dll
+  
+  > aurora-struct3d-frontend@1.0.0 build
+  > vite build
+  
+  Volo.Abp.BackgroundJobs -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.BackgroundJobs\net10.0\Volo.Abp.BackgroundJobs.dll
+  Volo.Abp.EntityFrameworkCore.PostgreSql -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.EntityFrameworkCore.PostgreSql\net10.0\Volo.Abp.EntityFrameworkCore.PostgreSql.dll
+  Volo.Abp.TenantManagement.EntityFrameworkCore -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.TenantManagement.EntityFrameworkCore\net10.0\Volo.Abp.TenantManagement.EntityFrameworkCore.dll
+  Volo.Abp.Minify -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.Minify\net10.0\Volo.Abp.Minify.dll
+  Volo.Abp.BackgroundJobs.Domain -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.BackgroundJobs.Domain\net10.0\Volo.Abp.BackgroundJobs.Domain.dll
+  Volo.Abp.Http -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.Http\net10.0\Volo.Abp.Http.dll
+  Volo.Abp.Http.Client -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.Http.Client\net10.0\Volo.Abp.Http.Client.dll
+  Volo.Abp.BackgroundJobs.EntityFrameworkCore -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.BackgroundJobs.EntityFrameworkCore\net10.0\Volo.Abp.BackgroundJobs.EntityFrameworkCore.dll
+  Volo.Abp.AspNetCore -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.AspNetCore\net10.0\Volo.Abp.AspNetCore.dll
+  Volo.Abp.AspNetCore.Serilog -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.AspNetCore.Serilog\net10.0\Volo.Abp.AspNetCore.Serilog.dll
+  Volo.Abp.AspNetCore.SignalR -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.AspNetCore.SignalR\net10.0\Volo.Abp.AspNetCore.SignalR.dll
+  Volo.Abp.AspNetCore.MultiTenancy -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.AspNetCore.MultiTenancy\net10.0\Volo.Abp.AspNetCore.MultiTenancy.dll
+  [36mvite v8.0.10 [32mbuilding client environment for production...[36m[39m
+  [2K
+  transforming...閴?3309 modules transformed.
+  rendering chunks...
+  computing gzip size...
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/index.html                             1.00 kB 閳?gzip:   0.39 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/border-beam.css                 0.39 kB 閳?gzip:   0.24 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/SwaggerPage.css                 0.59 kB 閳?gzip:   0.18 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/DashboardPage.css               1.19 kB 閳?gzip:   0.42 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/LoginPage.css                   1.97 kB 閳?gzip:   0.53 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/index.css                     165.92 kB 閳?gzip:  27.20 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/_plugin-vue_export-helper.js    0.08 kB 閳?gzip:   0.09 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/utils.js                        0.11 kB 閳?gzip:   0.12 kB 閳?map:     0.67 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/CardFooter.js                   0.36 kB 閳?gzip:   0.28 kB 閳?map:     1.00 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/CardHeader.js                   0.36 kB 閳?gzip:   0.28 kB 閳?map:     1.01 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/CardDescription.js              0.37 kB 閳?gzip:   0.28 kB 閳?map:     1.02 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/CardTitle.js                    0.37 kB 閳?gzip:   0.29 kB 閳?map:     1.03 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/CardContent.js                  0.60 kB 閳?gzip:   0.33 kB 閳?map:     1.96 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/rolldown-runtime.js             0.61 kB 閳?gzip:   0.39 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/NotFoundPage.js                 0.74 kB 閳?gzip:   0.44 kB 閳?map:     2.02 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/auth.js                         0.88 kB 閳?gzip:   0.49 kB 閳?map:     3.84 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/input.js                        0.89 kB 閳?gzip:   0.54 kB 閳?map:     5.37 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/badge.js                        0.94 kB 閳?gzip:   0.51 kB 閳?map:     2.48 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/border-beam.js                  1.33 kB 閳?gzip:   0.74 kB 閳?map:     4.22 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/deviceSession.js                1.41 kB 閳?gzip:   0.59 kB 閳?map:     9.45 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/button.js                       1.54 kB 閳?gzip:   0.77 kB 閳?map:     3.82 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/TableHeader.js                  1.70 kB 閳?gzip:   0.58 kB 閳?map:     6.36 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/SelectValue.js                  4.70 kB 閳?gzip:   1.62 kB 閳?map:    17.12 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/projectors.js                   5.08 kB 閳?gzip:   1.55 kB 閳?map:    30.08 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/ProfilerPage.js                 5.24 kB 閳?gzip:   1.75 kB 閳?map:    31.12 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/LoginPage.js                    5.77 kB 閳?gzip:   2.37 kB 閳?map:    29.08 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/CameraManagePage.js             6.02 kB 閳?gzip:   2.30 kB 閳?map:    26.59 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/ProjectorManagePage.js          6.07 kB 閳?gzip:   2.31 kB 閳?map:    27.47 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/abp-application.js              6.12 kB 閳?gzip:   2.34 kB 閳?map:    26.60 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/StateLogPage.js                 6.66 kB 閳?gzip:   2.12 kB 閳?map:    32.86 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/FaultHistoryPage.js             6.69 kB 閳?gzip:   2.30 kB 閳?map:    34.62 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/cameras.js                      7.41 kB 閳?gzip:   2.81 kB 閳?map:    46.28 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/SystemInfoPage.js               8.28 kB 閳?gzip:   2.59 kB 閳?map:    37.56 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/CapPage.js                     10.43 kB 閳?gzip:   3.00 kB 閳?map:    53.36 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/MainLayout.js                  11.25 kB 閳?gzip:   3.02 kB 閳?map:    53.79 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/ProjectorControlPage.js        12.73 kB 閳?gzip:   3.65 kB 閳?map:    67.65 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/DashboardPage.js               12.86 kB 閳?gzip:   3.47 kB 閳?map:    61.66 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/HangfirePage.js                13.50 kB 閳?gzip:   3.50 kB 閳?map:    71.78 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/SerialPortManagePage.js        15.46 kB 閳?gzip:   4.88 kB 閳?map:    74.36 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/CameraControlPage.js           18.00 kB 閳?gzip:   6.02 kB 閳?map:    97.83 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/SwaggerPage.js                 20.53 kB 閳?gzip:   6.96 kB 閳?map:    82.95 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/MotorDeviceManagePage.js       24.76 kB 閳?gzip:   7.33 kB 閳?map:   125.84 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/vue.js                         30.74 kB 閳?gzip:  12.07 kB 閳?map:   236.23 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/index.js                       51.73 kB 閳?gzip:  18.05 kB 閳?map:   106.79 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/ui.js                         134.42 kB 閳?gzip:  40.75 kB 閳?map:   897.92 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/i18n.js                       164.92 kB 閳?gzip:  59.77 kB 閳?map:   880.65 kB
+  ../AuroraStruct3D.HttpApi.Host/wwwroot/assets/vendor.js                     854.36 kB 閳?gzip: 278.29 kB 閳?map: 4,346.18 kB
+  
+  [32m閴?built in 3.49s[39m
+  Volo.Abp.PermissionManagement.Domain.Shared -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.PermissionManagement.Domain.Shared\net10.0\Volo.Abp.PermissionManagement.Domain.Shared.dll
+  MiniProfiler.AspNetCore.Mvc -> D:\GitRepos\Aurora Application\Builds\Debug\MiniProfiler.AspNetCore.Mvc\net10.0\MiniProfiler.AspNetCore.Mvc.dll
+  Volo.Abp.AspNetCore.Mvc.Contracts -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.AspNetCore.Mvc.Contracts\net10.0\Volo.Abp.AspNetCore.Mvc.Contracts.dll
+  Volo.Abp.PermissionManagement.Application.Contracts -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.PermissionManagement.Application.Contracts\net10.0\Volo.Abp.PermissionManagement.Application.Contracts.dll
+  Volo.Abp.AuditLogging.Domain -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.AuditLogging.Domain\net10.0\Volo.Abp.AuditLogging.Domain.dll
+  Volo.Abp.PermissionManagement.Domain -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.PermissionManagement.Domain\net10.0\Volo.Abp.PermissionManagement.Domain.dll
+  Volo.Abp.Features -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.Features\net10.0\Volo.Abp.Features.dll
+  Volo.Abp.AuditLogging.EntityFrameworkCore -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.AuditLogging.EntityFrameworkCore\net10.0\Volo.Abp.AuditLogging.EntityFrameworkCore.dll
+  Volo.Abp.Users.Domain.Shared -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.Users.Domain.Shared\net10.0\Volo.Abp.Users.Domain.Shared.dll
+  Volo.Abp.SettingManagement.Domain.Shared -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.SettingManagement.Domain.Shared\net10.0\Volo.Abp.SettingManagement.Domain.Shared.dll
+  Lion.AbpPro.Localization -> D:\GitRepos\Aurora Application\Builds\Debug\Lion.AbpPro.Localization\net10.0\Lion.AbpPro.Localization.dll
+  Volo.Abp.Identity.Domain.Shared -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.Identity.Domain.Shared\net10.0\Volo.Abp.Identity.Domain.Shared.dll
+  Volo.Abp.SettingManagement.Domain -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.SettingManagement.Domain\net10.0\Volo.Abp.SettingManagement.Domain.dll
+  Volo.Abp.SettingManagement.Application.Contracts -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.SettingManagement.Application.Contracts\net10.0\Volo.Abp.SettingManagement.Application.Contracts.dll
+  Volo.Abp.Ddd.Application -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.Ddd.Application\net10.0\Volo.Abp.Ddd.Application.dll
+  Lion.AbpPro.Core -> D:\GitRepos\Aurora Application\Builds\Debug\Lion.AbpPro.Core\net10.0\Lion.AbpPro.Core.dll
+  Volo.Abp.PermissionManagement.EntityFrameworkCore -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.PermissionManagement.EntityFrameworkCore\net10.0\Volo.Abp.PermissionManagement.EntityFrameworkCore.dll
+  Volo.Abp.Users.Abstractions -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.Users.Abstractions\net10.0\Volo.Abp.Users.Abstractions.dll
+  Lion.AbpPro.DynamicMenuManagement.Domain.Shared -> D:\GitRepos\Aurora Application\Builds\Debug\Lion.AbpPro.DynamicMenuManagement.Domain.Shared\net10.0\Lion.AbpPro.DynamicMenuManagement.Domain.Shared.dll
+  Lion.AbpPro.FileManagement.Domain.Shared -> D:\GitRepos\Aurora Application\Builds\Debug\Lion.AbpPro.FileManagement.Domain.Shared\net10.0\Lion.AbpPro.FileManagement.Domain.Shared.dll
+  Lion.AbpPro.TemplateManagement.Domain.Shared -> D:\GitRepos\Aurora Application\Builds\Debug\Lion.AbpPro.TemplateManagement.Domain.Shared\net10.0\Lion.AbpPro.TemplateManagement.Domain.Shared.dll
+  Lion.AbpPro.MasterDataManagement.Domain.Shared -> D:\GitRepos\Aurora Application\Builds\Debug\Lion.AbpPro.MasterDataManagement.Domain.Shared\net10.0\Lion.AbpPro.MasterDataManagement.Domain.Shared.dll
+  Lion.AbpPro.LanguageManagement.Domain.Shared -> D:\GitRepos\Aurora Application\Builds\Debug\Lion.AbpPro.LanguageManagement.Domain.Shared\net10.0\Lion.AbpPro.LanguageManagement.Domain.Shared.dll
+  Lion.AbpPro.FileManagement.Application.Contracts -> D:\GitRepos\Aurora Application\Builds\Debug\Lion.AbpPro.FileManagement.Application.Contracts\net10.0\Lion.AbpPro.FileManagement.Application.Contracts.dll
+  Lion.AbpPro.DataDictionaryManagement.Domain.Shared -> D:\GitRepos\Aurora Application\Builds\Debug\Lion.AbpPro.DataDictionaryManagement.Domain.Shared\net10.0\Lion.AbpPro.DataDictionaryManagement.Domain.Shared.dll
+  Volo.Abp.SettingManagement.EntityFrameworkCore -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.SettingManagement.EntityFrameworkCore\net10.0\Volo.Abp.SettingManagement.EntityFrameworkCore.dll
+  Lion.AbpPro.CodeManagement.Domain.Shared -> D:\GitRepos\Aurora Application\Builds\Debug\Lion.AbpPro.CodeManagement.Domain.Shared\net10.0\Lion.AbpPro.CodeManagement.Domain.Shared.dll
+  Volo.Abp.ApiVersioning.Abstractions -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.ApiVersioning.Abstractions\net10.0\Volo.Abp.ApiVersioning.Abstractions.dll
+  Lion.AbpPro.LanguageManagement.Application.Contracts -> D:\GitRepos\Aurora Application\Builds\Debug\Lion.AbpPro.LanguageManagement.Application.Contracts\net10.0\Lion.AbpPro.LanguageManagement.Application.Contracts.dll
+  Lion.AbpPro.CacheManagement.Domain.Shared -> D:\GitRepos\Aurora Application\Builds\Debug\Lion.AbpPro.CacheManagement.Domain.Shared\net10.0\Lion.AbpPro.CacheManagement.Domain.Shared.dll
+  Lion.AbpPro.DataDictionaryManagement.Application.Contracts -> D:\GitRepos\Aurora Application\Builds\Debug\Lion.AbpPro.DataDictionaryManagement.Application.Contracts\net10.0\Lion.AbpPro.DataDictionaryManagement.Application.Contracts.dll
+  Lion.AbpPro.LanguageManagement.Domain -> D:\GitRepos\Aurora Application\Builds\Debug\Lion.AbpPro.LanguageManagement.Domain\net10.0\Lion.AbpPro.LanguageManagement.Domain.dll
+  Volo.Abp.TextTemplating.Core -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.TextTemplating.Core\net10.0\Volo.Abp.TextTemplating.Core.dll
+  Volo.Abp.TenantManagement.Application -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.TenantManagement.Application\net10.0\Volo.Abp.TenantManagement.Application.dll
+  Lion.AbpPro.DynamicMenuManagement.Application.Contracts -> D:\GitRepos\Aurora Application\Builds\Debug\Lion.AbpPro.DynamicMenuManagement.Application.Contracts\net10.0\Lion.AbpPro.DynamicMenuManagement.Application.Contracts.dll
+  Lion.AbpPro.BasicManagement.Domain.Shared -> D:\GitRepos\Aurora Application\Builds\Debug\Lion.AbpPro.BasicManagement.Domain.Shared\net10.0\Lion.AbpPro.BasicManagement.Domain.Shared.dll
+  Volo.Abp.TextTemplating.Scriban -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.TextTemplating.Scriban\net10.0\Volo.Abp.TextTemplating.Scriban.dll
+  Lion.AbpPro.CodeManagement.Application.Contracts -> D:\GitRepos\Aurora Application\Builds\Debug\Lion.AbpPro.CodeManagement.Application.Contracts\net10.0\Lion.AbpPro.CodeManagement.Application.Contracts.dll
+  Lion.AbpPro.DataDictionaryManagement.Domain -> D:\GitRepos\Aurora Application\Builds\Debug\Lion.AbpPro.DataDictionaryManagement.Domain\net10.0\Lion.AbpPro.DataDictionaryManagement.Domain.dll
+  Volo.Abp.Identity.Application.Contracts -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.Identity.Application.Contracts\net10.0\Volo.Abp.Identity.Application.Contracts.dll
+  Lion.AbpPro.FileManagement.HttpApi.Client -> D:\GitRepos\Aurora Application\Builds\Debug\Lion.AbpPro.FileManagement.HttpApi.Client\net10.0\Lion.AbpPro.FileManagement.HttpApi.Client.dll
+  Lion.AbpPro.CodeManagement.HttpApi.Client -> D:\GitRepos\Aurora Application\Builds\Debug\Lion.AbpPro.CodeManagement.HttpApi.Client\net10.0\Lion.AbpPro.CodeManagement.HttpApi.Client.dll
+  Lion.AbpPro.CAP -> D:\GitRepos\Aurora Application\Builds\Debug\Lion.AbpPro.CAP\net10.0\Lion.AbpPro.CAP.dll
+  Lion.AbpPro.LanguageManagement.HttpApi.Client -> D:\GitRepos\Aurora Application\Builds\Debug\Lion.AbpPro.LanguageManagement.HttpApi.Client\net10.0\Lion.AbpPro.LanguageManagement.HttpApi.Client.dll
+  Lion.AbpPro.TemplateManagement.Application.Contracts -> D:\GitRepos\Aurora Application\Builds\Debug\Lion.AbpPro.TemplateManagement.Application.Contracts\net10.0\Lion.AbpPro.TemplateManagement.Application.Contracts.dll
+  Volo.Abp.PermissionManagement.Application -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.PermissionManagement.Application\net10.0\Volo.Abp.PermissionManagement.Application.dll
+  Lion.AbpPro.CodeManagement.Domain -> D:\GitRepos\Aurora Application\Builds\Debug\Lion.AbpPro.CodeManagement.Domain\net10.0\Lion.AbpPro.CodeManagement.Domain.dll
+  Lion.AbpPro.DynamicMenuManagement.Domain -> D:\GitRepos\Aurora Application\Builds\Debug\Lion.AbpPro.DynamicMenuManagement.Domain\net10.0\Lion.AbpPro.DynamicMenuManagement.Domain.dll
+  Volo.Abp.PermissionManagement.Domain.Identity -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.PermissionManagement.Domain.Identity\net10.0\Volo.Abp.PermissionManagement.Domain.Identity.dll
+  Lion.AbpPro.LanguageManagement.Application -> D:\GitRepos\Aurora Application\Builds\Debug\Lion.AbpPro.LanguageManagement.Application\net10.0\Lion.AbpPro.LanguageManagement.Application.dll
+  Lion.AbpPro.LanguageManagement.EntityFrameworkCore -> D:\GitRepos\Aurora Application\Builds\Debug\Lion.AbpPro.LanguageManagement.EntityFrameworkCore\net10.0\Lion.AbpPro.LanguageManagement.EntityFrameworkCore.dll
+  Volo.Abp.Users.Domain -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.Users.Domain\net10.0\Volo.Abp.Users.Domain.dll
+  Lion.AbpPro.CodeManagement.EntityFrameworkCore -> D:\GitRepos\Aurora Application\Builds\Debug\Lion.AbpPro.CodeManagement.EntityFrameworkCore\net10.0\Lion.AbpPro.CodeManagement.EntityFrameworkCore.dll
+  Lion.AbpPro.TemplateManagement.Domain -> D:\GitRepos\Aurora Application\Builds\Debug\Lion.AbpPro.TemplateManagement.Domain\net10.0\Lion.AbpPro.TemplateManagement.Domain.dll
+  Volo.Abp.TextTemplating -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.TextTemplating\net10.0\Volo.Abp.TextTemplating.dll
+  Lion.AbpPro.MasterDataManagement.Application.Contracts -> D:\GitRepos\Aurora Application\Builds\Debug\Lion.AbpPro.MasterDataManagement.Application.Contracts\net10.0\Lion.AbpPro.MasterDataManagement.Application.Contracts.dll
+  Lion.AbpPro.MasterDataManagement.Domain -> D:\GitRepos\Aurora Application\Builds\Debug\Lion.AbpPro.MasterDataManagement.Domain\net10.0\Lion.AbpPro.MasterDataManagement.Domain.dll
+  Lion.AbpPro.DataDictionaryManagement.Application -> D:\GitRepos\Aurora Application\Builds\Debug\Lion.AbpPro.DataDictionaryManagement.Application\net10.0\Lion.AbpPro.DataDictionaryManagement.Application.dll
+  Volo.Abp.Account.Application.Contracts -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.Account.Application.Contracts\net10.0\Volo.Abp.Account.Application.Contracts.dll
+  Volo.Abp.FeatureManagement.Domain -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.FeatureManagement.Domain\net10.0\Volo.Abp.FeatureManagement.Domain.dll
+  Lion.AbpPro.DynamicMenuManagement.HttpApi.Client -> D:\GitRepos\Aurora Application\Builds\Debug\Lion.AbpPro.DynamicMenuManagement.HttpApi.Client\net10.0\Lion.AbpPro.DynamicMenuManagement.HttpApi.Client.dll
+  Lion.AbpPro.TemplateManagement.EntityFrameworkCore -> D:\GitRepos\Aurora Application\Builds\Debug\Lion.AbpPro.TemplateManagement.EntityFrameworkCore\net10.0\Lion.AbpPro.TemplateManagement.EntityFrameworkCore.dll
+  Lion.AbpPro.MasterDataManagement.HttpApi.Client -> D:\GitRepos\Aurora Application\Builds\Debug\Lion.AbpPro.MasterDataManagement.HttpApi.Client\net10.0\Lion.AbpPro.MasterDataManagement.HttpApi.Client.dll
+  Lion.AbpPro.CodeManagement.Application -> D:\GitRepos\Aurora Application\Builds\Debug\Lion.AbpPro.CodeManagement.Application\net10.0\Lion.AbpPro.CodeManagement.Application.dll
+  Volo.Abp.Identity.Domain -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.Identity.Domain\net10.0\Volo.Abp.Identity.Domain.dll
+  Volo.Abp.Emailing -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.Emailing\net10.0\Volo.Abp.Emailing.dll
+  Lion.AbpPro.MasterDataManagement.Application -> D:\GitRepos\Aurora Application\Builds\Debug\Lion.AbpPro.MasterDataManagement.Application\net10.0\Lion.AbpPro.MasterDataManagement.Application.dll
+  Lion.AbpPro.ImportExportManagement.Domain.Shared -> D:\GitRepos\Aurora Application\Builds\Debug\Lion.AbpPro.ImportExportManagement.Domain.Shared\net10.0\Lion.AbpPro.ImportExportManagement.Domain.Shared.dll
+  Lion.AbpPro.DataDictionaryManagement.HttpApi.Client -> D:\GitRepos\Aurora Application\Builds\Debug\Lion.AbpPro.DataDictionaryManagement.HttpApi.Client\net10.0\Lion.AbpPro.DataDictionaryManagement.HttpApi.Client.dll
+  Lion.AbpPro.MasterDataManagement.EntityFrameworkCore -> D:\GitRepos\Aurora Application\Builds\Debug\Lion.AbpPro.MasterDataManagement.EntityFrameworkCore\net10.0\Lion.AbpPro.MasterDataManagement.EntityFrameworkCore.dll
+  Volo.Abp.SettingManagement.Application -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.SettingManagement.Application\net10.0\Volo.Abp.SettingManagement.Application.dll
+  Lion.AbpPro.DataDictionaryManagement.EntityFrameworkCore -> D:\GitRepos\Aurora Application\Builds\Debug\Lion.AbpPro.DataDictionaryManagement.EntityFrameworkCore\net10.0\Lion.AbpPro.DataDictionaryManagement.EntityFrameworkCore.dll
+  Volo.Abp.Users.EntityFrameworkCore -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.Users.EntityFrameworkCore\net10.0\Volo.Abp.Users.EntityFrameworkCore.dll
+  Lion.AbpPro.TemplateManagement.HttpApi.Client -> D:\GitRepos\Aurora Application\Builds\Debug\Lion.AbpPro.TemplateManagement.HttpApi.Client\net10.0\Lion.AbpPro.TemplateManagement.HttpApi.Client.dll
+  Lion.AbpPro.CacheManagement.Domain -> D:\GitRepos\Aurora Application\Builds\Debug\Lion.AbpPro.CacheManagement.Domain\net10.0\Lion.AbpPro.CacheManagement.Domain.dll
+  Lion.AbpPro.DynamicMenuManagement.Application -> D:\GitRepos\Aurora Application\Builds\Debug\Lion.AbpPro.DynamicMenuManagement.Application\net10.0\Lion.AbpPro.DynamicMenuManagement.Application.dll
+  Lion.AbpPro.CacheManagement.Application.Contracts -> D:\GitRepos\Aurora Application\Builds\Debug\Lion.AbpPro.CacheManagement.Application.Contracts\net10.0\Lion.AbpPro.CacheManagement.Application.Contracts.dll
+  Lion.AbpPro.BasicManagement.Application.Contracts -> D:\GitRepos\Aurora Application\Builds\Debug\Lion.AbpPro.BasicManagement.Application.Contracts\net10.0\Lion.AbpPro.BasicManagement.Application.Contracts.dll
+  Volo.Abp.Identity.EntityFrameworkCore -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.Identity.EntityFrameworkCore\net10.0\Volo.Abp.Identity.EntityFrameworkCore.dll
+  Lion.AbpPro.DynamicMenuManagement.EntityFrameworkCore -> D:\GitRepos\Aurora Application\Builds\Debug\Lion.AbpPro.DynamicMenuManagement.EntityFrameworkCore\net10.0\Lion.AbpPro.DynamicMenuManagement.EntityFrameworkCore.dll
+  Volo.Abp.Identity.AspNetCore -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.Identity.AspNetCore\net10.0\Volo.Abp.Identity.AspNetCore.dll
+  Lion.AbpPro.BasicManagement.HttpApi.Client -> D:\GitRepos\Aurora Application\Builds\Debug\Lion.AbpPro.BasicManagement.HttpApi.Client\net10.0\Lion.AbpPro.BasicManagement.HttpApi.Client.dll
+  Lion.AbpPro.StackExchangeRedis -> D:\GitRepos\Aurora Application\Builds\Debug\Lion.AbpPro.StackExchangeRedis\net10.0\Lion.AbpPro.StackExchangeRedis.dll
+  Lion.AbpPro.CacheManagement.HttpApi.Client -> D:\GitRepos\Aurora Application\Builds\Debug\Lion.AbpPro.CacheManagement.HttpApi.Client\net10.0\Lion.AbpPro.CacheManagement.HttpApi.Client.dll
+  Lion.AbpPro.TemplateManagement.Application -> D:\GitRepos\Aurora Application\Builds\Debug\Lion.AbpPro.TemplateManagement.Application\net10.0\Lion.AbpPro.TemplateManagement.Application.dll
+  Lion.AbpPro.SignalR -> D:\GitRepos\Aurora Application\Builds\Debug\Lion.AbpPro.SignalR\net10.0\Lion.AbpPro.SignalR.dll
+  Volo.Abp.UI -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.UI\net10.0\Volo.Abp.UI.dll
+  Volo.Abp.FeatureManagement.Application -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.FeatureManagement.Application\net10.0\Volo.Abp.FeatureManagement.Application.dll
+  Volo.Abp.Identity.Application -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.Identity.Application\net10.0\Volo.Abp.Identity.Application.dll
+  Volo.Abp.FeatureManagement.EntityFrameworkCore -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.FeatureManagement.EntityFrameworkCore\net10.0\Volo.Abp.FeatureManagement.EntityFrameworkCore.dll
+  Lion.AbpPro.CacheManagement.Application -> D:\GitRepos\Aurora Application\Builds\Debug\Lion.AbpPro.CacheManagement.Application\net10.0\Lion.AbpPro.CacheManagement.Application.dll
+  Lion.AbpPro.BasicManagement.Domain -> D:\GitRepos\Aurora Application\Builds\Debug\Lion.AbpPro.BasicManagement.Domain\net10.0\Lion.AbpPro.BasicManagement.Domain.dll
+  Lion.AbpPro.ImportExport -> D:\GitRepos\Aurora Application\Builds\Debug\Lion.AbpPro.ImportExport\net10.0\Lion.AbpPro.ImportExport.dll
+  Lion.AbpPro.NotificationManagement.Domain.Shared -> D:\GitRepos\Aurora Application\Builds\Debug\Lion.AbpPro.NotificationManagement.Domain.Shared\net10.0\Lion.AbpPro.NotificationManagement.Domain.Shared.dll
+  Volo.Abp.UI.Navigation -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.UI.Navigation\net10.0\Volo.Abp.UI.Navigation.dll
+  Lion.AbpPro.ImportExportManagement.Application.Contracts -> D:\GitRepos\Aurora Application\Builds\Debug\Lion.AbpPro.ImportExportManagement.Application.Contracts\net10.0\Lion.AbpPro.ImportExportManagement.Application.Contracts.dll
+  Lion.AbpPro.NotificationManagement.Domain -> D:\GitRepos\Aurora Application\Builds\Debug\Lion.AbpPro.NotificationManagement.Domain\net10.0\Lion.AbpPro.NotificationManagement.Domain.dll
+  Lion.AbpPro.ImportExportManagement.Domain -> D:\GitRepos\Aurora Application\Builds\Debug\Lion.AbpPro.ImportExportManagement.Domain\net10.0\Lion.AbpPro.ImportExportManagement.Domain.dll
+  Lion.AbpPro.NotificationManagement.Application.Contracts -> D:\GitRepos\Aurora Application\Builds\Debug\Lion.AbpPro.NotificationManagement.Application.Contracts\net10.0\Lion.AbpPro.NotificationManagement.Application.Contracts.dll
+  Lion.AbpPro.FileManagement.Domain -> D:\GitRepos\Aurora Application\Builds\Debug\Lion.AbpPro.FileManagement.Domain\net10.0\Lion.AbpPro.FileManagement.Domain.dll
+  Lion.AbpPro.ImportExportManagement.HttpApi.Client -> D:\GitRepos\Aurora Application\Builds\Debug\Lion.AbpPro.ImportExportManagement.HttpApi.Client\net10.0\Lion.AbpPro.ImportExportManagement.HttpApi.Client.dll
+  Lion.AbpPro.BasicManagement.EntityFrameworkCore -> D:\GitRepos\Aurora Application\Builds\Debug\Lion.AbpPro.BasicManagement.EntityFrameworkCore\net10.0\Lion.AbpPro.BasicManagement.EntityFrameworkCore.dll
+  Volo.Abp.Account.Application -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.Account.Application\net10.0\Volo.Abp.Account.Application.dll
+  AuroraStruct3D.Domain.Shared -> D:\GitRepos\Aurora Application\Builds\Debug\AuroraStruct3D.Domain.Shared\net10.0\AuroraStruct3D.Domain.Shared.dll
+  Lion.AbpPro.FileManagement.EntityFrameworkCore -> D:\GitRepos\Aurora Application\Builds\Debug\Lion.AbpPro.FileManagement.EntityFrameworkCore\net10.0\Lion.AbpPro.FileManagement.EntityFrameworkCore.dll
+  Lion.AbpPro.NotificationManagement.HttpApi.Client -> D:\GitRepos\Aurora Application\Builds\Debug\Lion.AbpPro.NotificationManagement.HttpApi.Client\net10.0\Lion.AbpPro.NotificationManagement.HttpApi.Client.dll
+  Lion.AbpPro.FileManagement.Application -> D:\GitRepos\Aurora Application\Builds\Debug\Lion.AbpPro.FileManagement.Application\net10.0\Lion.AbpPro.FileManagement.Application.dll
+  Lion.AbpPro.NotificationManagement.EntityFrameworkCore -> D:\GitRepos\Aurora Application\Builds\Debug\Lion.AbpPro.NotificationManagement.EntityFrameworkCore\net10.0\Lion.AbpPro.NotificationManagement.EntityFrameworkCore.dll
+  Lion.AbpPro.NotificationManagement.Application -> D:\GitRepos\Aurora Application\Builds\Debug\Lion.AbpPro.NotificationManagement.Application\net10.0\Lion.AbpPro.NotificationManagement.Application.dll
+  Lion.AbpPro.ImportExportManagement.Application -> D:\GitRepos\Aurora Application\Builds\Debug\Lion.AbpPro.ImportExportManagement.Application\net10.0\Lion.AbpPro.ImportExportManagement.Application.dll
+  Lion.AbpPro.ImportExportManagement.EntityFrameworkCore -> D:\GitRepos\Aurora Application\Builds\Debug\Lion.AbpPro.ImportExportManagement.EntityFrameworkCore\net10.0\Lion.AbpPro.ImportExportManagement.EntityFrameworkCore.dll
+  AuroraStruct3D.Application.Contracts -> D:\GitRepos\Aurora Application\Builds\Debug\AuroraStruct3D.Application.Contracts\net10.0\AuroraStruct3D.Application.Contracts.dll
+  AuroraStruct3D.HttpApi.Client -> D:\GitRepos\Aurora Application\Builds\Debug\AuroraStruct3D.HttpApi.Client\net10.0\AuroraStruct3D.HttpApi.Client.dll
+  AuroraStruct3D.Domain -> D:\GitRepos\Aurora Application\Builds\Debug\AuroraStruct3D.Domain\net10.0\AuroraStruct3D.Domain.dll
+  Volo.Abp.AspNetCore.Mvc -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.AspNetCore.Mvc\net10.0\Volo.Abp.AspNetCore.Mvc.dll
+  Lion.AbpPro.Oidc -> D:\GitRepos\Aurora Application\Builds\Debug\Lion.AbpPro.Oidc\net10.0\Lion.AbpPro.Oidc.dll
+  AuroraStruct3D.Projectors -> D:\GitRepos\Aurora Application\Builds\Debug\AuroraStruct3D.Projectors\net10.0\AuroraStruct3D.Projectors.dll
+  AuroraStruct3D.DeviceStateManagement -> D:\GitRepos\Aurora Application\Builds\Debug\AuroraStruct3D.DeviceStateManagement\net10.0\AuroraStruct3D.DeviceStateManagement.dll
+  Lion.AbpPro.ImportExportManagement.HttpApi -> D:\GitRepos\Aurora Application\Builds\Debug\Lion.AbpPro.ImportExportManagement.HttpApi\net10.0\Lion.AbpPro.ImportExportManagement.HttpApi.dll
+  AuroraStruct3D.RS485 -> D:\GitRepos\Aurora Application\Builds\Debug\AuroraStruct3D.RS485\net10.0\AuroraStruct3D.RS485.dll
+  Lion.AbpPro.NotificationManagement.HttpApi -> D:\GitRepos\Aurora Application\Builds\Debug\Lion.AbpPro.NotificationManagement.HttpApi\net10.0\Lion.AbpPro.NotificationManagement.HttpApi.dll
+  Lion.AbpPro.TwoFactor -> D:\GitRepos\Aurora Application\Builds\Debug\Lion.AbpPro.TwoFactor\net10.0\Lion.AbpPro.TwoFactor.dll
+  Lion.AbpPro.DynamicMenuManagement.HttpApi -> D:\GitRepos\Aurora Application\Builds\Debug\Lion.AbpPro.DynamicMenuManagement.HttpApi\net10.0\Lion.AbpPro.DynamicMenuManagement.HttpApi.dll
+  Lion.AbpPro.BasicManagement.HttpApi -> D:\GitRepos\Aurora Application\Builds\Debug\Lion.AbpPro.BasicManagement.HttpApi\net10.0\Lion.AbpPro.BasicManagement.HttpApi.dll
+  Lion.AbpPro.CacheManagement.HttpApi -> D:\GitRepos\Aurora Application\Builds\Debug\Lion.AbpPro.CacheManagement.HttpApi\net10.0\Lion.AbpPro.CacheManagement.HttpApi.dll
+  Lion.AbpPro.FileManagement.HttpApi -> D:\GitRepos\Aurora Application\Builds\Debug\Lion.AbpPro.FileManagement.HttpApi\net10.0\Lion.AbpPro.FileManagement.HttpApi.dll
+  Lion.AbpPro.TemplateManagement.HttpApi -> D:\GitRepos\Aurora Application\Builds\Debug\Lion.AbpPro.TemplateManagement.HttpApi\net10.0\Lion.AbpPro.TemplateManagement.HttpApi.dll
+  Lion.AbpPro.DataDictionaryManagement.HttpApi -> D:\GitRepos\Aurora Application\Builds\Debug\Lion.AbpPro.DataDictionaryManagement.HttpApi\net10.0\Lion.AbpPro.DataDictionaryManagement.HttpApi.dll
+  Lion.AbpPro.CodeManagement.HttpApi -> D:\GitRepos\Aurora Application\Builds\Debug\Lion.AbpPro.CodeManagement.HttpApi\net10.0\Lion.AbpPro.CodeManagement.HttpApi.dll
+  AuroraStruct3D.Tucam -> D:\GitRepos\Aurora Application\Builds\Debug\AuroraStruct3D.Tucam\net10.0\AuroraStruct3D.Tucam.dll
+  Lion.AbpPro.MasterDataManagement.HttpApi -> D:\GitRepos\Aurora Application\Builds\Debug\Lion.AbpPro.MasterDataManagement.HttpApi\net10.0\Lion.AbpPro.MasterDataManagement.HttpApi.dll
+  Volo.Abp.AspNetCore.Mvc.UI.Bundling.Abstractions -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.AspNetCore.Mvc.UI.Bundling.Abstractions\net10.0\Volo.Abp.AspNetCore.Mvc.UI.Bundling.Abstractions.dll
+  Volo.Abp.AspNetCore.Bundling -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.AspNetCore.Bundling\net10.0\Volo.Abp.AspNetCore.Bundling.dll
+  Lion.AbpPro.LanguageManagement.HttpApi -> D:\GitRepos\Aurora Application\Builds\Debug\Lion.AbpPro.LanguageManagement.HttpApi\net10.0\Lion.AbpPro.LanguageManagement.HttpApi.dll
+  Volo.Abp.AspNetCore.Mvc.UI.Packages -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.AspNetCore.Mvc.UI.Packages\net10.0\Volo.Abp.AspNetCore.Mvc.UI.Packages.dll
+  AuroraStruct3D.EntityFrameworkCore -> D:\GitRepos\Aurora Application\Builds\Debug\AuroraStruct3D.EntityFrameworkCore\net10.0\AuroraStruct3D.EntityFrameworkCore.dll
+  Lion.AbpPro.BasicManagement.Application -> D:\GitRepos\Aurora Application\Builds\Debug\Lion.AbpPro.BasicManagement.Application\net10.0\Lion.AbpPro.BasicManagement.Application.dll
+  AuroraStruct3D.DbMigrator -> D:\GitRepos\Aurora Application\Builds\Debug\AuroraStruct3D.DbMigrator\net10.0\AuroraStruct3D.DbMigrator.dll
+  Volo.Abp.AspNetCore.Mvc.UI -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.AspNetCore.Mvc.UI\net10.0\Volo.Abp.AspNetCore.Mvc.UI.dll
+  AuroraStruct3D.HttpApi -> D:\GitRepos\Aurora Application\Builds\Debug\AuroraStruct3D.HttpApi\net10.0\AuroraStruct3D.HttpApi.dll
+  AuroraStruct3D.Application -> D:\GitRepos\Aurora Application\Builds\Debug\AuroraStruct3D.Application\net10.0\AuroraStruct3D.Application.dll
+  Volo.Abp.AspNetCore.Mvc.UI.Bootstrap -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.AspNetCore.Mvc.UI.Bootstrap\net10.0\Volo.Abp.AspNetCore.Mvc.UI.Bootstrap.dll
+  Volo.Abp.AspNetCore.Mvc.UI.Bundling -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.AspNetCore.Mvc.UI.Bundling\net10.0\Volo.Abp.AspNetCore.Mvc.UI.Bundling.dll
+  Volo.Abp.AspNetCore.Mvc.UI.Widgets -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.AspNetCore.Mvc.UI.Widgets\net10.0\Volo.Abp.AspNetCore.Mvc.UI.Widgets.dll
+  Volo.Abp.AspNetCore.Mvc.UI.Theme.Shared -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.AspNetCore.Mvc.UI.Theme.Shared\net10.0\Volo.Abp.AspNetCore.Mvc.UI.Theme.Shared.dll
+  Volo.Abp.Account.Web -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.Account.Web\net10.0\Volo.Abp.Account.Web.dll
+  Volo.Abp.AspNetCore.Mvc.UI.MultiTenancy -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.AspNetCore.Mvc.UI.MultiTenancy\net10.0\Volo.Abp.AspNetCore.Mvc.UI.MultiTenancy.dll
+  Volo.Abp.AspNetCore.Mvc.UI.Theme.Basic -> D:\GitRepos\Aurora Application\Builds\Debug\Volo.Abp.AspNetCore.Mvc.UI.Theme.Basic\net10.0\Volo.Abp.AspNetCore.Mvc.UI.Theme.Basic.dll
+  Lion.AbpPro.AspNetCore -> D:\GitRepos\Aurora Application\Builds\Debug\Lion.AbpPro.AspNetCore\net10.0\Lion.AbpPro.AspNetCore.dll
+  AuroraStruct3D.WebGateway -> D:\GitRepos\Aurora Application\Builds\Debug\AuroraStruct3D.WebGateway\net10.0\AuroraStruct3D.WebGateway.dll
+  AuroraStruct3D.HttpApi.Host -> D:\GitRepos\Aurora Application\Builds\Debug\AuroraStruct3D.HttpApi.Host\net10.0\AuroraStruct3D.HttpApi.Host.dll
+
+宸叉垚鍔熺敓鎴愩€?
+
+C:\Users\zhengkai\.nuget\packages\microsoft.visualstudio.javascript.sdk\1.0.4902498\Sdk\Sdk.targets(293,3): warning : Creating Warning brace-expansion: Large numeric range defeats documented `max` DoS protection, (Package: brace-expansion, Severity: moderate) [D:\GitRepos\Aurora Application\Sources\AuroraStruct3D\AuroraStruct3D.Frontend\AuroraStruct3D.Frontend.esproj]
+    1 涓鍛?
+    0 涓敊璇?
+
+宸茬敤鏃堕棿 00:00:47.96

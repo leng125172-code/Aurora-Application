@@ -33,8 +33,18 @@ public class TucamCameraService : ITucamCameraService, IDisposable
         (GenICamNodeMap NodeMap, GenICamDependencyGraph Graph)
     > _nodeMapCache = new();
 
-    /// <summary>GenICam 节点探测/枚举互斥锁，避免并发探测污染选择器状态</summary>
+    /// <summary>
+    /// 进程级 Tucam SDK 全局互斥锁。
+    /// Tucam SDK 内部存在全局共享状态，即使操作不同相机句柄，并发调用也会导致堆损坏（SIGSEGV / double free）。
+    /// 所有 GenICam 枚举与依赖探测必须通过此锁串行执行。
+    /// </summary>
+    private static readonly SemaphoreSlim _globalSdkLock = new(1, 1);
+
+    /// <summary>GenICam 节点探测/枚举互斥锁，避免同一相机并发探测污染选择器状态</summary>
     private readonly ConcurrentDictionary<int, SemaphoreSlim> _nodeMapProbeLocks = new();
+
+    /// <summary>每台相机的 NodeMap 预热 Task，用于在开始采集前等待其完成，避免并发 SDK 调用导致堆损坏</summary>
+    private readonly ConcurrentDictionary<int, Task> _prewarmTasks = new();
 
     /// <summary>相机索引 → 数据库 CameraDevice.Id 映射（Host 启动后注入）</summary>
     private IReadOnlyDictionary<int, Guid> _deviceIdByCameraIndex = new Dictionary<int, Guid>();
@@ -181,48 +191,75 @@ public class TucamCameraService : ITucamCameraService, IDisposable
         ThrowIfDisposed();
         ThrowIfNotInitialized();
 
-        if (_cameraHandles.ContainsKey(cameraIndex))
+        // 使用全局 SDK 锁：
+        // 1. 将 ContainsKey 检查与 TUCAM_Dev_Open 置于同一临界区，避免并发请求双双调用 SDK
+        // 2. TUCAM_Dev_Open 本身是 SDK 调用，不能与 Probe/Enumerate 并发执行
+        _globalSdkLock.Wait();
+        try
         {
-            _logger.LogWarning("{Tag} Camera index {Index} is already opened", LogTag, cameraIndex);
-            return Task.CompletedTask;
-        }
+            if (_cameraHandles.ContainsKey(cameraIndex))
+            {
+                _logger.LogWarning(
+                    "{Tag} Camera index {Index} is already opened",
+                    LogTag,
+                    cameraIndex
+                );
+                return Task.CompletedTask;
+            }
 
-        Stopwatch sw = Stopwatch.StartNew();
-        var openParam = new TUCamOpen { uiIdxOpen = (uint)cameraIndex, hIdxTUCam = IntPtr.Zero };
+            Stopwatch sw = Stopwatch.StartNew();
+            var openParam = new TUCamOpen
+            {
+                uiIdxOpen = (uint)cameraIndex,
+                hIdxTUCam = IntPtr.Zero,
+            };
 
-        var ret = TUCamNative.TUCAM_Dev_Open(ref openParam);
-        sw.Stop();
+            var ret = TUCamNative.TUCAM_Dev_Open(ref openParam);
+            sw.Stop();
 
-        if (ret != TUCamRet.Success)
-        {
-            string errorMsg = $"{LogTag} Failed to open camera (index: {cameraIndex}): {ret}";
-            _logger.LogError(
-                "{Tag} Failed to open camera {Index}, return code: {RetCode}",
+            if (ret != TUCamRet.Success)
+            {
+                string errorMsg = $"{LogTag} Failed to open camera (index: {cameraIndex}): {ret}";
+                _logger.LogError(
+                    "{Tag} Failed to open camera {Index}, return code: {RetCode}",
+                    LogTag,
+                    cameraIndex,
+                    ret
+                );
+                RecordCameraLog(
+                    cameraIndex,
+                    CameraOperationType.Open,
+                    false,
+                    sw.ElapsedMilliseconds,
+                    errorMsg
+                );
+                throw new InvalidOperationException(errorMsg);
+            }
+
+            _cameraHandles[cameraIndex] = openParam.hIdxTUCam;
+            _logger.LogInformation(
+                "{Tag} Camera {Index} opened successfully, handle: {Handle}",
                 LogTag,
                 cameraIndex,
-                ret
+                openParam.hIdxTUCam
             );
-            RecordCameraLog(
-                cameraIndex,
-                CameraOperationType.Open,
-                false,
-                sw.ElapsedMilliseconds,
-                errorMsg
-            );
-            throw new InvalidOperationException(errorMsg);
+            RecordCameraLog(cameraIndex, CameraOperationType.Open, true, sw.ElapsedMilliseconds);
+        }
+        finally
+        {
+            _globalSdkLock.Release();
         }
 
-        _cameraHandles[cameraIndex] = openParam.hIdxTUCam;
-        _logger.LogInformation(
-            "{Tag} Camera {Index} opened successfully, handle: {Handle}",
-            LogTag,
-            cameraIndex,
-            openParam.hIdxTUCam
-        );
-        RecordCameraLog(cameraIndex, CameraOperationType.Open, true, sw.ElapsedMilliseconds);
-
         // 后台异步预跑 NodeMap 枚举 + 选择器依赖探测，结果写入缓存
-        _ = Task.Run(() => PrewarmGenICamNodeMapAsync(cameraIndex, openParam.hIdxTUCam));
+        // 注意：保存 Task 引用，StartCaptureAsync 会等待其完成以避免并发 SDK 调用导致堆损坏
+        // 注意：预热任务在 _globalSdkLock 释放后再启动，避免长时间持锁
+        IntPtr newHandle = _cameraHandles.TryGetValue(cameraIndex, out IntPtr h) ? h : IntPtr.Zero;
+        if (newHandle != IntPtr.Zero)
+        {
+            _prewarmTasks[cameraIndex] = Task.Run(() =>
+                PrewarmGenICamNodeMapAsync(cameraIndex, newHandle)
+            );
+        }
 
         return Task.CompletedTask;
     }
@@ -260,6 +297,7 @@ public class TucamCameraService : ITucamCameraService, IDisposable
         }
         _captureStates.TryRemove(cameraIndex, out _);
         _nodeMapCache.TryRemove(cameraIndex, out _);
+        _prewarmTasks.TryRemove(cameraIndex, out _);
 
         Stopwatch sw = Stopwatch.StartNew();
         var ret = TUCamNative.TUCAM_Dev_Close(handle);
@@ -775,6 +813,29 @@ public class TucamCameraService : ITucamCameraService, IDisposable
         IntPtr handle = GetHandle(cameraIndex);
         CameraCaptureState captureState = GetCaptureState(cameraIndex);
 
+        // Tucam SDK 在 ARM64/Linux 上非线程安全：若 NodeMap 预热仍在后台运行，
+        // 并发调用 Buf_Alloc/Cap_Start 会导致 SDK 内部堆损坏（double free / munmap invalid pointer）。
+        // 此处阻塞等待预热完成，确保所有 SDK 调用串行化。
+        if (
+            _prewarmTasks.TryGetValue(cameraIndex, out Task? prewarmTask)
+            && !prewarmTask.IsCompleted
+        )
+        {
+            _logger.LogInformation(
+                "{Tag} Camera {Index} NodeMap 预热尚未完成，等待后再启动采集…",
+                LogTag,
+                cameraIndex
+            );
+            try
+            {
+                prewarmTask.GetAwaiter().GetResult();
+            }
+            catch
+            {
+                // 预热失败不阻止采集，仅记录（预热内部已有日志）
+            }
+        }
+
         Stopwatch sw = Stopwatch.StartNew();
         lock (captureState.SyncRoot)
         {
@@ -794,9 +855,48 @@ public class TucamCameraService : ITucamCameraService, IDisposable
                 return Task.CompletedTask;
             }
 
+            // 防御性释放：若上次会话崩溃未正常 Release，相机硬件仍保有旧缓冲区，
+            // 此时 TUCAM_Buf_Alloc 会返回 Excluded（资源冲突）。先无条件 Release，
+            // 忽略返回值（无缓冲区时 Release 也会返回非 Success，属于正常情况）。
+            TUCamNative.TUCAM_Buf_Release(handle);
+
             // 先分配帧缓冲区，再启动连续采集。WaitForFrame 必须复用此处返回的 pBuffer。
+            // 多相机并发场景下，另一台相机大流量 USB 传输会导致本相机的 Buf_Alloc 控制
+            // 传输被抢占而返回 Excluded。采用指数退避重试，最多 5 次（约 1.5s 总等待）。
             var frame = new TUCamFrame { uiRsdSize = 1 };
-            var allocRet = TUCamNative.TUCAM_Buf_Alloc(handle, ref frame);
+            TUCamRet allocRet = TUCamRet.Failure;
+            int[] retryDelaysMs = { 0, 100, 200, 400, 800 };
+            for (int attempt = 0; attempt < retryDelaysMs.Length; attempt++)
+            {
+                if (retryDelaysMs[attempt] > 0)
+                {
+                    Thread.Sleep(retryDelaysMs[attempt]);
+                    // 每次重试前再次 Release，确保 SDK 内部状态清零
+                    TUCamNative.TUCAM_Buf_Release(handle);
+                }
+
+                allocRet = TUCamNative.TUCAM_Buf_Alloc(handle, ref frame);
+                if (allocRet == TUCamRet.Success)
+                {
+                    if (attempt > 0)
+                    {
+                        _logger.LogInformation(
+                            "{Tag} Camera {Index} Buf_Alloc 在第 {Attempt} 次重试后成功（可能因另一相机占用 USB 带宽）",
+                            LogTag,
+                            cameraIndex,
+                            attempt + 1
+                        );
+                    }
+                    break;
+                }
+
+                // Excluded 是典型的"资源被占用"返回码，可重试；其他错误码立即失败
+                if (allocRet != TUCamRet.Excluded)
+                {
+                    break;
+                }
+            }
+
             if (allocRet != TUCamRet.Success)
             {
                 sw.Stop();
@@ -811,7 +911,203 @@ public class TucamCameraService : ITucamCameraService, IDisposable
                 throw new InvalidOperationException(errorMsg);
             }
 
-            var ret = TUCamNative.TUCAM_Cap_Start(handle, (uint)TUCamCaptureMode.Sequence);
+            // 启动连续采集，对 FailOpenBulkIn 进行指数退避重试：
+            // 多相机共享 USB 控制器场景下，另一台相机正在 bulk-in 传输时，
+            // 本相机的 OpenBulkIn 会因带宽预留失败而返回 FailOpenBulkIn。
+            // 等待对方完成一帧传输（约 200ms）后重试通常即可成功。
+            TUCamRet ret = TUCamRet.Failure;
+            int[] capRetryDelaysMs = { 0, 100, 200, 400, 800 };
+            for (int attempt = 0; attempt < capRetryDelaysMs.Length; attempt++)
+            {
+                if (capRetryDelaysMs[attempt] > 0)
+                {
+                    Thread.Sleep(capRetryDelaysMs[attempt]);
+                }
+
+                ret = TUCamNative.TUCAM_Cap_Start(handle, (uint)TUCamCaptureMode.Sequence);
+                if (ret == TUCamRet.Success)
+                {
+                    if (attempt > 0)
+                    {
+                        _logger.LogInformation(
+                            "{Tag} Camera {Index} Cap_Start 在第 {Attempt} 次重试后成功（USB bulk-in 带宽竞争）",
+                            LogTag,
+                            cameraIndex,
+                            attempt + 1
+                        );
+                    }
+                    break;
+                }
+
+                // 仅对 FailOpenBulkIn 重试；其他错误立即失败
+                if (ret != TUCamRet.FailOpenBulkIn)
+                {
+                    break;
+                }
+            }
+
+            // 终极回退：若所有重试仍是 FailOpenBulkIn，说明设备句柄已进入持久错误态
+            // （SDK 内部 USB bulk-in 端点状态损坏），简单重试无法恢复。必须 Close + Open
+            // 重新拿到一个干净的设备句柄，再走一次完整的 Release/Alloc/Cap_Start 流程。
+            if (ret == TUCamRet.FailOpenBulkIn)
+            {
+                _logger.LogWarning(
+                    "{Tag} Camera {Index} Cap_Start 持续 FailOpenBulkIn，尝试关闭并重新打开设备句柄进行恢复",
+                    LogTag,
+                    cameraIndex
+                );
+
+                TUCamNative.TUCAM_Buf_Release(handle);
+                TUCamRet closeRet = TUCamNative.TUCAM_Dev_Close(handle);
+                _cameraHandles.TryRemove(cameraIndex, out _);
+                _nodeMapCache.TryRemove(cameraIndex, out _);
+                _logger.LogInformation(
+                    "{Tag} Camera {Index} Dev_Close 返回 {Ret}",
+                    LogTag,
+                    cameraIndex,
+                    closeRet
+                );
+
+                // 给 USB 驱动一点时间复位端点
+                Thread.Sleep(500);
+
+                // TUCam SDK 特性：在所有相机句柄释放后，再次 Dev_Open 会返回 FailOpenCamera，
+                // 必须先 Api_Uninit + Api_Init 让 SDK 重新枚举设备。CloseCameraAsync 内已对
+                // "关闭最后一台相机" 场景做了此处理，但本恢复路径在多相机场景下可能仍有其他
+                // 相机句柄存在，故仅在 _cameraHandles 为空时执行 SDK 级重置。
+                if (_cameraHandles.IsEmpty && _initialized)
+                {
+                    TUCamNative.TUCAM_Api_Uninit();
+                    _initialized = false;
+                    _lastCameraCount = 0;
+                    var reinitParam = new TUCamInit
+                    {
+                        uiCamCount = 0,
+                        pstrConfigPath = IntPtr.Zero,
+                    };
+                    TUCamRet reinitRet = TUCamNative.TUCAM_Api_Init(ref reinitParam, 1000);
+                    if (reinitRet == TUCamRet.Success)
+                    {
+                        _initialized = true;
+                        _lastCameraCount = (int)reinitParam.uiCamCount;
+                        _logger.LogInformation(
+                            "{Tag} Camera {Index} SDK 重新初始化成功（恢复路径），检测到 {Count} 台相机",
+                            LogTag,
+                            cameraIndex,
+                            reinitParam.uiCamCount
+                        );
+                    }
+                    else
+                    {
+                        _logger.LogWarning(
+                            "{Tag} Camera {Index} SDK 重新初始化失败（恢复路径）: {Ret}",
+                            LogTag,
+                            cameraIndex,
+                            reinitRet
+                        );
+                    }
+                }
+
+                // 对 Dev_Open 做多次重试：USB 端点复位 + 设备重新枚举均可能需要更长时间，
+                // 单次 300ms 等待往往不够。退避序列累计 ~3.5s 通常足以让设备恢复。
+                TUCamRet openRet = TUCamRet.Failure;
+                IntPtr reopenedHandle = IntPtr.Zero;
+                int[] openRetryDelaysMs = { 0, 500, 1000, 2000 };
+                for (int openAttempt = 0; openAttempt < openRetryDelaysMs.Length; openAttempt++)
+                {
+                    if (openRetryDelaysMs[openAttempt] > 0)
+                    {
+                        Thread.Sleep(openRetryDelaysMs[openAttempt]);
+                    }
+
+                    var reopenParam = new TUCamOpen
+                    {
+                        uiIdxOpen = (uint)cameraIndex,
+                        hIdxTUCam = IntPtr.Zero,
+                    };
+                    openRet = TUCamNative.TUCAM_Dev_Open(ref reopenParam);
+                    if (openRet == TUCamRet.Success)
+                    {
+                        reopenedHandle = reopenParam.hIdxTUCam;
+                        if (openAttempt > 0)
+                        {
+                            _logger.LogInformation(
+                                "{Tag} Camera {Index} Dev_Open 在第 {Attempt} 次重试后成功",
+                                LogTag,
+                                cameraIndex,
+                                openAttempt + 1
+                            );
+                        }
+                        break;
+                    }
+
+                    _logger.LogWarning(
+                        "{Tag} Camera {Index} Dev_Open 第 {Attempt} 次返回 {Ret}，继续重试",
+                        LogTag,
+                        cameraIndex,
+                        openAttempt + 1,
+                        openRet
+                    );
+                }
+
+                if (openRet != TUCamRet.Success)
+                {
+                    captureState.Frame = default;
+                    captureState.IsCapturing = false;
+                    sw.Stop();
+                    string errorMsg =
+                        $"{LogTag} Failed to reopen camera after FailOpenBulkIn: {openRet}";
+                    RecordCameraLog(
+                        cameraIndex,
+                        CameraOperationType.StartCapture,
+                        false,
+                        sw.ElapsedMilliseconds,
+                        errorMsg
+                    );
+                    throw new InvalidOperationException(errorMsg);
+                }
+                handle = reopenedHandle;
+                _cameraHandles[cameraIndex] = handle;
+                _logger.LogInformation(
+                    "{Tag} Camera {Index} Dev_Open 重新打开成功，新句柄: {Handle}",
+                    LogTag,
+                    cameraIndex,
+                    handle
+                );
+
+                // 重新分配缓冲区（新句柄上 SDK 状态干净，Buf_Alloc 通常一次即成功）
+                TUCamNative.TUCAM_Buf_Release(handle);
+                frame = new TUCamFrame { uiRsdSize = 1 };
+                allocRet = TUCamNative.TUCAM_Buf_Alloc(handle, ref frame);
+                if (allocRet != TUCamRet.Success)
+                {
+                    captureState.Frame = default;
+                    captureState.IsCapturing = false;
+                    sw.Stop();
+                    string errorMsg =
+                        $"{LogTag} Failed to re-alloc buffer after reopen: {allocRet}";
+                    RecordCameraLog(
+                        cameraIndex,
+                        CameraOperationType.StartCapture,
+                        false,
+                        sw.ElapsedMilliseconds,
+                        errorMsg
+                    );
+                    throw new InvalidOperationException(errorMsg);
+                }
+
+                // 重新启动采集
+                ret = TUCamNative.TUCAM_Cap_Start(handle, (uint)TUCamCaptureMode.Sequence);
+                if (ret == TUCamRet.Success)
+                {
+                    _logger.LogInformation(
+                        "{Tag} Camera {Index} Cap_Start 在 Dev_Close+Open 复位后成功",
+                        LogTag,
+                        cameraIndex
+                    );
+                }
+            }
+
             if (ret != TUCamRet.Success)
             {
                 TUCamNative.TUCAM_Buf_Release(handle);
@@ -832,6 +1128,32 @@ public class TucamCameraService : ITucamCameraService, IDisposable
             captureState.Frame = frame;
             captureState.IsCapturing = true;
             captureState.StopRequested = false;
+        }
+
+        // 部分 GenICam 设备需要显式发送 AcquisitionStart 命令才能真正开始出帧
+        // （TUCAM SDK 的 TUCAM_Cap_Start 仅在 Transport Layer 启动采集线程，
+        //  但 ACQ 状态机仍处于 Stopped）。失败仅记录警告，不影响主流程。
+        try
+        {
+            TUCamRet acqRet = GenICamSetInt(handle, "AcquisitionStart", 1);
+            if (acqRet != TUCamRet.Success)
+            {
+                _logger.LogDebug(
+                    "{Tag} Camera {Index} AcquisitionStart 命令返回 {Ret}，部分设备无需此命令，已忽略",
+                    LogTag,
+                    cameraIndex,
+                    acqRet
+                );
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(
+                ex,
+                "{Tag} Camera {Index} AcquisitionStart 命令异常，已忽略",
+                LogTag,
+                cameraIndex
+            );
         }
 
         sw.Stop();
@@ -873,6 +1195,30 @@ public class TucamCameraService : ITucamCameraService, IDisposable
                 }
 
                 captureState.StopRequested = true;
+            }
+
+            // 对应 StartCaptureAsync 的 AcquisitionStart，软发 AcquisitionStop（失败仅 Debug 日志）
+            try
+            {
+                TUCamRet acqRet = GenICamSetInt(handle, "AcquisitionStop", 1);
+                if (acqRet != TUCamRet.Success)
+                {
+                    _logger.LogDebug(
+                        "{Tag} Camera {Index} AcquisitionStop 命令返回 {Ret}，已忽略",
+                        LogTag,
+                        cameraIndex,
+                        acqRet
+                    );
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(
+                    ex,
+                    "{Tag} Camera {Index} AcquisitionStop 命令异常，已忽略",
+                    LogTag,
+                    cameraIndex
+                );
             }
 
             TUCamNative.TUCAM_Buf_AbortWait(handle);
@@ -1389,7 +1735,7 @@ public class TucamCameraService : ITucamCameraService, IDisposable
     // ─── 原始帧抓取（用于单帧快照 / RTP 推流）────────────────────────────────
 
     /// <inheritdoc/>
-    public Task<byte[]> GrabFrameRawAsync(
+    public Task<(byte[] JpegBytes, FrameQualityScore Quality)> GrabFrameRawAsync(
         int cameraIndex,
         int timeoutMs = 3000,
         int maxWidth = 0,
@@ -1414,8 +1760,13 @@ public class TucamCameraService : ITucamCameraService, IDisposable
             TUCamRet ret = TUCamNative.TUCAM_Buf_WaitForFrame(handle, ref frame, timeoutMs);
             if (ret != TUCamRet.Success)
             {
+                // Bug 4/5 诊断：超时时附加关键 GenICam 节点值，便于判断是否需调用 AcquisitionStart
+                string? exp = GenICamGetString(handle, "ExposureTime");
+                string? tm = GenICamGetString(handle, "TriggerMode");
+                string? am = GenICamGetString(handle, "AcquisitionMode");
+                long? fr = GenICamGetInt(handle, "AcquisitionFrameRate");
                 throw new InvalidOperationException(
-                    $"{LogTag} WaitForFrame failed (index={cameraIndex}): {ret}"
+                    $"{LogTag} WaitForFrame failed (index={cameraIndex}): {ret}. timeout={timeoutMs}ms, ExposureTime={exp}, TriggerMode={tm}, AcquisitionMode={am}, AcquisitionFrameRate={fr}"
                 );
             }
 
@@ -1468,8 +1819,8 @@ public class TucamCameraService : ITucamCameraService, IDisposable
             pixelFormat ?? "N/A"
         );
 
-        // 编码为 JPEG（含 Bayer 解包 + 双线性插值解马赛克）
-        byte[] jpegBytes = EncodeToJpeg(
+        // 编码为 JPEG（含 Bayer 解包 + 双线性插值解马赛克 + 质量评分）
+        (byte[] jpegBytes, FrameQualityScore quality) = EncodeToJpeg(
             rawData,
             width,
             height,
@@ -1483,7 +1834,39 @@ public class TucamCameraService : ITucamCameraService, IDisposable
             jpegQuality,
             imageRotationAngle
         );
-        return Task.FromResult(jpegBytes);
+        return Task.FromResult((jpegBytes, quality));
+    }
+
+    /// <inheritdoc/>
+    public Task<bool> DrainFrameAsync(int cameraIndex, int timeoutMs = 1000)
+    {
+        ThrowIfDisposed();
+        IntPtr handle = GetHandle(cameraIndex);
+
+        // 若相机未处于采集状态直接抛异常（与 BeginFrameWait 行为一致），
+        // 否则预览循环会在 drain 路径无限静默自旋
+        if (
+            !_captureStates.TryGetValue(cameraIndex, out CameraCaptureState? state)
+            || !state.IsCapturing
+        )
+        {
+            throw new InvalidOperationException(
+                $"{LogTag} Camera {cameraIndex} is not capturing. Call StartCaptureAsync first."
+            );
+        }
+
+        TUCamFrame frame = BeginFrameWait(cameraIndex, out CameraCaptureState captureState);
+        try
+        {
+            TUCamRet ret = TUCamNative.TUCAM_Buf_WaitForFrame(handle, ref frame, timeoutMs);
+            // 成功或超时都不记录日志（drain 超时属于正常情况）
+            return Task.FromResult(ret == TUCamRet.Success);
+        }
+        finally
+        {
+            // EndFrameWait 更新内部帧状态，不向 SDK 归还帧（由下次 WaitForFrame 隐式释放）
+            EndFrameWait(captureState, frame);
+        }
     }
 
     // ─── GenICam 节点公共访问方法 ────────────────────────────────────────────
@@ -2110,7 +2493,7 @@ public class TucamCameraService : ITucamCameraService, IDisposable
     /// <param name="maxOutputWidth">JPEG 输出最大宽度，0 表示保持原始宽度</param>
     /// <param name="jpegQuality">JPEG 编码质量，范围 1-100</param>
     /// <param name="imageRotationAngle">图像顺时针旋转角度（度，支持 0/90/180/270）</param>
-    private static byte[] EncodeToJpeg(
+    private static (byte[] JpegBytes, FrameQualityScore Quality) EncodeToJpeg(
         byte[] rawData,
         int width,
         int height,
@@ -2225,14 +2608,20 @@ public class TucamCameraService : ITucamCameraService, IDisposable
 
         // ── 步骤 B：Bayer GBRG → RGB 双线性插值解马赛克 ────────────────────────
         // 仅 outChannels=1（Bayer 单通道）时执行；outChannels=3 时 SDK 已处理，跳过
-        bool decodedIsBgr = outChannels == 3;
+        //
+        // TUCam SDK 通道顺序平台差异：
+        //   Windows：SDK 返回三通道 BGR 帧（沿用 GDI BITMAPINFO 惯例）
+        //   Linux/ARM64：SDK 返回三通道 RGB 帧（无 Windows GDI 约束）
+        // 因此在 Linux 下 decodedIsBgr=false，像素填充时需做 B/R 交换，否则蓝色偏红。
+        bool decodedIsBgr = outChannels == 3 && OperatingSystem.IsWindows();
+        bool isThreeChannel = outChannels == 3;
         if (
-            decodedIsBgr
+            isThreeChannel
             && bitDepth <= 8
             && ShouldNormalizeRgbDisplayFrame(pixelFormat, pixelFormatValue, pixelSize)
         )
         {
-            decoded = NormalizeRgb8DisplayFrame(decoded, isBgr: true);
+            decoded = NormalizeRgb8DisplayFrame(decoded, isBgr: decodedIsBgr);
         }
 
         if (normalizedRotationAngle != 0)
@@ -2275,7 +2664,16 @@ public class TucamCameraService : ITucamCameraService, IDisposable
                 ? DemosaicBayer(decoded, outputWidth, outputHeight, bayerPattern)
                 : decoded;
 
-        // ── 步骤 C：颜色数据 → SkiaSharp Bgra8888 + JPEG 编码 ───────────────────
+        // ── 步骤 C：帧质量评分（对焦清晰度 + 曝光质量） ──────────────────────────────
+        // 在缩放/JPEG 之前基于原始分辨率像素计算，结果更精确。
+        FrameQualityScore frameQuality = ComputeFrameQuality(
+            colorPixels,
+            outputWidth,
+            outputHeight,
+            decodedIsBgr
+        );
+
+        // ── 步骤 D：颜色数据 → SkiaSharp Bgra8888 + JPEG 编码 ───────────────────
         // SDK 三通道帧按 BGR 处理；自行解马赛克得到的是 RGB。
         // SkiaSharp Bgra8888 内存布局为 [B, G, R, A]
         // 注意：使用 Marshal.Copy 将数据复制到 SKBitmap 的内部缓冲区，
@@ -2321,7 +2719,7 @@ public class TucamCameraService : ITucamCameraService, IDisposable
         using SKData? encoded = image.Encode(SKEncodedImageFormat.Jpeg, quality);
         if (encoded is not null)
         {
-            return encoded.ToArray();
+            return (encoded.ToArray(), frameQuality);
         }
 
         // 降级路径：部分平台 JPEG 编码返回 null，转换为 Rgba8888 后重新编码
@@ -2330,7 +2728,7 @@ public class TucamCameraService : ITucamCameraService, IDisposable
         using SKData fallback =
             convertedImage.Encode(SKEncodedImageFormat.Jpeg, quality)
             ?? throw new InvalidOperationException($"JPEG 编码失败：{outputWidth}x{outputHeight}");
-        return fallback.ToArray();
+        return (fallback.ToArray(), frameQuality);
     }
 
     /// <summary>
@@ -2361,6 +2759,118 @@ public class TucamCameraService : ITucamCameraService, IDisposable
         }
 
         return resized;
+    }
+
+    /// <summary>
+    /// 基于已解马赛克的彩色像素数据计算帧图像质量评分。
+    /// 采用 4 倍下采样加速计算，误差可忽略。
+    /// </summary>
+    /// <param name="colorPixels">RGB 或 BGR 三通道像素数组（紧凑排列，行宽=width*3）</param>
+    /// <param name="width">图像宽度</param>
+    /// <param name="height">图像高度</param>
+    /// <param name="isBgr">true=BGR 通道顺序，false=RGB</param>
+    private static FrameQualityScore ComputeFrameQuality(
+        byte[] colorPixels,
+        int width,
+        int height,
+        bool isBgr
+    )
+    {
+        // ── 1. 下采样转灰度（step=4 → 1/16 像素量，速度快，精度足够）────────────
+        const int Step = 4;
+        int sw = (width + Step - 1) / Step;
+        int sh = (height + Step - 1) / Step;
+        var gray = new byte[sw * sh];
+        int gi = 0;
+        for (int y = 0; y < height && gi < gray.Length; y += Step)
+        {
+            for (int x = 0; x < width && gi < gray.Length; x += Step)
+            {
+                int src = (y * width + x) * 3;
+                if (src + 2 >= colorPixels.Length)
+                    break;
+                int r = isBgr ? colorPixels[src + 2] : colorPixels[src];
+                int g = colorPixels[src + 1];
+                int b = isBgr ? colorPixels[src] : colorPixels[src + 2];
+                gray[gi++] = (byte)((77 * r + 150 * g + 29 * b) >> 8);
+            }
+        }
+
+        int totalPixels = gi;
+        if (totalPixels < 9)
+        {
+            return new FrameQualityScore
+            {
+                FocusScore = 50f,
+                ApertureScore = 50f,
+                ApertureHint = ApertureHint.Good,
+            };
+        }
+
+        // ── 2. 对焦评分：Laplacian 方差（对角线 5 点核，中心=4，四邻=-1）────────
+        double lapSumSq = 0;
+        int lapCount = 0;
+        for (int y = 1; y < sh - 1; y++)
+        {
+            for (int x = 1; x < sw - 1; x++)
+            {
+                int idx = y * sw + x;
+                int lap =
+                    4 * gray[idx] - gray[idx - 1] - gray[idx + 1] - gray[idx - sw] - gray[idx + sw];
+                lapSumSq += (double)lap * lap;
+                lapCount++;
+            }
+        }
+
+        double variance = lapCount > 0 ? lapSumSq / lapCount : 0;
+        // log10 映射：variance=1→0分，variance=10000→100分（对数刻度感知更线性）
+        float focusScore = (float)
+            Math.Clamp(Math.Log10(Math.Max(1.0, variance)) / Math.Log10(10000.0) * 100.0, 0, 100);
+
+        // ── 3. 光圈（曝光）评分：过曝/欠曝像素比例 + 均值偏差 ────────────────────
+        var histogram = new int[256];
+        long pixelSum = 0;
+        for (int i = 0; i < totalPixels; i++)
+        {
+            histogram[gray[i]]++;
+            pixelSum += gray[i];
+        }
+
+        double mean = (double)pixelSum / totalPixels;
+
+        // 过曝：值 > 245；欠曝：值 < 10
+        int overCount = 0;
+        int underCount = 0;
+        for (int v = 246; v < 256; v++)
+            overCount += histogram[v];
+        for (int v = 0; v < 10; v++)
+            underCount += histogram[v];
+
+        float overRatio = (float)overCount / totalPixels;
+        float underRatio = (float)underCount / totalPixels;
+
+        // 过曝惩罚（3% 以上过曝即接近满分扣罚）
+        float clipPenalty = Math.Clamp(
+            overRatio / 0.03f * 0.8f + underRatio / 0.08f * 0.3f,
+            0f,
+            1f
+        );
+        // 均值偏差惩罚（理想均值约 115，允许 ±80 范围）
+        float meanPenalty = Math.Clamp((float)Math.Abs(mean - 115) / 80f, 0f, 1f) * 0.3f;
+        float apertureScore = Math.Clamp((1f - clipPenalty) * (1f - meanPenalty) * 100f, 0f, 100f);
+
+        // 光圈调节建议
+        ApertureHint hint =
+            overRatio > 0.03f ? ApertureHint.Decrease
+            : underRatio > 0.06f || mean < 35 ? ApertureHint.Increase
+            : ApertureHint.Good;
+
+        return new FrameQualityScore
+        {
+            FocusScore = focusScore,
+            ApertureScore = apertureScore,
+            ApertureHint = hint,
+        };
     }
 
     /// <summary>
@@ -3182,12 +3692,16 @@ public class TucamCameraService : ITucamCameraService, IDisposable
         TUCamRet ret = GenICamSetString(handle, nodeName, sanitizedValue);
         if (ret != TUCamRet.Success)
         {
+            // Bug 1b：String 写入失败必须抛出，避免前端误显示「保存成功」
             _logger.LogWarning(
                 "{Tag} GenICam SetString {Node}='{Value}' 返回 {Ret}，未生效",
                 LogTag,
                 nodeName,
                 sanitizedValue,
                 ret
+            );
+            throw new InvalidOperationException(
+                $"{LogTag} GenICam SetString {nodeName}='{sanitizedValue}' 失败 ret=0x{(int)ret:X8}"
             );
         }
         return Task.CompletedTask;
@@ -3220,6 +3734,41 @@ public class TucamCameraService : ITucamCameraService, IDisposable
     {
         ThrowIfDisposed();
         return _nodeMapCache.TryGetValue(cameraIndex, out var cached) ? cached.Graph : null;
+    }
+
+    /// <inheritdoc/>
+    public void UpdateCachedNodeValues(int cameraIndex, IReadOnlyList<GenICamNodeValue> values)
+    {
+        ThrowIfDisposed();
+        if (values is null || values.Count == 0)
+        {
+            return;
+        }
+
+        if (!_nodeMapCache.TryGetValue(cameraIndex, out var cached))
+        {
+            return;
+        }
+
+        GenICamNodeMap nodeMap = cached.NodeMap;
+        foreach (GenICamNodeValue v in values)
+        {
+            if (!v.Success)
+            {
+                continue;
+            }
+
+            if (
+                !string.IsNullOrEmpty(v.NodeName)
+                && nodeMap.NodesByName.TryGetValue(v.NodeName, out GenICamNodeMeta? meta)
+            )
+            {
+                // 将回读值写回可变属性，保持缓存与硬件一致
+                meta.CurrentValue = v.Value;
+                meta.Access = v.Access;
+                meta.IsLocked = v.IsLocked;
+            }
+        }
     }
 
     /// <inheritdoc/>
@@ -3332,19 +3881,6 @@ public class TucamCameraService : ITucamCameraService, IDisposable
                 };
             }
 
-            if (actualType == TuElemType.String)
-            {
-                string? str = Marshal.PtrToStringAnsi(attrElement.pTransfer);
-                return new GenICamNodeValue
-                {
-                    NodeName = nodeName,
-                    Success = true,
-                    Value = str,
-                    Access = access,
-                    IsLocked = isLocked,
-                };
-            }
-
             TucamElement valElement = default;
             valElement.pName = pName;
             TUCamRet getRet = TUCamNative.TUCAM_GenICam_GetElementValue(handle, ref valElement, 0);
@@ -3360,15 +3896,20 @@ public class TucamCameraService : ITucamCameraService, IDisposable
                 };
             }
 
+            // String 节点必须走 GetElementValue 触发 SDK 重新从硬件读取，
+            // 否则 attrElement.pTransfer 可能是 ElementAttr 缓存的旧字符串
+            // （Bug 1：修改 DeviceUserID 后立刻显示旧值的根因）。
             string value =
-                actualType == TuElemType.Float
+                actualType == TuElemType.String
+                    ? (Marshal.PtrToStringAnsi(valElement.pTransfer) ?? string.Empty)
+                : actualType == TuElemType.Float
                     ? valElement.uValue.FloatValue.dbVal.ToString(
                         "G",
                         System.Globalization.CultureInfo.InvariantCulture
                     )
-                    : valElement.uValue.IntValue.nVal.ToString(
-                        System.Globalization.CultureInfo.InvariantCulture
-                    );
+                : valElement.uValue.IntValue.nVal.ToString(
+                    System.Globalization.CultureInfo.InvariantCulture
+                );
 
             return new GenICamNodeValue
             {
@@ -3408,22 +3949,36 @@ public class TucamCameraService : ITucamCameraService, IDisposable
         await semaphore.WaitAsync().ConfigureAwait(false);
         try
         {
-            Stopwatch sw = Stopwatch.StartNew();
-            GenICamNodeMap map = TucamGenICamEnumerator.Enumerate(handle, _logger);
-            GenICamDependencyGraph graph = TucamGenICamDependencyProber.Probe(handle, map, _logger);
-            sw.Stop();
+            // Tucam SDK 存在进程级全局共享状态：不同相机的枚举/探测同样不能并发执行。
+            // 此处先获取进程级全局锁，再执行 SDK 调用，确保跨相机串行。
+            await _globalSdkLock.WaitAsync().ConfigureAwait(false);
+            try
+            {
+                Stopwatch sw = Stopwatch.StartNew();
+                GenICamNodeMap map = TucamGenICamEnumerator.Enumerate(handle, _logger);
+                GenICamDependencyGraph graph = TucamGenICamDependencyProber.Probe(
+                    handle,
+                    map,
+                    _logger
+                );
+                sw.Stop();
 
-            _nodeMapCache[cameraIndex] = (map, graph);
-            _logger.LogInformation(
-                "{Tag} Camera {Index} GenICam NodeMap 枚举完成：节点 {NodeCount} 个，依赖边 {EdgeCount} 条，耗时 {Ms}ms",
-                LogTag,
-                cameraIndex,
-                map.Nodes.Count,
-                graph.Edges.Count,
-                sw.ElapsedMilliseconds
-            );
+                _nodeMapCache[cameraIndex] = (map, graph);
+                _logger.LogInformation(
+                    "{Tag} Camera {Index} GenICam NodeMap 枚举完成：节点 {NodeCount} 个，依赖边 {EdgeCount} 条，耗时 {Ms}ms",
+                    LogTag,
+                    cameraIndex,
+                    map.Nodes.Count,
+                    graph.Edges.Count,
+                    sw.ElapsedMilliseconds
+                );
 
-            return map;
+                return map;
+            }
+            finally
+            {
+                _globalSdkLock.Release();
+            }
         }
         finally
         {

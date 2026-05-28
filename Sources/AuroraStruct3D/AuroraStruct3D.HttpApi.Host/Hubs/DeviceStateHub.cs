@@ -1,4 +1,5 @@
 using AuroraStruct3D.DeviceState;
+using AuroraStruct3D.Sessions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using Volo.Abp.AspNetCore.SignalR;
@@ -16,14 +17,17 @@ public class DeviceStateHub : AbpHub<IDeviceStateHub>
 {
     private readonly IDeviceStateManager _deviceStateManager;
     private readonly IDeviceFaultRepository _faultRepository;
+    private readonly IDeviceOperationSessionManager _sessionManager;
 
     public DeviceStateHub(
         IDeviceStateManager deviceStateManager,
-        IDeviceFaultRepository faultRepository
+        IDeviceFaultRepository faultRepository,
+        IDeviceOperationSessionManager sessionManager
     )
     {
         _deviceStateManager = deviceStateManager;
         _faultRepository = faultRepository;
+        _sessionManager = sessionManager;
     }
 
     /// <summary>客户端连接时，立即推送当前状态快照</summary>
@@ -38,6 +42,10 @@ public class DeviceStateHub : AbpHub<IDeviceStateHub>
         // 推送当前活跃故障
         DeviceFaultDto? faultDto = await GetCurrentFaultDtoAsync();
         await Clients.Caller.ReceiveDeviceFaultAsync(faultDto);
+
+        // 推送当前所有设备操作会话（前端据此渲染占用指示器）
+        IReadOnlyList<DeviceSessionDto> sessions = _sessionManager.GetAllSessions();
+        await Clients.Caller.ReceiveAllDeviceSessionsAsync(sessions);
     }
 
     // ─── 私有辅助方法 ─────────────────────────────────────────────────────────

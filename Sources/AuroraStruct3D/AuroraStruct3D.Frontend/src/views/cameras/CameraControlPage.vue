@@ -3,15 +3,20 @@
 // 左侧：按 NodeMap.categories 动态渲染参数分组
 // 右侧：预览 / 快照 / 旋转角度（软件端）/ 实时指标 / 快捷操作
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { useCameraStore } from '@/stores/cameras'
 import { CameraStatus, type CameraLiveMetricsDto, type GenICamNodeDto } from '@/api/cameras'
 import GenICamCategoryCard from '@/components/camera/GenICamCategoryCard.vue'
 import { toast } from 'vue-sonner'
+import { Card, CardContent } from '@/components/ui/card'
+import { BorderBeam } from '@/components/ui/border-beam'
+import { Button } from '@/components/ui/button'
 
 const route = useRoute()
 const router = useRouter()
 const store = useCameraStore()
+const { t } = useI18n()
 
 // ─── 当前设备 ─────────────────────────────────────────────────────────────
 const deviceId = computed<string>(() => route.params.id as string)
@@ -62,15 +67,16 @@ async function loadNodeMap(forceRefresh = false) {
         nodeValues.value = initial
     } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : String(e)
-        toast.error(`加载 NodeMap 失败：${msg}`)
+        toast.error(t('camera.loadNodeMapFailed', { msg }))
     } finally {
         nodeMapLoading.value = false
     }
 }
 
-/** 批量读取指定节点最新值 */
+/** 批量读取指定节点最新值，并同步更新 access 状态 */
 async function readNodes(nodeNames: string[]) {
     if (nodeNames.length === 0 || !nodeMap.value) return
+    // lookup 基于 allNodes；normalize 后 categories.nodes 与之共享引用，修改同步生效
     const lookup = new Map(nodeMap.value.allNodes.map((n) => [n.nodeName, n]))
     const inputs = nodeNames
         .map((name) => lookup.get(name))
@@ -83,7 +89,15 @@ async function readNodes(nodeNames: string[]) {
     try {
         const result = await store.readNodes(deviceId.value, inputs)
         for (const r of result.results) {
-            nodeValues.value[r.nodeName] = r.success ? r.value : null
+            // 读取成功时才更新值，避免将旧的 currentValue 覆盖为 null
+            if (r.success) {
+                nodeValues.value[r.nodeName] = r.value ?? null
+            }
+            // 同步更新节点的当前 access（Selector 切换后实时生效）
+            if (r.access) {
+                const node = lookup.get(r.nodeName)
+                if (node) node.access = r.access
+            }
         }
     } catch {
         // 忽略：保留上次值
@@ -103,8 +117,11 @@ async function refreshCategory(categoryName: string) {
     }
 }
 
-/** 节点写入后回调：刷新该节点自身 + 所有受其依赖的节点 */
-async function onNodeUpdated(node: GenICamNodeDto, _newValue: string) {
+/** 节点写入后回调：立即本地更新值，再异步刷新该节点及受影响节点的最新值+access */
+async function onNodeUpdated(node: GenICamNodeDto, newValue: string) {
+    // 立即本地更新，无需等待网络（写入已成功，值可信）
+    nodeValues.value[node.nodeName] = newValue
+    // 再从后端读取最新值+access（含受影响节点）
     const toRefresh = new Set<string>([node.nodeName])
     const affected = selectorDependencyIndex.value[node.nodeName] ?? []
     for (const a of affected) toRefresh.add(a)
@@ -139,10 +156,10 @@ async function saveRotationAngle() {
     try {
         await store.applyImageRotationAngle(deviceId.value, rotationAngle.value)
         savedRotationAngle.value = rotationAngle.value
-        toast.success('旋转角度已保存')
+        toast.success(t('camera.rotationSaved'))
     } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : String(e)
-        toast.error(`保存失败：${msg}`)
+        toast.error(t('camera.rotationSaveFailed', { msg }))
     } finally {
         rotationSaving.value = false
     }
@@ -169,23 +186,23 @@ async function togglePreview() {
             await run(async () => {
                 await store.stopCameraPreview(deviceId.value)
                 previewing.value = false
-                toast.success('预览已停止')
+                toast.success(t('camera.previewStopped'))
             })
         } catch (e: unknown) {
             const msg = e instanceof Error ? e.message : String(e)
-            toast.error(`停止预览失败：${msg}`)
+            toast.error(t('camera.stopPreviewFailed', { msg }))
         }
     } else {
         try {
             await run(async () => {
                 await store.startCameraPreview(deviceId.value, { enableRtp: false })
                 previewing.value = true
-                toast.success('预览已启动（SignalR）')
+                toast.success(t('camera.previewStarted'))
             })
         } catch (e: unknown) {
             previewing.value = false
             const msg = e instanceof Error ? e.message : String(e)
-            toast.error(`启动预览失败：${msg}`)
+            toast.error(t('camera.startPreviewFailed', { msg }))
         }
     }
 }
@@ -195,27 +212,36 @@ async function onSnapshot() {
         const snap = await store.snapshot(deviceId.value)
         snapshotUri.value = snap.dataUri
         previewTab.value = 'snapshot'
-        toast.success(`快照已拍摄：${new Date(snap.capturedAt).toLocaleTimeString()}`)
+        toast.success(t('camera.snapshotTaken', { time: new Date(snap.capturedAt).toLocaleTimeString() }))
     })
 }
 
 async function onSoftTrigger() {
     await run(async () => {
         await store.softTrigger(deviceId.value)
-        toast.success('软触发已发送')
+        toast.success(t('camera.softTriggerSent'))
     })
 }
 
 async function onExposureAutoOncePulse() {
     await run(async () => {
         await store.exposureAutoOncePulse(deviceId.value)
-        toast.success('单次自动曝光已触发')
+        toast.success(t('camera.exposureAutoOnceDone'))
     })
 }
 
 function displayMetric(value: number | null | undefined, digits = 1): string {
     if (typeof value !== 'number' || !Number.isFinite(value)) return '—'
     return value.toFixed(digits)
+}
+
+/**
+ * 根据评分（0-100）返回渐变颜色：0=红色，50=黄色，100=绿色。
+ * 使用 HSL 色相线性映射：score * 1.2 → [0°, 120°]。
+ */
+function scoreColor(score: number): string {
+    const hue = Math.round(Math.max(0, Math.min(120, score * 1.2)))
+    return `hsl(${hue}, 75%, 42%)`
 }
 
 // ─── 全部刷新 ────────────────────────────────────────────────────────────
@@ -246,16 +272,32 @@ onMounted(async () => {
             void router.push({ name: 'CameraManage' })
         })
     }
+    // 页面加载/刷新/返回时：向 Hub 续约宽限期并拉取最新快照，恢复 UI 状态
+    try {
+        const snapshot = await store.loadCameraSnapshotState(deviceId.value)
+        previewing.value = snapshot.isPreviewing
+        // NodeMap 由 store 注入，此处只需初始化节点值缓存
+        if (snapshot.nodeMap) {
+            const initial: Record<string, string | null> = {}
+            for (const n of snapshot.nodeMap.allNodes) {
+                initial[n.nodeName] = n.currentValue
+            }
+            nodeValues.value = initial
+        }
+    } catch {
+        // 快照加载失败时降级：直接拉取 NodeMap
+        if (isOpen.value) {
+            void loadNodeMap(false)
+        }
+    }
     if (isOpen.value) {
-        void loadNodeMap(false)
         void loadImageParams()
     }
 })
 
-onUnmounted(async () => {
-    if (previewing.value) {
-        await store.stopCameraPreview(deviceId.value).catch(() => {})
-    }
+onUnmounted(() => {
+    // 预览不在此处主动停止：Hub 断开后有 30s 宽限期，可通过 ReattachPreviewAsync 续约
+    // 用户可通过"停止预览"按钮主动停止
 })
 </script>
 
@@ -263,57 +305,57 @@ onUnmounted(async () => {
     <div class="flex flex-col gap-4 p-4">
         <!-- ── 顶部标题栏 ── -->
         <div class="flex flex-wrap items-center gap-3">
-            <button
-                class="rounded border px-2 py-1 text-xs hover:bg-muted/50"
-                @click="void router.push({ name: 'CameraManage' })"
-            >
-                ← 返回
-            </button>
-            <h1 class="text-lg font-semibold">{{ device?.name ?? '相机控制' }}</h1>
+            <Button variant="outline" size="xs" @click="void router.push({ name: 'CameraManage' })">
+                {{ t('camera.back') }}
+            </Button>
+            <h1 class="text-2xl font-bold tracking-tight">{{ device?.name ?? t('camera.ctrlTitle') }}</h1>
             <span
                 :class="[
                     'rounded px-2 py-0.5 text-xs font-medium',
-                    isOpen ? 'bg-green-100 text-green-700' : 'bg-muted text-muted-foreground',
+                    isOpen
+                        ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
+                        : 'bg-muted text-muted-foreground',
                 ]"
             >
-                {{ isOpen ? '已打开' : '已关闭' }}
+                {{ isOpen ? t('camera.ctrlOpen') : t('camera.ctrlClosed') }}
             </span>
-            <span class="text-xs text-muted-foreground">SN: {{ device?.serialNumber ?? '—' }}</span>
+            <span v-if="device?.serialNumber" class="text-xs text-muted-foreground">SN: {{ device.serialNumber }}</span>
             <span v-if="realtimeState?.isXmlLoaded === false" class="text-xs text-amber-500">
-                GenICam NodeMap 加载中…
+                {{ t('camera.nodMapLoading') }}
             </span>
 
             <div class="ml-auto flex items-center gap-2">
                 <!-- Visibility 筛选 -->
-                <label class="text-xs text-muted-foreground">可见性</label>
-                <select v-model="visibility" class="rounded border px-2 py-1 text-xs focus:outline-none">
+                <label class="text-xs text-muted-foreground">{{ t('camera.visibilityLabel') }}</label>
+                <select
+                    v-model="visibility"
+                    class="rounded border border-input bg-background px-2 py-1 text-xs text-foreground focus:outline-none"
+                >
                     <option value="Beginner">Beginner</option>
                     <option value="Expert">Expert</option>
                     <option value="Guru">Guru</option>
                 </select>
                 <!-- 重新枚举（强制 NodeMap 刷新） -->
-                <button
+                <Button
+                    variant="outline"
+                    size="xs"
                     :disabled="!isOpen || nodeMapLoading"
-                    class="rounded border px-2 py-1 text-xs hover:bg-muted/50 disabled:opacity-40"
                     @click="void loadNodeMap(true)"
                 >
-                    {{ nodeMapLoading ? '枚举中…' : '重新枚举' }}
-                </button>
+                    {{ nodeMapLoading ? t('camera.enumerating') : t('camera.reenumerate') }}
+                </Button>
                 <!-- 全部刷新 -->
-                <button
-                    :disabled="!isOpen"
-                    class="rounded border px-2 py-1 text-xs hover:bg-muted/50 disabled:opacity-40"
-                    @click="void refreshAll()"
-                >
-                    全部刷新
-                </button>
+                <Button variant="outline" size="xs" :disabled="!isOpen" @click="void refreshAll()">
+                    {{ t('camera.refreshAll') }}
+                </Button>
             </div>
         </div>
 
         <!-- ── 主体：左侧动态分组 + 右侧预览面板 ── -->
-        <div class="grid grid-cols-[1fr_340px] items-start gap-4">
-            <!-- 左侧：动态 NodeMap 渲染 -->
-            <div class="grid grid-cols-2 gap-4">
+        <!-- xl 以上双栏（主区 + 340px 预览）；窄屏堆叠，预览优先不 sticky，避免遮挡 -->
+        <div class="grid grid-cols-1 items-start gap-4 xl:grid-cols-[1fr_340px]">
+            <!-- 左侧：动态 NodeMap 渲染（分组随宽度递增列数） -->
+            <div class="grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-3">
                 <template v-if="nodeMap && nodeMap.categories.length > 0">
                     <GenICamCategoryCard
                         v-for="cat in nodeMap.categories"
@@ -328,150 +370,220 @@ onUnmounted(async () => {
                         @node-updated="(n, v) => void onNodeUpdated(n, v)"
                     />
                 </template>
-                <div v-else class="col-span-2 rounded-lg border p-6 text-center text-sm text-muted-foreground">
+                <div
+                    v-else
+                    class="rounded-lg border p-6 text-center text-sm text-muted-foreground md:col-span-2 2xl:col-span-3"
+                >
                     {{
                         isOpen
                             ? nodeMapLoading
-                                ? '正在加载 NodeMap…'
-                                : '暂无 NodeMap 数据，请点击右上角"重新枚举"'
-                            : '请先打开相机'
+                                ? t('camera.nodMapLoadingFull')
+                                : t('camera.noNodeMap')
+                            : t('camera.cameraNotOpen')
                     }}
                 </div>
             </div>
 
-            <!-- 右侧：预览面板（粘性定位） -->
-            <div class="sticky top-4 flex flex-col gap-3 rounded-lg border p-3">
-                <!-- Tab 切换 -->
-                <div class="flex items-center gap-1 border-b pb-2">
-                    <button
-                        :class="[
-                            'px-2 py-0.5 text-xs',
-                            previewTab === 'video'
-                                ? 'font-medium text-primary'
-                                : 'text-muted-foreground hover:text-foreground',
-                        ]"
-                        @click="previewTab = 'video'"
-                    >
-                        视频预览
-                    </button>
-                    <button
-                        :class="[
-                            'px-2 py-0.5 text-xs',
-                            previewTab === 'snapshot'
-                                ? 'font-medium text-primary'
-                                : 'text-muted-foreground hover:text-foreground',
-                        ]"
-                        @click="previewTab = 'snapshot'"
-                    >
-                        图像快照
-                    </button>
-                </div>
-
-                <!-- 图像显示区域 -->
-                <div class="relative aspect-video overflow-hidden rounded bg-black">
-                    <img
-                        v-if="previewTab === 'video' && previewUrl"
-                        :src="previewUrl"
-                        class="h-full w-full object-contain"
-                        alt="实时预览"
-                    />
-                    <img
-                        v-else-if="previewTab === 'snapshot' && snapshotUri"
-                        :src="snapshotUri"
-                        class="h-full w-full object-contain"
-                        alt="快照"
-                    />
-                    <div v-else class="flex h-full items-center justify-center text-xs text-white/40">
-                        {{ previewTab === 'video' ? (previewing ? '等待帧…' : '预览未启动') : '尚无快照' }}
+            <!-- 右侧：预览面板（仅在 xl 以上粘性定位，避免窄屏堆叠时遮挡） -->
+            <Card class="relative xl:sticky xl:top-4">
+                <BorderBeam :size="80" :duration="8" />
+                <CardContent class="flex flex-col gap-3 p-3">
+                    <!-- Tab 切换 -->
+                    <div class="flex items-center gap-1 border-b pb-2">
+                        <Button
+                            variant="ghost"
+                            size="xs"
+                            :class="previewTab === 'video' ? 'font-medium text-primary' : 'text-muted-foreground'"
+                            @click="previewTab = 'video'"
+                        >
+                            {{ t('camera.tabVideo') }}
+                        </Button>
+                        <Button
+                            variant="ghost"
+                            size="xs"
+                            :class="previewTab === 'snapshot' ? 'font-medium text-primary' : 'text-muted-foreground'"
+                            @click="previewTab = 'snapshot'"
+                        >
+                            {{ t('camera.tabSnapshot') }}
+                        </Button>
                     </div>
-                </div>
 
-                <!-- 预览控制按钮 -->
-                <div class="flex gap-2">
-                    <button
-                        :disabled="!isOpen || busy"
-                        :class="[
-                            'flex-1 rounded border px-2 py-1.5 text-xs font-medium disabled:opacity-40',
-                            previewing ? 'bg-red-50 text-red-600 hover:bg-red-100' : 'hover:bg-muted/50',
-                        ]"
-                        @click="void togglePreview()"
-                    >
-                        {{ previewing ? '停止预览' : '开始预览' }}
-                    </button>
-                    <button
-                        :disabled="!isOpen || busy"
-                        class="rounded border px-2 py-1.5 text-xs hover:bg-muted/50 disabled:opacity-40"
-                        @click="void onSnapshot()"
-                    >
-                        快照
-                    </button>
-                </div>
+                    <!-- 图像显示区域 -->
+                    <div class="relative aspect-video overflow-hidden rounded bg-black">
+                        <img
+                            v-if="previewTab === 'video' && previewUrl"
+                            :src="previewUrl"
+                            class="h-full w-full object-contain"
+                            :alt="t('camera.tabVideo')"
+                        />
+                        <img
+                            v-else-if="previewTab === 'snapshot' && snapshotUri"
+                            :src="snapshotUri"
+                            class="h-full w-full object-contain"
+                            :alt="t('camera.snapshot')"
+                        />
+                        <div v-else class="flex h-full items-center justify-center text-xs text-white/40">
+                            {{
+                                previewTab === 'video'
+                                    ? previewing
+                                        ? t('camera.waitingFrame')
+                                        : t('camera.previewNotStarted')
+                                    : t('camera.noSnapshot')
+                            }}
+                        </div>
+                    </div>
 
-                <div class="flex items-center gap-2 border-t pt-2 text-xs">
-                    <span class="shrink-0 text-muted-foreground">旋转角度</span>
-                    <select
-                        v-model.number="rotationAngle"
-                        :disabled="!isOpen || rotationSaving"
-                        class="min-w-0 flex-1 rounded border px-2 py-1 text-xs focus:outline-none disabled:opacity-40"
-                    >
-                        <option v-for="option in rotationOptions" :key="option.value" :value="option.value">
-                            {{ option.label }}
-                        </option>
-                    </select>
-                    <button
-                        :disabled="!isOpen || rotationSaving || !rotationDirty"
-                        class="rounded border px-2 py-1 text-xs hover:bg-muted/50 disabled:opacity-40"
-                        @click="void saveRotationAngle()"
-                    >
-                        {{ rotationSaving ? '保存中…' : '保存' }}
-                    </button>
-                </div>
+                    <!-- 图像质量评分条（仅实时预览时显示） -->
+                    <div v-if="previewing && metrics" class="rounded border bg-muted/20 px-3 py-2 text-xs">
+                        <!-- 对焦清晰度 -->
+                        <div class="mb-2">
+                            <div class="mb-1 flex items-center justify-between">
+                                <span class="text-muted-foreground">{{ t('camera.focusScore') }}</span>
+                                <span class="font-mono font-medium" :style="{ color: scoreColor(metrics.focusScore) }">
+                                    {{ Math.round(metrics.focusScore) }}
+                                </span>
+                            </div>
+                            <div class="h-2.5 w-full overflow-hidden rounded-full bg-muted/40">
+                                <div
+                                    class="h-full rounded-full transition-all duration-300"
+                                    :style="{
+                                        width: `${metrics.focusScore}%`,
+                                        backgroundColor: scoreColor(metrics.focusScore),
+                                    }"
+                                />
+                            </div>
+                        </div>
+                        <!-- 曝光质量 -->
+                        <div>
+                            <div class="mb-1 flex items-center justify-between">
+                                <span class="text-muted-foreground">{{ t('camera.apertureScore') }}</span>
+                                <span class="flex items-center gap-1.5">
+                                    <span
+                                        v-if="metrics.apertureHint !== 0"
+                                        class="rounded px-1 py-0.5 text-[10px] font-medium"
+                                        :style="{
+                                            backgroundColor: metrics.apertureHint === 1 ? '#fef3c7' : '#dbeafe',
+                                            color: metrics.apertureHint === 1 ? '#92400e' : '#1e40af',
+                                        }"
+                                    >
+                                        {{
+                                            metrics.apertureHint === 1
+                                                ? t('camera.apertureDown')
+                                                : t('camera.apertureUp')
+                                        }}
+                                    </span>
+                                    <span
+                                        class="font-mono font-medium"
+                                        :style="{ color: scoreColor(metrics.apertureScore) }"
+                                    >
+                                        {{ Math.round(metrics.apertureScore) }}
+                                    </span>
+                                </span>
+                            </div>
+                            <div class="h-2.5 w-full overflow-hidden rounded-full bg-muted/40">
+                                <div
+                                    class="h-full rounded-full transition-all duration-300"
+                                    :style="{
+                                        width: `${metrics.apertureScore}%`,
+                                        backgroundColor: scoreColor(metrics.apertureScore),
+                                    }"
+                                />
+                            </div>
+                        </div>
+                    </div>
 
-                <!-- 实时运行指标 -->
-                <div v-if="metrics" class="grid grid-cols-2 gap-x-2 gap-y-1 text-xs">
-                    <span class="text-muted-foreground">帧率</span>
-                    <span>{{ displayMetric(metrics.frameRate) }} fps</span>
-                    <span class="text-muted-foreground">FPGA 温度</span>
-                    <span>{{ displayMetric(metrics.fpgaTemperature, 0) }} °C</span>
-                    <span class="text-muted-foreground">传感器温度</span>
-                    <span>{{ displayMetric(metrics.sensorTemperature) }} °C</span>
-                    <span class="text-muted-foreground">AE 状态</span>
-                    <span>{{ metrics.aeStatus === 1 ? '运行中' : '空闲' }}</span>
-                    <span class="text-muted-foreground">缓冲帧数</span>
-                    <span>{{ displayMetric(metrics.currentBufFrames, 0) }}</span>
-                </div>
-
-                <!-- 快捷操作 -->
-                <div class="flex flex-col gap-1.5 border-t pt-2">
-                    <span class="text-xs font-medium text-muted-foreground">快捷操作</span>
+                    <!-- 预览控制按钮 -->
                     <div class="flex gap-2">
-                        <button
+                        <Button
+                            variant="outline"
+                            size="xs"
                             :disabled="!isOpen || busy"
-                            class="flex-1 rounded border px-2 py-1.5 text-xs hover:bg-muted/50 disabled:opacity-40"
-                            @click="void onSoftTrigger()"
+                            :class="
+                                previewing
+                                    ? 'bg-red-50 text-red-600 hover:bg-red-100 dark:bg-red-900/30 dark:text-red-400 dark:hover:bg-red-900/50'
+                                    : ''
+                            "
+                            class="flex-1"
+                            @click="void togglePreview()"
                         >
-                            软触发
-                        </button>
-                        <button
-                            :disabled="!isOpen || busy"
-                            class="flex-1 rounded border px-2 py-1.5 text-xs hover:bg-muted/50 disabled:opacity-40"
-                            @click="void onExposureAutoOncePulse()"
-                        >
-                            单次自动曝光
-                        </button>
+                            {{ previewing ? t('camera.stopPreview') : t('camera.startPreview') }}
+                        </Button>
+                        <Button variant="outline" size="xs" :disabled="!isOpen || busy" @click="void onSnapshot()">
+                            {{ t('camera.snapshot') }}
+                        </Button>
                     </div>
-                </div>
 
-                <!-- 设备基本信息 -->
-                <div v-if="device" class="border-t pt-2 text-xs text-muted-foreground">
-                    <div>型号：{{ device.model ?? '—' }}</div>
-                    <div>固件：{{ device.firmwareVersion ?? '—' }}</div>
-                    <div>状态：{{ realtimeState?.statusText ?? device.statusText }}</div>
-                    <div v-if="realtimeState?.sensorTemperature != null">
-                        实时传感器温度：{{ realtimeState.sensorTemperature.toFixed(1) }} °C
+                    <div class="flex items-center gap-2 border-t pt-2 text-xs">
+                        <span class="shrink-0 text-muted-foreground">{{ t('camera.rotationAngle') }}</span>
+                        <select
+                            v-model.number="rotationAngle"
+                            :disabled="!isOpen || rotationSaving"
+                            class="min-w-0 flex-1 rounded border px-2 py-1 text-xs focus:outline-none disabled:opacity-40"
+                        >
+                            <option v-for="option in rotationOptions" :key="option.value" :value="option.value">
+                                {{ option.label }}
+                            </option>
+                        </select>
+                        <Button
+                            variant="outline"
+                            size="xs"
+                            :disabled="!isOpen || rotationSaving || !rotationDirty"
+                            @click="void saveRotationAngle()"
+                        >
+                            {{ rotationSaving ? t('common.saving') : t('common.save') }}
+                        </Button>
                     </div>
-                </div>
-            </div>
+
+                    <!-- 实时运行指标 -->
+                    <div v-if="metrics" class="grid grid-cols-2 gap-x-2 gap-y-1 text-xs">
+                        <span class="text-muted-foreground">{{ t('camera.frameRate') }}</span>
+                        <span>{{ displayMetric(metrics.frameRate) }} fps</span>
+                        <span class="text-muted-foreground">{{ t('camera.fpgaTemp') }}</span>
+                        <span>{{ displayMetric(metrics.fpgaTemperature, 0) }} °C</span>
+                        <span class="text-muted-foreground">{{ t('camera.sensorTemp') }}</span>
+                        <span>{{ displayMetric(metrics.sensorTemperature) }} °C</span>
+                        <span class="text-muted-foreground">{{ t('camera.aeStatus') }}</span>
+                        <span>{{ metrics.aeStatus === 1 ? t('camera.aeRunning') : t('camera.aeIdle') }}</span>
+                        <span class="text-muted-foreground">{{ t('camera.bufFrames') }}</span>
+                        <span>{{ displayMetric(metrics.currentBufFrames, 0) }}</span>
+                    </div>
+
+                    <!-- 快捷操作 -->
+                    <div class="flex flex-col gap-1.5 border-t pt-2">
+                        <span class="text-xs font-medium text-muted-foreground">{{ t('camera.quickActions') }}</span>
+                        <div class="flex gap-2">
+                            <Button
+                                variant="outline"
+                                size="xs"
+                                :disabled="!isOpen || busy"
+                                class="flex-1"
+                                @click="void onSoftTrigger()"
+                            >
+                                {{ t('camera.softTrigger') }}
+                            </Button>
+                            <Button
+                                variant="outline"
+                                size="xs"
+                                :disabled="!isOpen || busy"
+                                class="flex-1"
+                                @click="void onExposureAutoOncePulse()"
+                            >
+                                {{ t('camera.exposureAutoOnce') }}
+                            </Button>
+                        </div>
+                    </div>
+
+                    <!-- 设备基本信息 -->
+                    <div v-if="device" class="border-t pt-2 text-xs text-muted-foreground">
+                        <div>{{ t('camera.ctrlModel') }}{{ device.model ?? '—' }}</div>
+                        <div>{{ t('camera.ctrlFirmware') }}{{ device.firmwareVersion ?? '—' }}</div>
+                        <div>{{ t('camera.ctrlStatus') }}{{ realtimeState?.statusText ?? device.statusText }}</div>
+                        <div v-if="realtimeState?.sensorTemperature != null">
+                            {{ t('camera.realtimeSensorTemp') }}{{ realtimeState.sensorTemperature.toFixed(1) }} °C
+                        </div>
+                    </div>
+                </CardContent>
+            </Card>
         </div>
     </div>
 </template>

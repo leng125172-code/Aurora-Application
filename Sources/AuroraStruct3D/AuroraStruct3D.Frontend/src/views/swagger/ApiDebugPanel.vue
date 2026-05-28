@@ -7,19 +7,19 @@
 
         <Tabs default-value="params">
             <TabsList>
-                <TabsTrigger value="params">参数</TabsTrigger>
-                <TabsTrigger value="body" :disabled="!hasBody">请求体</TabsTrigger>
-                <TabsTrigger value="headers">请求头</TabsTrigger>
+                <TabsTrigger value="params">{{ t('swaggerPage.tabParams') }}</TabsTrigger>
+                <TabsTrigger value="body" :disabled="!hasBody">{{ t('swaggerPage.tabBody') }}</TabsTrigger>
+                <TabsTrigger value="headers">{{ t('swaggerPage.tabHeaders') }}</TabsTrigger>
             </TabsList>
 
             <!-- 参数 Tab -->
             <TabsContent value="params" class="space-y-3 mt-3">
                 <div v-if="pathParams.length === 0 && queryParams.length === 0" class="text-sm text-muted-foreground">
-                    该接口无参数
+                    {{ t('swaggerPage.noParams') }}
                 </div>
 
                 <div v-if="pathParams.length > 0">
-                    <p class="text-xs font-semibold text-muted-foreground mb-2">路径参数</p>
+                    <p class="text-xs font-semibold text-muted-foreground mb-2">{{ t('swaggerPage.pathParams') }}</p>
                     <div v-for="p in pathParams" :key="p.name" class="flex items-center gap-2 mb-2">
                         <label class="text-xs font-mono w-32 shrink-0">{{ p.name }}</label>
                         <Input
@@ -32,7 +32,7 @@
                 </div>
 
                 <div v-if="queryParams.length > 0">
-                    <p class="text-xs font-semibold text-muted-foreground mb-2">查询参数</p>
+                    <p class="text-xs font-semibold text-muted-foreground mb-2">{{ t('swaggerPage.queryParams') }}</p>
                     <div v-for="p in queryParams" :key="p.name" class="flex items-center gap-2 mb-2">
                         <label class="text-xs font-mono w-32 shrink-0">{{ p.name }}</label>
                         <Input
@@ -51,7 +51,7 @@
                     v-model="req.body"
                     rows="8"
                     class="w-full rounded-md border bg-background p-3 font-mono text-xs resize-y focus:outline-none focus:ring-1 focus:ring-ring"
-                    placeholder="JSON 请求体..."
+                    :placeholder="t('swaggerPage.bodyPlaceholder')"
                 />
             </TabsContent>
 
@@ -61,16 +61,16 @@
                     <Input :model-value="key" readonly class="w-36 font-mono text-xs" />
                     <Input v-model="req.headers[key]" class="flex-1 font-mono text-xs" />
                 </div>
-                <Button variant="outline" size="sm" @click="addHeader">添加请求头</Button>
+                <Button variant="outline" size="sm" @click="addHeader">{{ t('swaggerPage.addHeader') }}</Button>
             </TabsContent>
         </Tabs>
 
         <!-- 发送按钮 -->
         <div class="flex gap-2">
             <Button :disabled="sending" @click="sendRequest">
-                {{ sending ? '请求中...' : '发送请求' }}
+                {{ sending ? t('swaggerPage.sending') : t('swaggerPage.send') }}
             </Button>
-            <Button variant="ghost" size="sm" @click="reset">重置</Button>
+            <Button variant="ghost" size="sm" @click="reset">{{ t('swaggerPage.reset') }}</Button>
         </div>
 
         <!-- 响应结果 -->
@@ -85,7 +85,9 @@
                     {{ response.status }} {{ response.statusText }}
                 </span>
                 <span class="text-muted-foreground text-xs">{{ response.duration }}ms</span>
-                <Button variant="ghost" size="sm" class="ml-auto text-xs" @click="copyResponse">复制响应</Button>
+                <Button variant="ghost" size="sm" class="ml-auto text-xs" @click="copyResponse">
+                    {{ t('swaggerPage.copyResponse') }}
+                </Button>
             </div>
             <ScrollArea class="h-48 rounded-md border">
                 <pre class="p-3 font-mono text-xs whitespace-pre-wrap break-all">{{ response.body }}</pre>
@@ -96,6 +98,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { ApiEndpoint, SwaggerDocument, DebugRequest, DebugResponse } from '@/types/swagger'
 import { executeDebugRequest, generateExampleBody, statusColor } from '@/api/swagger'
 import { Input } from '@/components/ui/input'
@@ -104,6 +107,8 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { toast } from 'vue-sonner'
+
+const { t } = useI18n()
 
 const props = defineProps<{
     endpoint: ApiEndpoint
@@ -159,6 +164,6 @@ function addHeader() {
 async function copyResponse() {
     if (!response.value) return
     await navigator.clipboard.writeText(response.value.body)
-    toast.success('已复制到剪贴板')
+    toast.success(t('swaggerPage.copied'))
 }
 </script>

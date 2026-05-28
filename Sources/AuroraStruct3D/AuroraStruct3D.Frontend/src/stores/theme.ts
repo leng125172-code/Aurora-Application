@@ -3,7 +3,7 @@
  * - 通过给 <html> 添加/移除 'dark' 类切换主题（与 tailwind.config.ts 中 darkMode:'class' 配套）
  */
 import { defineStore } from 'pinia'
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 
 export type ThemeMode = 'light' | 'dark' | 'system'
 
@@ -28,15 +28,20 @@ export const useThemeStore = defineStore('theme', () => {
     )
 
     // 跟随系统时也要响应系统级变化
+    const systemDark = ref(window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false)
     if (window.matchMedia) {
-        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+            systemDark.value = e.matches
             if (mode.value === 'system') applyTheme('system')
         })
     }
+
+    /** 当前是否处于深色模式（响应式，可用于图表 watch）。 */
+    const isDark = computed(() => mode.value === 'dark' || (mode.value === 'system' && systemDark.value))
 
     function setMode(next: ThemeMode): void {
         mode.value = next
     }
 
-    return { mode, setMode }
+    return { mode, isDark, setMode }
 })

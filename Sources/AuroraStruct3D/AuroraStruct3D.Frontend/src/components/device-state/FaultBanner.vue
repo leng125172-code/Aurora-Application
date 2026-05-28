@@ -1,6 +1,6 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { computed } from 'vue'
-import { AlertTriangle, ShieldAlert } from 'lucide-vue-next'
+import { AlertTriangle, ShieldAlert } from '@lucide/vue'
 import { type DeviceFaultDto, DeviceFaultLevel, DeviceFaultLevelLabels } from '@/api/device-state'
 
 interface Props {

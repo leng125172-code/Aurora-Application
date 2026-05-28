@@ -1,8 +1,11 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
+import * as signalR from '@microsoft/signalr'
 import {
     type GetMotorAxisListDto,
     type MotorAxisDto,
+    type MotorScanProgressDto,
+    MotorScanProgressKind,
     type MoveMotorInput,
     type ReadHoldingRegistersInput,
     type RegisterReadResultDto,
@@ -35,6 +38,70 @@ export const useMotorStore = defineStore('motor', () => {
     const motors = ref<MotorAxisDto[]>([])
     const selectedMotor = ref<MotorAxisDto | null>(null)
     const loading = ref(false)
+
+    // ─── 扫描进度（SignalR 推送） ─────────────────────────────────────────────
+    /** 扫描进度事件列表（按时间顺序追加，最多保留 500 条） */
+    const scanProgress = ref<MotorScanProgressDto[]>([])
+    /** SignalR 连接状态 */
+    const scanHubConnected = ref(false)
+    /** 当前是否正在执行扫描（由前端控制，便于 UI 展示） */
+    const isScanning = ref(false)
+
+    const MAX_PROGRESS_ITEMS = 500
+    let scanConnection: signalR.HubConnection | null = null
+
+    /** 启动扫描进度 SignalR Hub 连接 */
+    async function startScanHub() {
+        if (scanConnection) return
+        scanConnection = new signalR.HubConnectionBuilder()
+            .withUrl('/signalr-hubs/motor-scan', { skipNegotiation: false })
+            .withAutomaticReconnect()
+            .configureLogging(signalR.LogLevel.Warning)
+            .build()
+
+        scanConnection.on('ReceiveMotorScanProgressAsync', (progress: MotorScanProgressDto) => {
+            scanProgress.value.push(progress)
+            // 控制最大条数，避免内存膨胀
+            if (scanProgress.value.length > MAX_PROGRESS_ITEMS) {
+                scanProgress.value.splice(0, scanProgress.value.length - MAX_PROGRESS_ITEMS)
+            }
+            // 进度推送到完成态时同步本地标识
+            if (progress.kind === MotorScanProgressKind.Completed) {
+                isScanning.value = false
+            }
+        })
+
+        scanConnection.onclose(() => {
+            scanHubConnected.value = false
+        })
+        scanConnection.onreconnected(() => {
+            scanHubConnected.value = true
+        })
+
+        try {
+            await scanConnection.start()
+            scanHubConnected.value = true
+        } catch {
+            scanHubConnected.value = false
+        }
+    }
+
+    /** 停止扫描进度 SignalR Hub 连接 */
+    async function stopScanHub() {
+        if (scanConnection) {
+            try {
+                await scanConnection.stop()
+            } finally {
+                scanConnection = null
+                scanHubConnected.value = false
+            }
+        }
+    }
+
+    /** 清空扫描进度，常用于一次新的扫描开始前 */
+    function clearScanProgress() {
+        scanProgress.value = []
+    }
 
     function applyUpdate(updated: MotorAxisDto) {
         const index = motors.value.findIndex((motor) => motor.id === updated.id)
@@ -69,9 +136,15 @@ export const useMotorStore = defineStore('motor', () => {
     }
 
     async function scan(input: ScanMotorDevicesInput): Promise<ScanMotorDevicesResultDto> {
-        const result = await scanMotorDevices(input)
-        await fetchList({ refreshHardware: false })
-        return result
+        clearScanProgress()
+        isScanning.value = true
+        try {
+            const result = await scanMotorDevices(input)
+            await fetchList({ refreshHardware: false })
+            return result
+        } finally {
+            isScanning.value = false
+        }
     }
 
     async function update(id: string, dto: UpdateMotorAxisDto): Promise<MotorAxisDto> {
@@ -161,6 +234,12 @@ export const useMotorStore = defineStore('motor', () => {
         motors,
         selectedMotor,
         loading,
+        scanProgress,
+        scanHubConnected,
+        isScanning,
+        startScanHub,
+        stopScanHub,
+        clearScanProgress,
         fetchList,
         refresh,
         select,

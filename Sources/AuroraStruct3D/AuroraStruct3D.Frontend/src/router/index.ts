@@ -108,6 +108,24 @@ const routes: RouteRecordRaw[] = [
                 component: () => import('@/views/motors/MotorDeviceManagePage.vue'),
                 meta: { requiresAuth: true, title: 'menu.motorDeviceManage' },
             },
+            {
+                path: 'motors/ktech-console/:axisId',
+                name: 'KtechMotorConsole',
+                component: () => import('@/views/motors/KtechMotorConsolePage.vue'),
+                meta: { requiresAuth: true, title: 'menu.ktechMotorConsole' },
+            },
+            {
+                path: 'motors/leisai-console/:axisId',
+                name: 'LeisaiMotorConsole',
+                component: () => import('@/views/motors/LeisaiMotorConsolePage.vue'),
+                meta: { requiresAuth: true, title: 'menu.leisaiMotorConsole' },
+            },
+            {
+                path: 'product-models',
+                name: 'ProductModelManage',
+                component: () => import('@/views/product-models/ProductModelManagePage.vue'),
+                meta: { requiresAuth: true, title: 'menu.productModelManage' },
+            },
             // 系统管理路由已移除（仅供后台调试使用）
         ],
     },

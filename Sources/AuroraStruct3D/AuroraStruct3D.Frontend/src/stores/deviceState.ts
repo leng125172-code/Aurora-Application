@@ -13,12 +13,12 @@ import {
     type DeviceStateDto,
     type DeviceFaultDto,
     DeviceStatus,
-    DeviceRunMode,
-    DeviceFaultLevel,
     DeviceStatusLabels,
     DeviceRunModeLabels,
     DeviceFaultLevelLabels,
 } from '@/api/device-state'
+import { getClientSessionId } from '@/utils/clientSession'
+import { type DeviceSessionChangedDto, type DeviceSessionDto } from '@/api/device-sessions'
 
 export const useDeviceStateStore = defineStore('deviceState', () => {
     // ─── 状态 ─────────────────────────────────────────────────────────────────
@@ -62,7 +62,7 @@ export const useDeviceStateStore = defineStore('deviceState', () => {
         if (connection) return // 防止重复连接
 
         connection = new signalR.HubConnectionBuilder()
-            .withUrl('/signalr-hubs/device-state') // 无 accessTokenFactory = 匿名
+            .withUrl(`/signalr-hubs/device-state?clientSessionId=${getClientSessionId()}`) // 上报 per-tab 会话标识
             .withAutomaticReconnect()
             .configureLogging(signalR.LogLevel.Warning)
             .build()
@@ -75,6 +75,21 @@ export const useDeviceStateStore = defineStore('deviceState', () => {
         // 接收当前故障推送
         connection.on('ReceiveDeviceFaultAsync', (dto: DeviceFaultDto | null) => {
             currentFault.value = dto
+        })
+
+        // 接收设备操作会话变更通知，转发给 deviceSession store
+        connection.on('ReceiveDeviceSessionChangedAsync', (dto: DeviceSessionChangedDto) => {
+            // 懒加载避免循环依赖：在回调内 import 而非顶层
+            import('@/stores/deviceSession').then(({ useDeviceSessionStore }) => {
+                useDeviceSessionStore().handleSessionChanged(dto)
+            })
+        })
+
+        // 接收连接时推送的全量会话快照
+        connection.on('ReceiveAllDeviceSessionsAsync', (list: DeviceSessionDto[]) => {
+            import('@/stores/deviceSession').then(({ useDeviceSessionStore }) => {
+                useDeviceSessionStore().handleAllSessions(list)
+            })
         })
 
         connection.onreconnected(() => {

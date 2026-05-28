@@ -1,3 +1,6 @@
+using AuroraStruct3D.RS485.Ktech;
+using AuroraStruct3D.RS485.Leisai;
+
 namespace AuroraStruct3D.RS485;
 
 /// <summary>
@@ -5,6 +8,30 @@ namespace AuroraStruct3D.RS485;
 /// </summary>
 public interface IMotorControlService
 {
+    /// <summary>
+    /// 获取指定从机地址对应的瓴控 KTECH 驱动实例。
+    /// </summary>
+    /// <param name="slaveId">RS485 从机地址</param>
+    /// <returns>对应的 <see cref="KtechMotorDriver"/>；若该地址不存在或品牌不是 KTECH 则返回 null。</returns>
+    KtechMotorDriver? GetKtechMotorDriver(int slaveId);
+
+    /// <summary>
+    /// 枚举当前所有已注册的瓴控 KTECH 驱动（按从机地址升序）。
+    /// </summary>
+    IReadOnlyList<KtechMotorDriver> KtechDrivers { get; }
+
+    /// <summary>
+    /// 获取指定从机地址对应的雷赛 iCL-RS 驱动实例。
+    /// </summary>
+    /// <param name="slaveId">RS485 从机地址</param>
+    /// <returns>对应的 <see cref="LeisaiMotorDriver"/>；若该地址不存在或品牌不是雷赛则返回 null。</returns>
+    LeisaiMotorDriver? GetLeisaiMotorDriver(int slaveId);
+
+    /// <summary>
+    /// 枚举当前所有已注册的雷赛 iCL-RS 驱动（按从机地址升序）。
+    /// </summary>
+    IReadOnlyList<LeisaiMotorDriver> LeisaiDrivers { get; }
+
     /// <summary>
     /// 查询指定电机的当前状态
     /// </summary>
