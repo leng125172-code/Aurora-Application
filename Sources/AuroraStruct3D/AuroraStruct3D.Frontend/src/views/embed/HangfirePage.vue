@@ -7,15 +7,14 @@
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { toast } from 'vue-sonner'
 import * as signalR from '@microsoft/signalr'
 import * as echarts from 'echarts'
 import { RefreshCw, PlayCircle, Trash2, RotateCcw } from '@lucide/vue'
-import { Button } from '@/components/ui/button'
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
-import { BorderBeam } from '@/components/ui/border-beam'
+import Button from 'primevue/button'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
+import { AppCard } from '@/components/primevue'
+import { useAppToast } from '@/composables/useAppToast'
 import { httpClient } from '@/api/client'
 import { useAuthStore } from '@/stores/auth'
 import { useThemeStore } from '@/stores/theme'
@@ -24,6 +23,7 @@ const { t } = useI18n()
 const route = useRoute()
 const authStore = useAuthStore()
 const themeStore = useThemeStore()
+const toast = useAppToast()
 
 const activeTab = computed(() => (route.query.tab as string) || 'dashboard')
 
@@ -460,7 +460,7 @@ onUnmounted(async () => {
     <div class="space-y-4">
         <div class="flex items-center justify-between">
             <h1 class="text-2xl font-bold tracking-tight">{{ t('menu.hangfire') }}</h1>
-            <Button variant="outline" size="icon" :disabled="loading" @click="loadCurrentTab">
+            <Button severity="secondary" outlined :disabled="loading" @click="loadCurrentTab">
                 <RefreshCw :class="['size-4', loading && 'animate-spin']" />
             </Button>
         </div>
@@ -468,25 +468,22 @@ onUnmounted(async () => {
         <!-- ── 仪表盘 ── -->
         <template v-if="activeTab === 'dashboard'">
             <div class="grid gap-3 md:grid-cols-4 lg:grid-cols-8">
-                <Card v-for="c in STAT_CARDS" :key="c.key">
-                    <CardHeader class="pb-2">
-                        <CardTitle class="text-xs">{{ t(`hangfire.${c.key}`) }}</CardTitle>
-                    </CardHeader>
-                    <CardContent>
+                <AppCard v-for="c in STAT_CARDS" :key="c.key" :beam="false">
+                    <div class="p-4 space-y-1">
+                        <div class="text-xs">{{ t(`hangfire.${c.key}`) }}</div>
                         <div :class="['text-2xl font-semibold', c.color]">{{ stats[c.key] ?? '-' }}</div>
-                    </CardContent>
-                </Card>
+                    </div>
+                </AppCard>
             </div>
-            <Card class="relative">
-                <BorderBeam :size="120" :duration="10" />
-                <CardHeader>
-                    <CardTitle class="text-base">{{ t('hangfire.dailyTrend') }}</CardTitle>
-                    <CardDescription>{{ t('hangfire.dailyTrendDesc') }}</CardDescription>
-                </CardHeader>
-                <CardContent>
+            <AppCard :beam-size="120" :beam-duration="10">
+                <div class="p-4 space-y-3">
+                    <div>
+                        <div class="text-base font-semibold">{{ t('hangfire.dailyTrend') }}</div>
+                        <div class="text-sm text-muted-foreground mt-1">{{ t('hangfire.dailyTrendDesc') }}</div>
+                    </div>
                     <div ref="trendChartEl" style="height: 280px; width: 100%" />
-                </CardContent>
-            </Card>
+                </div>
+            </AppCard>
         </template>
 
         <!-- ── 作业 ── -->
@@ -495,15 +492,16 @@ onUnmounted(async () => {
                 <Button
                     v-for="s in JOB_STATES"
                     :key="s"
-                    :variant="jobState === s ? 'default' : 'outline'"
-                    size="sm"
+                    :severity="jobState === s ? 'primary' : 'secondary'"
+                    :outlined="jobState !== s"
+                    size="small"
                     @click="loadJobs(s)"
                 >
                     {{ stateLabel(s) }}
                 </Button>
             </div>
-            <Card>
-                <CardContent class="p-0">
+            <AppCard :beam="false">
+                <div>
                     <Table>
                         <TableHeader>
                             <TableRow>
@@ -533,8 +531,8 @@ onUnmounted(async () => {
                                     <div class="flex justify-end gap-1">
                                         <Button
                                             v-if="jobId(job)"
-                                            variant="ghost"
-                                            size="icon"
+                                            text
+                                            severity="secondary"
                                             :title="t('hangfire.retryJob')"
                                             @click="requeueJob(jobId(job))"
                                         >
@@ -542,10 +540,9 @@ onUnmounted(async () => {
                                         </Button>
                                         <Button
                                             v-if="jobId(job)"
-                                            variant="ghost"
-                                            size="icon"
+                                            text
+                                            severity="danger"
                                             :title="t('common.delete')"
-                                            class="text-destructive hover:text-destructive"
                                             @click="deleteJob(jobId(job))"
                                         >
                                             <Trash2 class="size-4" />
@@ -555,17 +552,17 @@ onUnmounted(async () => {
                             </TableRow>
                         </TableBody>
                     </Table>
-                </CardContent>
-            </Card>
+                </div>
+            </AppCard>
         </template>
 
         <!-- ── 重试（失败作业）── -->
         <template v-else-if="activeTab === 'retries'">
-            <Card>
-                <CardHeader>
-                    <CardTitle class="text-base">{{ t('hangfire.tabRetries') }}</CardTitle>
-                </CardHeader>
-                <CardContent class="p-0">
+            <AppCard :beam="false">
+                <div class="p-4 pb-2">
+                    <div class="text-base font-semibold">{{ t('hangfire.tabRetries') }}</div>
+                </div>
+                <div>
                     <Table>
                         <TableHeader>
                             <TableRow>
@@ -599,8 +596,8 @@ onUnmounted(async () => {
                                 <TableCell class="text-right">
                                     <Button
                                         v-if="jobId(job)"
-                                        variant="ghost"
-                                        size="icon"
+                                        text
+                                        severity="secondary"
                                         :title="t('hangfire.retryJob')"
                                         @click="requeueJob(jobId(job))"
                                     >
@@ -610,17 +607,17 @@ onUnmounted(async () => {
                             </TableRow>
                         </TableBody>
                     </Table>
-                </CardContent>
-            </Card>
+                </div>
+            </AppCard>
         </template>
 
         <!-- ── 周期性作业 ── -->
         <template v-else-if="activeTab === 'recurring'">
-            <Card>
-                <CardHeader>
-                    <CardTitle class="text-base">{{ t('hangfire.tabRecurring') }}</CardTitle>
-                </CardHeader>
-                <CardContent class="p-0">
+            <AppCard :beam="false">
+                <div class="p-4 pb-2">
+                    <div class="text-base font-semibold">{{ t('hangfire.tabRecurring') }}</div>
+                </div>
+                <div>
                     <Table>
                         <TableHeader>
                             <TableRow>
@@ -656,8 +653,8 @@ onUnmounted(async () => {
                                     <div class="flex justify-end gap-1">
                                         <Button
                                             v-if="rId(job)"
-                                            variant="ghost"
-                                            size="icon"
+                                            text
+                                            severity="secondary"
                                             :title="t('hangfire.triggerNow')"
                                             @click="triggerJob(rId(job))"
                                         >
@@ -665,10 +662,9 @@ onUnmounted(async () => {
                                         </Button>
                                         <Button
                                             v-if="rId(job)"
-                                            variant="ghost"
-                                            size="icon"
+                                            text
+                                            severity="danger"
                                             :title="t('common.delete')"
-                                            class="text-destructive hover:text-destructive"
                                             @click="deleteRecurringJob(rId(job))"
                                         >
                                             <Trash2 class="size-4" />
@@ -678,17 +674,17 @@ onUnmounted(async () => {
                             </TableRow>
                         </TableBody>
                     </Table>
-                </CardContent>
-            </Card>
+                </div>
+            </AppCard>
         </template>
 
         <!-- ── 服务器 ── -->
         <template v-else-if="activeTab === 'servers'">
-            <Card>
-                <CardHeader>
-                    <CardTitle class="text-base">{{ t('hangfire.tabServers') }}</CardTitle>
-                </CardHeader>
-                <CardContent class="p-0">
+            <AppCard :beam="false">
+                <div class="p-4 pb-2">
+                    <div class="text-base font-semibold">{{ t('hangfire.tabServers') }}</div>
+                </div>
+                <div>
                     <Table>
                         <TableHeader>
                             <TableRow>
@@ -724,8 +720,8 @@ onUnmounted(async () => {
                             </TableRow>
                         </TableBody>
                     </Table>
-                </CardContent>
-            </Card>
+                </div>
+            </AppCard>
         </template>
     </div>
 </template>

@@ -9,11 +9,10 @@ import { useI18n } from 'vue-i18n'
 import * as signalR from '@microsoft/signalr'
 import * as echarts from 'echarts'
 import { RefreshCw, RotateCcw } from '@lucide/vue'
-import { Button } from '@/components/ui/button'
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
-import { BorderBeam } from '@/components/ui/border-beam'
+import Button from 'primevue/button'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
+import { AppCard } from '@/components/primevue'
 import { httpClient } from '@/api/client'
 import { useAuthStore } from '@/stores/auth'
 import { useThemeStore } from '@/stores/theme'
@@ -317,7 +316,7 @@ onUnmounted(async () => {
         <!-- 标题 + 刷新 -->
         <div class="flex items-center justify-between">
             <h1 class="text-2xl font-bold tracking-tight">{{ t('menu.cap') }}</h1>
-            <Button variant="outline" size="icon" :disabled="loading" @click="loadCurrentTab">
+            <Button severity="secondary" outlined :disabled="loading" @click="loadCurrentTab">
                 <RefreshCw :class="['size-4', loading && 'animate-spin']" />
             </Button>
         </div>
@@ -325,49 +324,42 @@ onUnmounted(async () => {
         <!-- ── 仪表盘 ── -->
         <template v-if="activeTab === 'dashboard'">
             <div class="grid gap-4 md:grid-cols-4">
-                <Card>
-                    <CardHeader>
-                        <CardTitle class="text-sm">{{ t('cap.publishSucceeded') }}</CardTitle>
-                    </CardHeader>
-                    <CardContent>
+                <AppCard :beam="false">
+                    <div class="p-4 space-y-2">
+                        <div class="text-sm font-medium">{{ t('cap.publishSucceeded') }}</div>
                         <div class="text-3xl font-semibold text-green-500">{{ stats.publishSucceeded ?? '-' }}</div>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardHeader>
-                        <CardTitle class="text-sm">{{ t('cap.publishFailed') }}</CardTitle>
-                    </CardHeader>
-                    <CardContent>
+                    </div>
+                </AppCard>
+                <AppCard :beam="false">
+                    <div class="p-4 space-y-2">
+                        <div class="text-sm font-medium">{{ t('cap.publishFailed') }}</div>
                         <div class="text-3xl font-semibold text-red-500">{{ stats.publishFailed ?? '-' }}</div>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardHeader>
-                        <CardTitle class="text-sm">{{ t('cap.consumeSucceeded') }}</CardTitle>
-                    </CardHeader>
-                    <CardContent>
+                    </div>
+                </AppCard>
+                <AppCard :beam="false">
+                    <div class="p-4 space-y-2">
+                        <div class="text-sm font-medium">{{ t('cap.consumeSucceeded') }}</div>
                         <div class="text-3xl font-semibold text-blue-500">{{ stats.consumeSucceeded ?? '-' }}</div>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardHeader>
-                        <CardTitle class="text-sm">{{ t('cap.consumeFailed') }}</CardTitle>
-                    </CardHeader>
-                    <CardContent>
+                    </div>
+                </AppCard>
+                <AppCard :beam="false">
+                    <div class="p-4 space-y-2">
+                        <div class="text-sm font-medium">{{ t('cap.consumeFailed') }}</div>
                         <div class="text-3xl font-semibold text-orange-500">{{ stats.consumeFailed ?? '-' }}</div>
-                    </CardContent>
-                </Card>
+                    </div>
+                </AppCard>
             </div>
-            <Card class="relative">
-                <BorderBeam :size="120" :duration="10" />
-                <CardHeader>
-                    <CardTitle class="text-base">{{ t('cap.statistics') }}</CardTitle>
-                    <CardDescription>{{ t('cap.publishDesc') }} / {{ t('cap.consumeDesc') }}</CardDescription>
-                </CardHeader>
-                <CardContent>
+            <AppCard :beam-size="120" :beam-duration="10">
+                <div class="p-4 space-y-3">
+                    <div>
+                        <div class="text-base font-semibold">{{ t('cap.statistics') }}</div>
+                        <div class="text-sm text-muted-foreground mt-1">
+                            {{ t('cap.publishDesc') }} / {{ t('cap.consumeDesc') }}
+                        </div>
+                    </div>
                     <div ref="capChartEl" style="height: 280px; width: 100%" />
-                </CardContent>
-            </Card>
+                </div>
+            </AppCard>
         </template>
 
         <!-- ── 发布 / 接收 ── -->
@@ -377,22 +369,25 @@ onUnmounted(async () => {
                 <Button
                     v-for="s in STATUS_OPTIONS"
                     :key="s"
-                    :variant="messageStatus === s ? 'default' : 'outline'"
-                    size="sm"
+                    :severity="messageStatus === s ? 'primary' : 'secondary'"
+                    :outlined="messageStatus !== s"
+                    size="small"
                     @click="selectStatus(s)"
                 >
                     {{ t('cap.' + s) }}
                 </Button>
             </div>
 
-            <Card>
-                <CardHeader>
-                    <CardTitle class="text-base">
+            <AppCard :beam="false">
+                <div class="p-4 pb-2">
+                    <div class="text-base font-semibold">
                         {{ activeTab === 'published' ? t('cap.tabPublished') : t('cap.tabReceived') }}
-                    </CardTitle>
-                    <CardDescription>{{ t('management.totalRecords', { total: pageCount * 20 }) }}</CardDescription>
-                </CardHeader>
-                <CardContent class="p-0">
+                    </div>
+                    <div class="text-sm text-muted-foreground mt-1">
+                        {{ t('management.totalRecords', { total: pageCount * 20 }) }}
+                    </div>
+                </div>
+                <div>
                     <Table>
                         <TableHeader>
                             <TableRow>
@@ -419,8 +414,8 @@ onUnmounted(async () => {
                                 <TableCell class="text-right">
                                     <Button
                                         v-if="msg.id && msg.statusName?.toLowerCase() === 'failed'"
-                                        variant="ghost"
-                                        size="icon"
+                                        text
+                                        severity="secondary"
                                         :title="t('hangfire.retryJob')"
                                         @click="requeue(msg.id!, messageType)"
                                     >
@@ -436,16 +431,18 @@ onUnmounted(async () => {
                         </span>
                         <div class="flex gap-2">
                             <Button
-                                variant="outline"
-                                size="sm"
+                                severity="secondary"
+                                outlined
+                                size="small"
                                 :disabled="currentPage <= 1"
                                 @click="loadMessages(currentPage - 1)"
                             >
                                 {{ t('management.prevPage') }}
                             </Button>
                             <Button
-                                variant="outline"
-                                size="sm"
+                                severity="secondary"
+                                outlined
+                                size="small"
                                 :disabled="currentPage >= pageCount"
                                 @click="loadMessages(currentPage + 1)"
                             >
@@ -453,17 +450,17 @@ onUnmounted(async () => {
                             </Button>
                         </div>
                     </div>
-                </CardContent>
-            </Card>
+                </div>
+            </AppCard>
         </template>
 
         <!-- ── 订阅者 ── -->
         <template v-else-if="activeTab === 'subscribers'">
-            <Card>
-                <CardHeader>
-                    <CardTitle class="text-base">{{ t('cap.tabSubscribers') }}</CardTitle>
-                </CardHeader>
-                <CardContent class="p-0">
+            <AppCard :beam="false">
+                <div class="p-4 pb-2">
+                    <div class="text-base font-semibold">{{ t('cap.tabSubscribers') }}</div>
+                </div>
+                <div>
                     <Table>
                         <TableHeader>
                             <TableRow>
@@ -489,17 +486,17 @@ onUnmounted(async () => {
                             </TableRow>
                         </TableBody>
                     </Table>
-                </CardContent>
-            </Card>
+                </div>
+            </AppCard>
         </template>
 
         <!-- ── 节点 ── -->
         <template v-else-if="activeTab === 'nodes'">
-            <Card>
-                <CardHeader>
-                    <CardTitle class="text-base">{{ t('cap.tabNodes') }}</CardTitle>
-                </CardHeader>
-                <CardContent class="p-0">
+            <AppCard :beam="false">
+                <div class="p-4 pb-2">
+                    <div class="text-base font-semibold">{{ t('cap.tabNodes') }}</div>
+                </div>
+                <div>
                     <Table>
                         <TableHeader>
                             <TableRow>
@@ -521,8 +518,8 @@ onUnmounted(async () => {
                             </TableRow>
                         </TableBody>
                     </Table>
-                </CardContent>
-            </Card>
+                </div>
+            </AppCard>
         </template>
     </div>
 </template>

@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 /**
  * 三维数模管理页面
  * 功能：多条件查询、上传（带进度/取消）、重命名、删除、重试转换、Three.js PLY 预览
@@ -14,7 +14,12 @@
  */
 import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { toast } from 'vue-sonner'
+import { useConfirm } from 'primevue/useconfirm'
+import Button from 'primevue/button'
+import InputText from 'primevue/inputtext'
+import Select from 'primevue/select'
+import Dialog from 'primevue/dialog'
+import ConfirmDialog from 'primevue/confirmdialog'
 import * as THREE from 'three'
 import { PLYLoader } from 'three/examples/jsm/loaders/PLYLoader.js'
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js'
@@ -36,14 +41,9 @@ import {
     Loader2,
     Eraser,
 } from '@lucide/vue'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '@/components/ui/dialog'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
     ProductModelFormat,
     ProductModelConversionStatus,
@@ -59,9 +59,12 @@ import {
 } from '@/api/product-models'
 import { showErrorToastOnce } from '@/api/client'
 import { useAuthStore } from '@/stores/auth'
+import { useAppToast } from '@/composables/useAppToast'
 
 const { t } = useI18n()
 const authStore = useAuthStore()
+const toast = useAppToast()
+const confirm = useConfirm()
 
 // ===================== 列表状态 =====================
 
@@ -398,30 +401,30 @@ async function submitRename(): Promise<void> {
     }
 }
 
-// ===================== 删除对话框 =====================
+// ===================== 删除确认 =====================
 
-const showDeleteConfirm = ref(false)
 const deleting = ref<string | null>(null)
-const deleteTarget = ref<ProductModelDto | null>(null)
 
 function openDeleteConfirm(item: ProductModelDto): void {
-    deleteTarget.value = item
-    showDeleteConfirm.value = true
-}
-
-async function confirmDelete(): Promise<void> {
-    if (!deleteTarget.value) return
-    deleting.value = deleteTarget.value.id
-    try {
-        await deleteProductModelAsync(deleteTarget.value.id)
-        toast.success(t('productModel.deleteSuccess'))
-        showDeleteConfirm.value = false
-        await loadList()
-    } catch (e: unknown) {
-        showErrorToastOnce(e)
-    } finally {
-        deleting.value = null
-    }
+    confirm.require({
+        message: t('productModel.confirmDelete', { name: item.name }),
+        header: t('common.confirmDeleteTitle'),
+        icon: 'pi pi-exclamation-triangle',
+        acceptProps: { severity: 'danger', size: 'small', label: t('common.delete') },
+        rejectProps: { severity: 'secondary', outlined: true, size: 'small', label: t('common.cancel') },
+        accept: async () => {
+            deleting.value = item.id
+            try {
+                await deleteProductModelAsync(item.id)
+                toast.success(t('productModel.deleteSuccess'))
+                await loadList()
+            } catch (e: unknown) {
+                showErrorToastOnce(e)
+            } finally {
+                deleting.value = null
+            }
+        },
+    })
 }
 
 // ===================== 重试转换 =====================
@@ -443,15 +446,24 @@ async function handleRetry(item: ProductModelDto): Promise<void> {
 
 // ===================== 清理孤立记录 =====================
 
-const showCleanUpConfirm = ref(false)
 const cleaningUp = ref(false)
+
+function openCleanUpConfirm(): void {
+    confirm.require({
+        message: t('productModel.cleanUpConfirm'),
+        header: t('productModel.cleanUpTitle'),
+        icon: 'pi pi-exclamation-triangle',
+        acceptProps: { severity: 'danger', size: 'small', label: t('common.confirm') },
+        rejectProps: { severity: 'secondary', outlined: true, size: 'small', label: t('common.cancel') },
+        accept: handleCleanUp,
+    })
+}
 
 async function handleCleanUp(): Promise<void> {
     cleaningUp.value = true
     try {
         const count = await cleanUpOrphanedRecordsAsync()
         toast.success(t('productModel.cleanUpSuccess', { count }))
-        showCleanUpConfirm.value = false
         await loadList()
     } catch (e: unknown) {
         showErrorToastOnce(e)
@@ -603,10 +615,10 @@ onBeforeUnmount(() => {
         <div class="flex items-center justify-between">
             <h1 class="text-2xl font-bold tracking-tight">{{ t('productModel.title') }}</h1>
             <div class="flex gap-2">
-                <Button variant="outline" size="icon" :disabled="loading" @click="loadList">
+                <Button severity="secondary" outlined :disabled="loading" @click="loadList">
                     <RefreshCw :class="['size-4', loading && 'animate-spin']" />
                 </Button>
-                <Button variant="outline" @click="showCleanUpConfirm = true">
+                <Button severity="secondary" outlined @click="openCleanUpConfirm">
                     <Eraser class="mr-1 size-4" />
                     {{ t('productModel.cleanUp') }}
                 </Button>
@@ -619,45 +631,37 @@ onBeforeUnmount(() => {
 
         <!-- 搜索栏 -->
         <div class="flex flex-wrap gap-2">
-            <Input
+            <InputText
                 v-model="filterText"
                 :placeholder="t('productModel.searchPlaceholder')"
                 class="w-52"
                 @keydown.enter="handleSearch"
             />
             <Select
-                :model-value="filterFormat !== null ? String(filterFormat) : ''"
-                @update:model-value="(v) => (filterFormat = v ? (Number(v) as ProductModelFormat) : null)"
-            >
-                <SelectTrigger class="w-36">
-                    <SelectValue :placeholder="t('productModel.formatPlaceholder')" />
-                </SelectTrigger>
-                <SelectContent>
-                    <SelectItem v-for="opt in formatOptions" :key="opt.value" :value="String(opt.value)">
-                        {{ opt.label }}
-                    </SelectItem>
-                </SelectContent>
-            </Select>
+                v-model="filterFormat"
+                :options="formatOptions"
+                option-label="label"
+                option-value="value"
+                :placeholder="t('productModel.formatPlaceholder')"
+                show-clear
+                class="w-36"
+            />
             <Select
-                :model-value="filterStatus !== null ? String(filterStatus) : ''"
-                @update:model-value="(v) => (filterStatus = v ? (Number(v) as ProductModelConversionStatus) : null)"
-            >
-                <SelectTrigger class="w-36">
-                    <SelectValue :placeholder="t('productModel.statusPlaceholder')" />
-                </SelectTrigger>
-                <SelectContent>
-                    <SelectItem v-for="opt in statusOptions" :key="opt.value" :value="String(opt.value)">
-                        {{ opt.label }}
-                    </SelectItem>
-                </SelectContent>
-            </Select>
-            <Input v-model="filterStartTime" type="date" class="w-36" :placeholder="t('productModel.startDate')" />
-            <Input v-model="filterEndTime" type="date" class="w-36" :placeholder="t('productModel.endDate')" />
-            <Button variant="outline" @click="handleSearch">
+                v-model="filterStatus"
+                :options="statusOptions"
+                option-label="label"
+                option-value="value"
+                :placeholder="t('productModel.statusPlaceholder')"
+                show-clear
+                class="w-36"
+            />
+            <InputText v-model="filterStartTime" type="date" class="w-36" :placeholder="t('productModel.startDate')" />
+            <InputText v-model="filterEndTime" type="date" class="w-36" :placeholder="t('productModel.endDate')" />
+            <Button severity="secondary" outlined @click="handleSearch">
                 <Search class="mr-1 size-4" />
                 {{ t('common.search') }}
             </Button>
-            <Button variant="ghost" @click="handleReset">{{ t('common.reset') }}</Button>
+            <Button text severity="secondary" @click="handleReset">{{ t('common.reset') }}</Button>
         </div>
 
         <!-- 数据表格 -->
@@ -711,8 +715,8 @@ onBeforeUnmount(() => {
                                 <!-- PLY 预览（仅 isReady 可预览） -->
                                 <Button
                                     v-if="item.isReady"
-                                    variant="ghost"
-                                    size="icon"
+                                    text
+                                    severity="secondary"
                                     :title="t('productModel.preview')"
                                     @click="openPreview(item)"
                                 >
@@ -720,8 +724,8 @@ onBeforeUnmount(() => {
                                 </Button>
                                 <!-- 下载 -->
                                 <Button
-                                    variant="ghost"
-                                    size="icon"
+                                    text
+                                    severity="secondary"
                                     :title="t('productModel.download')"
                                     @click="handleDownload(item)"
                                 >
@@ -729,8 +733,8 @@ onBeforeUnmount(() => {
                                 </Button>
                                 <!-- 重命名 -->
                                 <Button
-                                    variant="ghost"
-                                    size="icon"
+                                    text
+                                    severity="secondary"
                                     :title="t('productModel.rename')"
                                     @click="openRename(item)"
                                 >
@@ -739,8 +743,8 @@ onBeforeUnmount(() => {
                                 <!-- 重试转换（仅失败状态） -->
                                 <Button
                                     v-if="item.conversionStatus === ProductModelConversionStatus.Failed"
-                                    variant="ghost"
-                                    size="icon"
+                                    text
+                                    severity="secondary"
                                     :title="t('productModel.retryConversion')"
                                     :disabled="retrying === item.id"
                                     @click="handleRetry(item)"
@@ -749,8 +753,8 @@ onBeforeUnmount(() => {
                                 </Button>
                                 <!-- 删除 -->
                                 <Button
-                                    variant="ghost"
-                                    size="icon"
+                                    text
+                                    severity="secondary"
                                     :title="t('common.delete')"
                                     :disabled="deleting === item.id"
                                     @click="openDeleteConfirm(item)"
@@ -770,232 +774,202 @@ onBeforeUnmount(() => {
                 {{ t('productModel.paginationInfo', { total, current: currentPage, totalPages }) }}
             </span>
             <div class="flex gap-2">
-                <Button variant="outline" size="sm" :disabled="currentPage <= 1" @click="prevPage">
+                <Button severity="secondary" outlined size="small" :disabled="currentPage <= 1" @click="prevPage">
                     {{ t('productModel.prevPage') }}
                 </Button>
-                <Button variant="outline" size="sm" :disabled="currentPage >= totalPages" @click="nextPage">
+                <Button
+                    severity="secondary"
+                    outlined
+                    size="small"
+                    :disabled="currentPage >= totalPages"
+                    @click="nextPage"
+                >
                     {{ t('productModel.nextPage') }}
                 </Button>
             </div>
         </div>
     </div>
 
-    <!-- ===================== 清理确认对话框 ===================== -->
-    <Dialog v-model:open="showCleanUpConfirm">
-        <DialogContent class="max-w-sm">
-            <DialogHeader>
-                <DialogTitle>{{ t('productModel.cleanUpTitle') }}</DialogTitle>
-            </DialogHeader>
-            <p class="text-sm text-muted-foreground">
-                {{ t('productModel.cleanUpConfirm') }}
-            </p>
-            <DialogFooter>
-                <DialogClose as-child>
-                    <Button variant="outline">{{ t('common.cancel') }}</Button>
-                </DialogClose>
-                <Button variant="destructive" :disabled="cleaningUp" @click="handleCleanUp">
-                    <Loader2 v-if="cleaningUp" class="mr-1 size-4 animate-spin" />
-                    {{ t('common.confirm') }}
-                </Button>
-            </DialogFooter>
-        </DialogContent>
-    </Dialog>
+    <!-- ===================== 全局确认对话框（删除 / 清理） ===================== -->
+    <ConfirmDialog />
 
     <!-- ===================== 上传对话框 ===================== -->
-    <Dialog v-model:open="showUpload">
-        <DialogContent class="max-w-2xl">
-            <DialogHeader>
-                <DialogTitle>{{ t('productModel.uploadTitle') }}</DialogTitle>
-            </DialogHeader>
+    <Dialog
+        v-model:visible="showUpload"
+        modal
+        :header="t('productModel.uploadTitle')"
+        :style="{ width: '720px', maxWidth: '90vw' }"
+    >
+        <!-- 拖拽区域 -->
+        <div
+            :class="[
+                'flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-8 transition-colors cursor-pointer',
+                isDragging ? 'border-primary bg-primary/5' : 'border-muted-foreground/30',
+            ]"
+            @dragover.prevent="isDragging = true"
+            @dragleave.prevent="isDragging = false"
+            @drop.prevent="handleDrop"
+            @click="($refs.fileInputRef as HTMLInputElement)?.click()"
+        >
+            <Upload class="mb-2 size-8 text-muted-foreground" />
+            <p class="text-sm text-muted-foreground">
+                {{ t('productModel.dropZoneText') }}
+                <span class="text-primary underline">{{ t('productModel.dropZoneClick') }}</span>
+            </p>
+            <p class="mt-1 text-xs text-muted-foreground">{{ t('productModel.supportedFormats') }}</p>
+            <input
+                ref="fileInputRef"
+                type="file"
+                class="hidden"
+                multiple
+                accept=".ply,.obj,.step,.stp,.iges,.igs,.stl,.glb,.gltf,.pcd"
+                @change="handleFileInput"
+            />
+        </div>
 
-            <!-- 拖拽区域 -->
-            <div
-                :class="[
-                    'flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-8 transition-colors cursor-pointer',
-                    isDragging ? 'border-primary bg-primary/5' : 'border-muted-foreground/30',
-                ]"
-                @dragover.prevent="isDragging = true"
-                @dragleave.prevent="isDragging = false"
-                @drop.prevent="handleDrop"
-                @click="($refs.fileInputRef as HTMLInputElement)?.click()"
-            >
-                <Upload class="mb-2 size-8 text-muted-foreground" />
-                <p class="text-sm text-muted-foreground">
-                    {{ t('productModel.dropZoneText') }}
-                    <span class="text-primary underline">{{ t('productModel.dropZoneClick') }}</span>
-                </p>
-                <p class="mt-1 text-xs text-muted-foreground">{{ t('productModel.supportedFormats') }}</p>
-                <input
-                    ref="fileInputRef"
-                    type="file"
-                    class="hidden"
-                    multiple
-                    accept=".ply,.obj,.step,.stp,.iges,.igs,.stl,.glb,.gltf,.pcd"
-                    @change="handleFileInput"
-                />
-            </div>
-
-            <!-- 上传队列 -->
-            <div v-if="uploadQueue.length > 0" class="mt-2 max-h-64 space-y-2 overflow-y-auto">
-                <div v-for="qItem in uploadQueue" :key="qItem.id" class="rounded border p-2">
-                    <div class="flex items-center justify-between gap-2">
-                        <div class="min-w-0 flex-1">
-                            <p class="truncate text-sm font-medium">{{ qItem.file.name }}</p>
-                            <p class="text-xs text-muted-foreground">
-                                {{ formatFileSize(qItem.file.size) }}
-                                <span v-if="qItem.state === 'error'" class="ml-1 text-destructive">
-                                    {{ qItem.errorMessage }}
-                                </span>
-                                <span
-                                    v-else-if="qItem.state === 'done' && qItem.conversionState === 'none'"
-                                    class="ml-1 text-green-500"
-                                >
-                                    {{ t('productModel.uploadDone') }}
-                                </span>
-                                <span v-else-if="qItem.state === 'cancelled'" class="ml-1 text-muted-foreground">
-                                    {{ t('productModel.uploadCancelled') }}
-                                </span>
-                            </p>
-                            <Progress
-                                v-if="qItem.state === 'uploading'"
-                                :model-value="qItem.progress"
-                                class="mt-1 h-1"
-                            />
-                        </div>
-                        <!-- 转换状态图标（上传完成后显示） -->
-                        <div
-                            v-if="qItem.state === 'done' && qItem.conversionState !== 'none'"
-                            class="shrink-0 flex items-center"
-                            :title="
-                                qItem.conversionState === 'waiting'
-                                    ? t('productModel.conversionWaiting')
-                                    : qItem.conversionState === 'converting'
-                                      ? t('productModel.conversionConverting')
-                                      : qItem.conversionState === 'success'
-                                        ? t('productModel.conversionSuccess')
-                                        : t('productModel.conversionFailed')
-                            "
-                        >
-                            <!-- 等待转换：时钟图标 -->
-                            <Clock v-if="qItem.conversionState === 'waiting'" class="size-4 text-muted-foreground" />
-                            <!-- 转换中：转圈图标 -->
-                            <Loader2
-                                v-else-if="qItem.conversionState === 'converting'"
-                                class="size-4 animate-spin text-primary"
-                            />
-                            <!-- 转换成功：勾号 -->
-                            <CheckCircle
-                                v-else-if="qItem.conversionState === 'success'"
-                                class="size-4 text-green-500"
-                            />
-                            <!-- 转换失败：叉号 -->
-                            <XCircle v-else-if="qItem.conversionState === 'failed'" class="size-4 text-destructive" />
-                        </div>
-                        <Button
+        <!-- 上传队列 -->
+        <div v-if="uploadQueue.length > 0" class="mt-2 max-h-64 space-y-2 overflow-y-auto">
+            <div v-for="qItem in uploadQueue" :key="qItem.id" class="rounded border p-2">
+                <div class="flex items-center justify-between gap-2">
+                    <div class="min-w-0 flex-1">
+                        <p class="truncate text-sm font-medium">{{ qItem.file.name }}</p>
+                        <p class="text-xs text-muted-foreground">
+                            {{ formatFileSize(qItem.file.size) }}
+                            <span v-if="qItem.state === 'error'" class="ml-1 text-destructive">
+                                {{ qItem.errorMessage }}
+                            </span>
+                            <span
+                                v-else-if="qItem.state === 'done' && qItem.conversionState === 'none'"
+                                class="ml-1 text-green-500"
+                            >
+                                {{ t('productModel.uploadDone') }}
+                            </span>
+                            <span v-else-if="qItem.state === 'cancelled'" class="ml-1 text-muted-foreground">
+                                {{ t('productModel.uploadCancelled') }}
+                            </span>
+                        </p>
+                        <Progress
                             v-if="qItem.state === 'uploading'"
-                            variant="ghost"
-                            size="icon"
-                            class="shrink-0"
-                            :title="t('productModel.cancelUpload')"
-                            @click="cancelUpload(qItem)"
-                        >
-                            <X class="size-4" />
-                        </Button>
-                        <Button
-                            v-else-if="
-                                qItem.state !== 'done' ||
-                                qItem.conversionState === 'none' ||
-                                qItem.conversionState === 'success' ||
-                                qItem.conversionState === 'failed'
-                            "
-                            variant="ghost"
-                            size="icon"
-                            class="shrink-0"
-                            :title="t('productModel.remove')"
-                            @click="removeQueueItem(qItem.id)"
-                        >
-                            <X class="size-4" />
-                        </Button>
+                            :model-value="qItem.progress"
+                            class="mt-1 h-1"
+                        />
                     </div>
+                    <!-- 转换状态图标（上传完成后显示） -->
+                    <div
+                        v-if="qItem.state === 'done' && qItem.conversionState !== 'none'"
+                        class="shrink-0 flex items-center"
+                        :title="
+                            qItem.conversionState === 'waiting'
+                                ? t('productModel.conversionWaiting')
+                                : qItem.conversionState === 'converting'
+                                  ? t('productModel.conversionConverting')
+                                  : qItem.conversionState === 'success'
+                                    ? t('productModel.conversionSuccess')
+                                    : t('productModel.conversionFailed')
+                        "
+                    >
+                        <!-- 等待转换：时钟图标 -->
+                        <Clock v-if="qItem.conversionState === 'waiting'" class="size-4 text-muted-foreground" />
+                        <!-- 转换中：转圈图标 -->
+                        <Loader2
+                            v-else-if="qItem.conversionState === 'converting'"
+                            class="size-4 animate-spin text-primary"
+                        />
+                        <!-- 转换成功：勾号 -->
+                        <CheckCircle
+                            v-else-if="qItem.conversionState === 'success'"
+                            class="size-4 text-green-500"
+                        />
+                        <!-- 转换失败：叉号 -->
+                        <XCircle v-else-if="qItem.conversionState === 'failed'" class="size-4 text-destructive" />
+                    </div>
+                    <Button
+                        v-if="qItem.state === 'uploading'"
+                        text
+                        severity="secondary"
+                        class="shrink-0"
+                        :title="t('productModel.cancelUpload')"
+                        @click="cancelUpload(qItem)"
+                    >
+                        <X class="size-4" />
+                    </Button>
+                    <Button
+                        v-else-if="
+                            qItem.state !== 'done' ||
+                            qItem.conversionState === 'none' ||
+                            qItem.conversionState === 'success' ||
+                            qItem.conversionState === 'failed'
+                        "
+                        text
+                        severity="secondary"
+                        class="shrink-0"
+                        :title="t('productModel.remove')"
+                        @click="removeQueueItem(qItem.id)"
+                    >
+                        <X class="size-4" />
+                    </Button>
                 </div>
             </div>
+        </div>
 
-            <DialogFooter>
-                <DialogClose as-child>
-                    <Button variant="outline">{{ t('productModel.close') }}</Button>
-                </DialogClose>
-                <Button :disabled="uploadQueue.filter((i) => i.state === 'idle').length === 0" @click="startUploadAll">
-                    {{ t('productModel.startUpload') }}
-                </Button>
-            </DialogFooter>
-        </DialogContent>
+        <template #footer>
+            <Button severity="secondary" outlined @click="showUpload = false">
+                {{ t('productModel.close') }}
+            </Button>
+            <Button :disabled="uploadQueue.filter((i) => i.state === 'idle').length === 0" @click="startUploadAll">
+                {{ t('productModel.startUpload') }}
+            </Button>
+        </template>
     </Dialog>
 
     <!-- ===================== 重命名对话框 ===================== -->
-    <Dialog v-model:open="showRename">
-        <DialogContent class="max-w-md">
-            <DialogHeader>
-                <DialogTitle>{{ t('productModel.renameTitle') }}</DialogTitle>
-            </DialogHeader>
-            <div class="space-y-2 py-2">
-                <Label>{{ t('productModel.renameLabel') }}</Label>
-                <Input
-                    v-model="renameName"
-                    :placeholder="t('productModel.renamePlaceholder')"
-                    maxlength="256"
-                    @keydown.enter="submitRename"
-                />
-            </div>
-            <DialogFooter>
-                <DialogClose as-child>
-                    <Button variant="outline">{{ t('common.cancel') }}</Button>
-                </DialogClose>
-                <Button :disabled="renaming || !renameName.trim()" @click="submitRename">
-                    <RefreshCw v-if="renaming" class="mr-1 size-4 animate-spin" />
-                    {{ t('common.confirm') }}
-                </Button>
-            </DialogFooter>
-        </DialogContent>
-    </Dialog>
-
-    <!-- ===================== 删除确认对话框 ===================== -->
-    <Dialog v-model:open="showDeleteConfirm">
-        <DialogContent class="max-w-sm">
-            <DialogHeader>
-                <DialogTitle>{{ t('common.confirmDeleteTitle') }}</DialogTitle>
-            </DialogHeader>
-            <p class="text-sm text-muted-foreground">
-                {{ t('productModel.confirmDelete', { name: deleteTarget?.name ?? '' }) }}
-            </p>
-            <DialogFooter>
-                <DialogClose as-child>
-                    <Button variant="outline">{{ t('common.cancel') }}</Button>
-                </DialogClose>
-                <Button variant="destructive" @click="confirmDelete">{{ t('common.delete') }}</Button>
-            </DialogFooter>
-        </DialogContent>
+    <Dialog
+        v-model:visible="showRename"
+        modal
+        :header="t('productModel.renameTitle')"
+        :style="{ width: '420px', maxWidth: '90vw' }"
+    >
+        <div class="space-y-2 py-2">
+            <label class="text-sm">{{ t('productModel.renameLabel') }}</label>
+            <InputText
+                v-model="renameName"
+                :placeholder="t('productModel.renamePlaceholder')"
+                maxlength="256"
+                class="w-full"
+                @keydown.enter="submitRename"
+            />
+        </div>
+        <template #footer>
+            <Button severity="secondary" outlined @click="showRename = false">
+                {{ t('common.cancel') }}
+            </Button>
+            <Button :disabled="renaming || !renameName.trim()" @click="submitRename">
+                <RefreshCw v-if="renaming" class="mr-1 size-4 animate-spin" />
+                {{ t('common.confirm') }}
+            </Button>
+        </template>
     </Dialog>
 
     <!-- ===================== PLY 预览对话框 ===================== -->
-    <Dialog v-model:open="showPreview">
-        <DialogContent class="max-w-4xl">
-            <DialogHeader>
-                <DialogTitle>{{ t('productModel.previewTitle') }}{{ previewTarget?.name }}</DialogTitle>
-            </DialogHeader>
-            <div class="relative h-[500px] w-full overflow-hidden rounded-md bg-[#1a1a1a]">
-                <div v-if="previewLoading" class="absolute inset-0 flex items-center justify-center text-white">
-                    {{ t('productModel.previewLoading') }}
-                </div>
-                <div v-if="previewError" class="absolute inset-0 flex items-center justify-center text-destructive">
-                    {{ previewError }}
-                </div>
-                <canvas ref="previewCanvasRef" class="size-full" />
+    <Dialog
+        v-model:visible="showPreview"
+        modal
+        :header="`${t('productModel.previewTitle')}${previewTarget?.name ?? ''}`"
+        :style="{ width: '960px', maxWidth: '95vw' }"
+    >
+        <div class="relative h-[500px] w-full overflow-hidden rounded-md bg-[#1a1a1a]">
+            <div v-if="previewLoading" class="absolute inset-0 flex items-center justify-center text-white">
+                {{ t('productModel.previewLoading') }}
             </div>
-            <DialogFooter>
-                <DialogClose as-child>
-                    <Button variant="outline">{{ t('productModel.close') }}</Button>
-                </DialogClose>
-            </DialogFooter>
-        </DialogContent>
+            <div v-if="previewError" class="absolute inset-0 flex items-center justify-center text-destructive">
+                {{ previewError }}
+            </div>
+            <canvas ref="previewCanvasRef" class="size-full" />
+        </div>
+        <template #footer>
+            <Button severity="secondary" outlined @click="showPreview = false">
+                {{ t('productModel.close') }}
+            </Button>
+        </template>
     </Dialog>
 </template>

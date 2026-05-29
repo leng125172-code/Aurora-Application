@@ -15,21 +15,20 @@
 
             <!-- 工具栏 -->
             <div class="flex flex-wrap gap-3 items-center">
-                <Input v-model="searchText" :placeholder="t('swaggerPage.searchPlaceholder')" class="flex-1 min-w-48" />
-                <Select v-model="filterMethod">
-                    <SelectTrigger class="w-36">
-                        <SelectValue :placeholder="t('swaggerPage.allMethods')" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="ALL">{{ t('swaggerPage.allMethods') }}</SelectItem>
-                        <SelectItem value="GET">GET</SelectItem>
-                        <SelectItem value="POST">POST</SelectItem>
-                        <SelectItem value="PUT">PUT</SelectItem>
-                        <SelectItem value="DELETE">DELETE</SelectItem>
-                        <SelectItem value="PATCH">PATCH</SelectItem>
-                    </SelectContent>
-                </Select>
-                <Button variant="outline" size="sm" @click="toggleAll">
+                <InputText
+                    v-model="searchText"
+                    :placeholder="t('swaggerPage.searchPlaceholder')"
+                    class="flex-1 min-w-48"
+                />
+                <Select
+                    v-model="filterMethod"
+                    :options="methodOptions"
+                    option-label="label"
+                    option-value="value"
+                    :placeholder="t('swaggerPage.allMethods')"
+                    class="w-36"
+                />
+                <Button severity="secondary" outlined size="small" @click="toggleAll">
                     {{ allExpanded ? t('swaggerPage.collapseAll') : t('swaggerPage.expandAll') }}
                 </Button>
             </div>
@@ -74,11 +73,11 @@ import { useI18n } from 'vue-i18n'
 import { fetchSwaggerDocument, groupEndpointsByTag } from '@/api/swagger'
 import type { SwaggerDocument, ApiGroup } from '@/types/swagger'
 import ApiGroupPanel from './ApiGroupPanel.vue'
-import { Input } from '@/components/ui/input'
-import { Button } from '@/components/ui/button'
+import InputText from 'primevue/inputtext'
+import Button from 'primevue/button'
+import Select from 'primevue/select'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { SparklesText } from '@/components/ui/sparkles-text'
 import { InteractiveGridPattern } from '@/components/ui/interactive-grid-pattern'
 
@@ -91,6 +90,16 @@ const error = ref('')
 const searchText = ref('')
 const filterMethod = ref('ALL')
 const allExpanded = ref(false)
+
+// HTTP 方法筛选下拉选项
+const methodOptions = computed(() => [
+    { label: t('swaggerPage.allMethods'), value: 'ALL' },
+    { label: 'GET', value: 'GET' },
+    { label: 'POST', value: 'POST' },
+    { label: 'PUT', value: 'PUT' },
+    { label: 'DELETE', value: 'DELETE' },
+    { label: 'PATCH', value: 'PATCH' },
+])
 
 const totalEndpoints = computed(() => groups.value.reduce((s, g) => s + g.endpoints.length, 0))
 

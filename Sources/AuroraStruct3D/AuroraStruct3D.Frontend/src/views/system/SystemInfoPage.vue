@@ -2,10 +2,10 @@
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RefreshCw, Server, Package } from '@lucide/vue'
-import { Button } from '@/components/ui/button'
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { Input } from '@/components/ui/input'
+import Button from 'primevue/button'
+import InputText from 'primevue/inputtext'
+import Tag from 'primevue/tag'
+import { AppCard } from '@/components/primevue'
 import { httpClient } from '@/api/client'
 
 const { t } = useI18n()
@@ -88,10 +88,10 @@ function formatDateTime(iso: string | null | undefined): string {
     })
 }
 
-function cpuColor(pct: number): 'destructive' | 'secondary' | 'default' {
-    if (pct >= 90) return 'destructive'
-    if (pct >= 70) return 'secondary'
-    return 'default'
+function cpuColor(pct: number): 'danger' | 'warn' | 'info' {
+    if (pct >= 90) return 'danger'
+    if (pct >= 70) return 'warn'
+    return 'info'
 }
 
 // ── 计算属性 ──────────────────────────────────────────────────────────────────
@@ -132,7 +132,7 @@ const showStableBanner = computed<boolean>(() => uptimeDays.value >= 30)
         <!-- 页头 -->
         <div class="flex items-center justify-between">
             <h1 class="text-2xl font-bold tracking-tight">{{ t('sysinfo.title') }}</h1>
-            <Button variant="outline" size="sm" :disabled="loading" @click="loadData">
+            <Button severity="secondary" outlined size="small" :disabled="loading" @click="loadData">
                 <RefreshCw :class="['size-4 mr-1.5', loading && 'animate-spin']" />
                 {{ t('sysinfo.refresh') }}
             </Button>
@@ -151,14 +151,14 @@ const showStableBanner = computed<boolean>(() => uptimeDays.value >= 30)
         </div>
 
         <!-- 服务器信息卡 -->
-        <Card>
-            <CardHeader class="pb-3">
-                <CardTitle class="flex items-center gap-2 text-base">
+        <AppCard :beam-size="120" :beam-duration="10">
+            <template #header>
+                <div class="px-4 pt-3 text-base font-semibold flex items-center gap-2">
                     <Server class="size-4" />
                     {{ t('sysinfo.server') }}
-                </CardTitle>
-            </CardHeader>
-            <CardContent v-if="info">
+                </div>
+            </template>
+            <div v-if="info">
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-0 text-sm">
                     <!-- 左列 -->
                     <div class="divide-y divide-border/60">
@@ -174,13 +174,12 @@ const showStableBanner = computed<boolean>(() => uptimeDays.value >= 30)
                             <span class="w-28 shrink-0 text-muted-foreground">{{ t('sysinfo.processor') }}</span>
                             <span class="break-all">
                                 {{ info.server.processorModel }}，{{ info.server.processorCount }} 核
-                                <Badge
+                                <Tag
                                     v-if="info.server.cpuPercent >= 0"
-                                    :variant="cpuColor(info.server.cpuPercent)"
-                                    class="ml-1.5 text-xs"
-                                >
-                                    {{ info.server.cpuPercent.toFixed(1) }}%
-                                </Badge>
+                                    :severity="cpuColor(info.server.cpuPercent)"
+                                    :value="`${info.server.cpuPercent.toFixed(1)}%`"
+                                    class="ml-1.5"
+                                />
                             </span>
                         </div>
                         <div class="flex items-start py-2.5 gap-3">
@@ -188,14 +187,11 @@ const showStableBanner = computed<boolean>(() => uptimeDays.value >= 30)
                             <span>
                                 {{ formatBytes(info.server.memoryUsedBytes) }} /
                                 {{ formatBytes(info.server.memoryTotalBytes) }}
-                                <Badge
-                                    :variant="
-                                        memPercent >= 90 ? 'destructive' : memPercent >= 70 ? 'secondary' : 'default'
-                                    "
-                                    class="ml-1.5 text-xs"
-                                >
-                                    {{ memPercent }}%
-                                </Badge>
+                                <Tag
+                                    :severity="memPercent >= 90 ? 'danger' : memPercent >= 70 ? 'warn' : 'info'"
+                                    :value="`${memPercent}%`"
+                                    class="ml-1.5"
+                                />
                             </span>
                         </div>
                         <div class="flex items-start py-2.5 gap-3">
@@ -236,31 +232,29 @@ const showStableBanner = computed<boolean>(() => uptimeDays.value >= 30)
                         </div>
                     </div>
                 </div>
-            </CardContent>
-            <CardContent v-else class="py-8 text-center text-sm text-muted-foreground">
+            </div>
+            <div v-else class="py-8 text-center text-sm text-muted-foreground">
                 {{ loading ? t('common.loading') : '-' }}
-            </CardContent>
-        </Card>
+            </div>
+        </AppCard>
 
         <!-- 已加载程序集卡 -->
-        <Card>
-            <CardHeader class="pb-3">
-                <div class="flex items-center justify-between gap-4">
-                    <CardTitle class="flex items-center gap-2 text-base">
+        <AppCard :beam-size="120" :beam-duration="10" :beam-delay="3">
+            <template #header>
+                <div class="px-4 pt-3 flex items-center justify-between gap-4">
+                    <div class="text-base font-semibold flex items-center gap-2">
                         <Package class="size-4" />
                         {{ t('sysinfo.assemblies') }}
-                        <Badge variant="secondary" class="ml-1">
-                            {{ filteredAssemblies.length }}
-                        </Badge>
-                    </CardTitle>
-                    <Input
+                        <Tag severity="secondary" :value="String(filteredAssemblies.length)" class="ml-1" />
+                    </div>
+                    <InputText
                         v-model="assemblySearch"
                         :placeholder="t('sysinfo.searchAssembly')"
                         class="h-8 w-56 text-sm"
                     />
                 </div>
-            </CardHeader>
-            <CardContent class="p-0">
+            </template>
+            <div class="-m-4">
                 <div class="overflow-x-auto">
                     <table class="w-full text-sm">
                         <thead>
@@ -304,7 +298,7 @@ const showStableBanner = computed<boolean>(() => uptimeDays.value >= 30)
                         </tbody>
                     </table>
                 </div>
-            </CardContent>
-        </Card>
+            </div>
+        </AppCard>
     </div>
 </template>

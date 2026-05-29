@@ -5,15 +5,16 @@
             {{ endpoint.operation.summary ?? endpoint.operation.description }}
         </div>
 
-        <Tabs default-value="params">
-            <TabsList>
-                <TabsTrigger value="params">{{ t('swaggerPage.tabParams') }}</TabsTrigger>
-                <TabsTrigger value="body" :disabled="!hasBody">{{ t('swaggerPage.tabBody') }}</TabsTrigger>
-                <TabsTrigger value="headers">{{ t('swaggerPage.tabHeaders') }}</TabsTrigger>
-            </TabsList>
+        <Tabs value="params">
+            <TabList>
+                <Tab value="params">{{ t('swaggerPage.tabParams') }}</Tab>
+                <Tab value="body" :disabled="!hasBody">{{ t('swaggerPage.tabBody') }}</Tab>
+                <Tab value="headers">{{ t('swaggerPage.tabHeaders') }}</Tab>
+            </TabList>
 
+            <TabPanels>
             <!-- 参数 Tab -->
-            <TabsContent value="params" class="space-y-3 mt-3">
+            <TabPanel value="params" class="space-y-3 mt-3">
                 <div v-if="pathParams.length === 0 && queryParams.length === 0" class="text-sm text-muted-foreground">
                     {{ t('swaggerPage.noParams') }}
                 </div>
@@ -22,10 +23,10 @@
                     <p class="text-xs font-semibold text-muted-foreground mb-2">{{ t('swaggerPage.pathParams') }}</p>
                     <div v-for="p in pathParams" :key="p.name" class="flex items-center gap-2 mb-2">
                         <label class="text-xs font-mono w-32 shrink-0">{{ p.name }}</label>
-                        <Input
+                        <InputText
                             v-model="req.pathParams[p.name]"
                             :placeholder="p.description ?? p.name"
-                            size="sm"
+                            size="small"
                             class="flex-1"
                         />
                     </div>
@@ -35,34 +36,35 @@
                     <p class="text-xs font-semibold text-muted-foreground mb-2">{{ t('swaggerPage.queryParams') }}</p>
                     <div v-for="p in queryParams" :key="p.name" class="flex items-center gap-2 mb-2">
                         <label class="text-xs font-mono w-32 shrink-0">{{ p.name }}</label>
-                        <Input
+                        <InputText
                             v-model="req.queryParams[p.name]"
                             :placeholder="p.description ?? p.name"
-                            size="sm"
+                            size="small"
                             class="flex-1"
                         />
                     </div>
                 </div>
-            </TabsContent>
+            </TabPanel>
 
             <!-- 请求体 Tab -->
-            <TabsContent value="body" class="mt-3">
+            <TabPanel value="body" class="mt-3">
                 <textarea
                     v-model="req.body"
                     rows="8"
                     class="w-full rounded-md border bg-background p-3 font-mono text-xs resize-y focus:outline-none focus:ring-1 focus:ring-ring"
                     :placeholder="t('swaggerPage.bodyPlaceholder')"
                 />
-            </TabsContent>
+            </TabPanel>
 
             <!-- 请求头 Tab -->
-            <TabsContent value="headers" class="mt-3 space-y-2">
+            <TabPanel value="headers" class="mt-3 space-y-2">
                 <div v-for="(_, key) in req.headers" :key="key" class="flex items-center gap-2">
-                    <Input :model-value="key" readonly class="w-36 font-mono text-xs" />
-                    <Input v-model="req.headers[key]" class="flex-1 font-mono text-xs" />
+                    <InputText :model-value="key" readonly class="w-36 font-mono text-xs" />
+                    <InputText v-model="req.headers[key]" class="flex-1 font-mono text-xs" />
                 </div>
-                <Button variant="outline" size="sm" @click="addHeader">{{ t('swaggerPage.addHeader') }}</Button>
-            </TabsContent>
+                <Button severity="secondary" outlined size="small" @click="addHeader">{{ t('swaggerPage.addHeader') }}</Button>
+            </TabPanel>
+            </TabPanels>
         </Tabs>
 
         <!-- 发送按钮 -->
@@ -70,7 +72,7 @@
             <Button :disabled="sending" @click="sendRequest">
                 {{ sending ? t('swaggerPage.sending') : t('swaggerPage.send') }}
             </Button>
-            <Button variant="ghost" size="sm" @click="reset">{{ t('swaggerPage.reset') }}</Button>
+            <Button text severity="secondary" size="small" @click="reset">{{ t('swaggerPage.reset') }}</Button>
         </div>
 
         <!-- 响应结果 -->
@@ -85,7 +87,7 @@
                     {{ response.status }} {{ response.statusText }}
                 </span>
                 <span class="text-muted-foreground text-xs">{{ response.duration }}ms</span>
-                <Button variant="ghost" size="sm" class="ml-auto text-xs" @click="copyResponse">
+                <Button text severity="secondary" size="small" class="ml-auto text-xs" @click="copyResponse">
                     {{ t('swaggerPage.copyResponse') }}
                 </Button>
             </div>
@@ -101,14 +103,19 @@ import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { ApiEndpoint, SwaggerDocument, DebugRequest, DebugResponse } from '@/types/swagger'
 import { executeDebugRequest, generateExampleBody, statusColor } from '@/api/swagger'
-import { Input } from '@/components/ui/input'
-import { Button } from '@/components/ui/button'
+import InputText from 'primevue/inputtext'
+import Button from 'primevue/button'
+import Tabs from 'primevue/tabs'
+import TabList from 'primevue/tablist'
+import Tab from 'primevue/tab'
+import TabPanels from 'primevue/tabpanels'
+import TabPanel from 'primevue/tabpanel'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { toast } from 'vue-sonner'
+import { useAppToast } from '@/composables/useAppToast'
 
 const { t } = useI18n()
+const toast = useAppToast()
 
 const props = defineProps<{
     endpoint: ApiEndpoint

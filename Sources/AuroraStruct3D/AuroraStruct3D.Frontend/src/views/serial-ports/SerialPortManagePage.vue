@@ -2,14 +2,13 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Pencil, PlugZap, RefreshCw, ScanLine, Send, Unplug } from '@lucide/vue'
-import { toast } from 'vue-sonner'
-import { Card, CardContent } from '@/components/ui/card'
-import { BorderBeam } from '@/components/ui/border-beam'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '@/components/ui/dialog'
+import Button from 'primevue/button'
+import InputText from 'primevue/inputtext'
+import InputNumber from 'primevue/inputnumber'
+import Select from 'primevue/select'
+import Dialog from 'primevue/dialog'
+import { AppCard } from '@/components/primevue'
+import { useAppToast } from '@/composables/useAppToast'
 
 import { SerialPortHandshake, SerialPortParity, type SerialPortConfigDto, SerialPortStopBits } from '@/api/serial-ports'
 import { useSerialPortStore } from '@/stores/serialPorts'
@@ -24,6 +23,7 @@ interface RawLogItem {
 }
 
 const { t } = useI18n()
+const toast = useAppToast()
 const store = useSerialPortStore()
 const scanning = ref(false)
 const connecting = ref(false)
@@ -105,6 +105,26 @@ const editHandshakeStr = computed({
         editForm.value.handshake = parseInt(v) as SerialPortHandshake
     },
 })
+
+// 编辑对话框中下拉框的可选项（PrimeVue Select 需要数组 + label/value）
+const parityOptions = computed(() => [
+    { label: t('serialPort.parityNone'), value: String(SerialPortParity.None) },
+    { label: t('serialPort.parityOdd'), value: String(SerialPortParity.Odd) },
+    { label: t('serialPort.parityEven'), value: String(SerialPortParity.Even) },
+    { label: t('serialPort.parityMark'), value: String(SerialPortParity.Mark) },
+    { label: t('serialPort.paritySpace'), value: String(SerialPortParity.Space) },
+])
+const stopBitsOptions = computed(() => [
+    { label: '1', value: String(SerialPortStopBits.One) },
+    { label: '1.5', value: String(SerialPortStopBits.OnePointFive) },
+    { label: '2', value: String(SerialPortStopBits.Two) },
+])
+const handshakeOptions = computed(() => [
+    { label: t('serialPort.handshakeNone'), value: String(SerialPortHandshake.None) },
+    { label: t('serialPort.handshakeXOnXOff'), value: String(SerialPortHandshake.XOnXOff) },
+    { label: t('serialPort.handshakeRts'), value: String(SerialPortHandshake.RequestToSend) },
+    { label: t('serialPort.handshakeRtsXOn'), value: String(SerialPortHandshake.RequestToSendXOnXOff) },
+])
 
 watch(
     () => store.ports,
@@ -281,11 +301,11 @@ onMounted(() => {
         <div class="flex flex-wrap items-center justify-between gap-3">
             <h1 class="text-2xl font-bold tracking-tight">{{ t('serialPort.title') }}</h1>
             <div class="flex flex-wrap gap-2">
-                <Button variant="outline" size="sm" @click="refreshList">
+                <Button severity="secondary" outlined size="small" @click="refreshList">
                     <RefreshCw class="size-4" />
                     {{ t('serialPort.refresh') }}
                 </Button>
-                <Button size="sm" :disabled="scanning" @click="handleScan">
+                <Button size="small" :disabled="scanning" @click="handleScan">
                     <ScanLine class="size-4" />
                     {{ scanning ? t('serialPort.scanning') : t('serialPort.scan') }}
                 </Button>
@@ -300,8 +320,8 @@ onMounted(() => {
                 <div v-else-if="store.ports.length === 0" class="py-8 text-center text-sm text-muted-foreground">
                     {{ t('serialPort.noDevices') }}
                 </div>
-                <Card v-else class="overflow-auto">
-                    <CardContent class="p-0">
+                <AppCard v-else :beam="false" class="overflow-auto">
+                    <div class="p-0">
                         <table class="w-full min-w-[920px] text-sm">
                             <thead class="border-b bg-muted/50">
                                 <tr>
@@ -347,8 +367,9 @@ onMounted(() => {
                                         <div class="flex flex-wrap gap-1.5">
                                             <Button
                                                 v-if="!port.isOpen"
-                                                variant="outline"
-                                                size="xs"
+                                                severity="secondary"
+                                                outlined
+                                                size="small"
                                                 class="text-green-600 hover:bg-green-50 dark:hover:bg-green-900/30"
                                                 :disabled="connecting"
                                                 @click.stop="handleConnect(port)"
@@ -358,8 +379,9 @@ onMounted(() => {
                                             </Button>
                                             <Button
                                                 v-else
-                                                variant="outline"
-                                                size="xs"
+                                                severity="secondary"
+                                                outlined
+                                                size="small"
                                                 class="text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-900/30"
                                                 :disabled="connecting"
                                                 @click.stop="handleDisconnect(port)"
@@ -367,7 +389,7 @@ onMounted(() => {
                                                 <Unplug class="size-3.5" />
                                                 {{ t('serialPort.disconnect') }}
                                             </Button>
-                                            <Button variant="outline" size="xs" @click.stop="openEdit(port)">
+                                            <Button severity="secondary" outlined size="small" @click.stop="openEdit(port)">
                                                 <Pencil class="size-3.5" />
                                                 {{ t('common.edit') }}
                                             </Button>
@@ -376,13 +398,12 @@ onMounted(() => {
                                 </tr>
                             </tbody>
                         </table>
-                    </CardContent>
-                </Card>
+                    </div>
+                </AppCard>
             </div>
 
-            <Card class="relative">
-                <BorderBeam :size="80" :duration="8" :delay="2" />
-                <CardContent class="p-4">
+            <AppCard :beam-size="80" :beam-duration="8" :beam-delay="2" class="relative">
+                <div class="p-4">
                     <div v-if="!selectedPort" class="py-10 text-center text-sm text-muted-foreground">
                         {{ t('serialPort.selectPort') }}
                     </div>
@@ -405,25 +426,15 @@ onMounted(() => {
 
                         <div class="grid grid-cols-[1fr_auto] gap-2">
                             <div class="flex flex-col gap-1">
-                                <Label class="text-sm">{{ t('serialPort.baudRate') }}</Label>
-                                <Select v-model="connectBaudRateStr">
-                                    <SelectTrigger>
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem
-                                            v-for="rate in supportedBaudRates"
-                                            :key="rate"
-                                            :value="String(rate)"
-                                        >
-                                            {{ rate }}
-                                        </SelectItem>
-                                    </SelectContent>
-                                </Select>
+                                <label class="text-sm">{{ t('serialPort.baudRate') }}</label>
+                                <Select
+                                    v-model="connectBaudRateStr"
+                                    :options="supportedBaudRates.map(String)"
+                                />
                             </div>
                             <Button
                                 v-if="!selectedPort.isOpen"
-                                size="sm"
+                                size="small"
                                 class="mt-6"
                                 :disabled="connecting"
                                 @click="handleConnect(selectedPort)"
@@ -433,8 +444,9 @@ onMounted(() => {
                             </Button>
                             <Button
                                 v-else
-                                variant="outline"
-                                size="sm"
+                                severity="secondary"
+                                outlined
+                                size="small"
                                 class="mt-6 text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-900/30"
                                 :disabled="connecting"
                                 @click="handleDisconnect(selectedPort)"
@@ -447,7 +459,7 @@ onMounted(() => {
                         <div class="border-t pt-4">
                             <div class="mb-3 flex items-center justify-between">
                                 <h3 class="text-sm font-medium">{{ t('serialPort.debug') }}</h3>
-                                <Button variant="outline" size="xs" @click="rawLogs = []">
+                                <Button severity="secondary" outlined size="small" @click="rawLogs = []">
                                     {{ t('serialPort.clearLog') }}
                                 </Button>
                             </div>
@@ -466,16 +478,16 @@ onMounted(() => {
                                     {{ t('serialPort.appendNewLine') }}
                                 </label>
                                 <div class="flex flex-col gap-1">
-                                    <Label class="text-sm">{{ t('serialPort.expectedLength') }}</Label>
-                                    <Input v-model.number="rawForm.expectedResponseLength" min="-1" type="number" />
+                                    <label class="text-sm">{{ t('serialPort.expectedLength') }}</label>
+                                    <InputNumber v-model="rawForm.expectedResponseLength" :min="-1" />
                                 </div>
                                 <div class="flex flex-col gap-1">
-                                    <Label class="text-sm">{{ t('serialPort.timeoutMs') }}</Label>
-                                    <Input v-model.number="rawForm.timeoutMs" min="50" type="number" />
+                                    <label class="text-sm">{{ t('serialPort.timeoutMs') }}</label>
+                                    <InputNumber v-model="rawForm.timeoutMs" :min="50" />
                                 </div>
                             </div>
                             <Button
-                                size="sm"
+                                size="small"
                                 class="mt-3 w-full"
                                 :disabled="sending || !rawForm.payload.trim()"
                                 @click="handleSendRaw"
@@ -504,119 +516,79 @@ onMounted(() => {
                             </div>
                         </div>
                     </div>
-                </CardContent>
-            </Card>
+                </div>
+            </AppCard>
         </div>
 
         <!-- 编辑串口对话框 -->
-        <Dialog v-model:open="showEditDialog">
-            <DialogContent class="w-[460px]">
-                <BorderBeam :size="80" :duration="8" />
-                <DialogHeader>
-                    <DialogTitle>{{ t('serialPort.editTitle') }}</DialogTitle>
-                </DialogHeader>
-                <div class="grid gap-3">
-                    <div class="flex flex-col gap-1">
-                        <Label>{{ t('serialPort.displayName') }}</Label>
-                        <Input v-model="editForm.displayName" />
-                    </div>
-                    <div class="flex flex-col gap-1">
-                        <Label>{{ t('serialPort.description') }}</Label>
-                        <Input v-model="editForm.description" />
-                    </div>
-                    <div class="grid grid-cols-2 gap-3">
-                        <div class="flex flex-col gap-1">
-                            <Label>{{ t('serialPort.baudRate') }}</Label>
-                            <Select v-model="editBaudRateStr">
-                                <SelectTrigger>
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem v-for="rate in supportedBaudRates" :key="rate" :value="String(rate)">
-                                        {{ rate }}
-                                    </SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <div class="flex flex-col gap-1">
-                            <Label>{{ t('serialPort.dataBits') }}</Label>
-                            <Input v-model.number="editForm.dataBits" max="8" min="5" type="number" />
-                        </div>
-                        <div class="flex flex-col gap-1">
-                            <Label>{{ t('serialPort.parity') }}</Label>
-                            <Select v-model="editParityStr">
-                                <SelectTrigger>
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem :value="String(SerialPortParity.None)">
-                                        {{ t('serialPort.parityNone') }}
-                                    </SelectItem>
-                                    <SelectItem :value="String(SerialPortParity.Odd)">
-                                        {{ t('serialPort.parityOdd') }}
-                                    </SelectItem>
-                                    <SelectItem :value="String(SerialPortParity.Even)">
-                                        {{ t('serialPort.parityEven') }}
-                                    </SelectItem>
-                                    <SelectItem :value="String(SerialPortParity.Mark)">
-                                        {{ t('serialPort.parityMark') }}
-                                    </SelectItem>
-                                    <SelectItem :value="String(SerialPortParity.Space)">
-                                        {{ t('serialPort.paritySpace') }}
-                                    </SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <div class="flex flex-col gap-1">
-                            <Label>{{ t('serialPort.stopBits') }}</Label>
-                            <Select v-model="editStopBitsStr">
-                                <SelectTrigger>
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem :value="String(SerialPortStopBits.One)">1</SelectItem>
-                                    <SelectItem :value="String(SerialPortStopBits.OnePointFive)">1.5</SelectItem>
-                                    <SelectItem :value="String(SerialPortStopBits.Two)">2</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-                    </div>
-                    <div class="flex flex-col gap-1">
-                        <Label>{{ t('serialPort.handshake') }}</Label>
-                        <Select v-model="editHandshakeStr">
-                            <SelectTrigger>
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem :value="String(SerialPortHandshake.None)">
-                                    {{ t('serialPort.handshakeNone') }}
-                                </SelectItem>
-                                <SelectItem :value="String(SerialPortHandshake.XOnXOff)">
-                                    {{ t('serialPort.handshakeXOnXOff') }}
-                                </SelectItem>
-                                <SelectItem :value="String(SerialPortHandshake.RequestToSend)">
-                                    {{ t('serialPort.handshakeRts') }}
-                                </SelectItem>
-                                <SelectItem :value="String(SerialPortHandshake.RequestToSendXOnXOff)">
-                                    {{ t('serialPort.handshakeRtsXOn') }}
-                                </SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </div>
-                    <label class="flex items-center gap-2 text-sm">
-                        <input v-model="editForm.isEnabled" type="checkbox" />
-                        {{ t('serialPort.enabled') }}
-                    </label>
+        <Dialog
+            v-model:visible="showEditDialog"
+            modal
+            :header="t('serialPort.editTitle')"
+            :style="{ width: '460px' }"
+        >
+            <div class="grid gap-3">
+                <div class="flex flex-col gap-1">
+                    <label class="text-sm">{{ t('serialPort.displayName') }}</label>
+                    <InputText v-model="editForm.displayName" />
                 </div>
-                <DialogFooter class="gap-2">
-                    <DialogClose as-child>
-                        <Button variant="outline">{{ t('common.cancel') }}</Button>
-                    </DialogClose>
-                    <Button :disabled="editing" @click="handleEdit">
-                        {{ editing ? t('common.saving') : t('common.save') }}
-                    </Button>
-                </DialogFooter>
-            </DialogContent>
+                <div class="flex flex-col gap-1">
+                    <label class="text-sm">{{ t('serialPort.description') }}</label>
+                    <InputText v-model="editForm.description" />
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div class="flex flex-col gap-1">
+                        <label class="text-sm">{{ t('serialPort.baudRate') }}</label>
+                        <Select
+                            v-model="editBaudRateStr"
+                            :options="supportedBaudRates.map(String)"
+                        />
+                    </div>
+                    <div class="flex flex-col gap-1">
+                        <label class="text-sm">{{ t('serialPort.dataBits') }}</label>
+                        <InputNumber v-model="editForm.dataBits" :min="5" :max="8" />
+                    </div>
+                    <div class="flex flex-col gap-1">
+                        <label class="text-sm">{{ t('serialPort.parity') }}</label>
+                        <Select
+                            v-model="editParityStr"
+                            :options="parityOptions"
+                            option-label="label"
+                            option-value="value"
+                        />
+                    </div>
+                    <div class="flex flex-col gap-1">
+                        <label class="text-sm">{{ t('serialPort.stopBits') }}</label>
+                        <Select
+                            v-model="editStopBitsStr"
+                            :options="stopBitsOptions"
+                            option-label="label"
+                            option-value="value"
+                        />
+                    </div>
+                </div>
+                <div class="flex flex-col gap-1">
+                    <label class="text-sm">{{ t('serialPort.handshake') }}</label>
+                    <Select
+                        v-model="editHandshakeStr"
+                        :options="handshakeOptions"
+                        option-label="label"
+                        option-value="value"
+                    />
+                </div>
+                <label class="flex items-center gap-2 text-sm">
+                    <input v-model="editForm.isEnabled" type="checkbox" />
+                    {{ t('serialPort.enabled') }}
+                </label>
+            </div>
+            <template #footer>
+                <Button severity="secondary" outlined @click="showEditDialog = false">
+                    {{ t('common.cancel') }}
+                </Button>
+                <Button :disabled="editing" @click="handleEdit">
+                    {{ editing ? t('common.saving') : t('common.save') }}
+                </Button>
+            </template>
         </Dialog>
     </div>
 </template>

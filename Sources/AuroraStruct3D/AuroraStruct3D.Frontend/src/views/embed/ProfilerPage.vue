@@ -6,10 +6,10 @@
 import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RefreshCw, ChevronDown, ChevronRight } from '@lucide/vue'
-import { Button } from '@/components/ui/button'
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
+import Button from 'primevue/button'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
+import { AppCard } from '@/components/primevue'
 import { httpClient } from '@/api/client'
 
 const { t } = useI18n()
@@ -138,17 +138,17 @@ onMounted(loadList)
         <!-- 标题栏 -->
         <div class="flex items-center justify-between">
             <h1 class="text-2xl font-bold tracking-tight">{{ t('menu.profiler') }}</h1>
-            <Button variant="outline" size="icon" :disabled="loading" @click="loadList">
+            <Button severity="secondary" outlined :disabled="loading" @click="loadList">
                 <RefreshCw :class="['size-4', loading && 'animate-spin']" />
             </Button>
         </div>
 
         <!-- 会话列表 -->
-        <Card>
-            <CardHeader>
-                <CardTitle class="text-base">{{ t('profiler.results') }}</CardTitle>
-            </CardHeader>
-            <CardContent class="p-0">
+        <AppCard>
+            <div class="p-4 pb-2">
+                <h3 class="text-base font-semibold">{{ t('profiler.results') }}</h3>
+            </div>
+            <div>
                 <Table>
                     <TableHeader>
                         <TableRow>
@@ -267,7 +267,7 @@ onMounted(loadList)
                         </template>
                     </TableBody>
                 </Table>
-            </CardContent>
-        </Card>
+            </div>
+        </AppCard>
     </div>
 </template>

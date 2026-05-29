@@ -1,18 +1,21 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 /**
  * 用户管理页面：分页查询、创建、重置密码、锁定/禁用
  */
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { toast } from 'vue-sonner'
 import { Lock, Plus, RefreshCw, Search, KeyRound, Trash2 } from '@lucide/vue'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Badge } from '@/components/ui/badge'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '@/components/ui/dialog'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import Button from 'primevue/button'
+import InputText from 'primevue/inputtext'
+import Tag from 'primevue/tag'
+import Dialog from 'primevue/dialog'
+import DataTable from 'primevue/datatable'
+import Column from 'primevue/column'
+import Select from 'primevue/select'
+import ConfirmDialog from 'primevue/confirmdialog'
+import { useConfirm } from 'primevue/useconfirm'
+import { AppCard } from '@/components/primevue'
+import { useAppToast } from '@/composables/useAppToast'
 import {
     getUserPageAsync,
     createUserAsync,
@@ -23,6 +26,8 @@ import {
 } from '@/api/management'
 
 const { t } = useI18n()
+const toast = useAppToast()
+const confirm = useConfirm()
 
 // ——— 分页状态 ———
 const pageIndex = ref(1)
@@ -117,6 +122,13 @@ const lockTarget = ref<UserDto | null>(null)
 const lockSeconds = ref(3600)
 const locking = ref(false)
 
+const lockOptions = [
+    { label: `5 ${t('management.minutes')}`, value: 300 },
+    { label: `30 ${t('management.minutes')}`, value: 1800 },
+    { label: `1 ${t('management.hours')}`, value: 3600 },
+    { label: `24 ${t('management.hours')}`, value: 86400 },
+]
+
 function openLock(user: UserDto): void {
     lockTarget.value = user
     lockSeconds.value = 3600
@@ -137,16 +149,24 @@ async function submitLock(): Promise<void> {
 }
 
 // ——— 删除用户 ———
-async function handleDelete(user: UserDto): Promise<void> {
+function handleDelete(user: UserDto): void {
     if (!user.id) return
-    if (!confirm(t('management.confirmDelete', { name: user.userName }))) return
-    try {
-        await deleteUserAsync(user.id)
-        toast.success(t('common.success'))
-        await loadUsers()
-    } catch {
-        // 错误已在拦截器处理
-    }
+    confirm.require({
+        message: t('management.confirmDelete', { name: user.userName }),
+        header: t('common.delete'),
+        icon: 'pi pi-exclamation-triangle',
+        acceptProps: { severity: 'danger', size: 'small' },
+        rejectProps: { severity: 'secondary', outlined: true, size: 'small' },
+        accept: async () => {
+            try {
+                await deleteUserAsync(user.id!)
+                toast.success(t('common.success'))
+                await loadUsers()
+            } catch {
+                // 错误已在拦截器处理
+            }
+        },
+    })
 }
 
 // ——— 分页 ———
@@ -171,7 +191,6 @@ function nextPage(): void {
 }
 
 // 监听 total 变化更新总页数
-import { watch } from 'vue'
 watch(total, updateTotalPages, { immediate: true })
 </script>
 
@@ -180,7 +199,7 @@ watch(total, updateTotalPages, { immediate: true })
         <div class="flex items-center justify-between">
             <h1 class="text-2xl font-bold tracking-tight">{{ t('menu.users') }}</h1>
             <div class="flex gap-2">
-                <Button variant="outline" size="icon" :disabled="loading" @click="loadUsers">
+                <Button severity="secondary" outlined :disabled="loading" @click="loadUsers">
                     <RefreshCw :class="['size-4', loading && 'animate-spin']" />
                 </Button>
                 <Button @click="openCreate">
@@ -192,106 +211,113 @@ watch(total, updateTotalPages, { immediate: true })
 
         <!-- 搜索栏 -->
         <div class="flex gap-2">
-            <Input
+            <InputText
                 v-model="filter"
                 :placeholder="t('management.searchUser')"
                 class="max-w-xs"
                 @keydown.enter="handleSearch"
             />
-            <Button variant="outline" @click="handleSearch">
+            <Button severity="secondary" outlined @click="handleSearch">
                 <Search class="mr-1 size-4" />
                 {{ t('common.search') }}
             </Button>
         </div>
 
         <!-- 数据表格 -->
-        <div class="rounded-md border">
-            <Table>
-                <TableHeader>
-                    <TableRow>
-                        <TableHead>{{ t('management.userName') }}</TableHead>
-                        <TableHead>{{ t('management.displayName') }}</TableHead>
-                        <TableHead>{{ t('management.email') }}</TableHead>
-                        <TableHead>{{ t('management.phone') }}</TableHead>
-                        <TableHead>{{ t('management.status') }}</TableHead>
-                        <TableHead class="text-right whitespace-nowrap">{{ t('common.action') }}</TableHead>
-                    </TableRow>
-                </TableHeader>
-                <TableBody>
-                    <TableRow v-if="loading">
-                        <TableCell colspan="6" class="text-center py-8 text-muted-foreground">
-                            {{ t('common.loading') }}
-                        </TableCell>
-                    </TableRow>
-                    <TableRow v-else-if="users.length === 0">
-                        <TableCell colspan="6" class="text-center py-8 text-muted-foreground">
-                            {{ t('management.noData') }}
-                        </TableCell>
-                    </TableRow>
-                    <TableRow v-for="user in users" :key="user.id">
-                        <TableCell class="font-medium">
-                            <div class="max-w-[150px] truncate" :title="user.userName">{{ user.userName }}</div>
-                        </TableCell>
-                        <TableCell>
-                            <div
-                                class="max-w-[150px] truncate"
-                                :title="user.name + (user.surname ? ' ' + user.surname : '')"
+        <AppCard :beam="false">
+            <DataTable :value="users" data-key="id" size="small" striped-rows scrollable :loading="loading">
+                <template #empty>
+                    <div class="py-8 text-center text-muted-foreground">{{ t('management.noData') }}</div>
+                </template>
+                <template #loading>
+                    <div class="py-8 text-center text-muted-foreground">{{ t('common.loading') }}</div>
+                </template>
+                <Column :header="t('management.userName')">
+                    <template #body="{ data }: { data: UserDto }">
+                        <div class="max-w-[150px] truncate font-medium" :title="data.userName">
+                            {{ data.userName }}
+                        </div>
+                    </template>
+                </Column>
+                <Column :header="t('management.displayName')">
+                    <template #body="{ data }: { data: UserDto }">
+                        <div
+                            class="max-w-[150px] truncate"
+                            :title="data.name + (data.surname ? ' ' + data.surname : '')"
+                        >
+                            {{ data.name }}{{ data.surname ? ' ' + data.surname : '' }}
+                        </div>
+                    </template>
+                </Column>
+                <Column :header="t('management.email')">
+                    <template #body="{ data }: { data: UserDto }">
+                        <div class="max-w-[200px] truncate" :title="data.email">{{ data.email }}</div>
+                    </template>
+                </Column>
+                <Column :header="t('management.phone')">
+                    <template #body="{ data }: { data: UserDto }">
+                        <span class="whitespace-nowrap">{{ data.phoneNumber ?? '-' }}</span>
+                    </template>
+                </Column>
+                <Column :header="t('management.status')">
+                    <template #body="{ data }: { data: UserDto }">
+                        <Tag
+                            :severity="data.isActive ? 'success' : 'secondary'"
+                            :value="data.isActive ? t('management.active') : t('management.inactive')"
+                        />
+                    </template>
+                </Column>
+                <Column :header="t('common.action')" header-class="text-right" body-class="text-right">
+                    <template #body="{ data }: { data: UserDto }">
+                        <div class="flex justify-end gap-1">
+                            <Button
+                                text
+                                severity="secondary"
+                                size="small"
+                                :title="t('management.resetPassword')"
+                                @click="openReset(data)"
                             >
-                                {{ user.name }}{{ user.surname ? ' ' + user.surname : '' }}
-                            </div>
-                        </TableCell>
-                        <TableCell>
-                            <div class="max-w-[200px] truncate" :title="user.email">{{ user.email }}</div>
-                        </TableCell>
-                        <TableCell class="whitespace-nowrap">{{ user.phoneNumber ?? '-' }}</TableCell>
-                        <TableCell>
-                            <Badge :variant="user.isActive ? 'default' : 'secondary'">
-                                {{ user.isActive ? t('management.active') : t('management.inactive') }}
-                            </Badge>
-                        </TableCell>
-                        <TableCell class="text-right">
-                            <div class="flex justify-end gap-1">
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    :title="t('management.resetPassword')"
-                                    @click="openReset(user)"
-                                >
-                                    <KeyRound class="size-4" />
-                                </Button>
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    :title="t('management.lockUser')"
-                                    @click="openLock(user)"
-                                >
-                                    <Lock class="size-4" />
-                                </Button>
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    :title="t('common.delete')"
-                                    class="text-destructive hover:text-destructive"
-                                    @click="handleDelete(user)"
-                                >
-                                    <Trash2 class="size-4" />
-                                </Button>
-                            </div>
-                        </TableCell>
-                    </TableRow>
-                </TableBody>
-            </Table>
-        </div>
+                                <KeyRound class="size-4" />
+                            </Button>
+                            <Button
+                                text
+                                severity="secondary"
+                                size="small"
+                                :title="t('management.lockUser')"
+                                @click="openLock(data)"
+                            >
+                                <Lock class="size-4" />
+                            </Button>
+                            <Button
+                                text
+                                severity="danger"
+                                size="small"
+                                :title="t('common.delete')"
+                                @click="handleDelete(data)"
+                            >
+                                <Trash2 class="size-4" />
+                            </Button>
+                        </div>
+                    </template>
+                </Column>
+            </DataTable>
+        </AppCard>
 
         <!-- 分页 -->
         <div class="flex items-center justify-between text-sm text-muted-foreground">
             <span>{{ t('management.totalRecords', { total }) }}</span>
             <div class="flex gap-2">
-                <Button variant="outline" size="sm" :disabled="pageIndex <= 1" @click="prevPage">
+                <Button severity="secondary" outlined size="small" :disabled="pageIndex <= 1" @click="prevPage">
                     {{ t('management.prevPage') }}
                 </Button>
                 <span class="flex items-center px-2">{{ pageIndex }} / {{ totalPages }}</span>
-                <Button variant="outline" size="sm" :disabled="pageIndex >= totalPages" @click="nextPage">
+                <Button
+                    severity="secondary"
+                    outlined
+                    size="small"
+                    :disabled="pageIndex >= totalPages"
+                    @click="nextPage"
+                >
                     {{ t('management.nextPage') }}
                 </Button>
             </div>
@@ -299,89 +325,82 @@ watch(total, updateTotalPages, { immediate: true })
     </div>
 
     <!-- 创建用户弹窗 -->
-    <Dialog v-model:open="showCreate">
-        <DialogContent class="sm:max-w-md">
-            <DialogHeader>
-                <DialogTitle>{{ t('management.createUser') }}</DialogTitle>
-            </DialogHeader>
-            <div class="space-y-3">
-                <div class="space-y-1">
-                    <Label>{{ t('management.userName') }} *</Label>
-                    <Input v-model="createForm.userName" />
-                </div>
-                <div class="space-y-1">
-                    <Label>{{ t('management.displayName') }}</Label>
-                    <Input v-model="createForm.name" />
-                </div>
-                <div class="space-y-1">
-                    <Label>{{ t('management.email') }} *</Label>
-                    <Input v-model="createForm.email" type="email" />
-                </div>
-                <div class="space-y-1">
-                    <Label>{{ t('management.password') }} *</Label>
-                    <Input v-model="createForm.password" type="password" />
-                </div>
+    <Dialog v-model:visible="showCreate" modal :header="t('management.createUser')" :style="{ width: '460px' }">
+        <div class="space-y-3">
+            <div class="space-y-1">
+                <label class="text-sm">{{ t('management.userName') }} *</label>
+                <InputText v-model="createForm.userName" class="w-full" />
             </div>
-            <DialogFooter>
-                <DialogClose as-child>
-                    <Button variant="outline">{{ t('common.cancel') }}</Button>
-                </DialogClose>
-                <Button :disabled="creating" @click="submitCreate">
-                    {{ creating ? t('common.loading') : t('common.confirm') }}
-                </Button>
-            </DialogFooter>
-        </DialogContent>
+            <div class="space-y-1">
+                <label class="text-sm">{{ t('management.displayName') }}</label>
+                <InputText v-model="createForm.name" class="w-full" />
+            </div>
+            <div class="space-y-1">
+                <label class="text-sm">{{ t('management.email') }} *</label>
+                <InputText v-model="createForm.email" type="email" class="w-full" />
+            </div>
+            <div class="space-y-1">
+                <label class="text-sm">{{ t('management.password') }} *</label>
+                <InputText v-model="createForm.password" type="password" class="w-full" />
+            </div>
+        </div>
+        <template #footer>
+            <Button severity="secondary" outlined size="small" @click="showCreate = false">
+                {{ t('common.cancel') }}
+            </Button>
+            <Button size="small" :disabled="creating" @click="submitCreate">
+                {{ creating ? t('common.loading') : t('common.confirm') }}
+            </Button>
+        </template>
     </Dialog>
 
     <!-- 重置密码弹窗 -->
-    <Dialog v-model:open="showReset">
-        <DialogContent class="sm:max-w-sm">
-            <DialogHeader>
-                <DialogTitle>{{ t('management.resetPassword') }}: {{ resetTarget?.userName }}</DialogTitle>
-            </DialogHeader>
-            <div class="space-y-1">
-                <Label>{{ t('management.newPassword') }}</Label>
-                <Input v-model="newPassword" type="password" />
-            </div>
-            <DialogFooter>
-                <DialogClose as-child>
-                    <Button variant="outline">{{ t('common.cancel') }}</Button>
-                </DialogClose>
-                <Button :disabled="resetting || !newPassword" @click="submitReset">
-                    {{ resetting ? t('common.loading') : t('common.confirm') }}
-                </Button>
-            </DialogFooter>
-        </DialogContent>
+    <Dialog
+        v-model:visible="showReset"
+        modal
+        :header="`${t('management.resetPassword')}: ${resetTarget?.userName ?? ''}`"
+        :style="{ width: '400px' }"
+    >
+        <div class="space-y-1">
+            <label class="text-sm">{{ t('management.newPassword') }}</label>
+            <InputText v-model="newPassword" type="password" class="w-full" />
+        </div>
+        <template #footer>
+            <Button severity="secondary" outlined size="small" @click="showReset = false">
+                {{ t('common.cancel') }}
+            </Button>
+            <Button size="small" :disabled="resetting || !newPassword" @click="submitReset">
+                {{ resetting ? t('common.loading') : t('common.confirm') }}
+            </Button>
+        </template>
     </Dialog>
 
     <!-- 锁定用户弹窗 -->
-    <Dialog v-model:open="showLock">
-        <DialogContent class="sm:max-w-sm">
-            <DialogHeader>
-                <DialogTitle>{{ t('management.lockUser') }}: {{ lockTarget?.userName }}</DialogTitle>
-            </DialogHeader>
-            <div class="space-y-1">
-                <Label>{{ t('management.lockDuration') }}</Label>
-                <Select v-model="lockSeconds">
-                    <SelectTrigger>
-                        <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem :value="300">5 {{ t('management.minutes') }}</SelectItem>
-                        <SelectItem :value="1800">30 {{ t('management.minutes') }}</SelectItem>
-                        <SelectItem :value="3600">1 {{ t('management.hours') }}</SelectItem>
-                        <SelectItem :value="86400">24 {{ t('management.hours') }}</SelectItem>
-                    </SelectContent>
-                </Select>
-            </div>
-            <DialogFooter>
-                <DialogClose as-child>
-                    <Button variant="outline">{{ t('common.cancel') }}</Button>
-                </DialogClose>
-                <Button :disabled="locking" @click="submitLock">
-                    {{ locking ? t('common.loading') : t('common.confirm') }}
-                </Button>
-            </DialogFooter>
-        </DialogContent>
+    <Dialog
+        v-model:visible="showLock"
+        modal
+        :header="`${t('management.lockUser')}: ${lockTarget?.userName ?? ''}`"
+        :style="{ width: '400px' }"
+    >
+        <div class="space-y-1">
+            <label class="text-sm">{{ t('management.lockDuration') }}</label>
+            <Select
+                v-model="lockSeconds"
+                :options="lockOptions"
+                option-label="label"
+                option-value="value"
+                class="w-full"
+            />
+        </div>
+        <template #footer>
+            <Button severity="secondary" outlined size="small" @click="showLock = false">
+                {{ t('common.cancel') }}
+            </Button>
+            <Button size="small" :disabled="locking" @click="submitLock">
+                {{ locking ? t('common.loading') : t('common.confirm') }}
+            </Button>
+        </template>
     </Dialog>
+
+    <ConfirmDialog />
 </template>
