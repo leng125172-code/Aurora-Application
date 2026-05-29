@@ -20,8 +20,6 @@ import { i18n } from '@/i18n'
 
 // 全局样式（Tailwind v4 入口 + 残留的 shadcn-vue 变量；迁移完成后再清理）
 import '@/assets/styles/index.css'
-// 暂保留 vue-sonner 样式，便于迁移期间共存；Phase 4 清理时移除
-import 'vue-sonner/style.css'
 
 const app = createApp(App)
 

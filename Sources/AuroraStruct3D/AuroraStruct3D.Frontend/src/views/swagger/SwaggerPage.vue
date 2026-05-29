@@ -35,11 +35,11 @@
 
             <!-- 方法统计徽章 -->
             <div class="flex flex-wrap gap-2">
-                <Badge variant="secondary">GET {{ methodCount('GET') }}</Badge>
-                <Badge variant="secondary">POST {{ methodCount('POST') }}</Badge>
-                <Badge variant="secondary">PUT {{ methodCount('PUT') }}</Badge>
-                <Badge variant="secondary">DELETE {{ methodCount('DELETE') }}</Badge>
-                <Badge variant="secondary">PATCH {{ methodCount('PATCH') }}</Badge>
+                <Tag severity="secondary" :value="`GET ${methodCount('GET')}`" />
+                <Tag severity="secondary" :value="`POST ${methodCount('POST')}`" />
+                <Tag severity="secondary" :value="`PUT ${methodCount('PUT')}`" />
+                <Tag severity="secondary" :value="`DELETE ${methodCount('DELETE')}`" />
+                <Tag severity="secondary" :value="`PATCH ${methodCount('PATCH')}`" />
             </div>
 
             <!-- 加载骨架屏 -->
@@ -76,8 +76,8 @@ import ApiGroupPanel from './ApiGroupPanel.vue'
 import InputText from 'primevue/inputtext'
 import Button from 'primevue/button'
 import Select from 'primevue/select'
-import { Badge } from '@/components/ui/badge'
-import { Skeleton } from '@/components/ui/skeleton'
+import Tag from 'primevue/tag'
+import Skeleton from 'primevue/skeleton'
 import { SparklesText } from '@/components/ui/sparkles-text'
 import { InteractiveGridPattern } from '@/components/ui/interactive-grid-pattern'
 

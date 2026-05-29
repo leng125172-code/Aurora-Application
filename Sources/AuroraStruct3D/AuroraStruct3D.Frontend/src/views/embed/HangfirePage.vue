@@ -11,8 +11,7 @@ import * as signalR from '@microsoft/signalr'
 import * as echarts from 'echarts'
 import { RefreshCw, PlayCircle, Trash2, RotateCcw } from '@lucide/vue'
 import Button from 'primevue/button'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Badge } from '@/components/ui/badge'
+import Tag from 'primevue/tag'
 import { AppCard } from '@/components/primevue'
 import { useAppToast } from '@/composables/useAppToast'
 import { httpClient } from '@/api/client'
@@ -502,32 +501,32 @@ onUnmounted(async () => {
             </div>
             <AppCard :beam="false">
                 <div>
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead>{{ t('hangfire.jobId') }}</TableHead>
-                                <TableHead>{{ t('hangfire.jobName') }}</TableHead>
-                                <TableHead class="whitespace-nowrap">{{ t('hangfire.jobCreated') }}</TableHead>
-                                <TableHead class="text-right whitespace-nowrap">{{ t('common.action') }}</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            <TableRow v-if="!jobList.length">
-                                <TableCell colspan="4" class="py-8 text-center text-muted-foreground">
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr>
+                                <th>{{ t('hangfire.jobId') }}</th>
+                                <th>{{ t('hangfire.jobName') }}</th>
+                                <th class="whitespace-nowrap">{{ t('hangfire.jobCreated') }}</th>
+                                <th class="text-right whitespace-nowrap">{{ t('common.action') }}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-if="!jobList.length">
+                                <td colspan="4" class="py-8 text-center text-muted-foreground">
                                     {{ t('hangfire.noJobs') }}
-                                </TableCell>
-                            </TableRow>
-                            <TableRow v-for="job in jobList" :key="jobId(job)">
-                                <TableCell class="font-mono text-xs whitespace-nowrap">{{ jobId(job) }}</TableCell>
-                                <TableCell>
+                                </td>
+                            </tr>
+                            <tr v-for="job in jobList" :key="jobId(job)">
+                                <td class="font-mono text-xs whitespace-nowrap">{{ jobId(job) }}</td>
+                                <td>
                                     <div class="max-w-[320px] truncate font-mono text-sm" :title="jobLabel(job)">
                                         {{ jobLabel(job) }}
                                     </div>
-                                </TableCell>
-                                <TableCell class="text-xs text-muted-foreground whitespace-nowrap">
+                                </td>
+                                <td class="text-xs text-muted-foreground whitespace-nowrap">
                                     {{ jobTime(job) }}
-                                </TableCell>
-                                <TableCell class="text-right">
+                                </td>
+                                <td class="text-right">
                                     <div class="flex justify-end gap-1">
                                         <Button
                                             v-if="jobId(job)"
@@ -548,10 +547,10 @@ onUnmounted(async () => {
                                             <Trash2 class="size-4" />
                                         </Button>
                                     </div>
-                                </TableCell>
-                            </TableRow>
-                        </TableBody>
-                    </Table>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
                 </div>
             </AppCard>
         </template>
@@ -563,37 +562,37 @@ onUnmounted(async () => {
                     <div class="text-base font-semibold">{{ t('hangfire.tabRetries') }}</div>
                 </div>
                 <div>
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead>{{ t('hangfire.jobId') }}</TableHead>
-                                <TableHead>{{ t('hangfire.jobName') }}</TableHead>
-                                <TableHead>{{ t('hangfire.errorMessage') }}</TableHead>
-                                <TableHead class="text-right whitespace-nowrap">{{ t('common.action') }}</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            <TableRow v-if="!jobList.length">
-                                <TableCell colspan="4" class="py-8 text-center text-muted-foreground">
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr>
+                                <th>{{ t('hangfire.jobId') }}</th>
+                                <th>{{ t('hangfire.jobName') }}</th>
+                                <th>{{ t('hangfire.errorMessage') }}</th>
+                                <th class="text-right whitespace-nowrap">{{ t('common.action') }}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-if="!jobList.length">
+                                <td colspan="4" class="py-8 text-center text-muted-foreground">
                                     {{ t('hangfire.noJobs') }}
-                                </TableCell>
-                            </TableRow>
-                            <TableRow v-for="job in jobList" :key="jobId(job)">
-                                <TableCell class="font-mono text-xs whitespace-nowrap">{{ jobId(job) }}</TableCell>
-                                <TableCell>
+                                </td>
+                            </tr>
+                            <tr v-for="job in jobList" :key="jobId(job)">
+                                <td class="font-mono text-xs whitespace-nowrap">{{ jobId(job) }}</td>
+                                <td>
                                     <div class="max-w-[320px] truncate font-mono text-sm" :title="jobLabel(job)">
                                         {{ jobLabel(job) }}
                                     </div>
-                                </TableCell>
-                                <TableCell>
+                                </td>
+                                <td>
                                     <div
                                         class="max-w-xs truncate text-xs text-destructive"
                                         :title="(jobVal(job)['Reason'] ?? jobVal(job)['reason'] ?? '-') as string"
                                     >
                                         {{ (jobVal(job)['Reason'] ?? jobVal(job)['reason'] ?? '-') as string }}
                                     </div>
-                                </TableCell>
-                                <TableCell class="text-right">
+                                </td>
+                                <td class="text-right">
                                     <Button
                                         v-if="jobId(job)"
                                         text
@@ -603,10 +602,10 @@ onUnmounted(async () => {
                                     >
                                         <RotateCcw class="size-4 text-blue-500" />
                                     </Button>
-                                </TableCell>
-                            </TableRow>
-                        </TableBody>
-                    </Table>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
                 </div>
             </AppCard>
         </template>
@@ -618,38 +617,38 @@ onUnmounted(async () => {
                     <div class="text-base font-semibold">{{ t('hangfire.tabRecurring') }}</div>
                 </div>
                 <div>
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead>ID</TableHead>
-                                <TableHead>{{ t('hangfire.cron') }}</TableHead>
-                                <TableHead>{{ t('hangfire.nextExecution') }}</TableHead>
-                                <TableHead>{{ t('hangfire.lastExecution') }}</TableHead>
-                                <TableHead class="text-right">{{ t('common.action') }}</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            <TableRow v-if="!recurringJobs.length">
-                                <TableCell colspan="5" class="py-6 text-center text-muted-foreground">
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>{{ t('hangfire.cron') }}</th>
+                                <th>{{ t('hangfire.nextExecution') }}</th>
+                                <th>{{ t('hangfire.lastExecution') }}</th>
+                                <th class="text-right">{{ t('common.action') }}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-if="!recurringJobs.length">
+                                <td colspan="5" class="py-6 text-center text-muted-foreground">
                                     {{ t('management.noData') }}
-                                </TableCell>
-                            </TableRow>
-                            <TableRow v-for="job in recurringJobs" :key="rId(job)">
-                                <TableCell>
+                                </td>
+                            </tr>
+                            <tr v-for="job in recurringJobs" :key="rId(job)">
+                                <td>
                                     <div class="max-w-[200px] truncate font-mono text-sm" :title="rId(job)">
                                         {{ rId(job) }}
                                     </div>
-                                </TableCell>
-                                <TableCell>
-                                    <Badge variant="secondary" class="font-mono text-xs">{{ rCron(job) }}</Badge>
-                                </TableCell>
-                                <TableCell class="text-xs text-muted-foreground">
+                                </td>
+                                <td>
+                                    <Tag severity="secondary" :value="rCron(job)" class="font-mono text-xs" />
+                                </td>
+                                <td class="text-xs text-muted-foreground">
                                     {{ formatTime(rNext(job)) }}
-                                </TableCell>
-                                <TableCell class="text-xs text-muted-foreground">
+                                </td>
+                                <td class="text-xs text-muted-foreground">
                                     {{ formatTime(rLast(job)) }}
-                                </TableCell>
-                                <TableCell class="text-right">
+                                </td>
+                                <td class="text-right">
                                     <div class="flex justify-end gap-1">
                                         <Button
                                             v-if="rId(job)"
@@ -670,10 +669,10 @@ onUnmounted(async () => {
                                             <Trash2 class="size-4" />
                                         </Button>
                                     </div>
-                                </TableCell>
-                            </TableRow>
-                        </TableBody>
-                    </Table>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
                 </div>
             </AppCard>
         </template>
@@ -685,41 +684,41 @@ onUnmounted(async () => {
                     <div class="text-base font-semibold">{{ t('hangfire.tabServers') }}</div>
                 </div>
                 <div>
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead>{{ t('hangfire.serverName') }}</TableHead>
-                                <TableHead>{{ t('hangfire.workerCount') }}</TableHead>
-                                <TableHead>{{ t('hangfire.queues') }}</TableHead>
-                                <TableHead>{{ t('hangfire.startedAt') }}</TableHead>
-                                <TableHead>{{ t('hangfire.heartbeat') }}</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            <TableRow v-if="!servers.length">
-                                <TableCell colspan="5" class="py-8 text-center text-muted-foreground">
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr>
+                                <th>{{ t('hangfire.serverName') }}</th>
+                                <th>{{ t('hangfire.workerCount') }}</th>
+                                <th>{{ t('hangfire.queues') }}</th>
+                                <th>{{ t('hangfire.startedAt') }}</th>
+                                <th>{{ t('hangfire.heartbeat') }}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-if="!servers.length">
+                                <td colspan="5" class="py-8 text-center text-muted-foreground">
                                     {{ t('hangfire.noServers') }}
-                                </TableCell>
-                            </TableRow>
-                            <TableRow v-for="srv in servers" :key="sName(srv)">
-                                <TableCell>
+                                </td>
+                            </tr>
+                            <tr v-for="srv in servers" :key="sName(srv)">
+                                <td>
                                     <div class="max-w-[200px] truncate font-mono text-sm" :title="sName(srv)">
                                         {{ sName(srv) }}
                                     </div>
-                                </TableCell>
-                                <TableCell>{{ sWorkers(srv) }}</TableCell>
-                                <TableCell class="text-xs text-muted-foreground">
+                                </td>
+                                <td>{{ sWorkers(srv) }}</td>
+                                <td class="text-xs text-muted-foreground">
                                     <div class="max-w-[150px] truncate" :title="sQueues(srv)">{{ sQueues(srv) }}</div>
-                                </TableCell>
-                                <TableCell class="text-xs text-muted-foreground whitespace-nowrap">
+                                </td>
+                                <td class="text-xs text-muted-foreground whitespace-nowrap">
                                     {{ sStarted(srv) }}
-                                </TableCell>
-                                <TableCell class="text-xs text-muted-foreground whitespace-nowrap">
+                                </td>
+                                <td class="text-xs text-muted-foreground whitespace-nowrap">
                                     {{ sHeartbeat(srv) }}
-                                </TableCell>
-                            </TableRow>
-                        </TableBody>
-                    </Table>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
                 </div>
             </AppCard>
         </template>

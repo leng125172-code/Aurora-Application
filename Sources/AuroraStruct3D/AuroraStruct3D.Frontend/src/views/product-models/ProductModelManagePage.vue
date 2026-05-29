@@ -41,9 +41,8 @@ import {
     Loader2,
     Eraser,
 } from '@lucide/vue'
-import { Badge } from '@/components/ui/badge'
-import { Progress } from '@/components/ui/progress'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import Tag from 'primevue/tag'
+import Progress from 'primevue/progressbar'
 import {
     ProductModelFormat,
     ProductModelConversionStatus,
@@ -102,19 +101,19 @@ const statusOptions = computed(() => [
     { label: t('productModel.statusFailed'), value: ProductModelConversionStatus.Failed },
 ])
 
-/** 转换状态 Badge variant 映射 */
-function statusVariant(status: ProductModelConversionStatus): 'default' | 'secondary' | 'destructive' | 'outline' {
+/** 转换状态 Tag severity 映射 */
+function statusVariant(status: ProductModelConversionStatus): 'success' | 'secondary' | 'danger' | 'info' {
     switch (status) {
         case ProductModelConversionStatus.Success:
         case ProductModelConversionStatus.NotRequired:
-            return 'default'
+            return 'success'
         case ProductModelConversionStatus.Converting:
         case ProductModelConversionStatus.Pending:
             return 'secondary'
         case ProductModelConversionStatus.Failed:
-            return 'destructive'
+            return 'danger'
         default:
-            return 'outline'
+            return 'info'
     }
 }
 
@@ -666,51 +665,49 @@ onBeforeUnmount(() => {
 
         <!-- 数据表格 -->
         <div class="rounded-md border">
-            <Table>
-                <TableHeader>
-                    <TableRow>
-                        <TableHead>{{ t('productModel.name') }}</TableHead>
-                        <TableHead>{{ t('productModel.format') }}</TableHead>
-                        <TableHead>{{ t('productModel.fileSize') }}</TableHead>
-                        <TableHead>{{ t('productModel.conversionStatus') }}</TableHead>
-                        <TableHead>{{ t('productModel.uploader') }}</TableHead>
-                        <TableHead>{{ t('productModel.uploadTime') }}</TableHead>
-                        <TableHead class="text-right whitespace-nowrap">{{ t('common.actions') }}</TableHead>
-                    </TableRow>
-                </TableHeader>
-                <TableBody>
-                    <TableRow v-if="loading">
-                        <TableCell colspan="7" class="py-8 text-center text-muted-foreground">
+            <table class="w-full text-sm">
+                <thead>
+                    <tr>
+                        <th>{{ t('productModel.name') }}</th>
+                        <th>{{ t('productModel.format') }}</th>
+                        <th>{{ t('productModel.fileSize') }}</th>
+                        <th>{{ t('productModel.conversionStatus') }}</th>
+                        <th>{{ t('productModel.uploader') }}</th>
+                        <th>{{ t('productModel.uploadTime') }}</th>
+                        <th class="text-right whitespace-nowrap">{{ t('common.actions') }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr v-if="loading">
+                        <td colspan="7" class="py-8 text-center text-muted-foreground">
                             {{ t('common.loading') }}
-                        </TableCell>
-                    </TableRow>
-                    <TableRow v-else-if="items.length === 0">
-                        <TableCell colspan="7" class="py-8 text-center text-muted-foreground">
+                        </td>
+                    </tr>
+                    <tr v-else-if="items.length === 0">
+                        <td colspan="7" class="py-8 text-center text-muted-foreground">
                             {{ t('common.noData') }}
-                        </TableCell>
-                    </TableRow>
-                    <TableRow v-for="item in items" :key="item.id">
-                        <TableCell class="font-medium">
+                        </td>
+                    </tr>
+                    <tr v-for="item in items" :key="item.id">
+                        <td class="font-medium">
                             <div class="max-w-[200px] truncate" :title="item.name">{{ item.name }}</div>
-                        </TableCell>
-                        <TableCell>
-                            <Badge variant="outline">{{ item.fileFormatDisplay }}</Badge>
-                        </TableCell>
-                        <TableCell>{{ formatFileSize(item.fileSizeBytes) }}</TableCell>
-                        <TableCell>
-                            <Badge :variant="statusVariant(item.conversionStatus)">
-                                {{ statusLabel(item.conversionStatus) }}
-                            </Badge>
-                        </TableCell>
-                        <TableCell>
+                        </td>
+                        <td>
+                            <Tag severity="info" :value="item.fileFormatDisplay" />
+                        </td>
+                        <td>{{ formatFileSize(item.fileSizeBytes) }}</td>
+                        <td>
+                            <Tag :severity="statusVariant(item.conversionStatus)" :value="statusLabel(item.conversionStatus)" />
+                        </td>
+                        <td>
                             <div class="max-w-[120px] truncate" :title="item.uploaderUserName ?? '-'">
                                 {{ item.uploaderUserName ?? '-' }}
                             </div>
-                        </TableCell>
-                        <TableCell class="whitespace-nowrap">
+                        </td>
+                        <td class="whitespace-nowrap">
                             {{ new Date(item.creationTime).toLocaleString() }}
-                        </TableCell>
-                        <TableCell class="text-right">
+                        </td>
+                        <td class="text-right">
                             <div class="flex justify-end gap-1">
                                 <!-- PLY 预览（仅 isReady 可预览） -->
                                 <Button
@@ -762,10 +759,10 @@ onBeforeUnmount(() => {
                                     <Trash2 class="size-4 text-destructive" />
                                 </Button>
                             </div>
-                        </TableCell>
-                    </TableRow>
-                </TableBody>
-            </Table>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
         </div>
 
         <!-- 分页 -->
@@ -850,7 +847,8 @@ onBeforeUnmount(() => {
                         </p>
                         <Progress
                             v-if="qItem.state === 'uploading'"
-                            :model-value="qItem.progress"
+                            :value="qItem.progress"
+                            :show-value="false"
                             class="mt-1 h-1"
                         />
                     </div>

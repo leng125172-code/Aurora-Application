@@ -7,8 +7,7 @@ import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RefreshCw, ChevronDown, ChevronRight } from '@lucide/vue'
 import Button from 'primevue/button'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Badge } from '@/components/ui/badge'
+import Tag from 'primevue/tag'
 import { AppCard } from '@/components/primevue'
 import { httpClient } from '@/api/client'
 
@@ -149,37 +148,37 @@ onMounted(loadList)
                 <h3 class="text-base font-semibold">{{ t('profiler.results') }}</h3>
             </div>
             <div>
-                <Table>
-                    <TableHeader>
-                        <TableRow>
-                            <TableHead class="w-8"></TableHead>
-                            <TableHead>{{ t('profiler.name') }}</TableHead>
-                            <TableHead>{{ t('profiler.started') }}</TableHead>
-                            <TableHead class="text-right">{{ t('profiler.duration') }}</TableHead>
-                            <TableHead>{{ t('profiler.sessionId') }}</TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        <TableRow v-if="sessions.length === 0 && !loading">
-                            <TableCell colspan="5" class="py-8 text-center text-muted-foreground">
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr>
+                            <th class="w-8"></th>
+                            <th>{{ t('profiler.name') }}</th>
+                            <th>{{ t('profiler.started') }}</th>
+                            <th class="text-right">{{ t('profiler.duration') }}</th>
+                            <th>{{ t('profiler.sessionId') }}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-if="sessions.length === 0 && !loading">
+                            <td colspan="5" class="py-8 text-center text-muted-foreground">
                                 {{ t('profiler.noData') }}
-                            </TableCell>
-                        </TableRow>
+                            </td>
+                        </tr>
                         <template v-for="session in sessions" :key="session.Id">
                             <!-- 会话行 -->
-                            <TableRow class="cursor-pointer hover:bg-muted/50" @click="selectSession(session.Id)">
-                                <TableCell class="w-8 pl-4">
+                            <tr class="cursor-pointer hover:bg-muted/50" @click="selectSession(session.Id)">
+                                <td class="w-8 pl-4">
                                     <ChevronDown
                                         v-if="selectedId === session.Id"
                                         class="size-4 text-muted-foreground"
                                     />
                                     <ChevronRight v-else class="size-4 text-muted-foreground" />
-                                </TableCell>
-                                <TableCell class="font-medium">{{ session.Name }}</TableCell>
-                                <TableCell class="text-sm text-muted-foreground">
+                                </td>
+                                <td class="font-medium">{{ session.Name }}</td>
+                                <td class="text-sm text-muted-foreground">
                                     {{ formatStarted(session.Started) }}
-                                </TableCell>
-                                <TableCell class="text-right">
+                                </td>
+                                <td class="text-right">
                                     <span
                                         :class="[
                                             'font-mono text-sm font-semibold',
@@ -188,15 +187,15 @@ onMounted(loadList)
                                     >
                                         {{ formatDuration(session.DurationMilliseconds) }} ms
                                     </span>
-                                </TableCell>
-                                <TableCell class="font-mono text-xs text-muted-foreground">
+                                </td>
+                                <td class="font-mono text-xs text-muted-foreground">
                                     {{ session.Id }}
-                                </TableCell>
-                            </TableRow>
+                                </td>
+                            </tr>
 
                             <!-- 展开详情行 -->
-                            <TableRow v-if="selectedId === session.Id" class="bg-muted/30 hover:bg-muted/30">
-                                <TableCell colspan="5" class="p-4">
+                            <tr v-if="selectedId === session.Id" class="bg-muted/30 hover:bg-muted/30">
+                                <td colspan="5" class="p-4">
                                     <div
                                         v-if="detailLoading"
                                         class="flex items-center gap-2 text-sm text-muted-foreground"
@@ -206,50 +205,49 @@ onMounted(loadList)
                                     </div>
                                     <div v-else-if="detail">
                                         <p class="mb-2 text-sm font-semibold">{{ t('profiler.detail') }}</p>
-                                        <Table>
-                                            <TableHeader>
-                                                <TableRow>
-                                                    <TableHead>{{ t('profiler.timingName') }}</TableHead>
-                                                    <TableHead class="text-right">
+                                        <table class="w-full text-sm">
+                                            <thead>
+                                                <tr>
+                                                    <th>{{ t('profiler.timingName') }}</th>
+                                                    <th class="text-right">
                                                         {{ t('profiler.timingMs') }}
-                                                    </TableHead>
-                                                    <TableHead class="text-right">
+                                                    </th>
+                                                    <th class="text-right">
                                                         {{ t('profiler.sqlCount') }}
-                                                    </TableHead>
-                                                    <TableHead class="text-right">
+                                                    </th>
+                                                    <th class="text-right">
                                                         {{ t('profiler.sqlDuration') }}
-                                                    </TableHead>
-                                                </TableRow>
-                                            </TableHeader>
-                                            <TableBody>
-                                                <TableRow
+                                                    </th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <tr
                                                     v-for="timing in detail.Root ? flattenTimings(detail.Root) : []"
                                                     :key="timing.Id"
                                                 >
-                                                    <TableCell>
+                                                    <td>
                                                         <span
                                                             class="font-mono text-sm"
                                                             :style="{ paddingLeft: `${timing._depth * 16}px` }"
                                                         >
                                                             {{ timing.Name }}
                                                         </span>
-                                                    </TableCell>
-                                                    <TableCell class="text-right font-mono text-sm">
+                                                    </td>
+                                                    <td class="text-right font-mono text-sm">
                                                         <span :class="durationClass(timing.DurationMilliseconds ?? 0)">
                                                             {{ formatDuration(timing.DurationMilliseconds) }}
                                                         </span>
-                                                    </TableCell>
-                                                    <TableCell class="text-right">
-                                                        <Badge
+                                                    </td>
+                                                    <td class="text-right">
+                                                        <Tag
                                                             v-if="getSqlStats(timing).count > 0"
-                                                            variant="secondary"
+                                                            severity="secondary"
+                                                            :value="String(getSqlStats(timing).count)"
                                                             class="font-mono"
-                                                        >
-                                                            {{ getSqlStats(timing).count }}
-                                                        </Badge>
+                                                        />
                                                         <span v-else class="text-muted-foreground">-</span>
-                                                    </TableCell>
-                                                    <TableCell
+                                                    </td>
+                                                    <td
                                                         class="text-right font-mono text-sm text-muted-foreground"
                                                     >
                                                         {{
@@ -257,16 +255,16 @@ onMounted(loadList)
                                                                 ? formatDuration(getSqlStats(timing).totalMs)
                                                                 : '-'
                                                         }}
-                                                    </TableCell>
-                                                </TableRow>
-                                            </TableBody>
-                                        </Table>
+                                                    </td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
                                     </div>
-                                </TableCell>
-                            </TableRow>
+                                </td>
+                            </tr>
                         </template>
-                    </TableBody>
-                </Table>
+                    </tbody>
+                </table>
             </div>
         </AppCard>
     </div>

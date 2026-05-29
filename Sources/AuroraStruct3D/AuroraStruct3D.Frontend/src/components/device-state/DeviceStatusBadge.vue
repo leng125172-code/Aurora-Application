@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Badge } from '@/components/ui/badge'
+import Tag from 'primevue/tag'
 import { DeviceStatus, DeviceStatusLabels } from '@/api/device-state'
 
 interface Props {
@@ -15,23 +15,21 @@ const label = computed<string>(() => {
     return DeviceStatusLabels[props.status] ?? String(props.status)
 })
 
-/** 根据状态返回 shadcn Badge 的 variant */
-const variant = computed<'default' | 'secondary' | 'destructive' | 'outline'>(() => {
-    if (props.status == null) return 'outline'
-    if (props.status === DeviceStatus.Running) return 'default'
-    if (props.status === DeviceStatus.Fault || props.status === DeviceStatus.EmergencyStop) return 'destructive'
+/** 根据状态返回 PrimeVue Tag 的 severity */
+const severity = computed<'success' | 'secondary' | 'danger' | 'info'>(() => {
+    if (props.status == null) return 'info'
+    if (props.status === DeviceStatus.Running) return 'success'
+    if (props.status === DeviceStatus.Fault || props.status === DeviceStatus.EmergencyStop) return 'danger'
     if (
         props.status === DeviceStatus.Standby ||
         props.status === DeviceStatus.Paused ||
         props.status === DeviceStatus.Stopped
     )
         return 'secondary'
-    return 'outline'
+    return 'info'
 })
 </script>
 
 <template>
-    <Badge :variant="variant" class="select-none whitespace-nowrap">
-        {{ label }}
-    </Badge>
+    <Tag :severity="severity" :value="label" class="select-none whitespace-nowrap" />
 </template>

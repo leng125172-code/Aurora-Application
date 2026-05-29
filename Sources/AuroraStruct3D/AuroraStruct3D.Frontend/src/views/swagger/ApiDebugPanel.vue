@@ -91,9 +91,9 @@
                     {{ t('swaggerPage.copyResponse') }}
                 </Button>
             </div>
-            <ScrollArea class="h-48 rounded-md border">
+            <div class="h-48 rounded-md border overflow-auto">
                 <pre class="p-3 font-mono text-xs whitespace-pre-wrap break-all">{{ response.body }}</pre>
-            </ScrollArea>
+            </div>
         </div>
     </div>
 </template>
@@ -110,8 +110,7 @@ import TabList from 'primevue/tablist'
 import Tab from 'primevue/tab'
 import TabPanels from 'primevue/tabpanels'
 import TabPanel from 'primevue/tabpanel'
-import { Skeleton } from '@/components/ui/skeleton'
-import { ScrollArea } from '@/components/ui/scroll-area'
+import Skeleton from 'primevue/skeleton'
 import { useAppToast } from '@/composables/useAppToast'
 
 const { t } = useI18n()

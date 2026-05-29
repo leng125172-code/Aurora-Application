@@ -14,7 +14,7 @@
  */
 import { useAttrs, computed, type HTMLAttributes } from 'vue'
 import PrimeCard from 'primevue/card'
-import { BorderBeam } from '@/components/ui/border-beam'
+import BorderBeam from '@/components/inspira/BorderBeam.vue'
 
 interface AppCardProps {
     /** 是否显示 BorderBeam 光束动画（默认 true，保持 Aurora 视觉一致性） */

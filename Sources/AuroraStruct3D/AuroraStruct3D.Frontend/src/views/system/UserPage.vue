@@ -234,7 +234,7 @@ watch(total, updateTotalPages, { immediate: true })
                 </template>
                 <Column :header="t('management.userName')">
                     <template #body="{ data }: { data: UserDto }">
-                        <div class="max-w-[150px] truncate font-medium" :title="data.userName">
+                        <div class="max-w-[150px] truncate font-medium" :title="data.userName ?? undefined">
                             {{ data.userName }}
                         </div>
                     </template>
@@ -251,7 +251,7 @@ watch(total, updateTotalPages, { immediate: true })
                 </Column>
                 <Column :header="t('management.email')">
                     <template #body="{ data }: { data: UserDto }">
-                        <div class="max-w-[200px] truncate" :title="data.email">{{ data.email }}</div>
+                        <div class="max-w-[200px] truncate" :title="data.email ?? undefined">{{ data.email }}</div>
                     </template>
                 </Column>
                 <Column :header="t('management.phone')">

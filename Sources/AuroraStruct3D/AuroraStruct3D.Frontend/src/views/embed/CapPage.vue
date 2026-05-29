@@ -10,8 +10,7 @@ import * as signalR from '@microsoft/signalr'
 import * as echarts from 'echarts'
 import { RefreshCw, RotateCcw } from '@lucide/vue'
 import Button from 'primevue/button'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Badge } from '@/components/ui/badge'
+import Tag from 'primevue/tag'
 import { AppCard } from '@/components/primevue'
 import { httpClient } from '@/api/client'
 import { useAuthStore } from '@/stores/auth'
@@ -275,10 +274,10 @@ async function startSignalR(): Promise<void> {
 }
 
 // ── 工具 ──────────────────────────────────────────────────────────────────────
-function statusVariant(s?: string): 'default' | 'secondary' | 'destructive' {
+function statusVariant(s?: string): 'success' | 'secondary' | 'danger' {
     const v = (s ?? '').toLowerCase()
-    if (v === 'succeeded') return 'default'
-    if (v === 'failed') return 'destructive'
+    if (v === 'succeeded') return 'success'
+    if (v === 'failed') return 'danger'
     return 'secondary'
 }
 
@@ -388,30 +387,30 @@ onUnmounted(async () => {
                     </div>
                 </div>
                 <div>
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead>{{ t('cap.messageName') }}</TableHead>
-                                <TableHead>{{ t('cap.messageGroup') }}</TableHead>
-                                <TableHead>{{ t('cap.messageStatus') }}</TableHead>
-                                <TableHead>{{ t('cap.messageTime') }}</TableHead>
-                                <TableHead class="text-right">{{ t('common.action') }}</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            <TableRow v-if="!messages.length">
-                                <TableCell colspan="5" class="py-8 text-center text-muted-foreground">
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr>
+                                <th>{{ t('cap.messageName') }}</th>
+                                <th>{{ t('cap.messageGroup') }}</th>
+                                <th>{{ t('cap.messageStatus') }}</th>
+                                <th>{{ t('cap.messageTime') }}</th>
+                                <th class="text-right">{{ t('common.action') }}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-if="!messages.length">
+                                <td colspan="5" class="py-8 text-center text-muted-foreground">
                                     {{ t('cap.noMessages') }}
-                                </TableCell>
-                            </TableRow>
-                            <TableRow v-for="msg in messages" :key="msg.id">
-                                <TableCell class="font-mono text-xs max-w-48 truncate">{{ msg.name }}</TableCell>
-                                <TableCell class="text-xs text-muted-foreground">{{ msg.group ?? '-' }}</TableCell>
-                                <TableCell>
-                                    <Badge :variant="statusVariant(msg.statusName)">{{ msg.statusName }}</Badge>
-                                </TableCell>
-                                <TableCell class="text-xs text-muted-foreground">{{ formatTime(msg.added) }}</TableCell>
-                                <TableCell class="text-right">
+                                </td>
+                            </tr>
+                            <tr v-for="msg in messages" :key="msg.id">
+                                <td class="font-mono text-xs max-w-48 truncate">{{ msg.name }}</td>
+                                <td class="text-xs text-muted-foreground">{{ msg.group ?? '-' }}</td>
+                                <td>
+                                    <Tag :severity="statusVariant(msg.statusName)" :value="msg.statusName" />
+                                </td>
+                                <td class="text-xs text-muted-foreground">{{ formatTime(msg.added) }}</td>
+                                <td class="text-right">
                                     <Button
                                         v-if="msg.id && msg.statusName?.toLowerCase() === 'failed'"
                                         text
@@ -421,10 +420,10 @@ onUnmounted(async () => {
                                     >
                                         <RotateCcw class="size-4 text-blue-500" />
                                     </Button>
-                                </TableCell>
-                            </TableRow>
-                        </TableBody>
-                    </Table>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
                     <div class="flex items-center justify-between border-t px-4 py-2">
                         <span class="text-xs text-muted-foreground">
                             {{ t('cap.pageIndex') }}: {{ currentPage }} / {{ Math.max(1, pageCount) }}
@@ -461,31 +460,31 @@ onUnmounted(async () => {
                     <div class="text-base font-semibold">{{ t('cap.tabSubscribers') }}</div>
                 </div>
                 <div>
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead>{{ t('cap.subscriberGroup') }}</TableHead>
-                                <TableHead>{{ t('cap.subscriberName') }}</TableHead>
-                                <TableHead>{{ t('cap.subscriberImpl') }}</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            <TableRow v-if="!subscribers.length">
-                                <TableCell colspan="3" class="py-8 text-center text-muted-foreground">
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr>
+                                <th>{{ t('cap.subscriberGroup') }}</th>
+                                <th>{{ t('cap.subscriberName') }}</th>
+                                <th>{{ t('cap.subscriberImpl') }}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-if="!subscribers.length">
+                                <td colspan="3" class="py-8 text-center text-muted-foreground">
                                     {{ t('cap.noSubscribers') }}
-                                </TableCell>
-                            </TableRow>
-                            <TableRow v-for="(sub, i) in subscribers" :key="i">
-                                <TableCell>
-                                    <Badge variant="secondary">{{ sub.group }}</Badge>
-                                </TableCell>
-                                <TableCell class="font-mono text-xs">{{ sub.name }}</TableCell>
-                                <TableCell class="text-xs text-muted-foreground">
+                                </td>
+                            </tr>
+                            <tr v-for="(sub, i) in subscribers" :key="i">
+                                <td>
+                                    <Tag severity="secondary" :value="sub.group" />
+                                </td>
+                                <td class="font-mono text-xs">{{ sub.name }}</td>
+                                <td class="text-xs text-muted-foreground">
                                     {{ sub.implName ?? sub.methodInfo }}
-                                </TableCell>
-                            </TableRow>
-                        </TableBody>
-                    </Table>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
                 </div>
             </AppCard>
         </template>
@@ -497,27 +496,27 @@ onUnmounted(async () => {
                     <div class="text-base font-semibold">{{ t('cap.tabNodes') }}</div>
                 </div>
                 <div>
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead>{{ t('cap.nodeName') }}</TableHead>
-                                <TableHead>{{ t('cap.nodeAddress') }}</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            <TableRow v-if="!nodes.length">
-                                <TableCell colspan="2" class="py-8 text-center text-muted-foreground">
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr>
+                                <th>{{ t('cap.nodeName') }}</th>
+                                <th>{{ t('cap.nodeAddress') }}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-if="!nodes.length">
+                                <td colspan="2" class="py-8 text-center text-muted-foreground">
                                     {{ t('cap.noNodes') }}
-                                </TableCell>
-                            </TableRow>
-                            <TableRow v-for="(node, i) in nodes" :key="i">
-                                <TableCell class="font-medium">{{ node.name ?? '-' }}</TableCell>
-                                <TableCell class="font-mono text-xs text-muted-foreground">
+                                </td>
+                            </tr>
+                            <tr v-for="(node, i) in nodes" :key="i">
+                                <td class="font-medium">{{ node.name ?? '-' }}</td>
+                                <td class="font-mono text-xs text-muted-foreground">
                                     {{ node.address ?? '-' }}
-                                </TableCell>
-                            </TableRow>
-                        </TableBody>
-                    </Table>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
                 </div>
             </AppCard>
         </template>

@@ -2,7 +2,9 @@
  * 全局 axios 客户端：注入 Bearer Token、租户头、统一错误处理
  */
 import axios, { type AxiosInstance, type InternalAxiosRequestConfig } from 'axios'
-import { toast } from 'vue-sonner'
+// PrimeVue 的 ToastEventBus 子路径未公开 .d.ts，但运行时存在；用 @ts-expect-error 屏蔽编译警告
+// @ts-expect-error 缺少类型声明
+import ToastEventBus from 'primevue/toasteventbus'
 
 import { useAuthStore } from '@/stores/auth'
 import { router } from '@/router'
@@ -31,7 +33,7 @@ export function showErrorToastOnce(error: unknown): void {
     }
 
     const message = candidate?.message || '未知错误'
-    toast.error(message)
+    ToastEventBus.emit('add', { severity: 'error', summary: '错误', detail: message, life: 5000 })
     if (candidate && typeof candidate === 'object') {
         candidate[ERROR_TOAST_SHOWN_KEY] = true
     }
@@ -95,7 +97,7 @@ httpClient.interceptors.response.use(
             ; (error as ToastMarkedError).message = message
                 ; (error as ToastMarkedError)[ERROR_TOAST_SHOWN_KEY] = true
         }
-        toast.error(message)
+        ToastEventBus.emit('add', { severity: 'error', summary: '错误', detail: message, life: 5000 })
         return Promise.reject(error)
     }
 )

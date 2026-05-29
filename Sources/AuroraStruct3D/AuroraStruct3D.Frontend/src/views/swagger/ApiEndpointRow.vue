@@ -15,9 +15,12 @@
             <span v-if="endpoint.operation.summary" class="text-muted-foreground text-xs hidden md:block">
                 {{ endpoint.operation.summary }}
             </span>
-            <Badge v-if="endpoint.operation.deprecated" variant="destructive" class="text-xs">
-                {{ t('swaggerPage.deprecated') }}
-            </Badge>
+            <Tag
+                v-if="endpoint.operation.deprecated"
+                severity="danger"
+                :value="t('swaggerPage.deprecated')"
+                class="text-xs"
+            />
         </button>
 
         <!-- 调试面板（展开） -->
@@ -33,7 +36,7 @@
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { ApiEndpoint, SwaggerDocument } from '@/types/swagger'
-import { Badge } from '@/components/ui/badge'
+import Tag from 'primevue/tag'
 import { methodColor } from '@/api/swagger'
 import ApiDebugPanel from './ApiDebugPanel.vue'
 

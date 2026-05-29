@@ -161,7 +161,7 @@ function handleDelete(role: RoleDto): void {
                 </template>
                 <Column :header="t('management.roleName')">
                     <template #body="{ data }: { data: RoleDto }">
-                        <div class="max-w-[200px] truncate font-medium" :title="data.name">{{ data.name }}</div>
+                        <div class="max-w-[200px] truncate font-medium" :title="data.name ?? undefined">{{ data.name }}</div>
                     </template>
                 </Column>
                 <Column :header="t('management.isDefault')">

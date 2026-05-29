@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { toast } from 'vue-sonner'
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
+import Select from 'primevue/select'
 import { DeviceRunMode, DeviceRunModeLabels, switchModeAsync, type DeviceStateDto } from '@/api/device-state'
 import { useAuthStore } from '@/stores/auth'
+import { useAppToast } from '@/composables/useAppToast'
 
 interface Props {
     /** 当前设备状态快照（用于判断是否可切换） */
@@ -15,6 +15,7 @@ interface Props {
 const props = defineProps<Props>()
 
 const auth = useAuthStore()
+const toast = useAppToast()
 
 /** 仅在已登录且 canSwitchMode 时允许操作 */
 const isDisabled = computed<boolean>(() => {
@@ -46,14 +47,14 @@ async function handleChange(value: string): Promise<void> {
 </script>
 
 <template>
-    <Select :model-value="currentMode" :disabled="isDisabled" @update:model-value="(v) => handleChange(v as string)">
-        <SelectTrigger class="h-7 w-24 text-xs">
-            <SelectValue placeholder="模式" />
-        </SelectTrigger>
-        <SelectContent>
-            <SelectItem v-for="opt in modeOptions" :key="opt.value" :value="opt.value">
-                {{ opt.label }}
-            </SelectItem>
-        </SelectContent>
-    </Select>
+    <Select
+        :model-value="currentMode"
+        :options="modeOptions"
+        option-label="label"
+        option-value="value"
+        :disabled="isDisabled"
+        placeholder="模式"
+        class="h-7 w-24 text-xs"
+        @update:model-value="(v) => handleChange(v as string)"
+    />
 </template>
