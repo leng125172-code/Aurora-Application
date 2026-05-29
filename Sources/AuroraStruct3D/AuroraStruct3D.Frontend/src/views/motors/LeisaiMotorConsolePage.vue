@@ -10,10 +10,9 @@ import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } 
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { ArrowLeft, AlertTriangle, RefreshCw, Save } from '@lucide/vue'
-import { toast } from 'vue-sonner'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { BorderBeam } from '@/components/ui/border-beam'
-import { Button } from '@/components/ui/button'
+import Button from 'primevue/button'
+import { AppCard } from '@/components/primevue'
+import { useAppToast } from '@/composables/useAppToast'
 import {
     LeisaiDiFunctionLabels,
     LeisaiDoFunctionLabels,
@@ -34,6 +33,7 @@ const router = useRouter()
 const store = useLeisaiMotorStore()
 const themeStore = useThemeStore()
 const { t } = useI18n()
+const toast = useAppToast()
 
 const axisId = computed(() => String(route.params.axisId ?? ''))
 const activeTab = ref<TabKey>('chart')
@@ -740,7 +740,7 @@ const tabLabels = computed(() => ({
     <div class="p-4 space-y-4">
         <!-- 顶部：返回 + 标题 + Hub 状态 -->
         <div class="flex items-center gap-3">
-            <Button variant="outline" size="sm" @click="goBack">
+            <Button severity="secondary" outlined size="small" @click="goBack">
                 <ArrowLeft class="size-4" />
                 {{ t('leisaiConsole.back') }}
             </Button>
@@ -757,8 +757,8 @@ const tabLabels = computed(() => ({
         </div>
 
         <!-- 实时状态摘要条 -->
-        <Card>
-            <CardContent class="p-3">
+        <AppCard :beam="false">
+            <div class="p-3">
                 <div class="mb-2 flex items-center gap-2">
                     <input
                         id="leisai-sampling-toggle"
@@ -826,16 +826,17 @@ const tabLabels = computed(() => ({
                         <div class="font-mono">{{ liveState.busVoltageVolt.toFixed(1) }} V</div>
                     </div>
                 </div>
-            </CardContent>
-        </Card>
+            </div>
+        </AppCard>
 
         <!-- Tab 切换条 -->
         <div class="flex gap-2 border-b">
             <Button
                 v-for="(label, key) in tabLabels"
                 :key="key"
-                :variant="activeTab === key ? 'default' : 'ghost'"
-                size="sm"
+                :severity="activeTab === key ? 'primary' : 'secondary'"
+                :text="activeTab !== key"
+                size="small"
                 @click="activeTab = key as TabKey"
             >
                 {{ label }}
@@ -845,30 +846,24 @@ const tabLabels = computed(() => ({
         <!-- Tab: 图表（v-show 保留 DOM，防止切换 Tab 时图表状态被重置） -->
         <div v-show="activeTab === 'chart'" class="grid grid-cols-2 gap-4">
             <!-- 伺服运行状态综合分析：双Y轴时序图（位置/跟随误差） -->
-            <Card class="relative">
-                <BorderBeam :size="120" :duration="10" />
-                <CardHeader class="pb-2 pt-3 px-4">
-                    <CardTitle class="text-sm font-medium">{{ t('leisaiConsole.chartTitle1') }}</CardTitle>
-                </CardHeader>
-                <CardContent class="p-3 pt-0">
+            <AppCard :beam-size="120" :beam-duration="10">
+                <div class="px-4 pt-3 text-base font-semibold">{{ t('leisaiConsole.chartTitle1') }}</div>
+                <div class="p-3 pt-0">
                     <div ref="chart1El" style="height: 300px" />
-                </CardContent>
-            </Card>
+                </div>
+            </AppCard>
             <!-- 位置-速度相图：X=位置, Y=速度, 颜色=|跟随误差| -->
-            <Card class="relative">
-                <BorderBeam :size="120" :duration="10" :delay="2" />
-                <CardHeader class="pb-2 pt-3 px-4">
-                    <CardTitle class="text-sm font-medium">{{ t('leisaiConsole.chartTitle2') }}</CardTitle>
-                </CardHeader>
-                <CardContent class="p-3 pt-0">
+            <AppCard :beam-size="120" :beam-duration="10" :beam-delay="2">
+                <div class="px-4 pt-3 text-base font-semibold">{{ t('leisaiConsole.chartTitle2') }}</div>
+                <div class="p-3 pt-0">
                     <div ref="chart2El" style="height: 300px" />
-                </CardContent>
-            </Card>
+                </div>
+            </AppCard>
         </div>
 
         <!-- Tab: 状态 -->
-        <Card v-if="activeTab === 'status'">
-            <CardContent class="p-3 space-y-3">
+        <AppCard v-if="activeTab === 'status'" :beam="false">
+            <div class="p-3 space-y-3">
                 <div v-if="!liveState" class="text-sm text-muted-foreground">{{ t('leisaiConsole.noStatePush') }}</div>
                 <template v-else>
                     <div class="grid grid-cols-2 gap-2 text-xs sm:grid-cols-3">
@@ -946,14 +941,14 @@ const tabLabels = computed(() => ({
                         </div>
                     </div>
                 </template>
-            </CardContent>
-        </Card>
+            </div>
+        </AppCard>
         <!-- Tab: IO -->
-        <Card v-if="activeTab === 'io'">
-            <CardContent class="p-3 space-y-4">
+        <AppCard v-if="activeTab === 'io'" :beam="false">
+            <div class="p-3 space-y-4">
                 <div class="flex items-center justify-between">
                     <h3 class="text-sm font-semibold">{{ t('leisaiConsole.diTitle') }}</h3>
-                    <Button variant="outline" size="sm" @click="loadIoConfig">
+                    <Button severity="secondary" outlined size="small" @click="loadIoConfig">
                         <RefreshCw class="size-3.5" />
                         {{ t('leisaiConsole.refreshConfig') }}
                     </Button>
@@ -981,21 +976,21 @@ const tabLabels = computed(() => ({
                         <div class="text-[11px] text-muted-foreground">{{ doLabel(i - 1) }}</div>
                         <div class="mt-1 flex items-center gap-2">
                             <span class="font-mono">{{ doBit(i - 1) ? 'ON' : 'OFF' }}</span>
-                            <Button size="sm" variant="outline" :disabled="acting" @click="writeDo(i, true)">
+                            <Button size="small" severity="secondary" outlined :disabled="acting" @click="writeDo(i, true)">
                                 {{ t('leisaiConsole.setOn') }}
                             </Button>
-                            <Button size="sm" variant="outline" :disabled="acting" @click="writeDo(i, false)">
+                            <Button size="small" severity="secondary" outlined :disabled="acting" @click="writeDo(i, false)">
                                 {{ t('leisaiConsole.setOff') }}
                             </Button>
                         </div>
                     </div>
                 </div>
-            </CardContent>
-        </Card>
+            </div>
+        </AppCard>
 
         <!-- Tab: 故障 -->
-        <Card v-if="activeTab === 'fault'">
-            <CardContent class="p-3 space-y-3">
+        <AppCard v-if="activeTab === 'fault'" :beam="false">
+            <div class="p-3 space-y-3">
                 <div v-if="!liveState" class="text-sm text-muted-foreground">{{ t('leisaiConsole.noStatePush') }}</div>
                 <template v-else>
                     <div class="grid grid-cols-2 gap-2 text-xs sm:grid-cols-3">
@@ -1018,23 +1013,23 @@ const tabLabels = computed(() => ({
                     </div>
                 </template>
                 <div class="flex gap-2 pt-2">
-                    <Button variant="outline" :disabled="acting" @click="clearFault('current')">
+                    <Button severity="secondary" outlined :disabled="acting" @click="clearFault('current')">
                         {{ t('leisaiConsole.clearCurrentFault') }}
                     </Button>
-                    <Button variant="outline" :disabled="acting" @click="clearFault('all')">
+                    <Button severity="secondary" outlined :disabled="acting" @click="clearFault('all')">
                         {{ t('leisaiConsole.clearAllFaults') }}
                     </Button>
-                    <Button variant="default" :disabled="acting" @click="saveToEeprom">
+                    <Button :disabled="acting" @click="saveToEeprom">
                         <Save class="size-3.5" />
                         {{ t('leisaiConsole.saveToEeprom') }}
                     </Button>
                 </div>
-            </CardContent>
-        </Card>
+            </div>
+        </AppCard>
 
         <!-- Tab: 手动 Modbus -->
-        <Card v-if="activeTab === 'raw'">
-            <CardContent class="p-3 space-y-3">
+        <AppCard v-if="activeTab === 'raw'" :beam="false">
+            <div class="p-3 space-y-3">
                 <div
                     class="flex items-start gap-2 rounded border border-yellow-300 bg-yellow-50 p-2 text-xs dark:border-yellow-700 dark:bg-yellow-900/20"
                 >
@@ -1100,7 +1095,7 @@ const tabLabels = computed(() => ({
                 </div>
 
                 <div class="flex gap-2">
-                    <Button variant="default" :disabled="acting" @click="runRawCommand">
+                    <Button :disabled="acting" @click="runRawCommand">
                         {{ t('leisaiConsole.rawExecute') }}
                     </Button>
                 </div>
@@ -1137,12 +1132,12 @@ const tabLabels = computed(() => ({
                         </span>
                     </div>
                 </div>
-            </CardContent>
-        </Card>
+            </div>
+        </AppCard>
 
         <!-- Tab: 参数 (Phase 2) -->
-        <Card v-if="activeTab === 'params'">
-            <CardContent class="p-3">
+        <AppCard v-if="activeTab === 'params'" :beam="false">
+            <div class="p-3">
                 <div
                     v-if="paramMetadata.length === 0 && isLoadingParams"
                     class="py-8 text-center text-sm text-muted-foreground"
@@ -1290,42 +1285,44 @@ const tabLabels = computed(() => ({
                         <!-- 底部批量操作 -->
                         <div class="flex flex-wrap gap-2 border-t pt-2">
                             <Button
-                                size="sm"
-                                variant="outline"
+                                size="small"
+                                severity="secondary"
+                                outlined
                                 :disabled="isLoadingParams || isWritingParams"
                                 @click="readCurrentGroupV1"
                             >
                                 {{ t('leisaiConsole.btnReadGroupV1') }}
                             </Button>
                             <Button
-                                size="sm"
-                                variant="outline"
+                                size="small"
+                                severity="secondary"
+                                outlined
                                 :disabled="isLoadingParams || isWritingParams"
                                 @click="readCurrentGroupV2"
                             >
                                 {{ t('leisaiConsole.btnReadGroupV2') }}
                             </Button>
                             <Button
-                                size="sm"
-                                variant="default"
+                                size="small"
                                 :disabled="isWritingParams || dirtyCount === 0"
                                 @click="writeDirtyParams"
                             >
                                 {{ t('leisaiConsole.btnWriteDirty', { count: dirtyCount }) }}
                             </Button>
                             <Button
-                                size="sm"
-                                variant="outline"
+                                size="small"
+                                severity="secondary"
+                                outlined
                                 :disabled="isWritingParams"
                                 @click="resetCurrentGroupToDefault"
                             >
                                 {{ t('leisaiConsole.btnResetDefault') }}
                             </Button>
-                            <Button size="sm" variant="outline" :disabled="acting" @click="saveToEeprom">
+                            <Button size="small" severity="secondary" outlined :disabled="acting" @click="saveToEeprom">
                                 {{ t('leisaiConsole.saveToEeprom') }}
                             </Button>
                             <div class="ml-auto flex gap-2">
-                                <Button size="sm" variant="ghost" @click="exportParamConfig">
+                                <Button size="small" text severity="secondary" @click="exportParamConfig">
                                     {{ t('leisaiConsole.btnExportJson') }}
                                 </Button>
                                 <label
@@ -1343,14 +1340,14 @@ const tabLabels = computed(() => ({
                         </div>
                     </div>
                 </div>
-            </CardContent>
-        </Card>
+            </div>
+        </AppCard>
         <!-- 操作日志面板 -->
-        <Card>
-            <CardContent class="p-3">
+        <AppCard :beam="false">
+            <div class="p-3">
                 <div class="mb-2 flex items-center justify-between">
                     <span class="text-xs font-semibold text-muted-foreground">{{ t('leisaiConsole.logTitle') }}</span>
-                    <Button variant="ghost" size="sm" class="h-6 px-2 text-xs" @click="store.logs.splice(0)">
+                    <Button text severity="secondary" size="small" class="h-6 px-2 text-xs" @click="store.logs.splice(0)">
                         {{ t('leisaiConsole.logClear') }}
                     </Button>
                 </div>
@@ -1382,7 +1379,7 @@ const tabLabels = computed(() => ({
                         <span class="break-all">{{ entry.text }}</span>
                     </div>
                 </div>
-            </CardContent>
-        </Card>
+            </div>
+        </AppCard>
     </div>
 </template>

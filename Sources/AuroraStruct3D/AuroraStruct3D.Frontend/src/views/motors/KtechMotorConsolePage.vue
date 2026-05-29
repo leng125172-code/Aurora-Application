@@ -9,9 +9,9 @@ import { computed, onMounted, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { ArrowLeft, RefreshCw, Power, PowerOff, CircleStop, Upload, Trash2 } from '@lucide/vue'
-import { toast } from 'vue-sonner'
-import { Card, CardContent } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
+import Button from 'primevue/button'
+import { AppCard } from '@/components/primevue'
+import { useAppToast } from '@/composables/useAppToast'
 import * as ktechApi from '@/api/ktech'
 import {
     KtechMotionMode,
@@ -28,6 +28,7 @@ const route = useRoute()
 const router = useRouter()
 const store = useKtechMotorStore()
 const { t } = useI18n()
+const toast = useAppToast()
 
 const axisId = computed(() => String(route.params.axisId ?? ''))
 const activeTab = ref<'info' | 'params' | 'motion' | 'log'>('info')
@@ -777,7 +778,7 @@ function goBack() {
     <div class="p-4 space-y-4">
         <!-- 顶部：返回 + 标题 + 实时状态条 -->
         <div class="flex items-center gap-3">
-            <Button variant="outline" size="sm" @click="goBack">
+            <Button severity="secondary" outlined size="small" @click="goBack">
                 <ArrowLeft class="size-4" />
                 {{ t('ktechConsole.back') }}
             </Button>
@@ -794,8 +795,8 @@ function goBack() {
         </div>
 
         <!-- 实时状态摘要 -->
-        <Card>
-            <CardContent class="p-3">
+        <AppCard :beam="false">
+            <div class="p-3">
                 <!-- 采样开关勾选框 -->
                 <div class="mb-2 flex items-center gap-2">
                     <input
@@ -901,8 +902,8 @@ function goBack() {
                         {{ t('ktechConsole.errLostInput') }}
                     </span>
                 </div>
-            </CardContent>
-        </Card>
+            </div>
+        </AppCard>
 
         <!-- Tab 切换按钮组 -->
         <div class="flex flex-wrap gap-2 border-b">
@@ -927,27 +928,28 @@ function goBack() {
         </div>
 
         <!-- ──────── 产品信息 Tab ──────── -->
-        <Card v-if="activeTab === 'info'">
-            <CardContent class="p-4 space-y-4">
+        <AppCard v-if="activeTab === 'info'" :beam="false">
+            <div class="p-4 space-y-4">
                 <div class="flex flex-wrap gap-2">
-                    <Button size="sm" :disabled="acting" @click="handleLoadProductInfo">
+                    <Button size="small" :disabled="acting" @click="handleLoadProductInfo">
                         <RefreshCw class="size-4" />
                         {{ t('ktechConsole.btnLoadProductInfo') }}
                     </Button>
-                    <Button size="sm" variant="outline" :disabled="acting" @click="handleLoadDeviceType">
+                    <Button size="small" severity="secondary" outlined :disabled="acting" @click="handleLoadDeviceType">
                         {{ t('ktechConsole.btnDeviceType') }}
                     </Button>
-                    <Button size="sm" variant="outline" :disabled="acting" @click="handleConnect">
+                    <Button size="small" severity="secondary" outlined :disabled="acting" @click="handleConnect">
                         <Power class="size-4" />
                         {{ t('ktechConsole.btnConnect') }}
                     </Button>
-                    <Button size="sm" variant="outline" :disabled="acting" @click="handleDisconnect">
+                    <Button size="small" severity="secondary" outlined :disabled="acting" @click="handleDisconnect">
                         <PowerOff class="size-4" />
                         {{ t('ktechConsole.btnDisconnect') }}
                     </Button>
                     <Button
-                        size="sm"
-                        variant="outline"
+                        size="small"
+                        severity="secondary"
+                        outlined
                         class="text-orange-500"
                         :disabled="acting"
                         @click="handleReboot"
@@ -992,38 +994,39 @@ function goBack() {
                     </div>
                 </div>
                 <div v-else class="text-sm text-muted-foreground">{{ t('ktechConsole.noProductInfo') }}</div>
-            </CardContent>
-        </Card>
+            </div>
+        </AppCard>
 
         <!-- ──────── 参数 Tab（标定 + 设置 合并） ──────── -->
-        <Card v-if="activeTab === 'params'">
-            <CardContent class="p-4 space-y-6">
+        <AppCard v-if="activeTab === 'params'" :beam="false">
+            <div class="p-4 space-y-6">
                 <!-- 顶部统一按钮区 -->
                 <div class="flex flex-wrap gap-2">
-                    <Button size="sm" :disabled="acting" @click="handleLoadParams">
+                    <Button size="small" :disabled="acting" @click="handleLoadParams">
                         <RefreshCw class="size-4" />
                         {{ t('ktechConsole.btnLoadParams') }}
                     </Button>
                     <Button
-                        size="sm"
+                        size="small"
                         class="bg-blue-600 text-white hover:bg-blue-700"
                         :disabled="acting"
                         @click="handleSaveParams"
                     >
                         {{ t('ktechConsole.btnSaveParams') }}
                     </Button>
-                    <Button size="sm" variant="outline" :disabled="acting" @click="handleAlignMotorEncoder">
+                    <Button size="small" severity="secondary" outlined :disabled="acting" @click="handleAlignMotorEncoder">
                         {{ t('ktechConsole.btnAlignEncoder') }}
                     </Button>
-                    <Button size="sm" variant="outline" :disabled="acting" @click="handleSetEncoderZero">
+                    <Button size="small" severity="secondary" outlined :disabled="acting" @click="handleSetEncoderZero">
                         {{ t('ktechConsole.btnSetEncoderZero') }}
                     </Button>
-                    <Button size="sm" variant="outline" :disabled="acting" @click="handleResetCalib">
+                    <Button size="small" severity="secondary" outlined :disabled="acting" @click="handleResetCalib">
                         {{ t('ktechConsole.btnResetCalib') }}
                     </Button>
                     <Button
-                        size="sm"
-                        variant="outline"
+                        size="small"
+                        severity="secondary"
+                        outlined
                         class="text-orange-500"
                         :disabled="acting"
                         @click="handleResetSetting"
@@ -1234,20 +1237,20 @@ function goBack() {
                             />
                         </label>
                     </div>
-                    <Button class="mt-3" size="sm" :disabled="acting" @click="handleWritePidRam">
+                    <Button class="mt-3" size="small" :disabled="acting" @click="handleWritePidRam">
                         {{ t('ktechConsole.btnWritePidRam') }}
                     </Button>
                 </section>
-            </CardContent>
-        </Card>
+            </div>
+        </AppCard>
 
         <!-- ──────── 运动控制 Tab ──────── -->
-        <Card v-if="activeTab === 'motion'">
-            <CardContent class="p-4 space-y-4">
+        <AppCard v-if="activeTab === 'motion'" :beam="false">
+            <div class="p-4 space-y-4">
                 <!-- 基础动作 -->
                 <div class="flex flex-wrap gap-2">
                     <Button
-                        size="sm"
+                        size="small"
                         class="bg-green-600 text-white hover:bg-green-700"
                         :disabled="acting"
                         @click="handleMotorOn"
@@ -1255,13 +1258,14 @@ function goBack() {
                         <Power class="size-4" />
                         {{ t('ktechConsole.btnMotorOn') }}
                     </Button>
-                    <Button size="sm" variant="outline" :disabled="acting" @click="handleMotorOff">
+                    <Button size="small" severity="secondary" outlined :disabled="acting" @click="handleMotorOff">
                         <PowerOff class="size-4" />
                         {{ t('ktechConsole.btnMotorOff') }}
                     </Button>
                     <Button
-                        size="sm"
-                        variant="outline"
+                        size="small"
+                        severity="secondary"
+                        outlined
                         class="text-red-600"
                         :disabled="acting"
                         @click="handleMotorStop"
@@ -1269,24 +1273,25 @@ function goBack() {
                         <CircleStop class="size-4" />
                         {{ t('ktechConsole.btnMotorStop') }}
                     </Button>
-                    <Button size="sm" variant="outline" :disabled="acting" @click="handleMotorRestore">
+                    <Button size="small" severity="secondary" outlined :disabled="acting" @click="handleMotorRestore">
                         {{ t('ktechConsole.btnMotorRestore') }}
                     </Button>
-                    <Button size="sm" variant="outline" :disabled="acting" @click="handleBrakeRelease">
+                    <Button size="small" severity="secondary" outlined :disabled="acting" @click="handleBrakeRelease">
                         {{ t('ktechConsole.btnBrakeRelease') }}
                     </Button>
-                    <Button size="sm" variant="outline" :disabled="acting" @click="handleBrakeApply">
+                    <Button size="small" severity="secondary" outlined :disabled="acting" @click="handleBrakeApply">
                         {{ t('ktechConsole.btnBrakeApply') }}
                     </Button>
-                    <Button size="sm" variant="outline" :disabled="acting" @click="handleClearLoops">
+                    <Button size="small" severity="secondary" outlined :disabled="acting" @click="handleClearLoops">
                         {{ t('ktechConsole.btnClearLoops') }}
                     </Button>
-                    <Button size="sm" variant="outline" :disabled="acting" @click="handleSetMotorZeroRam">
+                    <Button size="small" severity="secondary" outlined :disabled="acting" @click="handleSetMotorZeroRam">
                         {{ t('ktechConsole.btnSetZeroRam') }}
                     </Button>
                     <Button
-                        size="sm"
-                        variant="outline"
+                        size="small"
+                        severity="secondary"
+                        outlined
                         class="text-orange-500"
                         :disabled="acting"
                         @click="handleClearError"
@@ -1455,7 +1460,7 @@ function goBack() {
                     </div>
 
                     <Button
-                        size="sm"
+                        size="small"
                         class="bg-blue-600 text-white hover:bg-blue-700"
                         :disabled="acting"
                         @click="handleMotion"
@@ -1476,7 +1481,7 @@ function goBack() {
                             :disabled="uploading"
                         />
                         <Button
-                            size="sm"
+                            size="small"
                             class="bg-purple-600 text-white hover:bg-purple-700"
                             :disabled="uploading || !firmwareFile"
                             @click="handleUploadFirmware"
@@ -1502,15 +1507,15 @@ function goBack() {
                         </div>
                     </div>
                 </div>
-            </CardContent>
-        </Card>
+            </div>
+        </AppCard>
 
         <!-- ──────── 日志 Tab ──────── -->
-        <Card v-if="activeTab === 'log'">
-            <CardContent class="p-4 space-y-2">
+        <AppCard v-if="activeTab === 'log'" :beam="false">
+            <div class="p-4 space-y-2">
                 <div class="flex items-center gap-2">
                     <h3 class="text-sm font-medium">{{ t('ktechConsole.logTitle', { count: store.logs.length }) }}</h3>
-                    <Button size="xs" variant="outline" @click="store.logs.splice(0)">
+                    <Button size="small" severity="secondary" outlined @click="store.logs.splice(0)">
                         <Trash2 class="size-3.5" />
                         {{ t('ktechConsole.logClear') }}
                     </Button>
@@ -1535,7 +1540,7 @@ function goBack() {
                         {{ t('ktechConsole.logEmpty') }}
                     </div>
                 </div>
-            </CardContent>
-        </Card>
+            </div>
+        </AppCard>
     </div>
 </template>

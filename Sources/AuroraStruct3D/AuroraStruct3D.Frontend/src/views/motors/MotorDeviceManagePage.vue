@@ -1,16 +1,21 @@
-﻿<script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+<script setup lang="ts">
+// 电机设备管理页（PrimeVue 重构版）
+// 提供：扫描参数表单 + 进度日志 + 设备 DataTable（支持编辑/跳转对应操作台）
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { Pencil, RefreshCw, ScanLine, Sliders } from '@lucide/vue'
-import { toast } from 'vue-sonner'
-import { Card, CardContent } from '@/components/ui/card'
-import { BorderBeam } from '@/components/ui/border-beam'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '@/components/ui/dialog'
+import Button from 'primevue/button'
+import InputText from 'primevue/inputtext'
+import InputNumber from 'primevue/inputnumber'
+import Select from 'primevue/select'
+import Checkbox from 'primevue/checkbox'
+import ToggleSwitch from 'primevue/toggleswitch'
+import Dialog from 'primevue/dialog'
+import DataTable from 'primevue/datatable'
+import Column from 'primevue/column'
+import { AppCard } from '@/components/primevue'
+import { useAppToast } from '@/composables/useAppToast'
 
 import {
     MotorBrand,
@@ -25,7 +30,7 @@ import { useMotorStore } from '@/stores/motors'
 const { t } = useI18n()
 const store = useMotorStore()
 const router = useRouter()
-const selectedId = ref('')
+const toast = useAppToast()
 const scanning = ref(false)
 const scanResultText = ref('')
 
@@ -41,7 +46,7 @@ const showEditDialog = ref(false)
 const editing = ref(false)
 const editingId = ref('')
 
-// 编辑表单本地类型（description 固定为 string，避免 null 与 Input v-model 冲突）
+// 编辑表单本地类型（description 固定为 string，避免 null 与 InputText v-model 冲突）
 interface EditMotorForm {
     name: string
     description: string
@@ -58,26 +63,12 @@ const editForm = ref<EditMotorForm>({
 // 当前正在编辑的电机对象，用于根据品牌提供对应的型号选项
 const editingMotor = computed(() => store.motors.find((motor) => motor.id === editingId.value) ?? null)
 // 根据品牌返回可选型号列表：瓴控→MS4010，雷赛→iCL42-RS06
-const modelOptionsForEditing = computed(() => {
+const modelOptionsForEditing = computed<string[]>(() => {
     const brand = editingMotor.value?.brand
     if (brand === MotorBrand.KtechKtech) return ['MS4010']
     if (brand === MotorBrand.LeisaiIclRs) return ['iCL42-RS06']
     return []
 })
-
-watch(
-    () => store.motors,
-    (motors) => {
-        if (motors.length === 0) {
-            selectedId.value = ''
-            return
-        }
-        if (!selectedId.value || !motors.some((motor) => motor.id === selectedId.value)) {
-            selectedId.value = motors[0].id
-        }
-    },
-    { deep: true }
-)
 
 async function refreshList() {
     await store.fetchList()
@@ -108,16 +99,6 @@ async function handleScan() {
 
 function setAllBaudRates(checked: boolean) {
     scanForm.value.baudRates = checked ? [...baudRateOptions] : [...commonBaudRates]
-}
-
-function toggleBaudRate(rate: number, checked: boolean) {
-    const current = new Set(scanForm.value.baudRates)
-    if (checked) {
-        current.add(rate)
-    } else {
-        current.delete(rate)
-    }
-    scanForm.value.baudRates = [...current].sort((left, right) => left - right)
 }
 
 function openEdit(motor: MotorAxisDto) {
@@ -180,9 +161,7 @@ onUnmounted(() => {
     void store.stopScanHub()
 })
 
-/**
- * 扫描进度类型对应的标签。
- */
+/** 扫描进度类型对应的标签 */
 function progressKindLabel(kind: MotorScanProgressKind): string {
     switch (kind) {
         case MotorScanProgressKind.Started:
@@ -204,9 +183,7 @@ function progressKindLabel(kind: MotorScanProgressKind): string {
     }
 }
 
-/**
- * 扫描进度类型的颜色样式。
- */
+/** 扫描进度类型的颜色样式 */
 function progressKindClass(kind: MotorScanProgressKind): string {
     switch (kind) {
         case MotorScanProgressKind.DeviceFound:
@@ -224,9 +201,7 @@ function progressKindClass(kind: MotorScanProgressKind): string {
     }
 }
 
-/**
- * 格式化进度推送的时间戳为 HH:mm:ss.fff。
- */
+/** 格式化进度推送的时间戳为 HH:mm:ss.fff */
 function formatProgressTime(timestamp: string): string {
     const d = new Date(timestamp)
     if (Number.isNaN(d.getTime())) return timestamp
@@ -234,9 +209,7 @@ function formatProgressTime(timestamp: string): string {
     return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}.${pad(d.getMilliseconds(), 3)}`
 }
 
-/**
- * 拼装进度详细描述。
- */
+/** 拼装进度详细描述 */
 function progressDetail(p: MotorScanProgressDto): string {
     const parts: string[] = []
     if (p.portName) parts.push(p.portName)
@@ -252,260 +225,251 @@ function progressDetail(p: MotorScanProgressDto): string {
         <div class="flex flex-wrap items-center justify-between gap-3">
             <h1 class="text-2xl font-bold tracking-tight">{{ t('motor.title') }}</h1>
             <div class="flex flex-wrap gap-2">
-                <Button variant="outline" size="sm" @click="refreshList">
+                <Button severity="secondary" outlined size="small" @click="refreshList">
                     <RefreshCw class="size-4" />
                     {{ t('motor.refresh') }}
                 </Button>
-                <Button size="sm" :disabled="scanning || scanForm.baudRates.length === 0" @click="handleScan">
+                <Button
+                    severity="primary"
+                    size="small"
+                    :disabled="scanning || scanForm.baudRates.length === 0"
+                    @click="handleScan"
+                >
                     <ScanLine class="size-4" />
                     {{ scanning ? t('motor.scanning') : t('motor.scan') }}
                 </Button>
             </div>
         </div>
 
-        <div class="flex flex-col gap-4">
-            <main class="min-w-0 space-y-4">
-                <Card class="relative">
-                    <BorderBeam :size="80" :duration="8" />
-                    <CardContent class="p-4">
-                        <div class="grid gap-3 md:grid-cols-[120px_120px_120px_1fr]">
-                            <div class="flex flex-col gap-1">
-                                <Label class="text-sm">{{ t('motor.startId') }}</Label>
-                                <Input v-model.number="scanForm.startSlaveId" max="32" min="1" type="number" />
-                            </div>
-                            <div class="flex flex-col gap-1">
-                                <Label class="text-sm">{{ t('motor.endId') }}</Label>
-                                <Input v-model.number="scanForm.endSlaveId" max="32" min="1" type="number" />
-                            </div>
-                            <div class="flex flex-col gap-1">
-                                <Label class="text-sm">{{ t('motor.timeoutMs') }}</Label>
-                                <Input v-model.number="scanForm.probeTimeoutMs" min="50" type="number" />
-                            </div>
-                            <div class="flex items-end gap-2">
-                                <Button variant="outline" size="sm" type="button" @click="setAllBaudRates(false)">
-                                    {{ t('motor.common') }}
-                                </Button>
-                                <Button variant="outline" size="sm" type="button" @click="setAllBaudRates(true)">
-                                    {{ t('motor.selectAll') }}
-                                </Button>
-                            </div>
+        <main class="min-w-0 space-y-4">
+            <!-- 扫描参数 + 进度日志 -->
+            <AppCard :beam-size="80" :beam-duration="8">
+                <div class="p-4">
+                    <div class="grid gap-3 md:grid-cols-[120px_120px_120px_1fr]">
+                        <div class="flex flex-col gap-1">
+                            <label class="text-sm">{{ t('motor.startId') }}</label>
+                            <InputNumber v-model="scanForm.startSlaveId" :max="32" :min="1" show-buttons />
                         </div>
-                        <div class="mt-3 flex flex-wrap gap-2">
-                            <label
-                                v-for="rate in baudRateOptions"
-                                :key="rate"
-                                class="inline-flex items-center gap-1 rounded border px-2 py-1 text-xs hover:bg-muted/50"
+                        <div class="flex flex-col gap-1">
+                            <label class="text-sm">{{ t('motor.endId') }}</label>
+                            <InputNumber v-model="scanForm.endSlaveId" :max="32" :min="1" show-buttons />
+                        </div>
+                        <div class="flex flex-col gap-1">
+                            <label class="text-sm">{{ t('motor.timeoutMs') }}</label>
+                            <InputNumber v-model="scanForm.probeTimeoutMs" :min="50" show-buttons />
+                        </div>
+                        <div class="flex items-end gap-2">
+                            <Button
+                                severity="secondary"
+                                outlined
+                                size="small"
+                                type="button"
+                                @click="setAllBaudRates(false)"
                             >
-                                <input
-                                    :checked="scanForm.baudRates.includes(rate)"
-                                    type="checkbox"
-                                    @change="toggleBaudRate(rate, ($event.target as HTMLInputElement).checked)"
-                                />
-                                {{ rate }}
-                            </label>
+                                {{ t('motor.common') }}
+                            </Button>
+                            <Button
+                                severity="secondary"
+                                outlined
+                                size="small"
+                                type="button"
+                                @click="setAllBaudRates(true)"
+                            >
+                                {{ t('motor.selectAll') }}
+                            </Button>
                         </div>
-                        <div v-if="scanning || scanResultText" class="mt-3 text-xs text-muted-foreground">
-                            {{ scanning ? t('motor.scanDesc') : scanResultText }}
-                        </div>
-                        <!-- 扫描进度实时日志（SignalR 推送） -->
+                    </div>
+                    <div class="mt-3 flex flex-wrap gap-3">
                         <div
-                            v-if="store.scanProgress.length > 0"
-                            class="mt-2 max-h-56 overflow-auto rounded border bg-muted/30 p-2 font-mono text-[11px] leading-5"
+                            v-for="rate in baudRateOptions"
+                            :key="rate"
+                            class="inline-flex items-center gap-2 rounded border px-2 py-1 text-xs"
                         >
-                            <div
-                                v-for="(p, idx) in store.scanProgress"
-                                :key="idx"
-                                class="flex items-start gap-2 border-b border-border/40 py-0.5 last:border-0"
-                            >
-                                <span class="shrink-0 text-muted-foreground">
-                                    {{ formatProgressTime(p.timestamp) }}
-                                </span>
-                                <span class="shrink-0 w-16" :class="progressKindClass(p.kind)">
-                                    [{{ progressKindLabel(p.kind) }}]
-                                </span>
-                                <span class="shrink-0 text-muted-foreground">
-                                    {{
-                                        t('motor.progressSummary', {
-                                            finished: p.finishedPorts,
-                                            total: p.totalPorts,
-                                            tried: p.triedCount,
-                                            found: p.foundCount,
-                                        })
-                                    }}
-                                </span>
-                                <span class="flex-1 break-all">
-                                    <span v-if="progressDetail(p)" class="text-foreground/80">
-                                        {{ progressDetail(p) }}
-                                    </span>
-                                    <span v-if="progressDetail(p)" class="mx-1 text-muted-foreground">|</span>
-                                    <span>{{ p.message }}</span>
-                                </span>
-                            </div>
+                            <Checkbox
+                                v-model="scanForm.baudRates"
+                                :input-id="`baud-${rate}`"
+                                :value="rate"
+                            />
+                            <label :for="`baud-${rate}`">{{ rate }}</label>
                         </div>
-                    </CardContent>
-                </Card>
+                    </div>
+                    <div v-if="scanning || scanResultText" class="mt-3 text-xs text-muted-foreground">
+                        {{ scanning ? t('motor.scanDesc') : scanResultText }}
+                    </div>
+                    <!-- 扫描进度实时日志（SignalR 推送） -->
+                    <div
+                        v-if="store.scanProgress.length > 0"
+                        class="mt-2 max-h-56 overflow-auto rounded border bg-muted/30 p-2 font-mono text-[11px] leading-5"
+                    >
+                        <div
+                            v-for="(p, idx) in store.scanProgress"
+                            :key="idx"
+                            class="flex items-start gap-2 border-b border-border/40 py-0.5 last:border-0"
+                        >
+                            <span class="shrink-0 text-muted-foreground">
+                                {{ formatProgressTime(p.timestamp) }}
+                            </span>
+                            <span class="shrink-0 w-16" :class="progressKindClass(p.kind)">
+                                [{{ progressKindLabel(p.kind) }}]
+                            </span>
+                            <span class="shrink-0 text-muted-foreground">
+                                {{
+                                    t('motor.progressSummary', {
+                                        finished: p.finishedPorts,
+                                        total: p.totalPorts,
+                                        tried: p.triedCount,
+                                        found: p.foundCount,
+                                    })
+                                }}
+                            </span>
+                            <span class="flex-1 break-all">
+                                <span v-if="progressDetail(p)" class="text-foreground/80">
+                                    {{ progressDetail(p) }}
+                                </span>
+                                <span v-if="progressDetail(p)" class="mx-1 text-muted-foreground">|</span>
+                                <span>{{ p.message }}</span>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </AppCard>
 
-                <section>
-                    <div v-if="store.loading" class="py-8 text-center text-sm text-muted-foreground">
-                        {{ t('common.loading') }}
-                    </div>
-                    <div v-else-if="store.motors.length === 0" class="py-8 text-center text-sm text-muted-foreground">
-                        {{ t('motor.noDevices') }}
-                    </div>
-                    <div v-else class="overflow-auto">
-                        <Card class="overflow-auto">
-                            <CardContent class="p-0">
-                                <table class="w-full min-w-[960px] text-sm">
-                                    <thead class="border-b bg-muted/50">
-                                        <tr>
-                                            <th class="px-3 py-2 text-left font-medium">{{ t('motor.axis') }}</th>
-                                            <th class="px-3 py-2 text-left font-medium">{{ t('motor.name') }}</th>
-                                            <th class="px-3 py-2 text-left font-medium">{{ t('motor.brandModel') }}</th>
-                                            <th class="px-3 py-2 text-left font-medium">{{ t('motor.port') }}</th>
-                                            <th class="px-3 py-2 text-left font-medium">{{ t('motor.slaveId') }}</th>
-                                            <th class="px-3 py-2 text-left font-medium">{{ t('motor.status') }}</th>
-                                            <th class="px-3 py-2 text-left font-medium">{{ t('common.actions') }}</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <tr
-                                            v-for="motor in store.motors"
-                                            :key="motor.id"
-                                            :class="[
-                                                'cursor-pointer border-b last:border-0 hover:bg-muted/30',
-                                                selectedId === motor.id ? 'bg-muted/40' : '',
-                                            ]"
-                                            @click="selectedId = motor.id"
-                                        >
-                                            <td class="px-3 py-2">{{ motor.axisIndex }}</td>
-                                            <td class="px-3 py-2">
-                                                <div class="font-medium">{{ motor.name }}</div>
-                                                <div
-                                                    v-if="motor.description"
-                                                    class="max-w-[180px] truncate text-xs text-muted-foreground"
-                                                >
-                                                    {{ motor.description }}
-                                                </div>
-                                            </td>
-                                            <td class="px-3 py-2 text-xs">
-                                                <div class="text-muted-foreground">{{ motor.brandText }}</div>
-                                                <div v-if="motor.model" class="mt-0.5 font-medium text-foreground">
-                                                    {{ motor.model }}
-                                                </div>
-                                                <div v-else class="mt-0.5 text-amber-500">{{ t('motor.noModel') }}</div>
-                                            </td>
-                                            <td class="px-3 py-2">
-                                                <div class="font-mono text-xs">{{ motor.portName }}</div>
-                                                <div class="text-xs text-muted-foreground">
-                                                    {{ motor.baudRate || t('motor.notSet') }}
-                                                </div>
-                                            </td>
-                                            <td class="px-3 py-2 font-mono text-xs">{{ motor.slaveId }}</td>
-                                            <td :class="['px-3 py-2', statusClass(motor.status)]">
-                                                {{ motor.statusText }}
-                                            </td>
-                                            <td class="px-3 py-2">
-                                                <div class="flex flex-wrap gap-1.5">
-                                                    <Button variant="outline" size="xs" @click.stop="openEdit(motor)">
-                                                        <Pencil class="size-3.5" />
-                                                        {{ t('motor.edit') }}
-                                                    </Button>
-                                                    <Button
-                                                        v-if="motor.brand === MotorBrand.KtechKtech"
-                                                        variant="outline"
-                                                        size="xs"
-                                                        :class="
-                                                            motor.model
-                                                                ? 'text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30'
-                                                                : 'opacity-50'
-                                                        "
-                                                        :disabled="!motor.model"
-                                                        :title="
-                                                            motor.model
-                                                                ? t('motor.ktechConsoleTitle')
-                                                                : t('motor.needModel')
-                                                        "
-                                                        @click.stop="openKtechConsole(motor.id)"
-                                                    >
-                                                        <Sliders class="size-3.5" />
-                                                        {{ t('motor.console') }}
-                                                    </Button>
-                                                    <Button
-                                                        v-if="motor.brand === MotorBrand.LeisaiIclRs"
-                                                        variant="outline"
-                                                        size="xs"
-                                                        :class="
-                                                            motor.model
-                                                                ? 'text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30'
-                                                                : 'opacity-50'
-                                                        "
-                                                        :disabled="!motor.model"
-                                                        :title="
-                                                            motor.model
-                                                                ? t('motor.leisaiConsoleTitle')
-                                                                : t('motor.needModel')
-                                                        "
-                                                        @click.stop="openLeisaiConsole(motor.id)"
-                                                    >
-                                                        <Sliders class="size-3.5" />
-                                                        {{ t('motor.console') }}
-                                                    </Button>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    </tbody>
-                                </table>
-                            </CardContent>
-                        </Card>
-                    </div>
-                </section>
-            </main>
-        </div>
+            <!-- 设备列表 -->
+            <section>
+                <div v-if="store.loading" class="py-8 text-center text-sm text-muted-foreground">
+                    {{ t('common.loading') }}
+                </div>
+                <div v-else-if="store.motors.length === 0" class="py-8 text-center text-sm text-muted-foreground">
+                    {{ t('motor.noDevices') }}
+                </div>
+                <AppCard v-else :beam="false">
+                    <DataTable
+                        :value="store.motors"
+                        data-key="id"
+                        size="small"
+                        striped-rows
+                        scrollable
+                    >
+                        <Column field="axisIndex" :header="t('motor.axis')" style="width: 80px" />
+                        <Column :header="t('motor.name')">
+                            <template #body="{ data }: { data: MotorAxisDto }">
+                                <div class="font-medium">{{ data.name }}</div>
+                                <div
+                                    v-if="data.description"
+                                    class="max-w-[180px] truncate text-xs text-muted-foreground"
+                                >
+                                    {{ data.description }}
+                                </div>
+                            </template>
+                        </Column>
+                        <Column :header="t('motor.brandModel')">
+                            <template #body="{ data }: { data: MotorAxisDto }">
+                                <div class="text-xs text-muted-foreground">{{ data.brandText }}</div>
+                                <div v-if="data.model" class="mt-0.5 text-xs font-medium text-foreground">
+                                    {{ data.model }}
+                                </div>
+                                <div v-else class="mt-0.5 text-xs text-amber-500">{{ t('motor.noModel') }}</div>
+                            </template>
+                        </Column>
+                        <Column :header="t('motor.port')">
+                            <template #body="{ data }: { data: MotorAxisDto }">
+                                <div class="font-mono text-xs">{{ data.portName }}</div>
+                                <div class="text-xs text-muted-foreground">
+                                    {{ data.baudRate || t('motor.notSet') }}
+                                </div>
+                            </template>
+                        </Column>
+                        <Column field="slaveId" :header="t('motor.slaveId')">
+                            <template #body="{ data }: { data: MotorAxisDto }">
+                                <span class="font-mono text-xs">{{ data.slaveId }}</span>
+                            </template>
+                        </Column>
+                        <Column :header="t('motor.status')">
+                            <template #body="{ data }: { data: MotorAxisDto }">
+                                <span :class="statusClass(data.status)">{{ data.statusText }}</span>
+                            </template>
+                        </Column>
+                        <Column :header="t('common.actions')">
+                            <template #body="{ data }: { data: MotorAxisDto }">
+                                <div class="flex flex-wrap gap-1.5">
+                                    <Button
+                                        severity="secondary"
+                                        outlined
+                                        size="small"
+                                        @click.stop="openEdit(data)"
+                                    >
+                                        <Pencil class="size-3.5" />
+                                        {{ t('motor.edit') }}
+                                    </Button>
+                                    <Button
+                                        v-if="data.brand === MotorBrand.KtechKtech"
+                                        severity="info"
+                                        outlined
+                                        size="small"
+                                        :disabled="!data.model"
+                                        :title="
+                                            data.model ? t('motor.ktechConsoleTitle') : t('motor.needModel')
+                                        "
+                                        @click.stop="openKtechConsole(data.id)"
+                                    >
+                                        <Sliders class="size-3.5" />
+                                        {{ t('motor.console') }}
+                                    </Button>
+                                    <Button
+                                        v-if="data.brand === MotorBrand.LeisaiIclRs"
+                                        severity="info"
+                                        outlined
+                                        size="small"
+                                        :disabled="!data.model"
+                                        :title="
+                                            data.model ? t('motor.leisaiConsoleTitle') : t('motor.needModel')
+                                        "
+                                        @click.stop="openLeisaiConsole(data.id)"
+                                    >
+                                        <Sliders class="size-3.5" />
+                                        {{ t('motor.console') }}
+                                    </Button>
+                                </div>
+                            </template>
+                        </Column>
+                    </DataTable>
+                </AppCard>
+            </section>
+        </main>
 
         <!-- 编辑电机对话框 -->
-        <Dialog v-model:open="showEditDialog">
-            <DialogContent class="w-[440px]">
-                <BorderBeam :size="80" :duration="8" />
-                <DialogHeader>
-                    <DialogTitle>{{ t('motor.editTitle') }}</DialogTitle>
-                </DialogHeader>
-                <div class="grid gap-3">
-                    <div class="flex flex-col gap-1">
-                        <Label>{{ t('motor.name') }}</Label>
-                        <Input v-model="editForm.name" />
-                    </div>
-                    <div class="flex flex-col gap-1">
-                        <Label>{{ t('motor.model') }}</Label>
-                        <Select v-model="editForm.model">
-                            <SelectTrigger>
-                                <SelectValue :placeholder="t('motor.selectModel')" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="">{{ t('motor.selectModel') }}</SelectItem>
-                                <SelectItem v-for="opt in modelOptionsForEditing" :key="opt" :value="opt">
-                                    {{ opt }}
-                                </SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </div>
-                    <div class="flex flex-col gap-1">
-                        <Label>{{ t('motor.description') }}</Label>
-                        <Input v-model="editForm.description" />
-                    </div>
-                    <label class="flex items-center gap-2 text-sm">
-                        <input v-model="editForm.isEnabled" type="checkbox" />
-                        {{ t('motor.enabled') }}
-                    </label>
+        <Dialog v-model:visible="showEditDialog" modal :header="t('motor.editTitle')" :style="{ width: '440px' }">
+            <div class="grid gap-3">
+                <div class="flex flex-col gap-1">
+                    <label class="text-sm">{{ t('motor.name') }}</label>
+                    <InputText v-model="editForm.name" />
                 </div>
-                <DialogFooter class="gap-2">
-                    <DialogClose as-child>
-                        <Button variant="outline">{{ t('common.cancel') }}</Button>
-                    </DialogClose>
-                    <Button :disabled="editing" @click="handleEdit">
-                        {{ editing ? t('common.saving') : t('common.save') }}
-                    </Button>
-                </DialogFooter>
-            </DialogContent>
+                <div class="flex flex-col gap-1">
+                    <label class="text-sm">{{ t('motor.model') }}</label>
+                    <Select
+                        v-model="editForm.model"
+                        :options="modelOptionsForEditing"
+                        :placeholder="t('motor.selectModel')"
+                        show-clear
+                    />
+                </div>
+                <div class="flex flex-col gap-1">
+                    <label class="text-sm">{{ t('motor.description') }}</label>
+                    <InputText v-model="editForm.description" />
+                </div>
+                <div class="flex items-center gap-2 text-sm">
+                    <ToggleSwitch v-model="editForm.isEnabled" input-id="motor-enabled" />
+                    <label for="motor-enabled">{{ t('motor.enabled') }}</label>
+                </div>
+            </div>
+            <template #footer>
+                <Button severity="secondary" outlined @click="showEditDialog = false">
+                    {{ t('common.cancel') }}
+                </Button>
+                <Button :disabled="editing" @click="handleEdit">
+                    {{ editing ? t('common.saving') : t('common.save') }}
+                </Button>
+            </template>
         </Dialog>
     </div>
 </template>
