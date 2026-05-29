@@ -549,7 +549,8 @@ function animate() {
         }
     })
 
-    materials.forEach((mat) => {
+    materials.forEach((m) => {
+        const mat = m as unknown as THREE.ShaderMaterial
         if (mat.uniforms) {
             if (mat.uniforms.time) mat.uniforms.time.value = time
             if (mat.uniforms.dimensionShift) mat.uniforms.dimensionShift.value = params.value.dimensionShift
@@ -566,21 +567,23 @@ function animate() {
     })
 
     // Animate meshes
-    meshes.forEach((mesh, i) => {
+    meshes.forEach((obj, i) => {
+        const mesh = obj as THREE.Mesh & { material: THREE.Material | THREE.Material[] }
         if (!mesh.rotation) return
         const speed = params.value.rotationSpeed
         mesh.rotation.y += delta * speed * (i % 2 ? -1 : 1) * 0.3
         mesh.rotation.x += delta * speed * 0.1
 
         // Animate particle positions
-        if (mesh.material && mesh.material.type === 'PointsMaterial') {
-            const positions = mesh.geometry.attributes.position.array
+        const matSingle = mesh.material as THREE.Material | undefined
+        if (matSingle && matSingle.type === 'PointsMaterial') {
+            const positions = (mesh.geometry as THREE.BufferGeometry).attributes.position.array as Float32Array
             for (let j = 0; j < positions.length; j += 3) {
                 positions[j] += Math.sin(time + j) * 0.001
                 positions[j + 1] += Math.cos(time + j) * 0.001
                 positions[j + 2] += Math.sin(time * 0.7 + j) * 0.001
             }
-            mesh.geometry.attributes.position.needsUpdate = true
+            ;(mesh.geometry as THREE.BufferGeometry).attributes.position.needsUpdate = true
         }
     })
 
@@ -594,13 +597,14 @@ function cleanup() {
     }
 
     // Dispose of Three.js objects
-    meshes.forEach((mesh) => {
-        if (mesh.geometry) mesh.geometry.dispose()
+    meshes.forEach((obj) => {
+        const mesh = obj as THREE.Mesh & { material: THREE.Material | THREE.Material[] }
+        if (mesh.geometry) (mesh.geometry as THREE.BufferGeometry).dispose()
         if (mesh.material) {
             if (Array.isArray(mesh.material)) {
-                mesh.material.forEach((mat) => mat.dispose())
+                mesh.material.forEach((mat: THREE.Material) => mat.dispose())
             } else {
-                mesh.material.dispose()
+                ;(mesh.material as THREE.Material).dispose()
             }
         }
     })

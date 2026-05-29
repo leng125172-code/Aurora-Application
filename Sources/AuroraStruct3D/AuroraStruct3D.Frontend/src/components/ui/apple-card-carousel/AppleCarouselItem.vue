@@ -15,7 +15,7 @@ defineProps<Props>()
             opacity: 0,
             y: 20,
         }"
-        :animate="{
+        :animate="({
             opacity: 1,
             y: 0,
             transition: {
@@ -24,7 +24,7 @@ defineProps<Props>()
                 ease: 'easeOut',
                 once: true,
             },
-        }"
+        } as any)"
         class="rounded-3xl last:pr-[5%] md:last:pr-[33%]"
     >
         <slot />

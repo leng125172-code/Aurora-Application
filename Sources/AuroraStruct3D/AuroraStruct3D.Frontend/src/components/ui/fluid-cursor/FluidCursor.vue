@@ -802,9 +802,11 @@ onMounted(() => {
         const dyeRes = getResolution(config.DYE_RESOLUTION!)
 
         const texType = ext.halfFloatTexType
-        const rgba = ext.formatRGBA
-        const rg = ext.formatRG
-        const r = ext.formatR
+        // ext.formatXxx 由 helper 返回类型为 unknown，这里断言为具体格式对象
+        type FmtInfo = { internalFormat: number; format: number }
+        const rgba = ext.formatRGBA as FmtInfo
+        const rg = ext.formatRG as FmtInfo
+        const r = ext.formatR as FmtInfo
         const filtering = ext.supportLinearFiltering ? gl.LINEAR : gl.NEAREST
         gl.disable(gl.BLEND)
 

@@ -51,7 +51,7 @@ const sliderTrackStyles = computed(() => ({
 }))
 
 const leftColorHsl = computed(() => {
-    const [h, s, l] = hexToHsl(props.leftColor)
+    const [h, s] = hexToHsl(props.leftColor)
     const alpha = 0.4
     const lightness = 24 + (30 * (100 - value.value)) / 100
     return `hsl(${h} ${s}% ${lightness}% / ${alpha})`

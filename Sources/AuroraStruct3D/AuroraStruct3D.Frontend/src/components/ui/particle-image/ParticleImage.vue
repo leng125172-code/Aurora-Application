@@ -26,7 +26,8 @@ interface ParticleImageProps {
 
 defineProps<ParticleImageProps>()
 
-let _particles: ImageParticle
+let _particles: ImageParticle | undefined
+void _particles // 持有粒子实例避免被 GC，无需被读取
 const imageParticleRef = ref<HTMLImageElement>()
 
 onMounted(() => {

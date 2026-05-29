@@ -21,7 +21,7 @@ const props = withDefaults(defineProps<GlobeProps>(), {
     precision: 0.001,
 })
 
-const DEFAULT_CONFIG: COBEOptions = {
+const DEFAULT_CONFIG = {
     width: 800,
     height: 800,
     onRender: () => {},
@@ -108,12 +108,12 @@ function onResize() {
 function createGlobeOnMounted() {
     const config = { ...DEFAULT_CONFIG, ...props.config }
 
-    globe = createGlobe(globeCanvasRef.value!, {
+    globe = createGlobe(globeCanvasRef.value!, ({
         ...config,
         width: width.value * 2,
         height: width.value * 2,
         onRender,
-    })
+    } as unknown as COBEOptions))
 }
 
 onMounted(() => {

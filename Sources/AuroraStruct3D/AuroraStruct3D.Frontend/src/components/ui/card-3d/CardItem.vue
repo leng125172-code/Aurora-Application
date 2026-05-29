@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { useMouseState } from '~/composables/useMouseState'
+import type { useMouseState } from './useMouseState'
 import { cn } from '@inspira-ui/plugins'
 
 interface Props {

@@ -26,6 +26,7 @@ const emit = defineEmits<{
 }>()
 
 const containerRef = ref<HTMLElement | null>(null)
+void containerRef // 模板 ref 绑定
 const localIsHovering = ref(false)
 const mousePosition = ref({ x: 100, y: 100 })
 

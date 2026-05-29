@@ -178,12 +178,15 @@ onMounted(() => {
     if (!canvas) return
     const ctx = canvas.getContext('2d')
     if (!ctx) return
+    // 局部别名，让 TS 在 animate 闭包内保留非空窄化
+    const cv: HTMLCanvasElement = canvas
+    const c2d: CanvasRenderingContext2D = ctx
 
     function animate() {
-        ctx.clearRect(0, 0, canvas.width, canvas.height)
+        c2d.clearRect(0, 0, cv.width, cv.height)
 
-        const centerX = canvas.width / 2
-        const centerY = canvas.height / 2
+        const centerX = cv.width / 2
+        const centerY = cv.height / 2
         const dx = mousePos.x - centerX
         const dy = mousePos.y - centerY
         const maxDistance = Math.sqrt(centerX * centerX + centerY * centerY)
@@ -204,8 +207,8 @@ onMounted(() => {
                 targetRotation.value = null
             }
         } else if (!isDragging.value) {
-            rotation.x += (dy / canvas.height) * speed
-            rotation.y += (dx / canvas.width) * speed
+            rotation.x += (dy / cv.height) * speed
+            rotation.y += (dx / cv.width) * speed
         }
 
         imagePositions.value.forEach((icon, index) => {
@@ -221,15 +224,15 @@ onMounted(() => {
             const scale = (rotatedZ + 200) / 300
             const opacity = Math.max(0.2, Math.min(1, (rotatedZ + 150) / 200))
 
-            ctx.save()
-            ctx.translate(centerX + rotatedX, centerY + rotatedY)
-            ctx.scale(scale, scale)
-            ctx.globalAlpha = opacity
+            c2d.save()
+            c2d.translate(centerX + rotatedX, centerY + rotatedY)
+            c2d.scale(scale, scale)
+            c2d.globalAlpha = opacity
 
             if (imageCanvasesRef.value[index] && imagesLoadedRef.value[index]) {
-                ctx.drawImage(imageCanvasesRef.value[index], -20, -20, 40, 40)
+                c2d.drawImage(imageCanvasesRef.value[index], -20, -20, 40, 40)
             }
-            ctx.restore()
+            c2d.restore()
         })
 
         animationFrameRef.value = requestAnimationFrame(animate)

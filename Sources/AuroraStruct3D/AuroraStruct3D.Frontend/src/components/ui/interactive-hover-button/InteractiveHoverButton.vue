@@ -11,6 +11,7 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 const buttonRef = ref<HTMLButtonElement>()
+void buttonRef // 模板 ref 绑定
 </script>
 
 <template>

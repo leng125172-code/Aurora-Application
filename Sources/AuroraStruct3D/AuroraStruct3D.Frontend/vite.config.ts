@@ -3,7 +3,6 @@ import { defineConfig, loadEnv } from "vite";
 import vue from "@vitejs/plugin-vue";
 import tailwindcss from "@tailwindcss/vite";
 import AutoImport from "unplugin-auto-import/vite";
-import Components from "unplugin-vue-components/vite";
 
 // 后端 ABP HttpApi.Host 默认监听端口
 const ABP_BACKEND_URL = "http://localhost:44315";
@@ -15,7 +14,18 @@ export default defineConfig(({ mode }) => {
     const backendUrl = env.VITE_ABP_BACKEND_URL || ABP_BACKEND_URL;
 
     return {
-        plugins: [vue(), tailwindcss()],
+        plugins: [
+            vue(),
+            tailwindcss(),
+            // 自动导入 Vue / VueUse 等常用 API，主要服务于 Inspira UI 动画组件
+            // 生成 auto-imports.d.ts 给 TS 识别（被 tsconfig.app.json include 包含）
+            AutoImport({
+                imports: ["vue", "vue-router", "@vueuse/core"],
+                dts: "./src/auto-imports.d.ts",
+                vueTemplate: true,
+                dirs: [],
+            }),
+        ],
         resolve: {
             alias: {
                 // shadcn-vue / Inspira UI 强制使用 @/ 路径别名

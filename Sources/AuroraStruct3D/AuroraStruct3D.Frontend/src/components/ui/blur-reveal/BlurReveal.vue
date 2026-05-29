@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { Motion } from 'motion-v'
 import { onMounted, ref, useSlots, watchEffect } from 'vue'
-
 interface Props {
     duration?: number
     delay?: number
@@ -17,8 +16,6 @@ const props = withDefaults(defineProps<Props>(), {
     yOffset: 20,
 })
 
-const container = ref(null)
-const childElements = ref([])
 const slots = useSlots()
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -49,19 +46,18 @@ function getAnimate() {
 </script>
 
 <template>
-    <div ref="container" :class="props.class">
+    <div :class="props.class">
         <Motion
             v-for="(child, index) in children"
             :key="index"
-            ref="childElements"
             as="div"
             :initial="getInitial()"
             :while-in-view="getAnimate()"
-            :transition="{
+            :transition="({
                 duration: props.duration,
-                easing: 'easeInOut',
-                delay: props.delay * index,
-            }"
+                ease: 'easeInOut',
+                delay: props.delay * (index as number),
+            } as any)"
         >
             <component :is="child" />
         </Motion>

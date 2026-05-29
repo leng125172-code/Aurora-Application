@@ -157,7 +157,7 @@ onUnmounted(() => {
 
 <template>
     <Motion ref="containerRef" as="span" :class="props.class" :aria-label="text" role="text">
-        <template v-for="(char, index) in textArray" :key="index">
+        <template v-for="(_, index) in textArray" :key="index">
             <span :class="getCharClass(index)">
                 {{ displayChar(index) }}
             </span>

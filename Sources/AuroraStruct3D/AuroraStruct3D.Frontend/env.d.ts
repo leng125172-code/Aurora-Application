@@ -15,6 +15,15 @@ interface ImportMetaEnv {
 
 interface ImportMeta {
     readonly env: ImportMetaEnv
+    // Nuxt 兼容 shim：Inspira UI 组件中可能使用 import.meta.client / server
+    readonly client?: boolean
+    readonly server?: boolean
+}
+
+// NodeJS 命名空间 shim：少数 Inspira UI 组件引用 NodeJS.Timeout
+declare namespace NodeJS {
+    type Timeout = ReturnType<typeof setTimeout>
+    type Timer = ReturnType<typeof setTimeout>
 }
 
 // vite.config 中通过 define 注入的全局常量

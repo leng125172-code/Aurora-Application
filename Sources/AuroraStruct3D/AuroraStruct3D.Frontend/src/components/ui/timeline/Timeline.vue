@@ -18,6 +18,7 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 const timelineContainerRef = ref<HTMLElement | null>(null)
+void timelineContainerRef // 模板 ref 绑定
 const timelineRef = ref<HTMLElement | null>(null)
 const height = ref(0)
 
@@ -85,10 +86,10 @@ watch(height, (newHeight) => {
             >
                 <Motion
                     as="div"
-                    :style="{
+                    :style="({
                         height: heightTransform,
                         opacity: opacityTransform,
-                    }"
+                    } as any)"
                     class="absolute inset-x-0 top-0 w-[2px] rounded-full bg-linear-to-t from-purple-500 from-0% via-blue-500 via-10% to-transparent"
                 />
             </div>

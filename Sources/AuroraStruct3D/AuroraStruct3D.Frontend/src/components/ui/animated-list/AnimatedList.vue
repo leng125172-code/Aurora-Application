@@ -19,7 +19,9 @@ const nextIndex = ref(0)
 onMounted(startLoop)
 
 async function startLoop() {
-    const notifications = slots.default ? (slots.default()[0].children ?? []) : []
+    // slots.default() 返回 VNode[]，其 children 可能为字符串/数组，这里断言为 VNode 数组
+    const firstNode = slots.default ? slots.default()[0] : null
+    const notifications = (firstNode && Array.isArray(firstNode.children) ? firstNode.children : []) as unknown[]
     if (!notifications.length) return
 
     while (displayedItems.value.length < notifications.length) {

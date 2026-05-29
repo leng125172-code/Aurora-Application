@@ -61,11 +61,11 @@ const getGradientStyle = (index: number) => {
             :key="index"
             as="div"
             class="pointer-events-none absolute inset-0 rounded-[inherit]"
-            :style="{
+            :style="({
                 maskImage: getGradientStyle(index),
                 webkitMaskImage: getGradientStyle(index),
                 backdropFilter: `blur(${(index - 1) * props.blurIntensity}px)`,
-            }"
+            } as any)"
             v-bind="attrs"
         />
     </div>

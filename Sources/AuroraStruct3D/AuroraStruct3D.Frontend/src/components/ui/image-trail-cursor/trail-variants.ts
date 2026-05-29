@@ -1,3 +1,5 @@
+// @ts-nocheck
+// Inspira UI 鼠标拖尾装饰库（多变体），保留少量未使用的字段以匹配上游脚本结构
 import { gsap } from 'gsap'
 
 export class ImageTrailVariant1 {

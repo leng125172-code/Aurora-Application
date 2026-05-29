@@ -28,6 +28,7 @@ const props = withDefaults(defineProps<DockProps>(), {
 })
 
 const dockRef = ref<HTMLElement | null>(null)
+void dockRef // 仅用于模板 ref 绑定，避免 TS6133
 const mouseX = ref(Infinity)
 const mouseY = ref(Infinity)
 const magnification = computed(() => props.magnification)

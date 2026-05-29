@@ -146,7 +146,7 @@ function handleMove(clientX: number): void {
     }
 }
 
-function handleMouseDown(e: MouseEvent): void {
+function handleMouseDown(): void {
     handleStart()
 }
 
@@ -154,7 +154,7 @@ function handleMouseMove(e: MouseEvent): void {
     handleMove(e.clientX)
 }
 
-function handleTouchStart(e: TouchEvent): void {
+function handleTouchStart(): void {
     if (!props.autoplay) handleStart()
 }
 

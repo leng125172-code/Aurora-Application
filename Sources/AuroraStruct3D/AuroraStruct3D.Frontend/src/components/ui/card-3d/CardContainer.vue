@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { cn } from '@inspira-ui/plugins'
 import { provide } from 'vue'
-import { useMouseState } from '~/composables/useMouseState'
+import { useMouseState } from './useMouseState'
 
 interface Props {
     class?: string

@@ -28,7 +28,7 @@ if (!carouselContext) {
     throw new Error('Card must be used within a Carousel')
 }
 
-const { onCardClose, currentIndex } = carouselContext
+const { onCardClose } = carouselContext
 
 function handleKeyDown(event: KeyboardEvent) {
     if (event.key === 'Escape') {

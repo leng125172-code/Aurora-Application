@@ -58,15 +58,15 @@ const itemVariants = computed(() => ({
         as="div"
         initial="hidden"
         animate="visible"
-        :variants="containerVariants"
-        :transition="finalTransition"
+        :variants="(containerVariants as any)"
+        :transition="(finalTransition as any)"
         :class="cn(`relative`, props.class)"
     >
         <span
             v-for="(letter, index) in letters"
             :key="`${letter}-${index}`"
             class="absolute top-1/2 left-1/2"
-            :variants="itemVariants"
+            :variants="(itemVariants as any)"
             :style="{
                 '--index': index,
                 '--total': letters.length,

@@ -6,6 +6,8 @@ import { AmbientLight, Color, DirectionalLight, PerspectiveCamera, PointLight, S
 import ThreeGlobe from 'three-globe'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { onMounted, ref, watch } from 'vue'
+// 该 globe.json 需从 https://geojson-maps.kyd.au/ 下载放至同目录；缺失时 demo 不可用
+// @ts-expect-error 可选资源文件，未提供时跳过类型检查
 import contries from './globe.json'
 
 interface Position {
@@ -109,7 +111,7 @@ onMounted(() => {
 
         numberOfRings = genRandomNumbers(0, props.data.length, Math.floor((props.data.length * 4) / 5))
 
-        globe.ringsData(globeData.value.filter((d, i) => numberOfRings.includes(i)))
+        globe.ringsData(globeData.value.filter((_d, i) => numberOfRings.includes(i)))
     })
 })
 

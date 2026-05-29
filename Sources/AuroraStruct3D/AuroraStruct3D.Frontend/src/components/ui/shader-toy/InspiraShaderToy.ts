@@ -22,7 +22,8 @@ export type MouseMode = 'click' | 'hover'
 export class InspiraShaderToy {
     private renderer: Renderer
     private camera: Camera
-    private scene: Transform
+    // 场景持有引用，绑定 Mesh 时使用；如未被读取请保留以匹配 OGL 模式
+    private scene!: Transform
     private geometry: Geometry
     private program: Program | null = null
     private mesh: Mesh | null = null
@@ -159,6 +160,7 @@ export class InspiraShaderToy {
 
         // Setup scene
         this.scene = new Transform()
+        void this.scene
 
         // Setup geometry (full-screen quad)
         this.geometry = new Geometry(this.renderer.gl, {
