@@ -1,14 +1,14 @@
 ﻿<script setup lang="ts">
+/**
+ * 语言切换器：支持 5 种 locale
+ * 使用 PrimeVue Button + Menu(popup 模式)
+ */
+import { ref, computed } from 'vue'
 import { Languages } from '@lucide/vue'
 import { useI18n } from 'vue-i18n'
-import { Button } from '@/components/ui/button'
-import {
-    DropdownMenu,
-    DropdownMenuTrigger,
-    DropdownMenuContent,
-    DropdownMenuRadioGroup,
-    DropdownMenuRadioItem,
-} from '@/components/ui/dropdown-menu'
+import Button from 'primevue/button'
+import Menu from 'primevue/menu'
+import type { MenuItem } from 'primevue/menuitem'
 import { setLocale, type SupportedLocale } from '@/i18n'
 
 const { locale } = useI18n()
@@ -26,24 +26,47 @@ const langs: readonly LangItem[] = [
     { code: 'de-DE', label: 'Deutsch' },
 ]
 
-function onSelect(value: string): void {
-    setLocale(value as SupportedLocale)
+const menuRef = ref<InstanceType<typeof Menu> | null>(null)
+
+const items = computed<MenuItem[]>(() =>
+    langs.map((lang) => ({
+        label: lang.label,
+        data: { code: lang.code },
+        command: () => setLocale(lang.code),
+    }))
+)
+
+function togglePopup(event: Event): void {
+    menuRef.value?.toggle(event)
 }
 </script>
 
 <template>
-    <DropdownMenu>
-        <DropdownMenuTrigger as-child>
-            <Button variant="ghost" size="icon" :title="locale">
-                <Languages />
-            </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-            <DropdownMenuRadioGroup :model-value="locale" @update:model-value="(v) => onSelect(v as string)">
-                <DropdownMenuRadioItem v-for="lang in langs" :key="lang.code" :value="lang.code">
-                    {{ lang.label }}
-                </DropdownMenuRadioItem>
-            </DropdownMenuRadioGroup>
-        </DropdownMenuContent>
-    </DropdownMenu>
+    <Button
+        type="button"
+        severity="secondary"
+        text
+        rounded
+        :aria-label="locale"
+        v-tooltip.bottom="locale"
+        @click="togglePopup"
+    >
+        <template #icon>
+            <Languages class="size-4" />
+        </template>
+    </Button>
+    <Menu ref="menuRef" :model="items" :popup="true">
+        <template #item="{ item, props: itemProps }">
+            <a
+                v-ripple
+                v-bind="itemProps.action"
+                :class="[
+                    'flex items-center',
+                    locale === (item.data as { code: SupportedLocale }).code && 'font-semibold text-primary',
+                ]"
+            >
+                <span>{{ item.label }}</span>
+            </a>
+        </template>
+    </Menu>
 </template>

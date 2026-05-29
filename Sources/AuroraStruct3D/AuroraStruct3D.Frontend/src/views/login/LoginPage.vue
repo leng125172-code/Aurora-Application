@@ -2,22 +2,22 @@
 import { ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { toast } from 'vue-sonner'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Card, CardHeader, CardDescription, CardContent, CardFooter } from '@/components/ui/card'
-import { BorderBeam } from '@/components/ui/border-beam'
+import Button from 'primevue/button'
+import InputText from 'primevue/inputtext'
+import Password from 'primevue/password'
 import { TextGlitch } from '@/components/ui/text-glitch'
+import { AppCard } from '@/components/primevue'
 import LoginTopBar from '@/layouts/LoginTopBar.vue'
 import { loginAsync } from '@/api/auth'
 import { getApplicationConfigurationAsync } from '@/api/abp-application'
 import { useAuthStore } from '@/stores/auth'
+import { useAppToast } from '@/composables/useAppToast'
 
 const { t } = useI18n()
 const router = useRouter()
 const route = useRoute()
 const auth = useAuthStore()
+const toast = useAppToast()
 
 const username = ref('')
 const password = ref('')
@@ -26,11 +26,11 @@ const submitting = ref(false)
 
 async function handleSubmit(): Promise<void> {
     if (!username.value) {
-        toast.warning(t('login.usernameRequired'))
+        toast.warn(t('login.usernameRequired'))
         return
     }
     if (!password.value) {
-        toast.warning(t('login.passwordRequired'))
+        toast.warn(t('login.passwordRequired'))
         return
     }
 
@@ -75,44 +75,64 @@ async function handleSubmit(): Promise<void> {
 
     <!-- 登录卡片 -->
     <div class="relative z-[1] flex h-full w-full flex-col items-center justify-center gap-8 px-4">
-        <!-- 顶部 Glitch 大标题（官方 banner 风格：黑底白字 + RGB 偏移） -->
+        <!-- 顶部 Glitch 大标题（保留 Inspira UI 视觉效果） -->
         <TextGlitch :text="t('login.title')" :speed="1" :enable-shadows="true" class="!text-4xl md:!text-5xl" />
 
-        <Card class="w-full max-w-md shadow-2xl backdrop-blur-sm bg-background/80">
-            <BorderBeam :size="160" :duration="10" />
-            <CardHeader class="space-y-2 text-center">
-                <CardDescription>{{ t('login.subtitle') }}</CardDescription>
-            </CardHeader>
-            <CardContent class="space-y-4">
-                <div class="space-y-2">
-                    <Label for="login-tenant">{{ t('login.tenant') }}</Label>
-                    <Input
-                        id="login-tenant"
-                        v-model="tenantName"
-                        :placeholder="t('login.tenantPlaceholder')"
-                        autocomplete="organization"
-                    />
-                </div>
-                <div class="space-y-2">
-                    <Label for="login-username">{{ t('login.username') }}</Label>
-                    <Input id="login-username" v-model="username" autocomplete="username" @keyup.enter="handleSubmit" />
-                </div>
-                <div class="space-y-2">
-                    <Label for="login-password">{{ t('login.password') }}</Label>
-                    <Input
-                        id="login-password"
-                        v-model="password"
-                        type="password"
-                        autocomplete="current-password"
-                        @keyup.enter="handleSubmit"
-                    />
-                </div>
-            </CardContent>
-            <CardFooter>
-                <Button class="w-full" :disabled="submitting" @click="handleSubmit">
-                    {{ submitting ? t('login.signingIn') : t('login.signIn') }}
-                </Button>
-            </CardFooter>
-        </Card>
+        <AppCard class="w-full max-w-md shadow-2xl" :beam-size="160">
+            <template #subtitle>
+                <span class="block text-center">{{ t('login.subtitle') }}</span>
+            </template>
+
+            <template #content>
+                <form class="space-y-4" @submit.prevent="handleSubmit">
+                    <!-- 租户 -->
+                    <div class="space-y-2">
+                        <label for="login-tenant" class="text-sm font-medium">{{ t('login.tenant') }}</label>
+                        <InputText
+                            id="login-tenant"
+                            v-model="tenantName"
+                            :placeholder="t('login.tenantPlaceholder')"
+                            autocomplete="organization"
+                            class="w-full"
+                        />
+                    </div>
+                    <!-- 用户名 -->
+                    <div class="space-y-2">
+                        <label for="login-username" class="text-sm font-medium">{{ t('login.username') }}</label>
+                        <InputText
+                            id="login-username"
+                            v-model="username"
+                            autocomplete="username"
+                            class="w-full"
+                            @keyup.enter="handleSubmit"
+                        />
+                    </div>
+                    <!-- 密码 -->
+                    <div class="space-y-2">
+                        <label for="login-password" class="text-sm font-medium">{{ t('login.password') }}</label>
+                        <Password
+                            input-id="login-password"
+                            v-model="password"
+                            :feedback="false"
+                            toggle-mask
+                            autocomplete="current-password"
+                            input-class="w-full"
+                            class="w-full"
+                            @keyup.enter="handleSubmit"
+                        />
+                    </div>
+                </form>
+            </template>
+
+            <template #footer>
+                <Button
+                    class="w-full"
+                    :label="submitting ? t('login.signingIn') : t('login.signIn')"
+                    :loading="submitting"
+                    :disabled="submitting"
+                    @click="handleSubmit"
+                />
+            </template>
+        </AppCard>
     </div>
 </template>

@@ -9,8 +9,7 @@ import { useI18n } from 'vue-i18n'
 import * as signalR from '@microsoft/signalr'
 import * as echarts from 'echarts'
 import { AnimatedCircularProgressBar } from '@/components/ui/animated-circular-progressbar'
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
-import { BorderBeam } from '@/components/ui/border-beam'
+import { AppCard } from '@/components/primevue'
 import { useAuthStore } from '@/stores/auth'
 import { useThemeStore } from '@/stores/theme'
 import { httpClient } from '@/api/client'
@@ -247,12 +246,9 @@ onUnmounted(async () => {
         <!-- 系统负载：圆形进度条 -->
         <div class="flex flex-wrap gap-4">
             <!-- CPU -->
-            <Card class="relative flex flex-col items-center py-5 w-[250px] h-[250px]">
-                <BorderBeam :size="80" :duration="8" />
-                <CardHeader class="pb-2 text-center">
-                    <CardTitle class="text-sm text-muted-foreground">{{ t('dashboard.cpu') }}</CardTitle>
-                </CardHeader>
-                <CardContent class="flex flex-col items-center gap-2">
+            <AppCard class="w-[250px] h-[250px]" :beam-size="80" :beam-duration="8">
+                <div class="flex flex-col items-center gap-2 py-5">
+                    <div class="text-sm text-muted-foreground">{{ t('dashboard.cpu') }}</div>
                     <AnimatedCircularProgressBar
                         v-if="metrics.cpuPercent >= 0"
                         :value="cpuDisplay"
@@ -265,16 +261,13 @@ onUnmounted(async () => {
                     />
                     <span v-else class="text-sm text-muted-foreground">{{ t('dashboard.na') }}</span>
                     <span class="text-xs text-muted-foreground">{{ cpuDisplay }}%</span>
-                </CardContent>
-            </Card>
+                </div>
+            </AppCard>
 
             <!-- 内存 -->
-            <Card class="relative flex flex-col items-center py-5 w-[250px] h-[250px]">
-                <BorderBeam :size="80" :duration="8" :delay="2" />
-                <CardHeader class="pb-2 text-center">
-                    <CardTitle class="text-sm text-muted-foreground">{{ t('dashboard.memory') }}</CardTitle>
-                </CardHeader>
-                <CardContent class="flex flex-col items-center gap-2">
+            <AppCard class="w-[250px] h-[250px]" :beam-size="80" :beam-duration="8" :beam-delay="2">
+                <div class="flex flex-col items-center gap-2 py-5">
+                    <div class="text-sm text-muted-foreground">{{ t('dashboard.memory') }}</div>
                     <AnimatedCircularProgressBar
                         v-if="metrics.memoryPercent >= 0"
                         :value="memDisplay"
@@ -289,16 +282,19 @@ onUnmounted(async () => {
                     <span class="text-xs text-muted-foreground">
                         {{ formatBytes(metrics.memoryUsedBytes) }} / {{ formatBytes(metrics.memoryTotalBytes) }}
                     </span>
-                </CardContent>
-            </Card>
+                </div>
+            </AppCard>
 
             <!-- NPU 卡片（仅当 NPU 和 GPU 同时存在时单独展示 NPU；否则在混合卡中显示）-->
-            <Card v-if="showBothNpuGpu" class="relative flex flex-col items-center py-5 w-[250px] h-[250px]">
-                <BorderBeam :size="80" :duration="8" :delay="4" />
-                <CardHeader class="pb-2 text-center">
-                    <CardTitle class="text-sm text-muted-foreground">{{ t('dashboard.npu') }}</CardTitle>
-                </CardHeader>
-                <CardContent class="flex flex-col items-center gap-2">
+            <AppCard
+                v-if="showBothNpuGpu"
+                class="w-[250px] h-[250px]"
+                :beam-size="80"
+                :beam-duration="8"
+                :beam-delay="4"
+            >
+                <div class="flex flex-col items-center gap-2 py-5">
+                    <div class="text-sm text-muted-foreground">{{ t('dashboard.npu') }}</div>
                     <AnimatedCircularProgressBar
                         :value="npuDisplay"
                         :max="100"
@@ -309,16 +305,19 @@ onUnmounted(async () => {
                         class="size-28 text-xl"
                     />
                     <span class="text-xs text-muted-foreground">{{ npuDisplay }}%</span>
-                </CardContent>
-            </Card>
+                </div>
+            </AppCard>
 
             <!-- GPU 卡片（仅当 NPU 和 GPU 同时存在时单独展示 GPU）-->
-            <Card v-if="showBothNpuGpu" class="relative flex flex-col items-center py-5 w-[250px] h-[250px]">
-                <BorderBeam :size="80" :duration="8" :delay="6" />
-                <CardHeader class="pb-2 text-center">
-                    <CardTitle class="text-sm text-muted-foreground">{{ t('dashboard.gpu') }}</CardTitle>
-                </CardHeader>
-                <CardContent class="flex flex-col items-center gap-2">
+            <AppCard
+                v-if="showBothNpuGpu"
+                class="w-[250px] h-[250px]"
+                :beam-size="80"
+                :beam-duration="8"
+                :beam-delay="6"
+            >
+                <div class="flex flex-col items-center gap-2 py-5">
+                    <div class="text-sm text-muted-foreground">{{ t('dashboard.gpu') }}</div>
                     <AnimatedCircularProgressBar
                         :value="gpuDisplay"
                         :max="100"
@@ -329,18 +328,15 @@ onUnmounted(async () => {
                         class="size-28 text-xl"
                     />
                     <span class="text-xs text-muted-foreground">{{ gpuDisplay }}%</span>
-                </CardContent>
-            </Card>
+                </div>
+            </AppCard>
 
             <!-- NPU（Linux/RK3588）/ GPU（Windows）混合卡（仅当两者不同时存在时显示）-->
-            <Card v-else class="relative flex flex-col items-center py-5 w-[250px] h-[250px]">
-                <BorderBeam :size="80" :duration="8" :delay="4" />
-                <CardHeader class="pb-2 text-center">
-                    <CardTitle class="text-sm text-muted-foreground">
+            <AppCard v-else class="w-[250px] h-[250px]" :beam-size="80" :beam-duration="8" :beam-delay="4">
+                <div class="flex flex-col items-center gap-2 py-5">
+                    <div class="text-sm text-muted-foreground">
                         {{ metrics.npuPercent >= 0 ? t('dashboard.npu') : t('dashboard.gpu') }}
-                    </CardTitle>
-                </CardHeader>
-                <CardContent class="flex flex-col items-center gap-2">
+                    </div>
                     <AnimatedCircularProgressBar
                         v-if="metrics.npuPercent >= 0"
                         :value="npuDisplay"
@@ -371,106 +367,111 @@ onUnmounted(async () => {
                                   : t('dashboard.notSupported')
                         }}
                     </span>
-                </CardContent>
-            </Card>
+                </div>
+            </AppCard>
         </div>
 
         <!-- 网络流量：速率摘要 + 折线图合并 -->
-        <Card class="relative">
-            <BorderBeam :size="120" :duration="10" />
-            <CardHeader>
-                <CardTitle class="text-base">{{ t('dashboard.traffic') }}</CardTitle>
-                <CardDescription>
-                    <span class="text-[rgb(249,204,131)] font-medium mr-4">
-                        ↑ {{ formatBytes(metrics.networkSendRate, true) }}
-                    </span>
-                    <span class="text-[rgb(135,195,255)] font-medium">
-                        ↓ {{ formatBytes(metrics.networkReceiveRate, true) }}
-                    </span>
-                    <span class="ml-4 text-muted-foreground text-xs">
-                        {{ t('dashboard.totalSent') }}: {{ formatBytes(metrics.networkTotalSent) }} &nbsp;
-                        {{ t('dashboard.totalReceived') }}: {{ formatBytes(metrics.networkTotalReceived) }}
-                    </span>
-                </CardDescription>
-            </CardHeader>
-            <CardContent class="pr-4">
+        <AppCard>
+            <div class="p-4 space-y-3">
+                <div>
+                    <div class="text-base font-semibold">{{ t('dashboard.traffic') }}</div>
+                    <div class="text-sm text-muted-foreground mt-1">
+                        <span class="text-[rgb(249,204,131)] font-medium mr-4">
+                            ↑ {{ formatBytes(metrics.networkSendRate, true) }}
+                        </span>
+                        <span class="text-[rgb(135,195,255)] font-medium">
+                            ↓ {{ formatBytes(metrics.networkReceiveRate, true) }}
+                        </span>
+                        <span class="ml-4 text-muted-foreground text-xs">
+                            {{ t('dashboard.totalSent') }}: {{ formatBytes(metrics.networkTotalSent) }} &nbsp;
+                            {{ t('dashboard.totalReceived') }}: {{ formatBytes(metrics.networkTotalReceived) }}
+                        </span>
+                    </div>
+                </div>
                 <div ref="trafficChartEl" style="height: 220px; width: 100%" />
-            </CardContent>
-        </Card>
+            </div>
+        </AppCard>
 
         <!-- CAP + Hangfire 概览 -->
         <div class="grid gap-4 md:grid-cols-2">
             <!-- CAP 概览 -->
-            <Card class="relative">
-                <BorderBeam :size="100" :duration="10" />
-                <CardHeader>
-                    <CardTitle class="text-base">{{ t('dashboard.capOverview') }}</CardTitle>
-                </CardHeader>
-                <CardContent class="grid grid-cols-2 gap-3">
-                    <div class="rounded-lg bg-muted/40 p-3">
-                        <div class="text-xs text-muted-foreground">{{ t('cap.publishSucceeded') }}</div>
-                        <div class="mt-1 text-2xl font-semibold text-green-500">
-                            {{ capStats.publishSucceeded ?? '-' }}
+            <AppCard :beam-size="100">
+                <div class="p-4 space-y-3">
+                    <div class="text-base font-semibold">{{ t('dashboard.capOverview') }}</div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div class="rounded-lg bg-muted/40 p-3">
+                            <div class="text-xs text-muted-foreground">{{ t('cap.publishSucceeded') }}</div>
+                            <div class="mt-1 text-2xl font-semibold text-green-500">
+                                {{ capStats.publishSucceeded ?? '-' }}
+                            </div>
+                        </div>
+                        <div class="rounded-lg bg-muted/40 p-3">
+                            <div class="text-xs text-muted-foreground">{{ t('cap.publishFailed') }}</div>
+                            <div class="mt-1 text-2xl font-semibold text-red-500">
+                                {{ capStats.publishFailed ?? '-' }}
+                            </div>
+                        </div>
+                        <div class="rounded-lg bg-muted/40 p-3">
+                            <div class="text-xs text-muted-foreground">{{ t('cap.consumeSucceeded') }}</div>
+                            <div class="mt-1 text-2xl font-semibold text-blue-500">
+                                {{ capStats.consumeSucceeded ?? '-' }}
+                            </div>
+                        </div>
+                        <div class="rounded-lg bg-muted/40 p-3">
+                            <div class="text-xs text-muted-foreground">{{ t('cap.consumeFailed') }}</div>
+                            <div class="mt-1 text-2xl font-semibold text-orange-500">
+                                {{ capStats.consumeFailed ?? '-' }}
+                            </div>
                         </div>
                     </div>
-                    <div class="rounded-lg bg-muted/40 p-3">
-                        <div class="text-xs text-muted-foreground">{{ t('cap.publishFailed') }}</div>
-                        <div class="mt-1 text-2xl font-semibold text-red-500">{{ capStats.publishFailed ?? '-' }}</div>
-                    </div>
-                    <div class="rounded-lg bg-muted/40 p-3">
-                        <div class="text-xs text-muted-foreground">{{ t('cap.consumeSucceeded') }}</div>
-                        <div class="mt-1 text-2xl font-semibold text-blue-500">
-                            {{ capStats.consumeSucceeded ?? '-' }}
-                        </div>
-                    </div>
-                    <div class="rounded-lg bg-muted/40 p-3">
-                        <div class="text-xs text-muted-foreground">{{ t('cap.consumeFailed') }}</div>
-                        <div class="mt-1 text-2xl font-semibold text-orange-500">
-                            {{ capStats.consumeFailed ?? '-' }}
-                        </div>
-                    </div>
-                </CardContent>
-            </Card>
+                </div>
+            </AppCard>
 
             <!-- Hangfire 概览 -->
-            <Card class="relative">
-                <BorderBeam :size="100" :duration="10" :delay="5" />
-                <CardHeader>
-                    <CardTitle class="text-base">{{ t('dashboard.hangfireOverview') }}</CardTitle>
-                </CardHeader>
-                <CardContent class="grid grid-cols-3 gap-2">
-                    <div class="rounded-lg bg-muted/40 p-3">
-                        <div class="text-xs text-muted-foreground">{{ t('hangfire.enqueued') }}</div>
-                        <div class="mt-1 text-xl font-semibold text-yellow-500">
-                            {{ hangfireStats.enqueued ?? '-' }}
+            <AppCard :beam-size="100" :beam-delay="5">
+                <div class="p-4 space-y-3">
+                    <div class="text-base font-semibold">{{ t('dashboard.hangfireOverview') }}</div>
+                    <div class="grid grid-cols-3 gap-2">
+                        <div class="rounded-lg bg-muted/40 p-3">
+                            <div class="text-xs text-muted-foreground">{{ t('hangfire.enqueued') }}</div>
+                            <div class="mt-1 text-xl font-semibold text-yellow-500">
+                                {{ hangfireStats.enqueued ?? '-' }}
+                            </div>
+                        </div>
+                        <div class="rounded-lg bg-muted/40 p-3">
+                            <div class="text-xs text-muted-foreground">{{ t('hangfire.processing') }}</div>
+                            <div class="mt-1 text-xl font-semibold text-purple-500">
+                                {{ hangfireStats.processing ?? '-' }}
+                            </div>
+                        </div>
+                        <div class="rounded-lg bg-muted/40 p-3">
+                            <div class="text-xs text-muted-foreground">{{ t('hangfire.succeeded') }}</div>
+                            <div class="mt-1 text-xl font-semibold text-green-500">
+                                {{ hangfireStats.succeeded ?? '-' }}
+                            </div>
+                        </div>
+                        <div class="rounded-lg bg-muted/40 p-3">
+                            <div class="text-xs text-muted-foreground">{{ t('hangfire.failed') }}</div>
+                            <div class="mt-1 text-xl font-semibold text-red-500">
+                                {{ hangfireStats.failed ?? '-' }}
+                            </div>
+                        </div>
+                        <div class="rounded-lg bg-muted/40 p-3">
+                            <div class="text-xs text-muted-foreground">{{ t('hangfire.recurring') }}</div>
+                            <div class="mt-1 text-xl font-semibold text-cyan-500">
+                                {{ hangfireStats.servers ?? '-' }}
+                            </div>
+                        </div>
+                        <div class="rounded-lg bg-muted/40 p-3">
+                            <div class="text-xs text-muted-foreground">{{ t('hangfire.servers') }}</div>
+                            <div class="mt-1 text-xl font-semibold text-indigo-500">
+                                {{ hangfireStats.servers ?? '-' }}
+                            </div>
                         </div>
                     </div>
-                    <div class="rounded-lg bg-muted/40 p-3">
-                        <div class="text-xs text-muted-foreground">{{ t('hangfire.processing') }}</div>
-                        <div class="mt-1 text-xl font-semibold text-purple-500">
-                            {{ hangfireStats.processing ?? '-' }}
-                        </div>
-                    </div>
-                    <div class="rounded-lg bg-muted/40 p-3">
-                        <div class="text-xs text-muted-foreground">{{ t('hangfire.succeeded') }}</div>
-                        <div class="mt-1 text-xl font-semibold text-green-500">
-                            {{ hangfireStats.succeeded ?? '-' }}
-                        </div>
-                    </div>
-                    <div class="rounded-lg bg-muted/40 p-3">
-                        <div class="text-xs text-muted-foreground">{{ t('hangfire.failed') }}</div>
-                        <div class="mt-1 text-xl font-semibold text-red-500">{{ hangfireStats.failed ?? '-' }}</div>
-                    </div>
-                    <div class="rounded-lg bg-muted/40 p-3">
-                        <div class="text-xs text-muted-foreground">{{ t('hangfire.recurring') }}</div>
-                        <div class="mt-1 text-xl font-semibold text-cyan-500">{{ hangfireStats.servers ?? '-' }}</div>
-                    </div>
-                    <div class="rounded-lg bg-muted/40 p-3">
-                        <div class="text-xs text-muted-foreground">{{ t('hangfire.servers') }}</div>
-                        <div class="mt-1 text-xl font-semibold text-indigo-500">{{ hangfireStats.servers ?? '-' }}</div>
-                    </div>
-                </CardContent>
-            </Card>
+                </div>
+            </AppCard>
         </div>
     </div>
 </template>
