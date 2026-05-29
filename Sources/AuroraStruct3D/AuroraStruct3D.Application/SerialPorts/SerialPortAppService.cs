@@ -1,5 +1,6 @@
 using System.IO.Ports;
 using System.Text;
+using AuroraStruct3D.DeviceState;
 using AuroraStruct3D.RS485;
 using AuroraStruct3D.SerialPorts.Dtos;
 using Volo.Abp;
@@ -15,14 +16,17 @@ public class SerialPortAppService : AuroraStruct3DAppService, ISerialPortAppServ
 {
     private readonly ISerialPortConfigRepository _serialPortConfigRepository;
     private readonly IMotorControlService _motorControlService;
+    private readonly IDeviceStateManager _deviceStateManager;
 
     public SerialPortAppService(
         ISerialPortConfigRepository serialPortConfigRepository,
-        IMotorControlService motorControlService
+        IMotorControlService motorControlService,
+        IDeviceStateManager deviceStateManager
     )
     {
         _serialPortConfigRepository = serialPortConfigRepository;
         _motorControlService = motorControlService;
+        _deviceStateManager = deviceStateManager;
     }
 
     /// <inheritdoc/>
@@ -61,6 +65,7 @@ public class SerialPortAppService : AuroraStruct3DAppService, ISerialPortAppServ
     /// <inheritdoc/>
     public async Task<SerialPortScanResultDto> ScanSystemPortsAsync()
     {
+        EnsureManualOrMaintenanceMode();
         string[] portNames = SerialPort
             .GetPortNames()
             .OrderBy(portName => portName, StringComparer.OrdinalIgnoreCase)
@@ -96,6 +101,7 @@ public class SerialPortAppService : AuroraStruct3DAppService, ISerialPortAppServ
     /// <inheritdoc/>
     public async Task<SerialPortConfigDto> UpdateAsync(Guid id, UpdateSerialPortConfigDto input)
     {
+        EnsureManualOrMaintenanceMode();
         SerialPortConfig config = await _serialPortConfigRepository.GetAsync(id);
         config.SetDisplayName(input.DisplayName);
         config.SetDescription(input.Description);
@@ -114,6 +120,7 @@ public class SerialPortAppService : AuroraStruct3DAppService, ISerialPortAppServ
     /// <inheritdoc/>
     public async Task<SerialPortConfigDto> ConnectAsync(Guid id, ConnectSerialPortDto input)
     {
+        EnsureManualOrMaintenanceMode();
         SerialPortConfig config = await _serialPortConfigRepository.GetAsync(id);
         if (input.BaudRate.HasValue && input.BaudRate.Value != config.BaudRate)
         {
@@ -139,6 +146,7 @@ public class SerialPortAppService : AuroraStruct3DAppService, ISerialPortAppServ
     /// <inheritdoc/>
     public async Task<SerialPortConfigDto> DisconnectAsync(Guid id)
     {
+        EnsureManualOrMaintenanceMode();
         SerialPortConfig config = await _serialPortConfigRepository.GetAsync(id);
         _motorControlService.CloseSerialPort(id);
         return ToDto(config);
@@ -147,6 +155,7 @@ public class SerialPortAppService : AuroraStruct3DAppService, ISerialPortAppServ
     /// <inheritdoc/>
     public async Task<SerialPortRawResponseDto> SendRawAsync(Guid id, SerialPortRawSendDto input)
     {
+        EnsureManualOrMaintenanceMode();
         SerialPortConfig config = await _serialPortConfigRepository.GetAsync(id);
         byte[] request = input.IsHex
             ? ParseHex(input.Payload)
@@ -168,6 +177,24 @@ public class SerialPortAppService : AuroraStruct3DAppService, ISerialPortAppServ
             ResponseText = DecodeResponseText(response),
             ResponseLength = response.Length,
         };
+    }
+
+    /// <summary>
+    /// 校验当前运行模式必须为手动或检修，否则抛出业务异常。
+    /// </summary>
+    private void EnsureManualOrMaintenanceMode()
+    {
+        DeviceRunMode mode = _deviceStateManager.RunMode;
+        if (mode is not (DeviceRunMode.Manual or DeviceRunMode.Maintenance))
+        {
+            throw new UserFriendlyException(
+                $"当前运行模式为【{mode switch {
+                    DeviceRunMode.Online => "联机",
+                    DeviceRunMode.Auto   => "自动",
+                    _                    => mode.ToString()
+                }}】，串口操作仅允许在手动模式或检修模式下执行"
+            );
+        }
     }
 
     /// <summary>

@@ -45,6 +45,11 @@ public class ProductModelPermissionDefinitionProvider : PermissionDefinitionProv
             ProductModelPermissions.RetryConversion,
             L("Permission:ProductModel.RetryConversion")
         );
+
+        defaultPermission.AddChild(
+            ProductModelPermissions.CleanUp,
+            L("Permission:ProductModel.CleanUp")
+        );
     }
 
     private static LocalizableString L(string name)

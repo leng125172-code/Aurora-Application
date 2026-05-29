@@ -509,8 +509,8 @@ onUnmounted(async () => {
                             <TableRow>
                                 <TableHead>{{ t('hangfire.jobId') }}</TableHead>
                                 <TableHead>{{ t('hangfire.jobName') }}</TableHead>
-                                <TableHead>{{ t('hangfire.jobCreated') }}</TableHead>
-                                <TableHead class="text-right">{{ t('common.action') }}</TableHead>
+                                <TableHead class="whitespace-nowrap">{{ t('hangfire.jobCreated') }}</TableHead>
+                                <TableHead class="text-right whitespace-nowrap">{{ t('common.action') }}</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -520,9 +520,15 @@ onUnmounted(async () => {
                                 </TableCell>
                             </TableRow>
                             <TableRow v-for="job in jobList" :key="jobId(job)">
-                                <TableCell class="font-mono text-xs">{{ jobId(job) }}</TableCell>
-                                <TableCell class="font-mono text-sm">{{ jobLabel(job) }}</TableCell>
-                                <TableCell class="text-xs text-muted-foreground">{{ jobTime(job) }}</TableCell>
+                                <TableCell class="font-mono text-xs whitespace-nowrap">{{ jobId(job) }}</TableCell>
+                                <TableCell>
+                                    <div class="max-w-[320px] truncate font-mono text-sm" :title="jobLabel(job)">
+                                        {{ jobLabel(job) }}
+                                    </div>
+                                </TableCell>
+                                <TableCell class="text-xs text-muted-foreground whitespace-nowrap">
+                                    {{ jobTime(job) }}
+                                </TableCell>
                                 <TableCell class="text-right">
                                     <div class="flex justify-end gap-1">
                                         <Button
@@ -566,7 +572,7 @@ onUnmounted(async () => {
                                 <TableHead>{{ t('hangfire.jobId') }}</TableHead>
                                 <TableHead>{{ t('hangfire.jobName') }}</TableHead>
                                 <TableHead>{{ t('hangfire.errorMessage') }}</TableHead>
-                                <TableHead class="text-right">{{ t('common.action') }}</TableHead>
+                                <TableHead class="text-right whitespace-nowrap">{{ t('common.action') }}</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -576,10 +582,19 @@ onUnmounted(async () => {
                                 </TableCell>
                             </TableRow>
                             <TableRow v-for="job in jobList" :key="jobId(job)">
-                                <TableCell class="font-mono text-xs">{{ jobId(job) }}</TableCell>
-                                <TableCell class="font-mono text-sm">{{ jobLabel(job) }}</TableCell>
-                                <TableCell class="max-w-xs truncate text-xs text-destructive">
-                                    {{ (jobVal(job)['Reason'] ?? jobVal(job)['reason'] ?? '-') as string }}
+                                <TableCell class="font-mono text-xs whitespace-nowrap">{{ jobId(job) }}</TableCell>
+                                <TableCell>
+                                    <div class="max-w-[320px] truncate font-mono text-sm" :title="jobLabel(job)">
+                                        {{ jobLabel(job) }}
+                                    </div>
+                                </TableCell>
+                                <TableCell>
+                                    <div
+                                        class="max-w-xs truncate text-xs text-destructive"
+                                        :title="(jobVal(job)['Reason'] ?? jobVal(job)['reason'] ?? '-') as string"
+                                    >
+                                        {{ (jobVal(job)['Reason'] ?? jobVal(job)['reason'] ?? '-') as string }}
+                                    </div>
                                 </TableCell>
                                 <TableCell class="text-right">
                                     <Button
@@ -623,7 +638,11 @@ onUnmounted(async () => {
                                 </TableCell>
                             </TableRow>
                             <TableRow v-for="job in recurringJobs" :key="rId(job)">
-                                <TableCell class="font-mono text-sm">{{ rId(job) }}</TableCell>
+                                <TableCell>
+                                    <div class="max-w-[200px] truncate font-mono text-sm" :title="rId(job)">
+                                        {{ rId(job) }}
+                                    </div>
+                                </TableCell>
                                 <TableCell>
                                     <Badge variant="secondary" class="font-mono text-xs">{{ rCron(job) }}</Badge>
                                 </TableCell>
@@ -687,11 +706,21 @@ onUnmounted(async () => {
                                 </TableCell>
                             </TableRow>
                             <TableRow v-for="srv in servers" :key="sName(srv)">
-                                <TableCell class="font-mono text-sm">{{ sName(srv) }}</TableCell>
+                                <TableCell>
+                                    <div class="max-w-[200px] truncate font-mono text-sm" :title="sName(srv)">
+                                        {{ sName(srv) }}
+                                    </div>
+                                </TableCell>
                                 <TableCell>{{ sWorkers(srv) }}</TableCell>
-                                <TableCell class="text-xs text-muted-foreground">{{ sQueues(srv) }}</TableCell>
-                                <TableCell class="text-xs text-muted-foreground">{{ sStarted(srv) }}</TableCell>
-                                <TableCell class="text-xs text-muted-foreground">{{ sHeartbeat(srv) }}</TableCell>
+                                <TableCell class="text-xs text-muted-foreground">
+                                    <div class="max-w-[150px] truncate" :title="sQueues(srv)">{{ sQueues(srv) }}</div>
+                                </TableCell>
+                                <TableCell class="text-xs text-muted-foreground whitespace-nowrap">
+                                    {{ sStarted(srv) }}
+                                </TableCell>
+                                <TableCell class="text-xs text-muted-foreground whitespace-nowrap">
+                                    {{ sHeartbeat(srv) }}
+                                </TableCell>
                             </TableRow>
                         </TableBody>
                     </Table>

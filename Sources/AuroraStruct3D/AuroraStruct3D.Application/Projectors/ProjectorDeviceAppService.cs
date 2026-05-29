@@ -86,6 +86,7 @@ public class ProjectorDeviceAppService : AuroraStruct3DAppService, IProjectorDev
     /// <inheritdoc/>
     public async Task<int> ScanProjectorsAsync()
     {
+        EnsureManualOrMaintenanceMode();
         // 探测当前连接的 HID 投影机数量
         int count = _dlpProjectorService.GetHidDeviceCount(
             ProjectorConsts.HidVendorId,
@@ -125,6 +126,7 @@ public class ProjectorDeviceAppService : AuroraStruct3DAppService, IProjectorDev
     /// <inheritdoc/>
     public async Task<ProjectorDeviceDto> UpdateAsync(Guid id, UpdateProjectorDeviceDto input)
     {
+        EnsureManualOrMaintenanceMode();
         ProjectorDevice device = await _projectorDeviceRepository.GetAsync(id);
         device.SetName(input.Name);
         device.SetDescription(input.Description);

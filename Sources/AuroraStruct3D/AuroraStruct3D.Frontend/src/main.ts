@@ -10,6 +10,7 @@ import { i18n } from '@/i18n'
 
 // 全局样式（Tailwind 基础层 + shadcn-vue CSS 变量）
 import '@/assets/styles/index.css'
+import 'vue-sonner/style.css'
 
 const app = createApp(App)
 

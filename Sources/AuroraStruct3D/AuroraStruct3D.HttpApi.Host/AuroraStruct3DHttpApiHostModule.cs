@@ -58,7 +58,7 @@ namespace AuroraStruct3D
                 .AddAbpProCors()
                 .AddAbpProAntiForgery()
                 .AddAbpProIdentity()
-                .AddAbpProBlobStorageFileSystem()
+                .AddAbpProBlobStorageFileSystem(context.Services.GetConfiguration())
                 .AddAbpProSignalR()
                 .AddAbpProHealthChecks()
                 .AddAbpProTenantResolvers()

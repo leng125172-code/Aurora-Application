@@ -140,7 +140,7 @@ async function handleDelete(tenant: TenantDto): Promise<void> {
                     <TableRow>
                         <TableHead>{{ t('management.tenantName') }}</TableHead>
                         <TableHead>ID</TableHead>
-                        <TableHead class="text-right">{{ t('common.action') }}</TableHead>
+                        <TableHead class="text-right whitespace-nowrap">{{ t('common.action') }}</TableHead>
                     </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -155,8 +155,17 @@ async function handleDelete(tenant: TenantDto): Promise<void> {
                         </TableCell>
                     </TableRow>
                     <TableRow v-for="tenant in tenants" :key="tenant.id">
-                        <TableCell class="font-medium">{{ tenant.name }}</TableCell>
-                        <TableCell class="font-mono text-xs text-muted-foreground">{{ tenant.id }}</TableCell>
+                        <TableCell class="font-medium">
+                            <div class="max-w-[200px] truncate" :title="tenant.name">{{ tenant.name }}</div>
+                        </TableCell>
+                        <TableCell>
+                            <div
+                                class="max-w-[280px] truncate font-mono text-xs text-muted-foreground"
+                                :title="tenant.id"
+                            >
+                                {{ tenant.id }}
+                            </div>
+                        </TableCell>
                         <TableCell class="text-right">
                             <Button
                                 variant="ghost"

@@ -34,6 +34,7 @@ import {
     CheckCircle,
     XCircle,
     Loader2,
+    Eraser,
 } from '@lucide/vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -52,9 +53,11 @@ import {
     deleteProductModelAsync,
     retryConversionAsync,
     downloadProductModelAsync,
+    cleanUpOrphanedRecordsAsync,
     type ProductModelDto,
     type GetProductModelListInput,
 } from '@/api/product-models'
+import { showErrorToastOnce } from '@/api/client'
 import { useAuthStore } from '@/stores/auth'
 
 const { t } = useI18n()
@@ -323,6 +326,9 @@ function removeQueueItem(id: string): void {
 
 async function startUploadAll(): Promise<void> {
     const pending = uploadQueue.value.filter((i) => i.state === 'idle')
+    // 提前建立 SignalR 连接，防止 Job 在 UoW 提交后立即执行，通知在连接建立前发出（竞态条件）
+    await startConversionHub()
+
     await Promise.all(
         pending.map(async (item) => {
             const ac = new AbortController()
@@ -353,16 +359,15 @@ async function startUploadAll(): Promise<void> {
 
     // 检查是否有文件需要转换
     const needsConversionItems = uploadQueue.value.filter((i) => i.conversionState === 'waiting')
-    if (needsConversionItems.length > 0) {
-        // 建立 SignalR 连接，实时监听转换进度
-        await startConversionHub()
-    } else {
-        // 无需转换，直接刷新列表
+    if (needsConversionItems.length === 0) {
+        // 无需转换，断开 Hub 连接并刷新列表
+        stopConversionHub()
         if (uploadQueue.value.every((i) => i.state === 'done' || i.state === 'cancelled')) {
             showUpload.value = false
         }
         await loadList()
     }
+    // 有文件需要转换：保持 Hub 连接，等待 ReceiveConversionFinished 回调处理后续逻辑
 }
 
 // ===================== 重命名对话框 =====================
@@ -387,7 +392,7 @@ async function submitRename(): Promise<void> {
         showRename.value = false
         await loadList()
     } catch (e: unknown) {
-        toast.error(e instanceof Error ? e.message : String(e))
+        showErrorToastOnce(e)
     } finally {
         renaming.value = false
     }
@@ -413,7 +418,7 @@ async function confirmDelete(): Promise<void> {
         showDeleteConfirm.value = false
         await loadList()
     } catch (e: unknown) {
-        toast.error(e instanceof Error ? e.message : String(e))
+        showErrorToastOnce(e)
     } finally {
         deleting.value = null
     }
@@ -430,9 +435,28 @@ async function handleRetry(item: ProductModelDto): Promise<void> {
         toast.success(t('productModel.retrySuccess'))
         await loadList()
     } catch (e: unknown) {
-        toast.error(e instanceof Error ? e.message : String(e))
+        showErrorToastOnce(e)
     } finally {
         retrying.value = null
+    }
+}
+
+// ===================== 清理孤立记录 =====================
+
+const showCleanUpConfirm = ref(false)
+const cleaningUp = ref(false)
+
+async function handleCleanUp(): Promise<void> {
+    cleaningUp.value = true
+    try {
+        const count = await cleanUpOrphanedRecordsAsync()
+        toast.success(t('productModel.cleanUpSuccess', { count }))
+        showCleanUpConfirm.value = false
+        await loadList()
+    } catch (e: unknown) {
+        showErrorToastOnce(e)
+    } finally {
+        cleaningUp.value = false
     }
 }
 
@@ -448,7 +472,7 @@ async function handleDownload(item: ProductModelDto): Promise<void> {
         a.click()
         URL.revokeObjectURL(url)
     } catch (e: unknown) {
-        toast.error(e instanceof Error ? e.message : String(e))
+        showErrorToastOnce(e)
     }
 }
 
@@ -582,6 +606,10 @@ onBeforeUnmount(() => {
                 <Button variant="outline" size="icon" :disabled="loading" @click="loadList">
                     <RefreshCw :class="['size-4', loading && 'animate-spin']" />
                 </Button>
+                <Button variant="outline" @click="showCleanUpConfirm = true">
+                    <Eraser class="mr-1 size-4" />
+                    {{ t('productModel.cleanUp') }}
+                </Button>
                 <Button @click="openUpload">
                     <Upload class="mr-1 size-4" />
                     {{ t('productModel.upload') }}
@@ -643,7 +671,7 @@ onBeforeUnmount(() => {
                         <TableHead>{{ t('productModel.conversionStatus') }}</TableHead>
                         <TableHead>{{ t('productModel.uploader') }}</TableHead>
                         <TableHead>{{ t('productModel.uploadTime') }}</TableHead>
-                        <TableHead class="text-right">{{ t('common.actions') }}</TableHead>
+                        <TableHead class="text-right whitespace-nowrap">{{ t('common.actions') }}</TableHead>
                     </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -658,8 +686,8 @@ onBeforeUnmount(() => {
                         </TableCell>
                     </TableRow>
                     <TableRow v-for="item in items" :key="item.id">
-                        <TableCell class="max-w-[180px] truncate font-medium" :title="item.name">
-                            {{ item.name }}
+                        <TableCell class="font-medium">
+                            <div class="max-w-[200px] truncate" :title="item.name">{{ item.name }}</div>
                         </TableCell>
                         <TableCell>
                             <Badge variant="outline">{{ item.fileFormatDisplay }}</Badge>
@@ -670,8 +698,14 @@ onBeforeUnmount(() => {
                                 {{ statusLabel(item.conversionStatus) }}
                             </Badge>
                         </TableCell>
-                        <TableCell>{{ item.uploaderUserName ?? '-' }}</TableCell>
-                        <TableCell>{{ new Date(item.creationTime).toLocaleString() }}</TableCell>
+                        <TableCell>
+                            <div class="max-w-[120px] truncate" :title="item.uploaderUserName ?? '-'">
+                                {{ item.uploaderUserName ?? '-' }}
+                            </div>
+                        </TableCell>
+                        <TableCell class="whitespace-nowrap">
+                            {{ new Date(item.creationTime).toLocaleString() }}
+                        </TableCell>
                         <TableCell class="text-right">
                             <div class="flex justify-end gap-1">
                                 <!-- PLY 预览（仅 isReady 可预览） -->
@@ -745,6 +779,27 @@ onBeforeUnmount(() => {
             </div>
         </div>
     </div>
+
+    <!-- ===================== 清理确认对话框 ===================== -->
+    <Dialog v-model:open="showCleanUpConfirm">
+        <DialogContent class="max-w-sm">
+            <DialogHeader>
+                <DialogTitle>{{ t('productModel.cleanUpTitle') }}</DialogTitle>
+            </DialogHeader>
+            <p class="text-sm text-muted-foreground">
+                {{ t('productModel.cleanUpConfirm') }}
+            </p>
+            <DialogFooter>
+                <DialogClose as-child>
+                    <Button variant="outline">{{ t('common.cancel') }}</Button>
+                </DialogClose>
+                <Button variant="destructive" :disabled="cleaningUp" @click="handleCleanUp">
+                    <Loader2 v-if="cleaningUp" class="mr-1 size-4 animate-spin" />
+                    {{ t('common.confirm') }}
+                </Button>
+            </DialogFooter>
+        </DialogContent>
+    </Dialog>
 
     <!-- ===================== 上传对话框 ===================== -->
     <Dialog v-model:open="showUpload">

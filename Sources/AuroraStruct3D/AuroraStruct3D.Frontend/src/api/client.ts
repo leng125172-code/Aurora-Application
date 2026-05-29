@@ -11,12 +11,31 @@ import { getClientSessionId } from '@/utils/clientSession'
 
 // 生产环境同源；开发环境由 Vite 代理转发到 44315
 const baseURL = '/'
+const ERROR_TOAST_SHOWN_KEY = '__auroraErrorToastShown'
 
 export const httpClient: AxiosInstance = axios.create({
     baseURL,
     timeout: 30_000,
     withCredentials: false,
 })
+
+type ToastMarkedError = {
+    message?: string
+    [ERROR_TOAST_SHOWN_KEY]?: boolean
+}
+
+export function showErrorToastOnce(error: unknown): void {
+    const candidate = error as ToastMarkedError
+    if (candidate?.[ERROR_TOAST_SHOWN_KEY]) {
+        return
+    }
+
+    const message = candidate?.message || '未知错误'
+    toast.error(message)
+    if (candidate && typeof candidate === 'object') {
+        candidate[ERROR_TOAST_SHOWN_KEY] = true
+    }
+}
 
 httpClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
     const auth = useAuthStore()
@@ -39,9 +58,14 @@ httpClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
 
 httpClient.interceptors.response.use(
     (response) => response,
-    (error: { response?: { status?: number; data?: AbpRemoteError }; message?: string }) => {
+    (error: { response?: { status?: number; data?: unknown }; message?: string }) => {
         const status = error.response?.status
-        const remote = error.response?.data?.error
+        const data = error.response?.data
+        // 仅当响应体为对象时才尝试解析 ABP 错误格式（HTML 或纯文本响应不做解析）
+        const remote =
+            typeof data === 'object' && data !== null
+                ? (data as AbpRemoteError)?.error
+                : undefined
 
         if (status === 401) {
             const auth = useAuthStore()
@@ -50,9 +74,28 @@ httpClient.interceptors.response.use(
             router.push({ name: 'Login', query: { redirect: router.currentRoute.value.fullPath } })
         }
 
-        const message = remote?.message || error.message || '未知错误'
-        toast.error(message)
+        let message: string
+        if (remote?.message) {
+            message = remote.message
+        } else {
+            // 对非 ABP 格式响应（如 HTML 错误页、纯文本等）给出友好中文提示
+            switch (status) {
+                case 400: message = '请求参数错误 (400)'; break
+                case 401: message = '登录已过期，请重新登录 (401)'; break
+                case 403: message = '无权限执行此操作 (403)'; break
+                case 404: message = '请求的资源不存在 (404)'; break
+                case 500: message = '服务器内部错误，请稍后重试 (500)'; break
+                case 502: message = '网关错误，请稍后重试 (502)'; break
+                case 503: message = '服务不可用，请稍后重试 (503)'; break
+                default: message = error.message || '未知错误'; break
+            }
+        }
 
+        if (typeof error === 'object' && error !== null) {
+            ; (error as ToastMarkedError).message = message
+                ; (error as ToastMarkedError)[ERROR_TOAST_SHOWN_KEY] = true
+        }
+        toast.error(message)
         return Promise.reject(error)
     }
 )

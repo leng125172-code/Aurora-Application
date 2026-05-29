@@ -214,7 +214,7 @@ watch(total, updateTotalPages, { immediate: true })
                         <TableHead>{{ t('management.email') }}</TableHead>
                         <TableHead>{{ t('management.phone') }}</TableHead>
                         <TableHead>{{ t('management.status') }}</TableHead>
-                        <TableHead class="text-right">{{ t('common.action') }}</TableHead>
+                        <TableHead class="text-right whitespace-nowrap">{{ t('common.action') }}</TableHead>
                     </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -229,10 +229,21 @@ watch(total, updateTotalPages, { immediate: true })
                         </TableCell>
                     </TableRow>
                     <TableRow v-for="user in users" :key="user.id">
-                        <TableCell class="font-medium">{{ user.userName }}</TableCell>
-                        <TableCell>{{ user.name }}{{ user.surname ? ' ' + user.surname : '' }}</TableCell>
-                        <TableCell>{{ user.email }}</TableCell>
-                        <TableCell>{{ user.phoneNumber ?? '-' }}</TableCell>
+                        <TableCell class="font-medium">
+                            <div class="max-w-[150px] truncate" :title="user.userName">{{ user.userName }}</div>
+                        </TableCell>
+                        <TableCell>
+                            <div
+                                class="max-w-[150px] truncate"
+                                :title="user.name + (user.surname ? ' ' + user.surname : '')"
+                            >
+                                {{ user.name }}{{ user.surname ? ' ' + user.surname : '' }}
+                            </div>
+                        </TableCell>
+                        <TableCell>
+                            <div class="max-w-[200px] truncate" :title="user.email">{{ user.email }}</div>
+                        </TableCell>
+                        <TableCell class="whitespace-nowrap">{{ user.phoneNumber ?? '-' }}</TableCell>
                         <TableCell>
                             <Badge :variant="user.isActive ? 'default' : 'secondary'">
                                 {{ user.isActive ? t('management.active') : t('management.inactive') }}

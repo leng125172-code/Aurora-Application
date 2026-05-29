@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Hangfire.Common;
 using Hangfire.States;
 using Hangfire.Storage;
 using Hangfire.Storage.Monitoring;
@@ -16,24 +17,50 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Hangfire.Api
 {
     /// <summary>
-    /// 将 System.Type 序列化为其完整类型名称字符串，
-    /// 避免 System.Text.Json 在序列化 Hangfire Job.Type 时抛出 NotSupportedException。
+    /// 将 Hangfire.Common.Job 整体序列化为安全的字符串字段对象。
+    /// Job.Type、Job.Method、Job.Args 均含有 System.Text.Json 无法处理的运行时类型
+    /// （System.Type、MethodInfo、CancellationToken、IntPtr 等），
+    /// 通过本 Converter 统一投影为字符串，彻底阻断 STJ 的反射链，避免 NotSupportedException。
     /// </summary>
-    internal sealed class TypeToStringJsonConverter : JsonConverter<Type>
+    internal sealed class HangfireJobConverter : JsonConverter<Job>
     {
         /// <inheritdoc/>
-        public override Type? Read(
+        public override Job? Read(
             ref Utf8JsonReader reader,
             Type typeToConvert,
             JsonSerializerOptions options
         ) => null; // 反序列化暂不支持
 
         /// <inheritdoc/>
-        public override void Write(
-            Utf8JsonWriter writer,
-            Type value,
-            JsonSerializerOptions options
-        ) => writer.WriteStringValue(value?.FullName);
+        public override void Write(Utf8JsonWriter writer, Job value, JsonSerializerOptions options)
+        {
+            writer.WriteStartObject();
+
+            // 类型名称：写完整限定名字符串
+            writer.WriteString("type", value.Type?.FullName);
+
+            // 方法名称：写「DeclaringType.方法名」字符串
+            writer.WriteString(
+                "method",
+                value.Method is null
+                    ? null
+                    : $"{value.Method.DeclaringType?.FullName}.{value.Method.Name}"
+            );
+
+            // 参数列表：每个参数统一用 ToString() 转为字符串，避免反射进入复杂对象
+            writer.WritePropertyName("args");
+            writer.WriteStartArray();
+            foreach (object? arg in value.Args)
+            {
+                if (arg is null)
+                    writer.WriteNullValue();
+                else
+                    writer.WriteStringValue(arg.ToString());
+            }
+            writer.WriteEndArray();
+
+            writer.WriteEndObject();
+        }
     }
 
     /// <summary>
@@ -52,7 +79,8 @@ namespace Hangfire.Api
             JsonSerializerDefaults.Web
         )
         {
-            Converters = { new TypeToStringJsonConverter() },
+            // HangfireJobConverter 统一处理 Job 对象，阻断所有嵌套不可序列化类型
+            Converters = { new HangfireJobConverter() },
         };
 
         /// <summary>

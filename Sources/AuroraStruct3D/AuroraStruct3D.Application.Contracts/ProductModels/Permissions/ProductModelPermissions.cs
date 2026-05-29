@@ -25,4 +25,7 @@ public static class ProductModelPermissions
 
     /// <summary>手动重试格式转换（仅对 Failed 状态有效）</summary>
     public const string RetryConversion = "AuroraStruct3D.ProductModel.RetryConversion";
+
+    /// <summary>清理文件已丢失的孤立数模记录</summary>
+    public const string CleanUp = "AuroraStruct3D.ProductModel.CleanUp";
 }

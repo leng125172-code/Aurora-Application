@@ -57,6 +57,13 @@ public interface IProductModelAppService : IApplicationService
     Task RetryConversionAsync(Guid id);
 
     /// <summary>
+    /// 清理文件已丢失的孤立数模记录（仅删除数据库记录，不操作 BLOB）。
+    /// POST /api/app/product-model/clean-up-orphaned-records
+    /// </summary>
+    /// <returns>清理的记录数量</returns>
+    Task<int> CleanUpOrphanedRecordsAsync();
+
+    /// <summary>
     /// 下载数模文件（就绪后可下载原始文件或转换后的 PLY 文件）。
     /// GET /api/app/product-model/{id}/download
     /// </summary>

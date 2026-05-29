@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using AuroraStruct3D.DeviceState;
 using AuroraStruct3D.ProductModels.Dtos;
 using AuroraStruct3D.ProductModels.Jobs;
 using Hangfire;
@@ -26,18 +27,21 @@ public class ProductModelAppService : AuroraStruct3DAppService, IProductModelApp
     private readonly IBlobContainer<ProductModelBlobContainer> _blobContainer;
     private readonly IBackgroundJobClient _backgroundJobClient;
     private readonly IIdentityUserRepository _identityUserRepository;
+    private readonly IDeviceStateManager _deviceStateManager;
 
     public ProductModelAppService(
         IProductModelRepository productModelRepository,
         IBlobContainer<ProductModelBlobContainer> blobContainer,
         IBackgroundJobClient backgroundJobClient,
-        IIdentityUserRepository identityUserRepository
+        IIdentityUserRepository identityUserRepository,
+        IDeviceStateManager deviceStateManager
     )
     {
         _productModelRepository = productModelRepository;
         _blobContainer = blobContainer;
         _backgroundJobClient = backgroundJobClient;
         _identityUserRepository = identityUserRepository;
+        _deviceStateManager = deviceStateManager;
     }
 
     // ─────────────────────────── 查询 ───────────────────────────
@@ -158,6 +162,7 @@ public class ProductModelAppService : AuroraStruct3DAppService, IProductModelApp
     [Authorize(ProductModelPermissions.Delete)]
     public async Task DeleteAsync(Guid id)
     {
+        EnsureManualOrMaintenanceMode();
         ProductModel productModel = await _productModelRepository.GetAsync(id);
 
         // ── 删除 BLOB 文件（先于数据库记录，避免数据残留）──────────────────────
@@ -188,6 +193,40 @@ public class ProductModelAppService : AuroraStruct3DAppService, IProductModelApp
         _backgroundJobClient.Enqueue<ProductModelConversionJob>(job =>
             job.ExecuteAsync(productModel.Id)
         );
+    }
+
+    // ─────────────────────────── 清理孤立记录 ───────────────────────────
+
+    /// <inheritdoc/>
+    [Authorize(ProductModelPermissions.CleanUp)]
+    public async Task<int> CleanUpOrphanedRecordsAsync()
+    {
+        EnsureManualOrMaintenanceMode();
+
+        // 获取所有未软删除的数模记录（maxResultCount: int.MaxValue 表示不限数量）
+        List<ProductModel> all = await _productModelRepository.GetListAsync(
+            maxResultCount: int.MaxValue
+        );
+
+        int cleaned = 0;
+        foreach (ProductModel model in all)
+        {
+            bool exists = await _blobContainer.ExistsAsync(model.OriginalBlobName);
+            if (!exists)
+            {
+                // 原始 BLOB 已丢失，仅删除数据库记录，跳过 BLOB 删除操作
+                await _productModelRepository.DeleteAsync(model, autoSave: true);
+                Logger.LogInformation(
+                    "[ProductModelAppService] 清理孤立数模记录：{Id}（{Name}），原始 BLOB: {BlobName}",
+                    model.Id,
+                    model.Name,
+                    model.OriginalBlobName
+                );
+                cleaned++;
+            }
+        }
+
+        return cleaned;
     }
 
     // ─────────────────────────── 下载 ───────────────────────────
@@ -354,6 +393,24 @@ public class ProductModelAppService : AuroraStruct3DAppService, IProductModelApp
         }
 
         contentType = found;
+    }
+
+    /// <summary>
+    /// 校验当前运行模式必须为手动或检修，否则抛出业务异常。
+    /// </summary>
+    private void EnsureManualOrMaintenanceMode()
+    {
+        DeviceRunMode mode = _deviceStateManager.RunMode;
+        if (mode is not (DeviceRunMode.Manual or DeviceRunMode.Maintenance))
+        {
+            throw new UserFriendlyException(
+                $"当前运行模式为【{mode switch {
+                    DeviceRunMode.Online => "联机",
+                    DeviceRunMode.Auto   => "自动",
+                    _                    => mode.ToString()
+                }}】，数模管理仅允许在手动模式或检修模式下执行"
+            );
+        }
     }
 
     /// <summary>

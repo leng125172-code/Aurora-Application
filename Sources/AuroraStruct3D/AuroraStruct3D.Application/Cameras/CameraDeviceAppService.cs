@@ -75,6 +75,7 @@ public class CameraDeviceAppService : AuroraStruct3DAppService, ICameraDeviceApp
     /// <inheritdoc/>
     public async Task<CameraDeviceDto> CreateAsync(CreateCameraDeviceDto input)
     {
+        EnsureManualOrMaintenanceMode();
         // 检查物理索引是否已被占用
         CameraDevice? existing = await _cameraDeviceRepository.FindByDeviceIndexAsync(
             input.DeviceIndex
@@ -97,6 +98,7 @@ public class CameraDeviceAppService : AuroraStruct3DAppService, ICameraDeviceApp
     /// <inheritdoc/>
     public async Task<CameraDeviceDto> UpdateAsync(Guid id, UpdateCameraDeviceDto input)
     {
+        EnsureManualOrMaintenanceMode();
         CameraDevice camera = await _cameraDeviceRepository.GetAsync(id);
         camera.SetName(input.Name);
         camera.SetDescription(input.Description);
@@ -109,6 +111,7 @@ public class CameraDeviceAppService : AuroraStruct3DAppService, ICameraDeviceApp
     /// <inheritdoc/>
     public async Task DeleteAsync(Guid id)
     {
+        EnsureManualOrMaintenanceMode();
         // 关闭相机（如果已打开）
         CameraDevice camera = await _cameraDeviceRepository.GetAsync(id);
         if (_tucamService.IsCameraOpen(camera.DeviceIndex))
@@ -122,6 +125,7 @@ public class CameraDeviceAppService : AuroraStruct3DAppService, ICameraDeviceApp
     /// <inheritdoc/>
     public async Task<int> ScanCamerasAsync()
     {
+        EnsureManualOrMaintenanceMode();
         int count = await _tucamService.InitializeAsync();
 
         // 扫描过程中同步构建索引→设备ID映射，供操作日志使用

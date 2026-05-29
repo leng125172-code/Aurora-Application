@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.IO.Ports;
+using AuroraStruct3D.DeviceState;
 using AuroraStruct3D.Motors.Dtos;
 using AuroraStruct3D.RS485;
 using AuroraStruct3D.RS485.Ktech;
@@ -35,6 +36,7 @@ public class MotorDeviceAppService : AuroraStruct3DAppService, IMotorDeviceAppSe
     private readonly IDeviceOperationSessionManager _sessionManager;
     private readonly ICurrentClientSession _currentClientSession;
     private readonly IMotorScanProgressNotifier _scanProgressNotifier;
+    private readonly IDeviceStateManager _deviceStateManager;
 
     public MotorDeviceAppService(
         IMotorAxisRepository motorAxisRepository,
@@ -43,7 +45,8 @@ public class MotorDeviceAppService : AuroraStruct3DAppService, IMotorDeviceAppSe
         ILoggerFactory loggerFactory,
         IDeviceOperationSessionManager sessionManager,
         ICurrentClientSession currentClientSession,
-        IMotorScanProgressNotifier scanProgressNotifier
+        IMotorScanProgressNotifier scanProgressNotifier,
+        IDeviceStateManager deviceStateManager
     )
     {
         _motorAxisRepository = motorAxisRepository;
@@ -53,6 +56,7 @@ public class MotorDeviceAppService : AuroraStruct3DAppService, IMotorDeviceAppSe
         _sessionManager = sessionManager;
         _currentClientSession = currentClientSession;
         _scanProgressNotifier = scanProgressNotifier;
+        _deviceStateManager = deviceStateManager;
     }
 
     /// <inheritdoc/>
@@ -121,6 +125,7 @@ public class MotorDeviceAppService : AuroraStruct3DAppService, IMotorDeviceAppSe
     /// <inheritdoc/>
     public async Task<ScanMotorDevicesResultDto> ScanDevicesAsync(ScanMotorDevicesInput input)
     {
+        EnsureManualOrMaintenanceMode();
         if (input.StartSlaveId > input.EndSlaveId)
         {
             throw new UserFriendlyException("起始从机地址不能大于结束从机地址");
@@ -549,6 +554,7 @@ public class MotorDeviceAppService : AuroraStruct3DAppService, IMotorDeviceAppSe
     /// <inheritdoc/>
     public async Task<MotorAxisDto> UpdateAsync(Guid id, UpdateMotorAxisDto input)
     {
+        EnsureManualOrMaintenanceMode();
         MotorAxis axis = await _motorAxisRepository.GetAsync(id);
         axis.SetName(input.Name);
         axis.SetDescription(input.Description);
@@ -565,6 +571,7 @@ public class MotorDeviceAppService : AuroraStruct3DAppService, IMotorDeviceAppSe
         SetMotorRotationAngleRangeDto input
     )
     {
+        EnsureManualOrMaintenanceMode();
         MotorAxis axis = await _motorAxisRepository.GetAsync(id);
         EnsureKtechAxis(axis);
         SetRotationAngleRange(axis, input.MinRotationAngle, input.MaxRotationAngle);
@@ -578,6 +585,7 @@ public class MotorDeviceAppService : AuroraStruct3DAppService, IMotorDeviceAppSe
         SetMotorRotationAngleLimitFromCurrentDto input
     )
     {
+        EnsureManualOrMaintenanceMode();
         MotorAxis axis = await PrepareAxisForCommandAsync(id);
         EnsureKtechAxis(axis);
 
@@ -609,6 +617,7 @@ public class MotorDeviceAppService : AuroraStruct3DAppService, IMotorDeviceAppSe
     /// <inheritdoc/>
     public async Task<MotorAxisDto> RefreshStatusAsync(Guid id)
     {
+        EnsureManualOrMaintenanceMode();
         MotorAxis axis = await _motorAxisRepository.GetAsync(id);
         await RefreshStatusCoreAsync(axis, throwOnFailure: true);
         return await GetAsync(id);
@@ -617,6 +626,7 @@ public class MotorDeviceAppService : AuroraStruct3DAppService, IMotorDeviceAppSe
     /// <inheritdoc/>
     public async Task<MotorAxisDto> EnableAsync(Guid id)
     {
+        EnsureManualOrMaintenanceMode();
         MotorAxis axis = await PrepareAxisForCommandAsync(id);
         await _motorControlService.EnableAsync(axis.SlaveId);
         return await RefreshStatusAsync(id);
@@ -625,6 +635,7 @@ public class MotorDeviceAppService : AuroraStruct3DAppService, IMotorDeviceAppSe
     /// <inheritdoc/>
     public async Task<MotorAxisDto> DisableAsync(Guid id)
     {
+        EnsureManualOrMaintenanceMode();
         MotorAxis axis = await PrepareAxisForCommandAsync(id);
         await _motorControlService.DisableAsync(axis.SlaveId);
         return await RefreshStatusAsync(id);
@@ -633,6 +644,7 @@ public class MotorDeviceAppService : AuroraStruct3DAppService, IMotorDeviceAppSe
     /// <inheritdoc/>
     public async Task<MotorAxisDto> MoveAbsoluteAsync(Guid id, MoveMotorInput input)
     {
+        EnsureManualOrMaintenanceMode();
         MotorAxis axis = await PrepareAxisForCommandAsync(id);
         await _motorControlService.MoveAbsoluteAsync(axis.SlaveId, input.Position, input.SpeedRpm);
         return await RefreshStatusAsync(id);
@@ -641,6 +653,7 @@ public class MotorDeviceAppService : AuroraStruct3DAppService, IMotorDeviceAppSe
     /// <inheritdoc/>
     public async Task<MotorAxisDto> MoveRelativeAsync(Guid id, MoveMotorInput input)
     {
+        EnsureManualOrMaintenanceMode();
         MotorAxis axis = await PrepareAxisForCommandAsync(id);
         await _motorControlService.MoveRelativeAsync(axis.SlaveId, input.Position, input.SpeedRpm);
         return await RefreshStatusAsync(id);
@@ -649,6 +662,7 @@ public class MotorDeviceAppService : AuroraStruct3DAppService, IMotorDeviceAppSe
     /// <inheritdoc/>
     public async Task<MotorAxisDto> StopAsync(Guid id)
     {
+        EnsureManualOrMaintenanceMode();
         MotorAxis axis = await PrepareAxisForCommandAsync(id);
         await _motorControlService.StopAsync(axis.SlaveId);
         return await RefreshStatusAsync(id);
@@ -657,6 +671,7 @@ public class MotorDeviceAppService : AuroraStruct3DAppService, IMotorDeviceAppSe
     /// <inheritdoc/>
     public async Task<MotorAxisDto> EmergencyStopAsync(Guid id)
     {
+        EnsureManualOrMaintenanceMode();
         MotorAxis axis = await PrepareAxisForCommandAsync(id);
         await _motorControlService.EmergencyStopAsync(axis.SlaveId);
         return await RefreshStatusAsync(id);
@@ -665,6 +680,7 @@ public class MotorDeviceAppService : AuroraStruct3DAppService, IMotorDeviceAppSe
     /// <inheritdoc/>
     public async Task<MotorAxisDto> HomeAsync(Guid id)
     {
+        EnsureManualOrMaintenanceMode();
         MotorAxis axis = await PrepareAxisForCommandAsync(id);
         await _motorControlService.HomeAsync(axis.SlaveId);
         return await RefreshStatusAsync(id);
@@ -673,6 +689,7 @@ public class MotorDeviceAppService : AuroraStruct3DAppService, IMotorDeviceAppSe
     /// <inheritdoc/>
     public async Task<MotorAxisDto> ClearFaultAsync(Guid id)
     {
+        EnsureManualOrMaintenanceMode();
         MotorAxis axis = await PrepareAxisForCommandAsync(id);
         await _motorControlService.ClearFaultAsync(axis.SlaveId);
         return await RefreshStatusAsync(id);
@@ -684,6 +701,7 @@ public class MotorDeviceAppService : AuroraStruct3DAppService, IMotorDeviceAppSe
         ReadHoldingRegistersInput input
     )
     {
+        EnsureManualOrMaintenanceMode();
         MotorAxis axis = await _motorAxisRepository.GetAsync(id);
         SerialPortConfig portConfig = await _serialPortConfigRepository.GetAsync(
             axis.SerialPortConfigId
@@ -711,6 +729,7 @@ public class MotorDeviceAppService : AuroraStruct3DAppService, IMotorDeviceAppSe
     /// <inheritdoc/>
     public async Task<bool> WriteSingleRegisterAsync(Guid id, WriteSingleRegisterInput input)
     {
+        EnsureManualOrMaintenanceMode();
         MotorAxis axis = await _motorAxisRepository.GetAsync(id);
         SerialPortConfig portConfig = await _serialPortConfigRepository.GetAsync(
             axis.SerialPortConfigId
@@ -727,6 +746,24 @@ public class MotorDeviceAppService : AuroraStruct3DAppService, IMotorDeviceAppSe
             500
         );
         return true;
+    }
+
+    /// <summary>
+    /// 校验当前运行模式必须为手动或检修，否则抛出业务异常。
+    /// </summary>
+    private void EnsureManualOrMaintenanceMode()
+    {
+        DeviceRunMode mode = _deviceStateManager.RunMode;
+        if (mode is not (DeviceRunMode.Manual or DeviceRunMode.Maintenance))
+        {
+            throw new UserFriendlyException(
+                $"当前运行模式为【{mode switch {
+                    DeviceRunMode.Online => "联机",
+                    DeviceRunMode.Auto   => "自动",
+                    _                    => mode.ToString()
+                }}】，电机操作仅允许在手动模式或检修模式下执行"
+            );
+        }
     }
 
     /// <summary>

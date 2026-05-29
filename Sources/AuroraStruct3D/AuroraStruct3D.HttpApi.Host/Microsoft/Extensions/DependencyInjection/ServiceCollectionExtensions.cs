@@ -3,6 +3,7 @@ using Lion.AbpPro.CAP;
 using Medallion.Threading;
 using Medallion.Threading.Redis;
 using Microsoft.AspNetCore.SignalR.StackExchangeRedis;
+using Microsoft.Extensions.Configuration;
 using Savorboard.CAP.InMemoryMessageQueue;
 using Volo.Abp.BlobStoring;
 
@@ -124,8 +125,18 @@ public static class ServiceCollectionExtensions
     /// <summary>
     /// 注册基于FileSystem的blob设置
     /// </summary>
-    public static IServiceCollection AddAbpProBlobStorageFileSystem(this IServiceCollection service)
+    /// <param name="service">服务集合</param>
+    /// <param name="configuration">应用配置，用于读取 BlobStoring:ProductModels:BasePath</param>
+    public static IServiceCollection AddAbpProBlobStorageFileSystem(
+        this IServiceCollection service,
+        IConfiguration configuration
+    )
     {
+        // 优先读取配置文件中的路径，未配置时回退到程序目录（开发环境兼容）
+        var productModelsBasePath =
+            configuration["BlobStoring:ProductModels:BasePath"]
+            ?? Path.Combine(AppContext.BaseDirectory, "files", "product-models");
+
         service.Configure<AbpBlobStoringOptions>(options =>
         {
             options.Containers.ConfigureDefault(container =>
@@ -142,11 +153,7 @@ public static class ServiceCollectionExtensions
                 {
                     container.UseFileSystem(fileSystem =>
                     {
-                        fileSystem.BasePath = Path.Combine(
-                            AppContext.BaseDirectory,
-                            "files",
-                            "product-models"
-                        );
+                        fileSystem.BasePath = productModelsBasePath;
                     });
                 }
             );

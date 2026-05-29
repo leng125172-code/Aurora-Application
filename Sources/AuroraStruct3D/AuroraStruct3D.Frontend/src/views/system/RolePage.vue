@@ -146,7 +146,7 @@ async function handleDelete(role: RoleDto): Promise<void> {
                         <TableHead>{{ t('management.isDefault') }}</TableHead>
                         <TableHead>{{ t('management.isPublic') }}</TableHead>
                         <TableHead>{{ t('management.isStatic') }}</TableHead>
-                        <TableHead class="text-right">{{ t('common.action') }}</TableHead>
+                        <TableHead class="text-right whitespace-nowrap">{{ t('common.action') }}</TableHead>
                     </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -161,7 +161,9 @@ async function handleDelete(role: RoleDto): Promise<void> {
                         </TableCell>
                     </TableRow>
                     <TableRow v-for="role in roles" :key="role.id">
-                        <TableCell class="font-medium">{{ role.name }}</TableCell>
+                        <TableCell class="font-medium">
+                            <div class="max-w-[200px] truncate" :title="role.name">{{ role.name }}</div>
+                        </TableCell>
                         <TableCell>
                             <Badge v-if="role.isDefault" variant="secondary">{{ t('common.yes') }}</Badge>
                             <span v-else class="text-muted-foreground">{{ t('common.no') }}</span>
