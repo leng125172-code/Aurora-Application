@@ -1,21 +1,24 @@
 <script setup lang="ts">
+// 相机管理页：PrimeVue DataTable + Dialog 重构版
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
+import DataTable from 'primevue/datatable'
+import Column from 'primevue/column'
+import Button from 'primevue/button'
+import Dialog from 'primevue/dialog'
+import InputText from 'primevue/inputtext'
+import ToggleSwitch from 'primevue/toggleswitch'
 import { useCameraStore } from '@/stores/cameras'
 import { type UpdateCameraDeviceDto, CameraStatus } from '@/api/cameras'
-import { toast } from 'vue-sonner'
-import { Card, CardContent } from '@/components/ui/card'
-import { BorderBeam } from '@/components/ui/border-beam'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '@/components/ui/dialog'
+import { useAppToast } from '@/composables/useAppToast'
+import { AppCard } from '@/components/primevue'
 
 const { t } = useI18n()
 
 const router = useRouter()
 const store = useCameraStore()
+const toast = useAppToast()
 
 // ─── 扫描状态 ──────────────────────────────────────────────────────────────
 const scanning = ref(false)
@@ -133,87 +136,93 @@ onMounted(() => {
         <div class="flex items-center justify-between">
             <h1 class="text-2xl font-bold tracking-tight">{{ t('camera.title') }}</h1>
             <div class="flex gap-2">
-                <Button variant="outline" size="sm" @click="void store.fetchList()">{{ t('camera.refresh') }}</Button>
-                <Button size="sm" :disabled="scanning" @click="handleScan">
-                    <span v-if="scanning">{{ t('camera.scanning') }}</span>
-                    <span v-else>{{ t('camera.scan') }}</span>
+                <Button severity="secondary" outlined size="small" @click="void store.fetchList()">
+                    {{ t('camera.refresh') }}
+                </Button>
+                <Button :loading="scanning" size="small" @click="handleScan">
+                    {{ scanning ? t('camera.scanning') : t('camera.scan') }}
                 </Button>
             </div>
         </div>
 
-        <!-- 设备列表 -->
-        <div v-if="store.loading" class="py-8 text-center text-sm text-muted-foreground">
-            {{ t('common.loading') }}
-        </div>
-        <div v-else-if="store.cameras.length === 0" class="py-8 text-center text-sm text-muted-foreground">
-            {{ t('camera.noDevices') }}
-        </div>
-        <Card v-else class="hidden overflow-auto md:block">
-            <CardContent class="p-0">
-                <table class="w-full min-w-[800px] text-sm">
-                    <thead class="border-b bg-muted/50">
-                        <tr>
-                            <th class="px-3 py-2 text-left font-medium">{{ t('camera.index') }}</th>
-                            <th class="px-3 py-2 text-left font-medium">{{ t('camera.name') }}</th>
-                            <th class="px-3 py-2 text-left font-medium">{{ t('camera.model') }}</th>
-                            <th class="px-3 py-2 text-left font-medium">{{ t('camera.serialNumber') }}</th>
-                            <th class="px-3 py-2 text-left font-medium">{{ t('camera.status') }}</th>
-                            <th class="px-3 py-2 text-left font-medium">{{ t('camera.description') }}</th>
-                            <th class="px-3 py-2 text-left font-medium">{{ t('common.actions') }}</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr v-for="cam in store.cameras" :key="cam.id" class="border-b last:border-0 hover:bg-muted/30">
-                            <td class="px-3 py-2">{{ cam.deviceIndex }}</td>
-                            <td class="px-3 py-2 font-medium">{{ cam.name }}</td>
-                            <td class="px-3 py-2 text-xs text-muted-foreground">{{ cam.model ?? '—' }}</td>
-                            <td class="px-3 py-2 font-mono text-xs text-muted-foreground">
-                                {{ cam.serialNumber ?? '—' }}
-                            </td>
-                            <td :class="['px-3 py-2', statusClass(cam.status)]">
-                                {{ statusText(cam.status) }}
-                            </td>
-                            <td class="max-w-[180px] truncate px-3 py-2 text-xs text-muted-foreground">
-                                {{ cam.description ?? '—' }}
-                            </td>
-                            <td class="px-3 py-2">
-                                <div class="flex flex-wrap gap-1.5">
-                                    <Button variant="outline" size="xs" @click="goToControl(cam.id)">
-                                        {{ t('camera.control') }}
-                                    </Button>
-                                    <Button
-                                        v-if="cam.status === CameraStatus.Closed || cam.status === CameraStatus.Unknown"
-                                        variant="outline"
-                                        size="xs"
-                                        class="text-green-600 hover:bg-green-50 dark:hover:bg-green-900/30"
-                                        @click="handleOpen(cam.id)"
-                                    >
-                                        {{ t('camera.open') }}
-                                    </Button>
-                                    <Button
-                                        v-else-if="cam.status !== CameraStatus.Error"
-                                        variant="outline"
-                                        size="xs"
-                                        class="text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-900/30"
-                                        @click="handleClose(cam.id)"
-                                    >
-                                        {{ t('camera.close') }}
-                                    </Button>
-                                    <Button variant="outline" size="xs" @click="openEdit(cam.id)">
-                                        {{ t('common.edit') }}
-                                    </Button>
-                                </div>
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
-            </CardContent>
-        </Card>
+        <!-- 桌面端表格 -->
+        <DataTable
+            :value="store.cameras"
+            :loading="store.loading"
+            data-key="id"
+            size="small"
+            striped-rows
+            class="hidden md:block rounded-lg border"
+        >
+            <template #empty>
+                <div class="py-6 text-center text-sm text-muted-foreground">{{ t('camera.noDevices') }}</div>
+            </template>
+            <template #loading>
+                <div class="py-6 text-center text-sm text-muted-foreground">{{ t('common.loading') }}</div>
+            </template>
 
-        <!-- 移动端卡片视图（< md 时显示，避免横向滚动表格） -->
+            <Column field="deviceIndex" :header="t('camera.index')" style="min-width: 4rem" />
+            <Column field="name" :header="t('camera.name')" style="min-width: 9rem">
+                <template #body="{ data }">
+                    <span class="font-medium">{{ data.name }}</span>
+                </template>
+            </Column>
+            <Column :header="t('camera.model')" style="min-width: 8rem">
+                <template #body="{ data }">
+                    <span class="text-xs text-muted-foreground">{{ data.model ?? '—' }}</span>
+                </template>
+            </Column>
+            <Column :header="t('camera.serialNumber')" style="min-width: 10rem">
+                <template #body="{ data }">
+                    <span class="font-mono text-xs text-muted-foreground">{{ data.serialNumber ?? '—' }}</span>
+                </template>
+            </Column>
+            <Column :header="t('camera.status')" style="min-width: 6rem">
+                <template #body="{ data }">
+                    <span :class="statusClass(data.status)">{{ statusText(data.status) }}</span>
+                </template>
+            </Column>
+            <Column :header="t('camera.description')" style="min-width: 10rem; max-width: 14rem">
+                <template #body="{ data }">
+                    <span class="truncate text-xs text-muted-foreground">{{ data.description ?? '—' }}</span>
+                </template>
+            </Column>
+            <Column :header="t('common.actions')" style="min-width: 16rem">
+                <template #body="{ data }">
+                    <div class="flex flex-wrap gap-1.5">
+                        <Button severity="secondary" size="small" outlined @click="goToControl(data.id)">
+                            {{ t('camera.control') }}
+                        </Button>
+                        <Button
+                            v-if="data.status === CameraStatus.Closed || data.status === CameraStatus.Unknown"
+                            severity="success"
+                            size="small"
+                            outlined
+                            @click="handleOpen(data.id)"
+                        >
+                            {{ t('camera.open') }}
+                        </Button>
+                        <Button
+                            v-else-if="data.status !== CameraStatus.Error"
+                            severity="warn"
+                            size="small"
+                            outlined
+                            @click="handleClose(data.id)"
+                        >
+                            {{ t('camera.close') }}
+                        </Button>
+                        <Button severity="secondary" size="small" outlined @click="openEdit(data.id)">
+                            {{ t('common.edit') }}
+                        </Button>
+                    </div>
+                </template>
+            </Column>
+        </DataTable>
+
+        <!-- 移动端卡片视图（< md 时显示） -->
         <div v-if="!store.loading && store.cameras.length > 0" class="grid grid-cols-1 gap-3 sm:grid-cols-2 md:hidden">
-            <Card v-for="cam in store.cameras" :key="cam.id" class="overflow-hidden">
-                <CardContent class="space-y-2 p-3 text-sm">
+            <AppCard v-for="cam in store.cameras" :key="cam.id" :beam="false">
+                <div class="space-y-2 p-3 text-sm">
                     <div class="flex items-start justify-between gap-2">
                         <div class="min-w-0">
                             <div class="truncate font-medium">{{ cam.name }}</div>
@@ -231,65 +240,65 @@ onMounted(() => {
                         </div>
                     </div>
                     <div class="flex flex-wrap gap-1.5 border-t pt-2">
-                        <Button variant="outline" size="xs" @click="goToControl(cam.id)">
+                        <Button severity="secondary" size="small" outlined @click="goToControl(cam.id)">
                             {{ t('camera.control') }}
                         </Button>
                         <Button
                             v-if="cam.status === CameraStatus.Closed || cam.status === CameraStatus.Unknown"
-                            variant="outline"
-                            size="xs"
-                            class="text-green-600 hover:bg-green-50 dark:hover:bg-green-900/30"
+                            severity="success"
+                            size="small"
+                            outlined
                             @click="handleOpen(cam.id)"
                         >
                             {{ t('camera.open') }}
                         </Button>
                         <Button
                             v-else-if="cam.status !== CameraStatus.Error"
-                            variant="outline"
-                            size="xs"
-                            class="text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-900/30"
+                            severity="warn"
+                            size="small"
+                            outlined
                             @click="handleClose(cam.id)"
                         >
                             {{ t('camera.close') }}
                         </Button>
-                        <Button variant="outline" size="xs" @click="openEdit(cam.id)">
+                        <Button severity="secondary" size="small" outlined @click="openEdit(cam.id)">
                             {{ t('common.edit') }}
                         </Button>
                     </div>
-                </CardContent>
-            </Card>
+                </div>
+            </AppCard>
         </div>
 
         <!-- 编辑对话框 -->
-        <Dialog v-model:open="showEditDialog">
-            <DialogContent class="w-[calc(100vw-2rem)] max-w-[420px]">
-                <BorderBeam :size="80" :duration="8" />
-                <DialogHeader>
-                    <DialogTitle>{{ t('camera.editTitle') }}</DialogTitle>
-                </DialogHeader>
-                <div class="flex flex-col gap-3">
-                    <div class="flex flex-col gap-1">
-                        <Label>{{ t('camera.name') }}</Label>
-                        <Input v-model="editForm.name" :placeholder="t('camera.namePlaceholder')" />
-                    </div>
-                    <div class="flex flex-col gap-1">
-                        <Label>{{ t('camera.description') }}</Label>
-                        <Input v-model="editForm.description" />
-                    </div>
-                    <label class="flex items-center gap-2 text-sm">
-                        <input v-model="editForm.isEnabled" type="checkbox" />
-                        {{ t('camera.enabled') }}
-                    </label>
-                </div>
-                <DialogFooter class="gap-2">
-                    <DialogClose as-child>
-                        <Button variant="outline">{{ t('common.cancel') }}</Button>
-                    </DialogClose>
-                    <Button :disabled="editing" @click="handleEdit">
-                        {{ editing ? t('common.saving') : t('common.save') }}
-                    </Button>
-                </DialogFooter>
-            </DialogContent>
+        <Dialog
+            v-model:visible="showEditDialog"
+            :header="t('camera.editTitle')"
+            modal
+            :style="{ width: '420px' }"
+            :draggable="false"
+        >
+            <div class="flex flex-col gap-3">
+                <label class="flex flex-col gap-1 text-sm">
+                    <span>{{ t('camera.name') }}</span>
+                    <InputText v-model="editForm.name" size="small" :placeholder="t('camera.namePlaceholder')" />
+                </label>
+                <label class="flex flex-col gap-1 text-sm">
+                    <span>{{ t('camera.description') }}</span>
+                    <InputText v-model="editForm.description" size="small" />
+                </label>
+                <label class="flex items-center gap-2 text-sm">
+                    <ToggleSwitch v-model="editForm.isEnabled" />
+                    <span>{{ t('camera.enabled') }}</span>
+                </label>
+            </div>
+            <template #footer>
+                <Button severity="secondary" outlined size="small" @click="showEditDialog = false">
+                    {{ t('common.cancel') }}
+                </Button>
+                <Button :loading="editing" size="small" @click="handleEdit">
+                    {{ editing ? t('common.saving') : t('common.save') }}
+                </Button>
+            </template>
         </Dialog>
     </div>
 </template>

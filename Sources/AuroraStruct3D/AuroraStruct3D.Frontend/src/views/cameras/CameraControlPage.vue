@@ -1,22 +1,23 @@
 <script setup lang="ts">
-// 动态 GenICam 驱动的相机控制页面
+// 动态 GenICam 驱动的相机控制页面（PrimeVue 重构版）
 // 左侧：按 NodeMap.categories 动态渲染参数分组
 // 右侧：预览 / 快照 / 旋转角度（软件端）/ 实时指标 / 快捷操作
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
+import Button from 'primevue/button'
+import Select from 'primevue/select'
 import { useCameraStore } from '@/stores/cameras'
 import { CameraStatus, type CameraLiveMetricsDto, type GenICamNodeDto } from '@/api/cameras'
 import GenICamCategoryCard from '@/components/camera/GenICamCategoryCard.vue'
-import { toast } from 'vue-sonner'
-import { Card, CardContent } from '@/components/ui/card'
-import { BorderBeam } from '@/components/ui/border-beam'
-import { Button } from '@/components/ui/button'
+import { useAppToast } from '@/composables/useAppToast'
+import { AppCard } from '@/components/primevue'
 
 const route = useRoute()
 const router = useRouter()
 const store = useCameraStore()
 const { t } = useI18n()
+const toast = useAppToast()
 
 // ─── 当前设备 ─────────────────────────────────────────────────────────────
 const deviceId = computed<string>(() => route.params.id as string)
@@ -52,6 +53,11 @@ const selectorDependencyIndex = computed<Record<string, string[]>>(() => {
 
 // ─── Visibility 筛选 ─────────────────────────────────────────────────────
 const visibility = ref<'Beginner' | 'Expert' | 'Guru'>('Beginner')
+const visibilityOptions = [
+    { value: 'Beginner', label: 'Beginner' },
+    { value: 'Expert', label: 'Expert' },
+    { value: 'Guru', label: 'Guru' },
+]
 
 // ─── NodeMap 加载与节点值初始化 ──────────────────────────────────────────
 async function loadNodeMap(forceRefresh = false) {
@@ -305,7 +311,7 @@ onUnmounted(() => {
     <div class="flex flex-col gap-4 p-4">
         <!-- ── 顶部标题栏 ── -->
         <div class="flex flex-wrap items-center gap-3">
-            <Button variant="outline" size="xs" @click="void router.push({ name: 'CameraManage' })">
+            <Button severity="secondary" outlined size="small" @click="void router.push({ name: 'CameraManage' })">
                 {{ t('camera.back') }}
             </Button>
             <h1 class="text-2xl font-bold tracking-tight">{{ device?.name ?? t('camera.ctrlTitle') }}</h1>
@@ -327,25 +333,26 @@ onUnmounted(() => {
             <div class="ml-auto flex items-center gap-2">
                 <!-- Visibility 筛选 -->
                 <label class="text-xs text-muted-foreground">{{ t('camera.visibilityLabel') }}</label>
-                <select
+                <Select
                     v-model="visibility"
-                    class="rounded border border-input bg-background px-2 py-1 text-xs text-foreground focus:outline-none"
-                >
-                    <option value="Beginner">Beginner</option>
-                    <option value="Expert">Expert</option>
-                    <option value="Guru">Guru</option>
-                </select>
+                    :options="visibilityOptions"
+                    option-label="label"
+                    option-value="value"
+                    size="small"
+                    class="w-28"
+                />
                 <!-- 重新枚举（强制 NodeMap 刷新） -->
                 <Button
-                    variant="outline"
-                    size="xs"
+                    severity="secondary"
+                    outlined
+                    size="small"
                     :disabled="!isOpen || nodeMapLoading"
                     @click="void loadNodeMap(true)"
                 >
                     {{ nodeMapLoading ? t('camera.enumerating') : t('camera.reenumerate') }}
                 </Button>
                 <!-- 全部刷新 -->
-                <Button variant="outline" size="xs" :disabled="!isOpen" @click="void refreshAll()">
+                <Button severity="secondary" outlined size="small" :disabled="!isOpen" @click="void refreshAll()">
                     {{ t('camera.refreshAll') }}
                 </Button>
             </div>
@@ -385,23 +392,22 @@ onUnmounted(() => {
             </div>
 
             <!-- 右侧：预览面板（仅在 xl 以上粘性定位，避免窄屏堆叠时遮挡） -->
-            <Card class="relative xl:sticky xl:top-4">
-                <BorderBeam :size="80" :duration="8" />
-                <CardContent class="flex flex-col gap-3 p-3">
+            <AppCard :beam-size="80" :beam-duration="8" class="xl:sticky xl:top-4">
+                <div class="flex flex-col gap-3 p-3">
                     <!-- Tab 切换 -->
                     <div class="flex items-center gap-1 border-b pb-2">
                         <Button
-                            variant="ghost"
-                            size="xs"
-                            :class="previewTab === 'video' ? 'font-medium text-primary' : 'text-muted-foreground'"
+                            text
+                            size="small"
+                            :severity="previewTab === 'video' ? 'primary' : 'secondary'"
                             @click="previewTab = 'video'"
                         >
                             {{ t('camera.tabVideo') }}
                         </Button>
                         <Button
-                            variant="ghost"
-                            size="xs"
-                            :class="previewTab === 'snapshot' ? 'font-medium text-primary' : 'text-muted-foreground'"
+                            text
+                            size="small"
+                            :severity="previewTab === 'snapshot' ? 'primary' : 'secondary'"
                             @click="previewTab = 'snapshot'"
                         >
                             {{ t('camera.tabSnapshot') }}
@@ -495,38 +501,41 @@ onUnmounted(() => {
                     <!-- 预览控制按钮 -->
                     <div class="flex gap-2">
                         <Button
-                            variant="outline"
-                            size="xs"
+                            :severity="previewing ? 'danger' : 'secondary'"
+                            :outlined="!previewing"
+                            size="small"
                             :disabled="!isOpen || busy"
-                            :class="
-                                previewing
-                                    ? 'bg-red-50 text-red-600 hover:bg-red-100 dark:bg-red-900/30 dark:text-red-400 dark:hover:bg-red-900/50'
-                                    : ''
-                            "
                             class="flex-1"
                             @click="void togglePreview()"
                         >
                             {{ previewing ? t('camera.stopPreview') : t('camera.startPreview') }}
                         </Button>
-                        <Button variant="outline" size="xs" :disabled="!isOpen || busy" @click="void onSnapshot()">
+                        <Button
+                            severity="secondary"
+                            outlined
+                            size="small"
+                            :disabled="!isOpen || busy"
+                            @click="void onSnapshot()"
+                        >
                             {{ t('camera.snapshot') }}
                         </Button>
                     </div>
 
                     <div class="flex items-center gap-2 border-t pt-2 text-xs">
                         <span class="shrink-0 text-muted-foreground">{{ t('camera.rotationAngle') }}</span>
-                        <select
-                            v-model.number="rotationAngle"
+                        <Select
+                            v-model="rotationAngle"
+                            :options="rotationOptions"
+                            option-label="label"
+                            option-value="value"
                             :disabled="!isOpen || rotationSaving"
-                            class="min-w-0 flex-1 rounded border px-2 py-1 text-xs focus:outline-none disabled:opacity-40"
-                        >
-                            <option v-for="option in rotationOptions" :key="option.value" :value="option.value">
-                                {{ option.label }}
-                            </option>
-                        </select>
+                            size="small"
+                            class="min-w-0 flex-1"
+                        />
                         <Button
-                            variant="outline"
-                            size="xs"
+                            severity="secondary"
+                            outlined
+                            size="small"
                             :disabled="!isOpen || rotationSaving || !rotationDirty"
                             @click="void saveRotationAngle()"
                         >
@@ -553,8 +562,9 @@ onUnmounted(() => {
                         <span class="text-xs font-medium text-muted-foreground">{{ t('camera.quickActions') }}</span>
                         <div class="flex gap-2">
                             <Button
-                                variant="outline"
-                                size="xs"
+                                severity="secondary"
+                                outlined
+                                size="small"
                                 :disabled="!isOpen || busy"
                                 class="flex-1"
                                 @click="void onSoftTrigger()"
@@ -562,8 +572,9 @@ onUnmounted(() => {
                                 {{ t('camera.softTrigger') }}
                             </Button>
                             <Button
-                                variant="outline"
-                                size="xs"
+                                severity="secondary"
+                                outlined
+                                size="small"
                                 :disabled="!isOpen || busy"
                                 class="flex-1"
                                 @click="void onExposureAutoOncePulse()"
@@ -582,8 +593,8 @@ onUnmounted(() => {
                             {{ t('camera.realtimeSensorTemp') }}{{ realtimeState.sensorTemperature.toFixed(1) }} °C
                         </div>
                     </div>
-                </CardContent>
-            </Card>
+                </div>
+            </AppCard>
         </div>
     </div>
 </template>

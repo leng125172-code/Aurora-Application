@@ -1,11 +1,12 @@
 <script setup lang="ts">
 // 动态渲染一个 GenICam Category 分组卡片
 // 内部根据 Visibility 过滤后逐节点渲染 GenICamNodeField
-// 视觉风格参考 Dashboard 页面：使用 Card/CardHeader/CardTitle/CardContent
+// 视觉风格参考 Dashboard 页面：使用 AppCard（PrimeVue Card + Inspira BorderBeam）
 import { computed } from 'vue'
 import type { GenICamCategoryDto, GenICamNodeDto } from '@/api/cameras'
 import GenICamNodeField from './GenICamNodeField.vue'
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
+import Button from 'primevue/button'
+import { AppCard } from '@/components/primevue'
 
 const props = defineProps<{
     cameraId: string
@@ -42,34 +43,34 @@ const visibleNodes = computed<GenICamNodeDto[]>(() => {
 </script>
 
 <template>
-    <Card class="relative">
-        <CardHeader class="flex flex-row items-center justify-between space-y-0 py-3">
-            <CardTitle class="text-sm font-semibold">
+    <AppCard :beam="false">
+        <div class="flex flex-row items-center justify-between px-3 py-2">
+            <div class="text-sm font-semibold">
                 {{ category.displayName || category.name }}
-            </CardTitle>
-            <button
+            </div>
+            <Button
+                text
+                size="small"
+                severity="primary"
                 :disabled="disabled || loading"
-                class="text-xs text-primary hover:underline disabled:opacity-40"
                 @click="emit('refresh')"
             >
                 {{ loading ? '加载中…' : '刷新' }}
-            </button>
-        </CardHeader>
-        <CardContent class="p-0">
-            <div class="divide-y border-t">
-                <template v-if="visibleNodes.length === 0">
-                    <div class="px-3 py-4 text-center text-xs text-muted-foreground">无 {{ visibility }} 可见参数</div>
-                </template>
-                <GenICamNodeField
-                    v-for="node in visibleNodes"
-                    :key="node.nodeName"
-                    :camera-id="cameraId"
-                    :node="node"
-                    :value="values[node.nodeName] ?? node.currentValue"
-                    :disabled="disabled"
-                    @updated="(n, v) => emit('node-updated', n, v)"
-                />
-            </div>
-        </CardContent>
-    </Card>
+            </Button>
+        </div>
+        <div class="divide-y border-t">
+            <template v-if="visibleNodes.length === 0">
+                <div class="px-3 py-4 text-center text-xs text-muted-foreground">无 {{ visibility }} 可见参数</div>
+            </template>
+            <GenICamNodeField
+                v-for="node in visibleNodes"
+                :key="node.nodeName"
+                :camera-id="cameraId"
+                :node="node"
+                :value="values[node.nodeName] ?? node.currentValue"
+                :disabled="disabled"
+                @updated="(n, v) => emit('node-updated', n, v)"
+            />
+        </div>
+    </AppCard>
 </template>

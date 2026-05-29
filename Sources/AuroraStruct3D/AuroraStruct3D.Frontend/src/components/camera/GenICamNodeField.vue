@@ -4,7 +4,7 @@
 import { computed, ref, watch } from 'vue'
 import type { GenICamNodeDto } from '@/api/cameras'
 import { useCameraStore } from '@/stores/cameras'
-import { toast } from 'vue-sonner'
+import { useAppToast } from '@/composables/useAppToast'
 
 const props = defineProps<{
     /** 相机 ID */
@@ -23,6 +23,7 @@ const emit = defineEmits<{
 }>()
 
 const store = useCameraStore()
+const toast = useAppToast()
 
 // ─── 节点能力判定 ──────────────────────────────────────────────────────────
 const isCommand = computed(() => props.node.nodeType === 'Command')
