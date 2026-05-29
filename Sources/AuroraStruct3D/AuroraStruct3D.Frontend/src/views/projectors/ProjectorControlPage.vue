@@ -1,7 +1,14 @@
 <script setup lang="ts">
+// 光机控制台：PrimeVue 重构版（AppCard + Button + InputNumber + Slider + ColorPicker）
 import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
+import { useConfirm } from 'primevue/useconfirm'
+import Button from 'primevue/button'
+import InputNumber from 'primevue/inputnumber'
+import Slider from 'primevue/slider'
+import ColorPicker from 'primevue/colorpicker'
+import ConfirmDialog from 'primevue/confirmdialog'
 import { useProjectorStore } from '@/stores/projectors'
 import {
     ProjectorConnectionStatus,
@@ -11,15 +18,15 @@ import {
     ProjectorTriggerMode,
     ProjectorBootImage,
 } from '@/api/projectors'
-import { toast } from 'vue-sonner'
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
-import { BorderBeam } from '@/components/ui/border-beam'
-import { Button } from '@/components/ui/button'
+import { useAppToast } from '@/composables/useAppToast'
+import { AppCard } from '@/components/primevue'
 
 const route = useRoute()
 const router = useRouter()
 const store = useProjectorStore()
 const { t } = useI18n()
+const toast = useAppToast()
+const confirm = useConfirm()
 
 // ─── 当前设备 ─────────────────────────────────────────────────────────────
 const deviceId = computed<string>(() => route.params.id as string)
@@ -98,17 +105,18 @@ const rgbR = ref(75)
 const rgbG = ref(75)
 const rgbB = ref(75)
 
-// 与 <input type="color"> 双向绑定
+// PrimeVue ColorPicker 使用 hex（不带 #），与 R/G/B 双向绑定
 const rgbHex = computed({
     get() {
         const h = (v: number) => v.toString(16).padStart(2, '0')
-        return `#${h(rgbR.value)}${h(rgbG.value)}${h(rgbB.value)}`
+        return `${h(rgbR.value)}${h(rgbG.value)}${h(rgbB.value)}`
     },
     set(hex: string) {
-        if (hex.length !== 7) return
-        rgbR.value = parseInt(hex.slice(1, 3), 16)
-        rgbG.value = parseInt(hex.slice(3, 5), 16)
-        rgbB.value = parseInt(hex.slice(5, 7), 16)
+        const v = hex.startsWith('#') ? hex.slice(1) : hex
+        if (v.length !== 6) return
+        rgbR.value = parseInt(v.slice(0, 2), 16)
+        rgbG.value = parseInt(v.slice(2, 4), 16)
+        rgbB.value = parseInt(v.slice(4, 6), 16)
     },
 })
 async function onApplyRgb() {
@@ -152,10 +160,18 @@ async function onTriggerOnce() {
 }
 
 // ─── 高级操作 ─────────────────────────────────────────────────────────────
-async function onSoftReset() {
-    if (!confirm(t('projector.confirmSoftReset'))) return
-    await run(() => store.softReset(deviceId.value))
-    toast.success(t('projector.softResetSent'))
+function onSoftReset() {
+    confirm.require({
+        message: t('projector.confirmSoftReset'),
+        header: t('projector.softReset'),
+        icon: 'pi pi-exclamation-triangle',
+        acceptProps: { severity: 'danger', size: 'small' },
+        rejectProps: { severity: 'secondary', outlined: true, size: 'small' },
+        accept: async () => {
+            await run(() => store.softReset(deviceId.value))
+            toast.success(t('projector.softResetSent'))
+        },
+    })
 }
 async function onSaveParams() {
     await run(() => store.saveParams(deviceId.value))
@@ -213,9 +229,11 @@ watch(device, (d) => {
 
 <template>
     <div class="flex flex-col gap-4 p-4">
+        <ConfirmDialog />
+
         <!-- ─── 顶部：返回 + 设备信息 ────────────────────────────── -->
         <div class="flex items-center gap-3">
-            <Button variant="outline" size="sm" @click="router.back()">{{ t('camera.back') }}</Button>
+            <Button severity="secondary" outlined size="small" @click="router.back()">{{ t('camera.back') }}</Button>
             <div>
                 <h1 class="text-2xl font-bold tracking-tight">{{ device?.name ?? t('projector.ctrlTitle') }}</h1>
                 <p class="text-xs text-muted-foreground">
@@ -245,76 +263,75 @@ watch(device, (d) => {
             <!-- ─── 第一行：LED 控制 + 触发 / 高级 ───────────────── -->
             <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <!-- LED 控制 -->
-                <Card class="relative">
-                    <BorderBeam :size="80" :duration="8" />
-                    <CardHeader class="pb-3">
-                        <CardTitle class="text-sm font-semibold">{{ t('projector.ledControl') }}</CardTitle>
-                    </CardHeader>
-                    <CardContent>
+                <AppCard :beam-size="80" :beam-duration="8">
+                    <div class="p-4">
+                        <div class="mb-3 text-sm font-semibold">{{ t('projector.ledControl') }}</div>
                         <div class="flex gap-3">
                             <Button
-                                size="sm"
-                                class="bg-yellow-500 text-white hover:bg-yellow-400"
+                                size="small"
+                                severity="warn"
                                 :disabled="!isConnected || busy"
                                 @click="onLedOn"
                             >
                                 {{ t('projector.ledOn') }}
                             </Button>
-                            <Button variant="outline" size="sm" :disabled="!isConnected || busy" @click="onLedOff">
+                            <Button
+                                size="small"
+                                severity="secondary"
+                                outlined
+                                :disabled="!isConnected || busy"
+                                @click="onLedOff"
+                            >
                                 {{ t('projector.ledOff') }}
                             </Button>
                         </div>
-                    </CardContent>
-                </Card>
+                    </div>
+                </AppCard>
 
                 <!-- 触发 / 高级 -->
-                <Card class="relative">
-                    <BorderBeam :size="80" :duration="8" :delay="2" />
-                    <CardHeader class="pb-3">
-                        <CardTitle class="text-sm font-semibold">{{ t('projector.triggerAdvanced') }}</CardTitle>
-                    </CardHeader>
-                    <CardContent>
+                <AppCard :beam-size="80" :beam-duration="8" :beam-delay="2">
+                    <div class="p-4">
+                        <div class="mb-3 text-sm font-semibold">{{ t('projector.triggerAdvanced') }}</div>
                         <div class="flex flex-wrap gap-2">
-                            <Button size="sm" :disabled="!isConnected || busy" @click="onTriggerOnce">
+                            <Button size="small" :disabled="!isConnected || busy" @click="onTriggerOnce">
                                 {{ t('projector.triggerOnce') }}
                             </Button>
-                            <Button variant="outline" size="sm" :disabled="!isConnected || busy" @click="onSaveParams">
+                            <Button
+                                size="small"
+                                severity="secondary"
+                                outlined
+                                :disabled="!isConnected || busy"
+                                @click="onSaveParams"
+                            >
                                 {{ t('projector.saveParams') }}
                             </Button>
                             <Button
-                                variant="destructive"
-                                size="sm"
+                                size="small"
+                                severity="danger"
                                 :disabled="!isConnected || busy"
                                 @click="onSoftReset"
                             >
                                 {{ t('projector.softReset') }}
                             </Button>
                         </div>
-                    </CardContent>
-                </Card>
+                    </div>
+                </AppCard>
             </div>
 
             <!-- ─── 第二行：显示模式 + 颜色（多光谱） ────────────── -->
             <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <!-- 显示模式（含设为开机图） -->
-                <Card class="relative">
-                    <BorderBeam :size="80" :duration="8" :delay="1" />
-                    <CardHeader class="pb-3">
-                        <CardTitle class="text-sm font-semibold">{{ t('projector.displayMode') }}</CardTitle>
-                    </CardHeader>
-                    <CardContent>
+                <AppCard :beam-size="80" :beam-duration="8" :beam-delay="1">
+                    <div class="p-4">
+                        <div class="mb-3 text-sm font-semibold">{{ t('projector.displayMode') }}</div>
                         <div class="flex flex-wrap gap-2">
                             <Button
                                 v-for="opt in displayModeOptions"
                                 :key="opt.value"
-                                variant="outline"
-                                size="sm"
+                                size="small"
+                                :severity="device.lastDisplayMode === opt.value ? 'primary' : 'secondary'"
+                                :outlined="device.lastDisplayMode !== opt.value"
                                 :disabled="!isConnected || busy"
-                                :class="
-                                    device.lastDisplayMode === opt.value
-                                        ? 'border-primary bg-primary/5 text-primary'
-                                        : ''
-                                "
                                 @click="onSetDisplayMode(opt.value)"
                             >
                                 {{ opt.label }}
@@ -322,10 +339,10 @@ watch(device, (d) => {
                         </div>
                         <div class="mt-3 border-t pt-3">
                             <Button
-                                variant="outline"
-                                size="sm"
+                                size="small"
+                                severity="secondary"
+                                outlined
                                 :disabled="!isConnected || busy"
-                                class="border-dashed text-muted-foreground hover:border-primary hover:text-primary"
                                 @click="onSetBootFromDisplayMode"
                             >
                                 {{
@@ -337,28 +354,21 @@ watch(device, (d) => {
                                 }}
                             </Button>
                         </div>
-                    </CardContent>
-                </Card>
+                    </div>
+                </AppCard>
 
                 <!-- 颜色（多光谱） -->
-                <Card class="relative">
-                    <BorderBeam :size="80" :duration="8" :delay="3" />
-                    <CardHeader class="pb-3">
-                        <CardTitle class="text-sm font-semibold">{{ t('projector.colorMultiSpectral') }}</CardTitle>
-                    </CardHeader>
-                    <CardContent>
+                <AppCard :beam-size="80" :beam-duration="8" :beam-delay="3">
+                    <div class="p-4">
+                        <div class="mb-3 text-sm font-semibold">{{ t('projector.colorMultiSpectral') }}</div>
                         <!-- 颜色 Tab 按钮 -->
                         <div class="flex flex-wrap gap-2">
                             <!-- Aura RGB Tab -->
                             <Button
-                                variant="outline"
-                                size="sm"
+                                size="small"
+                                :severity="selectedColor === ProjectorColor.AuraSync ? 'help' : 'secondary'"
+                                :outlined="selectedColor !== ProjectorColor.AuraSync"
                                 :disabled="!isConnected || busy"
-                                :class="
-                                    selectedColor === ProjectorColor.AuraSync
-                                        ? 'border-purple-500 bg-purple-50 text-purple-600'
-                                        : ''
-                                "
                                 @click="onSelectAuraRgb"
                             >
                                 🌈 Aura RGB
@@ -367,32 +377,27 @@ watch(device, (d) => {
                             <Button
                                 v-for="opt in colorOptions.filter((c) => c.value !== ProjectorColor.AuraSync)"
                                 :key="opt.value"
-                                variant="outline"
-                                size="sm"
+                                size="small"
+                                :severity="selectedColor === opt.value ? 'primary' : 'secondary'"
+                                :outlined="selectedColor !== opt.value"
                                 :disabled="!isConnected || busy"
-                                :class="selectedColor === opt.value ? 'border-primary bg-primary/5 text-primary' : ''"
                                 @click="onSelectMonoColor(opt.value)"
                             >
                                 {{ opt.label }}
                             </Button>
                         </div>
 
-                        <!-- Aura RGB：圆形色轮调色盘 -->
+                        <!-- Aura RGB：色轮调色盘 -->
                         <div v-if="selectedColor === ProjectorColor.AuraSync" class="mt-4 flex items-center gap-4">
-                            <input
-                                v-model="rgbHex"
-                                type="color"
-                                :disabled="!isConnected || busy"
-                                class="h-16 w-16 cursor-pointer rounded-full border-0 bg-transparent p-0.5 disabled:cursor-not-allowed disabled:opacity-40"
-                                style="border-radius: 50%"
-                            />
+                            <ColorPicker v-model="rgbHex" :disabled="!isConnected || busy" inline />
                             <div class="flex flex-col gap-1 text-xs text-muted-foreground">
                                 <span>R {{ rgbR }} &nbsp;G {{ rgbG }} &nbsp;B {{ rgbB }}</span>
-                                <span class="font-mono uppercase">{{ rgbHex }}</span>
+                                <span class="font-mono uppercase">#{{ rgbHex }}</span>
                             </div>
                             <Button
-                                size="sm"
-                                class="ml-auto bg-purple-500 text-white hover:bg-purple-400"
+                                size="small"
+                                severity="help"
+                                class="ml-auto"
                                 :disabled="!isConnected || busy"
                                 @click="onApplyRgb"
                             >
@@ -400,151 +405,152 @@ watch(device, (d) => {
                             </Button>
                         </div>
 
-                        <!-- 单色：亮度调节 0-175 -->
+                        <!-- 单色：亮度调节 10-175 -->
                         <div v-else class="mt-4 flex items-center gap-3">
                             <span class="text-sm text-muted-foreground">{{ t('projector.brightness') }}</span>
-                            <input
-                                v-model.number="colorBrightness"
-                                type="range"
-                                min="10"
-                                max="175"
-                                step="5"
+                            <Slider
+                                v-model="colorBrightness"
+                                :min="10"
+                                :max="175"
+                                :step="5"
                                 class="flex-1"
                                 :disabled="!isConnected || busy"
                             />
                             <span class="w-8 text-right text-sm tabular-nums">{{ colorBrightness }}</span>
                             <Button
-                                variant="outline"
-                                size="sm"
+                                size="small"
+                                severity="secondary"
+                                outlined
                                 :disabled="!isConnected || busy"
                                 @click="onApplyMonoBrightness"
                             >
                                 {{ t('projector.apply') }}
                             </Button>
                         </div>
-                    </CardContent>
-                </Card>
+                    </div>
+                </AppCard>
             </div>
 
             <!-- ─── 第三行：图像翻转 + 触发模式 + 棋盘格 ────────── -->
             <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
                 <!-- 图像翻转 -->
-                <Card class="relative">
-                    <BorderBeam :size="80" :duration="8" :delay="1" />
-                    <CardHeader class="pb-3">
-                        <CardTitle class="text-sm font-semibold">{{ t('projector.imageFlip') }}</CardTitle>
-                    </CardHeader>
-                    <CardContent>
+                <AppCard :beam-size="80" :beam-duration="8" :beam-delay="1">
+                    <div class="p-4">
+                        <div class="mb-3 text-sm font-semibold">{{ t('projector.imageFlip') }}</div>
                         <div class="flex flex-col gap-1.5">
                             <Button
                                 v-for="opt in flipOptions"
                                 :key="opt.value"
-                                variant="outline"
-                                size="sm"
+                                size="small"
+                                :severity="device.flipMode === opt.value ? 'primary' : 'secondary'"
+                                :outlined="device.flipMode !== opt.value"
                                 :disabled="!isConnected || busy"
-                                :class="device.flipMode === opt.value ? 'border-primary bg-primary/5 text-primary' : ''"
                                 @click="onSetFlip(opt.value)"
                             >
                                 {{ opt.label }}
                             </Button>
                         </div>
-                    </CardContent>
-                </Card>
+                    </div>
+                </AppCard>
 
                 <!-- 触发模式 -->
-                <Card class="relative">
-                    <BorderBeam :size="80" :duration="8" :delay="2" />
-                    <CardHeader class="pb-3">
-                        <CardTitle class="text-sm font-semibold">{{ t('projector.triggerMode') }}</CardTitle>
-                    </CardHeader>
-                    <CardContent>
+                <AppCard :beam-size="80" :beam-duration="8" :beam-delay="2">
+                    <div class="p-4">
+                        <div class="mb-3 text-sm font-semibold">{{ t('projector.triggerMode') }}</div>
                         <div class="flex flex-col gap-1.5">
                             <Button
                                 v-for="opt in triggerModeOptions"
                                 :key="opt.value"
-                                variant="outline"
-                                size="sm"
+                                size="small"
+                                :severity="device.triggerMode === opt.value ? 'primary' : 'secondary'"
+                                :outlined="device.triggerMode !== opt.value"
                                 :disabled="!isConnected || busy"
-                                :class="
-                                    device.triggerMode === opt.value ? 'border-primary bg-primary/5 text-primary' : ''
-                                "
                                 @click="onSetTriggerMode(opt.value)"
                             >
                                 {{ opt.label }}
                             </Button>
                         </div>
-                    </CardContent>
-                </Card>
+                    </div>
+                </AppCard>
 
                 <!-- 棋盘格像素尺寸 -->
-                <Card class="relative">
-                    <BorderBeam :size="80" :duration="8" :delay="3" />
-                    <CardHeader class="pb-3">
-                        <CardTitle class="text-sm font-semibold">{{ t('projector.checkerboardSize') }}</CardTitle>
-                    </CardHeader>
-                    <CardContent>
+                <AppCard :beam-size="80" :beam-duration="8" :beam-delay="3">
+                    <div class="p-4">
+                        <div class="mb-3 text-sm font-semibold">{{ t('projector.checkerboardSize') }}</div>
                         <div class="flex items-center gap-3">
-                            <input
-                                v-model.number="checkerboardPixelSize"
-                                type="number"
-                                min="1"
-                                max="128"
+                            <InputNumber
+                                v-model="checkerboardPixelSize"
+                                :min="1"
+                                :max="128"
                                 :disabled="!isConnected || busy"
-                                class="w-20 rounded border bg-background px-2 py-1.5 text-sm disabled:opacity-40"
+                                show-buttons
+                                button-layout="horizontal"
+                                size="small"
+                                input-class="w-16 text-center"
                             />
                             <span class="text-xs text-muted-foreground">px</span>
                             <Button
-                                variant="outline"
-                                size="sm"
+                                size="small"
+                                severity="secondary"
+                                outlined
                                 :disabled="!isConnected || busy"
                                 @click="onSetCheckerboard"
                             >
                                 {{ t('projector.apply') }}
                             </Button>
                         </div>
-                    </CardContent>
-                </Card>
+                    </div>
+                </AppCard>
             </div>
 
             <!-- ─── 第四行：寄存器读写 ───────────────────────────── -->
-            <Card class="relative">
-                <BorderBeam :size="80" :duration="8" :delay="4" />
-                <CardHeader class="pb-3">
-                    <CardTitle class="text-sm font-semibold">{{ t('projector.registerRW') }}</CardTitle>
-                </CardHeader>
-                <CardContent>
+            <AppCard :beam-size="80" :beam-duration="8" :beam-delay="4">
+                <div class="p-4">
+                    <div class="mb-3 text-sm font-semibold">{{ t('projector.registerRW') }}</div>
                     <div class="flex flex-wrap items-center gap-3 text-sm">
                         <label class="flex items-center gap-1.5">
-                            {{ t('projector.registerAddress') }}
-                            <input
-                                v-model.number="registerAddr"
-                                type="number"
-                                min="0"
+                            <span>{{ t('projector.registerAddress') }}</span>
+                            <InputNumber
+                                v-model="registerAddr"
+                                :min="0"
                                 :disabled="busy"
-                                class="w-20 rounded border bg-background px-2 py-1.5 text-sm disabled:opacity-40"
+                                size="small"
+                                input-class="w-20"
                             />
                         </label>
                         <label class="flex items-center gap-1.5">
-                            {{ t('projector.registerValue') }}
-                            <input
-                                v-model.number="registerValue"
-                                type="number"
+                            <span>{{ t('projector.registerValue') }}</span>
+                            <InputNumber
+                                v-model="registerValue"
                                 :disabled="busy"
-                                class="w-20 rounded border bg-background px-2 py-1.5 text-sm disabled:opacity-40"
+                                size="small"
+                                input-class="w-20"
                             />
                         </label>
-                        <Button variant="outline" size="sm" :disabled="!isConnected || busy" @click="onReadRegister">
+                        <Button
+                            size="small"
+                            severity="secondary"
+                            outlined
+                            :disabled="!isConnected || busy"
+                            @click="onReadRegister"
+                        >
                             {{ t('projector.readRegister') }}
                         </Button>
-                        <Button variant="outline" size="sm" :disabled="!isConnected || busy" @click="onWriteRegister">
+                        <Button
+                            size="small"
+                            severity="secondary"
+                            outlined
+                            :disabled="!isConnected || busy"
+                            @click="onWriteRegister"
+                        >
                             {{ t('projector.writeRegister') }}
                         </Button>
                         <span v-if="registerReadResult !== null" class="font-mono text-xs">
                             {{ t('projector.registerResult') }}: {{ registerReadResult }}
                         </span>
                     </div>
-                </CardContent>
-            </Card>
+                </div>
+            </AppCard>
         </template>
     </div>
 </template>

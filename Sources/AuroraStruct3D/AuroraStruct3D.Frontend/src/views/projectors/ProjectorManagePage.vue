@@ -1,7 +1,14 @@
 <script setup lang="ts">
+// 光机管理页：PrimeVue DataTable + Dialog + Button 重构版
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
+import DataTable from 'primevue/datatable'
+import Column from 'primevue/column'
+import Button from 'primevue/button'
+import Dialog from 'primevue/dialog'
+import InputText from 'primevue/inputtext'
+import ToggleSwitch from 'primevue/toggleswitch'
 import { useProjectorStore } from '@/stores/projectors'
 import {
     type UpdateProjectorDeviceDto,
@@ -10,11 +17,12 @@ import {
     ProjectorConnectionStatus,
     ProjectorLedStatus,
 } from '@/api/projectors'
-import { toast } from 'vue-sonner'
+import { useAppToast } from '@/composables/useAppToast'
 
 const { t } = useI18n()
 const router = useRouter()
 const store = useProjectorStore()
+const toast = useAppToast()
 
 // ─── 扫描状态 ─────────────────────────────────────────────────────────────
 const scanning = ref(false)
@@ -111,136 +119,123 @@ onMounted(() => {
         <div class="flex items-center justify-between">
             <h1 class="text-lg font-semibold">{{ t('projector.title') }}</h1>
             <div class="flex gap-2">
-                <button class="rounded border px-3 py-1.5 text-sm hover:bg-muted/50" @click="void store.fetchList()">
+                <Button severity="secondary" size="small" outlined @click="void store.fetchList()">
                     {{ t('projector.refresh') }}
-                </button>
-                <button
-                    :disabled="scanning"
-                    class="rounded bg-primary px-3 py-1.5 text-sm text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-                    @click="handleScan"
-                >
+                </Button>
+                <Button :loading="scanning" size="small" @click="handleScan">
                     {{ scanning ? t('projector.scanning') : t('projector.scan') }}
-                </button>
+                </Button>
             </div>
         </div>
 
         <!-- 设备列表 -->
-        <div v-if="store.loading" class="py-8 text-center text-sm text-muted-foreground">{{ t('common.loading') }}</div>
-        <div v-else-if="store.projectors.length === 0" class="py-8 text-center text-sm text-muted-foreground">
-            {{ t('projector.noDevices') }}
-        </div>
-        <div v-else class="overflow-auto rounded-lg border">
-            <table class="w-full min-w-[900px] text-sm">
-                <thead class="border-b bg-muted/50">
-                    <tr>
-                        <th class="px-3 py-2 text-left font-medium">{{ t('projector.index') }}</th>
-                        <th class="px-3 py-2 text-left font-medium">{{ t('projector.name') }}</th>
-                        <th class="px-3 py-2 text-left font-medium">{{ t('projector.connectionType') }}</th>
-                        <th class="px-3 py-2 text-left font-medium">{{ t('projector.address') }}</th>
-                        <th class="px-3 py-2 text-left font-medium">{{ t('projector.connectionStatus') }}</th>
-                        <th class="px-3 py-2 text-left font-medium">{{ t('projector.led') }}</th>
-                        <th class="px-3 py-2 text-left font-medium">{{ t('projector.firmware') }}</th>
-                        <th class="px-3 py-2 text-left font-medium">{{ t('common.actions') }}</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr v-for="p in store.projectors" :key="p.id" class="border-b last:border-0 hover:bg-muted/30">
-                        <td class="px-3 py-2">{{ p.deviceIndex }}</td>
-                        <td class="px-3 py-2 font-medium">{{ p.name }}</td>
-                        <td class="px-3 py-2">
-                            {{ p.connectionType === ProjectorConnectionType.Tcp ? 'TCP' : 'USB HID' }}
-                        </td>
-                        <td class="px-3 py-2 font-mono text-xs">
-                            <span v-if="p.connectionType === ProjectorConnectionType.Tcp">
-                                {{ p.ipAddress }}:{{ p.tcpPort }}
-                            </span>
-                            <span v-else>HID[{{ p.hidDeviceIndex }}]</span>
-                        </td>
-                        <td :class="['px-3 py-2', connectionStatusClass(p.connectionStatus)]">
-                            {{ p.connectionStatusText }}
-                        </td>
-                        <td :class="['px-3 py-2', ledStatusClass(p.ledStatus)]">
-                            {{ p.ledStatusText }}
-                        </td>
-                        <td class="px-3 py-2 text-xs text-muted-foreground">
-                            {{ p.firmwareVersion ?? '—' }}
-                        </td>
-                        <td class="px-3 py-2">
-                            <div class="flex flex-wrap gap-1.5">
-                                <button
-                                    class="rounded border px-2 py-0.5 text-xs hover:bg-muted/50"
-                                    @click="goToControl(p.id)"
-                                >
-                                    {{ t('projector.control') }}
-                                </button>
-                                <button
-                                    v-if="p.connectionStatus !== ProjectorConnectionStatus.Connected"
-                                    class="rounded border px-2 py-0.5 text-xs text-green-600 hover:bg-green-50"
-                                    @click="handleConnect(p.id)"
-                                >
-                                    {{ t('projector.connect') }}
-                                </button>
-                                <button
-                                    v-else
-                                    class="rounded border px-2 py-0.5 text-xs text-orange-500 hover:bg-orange-50"
-                                    @click="handleDisconnect(p.id)"
-                                >
-                                    {{ t('projector.disconnect') }}
-                                </button>
-                                <button
-                                    class="rounded border px-2 py-0.5 text-xs hover:bg-muted/50"
-                                    @click="handleEdit(p)"
-                                >
-                                    {{ t('common.edit') }}
-                                </button>
-                            </div>
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
+        <DataTable
+            :value="store.projectors"
+            :loading="store.loading"
+            data-key="id"
+            size="small"
+            striped-rows
+            class="rounded-lg border"
+        >
+            <template #empty>
+                <div class="py-6 text-center text-sm text-muted-foreground">{{ t('projector.noDevices') }}</div>
+            </template>
+            <template #loading>
+                <div class="py-6 text-center text-sm text-muted-foreground">{{ t('common.loading') }}</div>
+            </template>
+
+            <Column field="deviceIndex" :header="t('projector.index')" style="min-width: 4rem" />
+            <Column field="name" :header="t('projector.name')" style="min-width: 9rem">
+                <template #body="{ data }">
+                    <span class="font-medium">{{ data.name }}</span>
+                </template>
+            </Column>
+            <Column :header="t('projector.connectionType')" style="min-width: 7rem">
+                <template #body="{ data }">
+                    {{ data.connectionType === ProjectorConnectionType.Tcp ? 'TCP' : 'USB HID' }}
+                </template>
+            </Column>
+            <Column :header="t('projector.address')" style="min-width: 10rem">
+                <template #body="{ data }">
+                    <span class="font-mono text-xs">
+                        <template v-if="data.connectionType === ProjectorConnectionType.Tcp">
+                            {{ data.ipAddress }}:{{ data.tcpPort }}
+                        </template>
+                        <template v-else>HID[{{ data.hidDeviceIndex }}]</template>
+                    </span>
+                </template>
+            </Column>
+            <Column :header="t('projector.connectionStatus')" style="min-width: 8rem">
+                <template #body="{ data }">
+                    <span :class="connectionStatusClass(data.connectionStatus)">{{ data.connectionStatusText }}</span>
+                </template>
+            </Column>
+            <Column :header="t('projector.led')" style="min-width: 6rem">
+                <template #body="{ data }">
+                    <span :class="ledStatusClass(data.ledStatus)">{{ data.ledStatusText }}</span>
+                </template>
+            </Column>
+            <Column :header="t('projector.firmware')" style="min-width: 7rem">
+                <template #body="{ data }">
+                    <span class="text-xs text-muted-foreground">{{ data.firmwareVersion ?? '—' }}</span>
+                </template>
+            </Column>
+            <Column :header="t('common.actions')" style="min-width: 16rem">
+                <template #body="{ data }">
+                    <div class="flex flex-wrap gap-1.5">
+                        <Button severity="secondary" size="small" outlined @click="goToControl(data.id)">
+                            {{ t('projector.control') }}
+                        </Button>
+                        <Button
+                            v-if="data.connectionStatus !== ProjectorConnectionStatus.Connected"
+                            severity="success"
+                            size="small"
+                            outlined
+                            @click="handleConnect(data.id)"
+                        >
+                            {{ t('projector.connect') }}
+                        </Button>
+                        <Button v-else severity="warn" size="small" outlined @click="handleDisconnect(data.id)">
+                            {{ t('projector.disconnect') }}
+                        </Button>
+                        <Button severity="secondary" size="small" outlined @click="handleEdit(data)">
+                            {{ t('common.edit') }}
+                        </Button>
+                    </div>
+                </template>
+            </Column>
+        </DataTable>
 
         <!-- 编辑投影机对话框 -->
-        <div
-            v-if="showEditDialog"
-            class="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
-            @click.self="showEditDialog = false"
+        <Dialog
+            v-model:visible="showEditDialog"
+            :header="t('projector.editTitle')"
+            modal
+            :style="{ width: '420px' }"
+            :draggable="false"
         >
-            <div class="w-[420px] rounded-lg border bg-background p-6 shadow-lg">
-                <h2 class="mb-4 text-base font-semibold">{{ t('projector.editTitle') }}</h2>
-                <div class="flex flex-col gap-3">
-                    <label class="flex flex-col gap-1 text-sm">
-                        {{ t('projector.name') }}
-                        <input v-model="editForm.name" class="rounded border bg-background px-2 py-1.5 text-sm" />
-                    </label>
-                    <label class="flex flex-col gap-1 text-sm">
-                        {{ t('common.description') }}
-                        <input
-                            v-model="editForm.description"
-                            class="rounded border bg-background px-2 py-1.5 text-sm"
-                        />
-                    </label>
-                    <label class="flex items-center gap-2 text-sm">
-                        <input v-model="editForm.isEnabled" type="checkbox" />
-                        {{ t('projector.enabled') }}
-                    </label>
-                </div>
-                <div class="mt-5 flex justify-end gap-2">
-                    <button
-                        class="rounded border px-4 py-1.5 text-sm text-muted-foreground hover:bg-muted/50"
-                        @click="showEditDialog = false"
-                    >
-                        {{ t('common.cancel') }}
-                    </button>
-                    <button
-                        :disabled="updating"
-                        class="rounded bg-primary px-4 py-1.5 text-sm text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-                        @click="handleUpdate"
-                    >
-                        {{ updating ? t('common.saving') : t('common.save') }}
-                    </button>
-                </div>
+            <div class="flex flex-col gap-3">
+                <label class="flex flex-col gap-1 text-sm">
+                    <span>{{ t('projector.name') }}</span>
+                    <InputText v-model="editForm.name" size="small" />
+                </label>
+                <label class="flex flex-col gap-1 text-sm">
+                    <span>{{ t('common.description') }}</span>
+                    <InputText v-model="editForm.description" size="small" />
+                </label>
+                <label class="flex items-center gap-2 text-sm">
+                    <ToggleSwitch v-model="editForm.isEnabled" />
+                    <span>{{ t('projector.enabled') }}</span>
+                </label>
             </div>
-        </div>
+            <template #footer>
+                <Button severity="secondary" outlined size="small" @click="showEditDialog = false">
+                    {{ t('common.cancel') }}
+                </Button>
+                <Button :loading="updating" size="small" @click="handleUpdate">
+                    {{ updating ? t('common.saving') : t('common.save') }}
+                </Button>
+            </template>
+        </Dialog>
     </div>
 </template>

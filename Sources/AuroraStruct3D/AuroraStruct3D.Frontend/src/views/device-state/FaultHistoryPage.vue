@@ -1,6 +1,12 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+// 故障历史页：PrimeVue DataTable + AppCard 重构版（含懒加载分页）
+import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
+import DataTable, { type DataTablePageEvent } from 'primevue/datatable'
+import Column from 'primevue/column'
+import Select from 'primevue/select'
+import DatePicker from 'primevue/datepicker'
+import Button from 'primevue/button'
 import {
     type DeviceFaultDto,
     type GetFaultPagedInput,
@@ -9,15 +15,13 @@ import {
     getFaultPagedListAsync,
 } from '@/api/device-state'
 import { extractLogTag } from '@/utils/log-tag'
-import { Card, CardContent } from '@/components/ui/card'
-import { BorderBeam } from '@/components/ui/border-beam'
-import { Button } from '@/components/ui/button'
+import { AppCard } from '@/components/primevue'
 
 const { t } = useI18n()
 
 // ─── 分页参数 ────────────────────────────────────────────────────────────────
 const pageSize = ref(20)
-const currentPage = ref(1)
+const first = ref(0) // 当前页起始索引（DataTable 需要）
 const totalCount = ref(0)
 const items = ref<DeviceFaultDto[]>([])
 const loading = ref(false)
@@ -25,26 +29,20 @@ const loading = ref(false)
 // ─── 筛选条件 ────────────────────────────────────────────────────────────────
 const filterFaultLevel = ref<DeviceFaultLevel | null>(null)
 const filterIsResolved = ref<boolean | null>(null)
-const filterStartTime = ref<string>('')
-const filterEndTime = ref<string>('')
-
-// ─── 计算尾页 ────────────────────────────────────────────────────────────────
-const isLastPage = computed<boolean>(() => {
-    const total = totalCount.value
-    return total > 0 && currentPage.value >= Math.ceil(total / pageSize.value)
-})
+const filterStartTime = ref<Date | null>(null)
+const filterEndTime = ref<Date | null>(null)
 
 async function loadAsync(): Promise<void> {
     loading.value = true
     try {
         const input: GetFaultPagedInput = {
-            skipCount: (currentPage.value - 1) * pageSize.value,
+            skipCount: first.value,
             maxResultCount: pageSize.value,
             sorting: 'occurredAt DESC',
             faultLevel: filterFaultLevel.value,
             isResolved: filterIsResolved.value,
-            startTime: filterStartTime.value || null,
-            endTime: filterEndTime.value || null,
+            startTime: filterStartTime.value ? filterStartTime.value.toISOString() : null,
+            endTime: filterEndTime.value ? filterEndTime.value.toISOString() : null,
         }
         const result = await getFaultPagedListAsync(input)
         items.value = result.items
@@ -54,21 +52,22 @@ async function loadAsync(): Promise<void> {
     }
 }
 
-function onPageChange(page: number): void {
-    currentPage.value = page
+function onPage(event: DataTablePageEvent): void {
+    first.value = event.first
+    pageSize.value = event.rows
     void loadAsync()
 }
 
 function onFilterChange(): void {
-    currentPage.value = 1
+    first.value = 0
     void loadAsync()
 }
 
 function onReset(): void {
     filterFaultLevel.value = null
     filterIsResolved.value = null
-    filterStartTime.value = ''
-    filterEndTime.value = ''
+    filterStartTime.value = null
+    filterEndTime.value = null
     onFilterChange()
 }
 
@@ -96,176 +95,162 @@ onMounted(() => {
         <h1 class="text-2xl font-bold tracking-tight">{{ t('deviceState.faultHistory') }}</h1>
 
         <!-- 筛选栏 -->
-        <Card class="relative">
-            <BorderBeam :size="80" :duration="8" />
-            <CardContent class="flex flex-wrap items-center gap-3 py-3">
+        <AppCard :beam-size="80" :beam-duration="8">
+            <div class="flex flex-wrap items-center gap-3 p-3">
                 <!-- 故障等级 -->
-                <label class="flex items-center gap-1.5 text-sm">
+                <div class="flex items-center gap-1.5 text-sm">
                     <span class="text-muted-foreground">{{ t('deviceState.level') }}</span>
-                    <select
+                    <Select
                         v-model="filterFaultLevel"
-                        class="rounded border bg-background px-2 py-1 text-sm"
+                        :options="faultLevelOptions"
+                        option-label="label"
+                        option-value="value"
+                        size="small"
+                        class="w-36"
                         @change="onFilterChange"
-                    >
-                        <option v-for="opt in faultLevelOptions" :key="String(opt.value)" :value="opt.value">
-                            {{ opt.label }}
-                        </option>
-                    </select>
-                </label>
+                    />
+                </div>
 
                 <!-- 是否解决 -->
-                <label class="flex items-center gap-1.5 text-sm">
+                <div class="flex items-center gap-1.5 text-sm">
                     <span class="text-muted-foreground">{{ t('deviceState.status') }}</span>
-                    <select
+                    <Select
                         v-model="filterIsResolved"
-                        class="rounded border bg-background px-2 py-1 text-sm"
+                        :options="resolvedOptions"
+                        option-label="label"
+                        option-value="value"
+                        size="small"
+                        class="w-32"
                         @change="onFilterChange"
-                    >
-                        <option v-for="opt in resolvedOptions" :key="String(opt.value)" :value="opt.value">
-                            {{ opt.label }}
-                        </option>
-                    </select>
-                </label>
+                    />
+                </div>
 
                 <!-- 日期范围 -->
-                <label class="flex items-center gap-1.5 text-sm">
+                <div class="flex items-center gap-1.5 text-sm">
                     <span class="text-muted-foreground">{{ t('deviceState.startTime') }}</span>
-                    <input
+                    <DatePicker
                         v-model="filterStartTime"
-                        type="datetime-local"
-                        class="rounded border bg-background px-2 py-1 text-sm"
-                        @change="onFilterChange"
+                        show-time
+                        show-icon
+                        icon-display="input"
+                        size="small"
+                        class="w-52"
+                        @date-select="onFilterChange"
+                        @clear-click="onFilterChange"
+                        show-button-bar
                     />
-                </label>
-                <label class="flex items-center gap-1.5 text-sm">
+                </div>
+                <div class="flex items-center gap-1.5 text-sm">
                     <span class="text-muted-foreground">{{ t('deviceState.endTime') }}</span>
-                    <input
+                    <DatePicker
                         v-model="filterEndTime"
-                        type="datetime-local"
-                        class="rounded border bg-background px-2 py-1 text-sm"
-                        @change="onFilterChange"
+                        show-time
+                        show-icon
+                        icon-display="input"
+                        size="small"
+                        class="w-52"
+                        @date-select="onFilterChange"
+                        @clear-click="onFilterChange"
+                        show-button-bar
                     />
-                </label>
+                </div>
 
-                <Button variant="outline" size="sm" class="text-muted-foreground" @click="onReset">
+                <Button severity="secondary" size="small" outlined @click="onReset">
                     {{ t('deviceState.reset') }}
                 </Button>
                 <span class="ml-auto text-xs text-muted-foreground">
                     {{ t('deviceState.total', { count: totalCount }) }}
                 </span>
-            </CardContent>
-        </Card>
+            </div>
+        </AppCard>
 
-        <!-- 表格 -->
-        <Card class="overflow-auto">
-            <CardContent class="p-0">
-                <table class="w-full min-w-[800px] text-sm">
-                    <thead class="border-b bg-muted/50">
-                        <tr>
-                            <th class="px-3 py-2 text-left font-medium">{{ t('deviceState.occurredAt') }}</th>
-                            <th class="px-3 py-2 text-left font-medium">{{ t('deviceState.level') }}</th>
-                            <th class="px-3 py-2 text-left font-medium">{{ t('deviceState.faultCode') }}</th>
-                            <th class="px-3 py-2 text-left font-medium">{{ t('deviceState.message') }}</th>
-                            <th class="px-3 py-2 text-left font-medium">{{ t('deviceState.status') }}</th>
-                            <th class="px-3 py-2 text-left font-medium">{{ t('deviceState.duration') }}</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr v-if="loading" class="h-20">
-                            <td colspan="6" class="text-center text-muted-foreground">
-                                {{ t('deviceState.loading') }}
-                            </td>
-                        </tr>
-                        <tr v-else-if="items.length === 0" class="h-20">
-                            <td colspan="6" class="text-center text-muted-foreground">{{ t('deviceState.noData') }}</td>
-                        </tr>
-                        <tr v-for="item in items" :key="item.id" class="border-b transition-colors hover:bg-muted/30">
-                            <!-- 发生时间 -->
-                            <td class="px-3 py-2 tabular-nums">
-                                {{ new Date(item.occurredAt).toLocaleString() }}
-                            </td>
+        <!-- 表格（PrimeVue DataTable 懒加载分页） -->
+        <AppCard :beam="false">
+            <DataTable
+                :value="items"
+                :loading="loading"
+                :lazy="true"
+                :paginator="true"
+                :rows="pageSize"
+                :first="first"
+                :total-records="totalCount"
+                :rows-per-page-options="[10, 20, 50, 100]"
+                striped-rows
+                size="small"
+                data-key="id"
+                @page="onPage"
+            >
+                <template #empty>
+                    <div class="py-6 text-center text-muted-foreground">{{ t('deviceState.noData') }}</div>
+                </template>
+                <template #loading>
+                    <div class="py-6 text-center text-muted-foreground">{{ t('deviceState.loading') }}</div>
+                </template>
 
-                            <!-- 故障等级 -->
-                            <td class="px-3 py-2">
+                <Column field="occurredAt" :header="t('deviceState.occurredAt')" style="min-width: 11rem">
+                    <template #body="{ data }">
+                        <span class="tabular-nums">{{ new Date(data.occurredAt).toLocaleString() }}</span>
+                    </template>
+                </Column>
+
+                <Column :header="t('deviceState.level')" style="min-width: 6rem">
+                    <template #body="{ data }">
+                        <span
+                            :class="{
+                                'text-yellow-600': data.faultLevel === DeviceFaultLevel.Warning,
+                                'text-orange-500': data.faultLevel === DeviceFaultLevel.GeneralFault,
+                                'text-destructive':
+                                    data.faultLevel === DeviceFaultLevel.SevereFault ||
+                                    data.faultLevel === DeviceFaultLevel.SafetyFault,
+                            }"
+                        >
+                            {{ DeviceFaultLevelLabels[data.faultLevel as DeviceFaultLevel] }}
+                        </span>
+                    </template>
+                </Column>
+
+                <Column field="faultCode" :header="t('deviceState.faultCode')" style="min-width: 8rem">
+                    <template #body="{ data }">
+                        <span class="font-mono text-xs">{{ data.faultCode ?? '—' }}</span>
+                    </template>
+                </Column>
+
+                <Column :header="t('deviceState.message')" style="min-width: 16rem; max-width: 28rem">
+                    <template #body="{ data }">
+                        <template v-if="data.faultMessage">
+                            <template v-if="extractLogTag(data.faultMessage)">
                                 <span
-                                    :class="{
-                                        'text-yellow-600': item.faultLevel === DeviceFaultLevel.Warning,
-                                        'text-orange-500': item.faultLevel === DeviceFaultLevel.GeneralFault,
-                                        'text-destructive':
-                                            item.faultLevel === DeviceFaultLevel.SevereFault ||
-                                            item.faultLevel === DeviceFaultLevel.SafetyFault,
-                                    }"
+                                    class="mr-1.5 inline-block rounded px-1 py-0.5 font-mono text-xs font-semibold text-white"
+                                    :style="{ backgroundColor: extractLogTag(data.faultMessage)!.color }"
                                 >
-                                    {{ DeviceFaultLevelLabels[item.faultLevel] }}
+                                    {{ extractLogTag(data.faultMessage)!.tag }}
                                 </span>
-                            </td>
-
-                            <!-- 故障码 -->
-                            <td class="px-3 py-2 font-mono text-xs">
-                                {{ item.faultCode ?? '—' }}
-                            </td>
-
-                            <!-- 故障信息（带日志标签颜色渲染） -->
-                            <td class="max-w-xs px-3 py-2">
-                                <template v-if="item.faultMessage">
-                                    <template v-if="extractLogTag(item.faultMessage)">
-                                        <span
-                                            class="mr-1.5 inline-block rounded px-1 py-0.5 font-mono text-xs font-semibold text-white"
-                                            :style="{
-                                                backgroundColor: extractLogTag(item.faultMessage)!.color,
-                                            }"
-                                        >
-                                            {{ extractLogTag(item.faultMessage)!.tag }}
-                                        </span>
-                                        <span :title="item.faultMessage" class="truncate">
-                                            {{ extractLogTag(item.faultMessage)!.rest }}
-                                        </span>
-                                    </template>
-                                    <span v-else :title="item.faultMessage" class="truncate">
-                                        {{ item.faultMessage }}
-                                    </span>
-                                </template>
-                                <span v-else class="text-muted-foreground">—</span>
-                            </td>
-
-                            <!-- 是否解决 -->
-                            <td class="px-3 py-2">
-                                <span :class="item.isResolved ? 'text-green-600' : 'text-muted-foreground'">
-                                    {{ item.isResolved ? t('deviceState.resolved') : t('deviceState.unresolved') }}
+                                <span :title="data.faultMessage" class="truncate">
+                                    {{ extractLogTag(data.faultMessage)!.rest }}
                                 </span>
-                            </td>
+                            </template>
+                            <span v-else :title="data.faultMessage" class="truncate">{{ data.faultMessage }}</span>
+                        </template>
+                        <span v-else class="text-muted-foreground">—</span>
+                    </template>
+                </Column>
 
-                            <!-- 持续时长 -->
-                            <td class="px-3 py-2 tabular-nums text-muted-foreground">
-                                {{ item.durationMs != null ? `${(item.durationMs / 1000).toFixed(1)}s` : '—' }}
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
-            </CardContent>
-        </Card>
+                <Column :header="t('deviceState.status')" style="min-width: 6rem">
+                    <template #body="{ data }">
+                        <span :class="data.isResolved ? 'text-green-600' : 'text-muted-foreground'">
+                            {{ data.isResolved ? t('deviceState.resolved') : t('deviceState.unresolved') }}
+                        </span>
+                    </template>
+                </Column>
 
-        <!-- 分页 -->
-        <div class="flex items-center justify-end gap-2 text-sm">
-            <Button
-                variant="outline"
-                size="sm"
-                :disabled="currentPage <= 1 || loading"
-                @click="onPageChange(currentPage - 1)"
-            >
-                {{ t('deviceState.prevPage') }}
-            </Button>
-            <span class="text-muted-foreground">
-                {{ t('deviceState.pageOf', { current: currentPage, total: Math.ceil(totalCount / pageSize) || 1 }) }}
-            </span>
-            <Button
-                variant="outline"
-                size="sm"
-                :disabled="isLastPage || loading"
-                @click="onPageChange(currentPage + 1)"
-            >
-                {{ t('deviceState.nextPage') }}
-            </Button>
-        </div>
+                <Column :header="t('deviceState.duration')" style="min-width: 6rem">
+                    <template #body="{ data }">
+                        <span class="tabular-nums text-muted-foreground">
+                            {{ data.durationMs != null ? `${(data.durationMs / 1000).toFixed(1)}s` : '—' }}
+                        </span>
+                    </template>
+                </Column>
+            </DataTable>
+        </AppCard>
     </div>
 </template>
