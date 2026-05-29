@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted } from 'vue'
 import { RouterView } from 'vue-router'
-import { Toaster } from '@/components/ui/sonner'
+import Toast from 'primevue/toast'
 import { AuroraBackground } from '@/components/ui/aurora-background'
 import { useDeviceStateStore } from '@/stores/deviceState'
 
@@ -22,5 +22,6 @@ onUnmounted(() => {
     <AuroraBackground class="h-screen w-screen overflow-hidden">
         <RouterView />
     </AuroraBackground>
-    <Toaster position="top-right" rich-colors close-button />
+    <!-- PrimeVue 全局 Toast 容器：业务侧通过 useAppToast() 调用 -->
+    <Toast position="top-right" />
 </template>

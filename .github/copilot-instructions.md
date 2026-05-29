@@ -146,11 +146,16 @@ dotnet ef migrations add <MigrationName> \
 - 文件上传使用 `FormData` + `onUploadProgress` 回调 + `AbortController` 支持取消
 - 参考文件：`Sources/AuroraStruct3D/AuroraStruct3D.Frontend/src/api/management.ts`
 
-## 前端 UI 组件约定
+## 前端 UI 组件约定（PrimeVue 迁移后）
 
-- **禁止自定义原生控件样式**，只使用 shadcn-vue 组件（`@/components/ui/`）+ Inspira UI 动画组件
+- **禁止自定义原生控件样式**，基础 UI 一律使用 **PrimeVue v4**（Aura 暗色预设），装饰/动画使用 **Inspira UI**（保留在 `@/components/ui/`）
+- 基础组件：`Button` / `InputText` / `Select` / `Dialog` / `DataTable` / `Tabs` / `Stepper` / `Menu` 等均来自 `primevue/xxx`
+- 项目级封装放在 `@/components/primevue/`（如 `AppCard`、`AppDataTable`、`AppDialog`），优先使用封装
+- Toast 通知：使用 `useAppToast()`（`@/composables/useAppToast`），底层为 PrimeVue `useToast()`；**禁止**继续使用 `vue-sonner`
+- 表单校验：使用 `@primevue/forms` + `zod`
+- 图标库：`@lucide/vue`（保留不变，不切换 PrimeIcons）
+- 数据可视化：`echarts`（保留不变）
 - Pinia Store 放 `src/stores/`，按业务命名；`defineStore` 使用组合式 API 写法（`setup` store）
 - 路由文件：`src/router/index.ts`，懒加载（`() => import('@/views/xxx/XxxPage.vue')`）
-- Toast 通知使用 `vue-sonner`（`toast.success` / `toast.error`）
-- 图标库：`lucide-vue-next`
-- 参考页面：`Sources/AuroraStruct3D/AuroraStruct3D.Frontend/src/views/system/UserPage.vue`
+- **禁止**新增对 `reka-ui` / `radix-vue` / `shadcn-vue` / `vue-sonner` 的依赖
+- Card 视觉规范：项目级 `AppCard` 默认搭配 Inspira `<BorderBeam>`，保持原 Aurora 风格

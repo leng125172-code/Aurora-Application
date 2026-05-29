@@ -1,5 +1,9 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
+/* CSS Layer 顺序：theme/base 在最底（PrimeVue 主题预设输出到 primevue 层），
+ * Tailwind 工具类位于 utilities 层置顶，保证业务侧 Tailwind 覆盖 PrimeVue 默认样式 */
+@layer theme, base, primevue, utilities;
+
 /* Tailwind v4 入口 */
 @import "tailwindcss";
 @import "tw-animate-css";
