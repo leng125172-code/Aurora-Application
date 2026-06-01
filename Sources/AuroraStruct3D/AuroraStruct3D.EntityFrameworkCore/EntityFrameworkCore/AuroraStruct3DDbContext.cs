@@ -1,3 +1,4 @@
+using AuroraStruct3D.CalibrationManagement;
 using AuroraStruct3D.Cameras;
 using AuroraStruct3D.DeviceState;
 using AuroraStruct3D.Motors;
@@ -118,6 +119,25 @@ namespace AuroraStruct3D.EntityFrameworkCore
         // ── 产品三维数模模块 ─────────────────────────────────────────────────────────
         public DbSet<ProductModel> ProductModels { get; set; }
 
+        // ── 标定管理模块 ──────────────────────────────────────────────────────────
+        public DbSet<CalibrationDevice> CalibrationDevices { get; set; }
+        public DbSet<CalibrationCameraBinding> CalibrationCameraBindings { get; set; }
+        public DbSet<CalibrationMotorBinding> CalibrationMotorBindings { get; set; }
+        public DbSet<CalibrationProjectorBinding> CalibrationProjectorBindings { get; set; }
+        public DbSet<CalibrationGimbalGroup> CalibrationGimbalGroups { get; set; }
+        public DbSet<CalibrationGimbalPreset> CalibrationGimbalPresets { get; set; }
+        public DbSet<CalibrationMotorInterlockRule> CalibrationMotorInterlockRules { get; set; }
+        public DbSet<CalibrationCameraParameter> CalibrationCameraParameters { get; set; }
+        public DbSet<CalibrationProjectorParameter> CalibrationProjectorParameters { get; set; }
+        public DbSet<CalibrationMotorParameter> CalibrationMotorParameters { get; set; }
+        public DbSet<CalibrationProject> CalibrationProjects { get; set; }
+        public DbSet<CalibrationCaptureFrame> CalibrationCaptureFrames { get; set; }
+        public DbSet<CalibrationCaptureImage> CalibrationCaptureImages { get; set; }
+        public DbSet<CalibrationResult> CalibrationResults { get; set; }
+        public DbSet<CalibrationValidationRecord> CalibrationValidationRecords { get; set; }
+        public DbSet<CalibrationCameraTemplate> CalibrationCameraTemplates { get; set; }
+        public DbSet<CalibrationProjectorTemplate> CalibrationProjectorTemplates { get; set; }
+
         public AuroraStruct3DDbContext(DbContextOptions<AuroraStruct3DDbContext> options)
             : base(options) { }
 
@@ -171,6 +191,9 @@ namespace AuroraStruct3D.EntityFrameworkCore
 
             // 产品三维数模模块
             builder.ConfigureProductModel();
+
+            // 标定管理模块
+            builder.ConfigureCalibrationManagement();
         }
     }
 }
