@@ -16,6 +16,7 @@ import {
     Cable,
     Cpu,
     Box,
+    Crosshair,
     ChevronDown,
     ChevronRight,
 } from '@lucide/vue'
@@ -32,6 +33,7 @@ const projectorExpanded = ref(route.path.startsWith('/projectors'))
 const cameraExpanded = ref(route.path.startsWith('/cameras'))
 const serialPortExpanded = ref(route.path.startsWith('/serial-ports'))
 const motorExpanded = ref(route.path.startsWith('/motors'))
+const calibrationExpanded = ref(route.path.startsWith('/calibration'))
 
 function isCapActive(tab: string): boolean {
     if (!route.path.startsWith('/embed/cap')) return false
@@ -461,6 +463,54 @@ function navigate(path: string, tab?: string): void {
                 <Box class="size-4 shrink-0" />
                 {{ t('menu.productModelManage') }}
             </button>
+
+            <!-- 标定管理 -->
+            <div>
+                <button
+                    :class="
+                        cn(
+                            'flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors text-left',
+                            route.path.startsWith('/calibration')
+                                ? 'text-accent-foreground'
+                                : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                        )
+                    "
+                    @click="calibrationExpanded = !calibrationExpanded"
+                >
+                    <Crosshair class="size-4 shrink-0" />
+                    <span class="flex-1">{{ t('menu.calibrationManage') }}</span>
+                    <ChevronDown v-if="calibrationExpanded" class="size-3.5" />
+                    <ChevronRight v-else class="size-3.5" />
+                </button>
+                <div v-if="calibrationExpanded" class="ml-6 mt-0.5 space-y-0.5">
+                    <button
+                        :class="
+                            cn(
+                                'flex w-full items-center rounded-md px-3 py-1.5 text-sm transition-colors text-left',
+                                isExactActive('/calibration/devices')
+                                    ? 'bg-accent text-accent-foreground'
+                                    : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                            )
+                        "
+                        @click="navigate('/calibration/devices')"
+                    >
+                        {{ t('menu.calibrationDevices') }}
+                    </button>
+                    <button
+                        :class="
+                            cn(
+                                'flex w-full items-center rounded-md px-3 py-1.5 text-sm transition-colors text-left',
+                                route.path.startsWith('/calibration/projects')
+                                    ? 'bg-accent text-accent-foreground'
+                                    : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                            )
+                        "
+                        @click="navigate('/calibration/projects')"
+                    >
+                        {{ t('menu.calibrationProjects') }}
+                    </button>
+                </div>
+            </div>
         </nav>
     </aside>
 </template>

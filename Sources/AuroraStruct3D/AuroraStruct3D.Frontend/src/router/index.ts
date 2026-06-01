@@ -150,6 +150,24 @@ const routes: RouteRecordRaw[] = [
                 component: () => import('@/views/product-models/ProductModelManagePage.vue'),
                 meta: { requiresAuth: true, title: 'menu.productModelManage' },
             },
+            {
+                path: 'calibration/devices',
+                name: 'CalibrationDevices',
+                component: () => import('@/views/calibration/CalibrationDevicePage.vue'),
+                meta: { requiresAuth: true, title: 'menu.calibrationDevices' },
+            },
+            {
+                path: 'calibration/projects',
+                name: 'CalibrationProjects',
+                component: () => import('@/views/calibration/CalibrationProjectPage.vue'),
+                meta: { requiresAuth: true, title: 'menu.calibrationProjects' },
+            },
+            {
+                path: 'calibration/projects/:id/wizard',
+                name: 'CalibrationWizard',
+                component: () => import('@/views/calibration/CalibrationWizardPage.vue'),
+                meta: { requiresAuth: true, title: 'menu.calibrationWizard' },
+            },
             // 系统管理路由已移除（仅供后台调试使用）
         ],
     },

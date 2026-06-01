@@ -66,6 +66,10 @@ export default {
         productModelManage: '三维数模管理',
         ktechMotorConsole: '瓴控电机操作台',
         leisaiMotorConsole: '雷赛电机操作台',
+        calibrationManage: '标定管理',
+        calibrationDevices: '标定设备',
+        calibrationProjects: '标定工程',
+        calibrationWizard: '标定向导',
     },
     dashboard: {
         cpu: 'CPU 负载',
