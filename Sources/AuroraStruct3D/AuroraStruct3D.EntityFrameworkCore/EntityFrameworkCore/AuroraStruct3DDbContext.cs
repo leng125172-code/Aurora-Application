@@ -1,3 +1,4 @@
+using AuroraStruct3D.Calibration;
 using AuroraStruct3D.Cameras;
 using AuroraStruct3D.DeviceState;
 using AuroraStruct3D.Motors;
@@ -90,6 +91,16 @@ namespace AuroraStruct3D.EntityFrameworkCore
         public DbSet<MasterDataType> MasterDataTypes { get; set; }
         public DbSet<MasterDataValue> MasterDataValues { get; set; }
 
+        // ── 标定模块 ──────────────────────────────────────────────────────────────
+        public DbSet<CalibProject> CalibProjects { get; set; }
+        public DbSet<CalibMotorParam> CalibMotorParams { get; set; }
+        public DbSet<CalibMotorConstraint> CalibMotorConstraints { get; set; }
+        public DbSet<CalibGimbalGroup> CalibGimbalGroups { get; set; }
+        public DbSet<CalibGimbalBinding> CalibGimbalBindings { get; set; }
+        public DbSet<CalibCameraParam> CalibCameraParams { get; set; }
+        public DbSet<CalibProjectorParam> CalibProjectorParams { get; set; }
+        public DbSet<CalibDeviceBinding> CalibDeviceBindings { get; set; }
+
         // ── 串口通讯模块 ────────────────────────────────────────────────────────────
         public DbSet<SerialPortConfig> SerialPortConfigs { get; set; }
         public DbSet<SerialPortOperationLog> SerialPortOperationLogs { get; set; }
@@ -171,6 +182,9 @@ namespace AuroraStruct3D.EntityFrameworkCore
 
             // 产品三维数模模块
             builder.ConfigureProductModel();
+
+            // 标定模块
+            builder.ConfigureCalibration();
         }
     }
 }
