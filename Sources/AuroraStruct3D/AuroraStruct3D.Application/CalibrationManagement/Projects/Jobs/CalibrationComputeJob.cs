@@ -26,6 +26,7 @@ public class CalibrationComputeJob
     private readonly IBlobContainer<CalibrationImageBlobContainer> _imageBlobContainer;
     private readonly IUnitOfWorkManager _unitOfWorkManager;
     private readonly IGuidGenerator _guidGenerator;
+    private readonly ICalibrationProgressNotifier _notifier;
     private readonly ILogger<CalibrationComputeJob> _logger;
 
     public CalibrationComputeJob(
@@ -34,6 +35,7 @@ public class CalibrationComputeJob
         IBlobContainer<CalibrationImageBlobContainer> imageBlobContainer,
         IUnitOfWorkManager unitOfWorkManager,
         IGuidGenerator guidGenerator,
+        ICalibrationProgressNotifier notifier,
         ILogger<CalibrationComputeJob> logger
     )
     {
@@ -42,6 +44,7 @@ public class CalibrationComputeJob
         _imageBlobContainer = imageBlobContainer;
         _unitOfWorkManager = unitOfWorkManager;
         _guidGenerator = guidGenerator;
+        _notifier = notifier;
         _logger = logger;
     }
 
@@ -66,6 +69,9 @@ public class CalibrationComputeJob
             await uow.CompleteAsync();
         }
 
+        // 通知前端：任务已启动，进度 5%
+        await _notifier.NotifyProgressAsync(projectId, "initializing", 5, "标定计算任务已启动，正在准备数据");
+
         // ── 第二步：执行 OpenCV 计算 ──
         ComputationOutput output;
         try
@@ -76,11 +82,22 @@ public class CalibrationComputeJob
                 return;
             }
 
+            // 通知前端：开始图像加载阶段，进度 10%
+            await _notifier.NotifyProgressAsync(
+                projectId,
+                "loading",
+                10,
+                "正在加载采集图像与检测标定板角点"
+            );
+
             output = await RunOpenCvComputationAsync(loaded);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "[CalibrationComputeJob] 工程 {ProjectId} 计算异常", projectId);
+
+            // 通知前端：计算失败
+            await _notifier.NotifyCompletedAsync(projectId, success: false, errorMessage: ex.Message);
 
             using IUnitOfWork failUow = _unitOfWorkManager.Begin(
                 requiresNew: true,
@@ -97,6 +114,9 @@ public class CalibrationComputeJob
             }
             return;
         }
+
+        // 通知前端：OpenCV 计算完成，开始持久化，进度 90%
+        await _notifier.NotifyProgressAsync(projectId, "saving", 90, "OpenCV 计算完成，正在持久化标定结果");
 
         // ── 第三步：写入 CalibrationResult + 回填单图误差 + 切换工程状态 ──
         using (IUnitOfWork uow = _unitOfWorkManager.Begin(requiresNew: true, isTransactional: true))
@@ -155,6 +175,10 @@ public class CalibrationComputeJob
             await _projectRepository.UpdateAsync(project);
 
             await uow.CompleteAsync();
+
+            // 通知前端：标定计算全部完成，进度 100%
+            await _notifier.NotifyProgressAsync(projectId, "completed", 100, "标定计算完成，结果已保存");
+            await _notifier.NotifyCompletedAsync(projectId, success: true, resultId: result.Id);
         }
 
         _logger.LogInformation(
@@ -192,6 +216,14 @@ public class CalibrationComputeJob
             objectPointTemplate
         );
 
+        // 通知前端：图像加载与角点检测完成，进度 30%
+        await _notifier.NotifyProgressAsync(
+            project.Id,
+            "detection",
+            30,
+            $"已完成图像加载与角点检测，共 {cameraGroups.Count} 台相机"
+        );
+
         if (cameraGroups.Count == 0 || cameraGroups.Values.All(c => c.ValidFrameCount == 0))
         {
             _logger.LogWarning(
@@ -206,9 +238,21 @@ public class CalibrationComputeJob
         Dictionary<Guid, double> perImageErrors = new();
         List<double> allErrors = new();
 
+        int cameraTotal = cameraGroups.Count;
+        int cameraIndex = 0;
         foreach (KeyValuePair<Guid, CameraSamples> kv in cameraGroups)
         {
             CameraSamples samples = kv.Value;
+            cameraIndex++;
+            // 通知前端：正在标定第 N 台相机内参，进度 30%~60% 区间按比例分配
+            int intrinsicPercent = 30 + (int)(30.0 * cameraIndex / cameraTotal);
+            await _notifier.NotifyProgressAsync(
+                project.Id,
+                "intrinsics",
+                intrinsicPercent,
+                $"正在计算相机内参（{cameraIndex}/{cameraTotal}）"
+            );
+
             if (samples.ValidFrameCount < 3)
             {
                 _logger.LogWarning(
@@ -230,6 +274,14 @@ public class CalibrationComputeJob
                 allErrors.Add(err);
             }
         }
+
+        // 通知前端：全部相机内参计算完成，进度 60%
+        await _notifier.NotifyProgressAsync(
+            project.Id,
+            "intrinsics",
+            60,
+            $"相机内参标定完成，共 {intrinsicResults.Count} 台相机"
+        );
 
         // ── 多相机外参标定（Master 为基准）──
         Dictionary<string, ExtrinsicResult> extrinsicResults = new();
@@ -266,6 +318,14 @@ public class CalibrationComputeJob
                 }
             }
         }
+
+        // 通知前端：多目外参标定完成，进度 75%
+        await _notifier.NotifyProgressAsync(
+            project.Id,
+            "extrinsics",
+            75,
+            $"多目外参标定完成，共 {extrinsicResults.Count} 对相机"
+        );
 
         // ── 统计整体误差 ──
         double maxErr = allErrors.Count > 0 ? allErrors.Max() : 0.0;
