@@ -31,8 +31,14 @@ public interface ICalibrationResultAppService : IApplicationService
     );
 
     /// <summary>
-    /// 导出标定结果为 JSON 文件（流式下载）。
+    /// 按指定格式导出标定结果（流式下载）。
     /// 包含相机内外参、结构光标定、误差统计、验证记录等完整快照。
+    /// 支持 JSON / XML / YAML / TXT 四种格式，默认 JSON。
     /// </summary>
-    Task<IRemoteStreamContent> ExportAsync(Guid id);
+    /// <param name="id">标定结果 Id</param>
+    /// <param name="format">导出格式（缺省 JSON）</param>
+    Task<IRemoteStreamContent> ExportAsync(
+        Guid id,
+        CalibrationResultExportFormat format = CalibrationResultExportFormat.Json
+    );
 }

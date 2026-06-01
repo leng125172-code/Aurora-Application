@@ -46,6 +46,7 @@
         "Calibration:NoAcceptedFrame": "标定工程下没有已接受的采集帧，无法触发计算",
         "Calibration:EmptyCameraSnapshot": "相机快照数据为空，无法解析为有效图像",
         "Calibration:DeviceTypeNotSupportProjector": "当前标定设备类型【{deviceType}】不支持投射器绑定或参数配置",
+        "Calibration:UnsupportedExportFormat": "不支持的导出格式：【{format}】",
 
         "Setting.Group.System": "系统",
         "Setting.Group.Other": "其它",
