@@ -1,6 +1,7 @@
 using AuroraStruct3D.CalibrationManagement.Results.Dtos;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
+using Volo.Abp.Content;
 
 namespace AuroraStruct3D.CalibrationManagement.Results;
 
@@ -30,8 +31,8 @@ public interface ICalibrationResultAppService : IApplicationService
     );
 
     /// <summary>
-    /// 导出标定结果为 JSON / ZIP（占位实现：抛 <see cref="NotImplementedException"/>，
-    /// Phase 3 由 BLOB + IRemoteStreamContent 落地）。
+    /// 导出标定结果为 JSON 文件（流式下载）。
+    /// 包含相机内外参、结构光标定、误差统计、验证记录等完整快照。
     /// </summary>
-    Task ExportAsync(Guid id);
+    Task<IRemoteStreamContent> ExportAsync(Guid id);
 }

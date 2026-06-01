@@ -1,14 +1,18 @@
+using AuroraStruct3D.CalibrationManagement.Devices;
 using AuroraStruct3D.CalibrationManagement.Projects.Dtos;
+using AuroraStruct3D.CalibrationManagement.Projects.Jobs;
+using AuroraStruct3D.Cameras;
+using AuroraStruct3D.Cameras.Dtos;
+using Hangfire;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
+using Volo.Abp.BlobStoring;
 using Volo.Abp.Domain.Entities;
 
 namespace AuroraStruct3D.CalibrationManagement.Projects;
 
 /// <summary>
 /// 标定工程应用服务实现。
-/// 注：<see cref="CaptureFrameAsync"/> 与 <see cref="ComputeAsync"/> 当前为占位实现，
-/// 抛 <see cref="NotImplementedException"/>，待 Phase 3 接入 OpenCV/SignalR/Hangfire 后落地。
 /// </summary>
 [Authorize(CalibrationPermissions.Project)]
 public class CalibrationProjectAppService
@@ -16,10 +20,24 @@ public class CalibrationProjectAppService
         ICalibrationProjectAppService
 {
     private readonly ICalibrationProjectRepository _projectRepository;
+    private readonly ICalibrationDeviceRepository _deviceRepository;
+    private readonly ICameraDeviceAppService _cameraAppService;
+    private readonly IBlobContainer<CalibrationImageBlobContainer> _imageBlobContainer;
+    private readonly IBackgroundJobClient _backgroundJobClient;
 
-    public CalibrationProjectAppService(ICalibrationProjectRepository projectRepository)
+    public CalibrationProjectAppService(
+        ICalibrationProjectRepository projectRepository,
+        ICalibrationDeviceRepository deviceRepository,
+        ICameraDeviceAppService cameraAppService,
+        IBlobContainer<CalibrationImageBlobContainer> imageBlobContainer,
+        IBackgroundJobClient backgroundJobClient
+    )
     {
         _projectRepository = projectRepository;
+        _deviceRepository = deviceRepository;
+        _cameraAppService = cameraAppService;
+        _imageBlobContainer = imageBlobContainer;
+        _backgroundJobClient = backgroundJobClient;
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -157,11 +175,75 @@ public class CalibrationProjectAppService
 
     /// <inheritdoc/>
     [Authorize(CalibrationPermissions.ProjectCapture)]
-    public Task<CalibrationCaptureFrameDto> CaptureFrameAsync(Guid id) =>
-        // Phase 3 由 Hangfire Job 异步执行多相机同步触发 + BLOB 写入；本期仅占位。
-        throw new NotImplementedException(
-            "采集逻辑由 Phase 3 集成相机/电机驱动后实现，当前仅供 API 契约预览。"
+    public async Task<CalibrationCaptureFrameDto> CaptureFrameAsync(Guid id)
+    {
+        CalibrationProject project = await LoadProjectWithDetailsAsync(id);
+
+        // 加载标定设备（含相机绑定）以获取参与采集的相机列表
+        CalibrationDevice? device = await _deviceRepository.FindWithDetailsAsync(
+            project.CalibrationDeviceId
         );
+        if (device is null)
+        {
+            throw new EntityNotFoundException(
+                typeof(CalibrationDevice),
+                project.CalibrationDeviceId
+            );
+        }
+        if (device.CameraBindings.Count == 0)
+        {
+            throw new BusinessException("Calibration:NoCameraBound").WithData(
+                "deviceId",
+                device.Id
+            );
+        }
+
+        // 计算下一帧序号（工程内单调递增，不复用已删除的序号）
+        int nextFrameIndex =
+            (project.Frames.Count > 0 ? project.Frames.Max(f => f.FrameIndex) : 0) + 1;
+
+        CalibrationCaptureFrame frame = new(GuidGenerator.Create(), project.Id, nextFrameIndex);
+
+        // 依次触发每台相机的同步快照（顺序执行避免 USB 总线带宽冲突）
+        foreach (CalibrationCameraBinding binding in device.CameraBindings)
+        {
+            CameraSnapshotDto snapshot = await _cameraAppService.TakeSnapshotAsync(
+                binding.CameraDeviceId
+            );
+
+            (byte[] jpegBytes, int width, int height) = DecodeJpegDataUri(snapshot.DataUri);
+
+            string blobName =
+                $"{project.Id}/frame-{nextFrameIndex:D4}/camera-{binding.CameraDeviceId}.jpg";
+            await _imageBlobContainer.SaveAsync(blobName, jpegBytes, overrideExisting: true);
+
+            CalibrationCaptureImage image = new(
+                GuidGenerator.Create(),
+                frame.Id,
+                binding.CameraDeviceId,
+                binding.Role,
+                blobName,
+                width,
+                height,
+                jpegBytes.LongLength
+            );
+            frame.Images.Add(image);
+        }
+
+        project.Frames.Add(frame);
+
+        // 首帧采集时自动将工程状态从"配置中/草稿"切换为"采集中"
+        if (
+            project.Status == CalibrationProjectStatus.Draft
+            || project.Status == CalibrationProjectStatus.Configuring
+        )
+        {
+            project.TransitionStatus(CalibrationProjectStatus.Capturing);
+        }
+
+        await _projectRepository.UpdateAsync(project, autoSave: true);
+        return MapToFrameDto(frame);
+    }
 
     /// <inheritdoc/>
     [Authorize(CalibrationPermissions.ProjectUpdate)]
@@ -205,11 +287,20 @@ public class CalibrationProjectAppService
 
     /// <inheritdoc/>
     [Authorize(CalibrationPermissions.ProjectCompute)]
-    public Task ComputeAsync(Guid id) =>
-        // Phase 3 由 Hangfire Job 调用 OpenCV 完成相机内外参与结构光标定；本期仅占位。
-        throw new NotImplementedException(
-            "标定计算由 Phase 3 集成 OpenCvSharp 后实现，当前仅供 API 契约预览。"
+    public async Task ComputeAsync(Guid id)
+    {
+        // 校验工程存在且至少有一帧已被接受
+        CalibrationProject project = await LoadProjectWithDetailsAsync(id);
+        if (!project.Frames.Any(f => f.IsAccepted))
+        {
+            throw new BusinessException("Calibration:NoAcceptedFrame").WithData("projectId", id);
+        }
+
+        // 异步入队 Hangfire Job，接口立即返回
+        _backgroundJobClient.Enqueue<CalibrationComputeJob>(job =>
+            job.ExecuteAsync(new CalibrationComputeJobArgs { CalibrationProjectId = id })
         );
+    }
 
     // ═══════════════════════════════════════════════════════════════════════
     // 私有辅助
@@ -219,6 +310,75 @@ public class CalibrationProjectAppService
     {
         CalibrationProject? project = await _projectRepository.FindWithDetailsAsync(id);
         return project ?? throw new EntityNotFoundException(typeof(CalibrationProject), id);
+    }
+
+    /// <summary>
+    /// 解析 "data:image/jpeg;base64,xxx" 格式的数据 URI，返回原始字节及 JPEG 宽高。
+    /// 通过扫描 JPEG SOF（Start Of Frame）标记 0xFFC0~0xFFCF 读取分辨率，
+    /// 避免引入额外图像库依赖。
+    /// </summary>
+    private static (byte[] Bytes, int Width, int Height) DecodeJpegDataUri(string dataUri)
+    {
+        if (string.IsNullOrWhiteSpace(dataUri))
+        {
+            throw new BusinessException("Calibration:EmptyCameraSnapshot");
+        }
+
+        // 兼容带前缀与不带前缀两种形式
+        string base64 = dataUri;
+        int commaIndex = dataUri.IndexOf(',');
+        if (commaIndex > 0 && dataUri.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
+        {
+            base64 = dataUri[(commaIndex + 1)..];
+        }
+
+        byte[] bytes = Convert.FromBase64String(base64);
+        (int width, int height) = ReadJpegDimensions(bytes);
+        return (bytes, width, height);
+    }
+
+    /// <summary>
+    /// 从 JPEG 字节流读取宽高。失败时返回 (0,0)，由调用方决定是否容忍。
+    /// </summary>
+    private static (int Width, int Height) ReadJpegDimensions(byte[] bytes)
+    {
+        // SOI 必须是 0xFFD8
+        if (bytes.Length < 4 || bytes[0] != 0xFF || bytes[1] != 0xD8)
+        {
+            return (0, 0);
+        }
+
+        int i = 2;
+        while (i < bytes.Length - 8)
+        {
+            // 段头：0xFF + marker
+            if (bytes[i] != 0xFF)
+            {
+                i++;
+                continue;
+            }
+
+            byte marker = bytes[i + 1];
+            // SOF0~SOF15（除 DHT=0xC4、JPG=0xC8、DAC=0xCC）
+            if (
+                marker >= 0xC0
+                && marker <= 0xCF
+                && marker != 0xC4
+                && marker != 0xC8
+                && marker != 0xCC
+            )
+            {
+                int height = (bytes[i + 5] << 8) | bytes[i + 6];
+                int width = (bytes[i + 7] << 8) | bytes[i + 8];
+                return (width, height);
+            }
+
+            // 跳到下一段：段长度位于 marker 后两字节（大端）
+            int segLen = (bytes[i + 2] << 8) | bytes[i + 3];
+            i += 2 + segLen;
+        }
+
+        return (0, 0);
     }
 
     private static CalibrationProjectListDto MapToListDto(CalibrationProject entity) =>
