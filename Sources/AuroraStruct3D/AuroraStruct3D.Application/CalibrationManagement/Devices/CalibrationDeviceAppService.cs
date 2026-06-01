@@ -11,7 +11,7 @@ namespace AuroraStruct3D.CalibrationManagement.Devices;
 /// 查询时使用 <see cref="IRepository{TEntity, TKey}.GetQueryableAsync"/> + Include 加载子集合。
 /// </summary>
 [Authorize(CalibrationPermissions.Device)]
-public class CalibrationDeviceAppService : AuroraStruct3DAppService, ICalibrationDeviceAppService
+public class CalibrationDeviceAppService : CalibrationAppServiceBase, ICalibrationDeviceAppService
 {
     private readonly ICalibrationDeviceRepository _deviceRepository;
 
@@ -60,6 +60,7 @@ public class CalibrationDeviceAppService : AuroraStruct3DAppService, ICalibratio
     [Authorize(CalibrationPermissions.DeviceCreate)]
     public async Task<CalibrationDeviceDetailDto> CreateAsync(CreateUpdateCalibrationDeviceDto input)
     {
+        EnsureManualOrMaintenanceMode();
         CalibrationDevice device = new(
             GuidGenerator.Create(),
             input.Name,
@@ -77,6 +78,7 @@ public class CalibrationDeviceAppService : AuroraStruct3DAppService, ICalibratio
         CreateUpdateCalibrationDeviceDto input
     )
     {
+        EnsureManualOrMaintenanceMode();
         CalibrationDevice device = await LoadDeviceWithChildrenAsync(id);
         device.UpdateBasicInfo(input.Name, input.Description);
         if (device.DeviceType != input.DeviceType)
@@ -92,6 +94,7 @@ public class CalibrationDeviceAppService : AuroraStruct3DAppService, ICalibratio
     [Authorize(CalibrationPermissions.DeviceDelete)]
     public async Task DeleteAsync(Guid id)
     {
+        EnsureManualOrMaintenanceMode();
         CalibrationDevice device = await _deviceRepository.GetAsync(id);
         await _deviceRepository.DeleteAsync(device, autoSave: true);
     }
@@ -103,6 +106,7 @@ public class CalibrationDeviceAppService : AuroraStruct3DAppService, ICalibratio
         SetCalibrationDeviceActiveInput input
     )
     {
+        EnsureManualOrMaintenanceMode();
         CalibrationDevice device = await LoadDeviceWithChildrenAsync(id);
         device.SetActive(input.IsActive);
         await _deviceRepository.UpdateAsync(device, autoSave: true);
@@ -120,6 +124,7 @@ public class CalibrationDeviceAppService : AuroraStruct3DAppService, ICalibratio
         UpsertCameraBindingInput input
     )
     {
+        EnsureManualOrMaintenanceMode();
         CalibrationDevice device = await LoadDeviceWithChildrenAsync(deviceId);
 
         // 相同角色已存在则移除（按"角色唯一"语义）
@@ -147,6 +152,7 @@ public class CalibrationDeviceAppService : AuroraStruct3DAppService, ICalibratio
     [Authorize(CalibrationPermissions.DeviceBind)]
     public async Task RemoveCameraBindingAsync(Guid deviceId, Guid bindingId)
     {
+        EnsureManualOrMaintenanceMode();
         CalibrationDevice device = await LoadDeviceWithChildrenAsync(deviceId);
         CalibrationCameraBinding binding =
             device.CameraBindings.FirstOrDefault(x => x.Id == bindingId)
@@ -162,6 +168,7 @@ public class CalibrationDeviceAppService : AuroraStruct3DAppService, ICalibratio
         UpsertMotorBindingInput input
     )
     {
+        EnsureManualOrMaintenanceMode();
         CalibrationDevice device = await LoadDeviceWithChildrenAsync(deviceId);
 
         CalibrationMotorBinding? existing = device.MotorBindings.FirstOrDefault(x =>
@@ -188,6 +195,7 @@ public class CalibrationDeviceAppService : AuroraStruct3DAppService, ICalibratio
     [Authorize(CalibrationPermissions.DeviceBind)]
     public async Task RemoveMotorBindingAsync(Guid deviceId, Guid bindingId)
     {
+        EnsureManualOrMaintenanceMode();
         CalibrationDevice device = await LoadDeviceWithChildrenAsync(deviceId);
         CalibrationMotorBinding binding =
             device.MotorBindings.FirstOrDefault(x => x.Id == bindingId)
@@ -203,6 +211,7 @@ public class CalibrationDeviceAppService : AuroraStruct3DAppService, ICalibratio
         UpsertProjectorBindingInput input
     )
     {
+        EnsureManualOrMaintenanceMode();
         CalibrationDevice device = await LoadDeviceWithChildrenAsync(deviceId);
         if (!CalibrationDevice.HasStructuredLight(device.DeviceType))
         {
@@ -233,6 +242,7 @@ public class CalibrationDeviceAppService : AuroraStruct3DAppService, ICalibratio
     [Authorize(CalibrationPermissions.DeviceBind)]
     public async Task RemoveProjectorBindingAsync(Guid deviceId, Guid bindingId)
     {
+        EnsureManualOrMaintenanceMode();
         CalibrationDevice device = await LoadDeviceWithChildrenAsync(deviceId);
         CalibrationProjectorBinding binding =
             device.ProjectorBindings.FirstOrDefault(x => x.Id == bindingId)
@@ -252,6 +262,7 @@ public class CalibrationDeviceAppService : AuroraStruct3DAppService, ICalibratio
         CreateUpdateGimbalGroupInput input
     )
     {
+        EnsureManualOrMaintenanceMode();
         CalibrationDevice device = await LoadDeviceWithChildrenAsync(deviceId);
         CalibrationGimbalGroup group = new(
             GuidGenerator.Create(),
@@ -276,6 +287,7 @@ public class CalibrationDeviceAppService : AuroraStruct3DAppService, ICalibratio
         CreateUpdateGimbalGroupInput input
     )
     {
+        EnsureManualOrMaintenanceMode();
         CalibrationDevice device = await LoadDeviceWithChildrenAsync(deviceId);
         CalibrationGimbalGroup group =
             device.GimbalGroups.FirstOrDefault(x => x.Id == groupId)
@@ -306,6 +318,7 @@ public class CalibrationDeviceAppService : AuroraStruct3DAppService, ICalibratio
     [Authorize(CalibrationPermissions.DeviceUpdate)]
     public async Task DeleteGimbalGroupAsync(Guid deviceId, Guid groupId)
     {
+        EnsureManualOrMaintenanceMode();
         CalibrationDevice device = await LoadDeviceWithChildrenAsync(deviceId);
         CalibrationGimbalGroup group =
             device.GimbalGroups.FirstOrDefault(x => x.Id == groupId)
@@ -322,6 +335,7 @@ public class CalibrationDeviceAppService : AuroraStruct3DAppService, ICalibratio
         CreateGimbalPresetInput input
     )
     {
+        EnsureManualOrMaintenanceMode();
         CalibrationDevice device = await LoadDeviceWithChildrenAsync(deviceId);
         CalibrationGimbalGroup group =
             device.GimbalGroups.FirstOrDefault(x => x.Id == groupId)
@@ -346,6 +360,7 @@ public class CalibrationDeviceAppService : AuroraStruct3DAppService, ICalibratio
     [Authorize(CalibrationPermissions.DeviceUpdate)]
     public async Task RemoveGimbalPresetAsync(Guid deviceId, Guid groupId, Guid presetId)
     {
+        EnsureManualOrMaintenanceMode();
         CalibrationDevice device = await LoadDeviceWithChildrenAsync(deviceId);
         CalibrationGimbalGroup group =
             device.GimbalGroups.FirstOrDefault(x => x.Id == groupId)
@@ -368,6 +383,7 @@ public class CalibrationDeviceAppService : AuroraStruct3DAppService, ICalibratio
         CreateUpdateInterlockRuleInput input
     )
     {
+        EnsureManualOrMaintenanceMode();
         CalibrationDevice device = await LoadDeviceWithChildrenAsync(deviceId);
         CalibrationMotorInterlockRule rule = new(
             GuidGenerator.Create(),
@@ -396,6 +412,7 @@ public class CalibrationDeviceAppService : AuroraStruct3DAppService, ICalibratio
         CreateUpdateInterlockRuleInput input
     )
     {
+        EnsureManualOrMaintenanceMode();
         CalibrationDevice device = await LoadDeviceWithChildrenAsync(deviceId);
         CalibrationMotorInterlockRule rule =
             device.InterlockRules.FirstOrDefault(x => x.Id == ruleId)
@@ -422,6 +439,7 @@ public class CalibrationDeviceAppService : AuroraStruct3DAppService, ICalibratio
     [Authorize(CalibrationPermissions.DeviceUpdate)]
     public async Task DeleteInterlockRuleAsync(Guid deviceId, Guid ruleId)
     {
+        EnsureManualOrMaintenanceMode();
         CalibrationDevice device = await LoadDeviceWithChildrenAsync(deviceId);
         CalibrationMotorInterlockRule rule =
             device.InterlockRules.FirstOrDefault(x => x.Id == ruleId)
@@ -441,6 +459,7 @@ public class CalibrationDeviceAppService : AuroraStruct3DAppService, ICalibratio
         CreateUpdateCameraParameterInput input
     )
     {
+        EnsureManualOrMaintenanceMode();
         CalibrationDevice device = await LoadDeviceWithChildrenAsync(deviceId);
 
         CalibrationCameraParameter? existing = device.CameraParameters.FirstOrDefault(x =>
@@ -484,6 +503,7 @@ public class CalibrationDeviceAppService : AuroraStruct3DAppService, ICalibratio
         CreateUpdateProjectorParameterInput input
     )
     {
+        EnsureManualOrMaintenanceMode();
         CalibrationDevice device = await LoadDeviceWithChildrenAsync(deviceId);
         if (!CalibrationDevice.HasStructuredLight(device.DeviceType))
         {
@@ -520,6 +540,7 @@ public class CalibrationDeviceAppService : AuroraStruct3DAppService, ICalibratio
         CreateUpdateMotorParameterInput input
     )
     {
+        EnsureManualOrMaintenanceMode();
         CalibrationDevice device = await LoadDeviceWithChildrenAsync(deviceId);
 
         CalibrationMotorParameter? existing = device.MotorParameters.FirstOrDefault(x =>

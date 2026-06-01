@@ -16,7 +16,7 @@ namespace AuroraStruct3D.CalibrationManagement.Projects;
 /// </summary>
 [Authorize(CalibrationPermissions.Project)]
 public class CalibrationProjectAppService
-    : AuroraStruct3DAppService,
+    : CalibrationAppServiceBase,
         ICalibrationProjectAppService
 {
     private readonly ICalibrationProjectRepository _projectRepository;
@@ -78,6 +78,7 @@ public class CalibrationProjectAppService
     [Authorize(CalibrationPermissions.ProjectCreate)]
     public async Task<CalibrationProjectDetailDto> CreateAsync(CreateCalibrationProjectDto input)
     {
+        EnsureManualOrMaintenanceMode();
         CalibrationProject project = new(
             GuidGenerator.Create(),
             input.Name,
@@ -95,6 +96,7 @@ public class CalibrationProjectAppService
         UpdateCalibrationProjectDto input
     )
     {
+        EnsureManualOrMaintenanceMode();
         CalibrationProject project = await LoadProjectWithDetailsAsync(id);
         project.UpdateBasicInfo(input.Name, input.Description);
         await _projectRepository.UpdateAsync(project, autoSave: true);
@@ -103,8 +105,11 @@ public class CalibrationProjectAppService
 
     /// <inheritdoc/>
     [Authorize(CalibrationPermissions.ProjectDelete)]
-    public async Task DeleteAsync(Guid id) =>
+    public async Task DeleteAsync(Guid id)
+    {
+        EnsureManualOrMaintenanceMode();
         await _projectRepository.DeleteAsync(id, autoSave: true);
+    }
 
     // ═══════════════════════════════════════════════════════════════════════
     // 配置
@@ -117,6 +122,7 @@ public class CalibrationProjectAppService
         SetBoardConfigInput input
     )
     {
+        EnsureManualOrMaintenanceMode();
         CalibrationProject project = await LoadProjectWithDetailsAsync(id);
         project.SetBoardConfig(
             input.BoardType,
@@ -141,6 +147,7 @@ public class CalibrationProjectAppService
         SetCaptureConfigInput input
     )
     {
+        EnsureManualOrMaintenanceMode();
         CalibrationProject project = await LoadProjectWithDetailsAsync(id);
         project.SetCaptureConfig(
             input.TargetCaptureCount,
@@ -163,6 +170,7 @@ public class CalibrationProjectAppService
         TransitionProjectStatusInput input
     )
     {
+        EnsureManualOrMaintenanceMode();
         CalibrationProject project = await LoadProjectWithDetailsAsync(id);
         project.TransitionStatus(input.Status, input.FailureReason);
         await _projectRepository.UpdateAsync(project, autoSave: true);
@@ -177,6 +185,7 @@ public class CalibrationProjectAppService
     [Authorize(CalibrationPermissions.ProjectCapture)]
     public async Task<CalibrationCaptureFrameDto> CaptureFrameAsync(Guid id)
     {
+        EnsureManualOrMaintenanceMode();
         CalibrationProject project = await LoadProjectWithDetailsAsync(id);
 
         // 加载标定设备（含相机绑定）以获取参与采集的相机列表
@@ -249,6 +258,7 @@ public class CalibrationProjectAppService
     [Authorize(CalibrationPermissions.ProjectUpdate)]
     public async Task RejectFrameAsync(Guid projectId, Guid frameId, RejectFrameInput input)
     {
+        EnsureManualOrMaintenanceMode();
         CalibrationProject project = await LoadProjectWithDetailsAsync(projectId);
         CalibrationCaptureFrame frame =
             project.Frames.FirstOrDefault(x => x.Id == frameId)
@@ -261,6 +271,7 @@ public class CalibrationProjectAppService
     [Authorize(CalibrationPermissions.ProjectUpdate)]
     public async Task AcceptFrameAsync(Guid projectId, Guid frameId)
     {
+        EnsureManualOrMaintenanceMode();
         CalibrationProject project = await LoadProjectWithDetailsAsync(projectId);
         CalibrationCaptureFrame frame =
             project.Frames.FirstOrDefault(x => x.Id == frameId)
@@ -273,6 +284,7 @@ public class CalibrationProjectAppService
     [Authorize(CalibrationPermissions.ProjectUpdate)]
     public async Task DeleteFrameAsync(Guid projectId, Guid frameId)
     {
+        EnsureManualOrMaintenanceMode();
         CalibrationProject project = await LoadProjectWithDetailsAsync(projectId);
         CalibrationCaptureFrame frame =
             project.Frames.FirstOrDefault(x => x.Id == frameId)
@@ -289,6 +301,7 @@ public class CalibrationProjectAppService
     [Authorize(CalibrationPermissions.ProjectCompute)]
     public async Task ComputeAsync(Guid id)
     {
+        EnsureManualOrMaintenanceMode();
         // 校验工程存在且至少有一帧已被接受
         CalibrationProject project = await LoadProjectWithDetailsAsync(id);
         if (!project.Frames.Any(f => f.IsAccepted))

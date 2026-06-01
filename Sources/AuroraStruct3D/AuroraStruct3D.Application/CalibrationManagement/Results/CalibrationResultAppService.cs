@@ -12,7 +12,7 @@ namespace AuroraStruct3D.CalibrationManagement.Results;
 /// </summary>
 [Authorize(CalibrationPermissions.Result)]
 public class CalibrationResultAppService
-    : AuroraStruct3DAppService,
+    : CalibrationAppServiceBase,
         ICalibrationResultAppService
 {
     private readonly ICalibrationResultRepository _resultRepository;
@@ -56,6 +56,7 @@ public class CalibrationResultAppService
     [Authorize(CalibrationPermissions.ResultSetActive)]
     public async Task<CalibrationResultDetailDto> SetActiveAsync(Guid id)
     {
+        EnsureManualOrMaintenanceMode();
         CalibrationResult target = await LoadResultWithDetailsAsync(id);
 
         // 取消同工程其它已生效版本（保证唯一生效）
@@ -81,6 +82,7 @@ public class CalibrationResultAppService
         AddValidationRecordInput input
     )
     {
+        EnsureManualOrMaintenanceMode();
         CalibrationResult result = await LoadResultWithDetailsAsync(resultId);
         CalibrationValidationRecord record = new(
             GuidGenerator.Create(),

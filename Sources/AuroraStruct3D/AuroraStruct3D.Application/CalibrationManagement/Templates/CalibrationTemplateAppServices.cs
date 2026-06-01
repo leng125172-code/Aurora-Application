@@ -9,7 +9,7 @@ namespace AuroraStruct3D.CalibrationManagement.Templates;
 /// </summary>
 [Authorize(CalibrationPermissions.Template)]
 public class CalibrationCameraTemplateAppService
-    : AuroraStruct3DAppService,
+    : CalibrationAppServiceBase,
         ICalibrationCameraTemplateAppService
 {
     private readonly IRepository<CalibrationCameraTemplate, Guid> _repository;
@@ -61,6 +61,7 @@ public class CalibrationCameraTemplateAppService
         CreateUpdateCalibrationCameraTemplateDto input
     )
     {
+        EnsureManualOrMaintenanceMode();
         CalibrationCameraTemplate entity = new(
             GuidGenerator.Create(),
             input.Name,
@@ -79,6 +80,7 @@ public class CalibrationCameraTemplateAppService
         CreateUpdateCalibrationCameraTemplateDto input
     )
     {
+        EnsureManualOrMaintenanceMode();
         CalibrationCameraTemplate entity = await _repository.GetAsync(id);
         entity.Update(input.Name, input.ParametersJson, input.CameraModel, input.Description);
         await _repository.UpdateAsync(entity, autoSave: true);
@@ -87,8 +89,11 @@ public class CalibrationCameraTemplateAppService
 
     /// <inheritdoc/>
     [Authorize(CalibrationPermissions.TemplateDelete)]
-    public async Task DeleteAsync(Guid id) =>
+    public async Task DeleteAsync(Guid id)
+    {
+        EnsureManualOrMaintenanceMode();
         await _repository.DeleteAsync(id, autoSave: true);
+    }
 
     /// <summary>
     /// 安全白名单排序：仅允许按名称或创建时间排序，避免动态 LINQ 注入。
@@ -128,7 +133,7 @@ public class CalibrationCameraTemplateAppService
 /// </summary>
 [Authorize(CalibrationPermissions.Template)]
 public class CalibrationProjectorTemplateAppService
-    : AuroraStruct3DAppService,
+    : CalibrationAppServiceBase,
         ICalibrationProjectorTemplateAppService
 {
     private readonly IRepository<CalibrationProjectorTemplate, Guid> _repository;
@@ -183,6 +188,7 @@ public class CalibrationProjectorTemplateAppService
         CreateUpdateCalibrationProjectorTemplateDto input
     )
     {
+        EnsureManualOrMaintenanceMode();
         CalibrationProjectorTemplate entity = new(
             GuidGenerator.Create(),
             input.Name,
@@ -201,6 +207,7 @@ public class CalibrationProjectorTemplateAppService
         CreateUpdateCalibrationProjectorTemplateDto input
     )
     {
+        EnsureManualOrMaintenanceMode();
         CalibrationProjectorTemplate entity = await _repository.GetAsync(id);
         entity.Update(input.Name, input.ParametersJson, input.ProjectorModel, input.Description);
         await _repository.UpdateAsync(entity, autoSave: true);
@@ -209,8 +216,11 @@ public class CalibrationProjectorTemplateAppService
 
     /// <inheritdoc/>
     [Authorize(CalibrationPermissions.TemplateDelete)]
-    public async Task DeleteAsync(Guid id) =>
+    public async Task DeleteAsync(Guid id)
+    {
+        EnsureManualOrMaintenanceMode();
         await _repository.DeleteAsync(id, autoSave: true);
+    }
 
     /// <summary>
     /// 安全白名单排序：仅允许按名称或创建时间排序，避免动态 LINQ 注入。
