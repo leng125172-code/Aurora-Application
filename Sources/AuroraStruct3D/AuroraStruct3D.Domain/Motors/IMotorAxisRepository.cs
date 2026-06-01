@@ -22,6 +22,9 @@ public interface IMotorAxisRepository : IRepository<MotorAxis, Guid>
 
     /// <summary>获取所有启用的轴</summary>
     Task<List<MotorAxis>> GetEnabledListAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>获取当前最大 AxisIndex（无轴时返回 null），不跟踪实体</summary>
+    Task<int?> GetMaxAxisIndexAsync(CancellationToken cancellationToken = default);
 }
 
 /// <summary>
@@ -63,6 +66,8 @@ public interface IMotorOperationLogRepository : IRepository<MotorOperationLog, G
         int maxResultCount,
         MotorOperationType? operationType = null,
         bool onlyFailures = false,
+        DateTime? startTime = null,
+        DateTime? endTime = null,
         CancellationToken cancellationToken = default
     );
 
@@ -73,6 +78,8 @@ public interface IMotorOperationLogRepository : IRepository<MotorOperationLog, G
         Guid motorAxisId,
         MotorOperationType? operationType = null,
         bool onlyFailures = false,
+        DateTime? startTime = null,
+        DateTime? endTime = null,
         CancellationToken cancellationToken = default
     );
 
@@ -89,4 +96,3 @@ public interface IMotorOperationLogRepository : IRepository<MotorOperationLog, G
         CancellationToken cancellationToken = default
     );
 }
-

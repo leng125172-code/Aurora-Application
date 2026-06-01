@@ -208,22 +208,46 @@ public class ProductModelAppService : AuroraStruct3DAppService, IProductModelApp
             maxResultCount: int.MaxValue
         );
 
-        int cleaned = 0;
+        if (all.Count == 0)
+        {
+            return 0;
+        }
+
+        List<ProductModel> orphaned = [];
         foreach (ProductModel model in all)
         {
-            bool exists = await _blobContainer.ExistsAsync(model.OriginalBlobName);
+            bool exists = await ExistsBlobWithCompatAsync(model.OriginalBlobName);
             if (!exists)
             {
-                // 原始 BLOB 已丢失，仅删除数据库记录，跳过 BLOB 删除操作
-                await _productModelRepository.DeleteAsync(model, autoSave: true);
-                Logger.LogInformation(
-                    "[ProductModelAppService] 清理孤立数模记录：{Id}（{Name}），原始 BLOB: {BlobName}",
-                    model.Id,
-                    model.Name,
-                    model.OriginalBlobName
-                );
-                cleaned++;
+                orphaned.Add(model);
             }
+        }
+
+        // 保护机制：若本次判定为“全部孤立”，大概率是存储路径配置异常或跨平台路径分隔符问题，直接中止避免误删。
+        if (orphaned.Count == all.Count)
+        {
+            Logger.LogError(
+                "[ProductModelAppService] 清理孤立记录已中止：共 {Total} 条记录，全部判定为原始 BLOB 不存在。请检查 BLOB 存储路径与跨平台路径分隔符。",
+                all.Count
+            );
+
+            throw new UserFriendlyException(
+                "检测到全部数模记录均被判定为孤立记录，已自动中止清理以防止误删。请先检查 Linux 服务器上的 BLOB 存储路径与文件可见性。"
+            );
+        }
+
+        int cleaned = 0;
+        foreach (ProductModel model in orphaned)
+        {
+            // 原始 BLOB 已丢失，仅删除数据库记录，跳过 BLOB 删除操作
+            await _productModelRepository.DeleteAsync(model, autoSave: true);
+            Logger.LogInformation(
+                "[ProductModelAppService] 清理孤立数模记录：{Id}（{Name}），原始 BLOB: {BlobName}",
+                model.Id,
+                model.Name,
+                model.OriginalBlobName
+            );
+            cleaned++;
         }
 
         return cleaned;
@@ -247,7 +271,7 @@ public class ProductModelAppService : AuroraStruct3DAppService, IProductModelApp
                 .WithData("status", productModel.ConversionStatus);
         }
 
-        Stream stream = await _blobContainer.GetAsync(blobName);
+        Stream stream = await GetBlobStreamWithCompatAsync(blobName);
         string fileName = string.IsNullOrEmpty(productModel.ConvertedBlobName)
             ? productModel.OriginalFileName
             : Path.GetFileNameWithoutExtension(productModel.OriginalFileName) + ".ply";
@@ -418,18 +442,86 @@ public class ProductModelAppService : AuroraStruct3DAppService, IProductModelApp
     /// </summary>
     private async Task TryDeleteBlobAsync(string blobName)
     {
-        try
+        HashSet<string> tried = [];
+        foreach (string candidate in GetBlobNameCandidates(blobName))
         {
-            await _blobContainer.DeleteAsync(blobName);
+            if (!tried.Add(candidate))
+            {
+                continue;
+            }
+
+            try
+            {
+                await _blobContainer.DeleteAsync(candidate);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning(
+                    ex,
+                    "[ProductModelAppService] 删除 BLOB 文件 {BlobName} 失败（可能已不存在）：{Message}",
+                    candidate,
+                    ex.Message
+                );
+            }
         }
-        catch (Exception ex)
+    }
+
+    /// <summary>
+    /// 兼容跨平台路径分隔符，生成 BLOB 键名候选列表。
+    /// </summary>
+    private static IEnumerable<string> GetBlobNameCandidates(string blobName)
+    {
+        if (string.IsNullOrWhiteSpace(blobName))
         {
-            Logger.LogWarning(
-                ex,
-                "[ProductModelAppService] 删除 BLOB 文件 {BlobName} 失败（可能已不存在）：{Message}",
-                blobName,
-                ex.Message
-            );
+            yield break;
         }
+
+        yield return blobName;
+
+        string normalized = NormalizeBlobName(blobName);
+        if (!string.Equals(blobName, normalized, StringComparison.Ordinal))
+        {
+            yield return normalized;
+        }
+    }
+
+    /// <summary>
+    /// 统一 BLOB 键名格式：反斜杠改为正斜杠，并去除前导斜杠。
+    /// </summary>
+    private static string NormalizeBlobName(string blobName)
+    {
+        return blobName.Replace('\\', '/').TrimStart('/');
+    }
+
+    /// <summary>
+    /// 兼容跨平台路径分隔符进行 BLOB 存在性检查。
+    /// </summary>
+    private async Task<bool> ExistsBlobWithCompatAsync(string blobName)
+    {
+        foreach (string candidate in GetBlobNameCandidates(blobName))
+        {
+            if (await _blobContainer.ExistsAsync(candidate))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// 兼容跨平台路径分隔符读取 BLOB 流。
+    /// </summary>
+    private async Task<Stream> GetBlobStreamWithCompatAsync(string blobName)
+    {
+        foreach (string candidate in GetBlobNameCandidates(blobName))
+        {
+            if (await _blobContainer.ExistsAsync(candidate))
+            {
+                return await _blobContainer.GetAsync(candidate);
+            }
+        }
+
+        throw new BusinessException("ProductModel:FileNotFound").WithData("blobName", blobName);
     }
 }

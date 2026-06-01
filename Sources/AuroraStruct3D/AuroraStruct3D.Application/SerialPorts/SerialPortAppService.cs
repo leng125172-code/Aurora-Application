@@ -15,16 +15,19 @@ namespace AuroraStruct3D.SerialPorts;
 public class SerialPortAppService : AuroraStruct3DAppService, ISerialPortAppService
 {
     private readonly ISerialPortConfigRepository _serialPortConfigRepository;
+    private readonly ISerialPortOperationLogRepository _operationLogRepository;
     private readonly IMotorControlService _motorControlService;
     private readonly IDeviceStateManager _deviceStateManager;
 
     public SerialPortAppService(
         ISerialPortConfigRepository serialPortConfigRepository,
+        ISerialPortOperationLogRepository operationLogRepository,
         IMotorControlService motorControlService,
         IDeviceStateManager deviceStateManager
     )
     {
         _serialPortConfigRepository = serialPortConfigRepository;
+        _operationLogRepository = operationLogRepository;
         _motorControlService = motorControlService;
         _deviceStateManager = deviceStateManager;
     }
@@ -280,5 +283,46 @@ public class SerialPortAppService : AuroraStruct3DAppService, ISerialPortAppServ
         {
             return string.Empty;
         }
+    }
+
+    /// <inheritdoc/>
+    public async Task<PagedResultDto<SerialPortOperationLogDto>> GetLogsAsync(
+        GetSerialPortLogListDto input
+    )
+    {
+        long totalCount = await _operationLogRepository.GetCountAsync(
+            input.SerialPortConfigId,
+            input.OperationType,
+            input.IsFailedOnly,
+            input.StartTime,
+            input.EndTime
+        );
+
+        List<SerialPortOperationLog> items = await _operationLogRepository.GetPagedListAsync(
+            input.SerialPortConfigId,
+            input.SkipCount,
+            input.MaxResultCount,
+            input.OperationType,
+            input.IsFailedOnly,
+            input.StartTime,
+            input.EndTime
+        );
+
+        return new PagedResultDto<SerialPortOperationLogDto>(
+            totalCount,
+            items
+                .Select(log => new SerialPortOperationLogDto
+                {
+                    Id = log.Id,
+                    SerialPortConfigId = log.SerialPortConfigId,
+                    OperationType = log.OperationType,
+                    OccurredAt = log.OccurredAt,
+                    IsSuccess = log.IsSuccess,
+                    ParameterSummary = log.ParameterSummary,
+                    ErrorMessage = log.ErrorMessage,
+                    RoundTripMs = log.RoundTripMs,
+                })
+                .ToList()
+        );
     }
 }

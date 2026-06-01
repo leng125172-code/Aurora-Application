@@ -121,3 +121,31 @@ export async function sendSerialPortRaw(id: string, dto: SerialPortRawSendDto): 
     const { data } = await httpClient.post<SerialPortRawResponseDto>(`${BASE}/${id}/send-raw`, dto)
     return data
 }
+
+export interface SerialPortOperationLogDto {
+    readonly id: string
+    readonly serialPortConfigId: string
+    readonly operationType: string
+    readonly occurredAt: string
+    readonly isSuccess: boolean
+    readonly parameterSummary: string | null
+    readonly errorMessage: string | null
+    readonly roundTripMs: number
+}
+
+export interface GetSerialPortLogListDto {
+    serialPortConfigId: string
+    operationType?: string
+    isFailedOnly?: boolean
+    startTime?: string
+    endTime?: string
+    skipCount?: number
+    maxResultCount?: number
+}
+
+export async function getSerialPortLogs(
+    params: GetSerialPortLogListDto
+): Promise<PagedResultDto<SerialPortOperationLogDto>> {
+    const { data } = await httpClient.get<PagedResultDto<SerialPortOperationLogDto>>(`${BASE}/logs`, { params })
+    return data
+}

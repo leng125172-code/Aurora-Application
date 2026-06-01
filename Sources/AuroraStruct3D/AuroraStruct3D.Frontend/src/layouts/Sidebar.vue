@@ -28,6 +28,10 @@ const { t } = useI18n()
 // 展开状态：CAP 和 Hangfire 默认展开（若当前路由匹配）
 const capExpanded = ref(route.path.startsWith('/embed/cap'))
 const hangfireExpanded = ref(route.path.startsWith('/embed/hangfire'))
+const projectorExpanded = ref(route.path.startsWith('/projectors'))
+const cameraExpanded = ref(route.path.startsWith('/cameras'))
+const serialPortExpanded = ref(route.path.startsWith('/serial-ports'))
+const motorExpanded = ref(route.path.startsWith('/motors'))
 
 function isCapActive(tab: string): boolean {
     if (!route.path.startsWith('/embed/cap')) return false
@@ -250,69 +254,197 @@ function navigate(path: string, tab?: string): void {
                 {{ t('menu.stateLog') }}
             </button>
 
-            <!-- 投影机管理 -->
-            <button
-                :class="
-                    cn(
-                        'flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors text-left',
-                        isExactActive('/projectors')
-                            ? 'bg-accent text-accent-foreground'
-                            : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
-                    )
-                "
-                @click="navigate('/projectors')"
-            >
-                <Monitor class="size-4 shrink-0" />
-                {{ t('menu.projectorManage') }}
-            </button>
+            <!-- 投影机管理展开组 -->
+            <div>
+                <button
+                    :class="
+                        cn(
+                            'flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors text-left',
+                            route.path.startsWith('/projectors')
+                                ? 'text-accent-foreground'
+                                : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                        )
+                    "
+                    @click="projectorExpanded = !projectorExpanded"
+                >
+                    <Monitor class="size-4 shrink-0" />
+                    <span class="flex-1">{{ t('menu.projectorManage') }}</span>
+                    <ChevronDown v-if="projectorExpanded" class="size-3.5" />
+                    <ChevronRight v-else class="size-3.5" />
+                </button>
+                <div v-if="projectorExpanded" class="ml-6 mt-0.5 space-y-0.5">
+                    <button
+                        :class="
+                            cn(
+                                'flex w-full items-center rounded-md px-3 py-1.5 text-sm transition-colors text-left',
+                                isExactActive('/projectors')
+                                    ? 'bg-accent text-accent-foreground'
+                                    : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                            )
+                        "
+                        @click="navigate('/projectors')"
+                    >
+                        {{ t('menu.management') }}
+                    </button>
+                    <button
+                        :class="
+                            cn(
+                                'flex w-full items-center rounded-md px-3 py-1.5 text-sm transition-colors text-left',
+                                isExactActive('/projectors/logs')
+                                    ? 'bg-accent text-accent-foreground'
+                                    : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                            )
+                        "
+                        @click="navigate('/projectors/logs')"
+                    >
+                        {{ t('menu.operationLogs') }}
+                    </button>
+                </div>
+            </div>
 
-            <!-- 相机管理 -->
-            <button
-                :class="
-                    cn(
-                        'flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors text-left',
-                        isExactActive('/cameras')
-                            ? 'bg-accent text-accent-foreground'
-                            : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
-                    )
-                "
-                @click="navigate('/cameras')"
-            >
-                <Camera class="size-4 shrink-0" />
-                {{ t('menu.cameraManage') }}
-            </button>
+            <!-- 相机管理展开组 -->
+            <div>
+                <button
+                    :class="
+                        cn(
+                            'flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors text-left',
+                            route.path.startsWith('/cameras')
+                                ? 'text-accent-foreground'
+                                : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                        )
+                    "
+                    @click="cameraExpanded = !cameraExpanded"
+                >
+                    <Camera class="size-4 shrink-0" />
+                    <span class="flex-1">{{ t('menu.cameraManage') }}</span>
+                    <ChevronDown v-if="cameraExpanded" class="size-3.5" />
+                    <ChevronRight v-else class="size-3.5" />
+                </button>
+                <div v-if="cameraExpanded" class="ml-6 mt-0.5 space-y-0.5">
+                    <button
+                        :class="
+                            cn(
+                                'flex w-full items-center rounded-md px-3 py-1.5 text-sm transition-colors text-left',
+                                isExactActive('/cameras')
+                                    ? 'bg-accent text-accent-foreground'
+                                    : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                            )
+                        "
+                        @click="navigate('/cameras')"
+                    >
+                        {{ t('menu.management') }}
+                    </button>
+                    <button
+                        :class="
+                            cn(
+                                'flex w-full items-center rounded-md px-3 py-1.5 text-sm transition-colors text-left',
+                                isExactActive('/cameras/logs')
+                                    ? 'bg-accent text-accent-foreground'
+                                    : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                            )
+                        "
+                        @click="navigate('/cameras/logs')"
+                    >
+                        {{ t('menu.operationLogs') }}
+                    </button>
+                </div>
+            </div>
 
             <!-- 485 串口管理 -->
-            <button
-                :class="
-                    cn(
-                        'flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors text-left',
-                        isExactActive('/serial-ports')
-                            ? 'bg-accent text-accent-foreground'
-                            : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
-                    )
-                "
-                @click="navigate('/serial-ports')"
-            >
-                <Cable class="size-4 shrink-0" />
-                {{ t('menu.serialPortManage') }}
-            </button>
+            <div>
+                <button
+                    :class="
+                        cn(
+                            'flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors text-left',
+                            route.path.startsWith('/serial-ports')
+                                ? 'text-accent-foreground'
+                                : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                        )
+                    "
+                    @click="serialPortExpanded = !serialPortExpanded"
+                >
+                    <Cable class="size-4 shrink-0" />
+                    <span class="flex-1">{{ t('menu.serialPortManage') }}</span>
+                    <ChevronDown v-if="serialPortExpanded" class="size-3.5" />
+                    <ChevronRight v-else class="size-3.5" />
+                </button>
+                <div v-if="serialPortExpanded" class="ml-6 mt-0.5 space-y-0.5">
+                    <button
+                        :class="
+                            cn(
+                                'flex w-full items-center rounded-md px-3 py-1.5 text-sm transition-colors text-left',
+                                isExactActive('/serial-ports')
+                                    ? 'bg-accent text-accent-foreground'
+                                    : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                            )
+                        "
+                        @click="navigate('/serial-ports')"
+                    >
+                        {{ t('menu.management') }}
+                    </button>
+                    <button
+                        :class="
+                            cn(
+                                'flex w-full items-center rounded-md px-3 py-1.5 text-sm transition-colors text-left',
+                                isExactActive('/serial-ports/logs')
+                                    ? 'bg-accent text-accent-foreground'
+                                    : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                            )
+                        "
+                        @click="navigate('/serial-ports/logs')"
+                    >
+                        {{ t('menu.operationLogs') }}
+                    </button>
+                </div>
+            </div>
 
             <!-- 485 电机设备管理 -->
-            <button
-                :class="
-                    cn(
-                        'flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors text-left',
-                        isExactActive('/motors')
-                            ? 'bg-accent text-accent-foreground'
-                            : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
-                    )
-                "
-                @click="navigate('/motors')"
-            >
-                <Cpu class="size-4 shrink-0" />
-                {{ t('menu.motorDeviceManage') }}
-            </button>
+            <div>
+                <button
+                    :class="
+                        cn(
+                            'flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors text-left',
+                            route.path.startsWith('/motors')
+                                ? 'text-accent-foreground'
+                                : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                        )
+                    "
+                    @click="motorExpanded = !motorExpanded"
+                >
+                    <Cpu class="size-4 shrink-0" />
+                    <span class="flex-1">{{ t('menu.motorDeviceManage') }}</span>
+                    <ChevronDown v-if="motorExpanded" class="size-3.5" />
+                    <ChevronRight v-else class="size-3.5" />
+                </button>
+                <div v-if="motorExpanded" class="ml-6 mt-0.5 space-y-0.5">
+                    <button
+                        :class="
+                            cn(
+                                'flex w-full items-center rounded-md px-3 py-1.5 text-sm transition-colors text-left',
+                                isExactActive('/motors')
+                                    ? 'bg-accent text-accent-foreground'
+                                    : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                            )
+                        "
+                        @click="navigate('/motors')"
+                    >
+                        {{ t('menu.management') }}
+                    </button>
+                    <button
+                        :class="
+                            cn(
+                                'flex w-full items-center rounded-md px-3 py-1.5 text-sm transition-colors text-left',
+                                isExactActive('/motors/logs')
+                                    ? 'bg-accent text-accent-foreground'
+                                    : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                            )
+                        "
+                        @click="navigate('/motors/logs')"
+                    >
+                        {{ t('menu.operationLogs') }}
+                    </button>
+                </div>
+            </div>
 
             <!-- 三维数模管理 -->
             <button

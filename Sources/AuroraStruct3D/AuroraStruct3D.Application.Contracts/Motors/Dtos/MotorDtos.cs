@@ -256,3 +256,57 @@ public class RegisterReadResultDto
     /// <summary>寄存器值列表</summary>
     public List<ushort> Values { get; set; } = new();
 }
+
+/// <summary>
+/// 电机操作日志输出 DTO。
+/// </summary>
+public class MotorOperationLogDto : EntityDto<Guid>
+{
+    /// <summary>所属电机轴 ID</summary>
+    public Guid MotorAxisId { get; set; }
+
+    /// <summary>Modbus 从机地址</summary>
+    public int SlaveId { get; set; }
+
+    /// <summary>操作类型</summary>
+    public MotorOperationType OperationType { get; set; }
+
+    /// <summary>操作发生时间（UTC）</summary>
+    public DateTime OccurredAt { get; set; }
+
+    /// <summary>是否成功</summary>
+    public bool IsSuccess { get; set; }
+
+    /// <summary>协议命令标识</summary>
+    public string? CommandCode { get; set; }
+
+    /// <summary>操作参数摘要</summary>
+    public string? ParameterSummary { get; set; }
+
+    /// <summary>失败时的错误消息</summary>
+    public string? ErrorMessage { get; set; }
+
+    /// <summary>命令往返耗时（毫秒），-1 表示未记录</summary>
+    public long RoundTripMs { get; set; }
+}
+
+/// <summary>
+/// 查询电机操作日志请求 DTO。
+/// </summary>
+public class GetMotorLogListDto : Volo.Abp.Application.Dtos.PagedResultRequestDto
+{
+    /// <summary>电机轴 ID（必填，无 ID 则返回空结果）</summary>
+    public Guid? MotorAxisId { get; set; }
+
+    /// <summary>按操作类型过滤（可选）</summary>
+    public MotorOperationType? OperationType { get; set; }
+
+    /// <summary>仅返回失败记录</summary>
+    public bool? IsFailedOnly { get; set; }
+
+    /// <summary>开始时间（可选，UTC）</summary>
+    public DateTime? StartTime { get; set; }
+
+    /// <summary>结束时间（可选，UTC）</summary>
+    public DateTime? EndTime { get; set; }
+}

@@ -62,4 +62,7 @@ public interface IMotorDeviceAppService : IApplicationService
 
     /// <summary>写单个保持寄存器（主要用于雷赛 Modbus RTU 调试）</summary>
     Task<bool> WriteSingleRegisterAsync(Guid id, WriteSingleRegisterInput input);
+
+    /// <summary>分页查询电机操作日志</summary>
+    Task<PagedResultDto<MotorOperationLogDto>> GetLogsAsync(GetMotorLogListDto input);
 }

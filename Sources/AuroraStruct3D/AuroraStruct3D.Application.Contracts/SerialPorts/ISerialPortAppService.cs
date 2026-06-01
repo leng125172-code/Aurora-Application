@@ -29,4 +29,7 @@ public interface ISerialPortAppService : IApplicationService
 
     /// <summary>发送原始串口数据并读取响应</summary>
     Task<SerialPortRawResponseDto> SendRawAsync(Guid id, SerialPortRawSendDto input);
+
+    /// <summary>分页查询串口操作日志</summary>
+    Task<PagedResultDto<SerialPortOperationLogDto>> GetLogsAsync(GetSerialPortLogListDto input);
 }

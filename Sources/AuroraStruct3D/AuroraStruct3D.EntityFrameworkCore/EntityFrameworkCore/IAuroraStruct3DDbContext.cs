@@ -60,5 +60,10 @@ namespace AuroraStruct3D.EntityFrameworkCore
 
         /// <summary>产品三维数模集合</summary>
         DbSet<ProductModel> ProductModels { get; }
+
+        // ── 串口通讯模块 ──────────────────────────────────────────────────────
+
+        /// <summary>串口操作日志集合</summary>
+        DbSet<SerialPortOperationLog> SerialPortOperationLogs { get; }
     }
 }

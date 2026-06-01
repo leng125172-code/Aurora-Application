@@ -105,6 +105,7 @@ async function loadStats(): Promise<void> {
 
 const trendChartEl = ref<HTMLDivElement | null>(null)
 let trendChart: echarts.ECharts | null = null
+let trendChartResizeObserver: ResizeObserver | null = null
 
 /** 从 dailyHistory 提取排序后的日期、成功数、失败数 */
 function buildTrendData(): { dates: string[]; succeeded: number[]; failed: number[] } {
@@ -175,6 +176,10 @@ function initTrendChart(): void {
     trendChart?.dispose()
     trendChart = echarts.init(trendChartEl.value, themeStore.isDark ? 'dark' : undefined, { renderer: 'canvas' })
     trendChart.setOption(buildTrendOption())
+    // 监听容器尺寸变化，自动调用 resize 使图表宽度自适应
+    trendChartResizeObserver?.disconnect()
+    trendChartResizeObserver = new ResizeObserver(() => trendChart?.resize())
+    trendChartResizeObserver.observe(trendChartEl.value)
 }
 
 /** 仅更新图表数据，不重建实例。 */
@@ -447,6 +452,8 @@ onMounted(async () => {
 })
 onUnmounted(async () => {
     trendChart?.dispose()
+    trendChartResizeObserver?.disconnect()
+    trendChartResizeObserver = null
     if (connection) {
         connection.off('ReceiveHangfireStats')
         await connection.stop()
@@ -466,10 +473,10 @@ onUnmounted(async () => {
 
         <!-- ── 仪表盘 ── -->
         <template v-if="activeTab === 'dashboard'">
-            <div class="grid gap-3 md:grid-cols-4 lg:grid-cols-8">
-                <AppCard v-for="c in STAT_CARDS" :key="c.key" :beam="false">
+            <div class="grid gap-3 grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
+                <AppCard v-for="c in STAT_CARDS" :key="c.key">
                     <div class="p-4 space-y-1">
-                        <div class="text-xs">{{ t(`hangfire.${c.key}`) }}</div>
+                        <div class="text-xs whitespace-nowrap">{{ t(`hangfire.${c.key}`) }}</div>
                         <div :class="['text-2xl font-semibold', c.color]">{{ stats[c.key] ?? '-' }}</div>
                     </div>
                 </AppCard>
@@ -499,8 +506,8 @@ onUnmounted(async () => {
                     {{ stateLabel(s) }}
                 </Button>
             </div>
-            <AppCard :beam="false">
-                <div>
+            <AppCard :beam="true">
+                <div class="overflow-x-auto">
                     <table class="w-full text-sm">
                         <thead>
                             <tr>
@@ -557,11 +564,11 @@ onUnmounted(async () => {
 
         <!-- ── 重试（失败作业）── -->
         <template v-else-if="activeTab === 'retries'">
-            <AppCard :beam="false">
+            <AppCard :beam="true">
                 <div class="p-4 pb-2">
                     <div class="text-base font-semibold">{{ t('hangfire.tabRetries') }}</div>
                 </div>
-                <div>
+                <div class="overflow-x-auto">
                     <table class="w-full text-sm">
                         <thead>
                             <tr>
@@ -612,11 +619,11 @@ onUnmounted(async () => {
 
         <!-- ── 周期性作业 ── -->
         <template v-else-if="activeTab === 'recurring'">
-            <AppCard :beam="false">
+            <AppCard :beam="true">
                 <div class="p-4 pb-2">
                     <div class="text-base font-semibold">{{ t('hangfire.tabRecurring') }}</div>
                 </div>
-                <div>
+                <div class="overflow-x-auto">
                     <table class="w-full text-sm">
                         <thead>
                             <tr>
@@ -679,11 +686,11 @@ onUnmounted(async () => {
 
         <!-- ── 服务器 ── -->
         <template v-else-if="activeTab === 'servers'">
-            <AppCard :beam="false">
+            <AppCard :beam="true">
                 <div class="p-4 pb-2">
                     <div class="text-base font-semibold">{{ t('hangfire.tabServers') }}</div>
                 </div>
-                <div>
+                <div class="overflow-x-auto">
                     <table class="w-full text-sm">
                         <thead>
                             <tr>

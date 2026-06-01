@@ -108,12 +108,12 @@ function onResize() {
 function createGlobeOnMounted() {
     const config = { ...DEFAULT_CONFIG, ...props.config }
 
-    globe = createGlobe(globeCanvasRef.value!, ({
+    globe = createGlobe(globeCanvasRef.value!, {
         ...config,
         width: width.value * 2,
         height: width.value * 2,
         onRender,
-    } as unknown as COBEOptions))
+    } as unknown as COBEOptions)
 }
 
 onMounted(() => {

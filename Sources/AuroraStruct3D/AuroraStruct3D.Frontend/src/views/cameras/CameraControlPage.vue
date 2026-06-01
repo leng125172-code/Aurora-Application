@@ -308,10 +308,16 @@ onUnmounted(() => {
 </script>
 
 <template>
-    <div class="flex flex-col gap-4 p-4">
+    <div class="flex flex-col gap-4">
         <!-- ── 顶部标题栏 ── -->
         <div class="flex flex-wrap items-center gap-3">
-            <Button severity="secondary" outlined size="small" @click="void router.push({ name: 'CameraManage' })">
+            <Button
+                severity="secondary"
+                outlined
+                size="small"
+                class="!text-xs"
+                @click="void router.push({ name: 'CameraManage' })"
+            >
                 {{ t('camera.back') }}
             </Button>
             <h1 class="text-2xl font-bold tracking-tight">{{ device?.name ?? t('camera.ctrlTitle') }}</h1>
@@ -325,44 +331,278 @@ onUnmounted(() => {
             >
                 {{ isOpen ? t('camera.ctrlOpen') : t('camera.ctrlClosed') }}
             </span>
-            <span v-if="device?.serialNumber" class="text-xs text-muted-foreground">SN: {{ device.serialNumber }}</span>
             <span v-if="realtimeState?.isXmlLoaded === false" class="text-xs text-amber-500">
                 {{ t('camera.nodMapLoading') }}
             </span>
 
-            <div class="ml-auto flex items-center gap-2">
+            <div class="ml-auto flex shrink-0 items-center gap-2">
                 <!-- Visibility 筛选 -->
-                <label class="text-xs text-muted-foreground">{{ t('camera.visibilityLabel') }}</label>
+                <label class="whitespace-nowrap text-xs text-muted-foreground">{{ t('camera.visibilityLabel') }}</label>
                 <Select
                     v-model="visibility"
                     :options="visibilityOptions"
                     option-label="label"
                     option-value="value"
                     size="small"
-                    class="w-28"
+                    class="!text-xs w-[9rem]"
+                    :pt="{
+                        root: { class: '!py-0 !px-2 !text-xs !h-7 !flex !items-center' },
+                        label: {
+                            class: '!text-xs !py-0 !leading-none !truncate !flex-1 !flex !items-center !h-full',
+                        },
+                        dropdown: { class: '!w-6 !flex !items-center !justify-center' },
+                    }"
                 />
                 <!-- 重新枚举（强制 NodeMap 刷新） -->
                 <Button
                     severity="secondary"
                     outlined
                     size="small"
+                    class="!text-xs whitespace-nowrap"
                     :disabled="!isOpen || nodeMapLoading"
                     @click="void loadNodeMap(true)"
                 >
                     {{ nodeMapLoading ? t('camera.enumerating') : t('camera.reenumerate') }}
                 </Button>
                 <!-- 全部刷新 -->
-                <Button severity="secondary" outlined size="small" :disabled="!isOpen" @click="void refreshAll()">
+                <Button
+                    severity="secondary"
+                    outlined
+                    size="small"
+                    class="!text-xs whitespace-nowrap"
+                    :disabled="!isOpen"
+                    @click="void refreshAll()"
+                >
                     {{ t('camera.refreshAll') }}
                 </Button>
             </div>
         </div>
 
-        <!-- ── 主体：左侧动态分组 + 右侧预览面板 ── -->
-        <!-- xl 以上双栏（主区 + 340px 预览）；窄屏堆叠，预览优先不 sticky，避免遮挡 -->
-        <div class="grid grid-cols-1 items-start gap-4 xl:grid-cols-[1fr_340px]">
-            <!-- 左侧：动态 NodeMap 渲染（分组随宽度递增列数） -->
-            <div class="grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-3">
+        <!-- ── 主体：左侧预览与控制，右侧动态节点 ── -->
+        <div class="grid grid-cols-1 gap-4 xl:grid-cols-[380px_1fr]">
+            <!-- 左：预览与控制（sticky 跟随滚动） -->
+            <div class="xl:sticky xl:top-4 xl:self-start xl:order-first">
+                <AppCard :beam-size="80" :beam-duration="8">
+                    <div class="flex flex-col gap-3 p-3">
+                        <!-- Tab 切换 -->
+                        <div class="flex items-center gap-1 border-b pb-2">
+                            <Button
+                                text
+                                size="small"
+                                :severity="previewTab === 'video' ? 'primary' : 'secondary'"
+                                @click="previewTab = 'video'"
+                            >
+                                {{ t('camera.tabVideo') }}
+                            </Button>
+                            <Button
+                                text
+                                size="small"
+                                :severity="previewTab === 'snapshot' ? 'primary' : 'secondary'"
+                                @click="previewTab = 'snapshot'"
+                            >
+                                {{ t('camera.tabSnapshot') }}
+                            </Button>
+                        </div>
+
+                        <!-- 图像显示区域 -->
+                        <div class="relative aspect-video overflow-hidden rounded bg-black">
+                            <img
+                                v-if="previewTab === 'video' && previewUrl"
+                                :src="previewUrl"
+                                class="h-full w-full object-contain"
+                                :alt="t('camera.tabVideo')"
+                            />
+                            <img
+                                v-else-if="previewTab === 'snapshot' && snapshotUri"
+                                :src="snapshotUri"
+                                class="h-full w-full object-contain"
+                                :alt="t('camera.snapshot')"
+                            />
+                            <div v-else class="flex h-full items-center justify-center text-xs text-white/40">
+                                {{
+                                    previewTab === 'video'
+                                        ? previewing
+                                            ? t('camera.waitingFrame')
+                                            : t('camera.previewNotStarted')
+                                        : t('camera.noSnapshot')
+                                }}
+                            </div>
+                        </div>
+
+                        <!-- 图像质量评分条（仅实时预览时显示） -->
+                        <div v-if="previewing && metrics" class="rounded border bg-muted/20 px-3 py-2 text-xs">
+                            <!-- 对焦清晰度 -->
+                            <div class="mb-2">
+                                <div class="mb-1 flex items-center justify-between">
+                                    <span class="text-muted-foreground">{{ t('camera.focusScore') }}</span>
+                                    <span
+                                        class="font-mono font-medium"
+                                        :style="{ color: scoreColor(metrics.focusScore) }"
+                                    >
+                                        {{ Math.round(metrics.focusScore) }}
+                                    </span>
+                                </div>
+                                <div class="h-2.5 w-full overflow-hidden rounded-full bg-muted/40">
+                                    <div
+                                        class="h-full rounded-full transition-all duration-300"
+                                        :style="{
+                                            width: `${metrics.focusScore}%`,
+                                            backgroundColor: scoreColor(metrics.focusScore),
+                                        }"
+                                    />
+                                </div>
+                            </div>
+                            <!-- 曝光质量 -->
+                            <div>
+                                <div class="mb-1 flex items-center justify-between">
+                                    <span class="text-muted-foreground">{{ t('camera.apertureScore') }}</span>
+                                    <span class="flex items-center gap-1.5">
+                                        <span
+                                            v-if="metrics.apertureHint !== 0"
+                                            class="rounded px-1 py-0.5 text-[10px] font-medium"
+                                            :style="{
+                                                backgroundColor: metrics.apertureHint === 1 ? '#fef3c7' : '#dbeafe',
+                                                color: metrics.apertureHint === 1 ? '#92400e' : '#1e40af',
+                                            }"
+                                        >
+                                            {{
+                                                metrics.apertureHint === 1
+                                                    ? t('camera.apertureDown')
+                                                    : t('camera.apertureUp')
+                                            }}
+                                        </span>
+                                        <span
+                                            class="font-mono font-medium"
+                                            :style="{ color: scoreColor(metrics.apertureScore) }"
+                                        >
+                                            {{ Math.round(metrics.apertureScore) }}
+                                        </span>
+                                    </span>
+                                </div>
+                                <div class="h-2.5 w-full overflow-hidden rounded-full bg-muted/40">
+                                    <div
+                                        class="h-full rounded-full transition-all duration-300"
+                                        :style="{
+                                            width: `${metrics.apertureScore}%`,
+                                            backgroundColor: scoreColor(metrics.apertureScore),
+                                        }"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 预览控制按钮 -->
+                        <div class="flex gap-2">
+                            <Button
+                                :severity="previewing ? 'danger' : 'secondary'"
+                                :outlined="!previewing"
+                                size="small"
+                                class="!text-xs flex-1"
+                                :disabled="!isOpen || busy"
+                                @click="void togglePreview()"
+                            >
+                                {{ previewing ? t('camera.stopPreview') : t('camera.startPreview') }}
+                            </Button>
+                            <Button
+                                severity="secondary"
+                                outlined
+                                size="small"
+                                class="!text-xs"
+                                :disabled="!isOpen || busy"
+                                @click="void onSnapshot()"
+                            >
+                                {{ t('camera.snapshot') }}
+                            </Button>
+                        </div>
+
+                        <!-- 旋转角度 -->
+                        <div class="flex items-center gap-2 border-t pt-2 text-xs">
+                            <span class="shrink-0 text-muted-foreground">{{ t('camera.rotationAngle') }}</span>
+                            <Select
+                                v-model="rotationAngle"
+                                :options="rotationOptions"
+                                option-label="label"
+                                option-value="value"
+                                :disabled="!isOpen || rotationSaving"
+                                size="small"
+                                class="!text-xs flex-1"
+                                :pt="{
+                                    root: { class: '!py-0 !px-2 !text-xs !h-7 !flex !items-center' },
+                                    label: {
+                                        class: '!text-xs !py-0 !leading-none !truncate !flex-1 !flex !items-center !h-full',
+                                    },
+                                    dropdown: { class: '!w-6 !flex !items-center !justify-center' },
+                                }"
+                            />
+                            <Button
+                                severity="secondary"
+                                outlined
+                                size="small"
+                                class="!text-xs whitespace-nowrap"
+                                :disabled="!isOpen || rotationSaving || !rotationDirty"
+                                @click="void saveRotationAngle()"
+                            >
+                                {{ rotationSaving ? t('common.saving') : t('common.save') }}
+                            </Button>
+                        </div>
+
+                        <!-- 实时运行指标 -->
+                        <div v-if="metrics" class="grid grid-cols-2 gap-x-2 gap-y-1 text-xs">
+                            <span class="text-muted-foreground">{{ t('camera.frameRate') }}</span>
+                            <span>{{ displayMetric(metrics.frameRate) }} fps</span>
+                            <span class="text-muted-foreground">{{ t('camera.fpgaTemp') }}</span>
+                            <span>{{ displayMetric(metrics.fpgaTemperature, 0) }} °C</span>
+                            <span class="text-muted-foreground">{{ t('camera.sensorTemp') }}</span>
+                            <span>{{ displayMetric(metrics.sensorTemperature) }} °C</span>
+                            <span class="text-muted-foreground">{{ t('camera.aeStatus') }}</span>
+                            <span>{{ metrics.aeStatus === 1 ? t('camera.aeRunning') : t('camera.aeIdle') }}</span>
+                            <span class="text-muted-foreground">{{ t('camera.bufFrames') }}</span>
+                            <span>{{ displayMetric(metrics.currentBufFrames, 0) }}</span>
+                        </div>
+
+                        <!-- 快捷操作 -->
+                        <div class="flex flex-col gap-1.5 border-t pt-2">
+                            <span class="text-xs font-medium text-muted-foreground">
+                                {{ t('camera.quickActions') }}
+                            </span>
+                            <div class="flex gap-2">
+                                <Button
+                                    severity="secondary"
+                                    outlined
+                                    size="small"
+                                    :disabled="!isOpen || busy"
+                                    class="flex-1 !text-xs whitespace-nowrap"
+                                    @click="void onSoftTrigger()"
+                                >
+                                    {{ t('camera.softTrigger') }}
+                                </Button>
+                                <Button
+                                    severity="secondary"
+                                    outlined
+                                    size="small"
+                                    :disabled="!isOpen || busy"
+                                    class="flex-1 !text-xs whitespace-nowrap"
+                                    @click="void onExposureAutoOncePulse()"
+                                >
+                                    {{ t('camera.exposureAutoOnce') }}
+                                </Button>
+                            </div>
+                        </div>
+
+                        <!-- 设备基本信息 -->
+                        <div v-if="device" class="border-t pt-2 text-xs text-muted-foreground">
+                            <div>{{ t('camera.ctrlModel') }}{{ device.model ?? '—' }}</div>
+                            <div>{{ t('camera.ctrlStatus') }}{{ realtimeState?.statusText ?? device.statusText }}</div>
+                            <div v-if="realtimeState?.sensorTemperature != null">
+                                {{ t('camera.realtimeSensorTemp') }}{{ realtimeState.sensorTemperature.toFixed(1) }} °C
+                            </div>
+                        </div>
+                    </div>
+                </AppCard>
+            </div>
+
+            <!-- 右：动态节点卡片 -->
+            <div class="grid auto-rows-min grid-cols-1 gap-3 md:grid-cols-2">
                 <template v-if="nodeMap && nodeMap.categories.length > 0">
                     <GenICamCategoryCard
                         v-for="cat in nodeMap.categories"
@@ -377,10 +617,7 @@ onUnmounted(() => {
                         @node-updated="(n, v) => void onNodeUpdated(n, v)"
                     />
                 </template>
-                <div
-                    v-else
-                    class="rounded-lg border p-6 text-center text-sm text-muted-foreground md:col-span-2 2xl:col-span-3"
-                >
+                <div v-else class="rounded-lg border p-6 text-center text-sm text-muted-foreground md:col-span-2">
                     {{
                         isOpen
                             ? nodeMapLoading
@@ -390,211 +627,6 @@ onUnmounted(() => {
                     }}
                 </div>
             </div>
-
-            <!-- 右侧：预览面板（仅在 xl 以上粘性定位，避免窄屏堆叠时遮挡） -->
-            <AppCard :beam-size="80" :beam-duration="8" class="xl:sticky xl:top-4">
-                <div class="flex flex-col gap-3 p-3">
-                    <!-- Tab 切换 -->
-                    <div class="flex items-center gap-1 border-b pb-2">
-                        <Button
-                            text
-                            size="small"
-                            :severity="previewTab === 'video' ? 'primary' : 'secondary'"
-                            @click="previewTab = 'video'"
-                        >
-                            {{ t('camera.tabVideo') }}
-                        </Button>
-                        <Button
-                            text
-                            size="small"
-                            :severity="previewTab === 'snapshot' ? 'primary' : 'secondary'"
-                            @click="previewTab = 'snapshot'"
-                        >
-                            {{ t('camera.tabSnapshot') }}
-                        </Button>
-                    </div>
-
-                    <!-- 图像显示区域 -->
-                    <div class="relative aspect-video overflow-hidden rounded bg-black">
-                        <img
-                            v-if="previewTab === 'video' && previewUrl"
-                            :src="previewUrl"
-                            class="h-full w-full object-contain"
-                            :alt="t('camera.tabVideo')"
-                        />
-                        <img
-                            v-else-if="previewTab === 'snapshot' && snapshotUri"
-                            :src="snapshotUri"
-                            class="h-full w-full object-contain"
-                            :alt="t('camera.snapshot')"
-                        />
-                        <div v-else class="flex h-full items-center justify-center text-xs text-white/40">
-                            {{
-                                previewTab === 'video'
-                                    ? previewing
-                                        ? t('camera.waitingFrame')
-                                        : t('camera.previewNotStarted')
-                                    : t('camera.noSnapshot')
-                            }}
-                        </div>
-                    </div>
-
-                    <!-- 图像质量评分条（仅实时预览时显示） -->
-                    <div v-if="previewing && metrics" class="rounded border bg-muted/20 px-3 py-2 text-xs">
-                        <!-- 对焦清晰度 -->
-                        <div class="mb-2">
-                            <div class="mb-1 flex items-center justify-between">
-                                <span class="text-muted-foreground">{{ t('camera.focusScore') }}</span>
-                                <span class="font-mono font-medium" :style="{ color: scoreColor(metrics.focusScore) }">
-                                    {{ Math.round(metrics.focusScore) }}
-                                </span>
-                            </div>
-                            <div class="h-2.5 w-full overflow-hidden rounded-full bg-muted/40">
-                                <div
-                                    class="h-full rounded-full transition-all duration-300"
-                                    :style="{
-                                        width: `${metrics.focusScore}%`,
-                                        backgroundColor: scoreColor(metrics.focusScore),
-                                    }"
-                                />
-                            </div>
-                        </div>
-                        <!-- 曝光质量 -->
-                        <div>
-                            <div class="mb-1 flex items-center justify-between">
-                                <span class="text-muted-foreground">{{ t('camera.apertureScore') }}</span>
-                                <span class="flex items-center gap-1.5">
-                                    <span
-                                        v-if="metrics.apertureHint !== 0"
-                                        class="rounded px-1 py-0.5 text-[10px] font-medium"
-                                        :style="{
-                                            backgroundColor: metrics.apertureHint === 1 ? '#fef3c7' : '#dbeafe',
-                                            color: metrics.apertureHint === 1 ? '#92400e' : '#1e40af',
-                                        }"
-                                    >
-                                        {{
-                                            metrics.apertureHint === 1
-                                                ? t('camera.apertureDown')
-                                                : t('camera.apertureUp')
-                                        }}
-                                    </span>
-                                    <span
-                                        class="font-mono font-medium"
-                                        :style="{ color: scoreColor(metrics.apertureScore) }"
-                                    >
-                                        {{ Math.round(metrics.apertureScore) }}
-                                    </span>
-                                </span>
-                            </div>
-                            <div class="h-2.5 w-full overflow-hidden rounded-full bg-muted/40">
-                                <div
-                                    class="h-full rounded-full transition-all duration-300"
-                                    :style="{
-                                        width: `${metrics.apertureScore}%`,
-                                        backgroundColor: scoreColor(metrics.apertureScore),
-                                    }"
-                                />
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- 预览控制按钮 -->
-                    <div class="flex gap-2">
-                        <Button
-                            :severity="previewing ? 'danger' : 'secondary'"
-                            :outlined="!previewing"
-                            size="small"
-                            :disabled="!isOpen || busy"
-                            class="flex-1"
-                            @click="void togglePreview()"
-                        >
-                            {{ previewing ? t('camera.stopPreview') : t('camera.startPreview') }}
-                        </Button>
-                        <Button
-                            severity="secondary"
-                            outlined
-                            size="small"
-                            :disabled="!isOpen || busy"
-                            @click="void onSnapshot()"
-                        >
-                            {{ t('camera.snapshot') }}
-                        </Button>
-                    </div>
-
-                    <div class="flex items-center gap-2 border-t pt-2 text-xs">
-                        <span class="shrink-0 text-muted-foreground">{{ t('camera.rotationAngle') }}</span>
-                        <Select
-                            v-model="rotationAngle"
-                            :options="rotationOptions"
-                            option-label="label"
-                            option-value="value"
-                            :disabled="!isOpen || rotationSaving"
-                            size="small"
-                            class="min-w-0 flex-1"
-                        />
-                        <Button
-                            severity="secondary"
-                            outlined
-                            size="small"
-                            :disabled="!isOpen || rotationSaving || !rotationDirty"
-                            @click="void saveRotationAngle()"
-                        >
-                            {{ rotationSaving ? t('common.saving') : t('common.save') }}
-                        </Button>
-                    </div>
-
-                    <!-- 实时运行指标 -->
-                    <div v-if="metrics" class="grid grid-cols-2 gap-x-2 gap-y-1 text-xs">
-                        <span class="text-muted-foreground">{{ t('camera.frameRate') }}</span>
-                        <span>{{ displayMetric(metrics.frameRate) }} fps</span>
-                        <span class="text-muted-foreground">{{ t('camera.fpgaTemp') }}</span>
-                        <span>{{ displayMetric(metrics.fpgaTemperature, 0) }} °C</span>
-                        <span class="text-muted-foreground">{{ t('camera.sensorTemp') }}</span>
-                        <span>{{ displayMetric(metrics.sensorTemperature) }} °C</span>
-                        <span class="text-muted-foreground">{{ t('camera.aeStatus') }}</span>
-                        <span>{{ metrics.aeStatus === 1 ? t('camera.aeRunning') : t('camera.aeIdle') }}</span>
-                        <span class="text-muted-foreground">{{ t('camera.bufFrames') }}</span>
-                        <span>{{ displayMetric(metrics.currentBufFrames, 0) }}</span>
-                    </div>
-
-                    <!-- 快捷操作 -->
-                    <div class="flex flex-col gap-1.5 border-t pt-2">
-                        <span class="text-xs font-medium text-muted-foreground">{{ t('camera.quickActions') }}</span>
-                        <div class="flex gap-2">
-                            <Button
-                                severity="secondary"
-                                outlined
-                                size="small"
-                                :disabled="!isOpen || busy"
-                                class="flex-1"
-                                @click="void onSoftTrigger()"
-                            >
-                                {{ t('camera.softTrigger') }}
-                            </Button>
-                            <Button
-                                severity="secondary"
-                                outlined
-                                size="small"
-                                :disabled="!isOpen || busy"
-                                class="flex-1"
-                                @click="void onExposureAutoOncePulse()"
-                            >
-                                {{ t('camera.exposureAutoOnce') }}
-                            </Button>
-                        </div>
-                    </div>
-
-                    <!-- 设备基本信息 -->
-                    <div v-if="device" class="border-t pt-2 text-xs text-muted-foreground">
-                        <div>{{ t('camera.ctrlModel') }}{{ device.model ?? '—' }}</div>
-                        <div>{{ t('camera.ctrlFirmware') }}{{ device.firmwareVersion ?? '—' }}</div>
-                        <div>{{ t('camera.ctrlStatus') }}{{ realtimeState?.statusText ?? device.statusText }}</div>
-                        <div v-if="realtimeState?.sensorTemperature != null">
-                            {{ t('camera.realtimeSensorTemp') }}{{ realtimeState.sensorTemperature.toFixed(1) }} °C
-                        </div>
-                    </div>
-                </div>
-            </AppCard>
         </div>
     </div>
 </template>

@@ -353,6 +353,27 @@ public class GenICamNodeChangeDto
     public bool IsLocked { get; set; }
 }
 
+/// <summary>
+/// 查询相机操作日志请求DTO
+/// </summary>
+public class GetCameraLogListDto : Volo.Abp.Application.Dtos.PagedResultRequestDto
+{
+    /// <summary>相机设备ID（必填，无 ID 则返回空结果）</summary>
+    public Guid? CameraDeviceId { get; set; }
+
+    /// <summary>按操作类型过滤（可选）</summary>
+    public CameraOperationType? OperationType { get; set; }
+
+    /// <summary>仅返回失败记录</summary>
+    public bool? IsFailedOnly { get; set; }
+
+    /// <summary>开始时间（可选，UTC）</summary>
+    public DateTime? StartTime { get; set; }
+
+    /// <summary>结束时间（可选，UTC）</summary>
+    public DateTime? EndTime { get; set; }
+}
+
 // ─── 手动控制：图像旋转角度 ─────────────────────────────────────────────
 
 /// <summary>

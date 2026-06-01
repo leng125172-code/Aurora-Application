@@ -17,6 +17,15 @@ public static class SerialPortConsts
     /// <summary>数据库表名前缀</summary>
     public const string DbTablePrefix = "AbpPro";
 
+    /// <summary>操作日志：操作类型名称最大长度</summary>
+    public const int MaxOperationTypeNameLength = 64;
+
+    /// <summary>操作日志：参数摘要最大长度</summary>
+    public const int MaxOperationParameterSummaryLength = 256;
+
+    /// <summary>操作日志：错误消息最大长度</summary>
+    public const int MaxOperationLogErrorMessageLength = 512;
+
     /// <summary>支持的常用串口波特率，覆盖 110 到 921600</summary>
     public static readonly int[] SupportedBaudRates =
     [

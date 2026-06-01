@@ -80,6 +80,7 @@ async function loadStats(): Promise<void> {
 
 const capChartEl = ref<HTMLDivElement | null>(null)
 let capChart: echarts.ECharts | null = null
+let capChartResizeObserver: ResizeObserver | null = null
 
 /** 构建 CAP 统计柱状图 ECharts option。 */
 function buildCapOption() {
@@ -128,6 +129,10 @@ function initCapChart(): void {
     capChart?.dispose()
     capChart = echarts.init(capChartEl.value, themeStore.isDark ? 'dark' : undefined, { renderer: 'canvas' })
     capChart.setOption(buildCapOption())
+    // 监听容器尺寸变化，自动调用 resize 使图表宽度自适应
+    capChartResizeObserver?.disconnect()
+    capChartResizeObserver = new ResizeObserver(() => capChart?.resize())
+    capChartResizeObserver.observe(capChartEl.value)
 }
 
 /** 仅更新柱状图数据，不重建实例。 */
@@ -302,6 +307,8 @@ onMounted(async () => {
 
 onUnmounted(async () => {
     capChart?.dispose()
+    capChartResizeObserver?.disconnect()
+    capChartResizeObserver = null
     if (connection) {
         connection.off('ReceiveCapStats')
         await connection.stop()
@@ -323,27 +330,27 @@ onUnmounted(async () => {
         <!-- ── 仪表盘 ── -->
         <template v-if="activeTab === 'dashboard'">
             <div class="grid gap-4 md:grid-cols-4">
-                <AppCard :beam="false">
+                <AppCard :beam-size="80" :beam-duration="8" :beam-delay="0">
                     <div class="p-4 space-y-2">
-                        <div class="text-sm font-medium">{{ t('cap.publishSucceeded') }}</div>
+                        <div class="text-sm font-medium whitespace-nowrap">{{ t('cap.publishSucceeded') }}</div>
                         <div class="text-3xl font-semibold text-green-500">{{ stats.publishSucceeded ?? '-' }}</div>
                     </div>
                 </AppCard>
-                <AppCard :beam="false">
+                <AppCard :beam-size="80" :beam-duration="8" :beam-delay="2">
                     <div class="p-4 space-y-2">
-                        <div class="text-sm font-medium">{{ t('cap.publishFailed') }}</div>
+                        <div class="text-sm font-medium whitespace-nowrap">{{ t('cap.publishFailed') }}</div>
                         <div class="text-3xl font-semibold text-red-500">{{ stats.publishFailed ?? '-' }}</div>
                     </div>
                 </AppCard>
-                <AppCard :beam="false">
+                <AppCard :beam-size="80" :beam-duration="8" :beam-delay="4">
                     <div class="p-4 space-y-2">
-                        <div class="text-sm font-medium">{{ t('cap.consumeSucceeded') }}</div>
+                        <div class="text-sm font-medium whitespace-nowrap">{{ t('cap.consumeSucceeded') }}</div>
                         <div class="text-3xl font-semibold text-blue-500">{{ stats.consumeSucceeded ?? '-' }}</div>
                     </div>
                 </AppCard>
-                <AppCard :beam="false">
+                <AppCard :beam-size="80" :beam-duration="8" :beam-delay="6">
                     <div class="p-4 space-y-2">
-                        <div class="text-sm font-medium">{{ t('cap.consumeFailed') }}</div>
+                        <div class="text-sm font-medium whitespace-nowrap">{{ t('cap.consumeFailed') }}</div>
                         <div class="text-3xl font-semibold text-orange-500">{{ stats.consumeFailed ?? '-' }}</div>
                     </div>
                 </AppCard>
@@ -377,7 +384,7 @@ onUnmounted(async () => {
                 </Button>
             </div>
 
-            <AppCard :beam="false">
+            <AppCard :beam="true">
                 <div class="p-4 pb-2">
                     <div class="text-base font-semibold">
                         {{ activeTab === 'published' ? t('cap.tabPublished') : t('cap.tabReceived') }}
@@ -386,7 +393,7 @@ onUnmounted(async () => {
                         {{ t('management.totalRecords', { total: pageCount * 20 }) }}
                     </div>
                 </div>
-                <div>
+                <div class="overflow-x-auto">
                     <table class="w-full text-sm">
                         <thead>
                             <tr>
@@ -455,11 +462,11 @@ onUnmounted(async () => {
 
         <!-- ── 订阅者 ── -->
         <template v-else-if="activeTab === 'subscribers'">
-            <AppCard :beam="false">
+            <AppCard :beam="true">
                 <div class="p-4 pb-2">
                     <div class="text-base font-semibold">{{ t('cap.tabSubscribers') }}</div>
                 </div>
-                <div>
+                <div class="overflow-x-auto">
                     <table class="w-full text-sm">
                         <thead>
                             <tr>
@@ -491,11 +498,11 @@ onUnmounted(async () => {
 
         <!-- ── 节点 ── -->
         <template v-else-if="activeTab === 'nodes'">
-            <AppCard :beam="false">
+            <AppCard :beam="true">
                 <div class="p-4 pb-2">
                     <div class="text-base font-semibold">{{ t('cap.tabNodes') }}</div>
                 </div>
-                <div>
+                <div class="overflow-x-auto">
                     <table class="w-full text-sm">
                         <thead>
                             <tr>

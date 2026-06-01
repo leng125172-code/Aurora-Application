@@ -128,14 +128,29 @@ const displayValue = computed<string>(() => {
 </script>
 
 <template>
-    <div class="flex min-h-[2rem] items-center gap-2 px-3 py-1 text-xs">
-        <!-- 节点标签 -->
-        <div class="w-44 shrink-0 truncate text-muted-foreground" :title="node.description || node.displayName">
-            {{ node.displayName }}
+    <!-- 外层：flex-wrap 响应式；宽时单行，窄时 key+badge 一行、值换行对齐 -->
+    <div class="flex min-h-[2rem] flex-wrap items-center gap-x-2 gap-y-0.5 px-3 py-1 text-xs">
+        <!-- 节点标签 + 访问模式徽章（始终在同一行） -->
+        <div class="flex shrink-0 items-center gap-1.5" style="min-width: 11rem; max-width: 11rem">
+            <div class="flex-1 truncate text-muted-foreground" :title="node.description || node.displayName">
+                {{ node.displayName }}
+            </div>
+            <span
+                :class="[
+                    'shrink-0 rounded px-1 py-0 text-[10px]',
+                    node.access === 'ReadOnly'
+                        ? 'bg-slate-100 text-slate-400'
+                        : node.access === 'ReadWrite'
+                          ? 'bg-blue-50 text-blue-400'
+                          : 'bg-amber-50 text-amber-500',
+                ]"
+            >
+                {{ node.access === 'ReadWrite' ? 'RW' : node.access === 'ReadOnly' ? 'RO' : node.access }}
+            </span>
         </div>
 
-        <!-- 值区域 -->
-        <div class="flex flex-1 items-center gap-1 overflow-hidden">
+        <!-- 值区域：flex-1 占满剩余空间，换行时与标签列左对齐 -->
+        <div class="flex min-w-0 flex-1 items-center gap-1 overflow-hidden" style="min-width: 8rem">
             <!-- Command 节点：仅执行按钮 -->
             <template v-if="isCommand">
                 <button
@@ -228,19 +243,5 @@ const displayValue = computed<string>(() => {
                 </button>
             </template>
         </div>
-
-        <!-- 访问模式徽章 -->
-        <span
-            :class="[
-                'shrink-0 rounded px-1 py-0 text-[10px]',
-                node.access === 'ReadOnly'
-                    ? 'bg-slate-100 text-slate-400'
-                    : node.access === 'ReadWrite'
-                      ? 'bg-blue-50 text-blue-400'
-                      : 'bg-amber-50 text-amber-500',
-            ]"
-        >
-            {{ node.access === 'ReadWrite' ? 'RW' : node.access === 'ReadOnly' ? 'RO' : node.access }}
-        </span>
     </div>
 </template>

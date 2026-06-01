@@ -35,10 +35,6 @@ public static class ProjectorDbContextModelCreatingExtensions
             // USB HID 连接配置（仅 USB HID 模式有效；VID/PID 由硬件固定，不存储于数据库）
             b.Property(x => x.HidDeviceIndex);
 
-            // 设备信息
-            b.Property(x => x.FirmwareVersion)
-                .HasMaxLength(ProjectorConsts.MaxFirmwareVersionLength);
-
             // 枚举存储为整数
             b.Property(x => x.ConnectionStatus).HasConversion<int>();
             b.Property(x => x.LedStatus).HasConversion<int>();

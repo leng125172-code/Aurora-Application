@@ -116,6 +116,12 @@ public class GetProjectorLogListDto : PagedAndSortedResultRequestDto
 
     /// <summary>是否仅查询失败记录</summary>
     public bool? IsFailedOnly { get; set; }
+
+    /// <summary>开始时间（可选，UTC）</summary>
+    public DateTime? StartTime { get; set; }
+
+    /// <summary>结束时间（可选，UTC）</summary>
+    public DateTime? EndTime { get; set; }
 }
 
 /// <summary>

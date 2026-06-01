@@ -18,7 +18,8 @@
                 <InputText
                     v-model="searchText"
                     :placeholder="t('swaggerPage.searchPlaceholder')"
-                    class="flex-1 min-w-48"
+                    size="small"
+                    class="flex-1 min-w-48 !h-7 !py-0 !text-xs"
                 />
                 <Select
                     v-model="filterMethod"
@@ -26,9 +27,21 @@
                     option-label="label"
                     option-value="value"
                     :placeholder="t('swaggerPage.allMethods')"
-                    class="w-36"
+                    size="small"
+                    class="!h-7 !w-[8rem] !text-xs"
+                    :pt="{
+                        root: { class: '!py-0 !px-2 !h-7 !flex !items-center' },
+                        label: { class: '!text-xs !py-0 !leading-none !truncate !flex !items-center !h-full' },
+                        dropdown: { class: '!w-6 !flex !items-center !justify-center' },
+                    }"
                 />
-                <Button severity="secondary" outlined size="small" @click="toggleAll">
+                <Button
+                    severity="secondary"
+                    outlined
+                    size="small"
+                    class="!h-7 !py-0 !text-xs !px-2 !leading-none whitespace-nowrap"
+                    @click="toggleAll"
+                >
                     {{ allExpanded ? t('swaggerPage.collapseAll') : t('swaggerPage.expandAll') }}
                 </Button>
             </div>

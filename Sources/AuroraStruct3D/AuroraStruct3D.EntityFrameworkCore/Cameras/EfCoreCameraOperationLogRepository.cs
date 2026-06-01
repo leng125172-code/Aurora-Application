@@ -1,5 +1,5 @@
-using AuroraStruct3D.EntityFrameworkCore;
 using AuroraStruct3D.Cameras;
+using AuroraStruct3D.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Volo.Abp.Domain.Repositories.EntityFrameworkCore;
 using Volo.Abp.EntityFrameworkCore;
@@ -25,6 +25,8 @@ public class EfCoreCameraOperationLogRepository
         int maxResultCount,
         CameraOperationType? operationType = null,
         bool onlyFailures = false,
+        DateTime? startTime = null,
+        DateTime? endTime = null,
         CancellationToken cancellationToken = default
     )
     {
@@ -38,6 +40,12 @@ public class EfCoreCameraOperationLogRepository
 
         if (onlyFailures)
             query = query.Where(l => !l.IsSuccess);
+
+        if (startTime.HasValue)
+            query = query.Where(l => l.OccurredAt >= startTime.Value);
+
+        if (endTime.HasValue)
+            query = query.Where(l => l.OccurredAt <= endTime.Value);
 
         return await query
             .OrderByDescending(l => l.OccurredAt)
@@ -51,6 +59,8 @@ public class EfCoreCameraOperationLogRepository
         Guid cameraDeviceId,
         CameraOperationType? operationType = null,
         bool onlyFailures = false,
+        DateTime? startTime = null,
+        DateTime? endTime = null,
         CancellationToken cancellationToken = default
     )
     {
@@ -64,6 +74,12 @@ public class EfCoreCameraOperationLogRepository
 
         if (onlyFailures)
             query = query.Where(l => !l.IsSuccess);
+
+        if (startTime.HasValue)
+            query = query.Where(l => l.OccurredAt >= startTime.Value);
+
+        if (endTime.HasValue)
+            query = query.Where(l => l.OccurredAt <= endTime.Value);
 
         return await query.LongCountAsync(cancellationToken);
     }

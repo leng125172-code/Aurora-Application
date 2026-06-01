@@ -281,17 +281,17 @@ namespace Hangfire.PostgreSql
             {
                 string sql =
                     $@"
-          SELECT ""id"" ""Id"", ""invocationdata"" ""InvocationData"", ""arguments"" ""Arguments"", ""createdat"" ""CreatedAt"", ""expireat"" ""ExpireAt"" 
-          FROM ""{_storage.Options.SchemaName}"".""job"" 
+          SELECT ""id"" ""Id"", ""invocationdata"" ""InvocationData"", ""arguments"" ""Arguments"", ""createdat"" ""CreatedAt"", ""expireat"" ""ExpireAt""
+          FROM ""{_storage.Options.SchemaName}"".""job""
           WHERE ""id"" = @Id;
 
-          SELECT ""jobid"" ""JobId"", ""name"" ""Name"", ""value"" ""Value"" 
-          FROM ""{_storage.Options.SchemaName}"".""jobparameter"" 
+          SELECT ""jobid"" ""JobId"", ""name"" ""Name"", ""value"" ""Value""
+          FROM ""{_storage.Options.SchemaName}"".""jobparameter""
           WHERE ""jobid"" = @Id;
 
-          SELECT ""jobid"" ""JobId"", ""name"" ""Name"", ""reason"" ""Reason"", ""createdat"" ""CreatedAt"", ""data"" ""Data"" 
-          FROM ""{_storage.Options.SchemaName}"".""state"" 
-          WHERE ""jobid"" = @Id 
+          SELECT ""jobid"" ""JobId"", ""name"" ""Name"", ""reason"" ""Reason"", ""createdat"" ""CreatedAt"", ""data"" ""Data""
+          FROM ""{_storage.Options.SchemaName}"".""state""
+          WHERE ""jobid"" = @Id
           ORDER BY ""id"" DESC;
         ";
                 using SqlMapper.GridReader multi = connection.QueryMultiple(
@@ -349,34 +349,34 @@ namespace Hangfire.PostgreSql
             {
                 string sql =
                     $@"
-          SELECT ""statename"" ""State"", COUNT(""id"") ""Count"" 
+          SELECT ""statename"" ""State"", COUNT(""id"") ""Count""
           FROM ""{_storage.Options.SchemaName}"".""job""
           WHERE ""statename"" IS NOT NULL
           GROUP BY ""statename"";
 
-          SELECT COUNT(*) 
+          SELECT COUNT(*)
           FROM ""{_storage.Options.SchemaName}"".""server"";
 
           SELECT SUM(""value"") FROM
             (SELECT SUM(""value"") AS value
-            FROM ""{_storage.Options.SchemaName}"".""counter"" 
+            FROM ""{_storage.Options.SchemaName}"".""counter""
             WHERE ""key"" = 'stats:succeeded'
             UNION ALL
             SELECT SUM(""value"") AS value
-            FROM ""{_storage.Options.SchemaName}"".""aggregatedcounter"" 
+            FROM ""{_storage.Options.SchemaName}"".""aggregatedcounter""
             WHERE ""key"" = 'stats:succeeded') c;
 
           SELECT SUM(""value"") FROM
             (SELECT SUM(""value"") AS value
-            FROM ""{_storage.Options.SchemaName}"".""counter"" 
+            FROM ""{_storage.Options.SchemaName}"".""counter""
             WHERE ""key"" = 'stats:deleted'
             UNION ALL
             SELECT SUM(""value"") AS value
-            FROM ""{_storage.Options.SchemaName}"".""aggregatedcounter"" 
+            FROM ""{_storage.Options.SchemaName}"".""aggregatedcounter""
             WHERE ""key"" = 'stats:deleted') c;
 
-          SELECT COUNT(*) 
-          FROM ""{_storage.Options.SchemaName}"".""set"" 
+          SELECT COUNT(*)
+          FROM ""{_storage.Options.SchemaName}"".""set""
           WHERE ""key"" = 'recurring-jobs';
         ";
 
@@ -575,12 +575,12 @@ namespace Hangfire.PostgreSql
         {
             string jobsSql =
                 $@"
-        SELECT ""j"".""id"" ""Id"", ""j"".""invocationdata"" ""InvocationData"", ""j"".""arguments"" ""Arguments"", ""j"".""createdat"" ""CreatedAt"", 
+        SELECT ""j"".""id"" ""Id"", ""j"".""invocationdata"" ""InvocationData"", ""j"".""arguments"" ""Arguments"", ""j"".""createdat"" ""CreatedAt"",
           ""j"".""expireat"" ""ExpireAt"", NULL ""FetchedAt"", ""j"".""statename"" ""StateName"", ""s"".""reason"" ""StateReason"", ""s"".""data"" ""StateData""
         FROM ""{_storage.Options.SchemaName}"".""job"" ""j""
         LEFT JOIN ""{_storage.Options.SchemaName}"".""state"" ""s"" ON ""j"".""stateid"" = ""s"".""id""
-        WHERE ""j"".""statename"" = @StateName 
-        ORDER BY ""j"".""id"" DESC
+        WHERE ""j"".""statename"" = @StateName
+        ORDER BY ""s"".""id"" DESC NULLS LAST
         LIMIT @Limit OFFSET @Offset;
       ";
 

@@ -157,15 +157,14 @@ function handleDelete(tenant: TenantDto): void {
                 </template>
                 <Column :header="t('management.tenantName')">
                     <template #body="{ data }: { data: TenantDto }">
-                        <div class="max-w-[200px] truncate font-medium" :title="data.name ?? undefined">{{ data.name }}</div>
+                        <div class="max-w-[200px] truncate font-medium" :title="data.name ?? undefined">
+                            {{ data.name }}
+                        </div>
                     </template>
                 </Column>
                 <Column header="ID">
                     <template #body="{ data }: { data: TenantDto }">
-                        <div
-                            class="max-w-[280px] truncate font-mono text-xs text-muted-foreground"
-                            :title="data.id"
-                        >
+                        <div class="max-w-[280px] truncate font-mono text-xs text-muted-foreground" :title="data.id">
                             {{ data.id }}
                         </div>
                     </template>

@@ -63,8 +63,6 @@ export interface CameraDeviceDto {
     readonly imageRotationAngle: number
 
     readonly model: string | null
-    readonly serialNumber: string | null
-    readonly firmwareVersion: string | null
 }
 
 // ─── 管理用输入 DTO ──────────────────────────────────────────────────────────
@@ -416,5 +414,37 @@ export interface CameraSnapshotStateDto {
 /** 获取相机当前完整运行状态快照，用于页面刷新/返回/重连后恢复 UI */
 export async function getCameraSnapshotState(id: string): Promise<CameraSnapshotStateDto> {
     const { data } = await httpClient.get<CameraSnapshotStateDto>(`${BASE}/${id}/camera-snapshot-state`)
+    return data
+}
+
+// ─── 操作日志 ────────────────────────────────────────────────────────────────
+
+/** 相机操作日志 DTO */
+export interface CameraOperationLogDto {
+    readonly id: string
+    readonly cameraDeviceId: string
+    readonly deviceIndex: number
+    readonly operationType: number
+    readonly occurredAt: string
+    readonly isSuccess: boolean
+    readonly parameterSummary: string | null
+    readonly errorMessage: string | null
+    readonly roundTripMs: number
+}
+
+/** 查询相机操作日志请求参数 */
+export interface GetCameraLogListDto {
+    cameraDeviceId?: string
+    operationType?: number
+    isFailedOnly?: boolean
+    startTime?: string
+    endTime?: string
+    skipCount?: number
+    maxResultCount?: number
+}
+
+/** 分页查询指定相机的操作日志（按发生时间倒序） */
+export async function getCameraLogs(params: GetCameraLogListDto = {}): Promise<PagedResultDto<CameraOperationLogDto>> {
+    const { data } = await httpClient.get<PagedResultDto<CameraOperationLogDto>>(`${BASE}/logs`, { params })
     return data
 }

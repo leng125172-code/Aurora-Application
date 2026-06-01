@@ -39,9 +39,6 @@ public class ProjectorDeviceDto : FullAuditedEntityDto<Guid>
 
     // ─── 设备信息 ──────────────────────────────────────────────────────
 
-    /// <summary>固件版本（连接后查询）</summary>
-    public string? FirmwareVersion { get; set; }
-
     /// <summary>设备标志字节 ID（-1 表示未知）</summary>
     public int DeviceHardwareId { get; set; }
 

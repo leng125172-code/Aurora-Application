@@ -25,6 +25,8 @@ public class EfCoreProjectorOperationLogRepository
         int maxResultCount,
         ProjectorOperationType? operationType = null,
         bool onlyFailures = false,
+        DateTime? startTime = null,
+        DateTime? endTime = null,
         CancellationToken cancellationToken = default
     )
     {
@@ -38,6 +40,12 @@ public class EfCoreProjectorOperationLogRepository
 
         if (onlyFailures)
             query = query.Where(l => !l.IsSuccess);
+
+        if (startTime.HasValue)
+            query = query.Where(l => l.OccurredAt >= startTime.Value);
+
+        if (endTime.HasValue)
+            query = query.Where(l => l.OccurredAt <= endTime.Value);
 
         return await query
             .OrderByDescending(l => l.OccurredAt)
@@ -51,6 +59,8 @@ public class EfCoreProjectorOperationLogRepository
         Guid projectorDeviceId,
         ProjectorOperationType? operationType = null,
         bool onlyFailures = false,
+        DateTime? startTime = null,
+        DateTime? endTime = null,
         CancellationToken cancellationToken = default
     )
     {
@@ -64,6 +74,12 @@ public class EfCoreProjectorOperationLogRepository
 
         if (onlyFailures)
             query = query.Where(l => !l.IsSuccess);
+
+        if (startTime.HasValue)
+            query = query.Where(l => l.OccurredAt >= startTime.Value);
+
+        if (endTime.HasValue)
+            query = query.Where(l => l.OccurredAt <= endTime.Value);
 
         return await query.LongCountAsync(cancellationToken);
     }

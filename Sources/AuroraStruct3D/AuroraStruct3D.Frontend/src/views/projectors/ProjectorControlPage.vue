@@ -228,7 +228,7 @@ watch(device, (d) => {
 </script>
 
 <template>
-    <div class="flex flex-col gap-4 p-4">
+    <div class="flex flex-col gap-4">
         <ConfirmDialog />
 
         <!-- ─── 顶部：返回 + 设备信息 ────────────────────────────── -->
@@ -236,12 +236,6 @@ watch(device, (d) => {
             <Button severity="secondary" outlined size="small" @click="router.back()">{{ t('camera.back') }}</Button>
             <div>
                 <h1 class="text-2xl font-bold tracking-tight">{{ device?.name ?? t('projector.ctrlTitle') }}</h1>
-                <p class="text-xs text-muted-foreground">
-                    {{ device?.connectionStatusText }}
-                    <span v-if="device?.firmwareVersion">
-                        · {{ t('projector.ctrlFirmware') }} {{ device.firmwareVersion }}
-                    </span>
-                </p>
             </div>
             <span
                 :class="[
@@ -261,18 +255,13 @@ watch(device, (d) => {
 
         <template v-else>
             <!-- ─── 第一行：LED 控制 + 触发 / 高级 ───────────────── -->
-            <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div class="grid gap-4 grid-cols-[repeat(auto-fill,minmax(min(100%,20rem),1fr))]">
                 <!-- LED 控制 -->
                 <AppCard :beam-size="80" :beam-duration="8">
                     <div class="p-4">
                         <div class="mb-3 text-sm font-semibold">{{ t('projector.ledControl') }}</div>
                         <div class="flex gap-3">
-                            <Button
-                                size="small"
-                                severity="warn"
-                                :disabled="!isConnected || busy"
-                                @click="onLedOn"
-                            >
+                            <Button size="small" severity="warn" :disabled="!isConnected || busy" @click="onLedOn">
                                 {{ t('projector.ledOn') }}
                             </Button>
                             <Button
@@ -319,7 +308,7 @@ watch(device, (d) => {
             </div>
 
             <!-- ─── 第二行：显示模式 + 颜色（多光谱） ────────────── -->
-            <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div class="grid gap-4 grid-cols-[repeat(auto-fill,minmax(min(100%,20rem),1fr))]">
                 <!-- 显示模式（含设为开机图） -->
                 <AppCard :beam-size="80" :beam-duration="8" :beam-delay="1">
                     <div class="p-4">
@@ -389,7 +378,7 @@ watch(device, (d) => {
 
                         <!-- Aura RGB：色轮调色盘 -->
                         <div v-if="selectedColor === ProjectorColor.AuraSync" class="mt-4 flex items-center gap-4">
-                            <ColorPicker v-model="rgbHex" :disabled="!isConnected || busy" inline />
+                            <ColorPicker v-model="rgbHex" :disabled="!isConnected || busy" />
                             <div class="flex flex-col gap-1 text-xs text-muted-foreground">
                                 <span>R {{ rgbR }} &nbsp;G {{ rgbG }} &nbsp;B {{ rgbB }}</span>
                                 <span class="font-mono uppercase">#{{ rgbHex }}</span>
@@ -432,7 +421,7 @@ watch(device, (d) => {
             </div>
 
             <!-- ─── 第三行：图像翻转 + 触发模式 + 棋盘格 ────────── -->
-            <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <div class="grid gap-4 grid-cols-[repeat(auto-fill,minmax(min(100%,14rem),1fr))]">
                 <!-- 图像翻转 -->
                 <AppCard :beam-size="80" :beam-duration="8" :beam-delay="1">
                     <div class="p-4">
@@ -476,8 +465,11 @@ watch(device, (d) => {
                 <!-- 棋盘格像素尺寸 -->
                 <AppCard :beam-size="80" :beam-duration="8" :beam-delay="3">
                     <div class="p-4">
-                        <div class="mb-3 text-sm font-semibold">{{ t('projector.checkerboardSize') }}</div>
-                        <div class="flex items-center gap-3">
+                        <div class="mb-3 text-sm font-semibold">
+                            {{ t('projector.checkerboardSize') }}
+                            <span class="font-normal text-muted-foreground">(px)</span>
+                        </div>
+                        <div class="flex items-center gap-2">
                             <InputNumber
                                 v-model="checkerboardPixelSize"
                                 :min="1"
@@ -486,13 +478,13 @@ watch(device, (d) => {
                                 show-buttons
                                 button-layout="horizontal"
                                 size="small"
-                                input-class="w-16 text-center"
+                                input-class="w-12 text-center"
                             />
-                            <span class="text-xs text-muted-foreground">px</span>
                             <Button
                                 size="small"
                                 severity="secondary"
                                 outlined
+                                class="shrink-0 whitespace-nowrap"
                                 :disabled="!isConnected || busy"
                                 @click="onSetCheckerboard"
                             >
@@ -520,12 +512,7 @@ watch(device, (d) => {
                         </label>
                         <label class="flex items-center gap-1.5">
                             <span>{{ t('projector.registerValue') }}</span>
-                            <InputNumber
-                                v-model="registerValue"
-                                :disabled="busy"
-                                size="small"
-                                input-class="w-20"
-                            />
+                            <InputNumber v-model="registerValue" :disabled="busy" size="small" input-class="w-20" />
                         </label>
                         <Button
                             size="small"

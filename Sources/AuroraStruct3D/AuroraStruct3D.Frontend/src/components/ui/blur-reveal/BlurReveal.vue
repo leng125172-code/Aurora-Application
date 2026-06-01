@@ -53,11 +53,13 @@ function getAnimate() {
             as="div"
             :initial="getInitial()"
             :while-in-view="getAnimate()"
-            :transition="({
-                duration: props.duration,
-                ease: 'easeInOut',
-                delay: props.delay * (index as number),
-            } as any)"
+            :transition="
+                {
+                    duration: props.duration,
+                    ease: 'easeInOut',
+                    delay: props.delay * (index as number),
+                } as any
+            "
         >
             <component :is="child" />
         </Motion>

@@ -13,63 +13,72 @@
             </TabList>
 
             <TabPanels>
-            <!-- 参数 Tab -->
-            <TabPanel value="params" class="space-y-3 mt-3">
-                <div v-if="pathParams.length === 0 && queryParams.length === 0" class="text-sm text-muted-foreground">
-                    {{ t('swaggerPage.noParams') }}
-                </div>
-
-                <div v-if="pathParams.length > 0">
-                    <p class="text-xs font-semibold text-muted-foreground mb-2">{{ t('swaggerPage.pathParams') }}</p>
-                    <div v-for="p in pathParams" :key="p.name" class="flex items-center gap-2 mb-2">
-                        <label class="text-xs font-mono w-32 shrink-0">{{ p.name }}</label>
-                        <InputText
-                            v-model="req.pathParams[p.name]"
-                            :placeholder="p.description ?? p.name"
-                            size="small"
-                            class="flex-1"
-                        />
+                <!-- 参数 Tab -->
+                <TabPanel value="params" class="space-y-3 mt-3">
+                    <div
+                        v-if="pathParams.length === 0 && queryParams.length === 0"
+                        class="text-sm text-muted-foreground"
+                    >
+                        {{ t('swaggerPage.noParams') }}
                     </div>
-                </div>
 
-                <div v-if="queryParams.length > 0">
-                    <p class="text-xs font-semibold text-muted-foreground mb-2">{{ t('swaggerPage.queryParams') }}</p>
-                    <div v-for="p in queryParams" :key="p.name" class="flex items-center gap-2 mb-2">
-                        <label class="text-xs font-mono w-32 shrink-0">{{ p.name }}</label>
-                        <InputText
-                            v-model="req.queryParams[p.name]"
-                            :placeholder="p.description ?? p.name"
-                            size="small"
-                            class="flex-1"
-                        />
+                    <div v-if="pathParams.length > 0">
+                        <p class="text-xs font-semibold text-muted-foreground mb-2">
+                            {{ t('swaggerPage.pathParams') }}
+                        </p>
+                        <div v-for="p in pathParams" :key="p.name" class="flex items-center gap-2 mb-2">
+                            <label class="text-xs font-mono w-32 shrink-0">{{ p.name }}</label>
+                            <InputText
+                                v-model="req.pathParams[p.name]"
+                                :placeholder="p.description ?? p.name"
+                                size="small"
+                                class="flex-1"
+                            />
+                        </div>
                     </div>
-                </div>
-            </TabPanel>
 
-            <!-- 请求体 Tab -->
-            <TabPanel value="body" class="mt-3">
-                <textarea
-                    v-model="req.body"
-                    rows="8"
-                    class="w-full rounded-md border bg-background p-3 font-mono text-xs resize-y focus:outline-none focus:ring-1 focus:ring-ring"
-                    :placeholder="t('swaggerPage.bodyPlaceholder')"
-                />
-            </TabPanel>
+                    <div v-if="queryParams.length > 0">
+                        <p class="text-xs font-semibold text-muted-foreground mb-2">
+                            {{ t('swaggerPage.queryParams') }}
+                        </p>
+                        <div v-for="p in queryParams" :key="p.name" class="flex items-center gap-2 mb-2">
+                            <label class="text-xs font-mono w-32 shrink-0">{{ p.name }}</label>
+                            <InputText
+                                v-model="req.queryParams[p.name]"
+                                :placeholder="p.description ?? p.name"
+                                size="small"
+                                class="flex-1"
+                            />
+                        </div>
+                    </div>
+                </TabPanel>
 
-            <!-- 请求头 Tab -->
-            <TabPanel value="headers" class="mt-3 space-y-2">
-                <div v-for="(_, key) in req.headers" :key="key" class="flex items-center gap-2">
-                    <InputText :model-value="key" readonly class="w-36 font-mono text-xs" />
-                    <InputText v-model="req.headers[key]" class="flex-1 font-mono text-xs" />
-                </div>
-                <Button severity="secondary" outlined size="small" @click="addHeader">{{ t('swaggerPage.addHeader') }}</Button>
-            </TabPanel>
+                <!-- 请求体 Tab -->
+                <TabPanel value="body" class="mt-3">
+                    <textarea
+                        v-model="req.body"
+                        rows="8"
+                        class="w-full rounded-md border bg-background p-3 font-mono text-xs resize-y focus:outline-none focus:ring-1 focus:ring-ring"
+                        :placeholder="t('swaggerPage.bodyPlaceholder')"
+                    />
+                </TabPanel>
+
+                <!-- 请求头 Tab -->
+                <TabPanel value="headers" class="mt-3 space-y-2">
+                    <div v-for="(_, key) in req.headers" :key="key" class="flex items-center gap-2">
+                        <InputText :model-value="key" readonly class="w-36 font-mono text-xs" />
+                        <InputText v-model="req.headers[key]" class="flex-1 font-mono text-xs" />
+                    </div>
+                    <Button severity="secondary" outlined size="small" @click="addHeader">
+                        {{ t('swaggerPage.addHeader') }}
+                    </Button>
+                </TabPanel>
             </TabPanels>
         </Tabs>
 
         <!-- 发送按钮 -->
-        <div class="flex gap-2">
-            <Button :disabled="sending" @click="sendRequest">
+        <div class="flex gap-2 items-center">
+            <Button size="small" :disabled="sending" @click="sendRequest">
                 {{ sending ? t('swaggerPage.sending') : t('swaggerPage.send') }}
             </Button>
             <Button text severity="secondary" size="small" @click="reset">{{ t('swaggerPage.reset') }}</Button>

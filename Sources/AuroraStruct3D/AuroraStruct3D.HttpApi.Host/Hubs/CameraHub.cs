@@ -99,4 +99,13 @@ public class CameraHub : AbpHub<ICameraHub>
         bool canceled = _cameraPreviewService.ReattachPreviewAsync(id, Context.ConnectionId);
         return Task.FromResult(canceled);
     }
+
+    /// <summary>
+    /// 客户端心跳探针：前端定期调用以维持连接活跃，防止长时间等待耗时操作时连接超时断开。
+    /// </summary>
+    /// <returns>服务器 UTC 时间戳（毫秒），供前端计算往返延迟</returns>
+    public Task<long> PingAsync()
+    {
+        return Task.FromResult(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+    }
 }

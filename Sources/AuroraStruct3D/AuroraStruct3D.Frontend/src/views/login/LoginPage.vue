@@ -5,9 +5,10 @@ import { useI18n } from 'vue-i18n'
 import Button from 'primevue/button'
 import InputText from 'primevue/inputtext'
 import Password from 'primevue/password'
-import { TextGlitch } from '@/components/ui/text-glitch'
+import { SparklesText } from '@/components/ui/sparkles-text'
 import { AppCard } from '@/components/primevue'
 import LoginTopBar from '@/layouts/LoginTopBar.vue'
+import { FlickeringGrid } from '@/components/ui/flickering-grid'
 import { loginAsync } from '@/api/auth'
 import { getApplicationConfigurationAsync } from '@/api/abp-application'
 import { useAuthStore } from '@/stores/auth'
@@ -73,10 +74,20 @@ async function handleSubmit(): Promise<void> {
         <LoginTopBar />
     </div>
 
+    <!-- FlickeringGrid 全屏背景 -->
+    <FlickeringGrid
+        class="absolute inset-0 z-[0]"
+        color="#6366f1"
+        :square-size="4"
+        :grid-gap="6"
+        :flicker-chance="0.2"
+        :max-opacity="0.15"
+    />
+
     <!-- 登录卡片 -->
     <div class="relative z-[1] flex h-full w-full flex-col items-center justify-center gap-8 px-4">
         <!-- 顶部 Glitch 大标题（保留 Inspira UI 视觉效果） -->
-        <TextGlitch :text="t('login.title')" :speed="1" :enable-shadows="true" class="!text-4xl md:!text-5xl" />
+        <SparklesText :text="t('login.title')" class="!text-4xl md:!text-5xl" />
 
         <AppCard class="w-full max-w-md shadow-2xl" :beam-size="160">
             <template #subtitle>
@@ -86,33 +97,36 @@ async function handleSubmit(): Promise<void> {
             <template #content>
                 <form class="space-y-4" @submit.prevent="handleSubmit">
                     <!-- 租户 -->
-                    <div class="space-y-2">
+                    <div class="flex flex-col gap-2">
                         <label for="login-tenant" class="text-sm font-medium">{{ t('login.tenant') }}</label>
                         <InputText
                             id="login-tenant"
                             v-model="tenantName"
+                            size="small"
                             :placeholder="t('login.tenantPlaceholder')"
                             autocomplete="organization"
                             class="w-full"
                         />
                     </div>
                     <!-- 用户名 -->
-                    <div class="space-y-2">
+                    <div class="flex flex-col gap-2">
                         <label for="login-username" class="text-sm font-medium">{{ t('login.username') }}</label>
                         <InputText
                             id="login-username"
                             v-model="username"
+                            size="small"
                             autocomplete="username"
                             class="w-full"
                             @keyup.enter="handleSubmit"
                         />
                     </div>
                     <!-- 密码 -->
-                    <div class="space-y-2">
+                    <div class="flex flex-col gap-2">
                         <label for="login-password" class="text-sm font-medium">{{ t('login.password') }}</label>
                         <Password
                             input-id="login-password"
                             v-model="password"
+                            size="small"
                             :feedback="false"
                             toggle-mask
                             autocomplete="current-password"
@@ -128,6 +142,7 @@ async function handleSubmit(): Promise<void> {
                 <Button
                     class="w-full"
                     :label="submitting ? t('login.signingIn') : t('login.signIn')"
+                    size="small"
                     :loading="submitting"
                     :disabled="submitting"
                     @click="handleSubmit"

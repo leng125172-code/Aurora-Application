@@ -47,6 +47,15 @@ public class EfCoreMotorAxisRepository
     }
 
     /// <inheritdoc/>
+    public async Task<int?> GetMaxAxisIndexAsync(CancellationToken cancellationToken = default)
+    {
+        AuroraStruct3DDbContext context = await GetDbContextAsync();
+        return await context
+            .MotorAxes.AsNoTracking()
+            .MaxAsync(a => (int?)a.AxisIndex, cancellationToken);
+    }
+
+    /// <inheritdoc/>
     public async Task<List<MotorAxis>> GetEnabledListAsync(
         CancellationToken cancellationToken = default
     )

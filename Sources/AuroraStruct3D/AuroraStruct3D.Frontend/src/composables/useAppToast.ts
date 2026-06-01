@@ -23,32 +23,32 @@ type ToastSeverity = 'success' | 'info' | 'warn' | 'error' | 'secondary' | 'cont
 
 /** Toast 可选参数 */
 export interface AppToastOptions {
-    /** 标题，可选；不传则按严重程度使用默认中文标题 */
-    title?: string
-    /** 自动关闭毫秒数；不传则按严重程度使用默认值；显式传 0 表示不自动关闭 */
-    duration?: number
-    /** 唯一分组（用于覆盖/避免重复，目前 PrimeVue 通过 group 区分容器，可不传） */
-    group?: string
+  /** 标题，可选；不传则按严重程度使用默认中文标题 */
+  title?: string
+  /** 自动关闭毫秒数；不传则按严重程度使用默认值；显式传 0 表示不自动关闭 */
+  duration?: number
+  /** 唯一分组（用于覆盖/避免重复，目前 PrimeVue 通过 group 区分容器，可不传） */
+  group?: string
 }
 
 /** 严重程度 → 默认中文标题 */
 const DEFAULT_TITLES: Record<ToastSeverity, string> = {
-    success: '成功',
-    info: '提示',
-    warn: '警告',
-    error: '错误',
-    secondary: '消息',
-    contrast: '消息',
+  success: '成功',
+  info: '提示',
+  warn: '警告',
+  error: '错误',
+  secondary: '消息',
+  contrast: '消息',
 }
 
 /** 严重程度 → 默认显示毫秒数 */
 const DEFAULT_LIFE: Record<ToastSeverity, number> = {
-    success: 3000,
-    info: 3000,
-    warn: 4000,
-    error: 5000,
-    secondary: 3000,
-    contrast: 3000,
+  success: 3000,
+  info: 3000,
+  warn: 4000,
+  error: 5000,
+  secondary: 3000,
+  contrast: 3000,
 }
 
 /**
@@ -58,17 +58,17 @@ const DEFAULT_LIFE: Record<ToastSeverity, number> = {
  *  - 其余 String() 兜底
  */
 function normalizeMessage(input: unknown): string {
-    if (input == null) return ''
-    if (typeof input === 'string') return input
-    if (input instanceof Error) return input.message
-    if (typeof input === 'object') {
-        try {
-            return JSON.stringify(input)
-        } catch {
-            return String(input)
-        }
+  if (input == null) return ''
+  if (typeof input === 'string') return input
+  if (input instanceof Error) return input.message
+  if (typeof input === 'object') {
+    try {
+      return JSON.stringify(input)
+    } catch {
+      return String(input)
     }
-    return String(input)
+  }
+  return String(input)
 }
 
 /**
@@ -77,52 +77,52 @@ function normalizeMessage(input: unknown): string {
  * @returns Toast API 对象，提供 success / error / warn / info / show / clear 方法
  */
 export function useAppToast() {
-    const toast = useToast()
+  const toast = useToast()
 
-    /** 内部统一 add 方法 */
-    function add(severity: ToastSeverity, message: unknown, options?: AppToastOptions): void {
-        const summary = options?.title ?? DEFAULT_TITLES[severity]
-        const life = options?.duration ?? DEFAULT_LIFE[severity]
-        toast.add({
-            severity,
-            summary,
-            detail: normalizeMessage(message),
-            life: life > 0 ? life : undefined,
-            group: options?.group,
-        })
-    }
+  /** 内部统一 add 方法 */
+  function add(severity: ToastSeverity, message: unknown, options?: AppToastOptions): void {
+    const summary = options?.title ?? DEFAULT_TITLES[severity]
+    const life = options?.duration ?? DEFAULT_LIFE[severity]
+    toast.add({
+      severity,
+      summary,
+      detail: normalizeMessage(message),
+      life: life > 0 ? life : undefined,
+      group: options?.group,
+    })
+  }
 
-    return {
-        /** 成功提示 */
-        success(message: unknown, options?: AppToastOptions): void {
-            add('success', message, options)
-        },
-        /** 错误提示（默认展示 5 秒） */
-        error(message: unknown, options?: AppToastOptions): void {
-            add('error', message, options)
-        },
-        /** 警告提示（兼容 vue-sonner `toast.warning`） */
-        warn(message: unknown, options?: AppToastOptions): void {
-            add('warn', message, options)
-        },
-        /** 警告提示别名，方便从 vue-sonner 直接迁移 */
-        warning(message: unknown, options?: AppToastOptions): void {
-            add('warn', message, options)
-        },
-        /** 普通信息提示 */
-        info(message: unknown, options?: AppToastOptions): void {
-            add('info', message, options)
-        },
-        /** 透传任意 severity */
-        show(severity: ToastSeverity, message: unknown, options?: AppToastOptions): void {
-            add(severity, message, options)
-        },
-        /** 清空所有 Toast；可选传入 group 仅清空指定分组 */
-        clear(group?: string): void {
-            if (group) toast.removeGroup(group)
-            else toast.removeAllGroups()
-        },
-    }
+  return {
+    /** 成功提示 */
+    success(message: unknown, options?: AppToastOptions): void {
+      add('success', message, options)
+    },
+    /** 错误提示（默认展示 5 秒） */
+    error(message: unknown, options?: AppToastOptions): void {
+      add('error', message, options)
+    },
+    /** 警告提示（兼容 vue-sonner `toast.warning`） */
+    warn(message: unknown, options?: AppToastOptions): void {
+      add('warn', message, options)
+    },
+    /** 警告提示别名，方便从 vue-sonner 直接迁移 */
+    warning(message: unknown, options?: AppToastOptions): void {
+      add('warn', message, options)
+    },
+    /** 普通信息提示 */
+    info(message: unknown, options?: AppToastOptions): void {
+      add('info', message, options)
+    },
+    /** 透传任意 severity */
+    show(severity: ToastSeverity, message: unknown, options?: AppToastOptions): void {
+      add(severity, message, options)
+    },
+    /** 清空所有 Toast；可选传入 group 仅清空指定分组 */
+    clear(group?: string): void {
+      if (group) toast.removeGroup(group)
+      else toast.removeAllGroups()
+    },
+  }
 }
 
 /** Toast API 类型，便于在业务侧导入参数 */

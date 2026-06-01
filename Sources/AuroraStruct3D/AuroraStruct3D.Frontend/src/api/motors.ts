@@ -145,6 +145,29 @@ export interface RegisterReadResultDto {
     readonly values: number[]
 }
 
+export interface MotorOperationLogDto {
+    readonly id: string
+    readonly motorAxisId: string
+    readonly slaveId: number
+    readonly operationType: number
+    readonly occurredAt: string
+    readonly isSuccess: boolean
+    readonly commandCode: string | null
+    readonly parameterSummary: string | null
+    readonly errorMessage: string | null
+    readonly roundTripMs: number
+}
+
+export interface GetMotorLogListDto {
+    motorAxisId?: string
+    operationType?: number
+    isFailedOnly?: boolean
+    startTime?: string
+    endTime?: string
+    skipCount?: number
+    maxResultCount?: number
+}
+
 const BASE = '/api/app/motor-device'
 
 export async function getMotorAxisList(params: GetMotorAxisListDto = {}): Promise<PagedResultDto<MotorAxisDto>> {
@@ -240,5 +263,10 @@ export async function readMotorHoldingRegisters(
 
 export async function writeMotorSingleRegister(id: string, dto: WriteSingleRegisterInput): Promise<boolean> {
     const { data } = await httpClient.post<boolean>(`${BASE}/${id}/write-single-register`, dto)
+    return data
+}
+
+export async function getMotorLogs(params: GetMotorLogListDto = {}): Promise<PagedResultDto<MotorOperationLogDto>> {
+    const { data } = await httpClient.get<PagedResultDto<MotorOperationLogDto>>(`${BASE}/logs`, { params })
     return data
 }

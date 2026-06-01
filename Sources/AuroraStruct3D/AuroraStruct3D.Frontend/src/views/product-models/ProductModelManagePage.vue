@@ -18,8 +18,12 @@ import { useConfirm } from 'primevue/useconfirm'
 import Button from 'primevue/button'
 import InputText from 'primevue/inputtext'
 import Select from 'primevue/select'
+import DatePicker from 'primevue/datepicker'
+import DataTable from 'primevue/datatable'
+import Column from 'primevue/column'
 import Dialog from 'primevue/dialog'
 import ConfirmDialog from 'primevue/confirmdialog'
+import { AppCard } from '@/components/primevue'
 import * as THREE from 'three'
 import { PLYLoader } from 'three/examples/jsm/loaders/PLYLoader.js'
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js'
@@ -77,8 +81,8 @@ const maxResultCount = ref(20)
 const filterText = ref('')
 const filterFormat = ref<ProductModelFormat | null>(null)
 const filterStatus = ref<ProductModelConversionStatus | null>(null)
-const filterStartTime = ref('')
-const filterEndTime = ref('')
+const filterStartTime = ref<Date | null>(null)
+const filterEndTime = ref<Date | null>(null)
 
 /** 格式选项 */
 const formatOptions = [
@@ -150,8 +154,8 @@ async function loadList(): Promise<void> {
             filter: filterText.value || null,
             fileFormat: filterFormat.value,
             conversionStatus: filterStatus.value,
-            startTime: filterStartTime.value || null,
-            endTime: filterEndTime.value || null,
+            startTime: filterStartTime.value ? filterStartTime.value.toISOString() : null,
+            endTime: filterEndTime.value ? filterEndTime.value.toISOString() : null,
             skipCount: skipCount.value,
             maxResultCount: maxResultCount.value,
             sorting: 'CreationTime DESC',
@@ -173,8 +177,8 @@ function handleReset(): void {
     filterText.value = ''
     filterFormat.value = null
     filterStatus.value = null
-    filterStartTime.value = ''
-    filterEndTime.value = ''
+    filterStartTime.value = null
+    filterEndTime.value = null
     skipCount.value = 0
     loadList()
 }
@@ -182,18 +186,9 @@ function handleReset(): void {
 const totalPages = computed(() => Math.ceil(total.value / maxResultCount.value))
 const currentPage = computed(() => Math.floor(skipCount.value / maxResultCount.value) + 1)
 
-function prevPage(): void {
-    if (skipCount.value >= maxResultCount.value) {
-        skipCount.value -= maxResultCount.value
-        loadList()
-    }
-}
-
-function nextPage(): void {
-    if (currentPage.value < totalPages.value) {
-        skipCount.value += maxResultCount.value
-        loadList()
-    }
+function goToPage(page: number): void {
+    skipCount.value = (page - 1) * maxResultCount.value
+    loadList()
 }
 
 // ===================== 上传对话框 =====================
@@ -611,180 +606,292 @@ onBeforeUnmount(() => {
 <template>
     <div class="space-y-4">
         <!-- 页面标题 -->
-        <div class="flex items-center justify-between">
-            <h1 class="text-2xl font-bold tracking-tight">{{ t('productModel.title') }}</h1>
-            <div class="flex gap-2">
-                <Button severity="secondary" outlined :disabled="loading" @click="loadList">
+        <h1 class="text-2xl font-bold tracking-tight">{{ t('productModel.title') }}</h1>
+
+        <!-- 主内容卡片：操作按钮 + 筛选 + 表格 + 分页 -->
+        <AppCard :beam="true">
+            <!-- 操作按钮区 -->
+            <div class="flex items-center gap-2 border-b border-border/40 px-4 py-3">
+                <Button severity="secondary" outlined size="small" :disabled="loading" @click="loadList">
                     <RefreshCw :class="['size-4', loading && 'animate-spin']" />
                 </Button>
-                <Button severity="secondary" outlined @click="openCleanUpConfirm">
+                <Button severity="secondary" outlined size="small" @click="openCleanUpConfirm">
                     <Eraser class="mr-1 size-4" />
                     {{ t('productModel.cleanUp') }}
                 </Button>
-                <Button @click="openUpload">
+                <Button size="small" @click="openUpload">
                     <Upload class="mr-1 size-4" />
                     {{ t('productModel.upload') }}
                 </Button>
             </div>
-        </div>
 
-        <!-- 搜索栏 -->
-        <div class="flex flex-wrap gap-2">
-            <InputText
-                v-model="filterText"
-                :placeholder="t('productModel.searchPlaceholder')"
-                class="w-52"
-                @keydown.enter="handleSearch"
-            />
-            <Select
-                v-model="filterFormat"
-                :options="formatOptions"
-                option-label="label"
-                option-value="value"
-                :placeholder="t('productModel.formatPlaceholder')"
-                show-clear
-                class="w-36"
-            />
-            <Select
-                v-model="filterStatus"
-                :options="statusOptions"
-                option-label="label"
-                option-value="value"
-                :placeholder="t('productModel.statusPlaceholder')"
-                show-clear
-                class="w-36"
-            />
-            <InputText v-model="filterStartTime" type="date" class="w-36" :placeholder="t('productModel.startDate')" />
-            <InputText v-model="filterEndTime" type="date" class="w-36" :placeholder="t('productModel.endDate')" />
-            <Button severity="secondary" outlined @click="handleSearch">
-                <Search class="mr-1 size-4" />
-                {{ t('common.search') }}
-            </Button>
-            <Button text severity="secondary" @click="handleReset">{{ t('common.reset') }}</Button>
-        </div>
-
-        <!-- 数据表格 -->
-        <div class="rounded-md border">
-            <table class="w-full text-sm">
-                <thead>
-                    <tr>
-                        <th>{{ t('productModel.name') }}</th>
-                        <th>{{ t('productModel.format') }}</th>
-                        <th>{{ t('productModel.fileSize') }}</th>
-                        <th>{{ t('productModel.conversionStatus') }}</th>
-                        <th>{{ t('productModel.uploader') }}</th>
-                        <th>{{ t('productModel.uploadTime') }}</th>
-                        <th class="text-right whitespace-nowrap">{{ t('common.actions') }}</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr v-if="loading">
-                        <td colspan="7" class="py-8 text-center text-muted-foreground">
-                            {{ t('common.loading') }}
-                        </td>
-                    </tr>
-                    <tr v-else-if="items.length === 0">
-                        <td colspan="7" class="py-8 text-center text-muted-foreground">
-                            {{ t('common.noData') }}
-                        </td>
-                    </tr>
-                    <tr v-for="item in items" :key="item.id">
-                        <td class="font-medium">
-                            <div class="max-w-[200px] truncate" :title="item.name">{{ item.name }}</div>
-                        </td>
-                        <td>
-                            <Tag severity="info" :value="item.fileFormatDisplay" />
-                        </td>
-                        <td>{{ formatFileSize(item.fileSizeBytes) }}</td>
-                        <td>
-                            <Tag :severity="statusVariant(item.conversionStatus)" :value="statusLabel(item.conversionStatus)" />
-                        </td>
-                        <td>
-                            <div class="max-w-[120px] truncate" :title="item.uploaderUserName ?? '-'">
-                                {{ item.uploaderUserName ?? '-' }}
-                            </div>
-                        </td>
-                        <td class="whitespace-nowrap">
-                            {{ new Date(item.creationTime).toLocaleString() }}
-                        </td>
-                        <td class="text-right">
-                            <div class="flex justify-end gap-1">
-                                <!-- PLY 预览（仅 isReady 可预览） -->
-                                <Button
-                                    v-if="item.isReady"
-                                    text
-                                    severity="secondary"
-                                    :title="t('productModel.preview')"
-                                    @click="openPreview(item)"
-                                >
-                                    <Eye class="size-4" />
-                                </Button>
-                                <!-- 下载 -->
-                                <Button
-                                    text
-                                    severity="secondary"
-                                    :title="t('productModel.download')"
-                                    @click="handleDownload(item)"
-                                >
-                                    <Download class="size-4" />
-                                </Button>
-                                <!-- 重命名 -->
-                                <Button
-                                    text
-                                    severity="secondary"
-                                    :title="t('productModel.rename')"
-                                    @click="openRename(item)"
-                                >
-                                    <Pencil class="size-4" />
-                                </Button>
-                                <!-- 重试转换（仅失败状态） -->
-                                <Button
-                                    v-if="item.conversionStatus === ProductModelConversionStatus.Failed"
-                                    text
-                                    severity="secondary"
-                                    :title="t('productModel.retryConversion')"
-                                    :disabled="retrying === item.id"
-                                    @click="handleRetry(item)"
-                                >
-                                    <RotateCcw :class="['size-4', retrying === item.id && 'animate-spin']" />
-                                </Button>
-                                <!-- 删除 -->
-                                <Button
-                                    text
-                                    severity="secondary"
-                                    :title="t('common.delete')"
-                                    :disabled="deleting === item.id"
-                                    @click="openDeleteConfirm(item)"
-                                >
-                                    <Trash2 class="size-4 text-destructive" />
-                                </Button>
-                            </div>
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
-
-        <!-- 分页 -->
-        <div v-if="totalPages > 1" class="flex items-center justify-between">
-            <span class="text-sm text-muted-foreground">
-                {{ t('productModel.paginationInfo', { total, current: currentPage, totalPages }) }}
-            </span>
-            <div class="flex gap-2">
-                <Button severity="secondary" outlined size="small" :disabled="currentPage <= 1" @click="prevPage">
-                    {{ t('productModel.prevPage') }}
-                </Button>
-                <Button
-                    severity="secondary"
-                    outlined
-                    size="small"
-                    :disabled="currentPage >= totalPages"
-                    @click="nextPage"
+            <!-- 筛选区 -->
+            <div class="flex flex-col gap-3 border-b border-border/40 px-3 py-2">
+                <div
+                    class="grid items-center gap-x-3 gap-y-2"
+                    style="grid-template-columns: repeat(auto-fill, 5.5rem 13rem)"
                 >
-                    {{ t('productModel.nextPage') }}
-                </Button>
+                    <span class="whitespace-nowrap text-sm text-muted-foreground">{{ t('productModel.name') }}</span>
+                    <InputText
+                        v-model="filterText"
+                        size="small"
+                        class="!text-xs w-full"
+                        :placeholder="t('productModel.searchPlaceholder')"
+                        @keydown.enter="handleSearch"
+                    />
+                    <span class="whitespace-nowrap text-sm text-muted-foreground">{{ t('productModel.format') }}</span>
+                    <Select
+                        v-model="filterFormat"
+                        :options="formatOptions"
+                        option-label="label"
+                        option-value="value"
+                        :placeholder="t('productModel.formatPlaceholder')"
+                        show-clear
+                        size="small"
+                        class="!text-xs w-full"
+                        :pt="{
+                            root: { class: '!py-0 !px-2 !text-xs !h-7 !flex !items-center' },
+                            label: {
+                                class: '!text-xs !py-0 !leading-none !truncate !flex-1 !flex !items-center !h-full',
+                            },
+                            dropdown: { class: '!w-6 !flex !items-center !justify-center' },
+                        }"
+                        @change="handleSearch"
+                    />
+                    <span class="whitespace-nowrap text-sm text-muted-foreground">
+                        {{ t('productModel.conversionStatus') }}
+                    </span>
+                    <Select
+                        v-model="filterStatus"
+                        :options="statusOptions"
+                        option-label="label"
+                        option-value="value"
+                        :placeholder="t('productModel.statusPlaceholder')"
+                        show-clear
+                        size="small"
+                        class="!text-xs w-full"
+                        :pt="{
+                            root: { class: '!py-0 !px-2 !text-xs !h-7 !flex !items-center' },
+                            label: {
+                                class: '!text-xs !py-0 !leading-none !truncate !flex-1 !flex !items-center !h-full',
+                            },
+                            dropdown: { class: '!w-6 !flex !items-center !justify-center' },
+                        }"
+                        @change="handleSearch"
+                    />
+                    <span class="whitespace-nowrap text-sm text-muted-foreground">
+                        {{ t('productModel.startDate') }}
+                    </span>
+                    <DatePicker
+                        v-model="filterStartTime"
+                        show-time
+                        show-icon
+                        fluid
+                        :showOnFocus="false"
+                        size="small"
+                        show-button-bar
+                        @date-select="handleSearch"
+                        @clear-click="handleSearch"
+                    />
+                    <span class="whitespace-nowrap text-sm text-muted-foreground">
+                        {{ t('productModel.endDate') }}
+                    </span>
+                    <DatePicker
+                        v-model="filterEndTime"
+                        show-time
+                        show-icon
+                        fluid
+                        :showOnFocus="false"
+                        size="small"
+                        show-button-bar
+                        @date-select="handleSearch"
+                        @clear-click="handleSearch"
+                    />
+                </div>
+                <!-- 操作行 -->
+                <div class="flex items-center gap-3">
+                    <Button severity="secondary" outlined size="small" @click="handleSearch">
+                        <Search class="mr-1 size-4" />
+                        {{ t('common.search') }}
+                    </Button>
+                    <Button text severity="secondary" size="small" @click="handleReset">
+                        {{ t('common.reset') }}
+                    </Button>
+                    <span class="ml-auto text-xs text-muted-foreground">
+                        {{ t('management.totalRecords', { total }) }}
+                    </span>
+                </div>
             </div>
-        </div>
+
+            <!-- 数据表格 (PrimeVue DataTable) -->
+            <DataTable
+                :value="items"
+                :loading="loading"
+                :lazy="true"
+                :paginator="false"
+                striped-rows
+                size="small"
+                data-key="id"
+                :pt="{ root: { class: 'overflow-hidden' } }"
+            >
+                <template #empty>
+                    <div class="py-6 text-center text-muted-foreground">{{ t('common.noData') }}</div>
+                </template>
+                <template #loading>
+                    <div class="py-6 text-center text-muted-foreground">{{ t('common.loading') }}</div>
+                </template>
+
+                <Column :header="t('productModel.name')" style="min-width: 10rem; max-width: 16rem">
+                    <template #body="{ data }">
+                        <div class="truncate" :title="data.name">{{ data.name }}</div>
+                    </template>
+                </Column>
+                <Column :header="t('productModel.format')" style="min-width: 5rem">
+                    <template #body="{ data }">
+                        <Tag severity="info" :value="data.fileFormatDisplay" />
+                    </template>
+                </Column>
+                <Column :header="t('productModel.fileSize')" style="min-width: 6rem">
+                    <template #body="{ data }">{{ formatFileSize(data.fileSizeBytes) }}</template>
+                </Column>
+                <Column :header="t('productModel.conversionStatus')" style="min-width: 8rem">
+                    <template #body="{ data }">
+                        <Tag
+                            :severity="statusVariant(data.conversionStatus)"
+                            :value="statusLabel(data.conversionStatus)"
+                        />
+                    </template>
+                </Column>
+                <Column :header="t('productModel.uploader')" style="min-width: 8rem">
+                    <template #body="{ data }">
+                        <div class="max-w-[120px] truncate" :title="data.uploaderUserName ?? '-'">
+                            {{ data.uploaderUserName ?? '-' }}
+                        </div>
+                    </template>
+                </Column>
+                <Column :header="t('productModel.uploadTime')" style="min-width: 11rem">
+                    <template #body="{ data }">
+                        <span class="tabular-nums">{{ new Date(data.creationTime).toLocaleString() }}</span>
+                    </template>
+                </Column>
+                <Column :header="t('common.actions')" style="min-width: 10rem">
+                    <template #body="{ data }">
+                        <div class="flex justify-end gap-1">
+                            <!-- PLY 预览（仅 isReady 可预览） -->
+                            <Button
+                                v-if="data.isReady"
+                                text
+                                severity="secondary"
+                                size="small"
+                                :title="t('productModel.preview')"
+                                @click="openPreview(data)"
+                            >
+                                <Eye class="size-4" />
+                            </Button>
+                            <!-- 下载 -->
+                            <Button
+                                text
+                                severity="secondary"
+                                size="small"
+                                :title="t('productModel.download')"
+                                @click="handleDownload(data)"
+                            >
+                                <Download class="size-4" />
+                            </Button>
+                            <!-- 重命名 -->
+                            <Button
+                                text
+                                severity="secondary"
+                                size="small"
+                                :title="t('productModel.rename')"
+                                @click="openRename(data)"
+                            >
+                                <Pencil class="size-4" />
+                            </Button>
+                            <!-- 重试转换（仅失败状态） -->
+                            <Button
+                                v-if="data.conversionStatus === ProductModelConversionStatus.Failed"
+                                text
+                                severity="secondary"
+                                size="small"
+                                :title="t('productModel.retryConversion')"
+                                :disabled="retrying === data.id"
+                                @click="handleRetry(data)"
+                            >
+                                <RotateCcw :class="['size-4', retrying === data.id && 'animate-spin']" />
+                            </Button>
+                            <!-- 删除 -->
+                            <Button
+                                text
+                                severity="secondary"
+                                size="small"
+                                :title="t('common.delete')"
+                                :disabled="deleting === data.id"
+                                @click="openDeleteConfirm(data)"
+                            >
+                                <Trash2 class="size-4 text-destructive" />
+                            </Button>
+                        </div>
+                    </template>
+                </Column>
+            </DataTable>
+
+            <!-- 自定义分页控件 -->
+            <div
+                v-if="total > maxResultCount"
+                class="flex items-center justify-between border-t border-border/50 px-4 py-3 text-sm"
+            >
+                <span class="text-xs text-muted-foreground">
+                    {{ t('management.totalRecords', { total }) }}
+                    &nbsp;·&nbsp;
+                    {{
+                        t('management.pageRange', {
+                            from: (currentPage - 1) * maxResultCount + 1,
+                            to: Math.min(currentPage * maxResultCount, total),
+                        })
+                    }}
+                </span>
+                <div class="flex items-center gap-1">
+                    <Button
+                        severity="secondary"
+                        outlined
+                        size="small"
+                        :disabled="currentPage <= 1 || loading"
+                        @click="goToPage(1)"
+                    >
+                        «
+                    </Button>
+                    <Button
+                        severity="secondary"
+                        outlined
+                        size="small"
+                        :disabled="currentPage <= 1 || loading"
+                        @click="goToPage(currentPage - 1)"
+                    >
+                        ‹
+                    </Button>
+                    <span class="px-3 text-muted-foreground">{{ currentPage }} / {{ totalPages }}</span>
+                    <Button
+                        severity="secondary"
+                        outlined
+                        size="small"
+                        :disabled="currentPage >= totalPages || loading"
+                        @click="goToPage(currentPage + 1)"
+                    >
+                        ›
+                    </Button>
+                    <Button
+                        severity="secondary"
+                        outlined
+                        size="small"
+                        :disabled="currentPage >= totalPages || loading"
+                        @click="goToPage(totalPages)"
+                    >
+                        »
+                    </Button>
+                </div>
+            </div>
+        </AppCard>
     </div>
 
     <!-- ===================== 全局确认对话框（删除 / 清理） ===================== -->
@@ -874,10 +981,7 @@ onBeforeUnmount(() => {
                             class="size-4 animate-spin text-primary"
                         />
                         <!-- 转换成功：勾号 -->
-                        <CheckCircle
-                            v-else-if="qItem.conversionState === 'success'"
-                            class="size-4 text-green-500"
-                        />
+                        <CheckCircle v-else-if="qItem.conversionState === 'success'" class="size-4 text-green-500" />
                         <!-- 转换失败：叉号 -->
                         <XCircle v-else-if="qItem.conversionState === 'failed'" class="size-4 text-destructive" />
                     </div>
@@ -911,10 +1015,14 @@ onBeforeUnmount(() => {
         </div>
 
         <template #footer>
-            <Button severity="secondary" outlined @click="showUpload = false">
+            <Button severity="secondary" outlined size="small" @click="showUpload = false">
                 {{ t('productModel.close') }}
             </Button>
-            <Button :disabled="uploadQueue.filter((i) => i.state === 'idle').length === 0" @click="startUploadAll">
+            <Button
+                size="small"
+                :disabled="uploadQueue.filter((i) => i.state === 'idle').length === 0"
+                @click="startUploadAll"
+            >
                 {{ t('productModel.startUpload') }}
             </Button>
         </template>
@@ -927,21 +1035,22 @@ onBeforeUnmount(() => {
         :header="t('productModel.renameTitle')"
         :style="{ width: '420px', maxWidth: '90vw' }"
     >
-        <div class="space-y-2 py-2">
+        <div class="flex flex-col gap-2 p-3">
             <label class="text-sm">{{ t('productModel.renameLabel') }}</label>
             <InputText
                 v-model="renameName"
                 :placeholder="t('productModel.renamePlaceholder')"
                 maxlength="256"
-                class="w-full"
+                size="small"
+                class="!text-xs w-full"
                 @keydown.enter="submitRename"
             />
         </div>
         <template #footer>
-            <Button severity="secondary" outlined @click="showRename = false">
+            <Button severity="secondary" outlined size="small" @click="showRename = false">
                 {{ t('common.cancel') }}
             </Button>
-            <Button :disabled="renaming || !renameName.trim()" @click="submitRename">
+            <Button size="small" :disabled="renaming || !renameName.trim()" @click="submitRename">
                 <RefreshCw v-if="renaming" class="mr-1 size-4 animate-spin" />
                 {{ t('common.confirm') }}
             </Button>
@@ -965,7 +1074,7 @@ onBeforeUnmount(() => {
             <canvas ref="previewCanvasRef" class="size-full" />
         </div>
         <template #footer>
-            <Button severity="secondary" outlined @click="showPreview = false">
+            <Button severity="secondary" outlined size="small" @click="showPreview = false">
                 {{ t('productModel.close') }}
             </Button>
         </template>

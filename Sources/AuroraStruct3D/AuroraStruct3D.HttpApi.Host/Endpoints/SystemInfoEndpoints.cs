@@ -25,7 +25,8 @@ public static class SystemInfoEndpoints
     /// </summary>
     public static IEndpointRouteBuilder MapSystemInfoApi(this IEndpointRouteBuilder endpoints)
     {
-        endpoints.MapGet("/api/system-info", HandleGetSystemInfo);
+        endpoints.MapGet("/api/system-info", (Delegate)HandleGetSystemInfo);
+        endpoints.MapGet("/api/system-info/assemblies", (Delegate)HandleGetAssemblies);
         return endpoints;
     }
 
@@ -65,20 +66,52 @@ public static class SystemInfoEndpoints
             Uptime = now - processStart,
         };
 
-        List<AssemblyInfoDto> assemblies = AppDomain
+        return Results.Ok(new SystemInfoDto { Server = server });
+    }
+
+    /// <summary>
+    /// 返回分页程序集列表，支持关键字搜索。
+    /// </summary>
+    private static IResult HandleGetAssemblies(int page = 1, int pageSize = 20, string? q = null)
+    {
+        // 对参数做基本约束，防止越界
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+
+        IEnumerable<AssemblyInfoDto> query = AppDomain
             .CurrentDomain.GetAssemblies()
             .Where(a => !a.IsDynamic && !string.IsNullOrEmpty(a.Location))
             .Select(BuildAssemblyDto)
-            // 仅展示有描述信息或属于项目关键命名空间的程序集
             .Where(a =>
                 !string.IsNullOrEmpty(a.Description)
                 || !string.IsNullOrEmpty(a.Title)
                 || IsRelevantAssembly(a.Name)
-            )
-            .OrderBy(a => a.Name)
-            .ToList();
+            );
 
-        return Results.Ok(new SystemInfoDto { Server = server, Assemblies = assemblies });
+        // 关键字过滤（不区分大小写）
+        if (!string.IsNullOrWhiteSpace(q))
+        {
+            string keyword = q.Trim();
+            query = query.Where(a =>
+                a.Name.Contains(keyword, StringComparison.OrdinalIgnoreCase)
+                || a.Title.Contains(keyword, StringComparison.OrdinalIgnoreCase)
+                || a.Description.Contains(keyword, StringComparison.OrdinalIgnoreCase)
+            );
+        }
+
+        List<AssemblyInfoDto> ordered = query.OrderBy(a => a.Name).ToList();
+        int totalCount = ordered.Count;
+        List<AssemblyInfoDto> items = ordered.Skip((page - 1) * pageSize).Take(pageSize).ToList();
+
+        return Results.Ok(
+            new PagedAssemblyListDto
+            {
+                TotalCount = totalCount,
+                Page = page,
+                PageSize = pageSize,
+                Items = items,
+            }
+        );
     }
 
     /// <summary>
@@ -182,14 +215,27 @@ public static class SystemInfoEndpoints
 
 // ── DTO 定义 ──────────────────────────────────────────────────────────────────
 
-/// <summary>系统信息完整响应 DTO。</summary>
+/// <summary>系统信息响应 DTO（仅含服务器信息，程序集通过独立分页接口获取）。</summary>
 public sealed class SystemInfoDto
 {
     /// <summary>服务器运行环境信息。</summary>
     public ServerInfoDto Server { get; init; } = new();
+}
 
-    /// <summary>已加载的程序集列表。</summary>
-    public List<AssemblyInfoDto> Assemblies { get; init; } = [];
+/// <summary>分页程序集列表响应 DTO。</summary>
+public sealed class PagedAssemblyListDto
+{
+    /// <summary>过滤后的程序集总数。</summary>
+    public int TotalCount { get; init; }
+
+    /// <summary>当前页码（从 1 开始）。</summary>
+    public int Page { get; init; }
+
+    /// <summary>每页条数。</summary>
+    public int PageSize { get; init; }
+
+    /// <summary>当前页的程序集列表。</summary>
+    public List<AssemblyInfoDto> Items { get; init; } = [];
 }
 
 /// <summary>服务器运行环境信息。</summary>

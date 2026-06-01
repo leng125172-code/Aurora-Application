@@ -98,10 +98,6 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                         .HasMaxLength(128)
                         .HasColumnType("character varying(128)");
 
-                    b.Property<string>("SerialNumber")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
                     b.Property<int>("Status")
                         .HasColumnType("integer");
 
@@ -1081,10 +1077,6 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                         .HasColumnType("text")
                         .HasColumnName("ExtraProperties");
 
-                    b.Property<string>("FirmwareVersion")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
                     b.Property<int>("FlipMode")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("integer")
@@ -1321,6 +1313,51 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                         .IsUnique();
 
                     b.ToTable("AbpProSerialPortConfigs", (string)null);
+                });
+
+            modelBuilder.Entity("AuroraStruct3D.SerialPorts.SerialPortOperationLog", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<bool>("IsSuccess")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime>("OccurredAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("OperationType")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("ParameterSummary")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<long>("RoundTripMs")
+                        .HasColumnType("bigint");
+
+                    b.Property<Guid>("SerialPortConfigId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OccurredAt");
+
+                    b.HasIndex("SerialPortConfigId");
+
+                    b.HasIndex("SerialPortConfigId", "IsSuccess");
+
+                    b.HasIndex("SerialPortConfigId", "OccurredAt");
+
+                    b.HasIndex("SerialPortConfigId", "OperationType");
+
+                    b.ToTable("AbpProSerialPortOperationLogs", (string)null);
                 });
 
             modelBuilder.Entity("Lion.AbpPro.BasicManagement.UserRefreshTokens.UserRefreshToken", b =>
@@ -4865,6 +4902,15 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                     b.HasOne("AuroraStruct3D.Projectors.ProjectorDevice", null)
                         .WithMany("OperationLogs")
                         .HasForeignKey("ProjectorDeviceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("AuroraStruct3D.SerialPorts.SerialPortOperationLog", b =>
+                {
+                    b.HasOne("AuroraStruct3D.SerialPorts.SerialPortConfig", null)
+                        .WithMany()
+                        .HasForeignKey("SerialPortConfigId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

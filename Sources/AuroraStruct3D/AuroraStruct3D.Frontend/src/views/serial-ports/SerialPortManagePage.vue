@@ -1,5 +1,5 @@
 ﻿<script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch, type Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Pencil, PlugZap, RefreshCw, ScanLine, Send, Unplug } from '@lucide/vue'
 import Button from 'primevue/button'
@@ -7,6 +7,9 @@ import InputText from 'primevue/inputtext'
 import InputNumber from 'primevue/inputnumber'
 import Select from 'primevue/select'
 import Dialog from 'primevue/dialog'
+import DataTable from 'primevue/datatable'
+import Column from 'primevue/column'
+import ToggleSwitch from 'primevue/toggleswitch'
 import { AppCard } from '@/components/primevue'
 import { useAppToast } from '@/composables/useAppToast'
 
@@ -67,6 +70,9 @@ const editForm = ref<EditSerialPortForm>({
 })
 
 const selectedPort = computed(() => store.ports.find((port) => port.id === selectedId.value) ?? null)
+
+// ─── 展开行（有描述的串口自动展开）─────────────────────
+const expandedRows = ref<Record<string, boolean>>({}) as Ref<Record<string, boolean>>
 const supportedBaudRates = computed(
     () =>
         selectedPort.value?.supportedBaudRates ?? [
@@ -136,8 +142,14 @@ watch(
         if (!selectedId.value || !ports.some((port) => port.id === selectedId.value)) {
             selectedId.value = ports[0].id
         }
+        // 自动展开有描述的行
+        const next: Record<string, boolean> = {}
+        for (const port of ports) {
+            if (port.description) next[port.id] = true
+        }
+        expandedRows.value = next
     },
-    { deep: true }
+    { deep: true, immediate: true }
 )
 
 watch(
@@ -297,7 +309,7 @@ onMounted(() => {
 </script>
 
 <template>
-    <div class="flex flex-col gap-4 p-4">
+    <div class="flex flex-col gap-4">
         <div class="flex flex-wrap items-center justify-between gap-3">
             <h1 class="text-2xl font-bold tracking-tight">{{ t('serialPort.title') }}</h1>
             <div class="flex flex-wrap gap-2">
@@ -312,192 +324,182 @@ onMounted(() => {
             </div>
         </div>
 
-        <div class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
-            <div class="min-w-0">
-                <div v-if="store.loading" class="py-8 text-center text-sm text-muted-foreground">
-                    {{ t('common.loading') }}
-                </div>
-                <div v-else-if="store.ports.length === 0" class="py-8 text-center text-sm text-muted-foreground">
-                    {{ t('serialPort.noDevices') }}
-                </div>
-                <AppCard v-else :beam="false" class="overflow-auto">
-                    <div class="p-0">
-                        <table class="w-full min-w-[920px] text-sm">
-                            <thead class="border-b bg-muted/50">
-                                <tr>
-                                    <th class="px-3 py-2 text-left font-medium">{{ t('serialPort.name') }}</th>
-                                    <th class="px-3 py-2 text-left font-medium">{{ t('serialPort.portName') }}</th>
-                                    <th class="px-3 py-2 text-left font-medium">{{ t('serialPort.baudRate') }}</th>
-                                    <th class="px-3 py-2 text-left font-medium">{{ t('serialPort.params') }}</th>
-                                    <th class="px-3 py-2 text-left font-medium">{{ t('serialPort.status') }}</th>
-                                    <th class="px-3 py-2 text-left font-medium">{{ t('common.actions') }}</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr
-                                    v-for="port in store.ports"
-                                    :key="port.id"
-                                    :class="[
-                                        'cursor-pointer border-b last:border-0 hover:bg-muted/30',
-                                        selectedId === port.id ? 'bg-muted/40' : '',
-                                    ]"
-                                    @click="selectedId = port.id"
-                                >
-                                    <td class="px-3 py-2">
-                                        <div class="font-medium">{{ port.displayName }}</div>
-                                        <div
-                                            v-if="port.description"
-                                            class="max-w-[220px] truncate text-xs text-muted-foreground"
-                                        >
-                                            {{ port.description }}
-                                        </div>
-                                    </td>
-                                    <td class="px-3 py-2 font-mono text-xs">{{ port.portName }}</td>
-                                    <td class="px-3 py-2">{{ port.baudRate || t('serialPort.notSet') }}</td>
-                                    <td class="px-3 py-2 text-xs text-muted-foreground">
-                                        {{ port.dataBits }} / {{ parityText(port.parity) }} /
-                                        {{ stopBitsText(port.stopBits) }} / {{ handshakeText(port.handshake) }}
-                                    </td>
-                                    <td class="px-3 py-2">
-                                        <span :class="port.isOpen ? 'text-green-600' : 'text-muted-foreground'">
-                                            {{ port.isOpen ? t('serialPort.connected') : t('serialPort.disconnected') }}
-                                        </span>
-                                    </td>
-                                    <td class="px-3 py-2">
-                                        <div class="flex flex-wrap gap-1.5">
-                                            <Button
-                                                v-if="!port.isOpen"
-                                                severity="secondary"
-                                                outlined
-                                                size="small"
-                                                class="text-green-600 hover:bg-green-50 dark:hover:bg-green-900/30"
-                                                :disabled="connecting"
-                                                @click.stop="handleConnect(port)"
-                                            >
-                                                <PlugZap class="size-3.5" />
-                                                {{ t('serialPort.connect') }}
-                                            </Button>
-                                            <Button
-                                                v-else
-                                                severity="secondary"
-                                                outlined
-                                                size="small"
-                                                class="text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-900/30"
-                                                :disabled="connecting"
-                                                @click.stop="handleDisconnect(port)"
-                                            >
-                                                <Unplug class="size-3.5" />
-                                                {{ t('serialPort.disconnect') }}
-                                            </Button>
-                                            <Button severity="secondary" outlined size="small" @click.stop="openEdit(port)">
-                                                <Pencil class="size-3.5" />
-                                                {{ t('common.edit') }}
-                                            </Button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </AppCard>
+        <!-- 列表卡 -->
+        <div>
+            <div v-if="store.loading" class="py-8 text-center text-sm text-muted-foreground">
+                {{ t('common.loading') }}
             </div>
-
-            <AppCard :beam-size="80" :beam-duration="8" :beam-delay="2" class="relative">
-                <div class="p-4">
-                    <div v-if="!selectedPort" class="py-10 text-center text-sm text-muted-foreground">
-                        {{ t('serialPort.selectPort') }}
-                    </div>
-                    <div v-else class="flex flex-col gap-4">
-                        <div class="flex items-start justify-between gap-3">
-                            <div>
-                                <h2 class="text-base font-semibold">{{ selectedPort.displayName }}</h2>
-                                <div class="mt-1 font-mono text-xs text-muted-foreground">
-                                    {{ selectedPort.portName }}
-                                </div>
-                            </div>
-                            <span
-                                :class="
-                                    selectedPort.isOpen ? 'text-sm text-green-600' : 'text-sm text-muted-foreground'
-                                "
-                            >
-                                {{ selectedPort.isOpen ? t('serialPort.connected') : t('serialPort.disconnected') }}
+            <div v-else-if="store.ports.length === 0" class="py-8 text-center text-sm text-muted-foreground">
+                {{ t('serialPort.noDevices') }}
+            </div>
+            <AppCard v-else>
+                <DataTable
+                    :value="store.ports"
+                    :loading="store.loading"
+                    v-model:expandedRows="expandedRows"
+                    striped-rows
+                    size="small"
+                    data-key="id"
+                    :row-class="(row) => (row.id === selectedId ? 'cursor-pointer !bg-muted/40' : 'cursor-pointer')"
+                    @row-click="(e) => (selectedId = e.data.id)"
+                >
+                    <template #expansion="{ data }">
+                        <div
+                            v-if="data.description"
+                            class="bg-muted/20 px-8 py-2.5 text-sm text-muted-foreground border-t border-border/30"
+                        >
+                            {{ data.description }}
+                        </div>
+                    </template>
+                    <Column :header="t('serialPort.name')" style="min-width: 10rem">
+                        <template #body="{ data }">
+                            <div class="font-medium">{{ data.displayName }}</div>
+                        </template>
+                    </Column>
+                    <Column :header="t('serialPort.portName')" style="min-width: 7rem">
+                        <template #body="{ data }">
+                            <span class="font-mono text-xs">{{ data.portName }}</span>
+                        </template>
+                    </Column>
+                    <Column :header="t('serialPort.baudRate')" style="min-width: 7rem">
+                        <template #body="{ data }">
+                            {{ data.baudRate || t('serialPort.notSet') }}
+                        </template>
+                    </Column>
+                    <Column :header="t('serialPort.params')" style="min-width: 12rem">
+                        <template #body="{ data }">
+                            <span class="text-xs text-muted-foreground">
+                                {{ data.dataBits }} / {{ parityText(data.parity) }} /
+                                {{ stopBitsText(data.stopBits) }} / {{ handshakeText(data.handshake) }}
                             </span>
-                        </div>
+                        </template>
+                    </Column>
+                    <Column :header="t('serialPort.status')" style="min-width: 7rem">
+                        <template #body="{ data }">
+                            <span :class="data.isOpen ? 'text-green-600' : 'text-muted-foreground'">
+                                {{ data.isOpen ? t('serialPort.connected') : t('serialPort.disconnected') }}
+                            </span>
+                        </template>
+                    </Column>
+                    <Column :header="t('common.actions')" style="min-width: 7rem">
+                        <template #body="{ data }">
+                            <Button severity="secondary" outlined size="small" @click.stop="openEdit(data)">
+                                <Pencil class="size-3.5" />
+                                {{ t('common.edit') }}
+                            </Button>
+                        </template>
+                    </Column>
+                </DataTable>
+            </AppCard>
+        </div>
 
-                        <div class="grid grid-cols-[1fr_auto] gap-2">
+        <!-- 串口调试卡 -->
+        <AppCard :beam-size="80" :beam-duration="8" :beam-delay="2">
+            <div v-if="!selectedPort" class="py-10 text-center text-sm text-muted-foreground">
+                {{ t('serialPort.selectPort') }}
+            </div>
+            <div v-else class="flex flex-col gap-4 p-4">
+                <!-- 标题行：名称 + 连接状态 + 连接/断开按钮 -->
+                <div class="flex flex-wrap items-center gap-3">
+                    <div class="flex-1 min-w-0">
+                        <span class="font-semibold">{{ selectedPort.displayName }}</span>
+                        <span class="ml-2 font-mono text-xs text-muted-foreground">{{ selectedPort.portName }}</span>
+                        <span
+                            :class="['ml-3 text-xs', selectedPort.isOpen ? 'text-green-600' : 'text-muted-foreground']"
+                        >
+                            {{ selectedPort.isOpen ? t('serialPort.connected') : t('serialPort.disconnected') }}
+                        </span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <Select
+                            v-model="connectBaudRateStr"
+                            :options="supportedBaudRates.map(String)"
+                            size="small"
+                            class="!text-xs w-[10rem]"
+                            :pt="{
+                                root: { class: '!py-0 !px-2 !text-xs !h-7 !flex !items-center' },
+                                label: {
+                                    class: '!text-xs !py-0 !leading-none !truncate !flex-1 !flex !items-center !h-full',
+                                },
+                                dropdown: { class: '!w-6 !flex !items-center !justify-center' },
+                            }"
+                        />
+                        <Button
+                            v-if="!selectedPort.isOpen"
+                            size="small"
+                            :disabled="connecting"
+                            @click="handleConnect(selectedPort)"
+                        >
+                            <PlugZap class="size-4" />
+                            {{ t('serialPort.connect') }}
+                        </Button>
+                        <Button
+                            v-else
+                            severity="secondary"
+                            outlined
+                            size="small"
+                            class="text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-900/30"
+                            :disabled="connecting"
+                            @click="handleDisconnect(selectedPort)"
+                        >
+                            <Unplug class="size-4" />
+                            {{ t('serialPort.disconnect') }}
+                        </Button>
+                    </div>
+                </div>
+
+                <!-- 调试区：发送 + 参数 + 日志横向并排 -->
+                <div class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+                    <!-- 左：发送区 -->
+                    <div class="flex flex-col gap-3">
+                        <div class="flex items-center justify-between">
+                            <span class="text-sm font-medium">{{ t('serialPort.debug') }}</span>
+                        </div>
+                        <textarea
+                            v-model="rawForm.payload"
+                            class="h-24 w-full resize-none rounded border bg-background px-2 py-1.5 font-mono text-xs"
+                            placeholder="01 03 10 03 00 01 B0 CA"
+                        />
+                        <div class="grid grid-cols-2 gap-x-4 gap-y-2">
+                            <label class="flex items-center gap-2 text-sm">
+                                <input v-model="rawForm.isHex" type="checkbox" />
+                                {{ t('serialPort.hexMode') }}
+                            </label>
+                            <label class="flex items-center gap-2 text-sm">
+                                <input v-model="rawForm.appendNewLine" type="checkbox" :disabled="rawForm.isHex" />
+                                {{ t('serialPort.appendNewLine') }}
+                            </label>
                             <div class="flex flex-col gap-1">
-                                <label class="text-sm">{{ t('serialPort.baudRate') }}</label>
-                                <Select
-                                    v-model="connectBaudRateStr"
-                                    :options="supportedBaudRates.map(String)"
-                                />
+                                <label class="text-xs text-muted-foreground">
+                                    {{ t('serialPort.expectedLength') }}
+                                </label>
+                                <InputNumber v-model="rawForm.expectedResponseLength" :min="-1" size="small" />
                             </div>
-                            <Button
-                                v-if="!selectedPort.isOpen"
-                                size="small"
-                                class="mt-6"
-                                :disabled="connecting"
-                                @click="handleConnect(selectedPort)"
-                            >
-                                <PlugZap class="size-4" />
-                                {{ t('serialPort.connect') }}
-                            </Button>
-                            <Button
-                                v-else
-                                severity="secondary"
-                                outlined
-                                size="small"
-                                class="mt-6 text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-900/30"
-                                :disabled="connecting"
-                                @click="handleDisconnect(selectedPort)"
-                            >
-                                <Unplug class="size-4" />
-                                {{ t('serialPort.disconnect') }}
+                            <div class="flex flex-col gap-1">
+                                <label class="text-xs text-muted-foreground">{{ t('serialPort.timeoutMs') }}</label>
+                                <InputNumber v-model="rawForm.timeoutMs" :min="50" size="small" />
+                            </div>
+                        </div>
+                        <Button
+                            size="small"
+                            class="w-full"
+                            :disabled="sending || !rawForm.payload.trim()"
+                            @click="handleSendRaw"
+                        >
+                            <Send class="size-4" />
+                            {{ sending ? t('serialPort.sending') : t('serialPort.send') }}
+                        </Button>
+                    </div>
+
+                    <!-- 右：日志区 -->
+                    <div class="flex flex-col gap-2">
+                        <div class="flex items-center justify-between">
+                            <span class="text-sm font-medium">{{ t('serialPort.debug') }}</span>
+                            <Button severity="secondary" outlined size="small" @click="rawLogs = []">
+                                {{ t('serialPort.clearLog') }}
                             </Button>
                         </div>
-
-                        <div class="border-t pt-4">
-                            <div class="mb-3 flex items-center justify-between">
-                                <h3 class="text-sm font-medium">{{ t('serialPort.debug') }}</h3>
-                                <Button severity="secondary" outlined size="small" @click="rawLogs = []">
-                                    {{ t('serialPort.clearLog') }}
-                                </Button>
-                            </div>
-                            <textarea
-                                v-model="rawForm.payload"
-                                class="h-24 w-full resize-none rounded border bg-background px-2 py-1.5 font-mono text-xs"
-                                placeholder="01 03 10 03 00 01 B0 CA"
-                            />
-                            <div class="mt-3 grid grid-cols-2 gap-2">
-                                <label class="flex items-center gap-2 text-sm">
-                                    <input v-model="rawForm.isHex" type="checkbox" />
-                                    {{ t('serialPort.hexMode') }}
-                                </label>
-                                <label class="flex items-center gap-2 text-sm">
-                                    <input v-model="rawForm.appendNewLine" type="checkbox" :disabled="rawForm.isHex" />
-                                    {{ t('serialPort.appendNewLine') }}
-                                </label>
-                                <div class="flex flex-col gap-1">
-                                    <label class="text-sm">{{ t('serialPort.expectedLength') }}</label>
-                                    <InputNumber v-model="rawForm.expectedResponseLength" :min="-1" />
-                                </div>
-                                <div class="flex flex-col gap-1">
-                                    <label class="text-sm">{{ t('serialPort.timeoutMs') }}</label>
-                                    <InputNumber v-model="rawForm.timeoutMs" :min="50" />
-                                </div>
-                            </div>
-                            <Button
-                                size="small"
-                                class="mt-3 w-full"
-                                :disabled="sending || !rawForm.payload.trim()"
-                                @click="handleSendRaw"
-                            >
-                                <Send class="size-4" />
-                                {{ sending ? t('serialPort.sending') : t('serialPort.send') }}
-                            </Button>
-                        </div>
-
-                        <div class="max-h-[340px] overflow-auto rounded border bg-muted/20">
+                        <div class="max-h-[280px] overflow-auto rounded border bg-muted/20">
                             <div v-if="rawLogs.length === 0" class="py-8 text-center text-xs text-muted-foreground">
                                 {{ t('serialPort.noLogs') }}
                             </div>
@@ -517,24 +519,25 @@ onMounted(() => {
                         </div>
                     </div>
                 </div>
-            </AppCard>
-        </div>
+            </div>
+        </AppCard>
 
         <!-- 编辑串口对话框 -->
         <Dialog
             v-model:visible="showEditDialog"
             modal
+            draggable
             :header="t('serialPort.editTitle')"
             :style="{ width: '460px' }"
         >
-            <div class="grid gap-3">
+            <div class="grid gap-3 p-3">
                 <div class="flex flex-col gap-1">
                     <label class="text-sm">{{ t('serialPort.displayName') }}</label>
-                    <InputText v-model="editForm.displayName" />
+                    <InputText v-model="editForm.displayName" size="small" class="!text-xs" />
                 </div>
                 <div class="flex flex-col gap-1">
                     <label class="text-sm">{{ t('serialPort.description') }}</label>
-                    <InputText v-model="editForm.description" />
+                    <InputText v-model="editForm.description" size="small" class="!text-xs" />
                 </div>
                 <div class="grid grid-cols-2 gap-3">
                     <div class="flex flex-col gap-1">
@@ -542,11 +545,20 @@ onMounted(() => {
                         <Select
                             v-model="editBaudRateStr"
                             :options="supportedBaudRates.map(String)"
+                            size="small"
+                            class="!text-xs"
+                            :pt="{
+                                root: { class: '!py-0 !px-2 !text-xs !h-7 !flex !items-center' },
+                                label: {
+                                    class: '!text-xs !py-0 !leading-none !truncate !flex-1 !flex !items-center !h-full',
+                                },
+                                dropdown: { class: '!w-6 !flex !items-center !justify-center' },
+                            }"
                         />
                     </div>
                     <div class="flex flex-col gap-1">
                         <label class="text-sm">{{ t('serialPort.dataBits') }}</label>
-                        <InputNumber v-model="editForm.dataBits" :min="5" :max="8" />
+                        <InputNumber v-model="editForm.dataBits" :min="5" :max="8" size="small" class="!text-xs" />
                     </div>
                     <div class="flex flex-col gap-1">
                         <label class="text-sm">{{ t('serialPort.parity') }}</label>
@@ -555,6 +567,15 @@ onMounted(() => {
                             :options="parityOptions"
                             option-label="label"
                             option-value="value"
+                            size="small"
+                            class="!text-xs"
+                            :pt="{
+                                root: { class: '!py-0 !px-2 !text-xs !h-7 !flex !items-center' },
+                                label: {
+                                    class: '!text-xs !py-0 !leading-none !truncate !flex-1 !flex !items-center !h-full',
+                                },
+                                dropdown: { class: '!w-6 !flex !items-center !justify-center' },
+                            }"
                         />
                     </div>
                     <div class="flex flex-col gap-1">
@@ -564,6 +585,15 @@ onMounted(() => {
                             :options="stopBitsOptions"
                             option-label="label"
                             option-value="value"
+                            size="small"
+                            class="!text-xs"
+                            :pt="{
+                                root: { class: '!py-0 !px-2 !text-xs !h-7 !flex !items-center' },
+                                label: {
+                                    class: '!text-xs !py-0 !leading-none !truncate !flex-1 !flex !items-center !h-full',
+                                },
+                                dropdown: { class: '!w-6 !flex !items-center !justify-center' },
+                            }"
                         />
                     </div>
                 </div>
@@ -574,18 +604,27 @@ onMounted(() => {
                         :options="handshakeOptions"
                         option-label="label"
                         option-value="value"
+                        size="small"
+                        class="!text-xs"
+                        :pt="{
+                            root: { class: '!py-0 !px-2 !text-xs !h-7 !flex !items-center' },
+                            label: {
+                                class: '!text-xs !py-0 !leading-none !truncate !flex-1 !flex !items-center !h-full',
+                            },
+                            dropdown: { class: '!w-6 !flex !items-center !justify-center' },
+                        }"
                     />
                 </div>
-                <label class="flex items-center gap-2 text-sm">
-                    <input v-model="editForm.isEnabled" type="checkbox" />
-                    {{ t('serialPort.enabled') }}
-                </label>
+                <div class="flex items-center gap-2">
+                    <ToggleSwitch v-model="editForm.isEnabled" />
+                    <span class="text-sm">{{ t('serialPort.enabled') }}</span>
+                </div>
             </div>
             <template #footer>
-                <Button severity="secondary" outlined @click="showEditDialog = false">
+                <Button severity="secondary" outlined @click="showEditDialog = false" size="small" class="!text-xs">
                     {{ t('common.cancel') }}
                 </Button>
-                <Button :disabled="editing" @click="handleEdit">
+                <Button :disabled="editing" @click="handleEdit" size="small" class="!text-xs">
                     {{ editing ? t('common.saving') : t('common.save') }}
                 </Button>
             </template>

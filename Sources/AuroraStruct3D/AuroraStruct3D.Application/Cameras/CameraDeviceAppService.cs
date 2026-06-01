@@ -19,6 +19,7 @@ namespace AuroraStruct3D.Cameras;
 public class CameraDeviceAppService : AuroraStruct3DAppService, ICameraDeviceAppService
 {
     private readonly ICameraDeviceRepository _cameraDeviceRepository;
+    private readonly ICameraOperationLogRepository _operationLogRepository;
     private readonly ICameraParameterSetRepository _parameterSetRepository;
     private readonly ITucamCameraService _tucamService;
     private readonly IDeviceStateManager _deviceStateManager;
@@ -28,6 +29,7 @@ public class CameraDeviceAppService : AuroraStruct3DAppService, ICameraDeviceApp
 
     public CameraDeviceAppService(
         ICameraDeviceRepository cameraDeviceRepository,
+        ICameraOperationLogRepository operationLogRepository,
         ICameraParameterSetRepository parameterSetRepository,
         ITucamCameraService tucamService,
         IDeviceStateManager deviceStateManager,
@@ -37,6 +39,7 @@ public class CameraDeviceAppService : AuroraStruct3DAppService, ICameraDeviceApp
     )
     {
         _cameraDeviceRepository = cameraDeviceRepository;
+        _operationLogRepository = operationLogRepository;
         _parameterSetRepository = parameterSetRepository;
         _tucamService = tucamService;
         _deviceStateManager = deviceStateManager;
@@ -143,7 +146,7 @@ public class CameraDeviceAppService : AuroraStruct3DAppService, ICameraDeviceApp
                 var newCamera = new CameraDevice(GuidGenerator.Create(), $"相机 #{i}", i);
                 if (!string.IsNullOrEmpty(model))
                 {
-                    newCamera.UpdateHardwareInfo(model, null);
+                    newCamera.UpdateHardwareInfo(model);
                 }
                 await _cameraDeviceRepository.InsertAsync(newCamera);
                 Logger.LogInformation("自动注册相机设备，索引: {Index}，型号: {Model}", i, model);
@@ -153,8 +156,8 @@ public class CameraDeviceAppService : AuroraStruct3DAppService, ICameraDeviceApp
             {
                 if (!string.IsNullOrEmpty(model) && existing.Model != model)
                 {
-                    // 型号有变化时更新（保留已有序列号）
-                    existing.UpdateHardwareInfo(model, existing.SerialNumber);
+                    // 型号有变化时更新
+                    existing.UpdateHardwareInfo(model);
                     await _cameraDeviceRepository.UpdateAsync(existing);
                     Logger.LogInformation("更新相机 {Index} 型号: {Model}", i, model);
                 }
@@ -175,9 +178,9 @@ public class CameraDeviceAppService : AuroraStruct3DAppService, ICameraDeviceApp
 
         await _tucamService.OpenCameraAsync(camera.DeviceIndex);
 
-        // 读取硬件信息并更新数据库（保留已有序列号）
+        // 读取硬件信息并更新数据库
         string model = await _tucamService.GetCameraModelAsync(camera.DeviceIndex);
-        camera.UpdateHardwareInfo(model, camera.SerialNumber);
+        camera.UpdateHardwareInfo(model);
         camera.SetStatus(CameraStatus.Ready);
         await _cameraDeviceRepository.UpdateAsync(camera);
     }
@@ -309,7 +312,7 @@ public class CameraDeviceAppService : AuroraStruct3DAppService, ICameraDeviceApp
     }
 
     /// <inheritdoc/>
-    public async Task SetImageRotationAngleAsync(Guid id, SetCameraRotationAngleDto input)
+    public async Task UpdateImageRotationAngleAsync(Guid id, SetCameraRotationAngleDto input)
     {
         EnsureManualOrMaintenanceMode();
         await EnsureOrAcquireSessionAsync(id, DeviceType.Camera);
@@ -1212,5 +1215,34 @@ public class CameraDeviceAppService : AuroraStruct3DAppService, ICameraDeviceApp
         snapshot.RtpEndpoint = _streamingService?.GetRtpEndpoint(id);
 
         return snapshot;
+    }
+
+    /// <inheritdoc/>
+    public async Task<PagedResultDto<CameraOperationLogDto>> GetLogsAsync(GetCameraLogListDto input)
+    {
+        if (!input.CameraDeviceId.HasValue)
+            return new PagedResultDto<CameraOperationLogDto>(0, new List<CameraOperationLogDto>());
+
+        Guid deviceId = input.CameraDeviceId.Value;
+        long totalCount = await _operationLogRepository.GetCountAsync(
+            deviceId,
+            input.OperationType,
+            input.IsFailedOnly ?? false,
+            input.StartTime,
+            input.EndTime
+        );
+        List<CameraOperationLog> logs = await _operationLogRepository.GetPagedListAsync(
+            deviceId,
+            input.SkipCount,
+            input.MaxResultCount,
+            input.OperationType,
+            input.IsFailedOnly ?? false,
+            input.StartTime,
+            input.EndTime
+        );
+        return new PagedResultDto<CameraOperationLogDto>(
+            totalCount,
+            logs.Select(x => x.ToDto()).ToList()
+        );
     }
 }

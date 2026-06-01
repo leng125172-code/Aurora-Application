@@ -72,7 +72,7 @@ public interface ICameraDeviceAppService : IApplicationService
     /// <summary>
     /// 设置相机软件端图像旋转角度（仅在手动或检修模式下允许）
     /// </summary>
-    Task SetImageRotationAngleAsync(Guid id, SetCameraRotationAngleDto input);
+    Task UpdateImageRotationAngleAsync(Guid id, SetCameraRotationAngleDto input);
 
     // ─── 手动控制：快照与预览 ───────────────────────────────────────────────
 
@@ -156,6 +156,11 @@ public interface ICameraDeviceAppService : IApplicationService
     /// 前端在页面刷新、路由返回或 SignalR 重连后调用，用于一次往返恢复 UI 状态。
     /// </summary>
     Task<CameraSnapshotStateDto> GetCameraSnapshotStateAsync(Guid id);
+
+    /// <summary>
+    /// 分页查询指定相机的操作日志，按发生时间倒序排列。
+    /// </summary>
+    Task<PagedResultDto<CameraOperationLogDto>> GetLogsAsync(GetCameraLogListDto input);
 }
 
 /// <summary>

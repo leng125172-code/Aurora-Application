@@ -3,10 +3,13 @@
 // 内部根据 Visibility 过滤后逐节点渲染 GenICamNodeField
 // 视觉风格参考 Dashboard 页面：使用 AppCard（PrimeVue Card + Inspira BorderBeam）
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { GenICamCategoryDto, GenICamNodeDto } from '@/api/cameras'
 import GenICamNodeField from './GenICamNodeField.vue'
 import Button from 'primevue/button'
 import { AppCard } from '@/components/primevue'
+
+const { t } = useI18n()
 
 const props = defineProps<{
     cameraId: string
@@ -43,24 +46,20 @@ const visibleNodes = computed<GenICamNodeDto[]>(() => {
 </script>
 
 <template>
-    <AppCard :beam="false">
+    <AppCard :beam-size="80" :beam-duration="8">
         <div class="flex flex-row items-center justify-between px-3 py-2">
             <div class="text-sm font-semibold">
                 {{ category.displayName || category.name }}
             </div>
-            <Button
-                text
-                size="small"
-                severity="primary"
-                :disabled="disabled || loading"
-                @click="emit('refresh')"
-            >
-                {{ loading ? '加载中…' : '刷新' }}
+            <Button text size="small" severity="primary" :disabled="disabled || loading" @click="emit('refresh')">
+                {{ loading ? t('camera.categoryLoading') : t('camera.categoryRefresh') }}
             </Button>
         </div>
         <div class="divide-y border-t">
             <template v-if="visibleNodes.length === 0">
-                <div class="px-3 py-4 text-center text-xs text-muted-foreground">无 {{ visibility }} 可见参数</div>
+                <div class="px-3 py-4 text-center text-xs text-muted-foreground">
+                    {{ t('camera.categoryNoNodes', { visibility }) }}
+                </div>
             </template>
             <GenICamNodeField
                 v-for="node in visibleNodes"

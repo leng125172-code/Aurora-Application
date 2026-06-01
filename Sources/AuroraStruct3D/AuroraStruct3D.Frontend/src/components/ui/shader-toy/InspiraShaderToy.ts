@@ -68,7 +68,7 @@ export class InspiraShaderToy {
     precision highp float;
     precision highp int;
     #endif
-    
+
     uniform vec3      iResolution;     // viewport resolution (in pixels)
     uniform float     iTime;           // shader playback time (in seconds)
     uniform float     iTimeDelta;      // render time (in seconds)
@@ -78,16 +78,16 @@ export class InspiraShaderToy {
     uniform vec4      iDate;           // (year, month, day, unixtime in seconds)
     uniform vec3      iHSV;            // HSV controls (hue, saturation, brightness)
     uniform float     iSpeed;          // speed multiplier
-    
+
     out vec4 fragColor;
-    
+
     // HSV to RGB conversion
     vec3 hsv2rgb(vec3 c) {
         vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
         vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
         return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
     }
-    
+
     // RGB to HSV conversion
     vec3 rgb2hsv(vec3 c) {
         vec4 K = vec4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);
@@ -97,7 +97,7 @@ export class InspiraShaderToy {
         float e = 1.0e-10;
         return vec3(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x);
     }
-    
+
     // Apply HSV adjustments
     vec3 applyHSV(vec3 color, vec3 hsvAdjust) {
         vec3 hsv = rgb2hsv(color);
@@ -106,18 +106,18 @@ export class InspiraShaderToy {
         hsv.z = clamp(hsv.z * hsvAdjust.z, 0.0, 1.0);
         return hsv2rgb(hsv);
     }
-    
+
     void mainImage(out vec4 c, in vec2 f);
-    
+
     void main() {
         vec4 color = vec4(0.0, 0.0, 0.0, 1.0);
         mainImage(color, gl_FragCoord.xy);
-        
+
         // Apply HSV adjustments if not default
         if (iHSV.x != 0.0 || iHSV.y != 1.0 || iHSV.z != 1.0) {
             color.rgb = applyHSV(color.rgb, iHSV);
         }
-        
+
         fragColor = color;
     }
   `

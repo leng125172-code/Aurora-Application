@@ -16,9 +16,6 @@ public class CameraDevice : FullAuditedAggregateRoot<Guid>
     /// <summary>相机型号（从SDK读取）</summary>
     public string? Model { get; private set; }
 
-    /// <summary>相机序列号（从SDK读取）</summary>
-    public string? SerialNumber { get; private set; }
-
     /// <summary>物理索引（SDK中的相机位置，从0开始）</summary>
     public int DeviceIndex { get; private set; }
 
@@ -69,18 +66,13 @@ public class CameraDevice : FullAuditedAggregateRoot<Guid>
     }
 
     /// <summary>更新相机硬件信息（由SDK读取后更新）</summary>
-    public CameraDevice UpdateHardwareInfo(string? model, string? serialNumber)
+    public CameraDevice UpdateHardwareInfo(string? model)
     {
         if (model != null)
         {
             Check.Length(model, nameof(model), CameraConsts.MaxNameLength);
         }
-        if (serialNumber != null)
-        {
-            Check.Length(serialNumber, nameof(serialNumber), CameraConsts.MaxSerialNumberLength);
-        }
         Model = model;
-        SerialNumber = serialNumber;
         return this;
     }
 

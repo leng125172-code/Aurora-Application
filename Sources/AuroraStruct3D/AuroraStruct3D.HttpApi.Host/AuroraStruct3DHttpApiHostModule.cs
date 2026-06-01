@@ -136,6 +136,8 @@ namespace AuroraStruct3D
                 endpoints.UseAbpHangfireApi("/api/hangfire");
                 // 注册系统信息 REST API
                 endpoints.MapSystemInfoApi();
+                // 注册 MiniProfiler 自定义查询 API（全量会话列表和详情）
+                endpoints.MapProfilerApi();
                 // 直接映射 DashboardHub，无需依赖 AbpAspNetCoreSignalRModule
                 endpoints.MapHub<DashboardHub>("/signalr-hubs/dashboard");
                 // 映射设备状态实时推送 Hub（允许匿名访问，登录前后均可连接）

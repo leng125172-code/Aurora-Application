@@ -67,8 +67,8 @@ export interface LightSpeedProps {
 }
 
 export const defaultOptions: LightSpeedOptions = {
-    onSpeedUp: () => {},
-    onSlowDown: () => {},
+    onSpeedUp: () => { },
+    onSlowDown: () => { },
     distortion: 'turbulentDistortion',
     length: 400,
     roadWidth: 10,
@@ -146,7 +146,7 @@ export const distortions: Distortions = {
       }
       vec3 getDistortion(float progress){
         float movementProgressFix = 0.02;
-        return vec3( 
+        return vec3(
           cos(progress * PI * uFreq.x + uTime) * uAmp.x - cos(movementProgressFix * PI * uFreq.x + uTime) * uAmp.x,
           nsin(progress * PI * uFreq.y + uTime) * uAmp.y - nsin(movementProgressFix * PI * uFreq.y + uTime) * uAmp.y,
           nsin(progress * PI * uFreq.z + uTime) * uAmp.z - nsin(movementProgressFix * PI * uFreq.z + uTime) * uAmp.z
@@ -159,11 +159,11 @@ export const distortions: Distortions = {
             const uAmp = mountainUniforms.uAmp.value
             const distortion = new THREE.Vector3(
                 Math.cos(progress * Math.PI * uFreq.x + time) * uAmp.x -
-                    Math.cos(movementProgressFix * Math.PI * uFreq.x + time) * uAmp.x,
+                Math.cos(movementProgressFix * Math.PI * uFreq.x + time) * uAmp.x,
                 nsin(progress * Math.PI * uFreq.y + time) * uAmp.y -
-                    nsin(movementProgressFix * Math.PI * uFreq.y + time) * uAmp.y,
+                nsin(movementProgressFix * Math.PI * uFreq.y + time) * uAmp.y,
                 nsin(progress * Math.PI * uFreq.z + time) * uAmp.z -
-                    nsin(movementProgressFix * Math.PI * uFreq.z + time) * uAmp.z
+                nsin(movementProgressFix * Math.PI * uFreq.z + time) * uAmp.z
             )
             const lookAtAmp = new THREE.Vector3(2, 2, 2)
             const lookAtOffset = new THREE.Vector3(0, 0, -5)
@@ -178,7 +178,7 @@ export const distortions: Distortions = {
       #define PI 3.14159265358979
       vec3 getDistortion(float progress){
         float movementProgressFix = 0.02;
-        return vec3( 
+        return vec3(
           cos(progress * PI * uFreq.x + uTime) * uAmp.x - cos(movementProgressFix * PI * uFreq.x + uTime) * uAmp.x,
           sin(progress * PI * uFreq.y + PI/2. + uTime) * uAmp.y - sin(movementProgressFix * PI * uFreq.y + PI/2. + uTime) * uAmp.y,
           0.
@@ -191,9 +191,9 @@ export const distortions: Distortions = {
             const uAmp = xyUniforms.uAmp.value
             const distortion = new THREE.Vector3(
                 Math.cos(progress * Math.PI * uFreq.x + time) * uAmp.x -
-                    Math.cos(movementProgressFix * Math.PI * uFreq.x + time) * uAmp.x,
+                Math.cos(movementProgressFix * Math.PI * uFreq.x + time) * uAmp.x,
                 Math.sin(progress * Math.PI * uFreq.y + time + Math.PI / 2) * uAmp.y -
-                    Math.sin(movementProgressFix * Math.PI * uFreq.y + time + Math.PI / 2) * uAmp.y,
+                Math.sin(movementProgressFix * Math.PI * uFreq.y + time + Math.PI / 2) * uAmp.y,
                 0
             )
             const lookAtAmp = new THREE.Vector3(2, 0.4, 1)
@@ -209,7 +209,7 @@ export const distortions: Distortions = {
       #define PI 3.14159265358979
       vec3 getDistortion(float progress){
         float camProgress = 0.0125;
-        return vec3( 
+        return vec3(
           sin(progress * PI * uFreq.x + uTime) * uAmp.x - sin(camProgress * PI * uFreq.x + uTime) * uAmp.x,
           sin(progress * PI * uFreq.y + uTime) * uAmp.y - sin(camProgress * PI * uFreq.y + uTime) * uAmp.y,
           0.
@@ -222,9 +222,9 @@ export const distortions: Distortions = {
             const uAmp = LongRaceUniforms.uAmp.value
             const distortion = new THREE.Vector3(
                 Math.sin(progress * Math.PI * uFreq.x + time) * uAmp.x -
-                    Math.sin(camProgress * Math.PI * uFreq.x + time) * uAmp.x,
+                Math.sin(camProgress * Math.PI * uFreq.x + time) * uAmp.x,
                 Math.sin(progress * Math.PI * uFreq.y + time) * uAmp.y -
-                    Math.sin(camProgress * Math.PI * uFreq.y + time) * uAmp.y,
+                Math.sin(camProgress * Math.PI * uFreq.y + time) * uAmp.y,
                 0
             )
             const lookAtAmp = new THREE.Vector3(1, 1, 0)

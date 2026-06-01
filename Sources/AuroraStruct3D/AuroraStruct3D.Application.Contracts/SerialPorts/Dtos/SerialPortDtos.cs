@@ -151,3 +151,51 @@ public class SerialPortScanResultDto
     /// <summary>同步后的串口列表</summary>
     public List<SerialPortConfigDto> Items { get; set; } = new();
 }
+
+/// <summary>
+/// 串口操作日志输出 DTO。
+/// </summary>
+public class SerialPortOperationLogDto : EntityDto<Guid>
+{
+    /// <summary>所属串口配置 ID</summary>
+    public Guid SerialPortConfigId { get; set; }
+
+    /// <summary>操作类型名称（如 Connect、Disconnect、SendRaw）</summary>
+    public string OperationType { get; set; } = string.Empty;
+
+    /// <summary>操作发生时间（UTC）</summary>
+    public DateTime OccurredAt { get; set; }
+
+    /// <summary>操作是否成功</summary>
+    public bool IsSuccess { get; set; }
+
+    /// <summary>操作参数摘要</summary>
+    public string? ParameterSummary { get; set; }
+
+    /// <summary>失败时的错误消息</summary>
+    public string? ErrorMessage { get; set; }
+
+    /// <summary>命令往返耗时（毫秒），-1 表示未记录</summary>
+    public long RoundTripMs { get; set; }
+}
+
+/// <summary>
+/// 串口操作日志分页查询 DTO。
+/// </summary>
+public class GetSerialPortLogListDto : PagedResultRequestDto
+{
+    /// <summary>串口配置 ID（必填）</summary>
+    public Guid SerialPortConfigId { get; set; }
+
+    /// <summary>按操作类型过滤（可选，如 Connect、SendRaw）</summary>
+    public string? OperationType { get; set; }
+
+    /// <summary>仅返回失败记录</summary>
+    public bool IsFailedOnly { get; set; }
+
+    /// <summary>开始时间（可选，UTC）</summary>
+    public DateTime? StartTime { get; set; }
+
+    /// <summary>结束时间（可选，UTC）</summary>
+    public DateTime? EndTime { get; set; }
+}

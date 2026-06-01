@@ -161,6 +161,31 @@ export const useCameraStore = defineStore('camera', () => {
 
     // ─── SignalR ──────────────────────────────────────────────────────────────
 
+    /** 心跳定时器 ID */
+    let _heartbeatTimer: ReturnType<typeof setInterval> | null = null
+
+    /** 启动心跳（每 15 秒 ping 一次，维持连接活跃） */
+    function _startHeartbeat() {
+        _stopHeartbeat()
+        _heartbeatTimer = setInterval(async () => {
+            if (connection?.state === signalR.HubConnectionState.Connected) {
+                try {
+                    await connection.invoke<number>('PingAsync')
+                } catch {
+                    // 心跳失败时 SignalR 自动重连机制会处理，此处忽略
+                }
+            }
+        }, 15_000)
+    }
+
+    /** 停止心跳定时器 */
+    function _stopHeartbeat() {
+        if (_heartbeatTimer !== null) {
+            clearInterval(_heartbeatTimer)
+            _heartbeatTimer = null
+        }
+    }
+
     /** 启动 SignalR Hub 连接（使用 MessagePack 协议，二进制帧无 base64 开销） */
     async function startHub() {
         if (connection?.state === signalR.HubConnectionState.Connected) {
@@ -232,9 +257,11 @@ export const useCameraStore = defineStore('camera', () => {
 
             connection.onclose(() => {
                 hubConnected.value = false
+                _stopHeartbeat()
             })
             connection.onreconnected(async () => {
                 hubConnected.value = true
+                _startHeartbeat()
                 // 重连后批量恢复所有已订阅相机的状态（触发 Reattach + 读取最新快照）
                 for (const id of subscribedCameraIds.value) {
                     try {
@@ -249,6 +276,7 @@ export const useCameraStore = defineStore('camera', () => {
         try {
             await connection.start()
             hubConnected.value = true
+            _startHeartbeat()
         } catch (error) {
             hubConnected.value = false
             connection = null
@@ -258,6 +286,7 @@ export const useCameraStore = defineStore('camera', () => {
 
     /** 停止 SignalR Hub 连接并释放所有预览帧资源 */
     async function stopHub() {
+        _stopHeartbeat()
         if (connection) {
             await connection.stop()
             connection = null

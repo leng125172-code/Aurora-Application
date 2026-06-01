@@ -88,7 +88,6 @@ export interface ProjectorDeviceDto {
     readonly hidDeviceIndex: number
     readonly connectTimeoutMs: number
 
-    readonly firmwareVersion: string | null
     readonly deviceHardwareId: number
 
     readonly connectionStatus: ProjectorConnectionStatus
@@ -141,6 +140,8 @@ export interface GetProjectorLogListDto {
     projectorDeviceId?: string
     operationType?: number
     isFailedOnly?: boolean
+    startTime?: string
+    endTime?: string
     skipCount?: number
     maxResultCount?: number
 }
@@ -222,7 +223,7 @@ export async function updateProjector(id: string, dto: UpdateProjectorDeviceDto)
 
 /** 扫描 USB HID 投影机，自动同步数据库记录，返回检测到的数量 */
 export async function scanProjectors(): Promise<number> {
-    const { data } = await httpClient.post<number>(`${BASE}/scan`)
+    const { data } = await httpClient.post<number>(`${BASE}/scan-projectors`)
     return data
 }
 

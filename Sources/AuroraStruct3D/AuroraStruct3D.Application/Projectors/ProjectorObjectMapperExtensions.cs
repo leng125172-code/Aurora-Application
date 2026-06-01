@@ -32,7 +32,6 @@ public static class ProjectorObjectMapperExtensions
             TcpPort = entity.TcpPort,
             HidDeviceIndex = entity.HidDeviceIndex,
             ConnectTimeoutMs = entity.ConnectTimeoutMs,
-            FirmwareVersion = entity.FirmwareVersion,
             DeviceHardwareId = entity.DeviceHardwareId,
             ConnectionStatus = entity.ConnectionStatus,
             LedStatus = entity.LedStatus,

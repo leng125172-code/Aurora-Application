@@ -787,9 +787,8 @@ export class ImageTrailVariant6 {
                     duration: 0.8,
                     ease: 'power3',
                     scale: scaleFactor,
-                    filter: `grayscale(${grayscaleValue * 100}%) brightness(${
-                        brightnessValue * 100
-                    }%) blur(${blurValue}px)`,
+                    filter: `grayscale(${grayscaleValue * 100}%) brightness(${brightnessValue * 100
+                        }%) blur(${blurValue}px)`,
                     x: this.mousePos.x - (img.rect?.width ?? 0) / 2,
                     y: this.mousePos.y - (img.rect?.height ?? 0) / 2,
                 },

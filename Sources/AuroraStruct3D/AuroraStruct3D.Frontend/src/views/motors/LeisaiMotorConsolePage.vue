@@ -11,11 +11,13 @@ import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { ArrowLeft, AlertTriangle, RefreshCw, Save } from '@lucide/vue'
 import Button from 'primevue/button'
+import Select from 'primevue/select'
+import InputText from 'primevue/inputtext'
+import InputNumber from 'primevue/inputnumber'
+import ToggleSwitch from 'primevue/toggleswitch'
 import { AppCard } from '@/components/primevue'
 import { useAppToast } from '@/composables/useAppToast'
 import {
-    LeisaiDiFunctionLabels,
-    LeisaiDoFunctionLabels,
     LeisaiParamGroupNames,
     type LeisaiBatchReadResultDto,
     type LeisaiIoConfigDto,
@@ -53,17 +55,19 @@ const trace = computed<LeisaiTraceDto>(
 // ───── 采样开关 ─────────────────────────────────────────────────────
 const isSamplingEnabled = ref(true)
 
+/** 切换实时采样开关；ToggleSwitch v-model 已将 isSamplingEnabled 更新为新值后调用。 */
 async function toggleSampling(): Promise<void> {
     const id = axisId.value
     if (!id) return
+    const newValue = isSamplingEnabled.value // v-model 已更新为期望的新值
     try {
-        if (isSamplingEnabled.value) {
-            await store.api.disableSampling(id)
-        } else {
+        if (newValue) {
             await store.api.enableSampling(id)
+        } else {
+            await store.api.disableSampling(id)
         }
-        isSamplingEnabled.value = !isSamplingEnabled.value
     } catch (err) {
+        isSamplingEnabled.value = !newValue // 失败时还原
         toast.error(t('leisaiConsole.samplingToggleFailed', { err: String(err) }))
     }
 }
@@ -79,11 +83,41 @@ async function loadIoConfig(): Promise<void> {
     }
 }
 
+/** DI 功能码 → i18n 键映射 */
+const DI_FUNC_KEYS: Record<number, string> = {
+    0x00: 'leisaiConsole.diFuncNone',
+    0x01: 'leisaiConsole.diFuncEnable',
+    0x02: 'leisaiConsole.diFuncFaultClear',
+    0x03: 'leisaiConsole.diFuncForwardJog',
+    0x04: 'leisaiConsole.diFuncReverseJog',
+    0x05: 'leisaiConsole.diFuncForceStop',
+    0x06: 'leisaiConsole.diFuncPosLimit',
+    0x07: 'leisaiConsole.diFuncNegLimit',
+    0x08: 'leisaiConsole.diFuncOrigin',
+    0x09: 'leisaiConsole.diFuncPathTrigger',
+    0x0a: 'leisaiConsole.diFuncPathAddr0',
+    0x0b: 'leisaiConsole.diFuncPathAddr1',
+    0x0c: 'leisaiConsole.diFuncPathAddr2',
+    0x0d: 'leisaiConsole.diFuncPathAddr3',
+}
+/** DO 功能码 → i18n 键映射 */
+const DO_FUNC_KEYS: Record<number, string> = {
+    0x00: 'leisaiConsole.doFuncNone',
+    0x01: 'leisaiConsole.doFuncReady',
+    0x02: 'leisaiConsole.doFuncMotorEnable',
+    0x03: 'leisaiConsole.doFuncBrake',
+    0x04: 'leisaiConsole.doFuncFault',
+    0x05: 'leisaiConsole.doFuncInPosition',
+    0x06: 'leisaiConsole.doFuncHomeDone',
+    0x07: 'leisaiConsole.doFuncCmdDone',
+}
+
 function diLabel(index: number): string {
     const code = ioConfig.value?.diFunctionCodes?.[index] ?? 0
     const base = code & 0x7f
     const nc = (code & 0x80) !== 0
-    const name = LeisaiDiFunctionLabels[base] ?? `0x${base.toString(16).padStart(2, '0')}`
+    const key = DI_FUNC_KEYS[base]
+    const name = key ? t(key) : `0x${base.toString(16).padStart(2, '0')}`
     return nc ? t('leisaiConsole.ncLabel', { name }) : name
 }
 
@@ -91,7 +125,8 @@ function doLabel(index: number): string {
     const code = ioConfig.value?.doFunctionCodes?.[index] ?? 0
     const base = code & 0x7f
     const nc = (code & 0x80) !== 0
-    const name = LeisaiDoFunctionLabels[base] ?? `0x${base.toString(16).padStart(2, '0')}`
+    const key = DO_FUNC_KEYS[base]
+    const name = key ? t(key) : `0x${base.toString(16).padStart(2, '0')}`
     return nc ? t('leisaiConsole.ncLabel', { name }) : name
 }
 
@@ -760,16 +795,8 @@ const tabLabels = computed(() => ({
         <AppCard :beam="false">
             <div class="p-3">
                 <div class="mb-2 flex items-center gap-2">
-                    <input
-                        id="leisai-sampling-toggle"
-                        type="checkbox"
-                        class="h-4 w-4 cursor-pointer accent-primary"
-                        :checked="isSamplingEnabled"
-                        @change="toggleSampling"
-                    />
-                    <label for="leisai-sampling-toggle" class="cursor-pointer select-none text-xs">
-                        {{ t('leisaiConsole.realtimeSampling') }}
-                    </label>
+                    <ToggleSwitch v-model="isSamplingEnabled" @change="toggleSampling" />
+                    <span class="select-none text-xs">{{ t('leisaiConsole.realtimeSampling') }}</span>
                     <span
                         v-if="!isSamplingEnabled"
                         class="ml-1 rounded bg-yellow-100 px-1.5 text-xs text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300"
@@ -830,17 +857,21 @@ const tabLabels = computed(() => ({
         </AppCard>
 
         <!-- Tab 切换条 -->
-        <div class="flex gap-2 border-b">
-            <Button
-                v-for="(label, key) in tabLabels"
+        <div class="flex flex-wrap gap-2 border-b">
+            <button
+                v-for="[key, label] in Object.entries(tabLabels)"
                 :key="key"
-                :severity="activeTab === key ? 'primary' : 'secondary'"
-                :text="activeTab !== key"
-                size="small"
+                type="button"
+                :class="[
+                    'px-4 py-2 text-sm border-b-2 transition-colors',
+                    activeTab === key
+                        ? 'border-primary text-primary font-medium'
+                        : 'border-transparent text-muted-foreground hover:text-foreground',
+                ]"
                 @click="activeTab = key as TabKey"
             >
                 {{ label }}
-            </Button>
+            </button>
         </div>
 
         <!-- Tab: 图表（v-show 保留 DOM，防止切换 Tab 时图表状态被重置） -->
@@ -976,10 +1007,22 @@ const tabLabels = computed(() => ({
                         <div class="text-[11px] text-muted-foreground">{{ doLabel(i - 1) }}</div>
                         <div class="mt-1 flex items-center gap-2">
                             <span class="font-mono">{{ doBit(i - 1) ? 'ON' : 'OFF' }}</span>
-                            <Button size="small" severity="secondary" outlined :disabled="acting" @click="writeDo(i, true)">
+                            <Button
+                                size="small"
+                                severity="secondary"
+                                outlined
+                                :disabled="acting"
+                                @click="writeDo(i, true)"
+                            >
                                 {{ t('leisaiConsole.setOn') }}
                             </Button>
-                            <Button size="small" severity="secondary" outlined :disabled="acting" @click="writeDo(i, false)">
+                            <Button
+                                size="small"
+                                severity="secondary"
+                                outlined
+                                :disabled="acting"
+                                @click="writeDo(i, false)"
+                            >
                                 {{ t('leisaiConsole.setOff') }}
                             </Button>
                         </div>
@@ -1047,48 +1090,74 @@ const tabLabels = computed(() => ({
                 <div class="grid grid-cols-2 gap-3 text-xs sm:grid-cols-4">
                     <label class="flex flex-col gap-1">
                         {{ t('leisaiConsole.rawOp') }}
-                        <select
+                        <Select
                             v-model="rawForm.op"
-                            class="rounded border border-input bg-background px-2 py-1 text-xs text-foreground"
-                        >
-                            <option value="read">{{ t('leisaiConsole.rawOpRead') }}</option>
-                            <option value="write">{{ t('leisaiConsole.rawOpWrite') }}</option>
-                        </select>
+                            :options="[
+                                { label: t('leisaiConsole.rawOpRead'), value: 'read' },
+                                { label: t('leisaiConsole.rawOpWrite'), value: 'write' },
+                            ]"
+                            option-label="label"
+                            option-value="value"
+                            size="small"
+                            class="!text-xs"
+                            :pt="{
+                                root: { class: '!py-0 !px-2 !text-xs !h-7 !flex !items-center' },
+                                label: {
+                                    class: '!text-xs !py-0 !leading-none !truncate !flex-1 !flex !items-center !h-full',
+                                },
+                                dropdown: { class: '!w-6 !flex !items-center !justify-center' },
+                            }"
+                        />
                     </label>
                     <label class="flex flex-col gap-1" v-if="rawForm.op === 'write'">
                         {{ t('leisaiConsole.rawFc') }}
-                        <select
+                        <Select
                             v-model.number="rawForm.fc"
-                            class="rounded border border-input bg-background px-2 py-1 text-xs text-foreground"
-                        >
-                            <option :value="6">{{ t('leisaiConsole.rawFc06') }}</option>
-                            <option :value="16">{{ t('leisaiConsole.rawFc16') }}</option>
-                        </select>
+                            :options="[
+                                { label: t('leisaiConsole.rawFc06'), value: 6 },
+                                { label: t('leisaiConsole.rawFc16'), value: 16 },
+                            ]"
+                            option-label="label"
+                            option-value="value"
+                            size="small"
+                            class="!text-xs"
+                            :pt="{
+                                root: { class: '!py-0 !px-2 !text-xs !h-7 !flex !items-center' },
+                                label: {
+                                    class: '!text-xs !py-0 !leading-none !truncate !flex-1 !flex !items-center !h-full',
+                                },
+                                dropdown: { class: '!w-6 !flex !items-center !justify-center' },
+                            }"
+                        />
                     </label>
                     <label class="flex flex-col gap-1">
                         {{ t('leisaiConsole.rawStartAddr') }}
-                        <input
-                            v-model.number="rawForm.startAddress"
-                            type="number"
-                            class="rounded border border-input bg-background px-2 py-1 font-mono text-xs text-foreground"
+                        <InputNumber
+                            v-model="rawForm.startAddress"
+                            size="small"
+                            class="!text-xs"
+                            input-class="!font-mono !text-xs !h-7 !py-0"
+                            :use-grouping="false"
                         />
                     </label>
                     <label class="flex flex-col gap-1" v-if="rawForm.op === 'read'">
                         {{ t('leisaiConsole.rawQuantity') }}
-                        <input
-                            v-model.number="rawForm.quantity"
-                            type="number"
-                            min="1"
-                            max="125"
-                            class="rounded border border-input bg-background px-2 py-1 font-mono text-xs text-foreground"
+                        <InputNumber
+                            v-model="rawForm.quantity"
+                            size="small"
+                            class="!text-xs"
+                            input-class="!font-mono !text-xs !h-7 !py-0"
+                            :min="1"
+                            :max="125"
+                            :use-grouping="false"
                         />
                     </label>
                     <label class="flex flex-col gap-1 sm:col-span-4" v-if="rawForm.op === 'write'">
                         {{ t('leisaiConsole.rawValues') }}
-                        <input
+                        <InputText
                             v-model="rawForm.valuesText"
-                            type="text"
-                            class="rounded border border-input bg-background px-2 py-1 font-mono text-xs text-foreground"
+                            size="small"
+                            class="!font-mono !text-xs !h-7 !py-0"
                             :placeholder="t('leisaiConsole.rawValuesPlaceholder')"
                         />
                     </label>
@@ -1186,11 +1255,11 @@ const tabLabels = computed(() => ({
                                     {{ dirtyCount }}
                                 </span>
                             </span>
-                            <input
+                            <InputText
                                 v-model="paramSearch"
-                                type="text"
+                                size="small"
+                                class="ml-auto !text-xs !h-7 !py-0 w-56"
                                 :placeholder="t('leisaiConsole.paramSearchPlaceholder')"
-                                class="ml-auto w-56 rounded border border-input bg-background px-2 py-1 text-xs text-foreground"
                             />
                         </div>
 
@@ -1244,12 +1313,13 @@ const tabLabels = computed(() => ({
                                                 </div>
                                             </td>
                                             <td class="px-2 py-1">
-                                                <input
-                                                    v-model.number="paramEdits[p.addressLow]"
-                                                    type="number"
+                                                <InputNumber
+                                                    v-model="paramEdits[p.addressLow]"
                                                     :min="p.rangeMin ?? undefined"
                                                     :max="p.rangeMax ?? undefined"
-                                                    class="w-24 rounded border border-input bg-background px-1.5 py-0.5 font-mono text-xs text-foreground"
+                                                    size="small"
+                                                    input-class="!font-mono !text-xs !w-24 !h-6 !py-0"
+                                                    :use-grouping="false"
                                                 />
                                             </td>
                                             <td class="px-2 py-1">
@@ -1347,7 +1417,13 @@ const tabLabels = computed(() => ({
             <div class="p-3">
                 <div class="mb-2 flex items-center justify-between">
                     <span class="text-xs font-semibold text-muted-foreground">{{ t('leisaiConsole.logTitle') }}</span>
-                    <Button text severity="secondary" size="small" class="h-6 px-2 text-xs" @click="store.logs.splice(0)">
+                    <Button
+                        text
+                        severity="secondary"
+                        size="small"
+                        class="h-6 px-2 text-xs"
+                        @click="store.logs.splice(0)"
+                    >
                         {{ t('leisaiConsole.logClear') }}
                     </Button>
                 </div>

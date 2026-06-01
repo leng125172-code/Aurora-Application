@@ -54,6 +54,8 @@ public interface IProjectorOperationLogRepository : IRepository<ProjectorOperati
         int maxResultCount,
         ProjectorOperationType? operationType = null,
         bool onlyFailures = false,
+        DateTime? startTime = null,
+        DateTime? endTime = null,
         CancellationToken cancellationToken = default
     );
 
@@ -64,6 +66,8 @@ public interface IProjectorOperationLogRepository : IRepository<ProjectorOperati
         Guid projectorDeviceId,
         ProjectorOperationType? operationType = null,
         bool onlyFailures = false,
+        DateTime? startTime = null,
+        DateTime? endTime = null,
         CancellationToken cancellationToken = default
     );
 

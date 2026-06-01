@@ -14,7 +14,7 @@
  */
 import { useAttrs, computed, type HTMLAttributes } from 'vue'
 import PrimeCard from 'primevue/card'
-import BorderBeam from '@/components/inspira/BorderBeam.vue'
+import BorderBeam from '@/components/ui/border-beam/BorderBeam.vue'
 
 interface AppCardProps {
     /** 是否显示 BorderBeam 光束动画（默认 true，保持 Aurora 视觉一致性） */
@@ -52,20 +52,16 @@ const restAttrs = computed(() => {
 </script>
 
 <template>
-    <!-- 外层 wrapper：承载 BorderBeam 并锁定圆角与 overflow，使光束沿边框运行 -->
-    <div :class="['relative rounded-xl overflow-hidden', props.class]" v-bind="restAttrs">
-        <BorderBeam
-            v-if="beam"
-            :size="beamSize"
-            :duration="beamDuration"
-            :delay="beamDelay"
-            :color-from="beamColorFrom"
-            :color-to="beamColorTo"
-        />
-        <!-- PrimeVue Card：透传 pt 让根容器贴合玻璃态背景；body 取消默认 padding，由业务侧 #content 控制 -->
+    <!-- 外层 wrapper：overflow-hidden 阻止 BorderBeam::after 的布局溢出触发滚动条；clip-path 保留以裁切视觉边界 -->
+    <div
+        :class="['relative overflow-hidden rounded-xl', props.class]"
+        style="clip-path: inset(0 round 0.75rem)"
+        v-bind="restAttrs"
+    >
+        <!-- PrimeVue Card：承载边框、玻璃态背景；自身 overflow-hidden 裁切 Card 内容到圆角范围 -->
         <PrimeCard
             :pt="{
-                root: { class: 'bg-card/40 backdrop-blur border-0 shadow-sm rounded-xl' },
+                root: { class: 'bg-card/40 backdrop-blur border border-border shadow-sm rounded-xl overflow-hidden' },
                 body: { class: '!p-0' },
                 caption: { class: 'p-4 pb-0' },
                 content: { class: 'p-4' },
@@ -90,5 +86,14 @@ const restAttrs = computed(() => {
                 <slot name="footer" />
             </template>
         </PrimeCard>
+        <!-- BorderBeam 放在 PrimeCard 之后，z 轴在上方，光束才能覆盖并显示在边框位置 -->
+        <BorderBeam
+            v-if="beam"
+            :size="beamSize"
+            :duration="beamDuration"
+            :delay="beamDelay"
+            :color-from="beamColorFrom"
+            :color-to="beamColorTo"
+        />
     </div>
 </template>

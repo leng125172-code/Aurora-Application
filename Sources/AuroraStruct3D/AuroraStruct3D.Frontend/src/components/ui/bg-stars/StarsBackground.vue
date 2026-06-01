@@ -67,23 +67,32 @@ watch(
     }
 )
 
-const starLayer1Transition = computed(() => ({
-    repeat: Infinity,
-    duration: props.speed,
-    ease: 'linear',
-} as any))
+const starLayer1Transition = computed(
+    () =>
+        ({
+            repeat: Infinity,
+            duration: props.speed,
+            ease: 'linear',
+        }) as any
+)
 
-const starLayer2Transition = computed(() => ({
-    repeat: Infinity,
-    duration: props.speed * 2,
-    ease: 'linear',
-} as any))
+const starLayer2Transition = computed(
+    () =>
+        ({
+            repeat: Infinity,
+            duration: props.speed * 2,
+            ease: 'linear',
+        }) as any
+)
 
-const starLayer3Transition = computed(() => ({
-    repeat: Infinity,
-    duration: props.speed * 3,
-    ease: 'linear',
-} as any))
+const starLayer3Transition = computed(
+    () =>
+        ({
+            repeat: Infinity,
+            duration: props.speed * 3,
+            ease: 'linear',
+        }) as any
+)
 </script>
 
 <template>

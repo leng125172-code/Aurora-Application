@@ -84,6 +84,8 @@ public interface ICameraOperationLogRepository : IRepository<CameraOperationLog,
         int maxResultCount,
         CameraOperationType? operationType = null,
         bool onlyFailures = false,
+        DateTime? startTime = null,
+        DateTime? endTime = null,
         CancellationToken cancellationToken = default
     );
 
@@ -94,6 +96,8 @@ public interface ICameraOperationLogRepository : IRepository<CameraOperationLog,
         Guid cameraDeviceId,
         CameraOperationType? operationType = null,
         bool onlyFailures = false,
+        DateTime? startTime = null,
+        DateTime? endTime = null,
         CancellationToken cancellationToken = default
     );
 

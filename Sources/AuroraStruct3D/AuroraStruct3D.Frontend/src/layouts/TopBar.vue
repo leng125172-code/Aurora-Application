@@ -62,7 +62,6 @@ function toggleProfile(event: Event): void {
                 type="button"
                 severity="secondary"
                 text
-                rounded
                 :aria-label="t('layout.profile')"
                 v-tooltip.bottom="t('layout.profile')"
                 @click="toggleProfile"
@@ -81,10 +80,7 @@ function toggleProfile(event: Event): void {
                             (item.data as { kind: string } | undefined)?.kind === 'label' && 'font-medium',
                         ]"
                     >
-                        <LogOut
-                            v-if="(item.data as { kind: string } | undefined)?.kind === 'logout'"
-                            class="size-4"
-                        />
+                        <LogOut v-if="(item.data as { kind: string } | undefined)?.kind === 'logout'" class="size-4" />
                         <span>{{ item.label }}</span>
                     </a>
                 </template>

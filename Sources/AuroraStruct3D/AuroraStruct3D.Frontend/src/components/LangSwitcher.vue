@@ -42,15 +42,7 @@ function togglePopup(event: Event): void {
 </script>
 
 <template>
-    <Button
-        type="button"
-        severity="secondary"
-        text
-        rounded
-        :aria-label="locale"
-        v-tooltip.bottom="locale"
-        @click="togglePopup"
-    >
+    <Button type="button" severity="secondary" text :aria-label="locale" v-tooltip.bottom="locale" @click="togglePopup">
         <template #icon>
             <Languages class="size-4" />
         </template>

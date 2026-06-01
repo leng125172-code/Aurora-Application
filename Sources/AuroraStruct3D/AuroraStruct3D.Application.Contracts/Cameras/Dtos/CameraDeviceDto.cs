@@ -14,9 +14,6 @@ public class CameraDeviceDto : FullAuditedEntityDto<Guid>
     /// <summary>相机型号</summary>
     public string? Model { get; set; }
 
-    /// <summary>相机序列号</summary>
-    public string? SerialNumber { get; set; }
-
     /// <summary>设备物理索引</summary>
     public int DeviceIndex { get; set; }
 
@@ -99,4 +96,37 @@ public class CameraParameterDto
 
     /// <summary>描述</summary>
     public string? Description { get; set; }
+}
+
+/// <summary>
+/// 相机操作日志DTO
+/// </summary>
+public class CameraOperationLogDto
+{
+    /// <summary>日志唯一ID</summary>
+    public Guid Id { get; set; }
+
+    /// <summary>关联的相机设备ID</summary>
+    public Guid CameraDeviceId { get; set; }
+
+    /// <summary>SDK相机索引</summary>
+    public int DeviceIndex { get; set; }
+
+    /// <summary>操作类型</summary>
+    public CameraOperationType OperationType { get; set; }
+
+    /// <summary>操作发生时间（UTC）</summary>
+    public DateTime OccurredAt { get; set; }
+
+    /// <summary>是否成功</summary>
+    public bool IsSuccess { get; set; }
+
+    /// <summary>操作参数摘要（可选）</summary>
+    public string? ParameterSummary { get; set; }
+
+    /// <summary>错误信息（仅失败时有值）</summary>
+    public string? ErrorMessage { get; set; }
+
+    /// <summary>硬件往返耗时（毫秒）</summary>
+    public long RoundTripMs { get; set; }
 }

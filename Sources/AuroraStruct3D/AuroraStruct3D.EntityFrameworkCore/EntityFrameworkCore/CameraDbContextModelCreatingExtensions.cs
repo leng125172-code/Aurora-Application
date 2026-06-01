@@ -26,8 +26,6 @@ public static class CameraDbContextModelCreatingExtensions
 
             b.Property(x => x.Model).HasMaxLength(CameraConsts.MaxNameLength);
 
-            b.Property(x => x.SerialNumber).HasMaxLength(CameraConsts.MaxSerialNumberLength);
-
             b.Property(x => x.Description).HasMaxLength(CameraConsts.MaxDescriptionLength);
 
             b.Property(x => x.Status).HasConversion<int>();

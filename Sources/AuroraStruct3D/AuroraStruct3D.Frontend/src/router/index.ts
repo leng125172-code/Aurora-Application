@@ -79,6 +79,12 @@ const routes: RouteRecordRaw[] = [
                 meta: { requiresAuth: true, title: 'menu.projectorManage' },
             },
             {
+                path: 'projectors/logs',
+                name: 'ProjectorLogs',
+                component: () => import('@/views/projectors/ProjectorLogsPage.vue'),
+                meta: { requiresAuth: true, title: 'menu.projectorLogs' },
+            },
+            {
                 path: 'projectors/:id/control',
                 name: 'ProjectorControl',
                 component: () => import('@/views/projectors/ProjectorControlPage.vue'),
@@ -89,6 +95,12 @@ const routes: RouteRecordRaw[] = [
                 name: 'CameraManage',
                 component: () => import('@/views/cameras/CameraManagePage.vue'),
                 meta: { requiresAuth: true, title: 'menu.cameraManage' },
+            },
+            {
+                path: 'cameras/logs',
+                name: 'CameraLogs',
+                component: () => import('@/views/cameras/CameraLogsPage.vue'),
+                meta: { requiresAuth: true, title: 'menu.cameraLogs' },
             },
             {
                 path: 'cameras/:id/control',
@@ -103,10 +115,22 @@ const routes: RouteRecordRaw[] = [
                 meta: { requiresAuth: true, title: 'menu.serialPortManage' },
             },
             {
+                path: 'serial-ports/logs',
+                name: 'SerialPortLogs',
+                component: () => import('@/views/serial-ports/SerialPortLogsPage.vue'),
+                meta: { requiresAuth: true, title: 'menu.serialPortLogs' },
+            },
+            {
                 path: 'motors',
                 name: 'MotorDeviceManage',
                 component: () => import('@/views/motors/MotorDeviceManagePage.vue'),
                 meta: { requiresAuth: true, title: 'menu.motorDeviceManage' },
+            },
+            {
+                path: 'motors/logs',
+                name: 'MotorLogs',
+                component: () => import('@/views/motors/MotorLogsPage.vue'),
+                meta: { requiresAuth: true, title: 'menu.motorLogs' },
             },
             {
                 path: 'motors/ktech-console/:axisId',

@@ -92,6 +92,7 @@ namespace AuroraStruct3D.EntityFrameworkCore
 
         // ── 串口通讯模块 ────────────────────────────────────────────────────────────
         public DbSet<SerialPortConfig> SerialPortConfigs { get; set; }
+        public DbSet<SerialPortOperationLog> SerialPortOperationLogs { get; set; }
 
         // ── 相机模块 ──────────────────────────────────────────────────────────────
         public DbSet<CameraDevice> CameraDevices { get; set; }

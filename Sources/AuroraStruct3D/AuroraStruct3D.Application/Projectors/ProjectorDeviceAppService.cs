@@ -495,7 +495,9 @@ public class ProjectorDeviceAppService : AuroraStruct3DAppService, IProjectorDev
         long totalCount = await _operationLogRepository.GetCountAsync(
             deviceId,
             input.OperationType,
-            input.IsFailedOnly ?? false
+            input.IsFailedOnly ?? false,
+            input.StartTime,
+            input.EndTime
         );
 
         List<ProjectorOperationLog> logs = await _operationLogRepository.GetPagedListAsync(
@@ -503,7 +505,9 @@ public class ProjectorDeviceAppService : AuroraStruct3DAppService, IProjectorDev
             input.SkipCount,
             input.MaxResultCount,
             input.OperationType,
-            input.IsFailedOnly ?? false
+            input.IsFailedOnly ?? false,
+            input.StartTime,
+            input.EndTime
         );
 
         return new PagedResultDto<ProjectorOperationLogDto>(

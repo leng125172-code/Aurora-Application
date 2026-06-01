@@ -57,9 +57,7 @@ public class EfCoreCameraDeviceRepository
         if (!string.IsNullOrWhiteSpace(filter))
         {
             query = query.Where(c =>
-                c.Name.Contains(filter)
-                || (c.Model != null && c.Model.Contains(filter))
-                || (c.SerialNumber != null && c.SerialNumber.Contains(filter))
+                c.Name.Contains(filter) || (c.Model != null && c.Model.Contains(filter))
             );
         }
 
@@ -82,9 +80,7 @@ public class EfCoreCameraDeviceRepository
         if (!string.IsNullOrWhiteSpace(filter))
         {
             query = query.Where(c =>
-                c.Name.Contains(filter)
-                || (c.Model != null && c.Model.Contains(filter))
-                || (c.SerialNumber != null && c.SerialNumber.Contains(filter))
+                c.Name.Contains(filter) || (c.Model != null && c.Model.Contains(filter))
             );
         }
 

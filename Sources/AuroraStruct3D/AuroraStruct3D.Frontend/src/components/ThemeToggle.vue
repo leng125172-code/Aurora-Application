@@ -46,7 +46,6 @@ function togglePopup(event: Event): void {
         type="button"
         severity="secondary"
         text
-        rounded
         :aria-label="t('layout.switchTheme')"
         v-tooltip.bottom="t('layout.switchTheme')"
         @click="togglePopup"

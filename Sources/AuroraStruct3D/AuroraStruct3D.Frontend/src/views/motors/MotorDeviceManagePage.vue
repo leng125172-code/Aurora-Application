@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // 电机设备管理页（PrimeVue 重构版）
 // 提供：扫描参数表单 + 进度日志 + 设备 DataTable（支持编辑/跳转对应操作台）
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch, type Ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { Pencil, RefreshCw, ScanLine, Sliders } from '@lucide/vue'
@@ -33,6 +33,21 @@ const router = useRouter()
 const toast = useAppToast()
 const scanning = ref(false)
 const scanResultText = ref('')
+
+// ─── 展开行（有描述的电机自动展开）─────────────────────
+const expandedRows = ref<Record<string, boolean>>({}) as Ref<Record<string, boolean>>
+
+watch(
+    () => store.motors,
+    (motors) => {
+        const next: Record<string, boolean> = {}
+        for (const motor of motors) {
+            if (motor.description) next[motor.id] = true
+        }
+        expandedRows.value = next
+    },
+    { immediate: true }
+)
 
 const baudRateOptions = SerialPortConsts.supportedBaudRates
 const commonBaudRates = [115200, 38400, 9600, 19200, 57600]
@@ -221,7 +236,7 @@ function progressDetail(p: MotorScanProgressDto): string {
 </script>
 
 <template>
-    <div class="flex flex-col gap-4 p-4">
+    <div class="flex flex-col gap-4">
         <div class="flex flex-wrap items-center justify-between gap-3">
             <h1 class="text-2xl font-bold tracking-tight">{{ t('motor.title') }}</h1>
             <div class="flex flex-wrap gap-2">
@@ -248,21 +263,45 @@ function progressDetail(p: MotorScanProgressDto): string {
                     <div class="grid gap-3 md:grid-cols-[120px_120px_120px_1fr]">
                         <div class="flex flex-col gap-1">
                             <label class="text-sm">{{ t('motor.startId') }}</label>
-                            <InputNumber v-model="scanForm.startSlaveId" :max="32" :min="1" show-buttons />
+                            <InputNumber
+                                v-model="scanForm.startSlaveId"
+                                :max="32"
+                                :min="1"
+                                show-buttons
+                                size="small"
+                                class="!text-xs w-full"
+                                input-class="!text-xs w-full"
+                            />
                         </div>
                         <div class="flex flex-col gap-1">
                             <label class="text-sm">{{ t('motor.endId') }}</label>
-                            <InputNumber v-model="scanForm.endSlaveId" :max="32" :min="1" show-buttons />
+                            <InputNumber
+                                v-model="scanForm.endSlaveId"
+                                :max="32"
+                                :min="1"
+                                show-buttons
+                                size="small"
+                                class="!text-xs w-full"
+                                input-class="!text-xs w-full"
+                            />
                         </div>
                         <div class="flex flex-col gap-1">
                             <label class="text-sm">{{ t('motor.timeoutMs') }}</label>
-                            <InputNumber v-model="scanForm.probeTimeoutMs" :min="50" show-buttons />
+                            <InputNumber
+                                v-model="scanForm.probeTimeoutMs"
+                                :min="50"
+                                show-buttons
+                                size="small"
+                                class="!text-xs w-full"
+                                input-class="!text-xs w-full"
+                            />
                         </div>
                         <div class="flex items-end gap-2">
                             <Button
                                 severity="secondary"
                                 outlined
                                 size="small"
+                                class="!text-xs w-[9rem]"
                                 type="button"
                                 @click="setAllBaudRates(false)"
                             >
@@ -272,6 +311,7 @@ function progressDetail(p: MotorScanProgressDto): string {
                                 severity="secondary"
                                 outlined
                                 size="small"
+                                class="!text-xs w-[9rem]"
                                 type="button"
                                 @click="setAllBaudRates(true)"
                             >
@@ -289,6 +329,8 @@ function progressDetail(p: MotorScanProgressDto): string {
                                 v-model="scanForm.baudRates"
                                 :input-id="`baud-${rate}`"
                                 :value="rate"
+                                size="small"
+                                class="!text-xs w-full"
                             />
                             <label :for="`baud-${rate}`">{{ rate }}</label>
                         </div>
@@ -349,17 +391,20 @@ function progressDetail(p: MotorScanProgressDto): string {
                         size="small"
                         striped-rows
                         scrollable
+                        v-model:expandedRows="expandedRows"
                     >
+                        <template #expansion="{ data }: { data: MotorAxisDto }">
+                            <div
+                                v-if="data.description"
+                                class="bg-muted/20 px-8 py-2.5 text-sm text-muted-foreground border-t border-border/30"
+                            >
+                                {{ data.description }}
+                            </div>
+                        </template>
                         <Column field="axisIndex" :header="t('motor.axis')" style="width: 80px" />
                         <Column :header="t('motor.name')">
                             <template #body="{ data }: { data: MotorAxisDto }">
                                 <div class="font-medium">{{ data.name }}</div>
-                                <div
-                                    v-if="data.description"
-                                    class="max-w-[180px] truncate text-xs text-muted-foreground"
-                                >
-                                    {{ data.description }}
-                                </div>
                             </template>
                         </Column>
                         <Column :header="t('motor.brandModel')">
@@ -392,12 +437,7 @@ function progressDetail(p: MotorScanProgressDto): string {
                         <Column :header="t('common.actions')">
                             <template #body="{ data }: { data: MotorAxisDto }">
                                 <div class="flex flex-wrap gap-1.5">
-                                    <Button
-                                        severity="secondary"
-                                        outlined
-                                        size="small"
-                                        @click.stop="openEdit(data)"
-                                    >
+                                    <Button severity="secondary" outlined size="small" @click.stop="openEdit(data)">
                                         <Pencil class="size-3.5" />
                                         {{ t('motor.edit') }}
                                     </Button>
@@ -407,9 +447,7 @@ function progressDetail(p: MotorScanProgressDto): string {
                                         outlined
                                         size="small"
                                         :disabled="!data.model"
-                                        :title="
-                                            data.model ? t('motor.ktechConsoleTitle') : t('motor.needModel')
-                                        "
+                                        :title="data.model ? t('motor.ktechConsoleTitle') : t('motor.needModel')"
                                         @click.stop="openKtechConsole(data.id)"
                                     >
                                         <Sliders class="size-3.5" />
@@ -421,9 +459,7 @@ function progressDetail(p: MotorScanProgressDto): string {
                                         outlined
                                         size="small"
                                         :disabled="!data.model"
-                                        :title="
-                                            data.model ? t('motor.leisaiConsoleTitle') : t('motor.needModel')
-                                        "
+                                        :title="data.model ? t('motor.leisaiConsoleTitle') : t('motor.needModel')"
                                         @click.stop="openLeisaiConsole(data.id)"
                                     >
                                         <Sliders class="size-3.5" />
@@ -438,11 +474,17 @@ function progressDetail(p: MotorScanProgressDto): string {
         </main>
 
         <!-- 编辑电机对话框 -->
-        <Dialog v-model:visible="showEditDialog" modal :header="t('motor.editTitle')" :style="{ width: '440px' }">
-            <div class="grid gap-3">
+        <Dialog
+            v-model:visible="showEditDialog"
+            modal
+            draggable
+            :header="t('motor.editTitle')"
+            :style="{ width: '440px' }"
+        >
+            <div class="grid gap-3 p-3">
                 <div class="flex flex-col gap-1">
                     <label class="text-sm">{{ t('motor.name') }}</label>
-                    <InputText v-model="editForm.name" />
+                    <InputText v-model="editForm.name" size="small" class="!text-xs" />
                 </div>
                 <div class="flex flex-col gap-1">
                     <label class="text-sm">{{ t('motor.model') }}</label>
@@ -451,11 +493,20 @@ function progressDetail(p: MotorScanProgressDto): string {
                         :options="modelOptionsForEditing"
                         :placeholder="t('motor.selectModel')"
                         show-clear
+                        size="small"
+                        class="!text-xs"
+                        :pt="{
+                            root: { class: '!py-0 !px-2 !text-xs !h-7 !flex !items-center' },
+                            label: {
+                                class: '!text-xs !py-0 !leading-none !truncate !flex-1 !flex !items-center !h-full',
+                            },
+                            dropdown: { class: '!w-6 !flex !items-center !justify-center' },
+                        }"
                     />
                 </div>
                 <div class="flex flex-col gap-1">
                     <label class="text-sm">{{ t('motor.description') }}</label>
-                    <InputText v-model="editForm.description" />
+                    <InputText v-model="editForm.description" size="small" class="!text-xs" />
                 </div>
                 <div class="flex items-center gap-2 text-sm">
                     <ToggleSwitch v-model="editForm.isEnabled" input-id="motor-enabled" />
@@ -463,10 +514,10 @@ function progressDetail(p: MotorScanProgressDto): string {
                 </div>
             </div>
             <template #footer>
-                <Button severity="secondary" outlined @click="showEditDialog = false">
+                <Button severity="secondary" outlined size="small" @click="showEditDialog = false">
                     {{ t('common.cancel') }}
                 </Button>
-                <Button :disabled="editing" @click="handleEdit">
+                <Button :disabled="editing" size="small" @click="handleEdit">
                     {{ editing ? t('common.saving') : t('common.save') }}
                 </Button>
             </template>

@@ -10,6 +10,10 @@ import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { ArrowLeft, RefreshCw, Power, PowerOff, CircleStop, Upload, Trash2 } from '@lucide/vue'
 import Button from 'primevue/button'
+import InputText from 'primevue/inputtext'
+import InputNumber from 'primevue/inputnumber'
+import Select from 'primevue/select'
+import ToggleSwitch from 'primevue/toggleswitch'
 import { AppCard } from '@/components/primevue'
 import { useAppToast } from '@/composables/useAppToast'
 import * as ktechApi from '@/api/ktech'
@@ -88,6 +92,8 @@ const motionForm = reactive<KtechMotionInputDto>({
 
 // ───── 升级 ────────────────────────────────────────────────────────
 const firmwareFile = ref<File | null>(null)
+const firmwareFileName = computed(() => firmwareFile.value?.name ?? null)
+const firmwareInputRef = ref<HTMLInputElement | null>(null)
 const uploading = ref(false)
 
 // ───── 计算属性：实时状态 ───────────────────────────────────────────
@@ -98,18 +104,19 @@ const upgradeLog = computed(() => store.upgradeLogByAxis[axisId.value] ?? [])
 /** true=采样启用（默认），false=已暂停 */
 const isSamplingEnabled = ref(true)
 
-/** 切换实时采样开关，调用后端 API 同步状态 */
+/** 切换实时采样开关；ToggleSwitch v-model 已将 isSamplingEnabled 更新为新值后调用。 */
 async function toggleSampling(): Promise<void> {
     const id = axisId.value
     if (!id) return
+    const newValue = isSamplingEnabled.value // v-model 已更新为期望的新值
     try {
-        if (isSamplingEnabled.value) {
-            await ktechApi.disableSampling(id)
-        } else {
+        if (newValue) {
             await ktechApi.enableSampling(id)
+        } else {
+            await ktechApi.disableSampling(id)
         }
-        isSamplingEnabled.value = !isSamplingEnabled.value
     } catch (err) {
+        isSamplingEnabled.value = !newValue // 失败时还原
         toast.error(t('ktechConsole.samplingToggleFailed', { err: String(err) }))
     }
 }
@@ -470,15 +477,6 @@ type EditableSettingKey = keyof KtechSettingDto
 type FieldOption = { value: number; label: string }
 // Demo formSettingRefresh 语义：
 // device 值 0 = 不支持（控件 Disabled，UI 应灰显）
-// device 值 1 → comboBox index 0 (Disable)
-// device 值 2 → comboBox index 1 (Slow)
-// device 值 3 → comboBox index 2 (Fast)
-const PROTECT_ENABLE_OPTS: FieldOption[] = [
-    { value: 0, label: '0 - 不支持（设备无此保护）' },
-    { value: 1, label: '1 - 禁用 Disable' },
-    { value: 2, label: '2 - 慢速触发 Slow' },
-    { value: 3, label: '3 - 快速触发 Fast' },
-]
 // RS485 波特率索引（KTECH 固件存储索引值，非实际波特率）
 // Demo 共 8 项（index 0~7），对应 9600/19200/38400/57600/115200/230400/460800/921600
 const RS485_BAUD_OPTS: FieldOption[] = [
@@ -499,75 +497,96 @@ const CAN_BAUD_OPTS: FieldOption[] = [
     { value: 3, label: '500000 bps' },
     { value: 4, label: '1000000 bps' },
 ]
-const fieldOptionsMap: Partial<Record<EditableSettingKey | EditableCalibKey, FieldOption[]>> = {
-    busType: [
-        { value: 0, label: 'NONE' },
-        { value: 1, label: 'RS485' },
-        { value: 2, label: 'CAN' },
-        { value: 3, label: 'EtherCAT' },
-    ],
-    rs485BaudRate: RS485_BAUD_OPTS,
-    canBaudRate: CAN_BAUD_OPTS,
-    broadcastMode: [
-        { value: 0, label: 'OFF 关闭' },
-        { value: 1, label: 'ON 开启' },
-    ],
-    spinDirection: [
-        { value: 0, label: 'Normal 正向' },
-        { value: 1, label: 'Reverse 反向' },
-    ],
-    // Demo formSettingRefresh 语义：0=不支持, 1=Disable(index 0), 2=Enable(index 1)
-    brakeResEnable: [
-        { value: 0, label: '0 - 不支持（设备无制动电阻）' },
-        { value: 1, label: '1 - 禁用 Disable' },
-        { value: 2, label: '2 - 启用 Enable' },
-    ],
-    protectMotorTempEnable: PROTECT_ENABLE_OPTS,
-    protectDriverTempEnable: PROTECT_ENABLE_OPTS,
-    protectUnderVoltageEnable: PROTECT_ENABLE_OPTS,
-    protectOverVoltageEnable: PROTECT_ENABLE_OPTS,
-    protectOverCurrentEnable: PROTECT_ENABLE_OPTS,
-    protectShortCircuitEnable: PROTECT_ENABLE_OPTS,
-    protectStallEnable: PROTECT_ENABLE_OPTS,
-    protectLostInputEnable: PROTECT_ENABLE_OPTS,
-    // 输入类型
-    inputType: [
-        { value: 0, label: '0 - 总线(RS485/CAN)' },
-        { value: 1, label: '1 - PWM 输入' },
-    ],
-    pwmInputControlMode: [
-        { value: 0, label: '0 - 关闭' },
-        { value: 1, label: '1 - 速度控制' },
-        { value: 2, label: '2 - 位置控制' },
-        { value: 3, label: '3 - 力矩控制' },
-    ],
-    // 校准字段
-    encoderPos: [
-        { value: 0, label: '0 正向 Normal' },
-        { value: 1, label: '1 反向 Reverse' },
-    ],
-    motorPhaseSequence: [
-        { value: 0, label: '0 正向 Normal' },
-        { value: 1, label: '1 反向 Reverse' },
-    ],
-    // Demo dataStreamClass.encoderType[0..9]
-    encoderType: [
-        { value: 0, label: '0 - AS5600' },
-        { value: 1, label: '1 - AS5047P' },
-        { value: 2, label: '2 - AS5048A' },
-        { value: 3, label: '3 - AS5048B' },
-        { value: 4, label: '4 - TLE5012B' },
-        { value: 5, label: '5 - 14Bit Encoder' },
-        { value: 6, label: '6 - 14Bit Encoder (v2)' },
-        { value: 7, label: '7 - 18Bit Encoder' },
-        { value: 8, label: '8 - 21Bit Encoder' },
-        { value: 9, label: '9 - 19Bit Encoder' },
-    ],
-}
+/** 具有"0 = 不支持"语义的字段集合，用于禁用逻辑，不依赖 label 文本 */
+const ZERO_DISABLED_FIELDS = new Set<string>([
+    'brakeResEnable',
+    'protectMotorTempEnable',
+    'protectDriverTempEnable',
+    'protectUnderVoltageEnable',
+    'protectOverVoltageEnable',
+    'protectOverCurrentEnable',
+    'protectShortCircuitEnable',
+    'protectStallEnable',
+    'protectLostInputEnable',
+])
+const fieldOptionsMap = computed<Partial<Record<EditableSettingKey | EditableCalibKey, FieldOption[]>>>(() => {
+    /** 保护功能启用字段的标准选项 */
+    const protectEnableOpts: FieldOption[] = [
+        { value: 0, label: t('ktechConsole.optProtectNone') },
+        { value: 1, label: t('ktechConsole.optProtectDisable') },
+        { value: 2, label: t('ktechConsole.optProtectSlowTrigger') },
+        { value: 3, label: t('ktechConsole.optProtectFastTrigger') },
+    ]
+    return {
+        busType: [
+            { value: 0, label: 'NONE' },
+            { value: 1, label: 'RS485' },
+            { value: 2, label: 'CAN' },
+            { value: 3, label: 'EtherCAT' },
+        ],
+        rs485BaudRate: RS485_BAUD_OPTS,
+        canBaudRate: CAN_BAUD_OPTS,
+        broadcastMode: [
+            { value: 0, label: 'OFF' },
+            { value: 1, label: 'ON' },
+        ],
+        spinDirection: [
+            { value: 0, label: 'Normal' },
+            { value: 1, label: 'Reverse' },
+        ],
+        // Demo formSettingRefresh 语义：0=不支持, 1=Disable(index 0), 2=Enable(index 1)
+        brakeResEnable: [
+            { value: 0, label: t('ktechConsole.optBrakeResNone') },
+            { value: 1, label: t('ktechConsole.optBrakeResDisable') },
+            { value: 2, label: t('ktechConsole.optBrakeResEnable') },
+        ],
+        protectMotorTempEnable: protectEnableOpts,
+        protectDriverTempEnable: protectEnableOpts,
+        protectUnderVoltageEnable: protectEnableOpts,
+        protectOverVoltageEnable: protectEnableOpts,
+        protectOverCurrentEnable: protectEnableOpts,
+        protectShortCircuitEnable: protectEnableOpts,
+        protectStallEnable: protectEnableOpts,
+        protectLostInputEnable: protectEnableOpts,
+        // 输入类型
+        inputType: [
+            { value: 0, label: t('ktechConsole.optBusCan') },
+            { value: 1, label: t('ktechConsole.optPwmInput') },
+        ],
+        pwmInputControlMode: [
+            { value: 0, label: t('ktechConsole.optPwmOff') },
+            { value: 1, label: t('ktechConsole.optPwmSpeedCtrl') },
+            { value: 2, label: t('ktechConsole.optPwmPosCtrl') },
+            { value: 3, label: t('ktechConsole.optPwmTorqueCtrl') },
+        ],
+        // 校准字段
+        encoderPos: [
+            { value: 0, label: '0 - Normal' },
+            { value: 1, label: '1 - Reverse' },
+        ],
+        motorPhaseSequence: [
+            { value: 0, label: '0 - Normal' },
+            { value: 1, label: '1 - Reverse' },
+        ],
+        // Demo dataStreamClass.encoderType[0..9]
+        encoderType: [
+            { value: 0, label: '0 - AS5600' },
+            { value: 1, label: '1 - AS5047P' },
+            { value: 2, label: '2 - AS5048A' },
+            { value: 3, label: '3 - AS5048B' },
+            { value: 4, label: '4 - TLE5012B' },
+            { value: 5, label: '5 - 14Bit Encoder' },
+            { value: 6, label: '6 - 14Bit Encoder (v2)' },
+            { value: 7, label: '7 - 18Bit Encoder' },
+            { value: 8, label: '8 - 21Bit Encoder' },
+            { value: 9, label: '9 - 19Bit Encoder' },
+        ],
+    }
+})
 
 /** 取字段对应的下拉建议项（无则返回空数组）。 */
 function fieldOptions(key: string): FieldOption[] {
-    return fieldOptionsMap[key as keyof typeof fieldOptionsMap] ?? []
+    return fieldOptionsMap.value[key as keyof typeof fieldOptionsMap.value] ?? []
 }
 
 /**
@@ -591,12 +610,11 @@ const protectOverCurrentA = computed(() => (settingForm.protectOverCurrent / 100
 
 /**
  * 判断字段在当前值为 0 时是否应禁用下拉。
- * 仅对"0 表示不支持"的字段有效（检查 0 选项 label 是否含"不支持"），
+ * 仅对"0 表示不支持"的字段有效，通过 ZERO_DISABLED_FIELDS 集合判断，
  * 避免误禁用 SpinDirection 等正常 0 值字段。
  */
 function isDisabledWhenZero(key: string): boolean {
-    const zeroOpt = fieldOptions(key).find((o) => o.value === 0)
-    return !!zeroOpt && zeroOpt.label.includes('不支持')
+    return ZERO_DISABLED_FIELDS.has(key)
 }
 
 /**
@@ -611,83 +629,81 @@ function selectableOptions(key: string, currentValue: unknown): FieldOption[] {
     return opts.filter((o) => o.value !== 0)
 }
 
-const settingFields: { key: EditableSettingKey; label: string }[] = [
-    { key: 'driverId', label: '驱动 ID' },
-    { key: 'busType', label: '总线类型' },
-    { key: 'rs485BaudRate', label: 'RS485 波特率' },
-    { key: 'canBaudRate', label: 'CAN 波特率' },
-    { key: 'broadcastMode', label: '广播模式' },
-    { key: 'spinDirection', label: '旋转方向' },
-    { key: 'protectMotorTempEnable', label: '电机温度保护启用' },
-    { key: 'protectDriverTempEnable', label: '驱动温度保护启用' },
-    { key: 'protectUnderVoltageEnable', label: '欠压保护启用' },
-    { key: 'protectOverVoltageEnable', label: '过压保护启用' },
-    { key: 'protectOverCurrentEnable', label: '过流保护启用' },
-    { key: 'protectShortCircuitEnable', label: '短路保护启用' },
-    { key: 'protectStallEnable', label: '失速保护启用' },
-    { key: 'protectLostInputEnable', label: '失控保护启用' },
-    { key: 'protectMotorTemp', label: '电机温度阈值(℃)' },
-    { key: 'protectDriverTemp', label: '驱动温度阈值(℃)' },
-    { key: 'protectUnderVoltage', label: '欠压阈值(V)' },
-    { key: 'protectOverVoltage', label: '过压阈值(V)' },
-    { key: 'protectOverCurrent', label: '过流阈值(mA)' },
-    { key: 'protectOverCurrentTime', label: '过流响应时间(ms)' },
-    { key: 'protectStallTime', label: '失速响应时间(ms)' },
-    { key: 'protectLostInputTime', label: '失控响应时间(ms)' },
-    { key: 'brakeResEnable', label: '制动电阻启用' },
-    { key: 'brakeResOnVoltage', label: '制动开启电压(V)' },
-    { key: 'inputType', label: '输入类型' },
-    { key: 'pwmInputControlMode', label: 'PWM 控制模式' },
-    { key: 'pwmInputMinValue', label: 'PWM 最小值' },
-    { key: 'pwmInputMaxValue', label: 'PWM 最大值' },
-    { key: 'pwmInputCenterValue', label: 'PWM 中心值' },
-    { key: 'pwmInputDeadband', label: 'PWM 死区' },
-    { key: 'pwmToTorqueRatio', label: 'PWM→力矩比' },
-    { key: 'pwmToSpeedRatio', label: 'PWM→速度比' },
-    { key: 'pwmToAngleRatio', label: 'PWM→角度比' },
-    { key: 'pulsesPerCircle', label: '每圈脉冲数' },
-    { key: 'anglePidKp', label: '角度 PID Kp' },
-    { key: 'anglePidKi', label: '角度 PID Ki' },
-    { key: 'anglePidKd', label: '角度 PID Kd' },
-    { key: 'speedPidKp', label: '速度 PID Kp' },
-    { key: 'speedPidKi', label: '速度 PID Ki' },
-    { key: 'speedPidKd', label: '速度 PID Kd' },
-    { key: 'currentPidKp', label: '电流 PID Kp' },
-    { key: 'currentPidKi', label: '电流 PID Ki' },
-    { key: 'currentPidKd', label: '电流 PID Kd' },
-    { key: 'maxTorque', label: '最大力矩/功率' }, // MS 型由能力 API 覆盖为"最大功率"
-    { key: 'maxSpeed', label: '最大速度(dps)' },
-    { key: 'maxAngle', label: '最大角度(°)' },
-    { key: 'currentRamp', label: '电流斜率' },
-    { key: 'speedRamp', label: '速度斜率(dps/s)' },
-    { key: 'uniqueId', label: '唯一 ID' },
-    { key: 'savedFlag', label: '保存标志' },
-]
+const settingFields = computed<{ key: EditableSettingKey; label: string }[]>(() => [
+    { key: 'driverId', label: t('ktechConsole.fieldDriverId') },
+    { key: 'busType', label: t('ktechConsole.fieldBusType') },
+    { key: 'rs485BaudRate', label: t('ktechConsole.fieldRs485Baud') },
+    { key: 'canBaudRate', label: t('ktechConsole.fieldCanBaud') },
+    { key: 'broadcastMode', label: t('ktechConsole.fieldBroadcastMode') },
+    { key: 'spinDirection', label: t('ktechConsole.fieldSpinDirection') },
+    { key: 'protectMotorTempEnable', label: t('ktechConsole.fieldProtectMotorTemp') },
+    { key: 'protectDriverTempEnable', label: t('ktechConsole.fieldProtectDriverTemp') },
+    { key: 'protectUnderVoltageEnable', label: t('ktechConsole.fieldProtectUnderVoltage') },
+    { key: 'protectOverVoltageEnable', label: t('ktechConsole.fieldProtectOverVoltage') },
+    { key: 'protectOverCurrentEnable', label: t('ktechConsole.fieldProtectOverCurrent') },
+    { key: 'protectShortCircuitEnable', label: t('ktechConsole.fieldProtectShortCircuit') },
+    { key: 'protectStallEnable', label: t('ktechConsole.fieldProtectStall') },
+    { key: 'protectLostInputEnable', label: t('ktechConsole.fieldProtectLostInput') },
+    { key: 'protectMotorTemp', label: t('ktechConsole.fieldProtectMotorTempVal') },
+    { key: 'protectDriverTemp', label: t('ktechConsole.fieldProtectDriverTempVal') },
+    { key: 'protectUnderVoltage', label: t('ktechConsole.fieldProtectUnderVoltageVal') },
+    { key: 'protectOverVoltage', label: t('ktechConsole.fieldProtectOverVoltageVal') },
+    { key: 'protectOverCurrent', label: t('ktechConsole.fieldProtectOverCurrentVal') },
+    { key: 'protectOverCurrentTime', label: t('ktechConsole.fieldProtectOverCurrentTime') },
+    { key: 'protectStallTime', label: t('ktechConsole.fieldProtectStallTime') },
+    { key: 'protectLostInputTime', label: t('ktechConsole.fieldProtectLostInputTime') },
+    { key: 'brakeResEnable', label: t('ktechConsole.fieldBrakeResEnable') },
+    { key: 'brakeResOnVoltage', label: t('ktechConsole.fieldBrakeResVoltage') },
+    { key: 'inputType', label: t('ktechConsole.fieldInputType') },
+    { key: 'pwmInputControlMode', label: t('ktechConsole.fieldPwmControlMode') },
+    { key: 'pwmInputMinValue', label: t('ktechConsole.fieldPwmMin') },
+    { key: 'pwmInputMaxValue', label: t('ktechConsole.fieldPwmMax') },
+    { key: 'pwmInputCenterValue', label: t('ktechConsole.fieldPwmCenter') },
+    { key: 'pwmInputDeadband', label: t('ktechConsole.fieldPwmDeadband') },
+    { key: 'pwmToTorqueRatio', label: t('ktechConsole.fieldPwmToTorqueRatio') },
+    { key: 'pwmToSpeedRatio', label: t('ktechConsole.fieldPwmToSpeedRatio') },
+    { key: 'pwmToAngleRatio', label: t('ktechConsole.fieldPwmToAngleRatio') },
+    { key: 'pulsesPerCircle', label: t('ktechConsole.fieldPulsesPerCircle') },
+    { key: 'anglePidKp', label: t('ktechConsole.fieldAnglePidKp') },
+    { key: 'anglePidKi', label: t('ktechConsole.fieldAnglePidKi') },
+    { key: 'anglePidKd', label: t('ktechConsole.fieldAnglePidKd') },
+    { key: 'speedPidKp', label: t('ktechConsole.fieldSpeedPidKp') },
+    { key: 'speedPidKi', label: t('ktechConsole.fieldSpeedPidKi') },
+    { key: 'speedPidKd', label: t('ktechConsole.fieldSpeedPidKd') },
+    { key: 'currentPidKp', label: t('ktechConsole.fieldCurrentPidKp') },
+    { key: 'currentPidKi', label: t('ktechConsole.fieldCurrentPidKi') },
+    { key: 'currentPidKd', label: t('ktechConsole.fieldCurrentPidKd') },
+    { key: 'maxTorque', label: t('ktechConsole.fieldMaxTorque') },
+    { key: 'maxSpeed', label: t('ktechConsole.fieldMaxSpeed') },
+    { key: 'maxAngle', label: t('ktechConsole.fieldMaxAngle') },
+    { key: 'currentRamp', label: t('ktechConsole.fieldCurrentRamp') },
+    { key: 'speedRamp', label: t('ktechConsole.fieldSpeedRamp') },
+    { key: 'uniqueId', label: t('ktechConsole.fieldUniqueId') },
+    { key: 'savedFlag', label: t('ktechConsole.fieldSavedFlag') },
+])
 
-const calibFields: { key: EditableCalibKey; label: string }[] = [
-    { key: 'motorPoles', label: '电机极对数' },
-    { key: 'encoderType', label: '编码器类型' },
-    { key: 'encoderPos', label: '编码器位置' },
-    { key: 'motorPhaseSequence', label: '电机相序' },
-    { key: 'motorEncoderAlignBias', label: '电机编码器对齐偏置' },
-    { key: 'motorEncoderAlignRatio', label: '电机编码器对齐比率' },
-    { key: 'motorEncoderAlignVoltage', label: '对齐电压(V)' },
-    { key: 'motorEncoderAlignFlag', label: '对齐标志' },
-    { key: 'encoderOffset', label: '编码器零点偏置' },
-    { key: 'encoderOffsetFlag', label: '编码器偏置标志' },
-]
+const calibFields = computed<{ key: EditableCalibKey; label: string }[]>(() => [
+    { key: 'motorPoles', label: t('ktechConsole.calibMotorPoles') },
+    { key: 'encoderType', label: t('ktechConsole.calibEncoderType') },
+    { key: 'encoderPos', label: t('ktechConsole.calibEncoderPos') },
+    { key: 'motorPhaseSequence', label: t('ktechConsole.calibMotorPhaseSeq') },
+    { key: 'motorEncoderAlignBias', label: t('ktechConsole.calibEncoderAlignBias') },
+    { key: 'motorEncoderAlignRatio', label: t('ktechConsole.calibEncoderAlignRatio') },
+    { key: 'motorEncoderAlignVoltage', label: t('ktechConsole.calibEncoderAlignVoltage') },
+    { key: 'motorEncoderAlignFlag', label: t('ktechConsole.calibEncoderAlignFlag') },
+    { key: 'encoderOffset', label: t('ktechConsole.calibEncoderOffset') },
+    { key: 'encoderOffsetFlag', label: t('ktechConsole.calibEncoderOffsetFlag') },
+])
 
 // MG/MG_E 专有字段（动态显示）
 type MgEditableKey = Exclude<keyof NonNullable<KtechCalibDto['mg']>, 'alignValueList'>
-const mgFields: { key: MgEditableKey; label: string }[] = [
-    { key: 'reductionRatio', label: '减速比(MG_E)' },
-    { key: 'encoderRelateValue', label: '编码器关联值' },
-    { key: 'encoderRelateValueFlag', label: '编码器关联标志' },
-    { key: 'encoder2Offset', label: '第二编码器偏置(MG_E)' },
-    { key: 'encoder2OffsetFlag', label: '第二编码器偏置标志' },
-]
-
-// 模板直接使用 calibFields 和 settingFields，无需过滤。
+const mgFields = computed<{ key: MgEditableKey; label: string }[]>(() => [
+    { key: 'reductionRatio', label: t('ktechConsole.mgReductionRatio') },
+    { key: 'encoderRelateValue', label: t('ktechConsole.mgEncoderRelateValue') },
+    { key: 'encoderRelateValueFlag', label: t('ktechConsole.mgEncoderRelateValueFlag') },
+    { key: 'encoder2Offset', label: t('ktechConsole.mgEncoder2Offset') },
+    { key: 'encoder2OffsetFlag', label: t('ktechConsole.mgEncoder2OffsetFlag') },
+])
 
 // ───── 生命周期 ────────────────────────────────────────────────────
 onMounted(async () => {
@@ -797,18 +813,10 @@ function goBack() {
         <!-- 实时状态摘要 -->
         <AppCard :beam="false">
             <div class="p-3">
-                <!-- 采样开关勾选框 -->
+                <!-- 采样开关 -->
                 <div class="mb-2 flex items-center gap-2">
-                    <input
-                        id="sampling-toggle"
-                        type="checkbox"
-                        class="h-4 w-4 cursor-pointer accent-primary"
-                        :checked="isSamplingEnabled"
-                        @change="toggleSampling"
-                    />
-                    <label for="sampling-toggle" class="cursor-pointer select-none text-xs">
-                        {{ t('ktechConsole.realtimeSampling') }}
-                    </label>
+                    <ToggleSwitch v-model="isSamplingEnabled" @change="toggleSampling" />
+                    <span class="select-none text-xs">{{ t('ktechConsole.realtimeSampling') }}</span>
                     <span
                         v-if="!isSamplingEnabled"
                         class="ml-1 rounded bg-yellow-100 px-1.5 text-xs text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300"
@@ -1014,7 +1022,13 @@ function goBack() {
                     >
                         {{ t('ktechConsole.btnSaveParams') }}
                     </Button>
-                    <Button size="small" severity="secondary" outlined :disabled="acting" @click="handleAlignMotorEncoder">
+                    <Button
+                        size="small"
+                        severity="secondary"
+                        outlined
+                        :disabled="acting"
+                        @click="handleAlignMotorEncoder"
+                    >
                         {{ t('ktechConsole.btnAlignEncoder') }}
                     </Button>
                     <Button size="small" severity="secondary" outlined :disabled="acting" @click="handleSetEncoderZero">
@@ -1045,28 +1059,38 @@ function goBack() {
                         <label v-for="f in calibFields" :key="f.key" class="flex flex-col gap-1 text-xs">
                             <span class="text-muted-foreground">{{ fieldLabel(f.key, f.label) }}</span>
                             <!-- 有枚举 + 只读：显示中文标签 -->
-                            <input
+                            <InputText
                                 v-if="hasFieldOptions(f.key) && isReadOnlyCalib(f.key)"
                                 :value="fieldOptionLabel(f.key, calibForm[f.key] as number)"
-                                class="rounded border bg-muted px-2 py-1.5 font-mono text-sm opacity-70 cursor-not-allowed"
+                                size="small"
+                                class="!text-xs opacity-70 cursor-not-allowed"
                                 readonly
                             />
-                            <!-- 有枚举 + 可写：真下拉 -->
-                            <select
+                            <!-- 有枚举 + 可写：下拉选择 -->
+                            <Select
                                 v-else-if="hasFieldOptions(f.key)"
-                                v-model.number="(calibForm as any)[f.key]"
-                                class="rounded border bg-background px-2 py-1.5 text-sm"
-                            >
-                                <option v-for="o in fieldOptions(f.key)" :key="o.value" :value="o.value">
-                                    {{ o.label }}
-                                </option>
-                            </select>
+                                v-model="(calibForm as any)[f.key]"
+                                :options="fieldOptions(f.key)"
+                                option-label="label"
+                                option-value="value"
+                                size="small"
+                                class="!text-xs"
+                                :pt="{
+                                    root: { class: '!py-0 !px-2 !text-xs !h-7 !flex !items-center' },
+                                    label: {
+                                        class: '!text-xs !py-0 !leading-none !truncate !flex-1 !flex !items-center !h-full',
+                                    },
+                                    dropdown: { class: '!w-6 !flex !items-center !justify-center' },
+                                }"
+                            />
                             <!-- 数字字段 -->
-                            <input
+                            <InputNumber
                                 v-else
-                                v-model.number="calibForm[f.key]"
-                                class="rounded border bg-background px-2 py-1.5 font-mono text-sm disabled:opacity-60 disabled:cursor-not-allowed"
-                                type="number"
+                                v-model="(calibForm as any)[f.key]"
+                                size="small"
+                                fluid
+                                input-class="!text-xs"
+                                :use-grouping="false"
                                 :disabled="isReadOnlyCalib(f.key)"
                                 :min="fieldRange(f.key)?.min ?? undefined"
                                 :max="fieldRange(f.key)?.max ?? undefined"
@@ -1083,22 +1107,26 @@ function goBack() {
                             <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                                 <label v-for="f in mgFields" :key="f.key" class="flex flex-col gap-1 text-xs">
                                     <span class="text-muted-foreground">{{ f.label }}</span>
-                                    <input
-                                        v-model.number="calibForm.mg[f.key]"
-                                        class="rounded border bg-background px-2 py-1.5 font-mono text-sm"
-                                        type="number"
+                                    <InputNumber
+                                        v-model="(calibForm.mg as any)[f.key]"
+                                        size="small"
+                                        fluid
+                                        input-class="!text-xs"
+                                        :use-grouping="false"
                                     />
                                 </label>
                             </div>
                             <div class="space-y-2">
                                 <div class="text-xs text-muted-foreground">{{ t('ktechConsole.alignValueList') }}</div>
                                 <div class="grid grid-cols-4 md:grid-cols-8 gap-1.5">
-                                    <input
-                                        v-for="(_, i) in calibForm.mg.alignValueList"
+                                    <InputNumber
+                                        v-for="(_, i) in calibForm.mg!.alignValueList"
                                         :key="i"
-                                        v-model.number="calibForm.mg.alignValueList[i]"
-                                        class="rounded border bg-background px-1.5 py-1 font-mono text-xs"
-                                        type="number"
+                                        v-model="calibForm.mg!.alignValueList[i]"
+                                        size="small"
+                                        fluid
+                                        input-class="!text-xs"
+                                        :use-grouping="false"
                                     />
                                 </div>
                             </div>
@@ -1120,33 +1148,39 @@ function goBack() {
                                 </span>
                             </span>
                             <!-- 有枚举 + 只读 -->
-                            <input
+                            <InputText
                                 v-if="hasFieldOptions(f.key) && isReadOnlySetting(f.key)"
                                 :value="fieldOptionLabel(f.key, settingForm[f.key] as number)"
-                                class="rounded border bg-muted px-2 py-1.5 font-mono text-sm opacity-70 cursor-not-allowed"
+                                size="small"
+                                class="!text-xs opacity-70 cursor-not-allowed"
                                 readonly
                             />
-                            <!-- 有枚举 + 可写：真下拉；protect enable 值为 0（不支持）时禁用 -->
-                            <select
+                            <!-- 有枚举 + 可写；protect enable 值为 0（不支持）时禁用 -->
+                            <Select
                                 v-else-if="hasFieldOptions(f.key)"
-                                v-model.number="(settingForm as any)[f.key]"
-                                class="rounded border bg-background px-2 py-1.5 text-sm disabled:opacity-60 disabled:cursor-not-allowed"
+                                v-model="(settingForm as any)[f.key]"
+                                :options="selectableOptions(f.key, (settingForm as any)[f.key])"
+                                option-label="label"
+                                option-value="value"
+                                size="small"
+                                class="!text-xs"
                                 :disabled="isDisabledWhenZero(f.key) && (settingForm as any)[f.key] === 0"
-                            >
-                                <option
-                                    v-for="o in selectableOptions(f.key, (settingForm as any)[f.key])"
-                                    :key="o.value"
-                                    :value="o.value"
-                                >
-                                    {{ o.label }}
-                                </option>
-                            </select>
+                                :pt="{
+                                    root: { class: '!py-0 !px-2 !text-xs !h-7 !flex !items-center' },
+                                    label: {
+                                        class: '!text-xs !py-0 !leading-none !truncate !flex-1 !flex !items-center !h-full',
+                                    },
+                                    dropdown: { class: '!w-6 !flex !items-center !justify-center' },
+                                }"
+                            />
                             <!-- 数字字段 -->
-                            <input
+                            <InputNumber
                                 v-else
-                                v-model.number="settingForm[f.key]"
-                                class="rounded border bg-background px-2 py-1.5 font-mono text-sm disabled:opacity-60 disabled:cursor-not-allowed"
-                                type="number"
+                                v-model="(settingForm as any)[f.key]"
+                                size="small"
+                                fluid
+                                input-class="!text-xs"
+                                :use-grouping="false"
                                 :disabled="isReadOnlySetting(f.key)"
                                 :min="fieldRange(f.key)?.min ?? undefined"
                                 :max="fieldRange(f.key)?.max ?? undefined"
@@ -1166,74 +1200,92 @@ function goBack() {
                     <div class="grid grid-cols-3 gap-3">
                         <label class="flex flex-col gap-1 text-xs">
                             <span class="text-muted-foreground">{{ t('ktechConsole.pidAngleKp') }}</span>
-                            <input
-                                v-model.number="pidRamForm.angleKp"
-                                class="rounded border bg-background px-2 py-1.5 font-mono text-sm"
-                                type="number"
+                            <InputNumber
+                                v-model="pidRamForm.angleKp"
+                                size="small"
+                                fluid
+                                input-class="!text-xs"
+                                :use-grouping="false"
                             />
                         </label>
                         <label class="flex flex-col gap-1 text-xs">
                             <span class="text-muted-foreground">{{ t('ktechConsole.pidAngleKi') }}</span>
-                            <input
-                                v-model.number="pidRamForm.angleKi"
-                                class="rounded border bg-background px-2 py-1.5 font-mono text-sm"
-                                type="number"
+                            <InputNumber
+                                v-model="pidRamForm.angleKi"
+                                size="small"
+                                fluid
+                                input-class="!text-xs"
+                                :use-grouping="false"
                             />
                         </label>
                         <label class="flex flex-col gap-1 text-xs">
                             <span class="text-muted-foreground">{{ t('ktechConsole.pidAngleKd') }}</span>
-                            <input
-                                v-model.number="pidRamForm.angleKd"
-                                class="rounded border bg-background px-2 py-1.5 font-mono text-sm"
-                                type="number"
+                            <InputNumber
+                                v-model="pidRamForm.angleKd"
+                                size="small"
+                                fluid
+                                input-class="!text-xs"
+                                :use-grouping="false"
                             />
                         </label>
                         <label class="flex flex-col gap-1 text-xs">
                             <span class="text-muted-foreground">{{ t('ktechConsole.pidSpeedKp') }}</span>
-                            <input
-                                v-model.number="pidRamForm.speedKp"
-                                class="rounded border bg-background px-2 py-1.5 font-mono text-sm"
-                                type="number"
+                            <InputNumber
+                                v-model="pidRamForm.speedKp"
+                                size="small"
+                                fluid
+                                input-class="!text-xs"
+                                :use-grouping="false"
                             />
                         </label>
                         <label class="flex flex-col gap-1 text-xs">
                             <span class="text-muted-foreground">{{ t('ktechConsole.pidSpeedKi') }}</span>
-                            <input
-                                v-model.number="pidRamForm.speedKi"
-                                class="rounded border bg-background px-2 py-1.5 font-mono text-sm"
-                                type="number"
+                            <InputNumber
+                                v-model="pidRamForm.speedKi"
+                                size="small"
+                                fluid
+                                input-class="!text-xs"
+                                :use-grouping="false"
                             />
                         </label>
                         <label class="flex flex-col gap-1 text-xs">
                             <span class="text-muted-foreground">{{ t('ktechConsole.pidSpeedKd') }}</span>
-                            <input
-                                v-model.number="pidRamForm.speedKd"
-                                class="rounded border bg-background px-2 py-1.5 font-mono text-sm"
-                                type="number"
+                            <InputNumber
+                                v-model="pidRamForm.speedKd"
+                                size="small"
+                                fluid
+                                input-class="!text-xs"
+                                :use-grouping="false"
                             />
                         </label>
                         <label class="flex flex-col gap-1 text-xs">
                             <span class="text-muted-foreground">{{ t('ktechConsole.pidCurrentKp') }}</span>
-                            <input
-                                v-model.number="pidRamForm.currentKp"
-                                class="rounded border bg-background px-2 py-1.5 font-mono text-sm"
-                                type="number"
+                            <InputNumber
+                                v-model="pidRamForm.currentKp"
+                                size="small"
+                                fluid
+                                input-class="!text-xs"
+                                :use-grouping="false"
                             />
                         </label>
                         <label class="flex flex-col gap-1 text-xs">
                             <span class="text-muted-foreground">{{ t('ktechConsole.pidCurrentKi') }}</span>
-                            <input
-                                v-model.number="pidRamForm.currentKi"
-                                class="rounded border bg-background px-2 py-1.5 font-mono text-sm"
-                                type="number"
+                            <InputNumber
+                                v-model="pidRamForm.currentKi"
+                                size="small"
+                                fluid
+                                input-class="!text-xs"
+                                :use-grouping="false"
                             />
                         </label>
                         <label class="flex flex-col gap-1 text-xs">
                             <span class="text-muted-foreground">{{ t('ktechConsole.pidCurrentKd') }}</span>
-                            <input
-                                v-model.number="pidRamForm.currentKd"
-                                class="rounded border bg-background px-2 py-1.5 font-mono text-sm"
-                                type="number"
+                            <InputNumber
+                                v-model="pidRamForm.currentKd"
+                                size="small"
+                                fluid
+                                input-class="!text-xs"
+                                :use-grouping="false"
                             />
                         </label>
                     </div>
@@ -1285,7 +1337,13 @@ function goBack() {
                     <Button size="small" severity="secondary" outlined :disabled="acting" @click="handleClearLoops">
                         {{ t('ktechConsole.btnClearLoops') }}
                     </Button>
-                    <Button size="small" severity="secondary" outlined :disabled="acting" @click="handleSetMotorZeroRam">
+                    <Button
+                        size="small"
+                        severity="secondary"
+                        outlined
+                        :disabled="acting"
+                        @click="handleSetMotorZeroRam"
+                    >
                         {{ t('ktechConsole.btnSetZeroRam') }}
                     </Button>
                     <Button
@@ -1304,12 +1362,21 @@ function goBack() {
                 <div class="border-t pt-4 space-y-3">
                     <div class="flex items-center gap-3">
                         <label class="text-sm">{{ t('ktechConsole.motionMode') }}</label>
-                        <select
-                            v-model.number="motionForm.mode"
-                            class="rounded border bg-background px-2 py-1.5 text-sm"
-                        >
-                            <option v-for="m in filteredMotionModes" :key="m" :value="m">{{ modeLabel(m) }}</option>
-                        </select>
+                        <Select
+                            v-model="motionForm.mode"
+                            :options="filteredMotionModes.map((m) => ({ label: modeLabel(m), value: m }))"
+                            option-label="label"
+                            option-value="value"
+                            size="small"
+                            class="!text-xs w-52"
+                            :pt="{
+                                root: { class: '!py-0 !px-2 !text-xs !h-7 !flex !items-center' },
+                                label: {
+                                    class: '!text-xs !py-0 !leading-none !truncate !flex-1 !flex !items-center !h-full',
+                                },
+                                dropdown: { class: '!w-6 !flex !items-center !justify-center' },
+                            }"
+                        />
                     </div>
 
                     <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -1320,10 +1387,12 @@ function goBack() {
                                     ({{ fieldRange('voltage')?.unit }})
                                 </span>
                             </span>
-                            <input
-                                v-model.number="motionForm.voltage"
-                                type="number"
-                                class="rounded border bg-background px-2 py-1.5 font-mono text-sm"
+                            <InputNumber
+                                v-model="motionForm.voltage"
+                                size="small"
+                                fluid
+                                input-class="!text-xs"
+                                :use-grouping="false"
                                 :min="fieldRange('voltage')?.min ?? undefined"
                                 :max="fieldRange('voltage')?.max ?? undefined"
                                 :step="fieldRange('voltage')?.step ?? undefined"
@@ -1339,10 +1408,12 @@ function goBack() {
                                     ({{ fieldRange('torqueOrPower')?.unit }})
                                 </span>
                             </span>
-                            <input
-                                v-model.number="motionForm.torqueOrPower"
-                                type="number"
-                                class="rounded border bg-background px-2 py-1.5 font-mono text-sm"
+                            <InputNumber
+                                v-model="motionForm.torqueOrPower"
+                                size="small"
+                                fluid
+                                input-class="!text-xs"
+                                :use-grouping="false"
                                 :min="fieldRange('torqueOrPower')?.min ?? undefined"
                                 :max="fieldRange('torqueOrPower')?.max ?? undefined"
                                 :step="fieldRange('torqueOrPower')?.step ?? undefined"
@@ -1355,10 +1426,12 @@ function goBack() {
                                     ({{ fieldRange('speedSignedDps')?.unit }})
                                 </span>
                             </span>
-                            <input
-                                v-model.number="motionForm.speedSignedDps"
-                                type="number"
-                                class="rounded border bg-background px-2 py-1.5 font-mono text-sm"
+                            <InputNumber
+                                v-model="motionForm.speedSignedDps"
+                                size="small"
+                                fluid
+                                input-class="!text-xs"
+                                :use-grouping="false"
                                 :min="fieldRange('speedSignedDps')?.min ?? undefined"
                                 :max="fieldRange('speedSignedDps')?.max ?? undefined"
                                 :step="fieldRange('speedSignedDps')?.step ?? undefined"
@@ -1381,10 +1454,12 @@ function goBack() {
                                     ({{ fieldRange('angleDeg')?.unit }})
                                 </span>
                             </span>
-                            <input
-                                v-model.number="motionForm.angleDeg"
-                                type="number"
-                                class="rounded border bg-background px-2 py-1.5 font-mono text-sm"
+                            <InputNumber
+                                v-model="motionForm.angleDeg"
+                                size="small"
+                                fluid
+                                input-class="!text-xs"
+                                :use-grouping="false"
                                 :min="fieldRange('angleDeg')?.min ?? undefined"
                                 :max="fieldRange('angleDeg')?.max ?? undefined"
                                 :step="fieldRange('angleDeg')?.step ?? undefined"
@@ -1404,10 +1479,12 @@ function goBack() {
                                     ({{ fieldRange('singleAngleDeg')?.unit }})
                                 </span>
                             </span>
-                            <input
-                                v-model.number="motionForm.singleAngleDeg"
-                                type="number"
-                                class="rounded border bg-background px-2 py-1.5 font-mono text-sm"
+                            <InputNumber
+                                v-model="motionForm.singleAngleDeg"
+                                size="small"
+                                fluid
+                                input-class="!text-xs"
+                                :use-grouping="false"
                                 :min="fieldRange('singleAngleDeg')?.min ?? undefined"
                                 :max="fieldRange('singleAngleDeg')?.max ?? undefined"
                                 :step="fieldRange('singleAngleDeg')?.step ?? undefined"
@@ -1424,13 +1501,24 @@ function goBack() {
                             <span class="text-muted-foreground">
                                 {{ fieldLabel('direction', t('ktechConsole.fieldDirection')) }}
                             </span>
-                            <select
-                                v-model.number="motionForm.direction"
-                                class="rounded border bg-background px-2 py-1.5 text-sm"
-                            >
-                                <option :value="0">0 - 正向 (Forward)</option>
-                                <option :value="1">1 - 反向 (Rev)</option>
-                            </select>
+                            <Select
+                                v-model="motionForm.direction"
+                                :options="[
+                                    { label: '0 - 正向 (Forward)', value: 0 },
+                                    { label: '1 - 反向 (Rev)', value: 1 },
+                                ]"
+                                option-label="label"
+                                option-value="value"
+                                size="small"
+                                class="!text-xs"
+                                :pt="{
+                                    root: { class: '!py-0 !px-2 !text-xs !h-7 !flex !items-center' },
+                                    label: {
+                                        class: '!text-xs !py-0 !leading-none !truncate !flex-1 !flex !items-center !h-full',
+                                    },
+                                    dropdown: { class: '!w-6 !flex !items-center !justify-center' },
+                                }"
+                            />
                         </label>
                         <label
                             v-if="
@@ -1448,10 +1536,12 @@ function goBack() {
                                     ({{ fieldRange('speedDps')?.unit }})
                                 </span>
                             </span>
-                            <input
-                                v-model.number="motionForm.speedDps"
-                                type="number"
-                                class="rounded border bg-background px-2 py-1.5 font-mono text-sm"
+                            <InputNumber
+                                v-model="motionForm.speedDps"
+                                size="small"
+                                fluid
+                                input-class="!text-xs"
+                                :use-grouping="false"
                                 :min="fieldRange('speedDps')?.min ?? undefined"
                                 :max="fieldRange('speedDps')?.max ?? undefined"
                                 :step="fieldRange('speedDps')?.step ?? undefined"
@@ -1473,13 +1563,28 @@ function goBack() {
                 <div class="border-t pt-4 space-y-3">
                     <h3 class="text-sm font-medium">{{ t('ktechConsole.firmwareSection') }}</h3>
                     <div class="flex items-center gap-3">
+                        <!-- 隐藏的原生文件输入，由 Button 触发 -->
                         <input
+                            ref="firmwareInputRef"
                             type="file"
                             accept=".bin,.hex,.kf"
-                            @change="handleFileChange"
-                            class="text-sm"
+                            class="hidden"
                             :disabled="uploading"
+                            @change="handleFileChange"
                         />
+                        <Button
+                            severity="secondary"
+                            size="small"
+                            outlined
+                            class="!h-7 !px-2 !text-xs"
+                            :disabled="uploading"
+                            @click="firmwareInputRef?.click()"
+                        >
+                            {{ t('ktechConsole.selectFirmware') }}
+                        </Button>
+                        <span class="text-xs text-muted-foreground truncate max-w-[12rem]">
+                            {{ firmwareFileName ?? t('ktechConsole.noFileSelected') }}
+                        </span>
                         <Button
                             size="small"
                             class="bg-purple-600 text-white hover:bg-purple-700"

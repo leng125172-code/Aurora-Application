@@ -46,9 +46,6 @@ public class ProjectorDevice : FullAuditedAggregateRoot<Guid>
 
     // ─────────────────────────── 设备信息（连接后查询填充） ─────────────────────
 
-    /// <summary>固件版本字符串（连接后由 "v\r\n" 命令查询，可为 null）</summary>
-    public string? FirmwareVersion { get; private set; }
-
     /// <summary>设备标志字节 ID（由 "pr 0\r\n" 命令查询，-1 表示未知）</summary>
     public int DeviceHardwareId { get; private set; }
 
@@ -249,9 +246,8 @@ public class ProjectorDevice : FullAuditedAggregateRoot<Guid>
     }
 
     /// <summary>更新设备信息（连接后从设备查询）</summary>
-    public ProjectorDevice UpdateDeviceInfo(string? firmwareVersion, int hardwareId)
+    public ProjectorDevice UpdateDeviceInfo(int hardwareId)
     {
-        FirmwareVersion = firmwareVersion;
         DeviceHardwareId = hardwareId;
         LastCommunicationAt = DateTime.UtcNow;
         return this;

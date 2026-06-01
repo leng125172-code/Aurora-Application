@@ -37,6 +37,7 @@ public class MotorDeviceAppService : AuroraStruct3DAppService, IMotorDeviceAppSe
     private readonly ICurrentClientSession _currentClientSession;
     private readonly IMotorScanProgressNotifier _scanProgressNotifier;
     private readonly IDeviceStateManager _deviceStateManager;
+    private readonly IMotorOperationLogRepository _operationLogRepository;
 
     public MotorDeviceAppService(
         IMotorAxisRepository motorAxisRepository,
@@ -46,7 +47,8 @@ public class MotorDeviceAppService : AuroraStruct3DAppService, IMotorDeviceAppSe
         IDeviceOperationSessionManager sessionManager,
         ICurrentClientSession currentClientSession,
         IMotorScanProgressNotifier scanProgressNotifier,
-        IDeviceStateManager deviceStateManager
+        IDeviceStateManager deviceStateManager,
+        IMotorOperationLogRepository operationLogRepository
     )
     {
         _motorAxisRepository = motorAxisRepository;
@@ -57,6 +59,7 @@ public class MotorDeviceAppService : AuroraStruct3DAppService, IMotorDeviceAppSe
         _currentClientSession = currentClientSession;
         _scanProgressNotifier = scanProgressNotifier;
         _deviceStateManager = deviceStateManager;
+        _operationLogRepository = operationLogRepository;
     }
 
     /// <inheritdoc/>
@@ -333,8 +336,10 @@ public class MotorDeviceAppService : AuroraStruct3DAppService, IMotorDeviceAppSe
         await Task.WhenAll(scanTasks);
 
         // 探测阶段结束，回到主线程串行写库，避免 EF Core DbContext 并发问题
-        List<MotorAxis> allAxes = await _motorAxisRepository.GetListAsync();
-        int nextAxisIndex = allAxes.Count == 0 ? 0 : allAxes.Max(axis => axis.AxisIndex) + 1;
+        // 用 AsNoTracking 只查最大 AxisIndex，避免把全量实体加入追踪器
+        // 否则后续 FindBySlaveIdAsync（AsNoTracking）→ UpdateAsync（Attach）会触发追踪冲突
+        int? maxAxisIndex = await _motorAxisRepository.GetMaxAxisIndexAsync();
+        int nextAxisIndex = (maxAxisIndex ?? -1) + 1;
         List<DiscoveredMotorDeviceDto> discovered = new();
 
         foreach (
@@ -1214,5 +1219,49 @@ public class MotorDeviceAppService : AuroraStruct3DAppService, IMotorDeviceAppSe
             MotorDeviceStatus.Faulted => "故障",
             _ => status.ToString(),
         };
+    }
+
+    // ─── 操作日志 ─────────────────────────────────────────────────────────
+
+    /// <inheritdoc/>
+    public async Task<PagedResultDto<MotorOperationLogDto>> GetLogsAsync(GetMotorLogListDto input)
+    {
+        if (!input.MotorAxisId.HasValue)
+            return new PagedResultDto<MotorOperationLogDto>(0, new List<MotorOperationLogDto>());
+
+        Guid axisId = input.MotorAxisId.Value;
+        long totalCount = await _operationLogRepository.GetCountAsync(
+            axisId,
+            input.OperationType,
+            input.IsFailedOnly ?? false,
+            input.StartTime,
+            input.EndTime
+        );
+        List<MotorOperationLog> logs = await _operationLogRepository.GetPagedListAsync(
+            axisId,
+            input.SkipCount,
+            input.MaxResultCount,
+            input.OperationType,
+            input.IsFailedOnly ?? false,
+            input.StartTime,
+            input.EndTime
+        );
+        return new PagedResultDto<MotorOperationLogDto>(
+            totalCount,
+            logs.Select(x => new MotorOperationLogDto
+                {
+                    Id = x.Id,
+                    MotorAxisId = x.MotorAxisId,
+                    SlaveId = x.SlaveId,
+                    OperationType = x.OperationType,
+                    OccurredAt = x.OccurredAt,
+                    IsSuccess = x.IsSuccess,
+                    CommandCode = x.CommandCode,
+                    ParameterSummary = x.ParameterSummary,
+                    ErrorMessage = x.ErrorMessage,
+                    RoundTripMs = x.RoundTripMs,
+                })
+                .ToList()
+        );
     }
 }

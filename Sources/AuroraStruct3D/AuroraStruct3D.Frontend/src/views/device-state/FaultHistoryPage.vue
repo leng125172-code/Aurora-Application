@@ -1,17 +1,17 @@
 <script setup lang="ts">
 // 故障历史页：PrimeVue DataTable + AppCard 重构版（含懒加载分页）
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import DataTable, { type DataTablePageEvent } from 'primevue/datatable'
+import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import Select from 'primevue/select'
 import DatePicker from 'primevue/datepicker'
 import Button from 'primevue/button'
+import { RefreshCw } from '@lucide/vue'
 import {
     type DeviceFaultDto,
     type GetFaultPagedInput,
     DeviceFaultLevel,
-    DeviceFaultLevelLabels,
     getFaultPagedListAsync,
 } from '@/api/device-state'
 import { extractLogTag } from '@/utils/log-tag'
@@ -21,10 +21,18 @@ const { t } = useI18n()
 
 // ─── 分页参数 ────────────────────────────────────────────────────────────────
 const pageSize = ref(20)
-const first = ref(0) // 当前页起始索引（DataTable 需要）
+const first = ref(0) // 当前页起始索引
 const totalCount = ref(0)
 const items = ref<DeviceFaultDto[]>([])
 const loading = ref(false)
+
+const currentPage = computed(() => Math.floor(first.value / pageSize.value) + 1)
+const totalPages = computed(() => Math.max(1, Math.ceil(totalCount.value / pageSize.value)))
+
+function goToPage(page: number): void {
+    first.value = (page - 1) * pageSize.value
+    void loadAsync()
+}
 
 // ─── 筛选条件 ────────────────────────────────────────────────────────────────
 const filterFaultLevel = ref<DeviceFaultLevel | null>(null)
@@ -52,12 +60,6 @@ async function loadAsync(): Promise<void> {
     }
 }
 
-function onPage(event: DataTablePageEvent): void {
-    first.value = event.first
-    pageSize.value = event.rows
-    void loadAsync()
-}
-
 function onFilterChange(): void {
     first.value = 0
     void loadAsync()
@@ -71,19 +73,30 @@ function onReset(): void {
     onFilterChange()
 }
 
-const faultLevelOptions: Array<{ value: DeviceFaultLevel | null; label: string }> = [
+const faultLevelOptions = computed<Array<{ value: DeviceFaultLevel | null; label: string }>>(() => [
     { value: null, label: t('deviceState.all') },
-    { value: DeviceFaultLevel.Warning, label: DeviceFaultLevelLabels[DeviceFaultLevel.Warning] },
-    { value: DeviceFaultLevel.GeneralFault, label: DeviceFaultLevelLabels[DeviceFaultLevel.GeneralFault] },
-    { value: DeviceFaultLevel.SevereFault, label: DeviceFaultLevelLabels[DeviceFaultLevel.SevereFault] },
-    { value: DeviceFaultLevel.SafetyFault, label: DeviceFaultLevelLabels[DeviceFaultLevel.SafetyFault] },
-]
+    { value: DeviceFaultLevel.Warning, label: t('deviceState.faultLevel.warning') },
+    { value: DeviceFaultLevel.GeneralFault, label: t('deviceState.faultLevel.generalFault') },
+    { value: DeviceFaultLevel.SevereFault, label: t('deviceState.faultLevel.severeFault') },
+    { value: DeviceFaultLevel.SafetyFault, label: t('deviceState.faultLevel.safetyFault') },
+])
 
-const resolvedOptions: Array<{ value: boolean | null; label: string }> = [
+const faultLevelI18nKeys: Record<DeviceFaultLevel, string> = {
+    [DeviceFaultLevel.Warning]: 'deviceState.faultLevel.warning',
+    [DeviceFaultLevel.GeneralFault]: 'deviceState.faultLevel.generalFault',
+    [DeviceFaultLevel.SevereFault]: 'deviceState.faultLevel.severeFault',
+    [DeviceFaultLevel.SafetyFault]: 'deviceState.faultLevel.safetyFault',
+}
+
+function faultLevelLabel(level: DeviceFaultLevel): string {
+    return t(faultLevelI18nKeys[level] ?? '')
+}
+
+const resolvedOptions = computed<Array<{ value: boolean | null; label: string }>>(() => [
     { value: null, label: t('deviceState.all') },
     { value: false, label: t('deviceState.unresolved') },
     { value: true, label: t('deviceState.resolved') },
-]
+])
 
 onMounted(() => {
     void loadAsync()
@@ -91,94 +104,106 @@ onMounted(() => {
 </script>
 
 <template>
-    <div class="flex flex-col gap-4 p-4">
-        <h1 class="text-2xl font-bold tracking-tight">{{ t('deviceState.faultHistory') }}</h1>
+    <div class="space-y-4">
+        <!-- 标题 + 刷新 -->
+        <div class="flex items-center justify-between">
+            <h1 class="text-2xl font-bold tracking-tight">{{ t('deviceState.faultHistory') }}</h1>
+            <Button severity="secondary" outlined size="small" :disabled="loading" @click="void loadAsync()">
+                <RefreshCw :class="['size-4', loading && 'animate-spin']" />
+            </Button>
+        </div>
 
-        <!-- 筛选栏 -->
-        <AppCard :beam-size="80" :beam-duration="8">
-            <div class="flex flex-wrap items-center gap-3 p-3">
-                <!-- 故障等级 -->
-                <div class="flex items-center gap-1.5 text-sm">
-                    <span class="text-muted-foreground">{{ t('deviceState.level') }}</span>
+        <!-- 数据卡（含筛选） -->
+        <AppCard :beam="true">
+            <!-- 筛选区 -->
+            <div class="flex flex-col gap-3 border-b border-border/40 px-3 py-2">
+                <div
+                    class="grid items-center gap-x-3 gap-y-2"
+                    style="grid-template-columns: repeat(auto-fill, 5.5rem 13rem)"
+                >
+                    <span class="text-sm text-muted-foreground whitespace-nowrap">{{ t('deviceState.level') }}</span>
                     <Select
                         v-model="filterFaultLevel"
                         :options="faultLevelOptions"
                         option-label="label"
                         option-value="value"
                         size="small"
-                        class="w-36"
+                        class="!text-xs w-full"
+                        :pt="{
+                            root: { class: '!py-0 !px-2 !text-xs !h-7 !flex !items-center' },
+                            label: {
+                                class: '!text-xs !py-0 !leading-none !truncate !flex-1 !flex !items-center !h-full',
+                            },
+                            dropdown: { class: '!w-6 !flex !items-center !justify-center' },
+                        }"
                         @change="onFilterChange"
                     />
-                </div>
-
-                <!-- 是否解决 -->
-                <div class="flex items-center gap-1.5 text-sm">
-                    <span class="text-muted-foreground">{{ t('deviceState.status') }}</span>
+                    <span class="text-sm text-muted-foreground whitespace-nowrap">{{ t('deviceState.status') }}</span>
                     <Select
                         v-model="filterIsResolved"
                         :options="resolvedOptions"
                         option-label="label"
                         option-value="value"
                         size="small"
-                        class="w-32"
+                        class="!text-xs w-full"
+                        :pt="{
+                            root: { class: '!py-0 !px-2 !text-xs !h-7 !flex !items-center' },
+                            label: {
+                                class: '!text-xs !py-0 !leading-none !truncate !flex-1 !flex !items-center !h-full',
+                            },
+                            dropdown: { class: '!w-6 !flex !items-center !justify-center' },
+                        }"
                         @change="onFilterChange"
                     />
-                </div>
-
-                <!-- 日期范围 -->
-                <div class="flex items-center gap-1.5 text-sm">
-                    <span class="text-muted-foreground">{{ t('deviceState.startTime') }}</span>
+                    <span class="text-sm text-muted-foreground whitespace-nowrap">
+                        {{ t('deviceState.startTime') }}
+                    </span>
                     <DatePicker
                         v-model="filterStartTime"
                         show-time
-                        show-icon
-                        icon-display="input"
+                        showIcon
+                        fluid
+                        :showOnFocus="false"
                         size="small"
-                        class="w-52"
                         @date-select="onFilterChange"
                         @clear-click="onFilterChange"
                         show-button-bar
                     />
-                </div>
-                <div class="flex items-center gap-1.5 text-sm">
-                    <span class="text-muted-foreground">{{ t('deviceState.endTime') }}</span>
+                    <span class="text-sm text-muted-foreground whitespace-nowrap">{{ t('deviceState.endTime') }}</span>
                     <DatePicker
                         v-model="filterEndTime"
                         show-time
                         show-icon
-                        icon-display="input"
+                        fluid
+                        :showOnFocus="false"
                         size="small"
-                        class="w-52"
                         @date-select="onFilterChange"
                         @clear-click="onFilterChange"
                         show-button-bar
                     />
                 </div>
-
-                <Button severity="secondary" size="small" outlined @click="onReset">
-                    {{ t('deviceState.reset') }}
-                </Button>
-                <span class="ml-auto text-xs text-muted-foreground">
-                    {{ t('deviceState.total', { count: totalCount }) }}
-                </span>
+                <!-- 操作行 -->
+                <div class="flex items-center gap-3">
+                    <Button severity="secondary" size="small" outlined @click="onReset">
+                        {{ t('deviceState.reset') }}
+                    </Button>
+                    <span class="ml-auto text-xs text-muted-foreground">
+                        {{ t('deviceState.total', { count: totalCount }) }}
+                    </span>
+                </div>
             </div>
-        </AppCard>
-
-        <!-- 表格（PrimeVue DataTable 懒加载分页） -->
-        <AppCard :beam="false">
             <DataTable
                 :value="items"
                 :loading="loading"
                 :lazy="true"
-                :paginator="true"
+                :paginator="false"
                 :rows="pageSize"
                 :first="first"
                 :total-records="totalCount"
-                :rows-per-page-options="[10, 20, 50, 100]"
                 striped-rows
                 size="small"
                 data-key="id"
-                @page="onPage"
+                :pt="{ root: { class: 'overflow-hidden' } }"
             >
                 <template #empty>
                     <div class="py-6 text-center text-muted-foreground">{{ t('deviceState.noData') }}</div>
@@ -204,7 +229,7 @@ onMounted(() => {
                                     data.faultLevel === DeviceFaultLevel.SafetyFault,
                             }"
                         >
-                            {{ DeviceFaultLevelLabels[data.faultLevel as DeviceFaultLevel] }}
+                            {{ faultLevelLabel(data.faultLevel as DeviceFaultLevel) }}
                         </span>
                     </template>
                 </Column>
@@ -251,6 +276,62 @@ onMounted(() => {
                     </template>
                 </Column>
             </DataTable>
+
+            <!-- 自定义分页控件 -->
+            <div
+                v-if="totalCount > pageSize"
+                class="flex items-center justify-between px-4 py-3 border-t border-border/50 text-sm"
+            >
+                <span class="text-muted-foreground text-xs">
+                    {{ t('management.totalRecords', { total: totalCount }) }}
+                    &nbsp;·&nbsp;
+                    {{
+                        t('management.pageRange', {
+                            from: (currentPage - 1) * pageSize + 1,
+                            to: Math.min(currentPage * pageSize, totalCount),
+                        })
+                    }}
+                </span>
+                <div class="flex items-center gap-1">
+                    <Button
+                        severity="secondary"
+                        outlined
+                        size="small"
+                        :disabled="currentPage <= 1 || loading"
+                        @click="goToPage(1)"
+                    >
+                        «
+                    </Button>
+                    <Button
+                        severity="secondary"
+                        outlined
+                        size="small"
+                        :disabled="currentPage <= 1 || loading"
+                        @click="goToPage(currentPage - 1)"
+                    >
+                        ‹
+                    </Button>
+                    <span class="px-3 text-muted-foreground">{{ currentPage }} / {{ totalPages }}</span>
+                    <Button
+                        severity="secondary"
+                        outlined
+                        size="small"
+                        :disabled="currentPage >= totalPages || loading"
+                        @click="goToPage(currentPage + 1)"
+                    >
+                        ›
+                    </Button>
+                    <Button
+                        severity="secondary"
+                        outlined
+                        size="small"
+                        :disabled="currentPage >= totalPages || loading"
+                        @click="goToPage(totalPages)"
+                    >
+                        »
+                    </Button>
+                </div>
+            </div>
         </AppCard>
     </div>
 </template>

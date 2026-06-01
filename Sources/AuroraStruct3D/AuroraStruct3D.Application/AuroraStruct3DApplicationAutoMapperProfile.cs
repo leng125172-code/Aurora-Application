@@ -25,7 +25,6 @@ public static class CameraObjectMapperExtensions
             DeleterId = entity.DeleterId,
             Name = entity.Name,
             Model = entity.Model,
-            SerialNumber = entity.SerialNumber,
             DeviceIndex = entity.DeviceIndex,
             Status = entity.Status,
             Description = entity.Description,
@@ -75,6 +74,25 @@ public static class CameraObjectMapperExtensions
             ParamType = entity.ParamType,
             Value = entity.Value,
             Description = entity.Description,
+        };
+    }
+
+    /// <summary>
+    /// 将相机操作日志实体转换为DTO
+    /// </summary>
+    public static CameraOperationLogDto ToDto(this CameraOperationLog entity)
+    {
+        return new CameraOperationLogDto
+        {
+            Id = entity.Id,
+            CameraDeviceId = entity.CameraDeviceId,
+            DeviceIndex = entity.DeviceIndex,
+            OperationType = entity.OperationType,
+            OccurredAt = entity.OccurredAt,
+            IsSuccess = entity.IsSuccess,
+            ParameterSummary = entity.ParameterSummary,
+            ErrorMessage = entity.ErrorMessage,
+            RoundTripMs = entity.RoundTripMs,
         };
     }
 }

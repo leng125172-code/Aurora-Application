@@ -4,7 +4,7 @@
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 
-// PrimeVue 核心、服务与指令（Aura 暗色预设，配合 Tailwind v4 通过 CSS Layer 共存）
+// PrimeVue 核心、服务与指令（Aura 定制预设，配合 Tailwind v4 通过 CSS Layer 共存）
 import PrimeVue from 'primevue/config'
 import ToastService from 'primevue/toastservice'
 import ConfirmationService from 'primevue/confirmationservice'
@@ -12,7 +12,7 @@ import DialogService from 'primevue/dialogservice'
 import Tooltip from 'primevue/tooltip'
 import Ripple from 'primevue/ripple'
 import StyleClass from 'primevue/styleclass'
-import Aura from '@primeuix/themes/aura'
+import { AuroraPreset } from '@/assets/styles/primevue-preset'
 
 import App from '@/App.vue'
 import { router } from '@/router'
@@ -32,7 +32,7 @@ app.use(i18n)
 app.use(PrimeVue, {
     ripple: true,
     theme: {
-        preset: Aura,
+        preset: AuroraPreset,
         options: {
             prefix: 'p',
             darkModeSelector: '.dark',
