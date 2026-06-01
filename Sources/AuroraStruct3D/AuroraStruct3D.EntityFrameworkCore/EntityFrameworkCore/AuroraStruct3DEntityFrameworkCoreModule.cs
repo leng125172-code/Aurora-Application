@@ -1,3 +1,7 @@
+using AuroraStruct3D.CalibrationManagement;
+using AuroraStruct3D.CalibrationManagement.Devices;
+using AuroraStruct3D.CalibrationManagement.Projects;
+using AuroraStruct3D.CalibrationManagement.Results;
 using AuroraStruct3D.Cameras;
 using AuroraStruct3D.DeviceState;
 using AuroraStruct3D.Motors;
@@ -65,6 +69,20 @@ namespace AuroraStruct3D.EntityFrameworkCore
 
                 // 注册设备状态管理模块自定义仓储
                 options.AddRepository<DeviceStateLog, EfCoreDeviceStateLogRepository>();
+
+                // 注册标定管理模块自定义仓储
+                options.AddRepository<
+                    CalibrationDevice,
+                    EfCoreCalibrationDeviceRepository
+                >();
+                options.AddRepository<
+                    CalibrationProject,
+                    EfCoreCalibrationProjectRepository
+                >();
+                options.AddRepository<
+                    CalibrationResult,
+                    EfCoreCalibrationResultRepository
+                >();
             });
             Configure<AbpSequentialGuidGeneratorOptions>(options =>
             {
