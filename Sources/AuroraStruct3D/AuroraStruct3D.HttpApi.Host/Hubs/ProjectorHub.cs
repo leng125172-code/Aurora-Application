@@ -61,4 +61,12 @@ public class ProjectorHub : AbpHub<IProjectorHub>
     {
         await Clients.All.ReceiveProjectorLedChangedAsync(projectorDeviceId, ledStatus);
     }
+
+    /// <summary>
+    /// 向所有客户端广播条纹图案下载进度（0~100）
+    /// </summary>
+    public async Task BroadcastFringeDownloadProgressAsync(Guid projectorDeviceId, int progress)
+    {
+        await Clients.All.ReceiveFringeDownloadProgressAsync(projectorDeviceId, progress);
+    }
 }

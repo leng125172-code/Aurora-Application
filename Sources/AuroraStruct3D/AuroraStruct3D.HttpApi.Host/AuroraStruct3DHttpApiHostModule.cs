@@ -12,6 +12,7 @@ using AuroraStruct3D.Sessions;
 using AuroraStruct3D.Streaming;
 using AuroraStruct3D.Tucam;
 using Lion.AbpPro.CAP;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Volo.Abp.AspNetCore.ExceptionHandling;
 using Volo.Abp.AspNetCore.Mvc;
@@ -72,6 +73,12 @@ namespace AuroraStruct3D
             context.Services.Configure<KestrelServerOptions>(options =>
             {
                 options.Limits.MaxRequestBodySize = null;
+            });
+
+            context.Services.Configure<FormOptions>(options =>
+            {
+                options.MultipartBodyLengthLimit = long.MaxValue;
+                options.MultipartHeadersLengthLimit = int.MaxValue;
             });
 
             // 注册后台广播服务，定期通过 SignalR 推送仪表盘统计数据

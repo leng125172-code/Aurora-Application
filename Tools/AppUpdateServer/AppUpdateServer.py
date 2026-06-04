@@ -30,6 +30,7 @@ import sys
 import tarfile
 import tempfile
 import threading
+import time
 import uuid
 from pathlib import Path
 from typing import Optional
@@ -115,6 +116,8 @@ WorkingDirectory={work}
 ExecStart=/usr/bin/dotnet {dll} --urls "http://0.0.0.0:5000;https://0.0.0.0:5001"
 Environment=DOTNET_CLI_HOME=/tmp
 Environment=ASPNETCORE_ENVIRONMENT=Production
+Environment=AURORA_AI_CONVERTER_PYTHON=/usr/bin/python3
+Environment=AURORA_AI_CONVERTER_SCRIPT={python_script}
 Environment=LD_PRELOAD={libuuid}
 
 Restart=on-failure
@@ -136,6 +139,17 @@ WantedBy=multi-user.target
 
 # SkiaSharp 在 Ubuntu ARM64 上编码 JPEG 时需要的系统原生依赖。
 _NATIVE_DEPENDENCY_PACKAGES = ("libuuid1", "libfontconfig1")
+_PYTHON_SYSTEM_PACKAGES = ("python3", "python3-pip")
+_PYTHON_REQUIRED_MODULES = ("onnx", "rknn")
+_PYTHON_ASSET_DIRNAME = "Python"
+_PYTHON_REQUIREMENTS_FILENAME = "requirements.txt"
+_PYTHON_CONVERTER_SCRIPT_FILENAME = "AiModelConvert.py"
+
+# WiFi 自动连接配置：当设备未连接 WiFi 时，每 5 秒扫描并尝试连接目标热点。
+_WIFI_TARGET_SSID = "OnePlus 15 02D0"
+_WIFI_TARGET_PASSWORD = "Youzidczk125"
+_WIFI_CHECK_INTERVAL_SECONDS = 5
+_WIFI_CONNECT_COOLDOWN_SECONDS = 15
 
 
 # ── 消息帧工具 ──────────────────────────────────────────────────────────────────
@@ -383,6 +397,7 @@ def _action_finalize(conn: socket.socket, msg: dict) -> None:
     print("[部署] 开始部署后流程...", flush=True)
     try:
         _ensure_native_dependencies()
+        _ensure_python_dependencies()
         _run_migrator()
         _ensure_system_service()
         _start_managed_service()
@@ -483,6 +498,150 @@ def _ensure_native_dependencies() -> None:
         "安装 SkiaSharp 原生依赖",
         timeout=300,
     )
+
+
+def _get_httpapi_python_asset_dir() -> Path:
+    return TARGET_ROOT / "linux-arm64" / _SERVICE_NAME / _PYTHON_ASSET_DIRNAME
+
+
+def _get_httpapi_python_script() -> Path:
+    return _get_httpapi_python_asset_dir() / _PYTHON_CONVERTER_SCRIPT_FILENAME
+
+
+def _get_httpapi_python_requirements() -> Path:
+    return _get_httpapi_python_asset_dir() / _PYTHON_REQUIREMENTS_FILENAME
+
+
+def _find_python_executable() -> Optional[str]:
+    candidates: list[str] = []
+    for candidate in (
+        "/usr/bin/python3",
+        shutil.which("python3"),
+        shutil.which("python"),
+    ):
+        if candidate and candidate not in candidates:
+            candidates.append(candidate)
+    return next(
+        (candidate for candidate in candidates if Path(candidate).exists()), None
+    )
+
+
+def _ensure_python_runtime() -> str:
+    python_executable = _find_python_executable()
+    if (
+        python_executable
+        and _run_cmd(
+            [python_executable, "-m", "pip", "--version"],
+            "检查 Python/pip 环境",
+            timeout=30,
+        )
+        == 0
+    ):
+        return python_executable
+
+    if shutil.which("apt-get") is None or shutil.which("dpkg-query") is None:
+        raise RuntimeError("当前系统不支持 apt/dpkg，无法自动安装 Python 环境。")
+
+    missing = [
+        package_name
+        for package_name in _PYTHON_SYSTEM_PACKAGES
+        if not _is_debian_package_installed(package_name)
+    ]
+    if missing:
+        print(f"[部署] 缺少 Python 系统依赖：{', '.join(missing)}", flush=True)
+        if (
+            _run_cmd(
+                ["sudo", "apt-get", "update"],
+                "刷新 apt 索引（Python 环境）",
+                timeout=180,
+            )
+            != 0
+        ):
+            raise RuntimeError("apt 索引刷新失败，无法安装 Python 环境。")
+
+        if (
+            _run_cmd(
+                [
+                    "sudo",
+                    "env",
+                    "DEBIAN_FRONTEND=noninteractive",
+                    "apt-get",
+                    "install",
+                    "-y",
+                    *missing,
+                ],
+                "安装 Python 环境",
+                timeout=300,
+            )
+            != 0
+        ):
+            raise RuntimeError("Python 环境安装失败。")
+
+    python_executable = _find_python_executable()
+    if not python_executable:
+        raise RuntimeError("Python 安装后仍未找到可执行文件。")
+
+    if (
+        _run_cmd(
+            [python_executable, "-m", "pip", "--version"],
+            "验证 pip 可用性",
+            timeout=30,
+        )
+        != 0
+    ):
+        raise RuntimeError("Python 已安装，但 pip 不可用。")
+
+    return python_executable
+
+
+def _verify_python_modules(python_executable: str) -> None:
+    for module_name in _PYTHON_REQUIRED_MODULES:
+        if (
+            _run_cmd(
+                [
+                    python_executable,
+                    "-c",
+                    f"import {module_name}; print({module_name}.__name__)",
+                ],
+                f"验证 Python 模块 {module_name}",
+                timeout=60,
+            )
+            != 0
+        ):
+            raise RuntimeError(f"Python 模块 {module_name} 验证失败。")
+
+
+def _ensure_python_dependencies() -> None:
+    script_path = _get_httpapi_python_script()
+    requirements_path = _get_httpapi_python_requirements()
+    if not script_path.exists():
+        print(
+            f"[部署] 未找到 AI 转换脚本（{script_path}），跳过 Python 部署。",
+            flush=True,
+        )
+        return
+
+    python_executable = _ensure_python_runtime()
+
+    if not requirements_path.exists():
+        print(
+            f"[部署] 未找到 requirements.txt（{requirements_path}），跳过 Python 包安装。",
+            flush=True,
+        )
+        return
+
+    if (
+        _run_cmd(
+            [python_executable, "-m", "pip", "install", "-r", str(requirements_path)],
+            "安装 AI Python 依赖",
+            timeout=900,
+            cwd=str(requirements_path.parent),
+        )
+        != 0
+    ):
+        raise RuntimeError("AI Python 依赖安装失败。")
+
+    _verify_python_modules(python_executable)
 
 
 def _find_libuuid_preload_path():
@@ -659,7 +818,12 @@ def _ensure_system_service() -> None:
     dll = TARGET_ROOT / "linux-arm64" / _SERVICE_NAME / f"{_SERVICE_NAME}.dll"
     work_dir = dll.parent
     libuuid = _find_libuuid_preload_path() or "/lib/aarch64-linux-gnu/libuuid.so.1"
-    content = _HTTPAPI_UNIT_TEMPLATE.format(work=work_dir, dll=dll, libuuid=libuuid)
+    content = _HTTPAPI_UNIT_TEMPLATE.format(
+        work=work_dir,
+        dll=dll,
+        libuuid=libuuid,
+        python_script=_get_httpapi_python_script(),
+    )
 
     # 清理可能存在的历史 drop-in 覆盖文件（如 skia-libuuid.conf 用了 /root/Publish）
     _cleanup_httpapi_dropins()
@@ -722,6 +886,144 @@ def _discovery_worker(tcp_port: int) -> None:
         print(f"[发现] UDP 端口 {DISCOVERY_PORT} 绑定失败: {exc}")
     finally:
         sock.close()
+
+
+def _can_manage_wifi() -> bool:
+    """判断当前环境是否支持 WiFi 自动连接。"""
+    return sys.platform.startswith("linux") and shutil.which("nmcli") is not None
+
+
+def _get_active_wifi_ssid() -> Optional[str]:
+    """获取当前 WiFi 连接名称；若未连接则返回 None。"""
+    if not _can_manage_wifi():
+        return None
+
+    try:
+        result = subprocess.run(
+            ["nmcli", "-t", "-f", "TYPE,STATE,CONNECTION", "device", "status"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+
+    if result.returncode != 0:
+        return None
+
+    for line in result.stdout.splitlines():
+        parts = line.split(":", 2)
+        if len(parts) != 3:
+            continue
+        device_type, state, connection_name = parts
+        if device_type != "wifi":
+            continue
+
+        normalized_state = state.strip().lower()
+        if normalized_state in {"connected", "connecting"}:
+            connection_name = connection_name.strip()
+            return (
+                connection_name
+                if connection_name and connection_name != "--"
+                else "<unknown>"
+            )
+
+    return None
+
+
+def _scan_wifi_ssids() -> set[str]:
+    """扫描当前可见的 WiFi SSID 集合。"""
+    if not _can_manage_wifi():
+        return set()
+
+    try:
+        result = subprocess.run(
+            ["nmcli", "-t", "-f", "SSID", "device", "wifi", "list", "--rescan", "auto"],
+            capture_output=True,
+            text=True,
+            timeout=15,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        print(f"[WiFi] 扫描失败：{exc}", flush=True)
+        return set()
+
+    if result.returncode != 0:
+        error_text = (result.stderr or result.stdout).strip()
+        if error_text:
+            print(f"[WiFi] 扫描失败：{error_text}", flush=True)
+        return set()
+
+    return {line.strip() for line in result.stdout.splitlines() if line.strip()}
+
+
+def _connect_wifi(ssid: str, password: str) -> bool:
+    """尝试连接指定 WiFi。"""
+    try:
+        result = subprocess.run(
+            ["nmcli", "device", "wifi", "connect", ssid, "password", password],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        print(f"[WiFi] 连接 {ssid} 失败：{exc}", flush=True)
+        return False
+
+    output = (result.stdout or result.stderr).strip()
+    if result.returncode == 0:
+        print(f"[WiFi] 已连接到 {ssid}", flush=True)
+        return True
+
+    if output:
+        print(f"[WiFi] 连接 {ssid} 失败：{output}", flush=True)
+    else:
+        print(f"[WiFi] 连接 {ssid} 失败，退出码 {result.returncode}", flush=True)
+    return False
+
+
+def _wifi_auto_connect_worker() -> None:
+    """当设备未连接 WiFi 时，周期性扫描并自动连接指定热点。"""
+    if not _can_manage_wifi():
+        print("[WiFi] 当前环境不支持 nmcli，跳过自动连接功能", flush=True)
+        return
+
+    print(
+        f"[WiFi] 自动连接已启用：目标 SSID={_WIFI_TARGET_SSID}，检查间隔={_WIFI_CHECK_INTERVAL_SECONDS}s",
+        flush=True,
+    )
+
+    while True:
+        try:
+            active_ssid = _get_active_wifi_ssid()
+            if active_ssid == _WIFI_TARGET_SSID:
+                time.sleep(_WIFI_CHECK_INTERVAL_SECONDS)
+                continue
+
+            if active_ssid:
+                print(
+                    f"[WiFi] 当前已连接 WiFi：{active_ssid}，跳过自动连接", flush=True
+                )
+                time.sleep(_WIFI_CHECK_INTERVAL_SECONDS)
+                continue
+
+            available_ssids = _scan_wifi_ssids()
+            if _WIFI_TARGET_SSID not in available_ssids:
+                print(
+                    f"[WiFi] 未发现目标热点 {_WIFI_TARGET_SSID}，继续等待", flush=True
+                )
+                time.sleep(_WIFI_CHECK_INTERVAL_SECONDS)
+                continue
+
+            if _connect_wifi(_WIFI_TARGET_SSID, _WIFI_TARGET_PASSWORD):
+                time.sleep(_WIFI_CONNECT_COOLDOWN_SECONDS)
+                continue
+        except Exception as exc:
+            print(f"[WiFi] 自动连接线程异常：{exc}", flush=True)
+
+        time.sleep(_WIFI_CHECK_INTERVAL_SECONDS)
 
 
 def _handle_client(conn: socket.socket, addr: tuple) -> None:
@@ -876,6 +1178,7 @@ def main() -> None:
         threading.Thread(
             target=_discovery_worker, args=(args.port,), daemon=True
         ).start()
+        threading.Thread(target=_wifi_auto_connect_worker, daemon=True).start()
 
         while True:
             try:

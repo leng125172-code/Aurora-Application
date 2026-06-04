@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
@@ -16,6 +16,8 @@ import {
     Cable,
     Cpu,
     Box,
+    ScanLine,
+    Layers,
     ChevronDown,
     ChevronRight,
 } from '@lucide/vue'
@@ -28,10 +30,13 @@ const { t } = useI18n()
 // 展开状态：CAP 和 Hangfire 默认展开（若当前路由匹配）
 const capExpanded = ref(route.path.startsWith('/embed/cap'))
 const hangfireExpanded = ref(route.path.startsWith('/embed/hangfire'))
+const calibExpanded = ref(route.path.startsWith('/calibration'))
 const projectorExpanded = ref(route.path.startsWith('/projectors'))
 const cameraExpanded = ref(route.path.startsWith('/cameras'))
 const serialPortExpanded = ref(route.path.startsWith('/serial-ports'))
 const motorExpanded = ref(route.path.startsWith('/motors'))
+const productModelExpanded = ref(route.path.startsWith('/product-models'))
+const aiModelExpanded = ref(route.path.startsWith('/ai-models'))
 
 function isCapActive(tab: string): boolean {
     if (!route.path.startsWith('/embed/cap')) return false
@@ -447,20 +452,150 @@ function navigate(path: string, tab?: string): void {
             </div>
 
             <!-- 三维数模管理 -->
-            <button
-                :class="
-                    cn(
-                        'flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors text-left',
-                        isExactActive('/product-models')
-                            ? 'bg-accent text-accent-foreground'
-                            : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
-                    )
-                "
-                @click="navigate('/product-models')"
-            >
-                <Box class="size-4 shrink-0" />
-                {{ t('menu.productModelManage') }}
-            </button>
+            <div>
+                <button
+                    :class="
+                        cn(
+                            'flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors text-left',
+                            route.path.startsWith('/product-models')
+                                ? 'text-accent-foreground'
+                                : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                        )
+                    "
+                    @click="productModelExpanded = !productModelExpanded"
+                >
+                    <Box class="size-4 shrink-0" />
+                    <span class="flex-1">{{ t('menu.productModelManage') }}</span>
+                    <ChevronDown v-if="productModelExpanded" class="size-3.5" />
+                    <ChevronRight v-else class="size-3.5" />
+                </button>
+                <div v-if="productModelExpanded" class="ml-6 mt-0.5 space-y-0.5">
+                    <button
+                        :class="
+                            cn(
+                                'flex w-full items-center rounded-md px-3 py-1.5 text-sm transition-colors text-left',
+                                isExactActive('/product-models')
+                                    ? 'bg-accent text-accent-foreground'
+                                    : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                            )
+                        "
+                        @click="navigate('/product-models')"
+                    >
+                        {{ t('menu.management') }}
+                    </button>
+                    <button
+                        :class="
+                            cn(
+                                'flex w-full items-center rounded-md px-3 py-1.5 text-sm transition-colors text-left',
+                                isExactActive('/product-models/logs')
+                                    ? 'bg-accent text-accent-foreground'
+                                    : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                            )
+                        "
+                        @click="navigate('/product-models/logs')"
+                    >
+                        {{ t('menu.operationLogs') }}
+                    </button>
+                </div>
+            </div>
+
+            <!-- AI 模型管理 -->
+            <div>
+                <button
+                    :class="
+                        cn(
+                            'flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors text-left',
+                            route.path.startsWith('/ai-models')
+                                ? 'text-accent-foreground'
+                                : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                        )
+                    "
+                    @click="aiModelExpanded = !aiModelExpanded"
+                >
+                    <Cpu class="size-4 shrink-0" />
+                    <span class="flex-1">{{ t('menu.aiModelManage') }}</span>
+                    <ChevronDown v-if="aiModelExpanded" class="size-3.5" />
+                    <ChevronRight v-else class="size-3.5" />
+                </button>
+                <div v-if="aiModelExpanded" class="ml-6 mt-0.5 space-y-0.5">
+                    <button
+                        :class="
+                            cn(
+                                'flex w-full items-center rounded-md px-3 py-1.5 text-sm transition-colors text-left',
+                                isExactActive('/ai-models')
+                                    ? 'bg-accent text-accent-foreground'
+                                    : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                            )
+                        "
+                        @click="navigate('/ai-models')"
+                    >
+                        {{ t('menu.management') }}
+                    </button>
+                    <button
+                        :class="
+                            cn(
+                                'flex w-full items-center rounded-md px-3 py-1.5 text-sm transition-colors text-left',
+                                isExactActive('/ai-models/logs')
+                                    ? 'bg-accent text-accent-foreground'
+                                    : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                            )
+                        "
+                        @click="navigate('/ai-models/logs')"
+                    >
+                        {{ t('menu.operationLogs') }}
+                    </button>
+                </div>
+            </div>
+
+            <!-- 标定管理 可展开菜单 -->
+            <div>
+                <button
+                    :class="
+                        cn(
+                            'flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors text-left',
+                            route.path.startsWith('/calibration')
+                                ? 'bg-accent text-accent-foreground'
+                                : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                        )
+                    "
+                    @click="calibExpanded = !calibExpanded"
+                >
+                    <ScanLine class="size-4 shrink-0" />
+                    <span class="flex-1">{{ t('menu.calibration') }}</span>
+                    <ChevronDown v-if="calibExpanded" class="size-3.5" />
+                    <ChevronRight v-else class="size-3.5" />
+                </button>
+                <div v-if="calibExpanded" class="ml-6 mt-0.5 flex flex-col gap-0.5">
+                    <button
+                        :class="
+                            cn(
+                                'flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors text-left',
+                                isExactActive('/calibration/projects')
+                                    ? 'bg-accent text-accent-foreground'
+                                    : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                            )
+                        "
+                        @click="navigate('/calibration/projects')"
+                    >
+                        <ScanLine class="size-3.5 shrink-0" />
+                        {{ t('menu.calibProjectManage') }}
+                    </button>
+                    <button
+                        :class="
+                            cn(
+                                'flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors text-left',
+                                isExactActive('/calibration/gimbal-groups')
+                                    ? 'bg-accent text-accent-foreground'
+                                    : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                            )
+                        "
+                        @click="navigate('/calibration/gimbal-groups')"
+                    >
+                        <Layers class="size-3.5 shrink-0" />
+                        {{ t('menu.calibGimbalGroupManage') }}
+                    </button>
+                </div>
+            </div>
         </nav>
     </aside>
 </template>

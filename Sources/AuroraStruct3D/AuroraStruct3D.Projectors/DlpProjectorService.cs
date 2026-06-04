@@ -609,6 +609,14 @@ public class DlpProjectorService : IDlpProjectorService, IDisposable
         return _tcpClient!.SendCommandAndReadAsync(command, ct);
     }
 
+    /// <summary>仅读取一行响应，不发送任何命令（用于等待 Flash page 写入应答）</summary>
+    private Task<string?> ReadResponseCoreAsync(CancellationToken ct)
+    {
+        if (_useHid)
+            return _hidClient!.ReadResponseAsync(ct);
+        return _tcpClient!.ReadResponseAsync(ct);
+    }
+
     /// <summary>当前连接的设备标识符（用于日志）</summary>
     private string DeviceId =>
         _useHid
@@ -829,5 +837,195 @@ public class DlpProjectorService : IDlpProjectorService, IDisposable
                 cancellationToken
             )
             .ConfigureAwait(false);
+    }
+
+    // ─── 像素分辨率查询与 Flash 条纹下载 ──────────────────────────────────
+
+    /// <inheritdoc/>
+    public async Task<(int WidthPixels, string PixelMode)> GetPixelResolutionAsync(
+        CancellationToken cancellationToken = default
+    )
+    {
+        EnsureClient();
+        _logger.LogInformation(
+            "{Tag} [Device {Device}] Query pixel resolution (Fp)",
+            LogTag,
+            DeviceId
+        );
+
+        // 发送 Fp 指令，响应格式示例："1280 Pixel Mode"
+        string? response = await SendCommandAndReadCoreAsync(
+                TjProjectorCommands.ReadPixelMode,
+                cancellationToken
+            )
+            .ConfigureAwait(false);
+
+        if (string.IsNullOrWhiteSpace(response))
+        {
+            _logger.LogWarning(
+                "{Tag} [Device {Device}] Fp command returned empty response, using default 1280",
+                LogTag,
+                DeviceId
+            );
+            return (1280, "1280 Pixel Mode");
+        }
+
+        // 解析：取第一个空格前的数字
+        string[] parts = response.Trim().Split(' ', 2);
+        if (parts.Length > 0 && int.TryParse(parts[0], out int width) && width > 0)
+        {
+            _logger.LogInformation(
+                "{Tag} [Device {Device}] Pixel resolution: {Width} pixels, mode: {Mode}",
+                LogTag,
+                DeviceId,
+                width,
+                response
+            );
+            return (width, response);
+        }
+
+        _logger.LogWarning(
+            "{Tag} [Device {Device}] Failed to parse Fp response '{Resp}', using default 1280",
+            LogTag,
+            DeviceId,
+            response
+        );
+        return (1280, response);
+    }
+
+    /// <inheritdoc/>
+    public async Task DownloadFringePatternAsync(
+        int imageCount,
+        byte[] columnGrayValues,
+        bool isHorizontal,
+        Func<int, Task>? onProgress = null,
+        CancellationToken cancellationToken = default
+    )
+    {
+        EnsureClient();
+
+        int widthPixels = columnGrayValues.Length / imageCount;
+        int totalWrites = columnGrayValues.Length;
+
+        _logger.LogInformation(
+            "{Tag} [Device {Device}] Start fringe download: images={Count}, columns={Width}, total={Total}",
+            LogTag,
+            DeviceId,
+            imageCount,
+            widthPixels,
+            totalWrites
+        );
+
+        // 1. 切换到默认显示模式（S6），再开灯（LN）
+        await SendCommandCoreAsync(TjProjectorCommands.SetModeFlash, cancellationToken)
+            .ConfigureAwait(false);
+        await Task.Delay(50, cancellationToken).ConfigureAwait(false);
+        await SendCommandCoreAsync(TjProjectorCommands.LedOn, cancellationToken)
+            .ConfigureAwait(false);
+        await Task.Delay(50, cancellationToken).ConfigureAwait(false);
+
+        // 2. 写入总图像幅数（MB N）
+        string mbCmd =
+            $"{TjProjectorCommands.SetImageCountPrefix}{imageCount}{TjProjectorCommands.CommandSuffix}";
+        await SendCommandCoreAsync(mbCmd, cancellationToken).ConfigureAwait(false);
+        await Task.Delay(50, cancellationToken).ConfigureAwait(false);
+
+        // 3. 设置条纹方向（MD N）：横条纹传幅数，竖条纹传 0
+        int mdParam = isHorizontal ? imageCount : 0;
+        string mdCmd =
+            $"{TjProjectorCommands.SetFringeDirectionPrefix}{mdParam}{TjProjectorCommands.CommandSuffix}";
+        await SendCommandCoreAsync(mdCmd, cancellationToken).ConfigureAwait(false);
+        await Task.Delay(50, cancellationToken).ConfigureAwait(false);
+
+        // 4. 擦除 Flash（FE），等待 F0 成功应答；若 F1 则重试（最多 5 次）
+        const int MaxEraseRetries = 5;
+        bool eraseOk = false;
+        for (int attempt = 0; attempt < MaxEraseRetries; attempt++)
+        {
+            string? eraseReply = await SendCommandAndReadCoreAsync(
+                    TjProjectorCommands.EraseFlash,
+                    cancellationToken
+                )
+                .ConfigureAwait(false);
+
+            _logger.LogInformation(
+                "{Tag} [Device {Device}] FE erase attempt {Attempt}: reply={Reply}",
+                LogTag,
+                DeviceId,
+                attempt + 1,
+                eraseReply
+            );
+
+            if (
+                eraseReply != null
+                && eraseReply
+                    .Trim()
+                    .StartsWith(
+                        TjProjectorCommands.FlashEraseOk,
+                        StringComparison.OrdinalIgnoreCase
+                    )
+            )
+            {
+                eraseOk = true;
+                break;
+            }
+
+            // F1 或超时：等待后重试
+            await Task.Delay(500, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (!eraseOk)
+        {
+            throw new InvalidOperationException(
+                $"[{LogTag}] Flash erase failed after {MaxEraseRetries} attempts. Device may be busy or disconnected."
+            );
+        }
+
+        // 5. 循环写列数据（FW<index> <gray>），每条命令间隔 25ms
+        const int PageSize = 256;
+        int lastReportedProgress = 0;
+        if (onProgress != null)
+            await onProgress(0).ConfigureAwait(false);
+
+        for (int idx = 0; idx < totalWrites; idx++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            string fwCmd =
+                $"{TjProjectorCommands.WriteFlashPixelPrefix}{idx} {columnGrayValues[idx]}{TjProjectorCommands.CommandSuffix}";
+
+            bool isPageBoundary = (idx + 1) % PageSize == 0;
+            bool isLastWrite = idx == totalWrites - 1;
+
+            if (isPageBoundary || isLastWrite)
+            {
+                // 到达 page 边界或最后一条：发送后等待光机 page 写入应答
+                await SendCommandCoreAsync(fwCmd, cancellationToken).ConfigureAwait(false);
+                await Task.Delay(25, cancellationToken).ConfigureAwait(false);
+                await ReadResponseCoreAsync(cancellationToken).ConfigureAwait(false);
+            }
+            else
+            {
+                // 普通写入：发送后等待 25ms 再发下一条
+                await SendCommandCoreAsync(fwCmd, cancellationToken).ConfigureAwait(false);
+                await Task.Delay(25, cancellationToken).ConfigureAwait(false);
+            }
+
+            // 更新进度（以 1% 为步进避免过频回调）
+            int currentProgress = (int)((idx + 1) * 100L / totalWrites);
+            if (currentProgress > lastReportedProgress)
+            {
+                lastReportedProgress = currentProgress;
+                if (onProgress != null)
+                    await onProgress(currentProgress).ConfigureAwait(false);
+            }
+        }
+
+        _logger.LogInformation(
+            "{Tag} [Device {Device}] Fringe download complete: {Total} columns written",
+            LogTag,
+            DeviceId,
+            totalWrites
+        );
     }
 }

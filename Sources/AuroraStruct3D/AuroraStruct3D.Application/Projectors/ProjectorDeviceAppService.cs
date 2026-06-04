@@ -13,6 +13,7 @@ namespace AuroraStruct3D.Projectors;
 /// 所有硬件控制操作（连接/LED/显示/触发等）要求设备运行模式为手动或检修模式，
 /// 由 <see cref="IDeviceStateManager"/> 进行运行模式校验。
 /// </summary>
+[Authorize]
 public class ProjectorDeviceAppService : AuroraStruct3DAppService, IProjectorDeviceAppService
 {
     private readonly IProjectorDeviceRepository _projectorDeviceRepository;
@@ -22,6 +23,8 @@ public class ProjectorDeviceAppService : AuroraStruct3DAppService, IProjectorDev
     private readonly IDlpProjectorService _dlpProjectorService;
     private readonly IDeviceOperationSessionManager _sessionManager;
     private readonly ICurrentClientSession _currentClientSession;
+    private readonly IProjectorHubNotifier _projectorHubNotifier;
+    private readonly ProjectorFringeDownloadStateStore _fringeDownloadStateStore;
 
     public ProjectorDeviceAppService(
         IProjectorDeviceRepository projectorDeviceRepository,
@@ -30,7 +33,9 @@ public class ProjectorDeviceAppService : AuroraStruct3DAppService, IProjectorDev
         IDeviceStateManager deviceStateManager,
         IDlpProjectorService dlpProjectorService,
         IDeviceOperationSessionManager sessionManager,
-        ICurrentClientSession currentClientSession
+        ICurrentClientSession currentClientSession,
+        IProjectorHubNotifier projectorHubNotifier,
+        ProjectorFringeDownloadStateStore fringeDownloadStateStore
     )
     {
         _projectorDeviceRepository = projectorDeviceRepository;
@@ -40,6 +45,8 @@ public class ProjectorDeviceAppService : AuroraStruct3DAppService, IProjectorDev
         _dlpProjectorService = dlpProjectorService;
         _sessionManager = sessionManager;
         _currentClientSession = currentClientSession;
+        _projectorHubNotifier = projectorHubNotifier;
+        _fringeDownloadStateStore = fringeDownloadStateStore;
     }
 
     // ─── 设备 CRUD ────────────────────────────────────────────────────────
@@ -514,6 +521,188 @@ public class ProjectorDeviceAppService : AuroraStruct3DAppService, IProjectorDev
             totalCount,
             logs.Select(x => x.ToDto()).ToList()
         );
+    }
+
+    // ─── 像素分辨率与条纹下载 ───────────────────────────────────────────────
+
+    /// <inheritdoc/>
+    public async Task<ProjectorPixelResolutionDto> GetPixelResolutionAsync(Guid id)
+    {
+        IDlpProjectorService svc = GetConnectedService(id);
+        (int widthPixels, string pixelMode) = await svc.GetPixelResolutionAsync()
+            .ConfigureAwait(false);
+        return new ProjectorPixelResolutionDto { WidthPixels = widthPixels, PixelMode = pixelMode };
+    }
+
+    /// <inheritdoc/>
+    public Task<List<FringePreviewImageDto>> GenerateFringePreviewAsync(
+        DownloadFringePatternInputDto input
+    )
+    {
+        byte[][] images = BuildFringeImagePixels(input);
+        List<FringePreviewImageDto> result = images
+            .Select(
+                (pixels, index) =>
+                    new FringePreviewImageDto
+                    {
+                        Index = index,
+                        Label = $"图像 {index + 1}",
+                        Pixels = pixels,
+                    }
+            )
+            .ToList();
+
+        return Task.FromResult(result);
+    }
+
+    /// <inheritdoc/>
+    public Task<ProjectorFringeDownloadStatusDto> GetFringeDownloadStatusAsync(Guid id)
+    {
+        return Task.FromResult(_fringeDownloadStateStore.Get(id));
+    }
+
+    /// <inheritdoc/>
+    public Task DownloadFringePatternAsync(DownloadFringePatternInputDto input)
+    {
+        bool isVertical = input.FringeMode.Equals("vertical", StringComparison.OrdinalIgnoreCase);
+        byte[][] images = BuildFringeImagePixels(input);
+        int pixelCount = images[0].Length;
+        byte[] columnGrayValues = new byte[input.ImageCount * pixelCount];
+        for (int i = 0; i < images.Length; i++)
+        {
+            Buffer.BlockCopy(images[i], 0, columnGrayValues, i * pixelCount, pixelCount);
+        }
+
+        if (
+            !_fringeDownloadStateStore.TryStart(
+                input.ProjectorId,
+                out ProjectorFringeDownloadStatusDto startedStatus
+            )
+        )
+        {
+            throw new UserFriendlyException("当前投影机已有条纹下载任务正在执行，请勿重复发起。");
+        }
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                IDlpProjectorService svc = GetConnectedService(input.ProjectorId);
+                await _projectorHubNotifier
+                    .NotifyFringeDownloadStatusChangedAsync(startedStatus)
+                    .ConfigureAwait(false);
+                await _projectorHubNotifier
+                    .NotifyFringeDownloadProgressAsync(input.ProjectorId, 0)
+                    .ConfigureAwait(false);
+
+                async Task reportProgress(int pct)
+                {
+                    try
+                    {
+                        ProjectorFringeDownloadStatusDto runningStatus =
+                            _fringeDownloadStateStore.UpdateProgress(input.ProjectorId, pct);
+                        await _projectorHubNotifier
+                            .NotifyFringeDownloadStatusChangedAsync(runningStatus)
+                            .ConfigureAwait(false);
+                        await _projectorHubNotifier
+                            .NotifyFringeDownloadProgressAsync(input.ProjectorId, pct)
+                            .ConfigureAwait(false);
+                    }
+                    catch
+                    {
+                        // 进度推送失败不中断下载流程
+                    }
+                }
+
+                await svc.DownloadFringePatternAsync(
+                        input.ImageCount,
+                        columnGrayValues,
+                        !isVertical,
+                        reportProgress
+                    )
+                    .ConfigureAwait(false);
+
+                ProjectorFringeDownloadStatusDto completedStatus =
+                    _fringeDownloadStateStore.Complete(input.ProjectorId);
+                await _projectorHubNotifier
+                    .NotifyFringeDownloadStatusChangedAsync(completedStatus)
+                    .ConfigureAwait(false);
+                await _projectorHubNotifier
+                    .NotifyFringeDownloadProgressAsync(input.ProjectorId, 100)
+                    .ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning(
+                    ex,
+                    "[Projector] Fringe download failed for projector {ProjectorId}",
+                    input.ProjectorId
+                );
+                ProjectorFringeDownloadStatusDto failedStatus = _fringeDownloadStateStore.Fail(
+                    input.ProjectorId,
+                    ex.Message
+                );
+                try
+                {
+                    await _projectorHubNotifier
+                        .NotifyFringeDownloadStatusChangedAsync(failedStatus)
+                        .ConfigureAwait(false);
+                }
+                catch
+                {
+                    // 状态推送失败不再抛出，避免后台任务崩溃。
+                }
+            }
+        });
+
+        return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// 按与设备下载完全一致的规则生成条纹图一维像素数据。
+    /// 竖条纹：每张图长度为 WidthPixels；横条纹：每张图长度为 HeightPixels。
+    /// </summary>
+    private static byte[][] BuildFringeImagePixels(DownloadFringePatternInputDto input)
+    {
+        bool isVertical = input.FringeMode.Equals("vertical", StringComparison.OrdinalIgnoreCase);
+        int pixelCount = isVertical ? input.WidthPixels : input.HeightPixels;
+
+        if (pixelCount <= 0)
+        {
+            throw new UserFriendlyException("条纹像素数无效，无法生成预览图像。");
+        }
+
+        if (pixelCount % input.PeriodCount != 0)
+        {
+            throw new UserFriendlyException("条纹周期数必须能整除有效像素数。");
+        }
+
+        if (input.PhaseShift <= 0 || input.PhaseShift >= input.PeriodCount)
+        {
+            throw new UserFriendlyException("相移量必须大于 0 且小于周期数。");
+        }
+
+        int stripeWidth = pixelCount / input.PeriodCount;
+        byte firstColor = input.FringeType.Equals("wb", StringComparison.OrdinalIgnoreCase)
+            ? (byte)255
+            : (byte)0;
+        byte secondColor = (byte)(255 - firstColor);
+
+        byte[][] images = new byte[input.ImageCount][];
+        for (int i = 0; i < input.ImageCount; i++)
+        {
+            byte[] pixels = new byte[pixelCount];
+            int offset = i * input.PhaseShift;
+            for (int pos = 0; pos < pixelCount; pos++)
+            {
+                int shifted = (pos + offset) % pixelCount;
+                int stripeIdx = (shifted / stripeWidth) % 2;
+                pixels[pos] = stripeIdx == 0 ? firstColor : secondColor;
+            }
+            images[i] = pixels;
+        }
+
+        return images;
     }
 
     // ─── 辅助 ─────────────────────────────────────────────────────────────

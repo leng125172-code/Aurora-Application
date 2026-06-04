@@ -1,3 +1,4 @@
+using AuroraStruct3D.AI;
 using AuroraStruct3D.DeviceState;
 using AuroraStruct3D.Ktech;
 using AuroraStruct3D.Leisai;
@@ -35,6 +36,9 @@ namespace AuroraStruct3D
     {
         public override void ConfigureServices(ServiceConfigurationContext context)
         {
+            // 注册 AI 模型运行时服务为单例
+            context.Services.AddAiServices();
+
             // 注册TUCam相机服务为单例
             context.Services.AddTucamCameraServices();
 

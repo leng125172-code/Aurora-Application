@@ -1,3 +1,4 @@
+using AuroraStruct3D.AI;
 using AuroraStruct3D.Cameras;
 using AuroraStruct3D.DeviceState;
 using AuroraStruct3D.Motors;
@@ -60,6 +61,26 @@ namespace AuroraStruct3D.EntityFrameworkCore
 
         /// <summary>产品三维数模集合</summary>
         DbSet<ProductModel> ProductModels { get; }
+
+        /// <summary>产品三维数模操作日志集合</summary>
+        DbSet<ProductModelOperationLog> ProductModelOperationLogs { get; }
+
+        // ── AI 模型模块 ──────────────────────────────────────────────────────
+
+        /// <summary>AI 模型集合</summary>
+        DbSet<AiModel> AiModels { get; }
+
+        /// <summary>AI 模型文件集合</summary>
+        DbSet<AiModelFile> AiModelFiles { get; }
+
+        /// <summary>AI 模型标识集合</summary>
+        DbSet<AiModelIdentifier> AiModelIdentifiers { get; }
+
+        /// <summary>AI 模型标识关联集合</summary>
+        DbSet<AiModelIdentifierLink> AiModelIdentifierLinks { get; }
+
+        /// <summary>AI 模型操作日志集合</summary>
+        DbSet<AiModelOperationLog> AiModelOperationLogs { get; }
 
         // ── 串口通讯模块 ──────────────────────────────────────────────────────
 

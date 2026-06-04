@@ -170,6 +170,10 @@ public sealed class TjProjectorHidClient : IDisposable
         try
         {
             EnsureConnected();
+
+            // 发送命令前先排空缓冲区，避免读到上一条命令的残留响应
+            DrainInputBuffer();
+
             WriteToDevice(command);
             _logger.LogDebug("{Tag} HID TX: {Cmd}", LogTag, command.TrimEnd('\r', '\n'));
 
@@ -193,7 +197,73 @@ public sealed class TjProjectorHidClient : IDisposable
         }
     }
 
+    /// <summary>
+    /// 仅读取一行响应，不发送任何命令（用于等待 Flash page 写入完成的应答）。
+    /// 超时或未连接时返回 null。
+    /// </summary>
+    public async Task<string?> ReadResponseAsync(CancellationToken cancellationToken = default)
+    {
+        await _lock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            EnsureConnected();
+            string? response = ReadFromDevice();
+            _logger.LogDebug("{Tag} HID Page-write ACK: {Response}", LogTag, response);
+            return response;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "{Tag} HID ReadResponseAsync failed", LogTag);
+            return null;
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
     // ─── 内部辅助 ────────────────────────────────────────────────
+
+    /// <summary>
+    /// 排空 HID 接收缓冲区中的残留旧数据。
+    /// 每次发送需要响应的命令之前调用，确保读到的是本次命令的真实响应。
+    /// 使用极短超时（10ms）快速清空，缓冲区为空时捕获 TimeoutException 退出。
+    /// </summary>
+    private void DrainInputBuffer()
+    {
+        if (_device == null || _stream == null)
+            return;
+
+        int inLen = _device.GetMaxInputReportLength();
+        byte[] buf = new byte[inLen];
+        int savedTimeout = _stream.ReadTimeout;
+        try
+        {
+            _stream.ReadTimeout = 10; // 10ms 快速轮询，无数据即超时
+            while (true)
+            {
+                try
+                {
+                    int n = _stream.Read(buf, 0, inLen);
+                    if (n == 0)
+                        break;
+                    // 有数据则继续排空
+                }
+                catch (TimeoutException)
+                {
+                    break; // 缓冲区已空
+                }
+            }
+        }
+        catch
+        {
+            // 排空过程中的任何其他异常均忽略，不影响主流程
+        }
+        finally
+        {
+            _stream.ReadTimeout = savedTimeout;
+        }
+    }
 
     /// <summary>
     /// 向 HID 设备写入命令（同步，内部使用）。

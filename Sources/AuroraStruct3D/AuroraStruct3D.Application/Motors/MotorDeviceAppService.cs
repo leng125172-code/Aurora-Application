@@ -18,6 +18,7 @@ namespace AuroraStruct3D.Motors;
 /// <summary>
 /// 485 串口电机设备管理应用服务实现。
 /// </summary>
+[Authorize]
 public class MotorDeviceAppService : AuroraStruct3DAppService, IMotorDeviceAppService
 {
     private const long KtechSingleTurnAngleUnits = MotorConsts.KtechSingleTurnAngleUnits;

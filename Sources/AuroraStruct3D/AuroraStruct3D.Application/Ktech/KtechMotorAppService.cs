@@ -14,6 +14,7 @@ namespace AuroraStruct3D.Ktech;
 /// 通过 <see cref="IMotorControlService"/> 获取已注册的 <see cref="KtechMotorDriver"/>，
 /// 与现有 <c>MotorDeviceAppService</c> 解耦，只服务 KTECH 品牌轴。
 /// </summary>
+[Authorize]
 public class KtechMotorAppService : AuroraStruct3DAppService, IKtechMotorAppService
 {
     private readonly IMotorAxisRepository _motorAxisRepository;

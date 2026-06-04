@@ -133,9 +133,21 @@ public class CalibCameraParam : FullAuditedEntity<Guid>
         ImageWidthPixels = imageWidthPixels;
         ImageHeightPixels = imageHeightPixels;
 
-        // 按宽边计算像素物理尺寸（mm → μm 换算：×1000）
-        PixelSizeUm =
-            imageWidthPixels > 0 ? Math.Round(sensorWidthMm * 1000m / imageWidthPixels, 4) : 0m;
+        // 按传感器与分辨率对角线计算单像素物理尺寸（mm → μm 换算：×1000）
+        if (imageWidthPixels > 0 && imageHeightPixels > 0)
+        {
+            double sensorDiagonalUm =
+                Math.Sqrt(Math.Pow((double)sensorWidthMm, 2) + Math.Pow((double)sensorHeightMm, 2))
+                * 1000d;
+            double imageDiagonalPixels = Math.Sqrt(
+                Math.Pow(imageWidthPixels, 2) + Math.Pow(imageHeightPixels, 2)
+            );
+            PixelSizeUm = Math.Round((decimal)(sensorDiagonalUm / imageDiagonalPixels), 4);
+        }
+        else
+        {
+            PixelSizeUm = 0m;
+        }
         return this;
     }
 

@@ -126,7 +126,7 @@ public static class ServiceCollectionExtensions
     /// 注册基于FileSystem的blob设置
     /// </summary>
     /// <param name="service">服务集合</param>
-    /// <param name="configuration">应用配置，用于读取 BlobStoring:ProductModels:BasePath</param>
+    /// <param name="configuration">应用配置，用于读取 BlobStoring 各容器的 BasePath</param>
     public static IServiceCollection AddAbpProBlobStorageFileSystem(
         this IServiceCollection service,
         IConfiguration configuration
@@ -136,6 +136,9 @@ public static class ServiceCollectionExtensions
         var productModelsBasePath =
             configuration["BlobStoring:ProductModels:BasePath"]
             ?? Path.Combine(AppContext.BaseDirectory, "files", "product-models");
+        var aiModelsBasePath =
+            configuration["BlobStoring:AiModels:BasePath"]
+            ?? Path.Combine(AppContext.BaseDirectory, "files", "ai-models");
 
         service.Configure<AbpBlobStoringOptions>(options =>
         {
@@ -157,6 +160,15 @@ public static class ServiceCollectionExtensions
                     });
                 }
             );
+
+            // AI 模型专属容器，使用本地文件系统存储
+            options.Containers.Configure<AuroraStruct3D.AI.AiModelBlobContainer>(container =>
+            {
+                container.UseFileSystem(fileSystem =>
+                {
+                    fileSystem.BasePath = aiModelsBasePath;
+                });
+            });
         });
         return service;
     }

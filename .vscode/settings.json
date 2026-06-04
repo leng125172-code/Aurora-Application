@@ -23,7 +23,7 @@
     // ==========================
     // Anaconda3 完整版 自动识别（不用写路径！）
     // ==========================
-    "python.terminal.activateEnvironment": true,
+    "python.terminal.activateEnvironment": false,
     "python.analysis.autoImportCompletions": true,
     "python.analysis.typeCheckingMode": "basic",
     "[python]": {

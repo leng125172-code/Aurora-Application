@@ -213,6 +213,47 @@ internal sealed class TjProjectorTcpClient : IDisposable
         }
     }
 
+    /// <summary>
+    /// 仅读取一行响应，不发送任何命令（用于等待 Flash page 写入完成的应答）。
+    /// 超时或未连接时返回 null。
+    /// </summary>
+    public async Task<string?> ReadResponseAsync(CancellationToken cancellationToken = default)
+    {
+        await _lock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            EnsureConnected();
+            byte[] buffer = new byte[128];
+            int bytesRead = 0;
+            try
+            {
+                bytesRead = await _stream!
+                    .ReadAsync(buffer, cancellationToken)
+                    .ConfigureAwait(false);
+            }
+            catch (IOException)
+            {
+                return null;
+            }
+
+            if (bytesRead <= 0)
+                return null;
+
+            string response = Encoding.ASCII.GetString(buffer, 0, bytesRead).TrimEnd('\r', '\n');
+            _logger.LogDebug("{Tag} [IP {Ip}] Page-write ACK: {Resp}", LogTag, _ip, response);
+            return response;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "{Tag} [IP {Ip}] ReadResponseAsync failed", LogTag, _ip);
+            return null;
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
     private void EnsureConnected()
     {
         if (!IsConnected)

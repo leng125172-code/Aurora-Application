@@ -15,7 +15,6 @@ import {
     getStateLogPagedListAsync,
 } from '@/api/device-state'
 import { AppCard } from '@/components/primevue'
-import GlowBorder from '@/components/ui/glow-border/GlowBorder.vue'
 
 const { t } = useI18n()
 

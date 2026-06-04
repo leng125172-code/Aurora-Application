@@ -47,3 +47,37 @@ public interface IProductModelRepository : IRepository<ProductModel, Guid>
         CancellationToken cancellationToken = default
     );
 }
+
+/// <summary>
+/// 三维数模操作日志仓储接口。
+/// </summary>
+public interface IProductModelOperationLogRepository : IRepository<ProductModelOperationLog, Guid>
+{
+    /// <summary>
+    /// 分页查询操作日志，按时间倒序。
+    /// </summary>
+    Task<List<ProductModelOperationLog>> GetPagedListAsync(
+        Guid? productModelId = null,
+        string? filter = null,
+        ProductModelOperationType? operationType = null,
+        bool onlyFailures = false,
+        DateTime? startTime = null,
+        DateTime? endTime = null,
+        int skipCount = 0,
+        int maxResultCount = 20,
+        CancellationToken cancellationToken = default
+    );
+
+    /// <summary>
+    /// 查询操作日志总数。
+    /// </summary>
+    Task<long> GetCountAsync(
+        Guid? productModelId = null,
+        string? filter = null,
+        ProductModelOperationType? operationType = null,
+        bool onlyFailures = false,
+        DateTime? startTime = null,
+        DateTime? endTime = null,
+        CancellationToken cancellationToken = default
+    );
+}

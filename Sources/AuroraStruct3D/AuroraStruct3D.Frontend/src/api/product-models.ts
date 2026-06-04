@@ -40,6 +40,16 @@ export enum ProductModelConversionStatus {
     Failed = 4,
 }
 
+/** 三维数模操作类型 */
+export enum ProductModelOperationType {
+    Upload = 0,
+    Rename = 1,
+    Delete = 2,
+    RetryConversion = 3,
+    Download = 4,
+    CleanUpOrphanedRecords = 5,
+}
+
 // ===================== DTO 类型 =====================
 
 export interface ProductModelDto {
@@ -80,6 +90,30 @@ export interface UpdateProductModelNameInput {
     readonly name: string
 }
 
+export interface ProductModelOperationLogDto {
+    readonly id: string
+    readonly productModelId: string | null
+    readonly modelName: string
+    readonly originalFileName: string | null
+    readonly operationType: ProductModelOperationType
+    readonly occurredAt: string
+    readonly isSuccess: boolean
+    readonly parameterSummary: string | null
+    readonly errorMessage: string | null
+    readonly durationMs: number
+}
+
+export interface GetProductModelLogListInput {
+    readonly productModelId?: string | null
+    readonly filter?: string | null
+    readonly operationType?: ProductModelOperationType | null
+    readonly isFailedOnly?: boolean
+    readonly startTime?: string | null
+    readonly endTime?: string | null
+    readonly skipCount?: number
+    readonly maxResultCount?: number
+}
+
 // ===================== API 函数 =====================
 
 const BASE = '/api/app/product-model'
@@ -99,6 +133,18 @@ export async function getProductModelListAsync(input: GetProductModelListInput):
  */
 export async function getProductModelAsync(id: string): Promise<ProductModelDto> {
     const response = await httpClient.get<ProductModelDto>(`${BASE}/${id}`)
+    return response.data
+}
+
+/**
+ * 获取三维数模操作日志分页列表
+ */
+export async function getProductModelLogsAsync(
+    input: GetProductModelLogListInput
+): Promise<PagedResult<ProductModelOperationLogDto>> {
+    const response = await httpClient.get<PagedResult<ProductModelOperationLogDto>>(`${BASE}/logs`, {
+        params: input,
+    })
     return response.data
 }
 

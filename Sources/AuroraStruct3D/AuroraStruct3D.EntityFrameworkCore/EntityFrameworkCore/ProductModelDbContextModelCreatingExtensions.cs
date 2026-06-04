@@ -51,5 +51,33 @@ public static class ProductModelDbContextModelCreatingExtensions
             b.HasIndex(x => x.CreationTime);
             b.HasIndex(x => x.CreatorId);
         });
+
+        builder.Entity<ProductModelOperationLog>(b =>
+        {
+            b.ToTable($"{TablePrefix}ProductModelOperationLogs");
+            b.ConfigureByConvention();
+
+            b.Property(x => x.ModelName)
+                .IsRequired()
+                .HasMaxLength(ProductModelConsts.MaxOperationLogModelNameLength);
+
+            b.Property(x => x.OriginalFileName)
+                .HasMaxLength(ProductModelConsts.MaxOperationLogFileNameLength);
+
+            b.Property(x => x.OperationType).HasConversion<int>().IsRequired();
+
+            b.Property(x => x.ParameterSummary)
+                .HasMaxLength(ProductModelConsts.MaxOperationLogParameterLength);
+
+            b.Property(x => x.ErrorMessage)
+                .HasMaxLength(ProductModelConsts.MaxOperationLogErrorMessageLength);
+
+            b.Property(x => x.DurationMs).IsRequired();
+
+            b.HasIndex(x => x.ProductModelId);
+            b.HasIndex(x => x.OperationType);
+            b.HasIndex(x => x.OccurredAt);
+            b.HasIndex(x => x.IsSuccess);
+        });
     }
 }

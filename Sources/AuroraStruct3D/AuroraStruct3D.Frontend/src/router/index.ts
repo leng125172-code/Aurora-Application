@@ -150,6 +150,42 @@ const routes: RouteRecordRaw[] = [
                 component: () => import('@/views/product-models/ProductModelManagePage.vue'),
                 meta: { requiresAuth: true, title: 'menu.productModelManage' },
             },
+            {
+                path: 'product-models/logs',
+                name: 'ProductModelLogs',
+                component: () => import('@/views/product-models/ProductModelLogsPage.vue'),
+                meta: { requiresAuth: true, title: 'menu.productModelLogs' },
+            },
+            {
+                path: 'ai-models',
+                name: 'AiModelManage',
+                component: () => import('@/views/ai-models/AiModelManagePage.vue'),
+                meta: { requiresAuth: true, title: 'menu.aiModelManage' },
+            },
+            {
+                path: 'ai-models/logs',
+                name: 'AiModelLogs',
+                component: () => import('@/views/ai-models/AiModelLogsPage.vue'),
+                meta: { requiresAuth: true, title: 'menu.aiModelLogs' },
+            },
+            {
+                path: 'calibration/projects',
+                name: 'CalibProjectManage',
+                component: () => import('@/views/calibration/CalibProjectManagePage.vue'),
+                meta: { requiresAuth: true, title: 'menu.calibProjectManage' },
+            },
+            {
+                path: 'calibration/gimbal-groups',
+                name: 'CalibGimbalGroupManage',
+                component: () => import('@/views/calibration/CalibGimbalGroupManagePage.vue'),
+                meta: { requiresAuth: true, title: 'menu.calibGimbalGroupManage' },
+            },
+            {
+                path: 'calibration/projects/:id/wizard',
+                name: 'CalibWizard',
+                component: () => import('@/views/calibration/CalibWizardPage.vue'),
+                meta: { requiresAuth: true, title: 'menu.calibWizard' },
+            },
             // 系统管理路由已移除（仅供后台调试使用）
         ],
     },

@@ -95,6 +95,47 @@ internal static class TjProjectorCommands
 
     /// <summary>写寄存器命令前缀（完整命令如 "pw 3 1\r\n"）</summary>
     public const string WriteRegisterPrefix = "pw ";
+
+    // ─── 条纹 Flash 下载相关命令 ─────────────────────────────────
+
+    /// <summary>
+    /// 查询投影机像素分辨率（Fp 指令），响应格式示例："1280 Pixel Mode"
+    /// </summary>
+    public const string ReadPixelMode = "Fp\r\n";
+
+    /// <summary>
+    /// 切换到 Flash 存储图案播放模式（对应内容模式 6）
+    /// </summary>
+    public const string SetModeFlash = "S6\r\n";
+
+    /// <summary>
+    /// 设置总图像幅数命令前缀（完整命令如 "MB 3\r\n"）
+    /// </summary>
+    public const string SetImageCountPrefix = "MB ";
+
+    /// <summary>
+    /// 擦除 Flash 命令。等待回复："F0" 表示成功，"F1" 表示失败需重试
+    /// </summary>
+    public const string EraseFlash = "FE\r\n";
+
+    /// <summary>Flash 擦除成功回复标识</summary>
+    public const string FlashEraseOk = "F0";
+
+    /// <summary>Flash 擦除失败回复标识（需重试）</summary>
+    public const string FlashEraseFail = "F1";
+
+    /// <summary>
+    /// 设置条纹方向命令前缀（完整命令如 "MD 3\r\n" 或 "MD 0\r\n"）。
+    /// 横条纹时传入图像幅数；竖条纹时传入 0。
+    /// </summary>
+    public const string SetFringeDirectionPrefix = "MD ";
+
+    /// <summary>
+    /// 写 Flash 像素列命令前缀（完整命令如 "FW 128 200\r\n"）。
+    /// 第一个参数：当前像素列全局索引；第二个参数：该列灰度值（0~255）。
+    /// 每写入 256 个数据后需等待光机 page 写入完成的应答，再继续写入。
+    /// </summary>
+    public const string WriteFlashPixelPrefix = "FW";
 }
 
 /// <summary>

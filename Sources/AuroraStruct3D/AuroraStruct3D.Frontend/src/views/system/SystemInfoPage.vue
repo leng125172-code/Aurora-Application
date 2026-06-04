@@ -217,17 +217,17 @@ function shortInfoVersion(ver: string): string {
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-0 text-sm">
                     <!-- 左列 -->
                     <div class="divide-y divide-border/60">
-                        <div class="flex items-start py-2.5 gap-3">
+                        <div class="grid grid-cols-[6rem_minmax(0,1fr)] items-start py-2.5 gap-3">
                             <span class="shrink-0 whitespace-nowrap text-muted-foreground">
                                 {{ t('sysinfo.appName') }}
                             </span>
                             <span class="font-medium break-all">{{ info.server.applicationName }}</span>
                         </div>
-                        <div class="flex items-start py-2.5 gap-3">
+                        <div class="grid grid-cols-[6rem_minmax(0,1fr)] items-start py-2.5 gap-3">
                             <span class="shrink-0 whitespace-nowrap text-muted-foreground">{{ t('sysinfo.os') }}</span>
                             <span class="break-all">{{ info.server.osDescription }}</span>
                         </div>
-                        <div class="flex items-start py-2.5 gap-3">
+                        <div class="grid grid-cols-[6rem_minmax(0,1fr)] items-start py-2.5 gap-3">
                             <span class="shrink-0 whitespace-nowrap text-muted-foreground">
                                 {{ t('sysinfo.processor') }}
                             </span>
@@ -241,7 +241,7 @@ function shortInfoVersion(ver: string): string {
                                 />
                             </span>
                         </div>
-                        <div class="flex items-start py-2.5 gap-3">
+                        <div class="grid grid-cols-[6rem_minmax(0,1fr)] items-start py-2.5 gap-3">
                             <span class="shrink-0 whitespace-nowrap text-muted-foreground">
                                 {{ t('sysinfo.memory') }}
                             </span>
@@ -255,13 +255,13 @@ function shortInfoVersion(ver: string): string {
                                 />
                             </span>
                         </div>
-                        <div class="flex items-start py-2.5 gap-3">
+                        <div class="grid grid-cols-[6rem_minmax(0,1fr)] items-start py-2.5 gap-3">
                             <span class="shrink-0 whitespace-nowrap text-muted-foreground">
                                 {{ t('sysinfo.directory') }}
                             </span>
                             <span class="break-all font-mono text-xs leading-5">{{ info.server.contentRootPath }}</span>
                         </div>
-                        <div class="flex items-start py-2.5 gap-3">
+                        <div class="grid grid-cols-[6rem_minmax(0,1fr)] items-start py-2.5 gap-3">
                             <span class="shrink-0 whitespace-nowrap text-muted-foreground">
                                 {{ t('sysinfo.processName') }}
                             </span>
@@ -271,37 +271,37 @@ function shortInfoVersion(ver: string): string {
 
                     <!-- 右列 -->
                     <div class="divide-y divide-border/60">
-                        <div class="flex items-start py-2.5 gap-3">
+                        <div class="grid grid-cols-[6rem_minmax(0,1fr)] items-start py-2.5 gap-3">
                             <span class="shrink-0 whitespace-nowrap text-muted-foreground">
                                 {{ t('sysinfo.dotnetVersion') }}
                             </span>
                             <span>{{ info.server.dotNetVersion }}</span>
                         </div>
-                        <div class="flex items-start py-2.5 gap-3">
+                        <div class="grid grid-cols-[6rem_minmax(0,1fr)] items-start py-2.5 gap-3">
                             <span class="shrink-0 whitespace-nowrap text-muted-foreground">
                                 {{ t('sysinfo.machine') }}
                             </span>
                             <span>{{ info.server.machineName }}</span>
                         </div>
-                        <div class="flex items-start py-2.5 gap-3">
+                        <div class="grid grid-cols-[6rem_minmax(0,1fr)] items-start py-2.5 gap-3">
                             <span class="shrink-0 whitespace-nowrap text-muted-foreground">
                                 {{ t('sysinfo.user') }}
                             </span>
                             <span>{{ info.server.userName }}</span>
                         </div>
-                        <div class="flex items-start py-2.5 gap-3">
+                        <div class="grid grid-cols-[6rem_minmax(0,1fr)] items-start py-2.5 gap-3">
                             <span class="shrink-0 whitespace-nowrap text-muted-foreground">
                                 {{ t('sysinfo.serverTime') }}
                             </span>
                             <span>{{ formatDateTime(info.server.serverTime) }}</span>
                         </div>
-                        <div class="flex items-start py-2.5 gap-3">
+                        <div class="grid grid-cols-[6rem_minmax(0,1fr)] items-start py-2.5 gap-3">
                             <span class="shrink-0 whitespace-nowrap text-muted-foreground">
                                 {{ t('sysinfo.processStart') }}
                             </span>
                             <span>{{ formatDateTime(info.server.processStartTime) }}</span>
                         </div>
-                        <div class="flex items-start py-2.5 gap-3">
+                        <div class="grid grid-cols-[6rem_minmax(0,1fr)] items-start py-2.5 gap-3">
                             <span class="shrink-0 whitespace-nowrap text-muted-foreground">
                                 {{ t('sysinfo.uptime') }}
                             </span>

@@ -12,6 +12,7 @@ namespace AuroraStruct3D.SerialPorts;
 /// <summary>
 /// 485 串口管理应用服务实现。
 /// </summary>
+[Authorize]
 public class SerialPortAppService : AuroraStruct3DAppService, ISerialPortAppService
 {
     private readonly ISerialPortConfigRepository _serialPortConfigRepository;

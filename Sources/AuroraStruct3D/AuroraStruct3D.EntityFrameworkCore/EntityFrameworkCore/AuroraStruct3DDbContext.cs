@@ -1,3 +1,4 @@
+using AuroraStruct3D.AI;
 using AuroraStruct3D.Calibration;
 using AuroraStruct3D.Cameras;
 using AuroraStruct3D.DeviceState;
@@ -128,6 +129,14 @@ namespace AuroraStruct3D.EntityFrameworkCore
 
         // ── 产品三维数模模块 ─────────────────────────────────────────────────────────
         public DbSet<ProductModel> ProductModels { get; set; }
+        public DbSet<ProductModelOperationLog> ProductModelOperationLogs { get; set; }
+
+        // ── AI 模型模块 ─────────────────────────────────────────────────────────
+        public DbSet<AiModel> AiModels { get; set; }
+        public DbSet<AiModelFile> AiModelFiles { get; set; }
+        public DbSet<AiModelIdentifier> AiModelIdentifiers { get; set; }
+        public DbSet<AiModelIdentifierLink> AiModelIdentifierLinks { get; set; }
+        public DbSet<AiModelOperationLog> AiModelOperationLogs { get; set; }
 
         public AuroraStruct3DDbContext(DbContextOptions<AuroraStruct3DDbContext> options)
             : base(options) { }
@@ -182,6 +191,9 @@ namespace AuroraStruct3D.EntityFrameworkCore
 
             // 产品三维数模模块
             builder.ConfigureProductModel();
+
+            // AI 模型模块
+            builder.ConfigureAiModel();
 
             // 标定模块
             builder.ConfigureCalibration();
