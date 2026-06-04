@@ -8,6 +8,8 @@ import Button from 'primevue/button'
 import Select from 'primevue/select'
 import Tag from 'primevue/tag'
 import DatePicker from 'primevue/datepicker'
+import ToggleSwitch from 'primevue/toggleswitch'
+import { Search } from '@lucide/vue'
 import { useProjectorStore } from '@/stores/projectors'
 import { type ProjectorOperationLogDto, getProjectorLogs } from '@/api/projectors'
 import { AppCard } from '@/components/primevue'
@@ -89,6 +91,15 @@ function onFilterChange(): void {
     void loadLogs()
 }
 
+function handleReset(): void {
+    logSelectedId.value = null
+    logFailedOnly.value = false
+    logStartTime.value = null
+    logEndTime.value = null
+    logFirst.value = 0
+    void loadLogs()
+}
+
 onMounted(() => {
     void store.fetchList()
 })
@@ -99,29 +110,30 @@ onMounted(() => {
         <h1 class="text-2xl font-bold tracking-tight">{{ t('projector.logsTitle') }}</h1>
 
         <AppCard :beam="false">
-            <!-- 筛选栏 -->
-            <div class="flex flex-wrap items-center gap-3 border-b border-border/40 px-3 py-2">
-                <Select
-                    v-model="logSelectedId"
-                    :options="store.projectors"
-                    option-label="name"
-                    option-value="id"
-                    :placeholder="t('projector.selectProjector')"
-                    size="small"
-                    class="!text-xs w-[10rem]"
-                    :pt="{
-                        root: { class: '!py-0 !px-2 !text-xs !h-7 !flex !items-center' },
-                        label: { class: '!text-xs !py-0 !leading-none !truncate !flex-1 !flex !items-center !h-full' },
-                        dropdown: { class: '!w-6 !flex !items-center !justify-center' },
-                    }"
-                    @change="onFilterChange"
-                />
-                <label class="flex cursor-pointer items-center gap-1.5 text-sm">
-                    <input v-model="logFailedOnly" type="checkbox" class="accent-primary" @change="onFilterChange" />
-                    {{ t('common.failedOnly') }}
-                </label>
-                <div class="flex items-center gap-1.5">
-                    <span class="text-sm text-muted-foreground whitespace-nowrap">
+            <div class="flex flex-col gap-3 border-b border-border/40 px-3 py-2">
+                <div
+                    class="grid items-center gap-x-3 gap-y-2"
+                    style="grid-template-columns: repeat(auto-fill, 5.5rem 13rem)"
+                >
+                    <span class="whitespace-nowrap text-sm text-muted-foreground">{{ t('projector.projector') }}</span>
+                    <Select
+                        v-model="logSelectedId"
+                        :options="store.projectors"
+                        option-label="name"
+                        option-value="id"
+                        :placeholder="t('projector.selectProjector')"
+                        size="small"
+                        class="!text-xs w-full"
+                        :pt="{
+                            root: { class: '!py-0 !px-2 !text-xs !h-7 !flex !items-center' },
+                            label: {
+                                class: '!text-xs !py-0 !leading-none !truncate !flex-1 !flex !items-center !h-full',
+                            },
+                            dropdown: { class: '!w-6 !flex !items-center !justify-center' },
+                        }"
+                        @change="onFilterChange"
+                    />
+                    <span class="whitespace-nowrap text-sm text-muted-foreground">
                         {{ t('deviceState.startTime') }}
                     </span>
                     <DatePicker
@@ -131,15 +143,11 @@ onMounted(() => {
                         fluid
                         :showOnFocus="false"
                         size="small"
+                        show-button-bar
                         @date-select="onFilterChange"
                         @clear-click="onFilterChange"
-                        show-button-bar
                     />
-                </div>
-                <div class="flex items-center gap-1.5">
-                    <span class="text-sm text-muted-foreground whitespace-nowrap">
-                        {{ t('deviceState.endTime') }}
-                    </span>
+                    <span class="whitespace-nowrap text-sm text-muted-foreground">{{ t('deviceState.endTime') }}</span>
                     <DatePicker
                         v-model="logEndTime"
                         show-time
@@ -147,21 +155,31 @@ onMounted(() => {
                         fluid
                         :showOnFocus="false"
                         size="small"
+                        show-button-bar
                         @date-select="onFilterChange"
                         @clear-click="onFilterChange"
-                        show-button-bar
                     />
                 </div>
-                <Button
-                    severity="secondary"
-                    size="small"
-                    outlined
-                    class="ml-auto !h-7 !px-2 !py-0 !text-xs"
-                    :disabled="!logSelectedId"
-                    @click="void loadLogs()"
-                >
-                    {{ t('projector.refresh') }}
-                </Button>
+                <div class="flex items-center gap-3">
+                    <label class="flex items-center gap-2 text-sm text-muted-foreground">
+                        <ToggleSwitch v-model="logFailedOnly" @change="onFilterChange" />
+                        {{ t('common.failedOnly') }}
+                    </label>
+                    <Button
+                        severity="secondary"
+                        outlined
+                        size="small"
+                        :disabled="!logSelectedId"
+                        @click="void loadLogs()"
+                    >
+                        <Search class="mr-1 size-4" />
+                        {{ t('common.search') }}
+                    </Button>
+                    <Button text severity="secondary" size="small" @click="handleReset">{{ t('common.reset') }}</Button>
+                    <span class="ml-auto text-xs text-muted-foreground">
+                        {{ t('management.totalRecords', { total: logTotalCount }) }}
+                    </span>
+                </div>
             </div>
 
             <!-- 数据表 -->

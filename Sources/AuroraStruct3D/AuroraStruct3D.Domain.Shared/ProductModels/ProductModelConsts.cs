@@ -20,6 +20,18 @@ public static class ProductModelConsts
     /// <summary>转换错误信息最大长度</summary>
     public const int MaxErrorMessageLength = 2048;
 
+    /// <summary>操作日志中的数模名称最大长度</summary>
+    public const int MaxOperationLogModelNameLength = MaxNameLength;
+
+    /// <summary>操作日志中的原始文件名最大长度</summary>
+    public const int MaxOperationLogFileNameLength = MaxOriginalFileNameLength;
+
+    /// <summary>操作日志参数摘要最大长度</summary>
+    public const int MaxOperationLogParameterLength = 512;
+
+    /// <summary>操作日志错误消息最大长度</summary>
+    public const int MaxOperationLogErrorMessageLength = 2048;
+
     /// <summary>BLOB 容器名称</summary>
     public const string BlobContainerName = "product-models";
 

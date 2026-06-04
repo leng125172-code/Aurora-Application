@@ -159,3 +159,4 @@ dotnet ef migrations add <MigrationName> \
 - 路由文件：`src/router/index.ts`，懒加载（`() => import('@/views/xxx/XxxPage.vue')`）
 - **禁止**新增对 `reka-ui` / `radix-vue` / `shadcn-vue` / `vue-sonner` 的依赖
 - Card 视觉规范：项目级 `AppCard` 默认搭配 Inspira `<BorderBeam>`，保持原 Aurora 风格
+- i18n 必须5国多语言

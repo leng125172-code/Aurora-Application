@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Microsoft.NET.Sdk">
+    <Import Project="..\..\..\common.props" />
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\AuroraStruct3D.Domain\AuroraStruct3D.Domain.csproj" />
+        <ProjectReference Include="..\..\AuroraAbpPro\Volo.Abp.BlobStoring\Volo.Abp.BlobStoring.csproj" />
+        <ProjectReference Include="..\..\AuroraAbpPro\Volo.Abp.Core\Volo.Abp.Core.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.22.0" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <None Include="Python\**\*">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+            <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+            <TargetPath>Python\%(RecursiveDir)%(Filename)%(Extension)</TargetPath>
+        </None>
+    </ItemGroup>
+</Project>

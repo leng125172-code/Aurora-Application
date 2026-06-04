@@ -237,3 +237,90 @@ public class WriteProjectorRegisterDto : ProjectorControlDto
     /// <summary>写入值</summary>
     public int Value { get; set; }
 }
+
+/// <summary>
+/// 投影机像素分辨率响应 DTO
+/// </summary>
+public class ProjectorPixelResolutionDto
+{
+    /// <summary>投影宽度（像素）</summary>
+    public int WidthPixels { get; set; }
+
+    /// <summary>像素模式描述（例如 "1280 Pixel Mode"）</summary>
+    public string PixelMode { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// 单张条纹预览图 DTO。
+/// </summary>
+public class FringePreviewImageDto
+{
+    /// <summary>图像序号（从 0 开始）</summary>
+    public int Index { get; set; }
+
+    /// <summary>图像标签</summary>
+    public string Label { get; set; } = string.Empty;
+
+    /// <summary>
+    /// 预览像素数据。
+    /// 竖条纹时长度=WidthPixels，横条纹时长度=HeightPixels。
+    /// JSON 序列化时将输出为 Base64 字符串。
+    /// </summary>
+    public byte[] Pixels { get; set; } = [];
+}
+
+/// <summary>
+/// 投影机条纹下载状态 DTO。
+/// </summary>
+public class ProjectorFringeDownloadStatusDto
+{
+    /// <summary>投影机设备 ID</summary>
+    public Guid ProjectorId { get; set; }
+
+    /// <summary>状态：Idle / Running / Completed / Failed</summary>
+    public string Status { get; set; } = "Idle";
+
+    /// <summary>进度百分比（0~100）</summary>
+    public int Progress { get; set; }
+
+    /// <summary>失败时的错误信息</summary>
+    public string? ErrorMessage { get; set; }
+}
+
+/// <summary>
+/// 下载条纹图案到光机 Flash 请求 DTO
+/// </summary>
+public class DownloadFringePatternInputDto
+{
+    /// <summary>目标投影机设备 ID</summary>
+    [Required]
+    public Guid ProjectorId { get; set; }
+
+    /// <summary>条纹方向：horizontal=横条纹，vertical=竖条纹</summary>
+    [Required]
+    public string FringeMode { get; set; } = "horizontal";
+
+    /// <summary>条纹类型：bw=黑白（首色黑），wb=白黑（首色白）</summary>
+    [Required]
+    public string FringeType { get; set; } = "bw";
+
+    /// <summary>投影宽度（像素）</summary>
+    [Range(1, 4096)]
+    public int WidthPixels { get; set; }
+
+    /// <summary>投影高度（像素）</summary>
+    [Range(1, 4096)]
+    public int HeightPixels { get; set; }
+
+    /// <summary>条纹周期数（宽度或高度必须能被整除）</summary>
+    [Range(1, 100)]
+    public int PeriodCount { get; set; }
+
+    /// <summary>生成图片数量</summary>
+    [Range(1, 64)]
+    public int ImageCount { get; set; }
+
+    /// <summary>每张图相对上一张的像素相移量（整数，0 &lt; phaseShift &lt; periodCount）</summary>
+    [Range(1, 4096)]
+    public int PhaseShift { get; set; }
+}

@@ -10,6 +10,7 @@ namespace AuroraStruct3D.Cameras;
 /// <summary>
 /// 相机参数集管理应用服务
 /// </summary>
+[Authorize]
 public class CameraParameterSetAppService : AuroraStruct3DAppService, ICameraParameterSetAppService
 {
     private readonly ICameraParameterSetRepository _parameterSetRepository;

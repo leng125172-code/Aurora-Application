@@ -134,4 +134,30 @@ public interface IProjectorDeviceAppService : IApplicationService
     /// 获取操作日志列表（分页）
     /// </summary>
     Task<PagedResultDto<ProjectorOperationLogDto>> GetLogsAsync(GetProjectorLogListDto input);
+
+    // ─── 像素分辨率与条纹下载 ────────────────────────────────────────────
+
+    /// <summary>
+    /// 通过 Fp 指令查询投影机像素分辨率（宽度像素数与像素模式描述）
+    /// </summary>
+    /// <param name="id">投影机设备 ID</param>
+    Task<ProjectorPixelResolutionDto> GetPixelResolutionAsync(Guid id);
+
+    /// <summary>
+    /// 在后端生成条纹图案预览数据并返回给前端。
+    /// </summary>
+    Task<List<FringePreviewImageDto>> GenerateFringePreviewAsync(
+        DownloadFringePatternInputDto input
+    );
+
+    /// <summary>
+    /// 获取指定投影机当前条纹下载状态。
+    /// </summary>
+    Task<ProjectorFringeDownloadStatusDto> GetFringeDownloadStatusAsync(Guid id);
+
+    /// <summary>
+    /// 启动条纹图案下载到投影机 Flash。
+    /// 接口在后台任务启动后立即返回，进度与结果通过状态查询和 SignalR 推送。
+    /// </summary>
+    Task DownloadFringePatternAsync(DownloadFringePatternInputDto input);
 }

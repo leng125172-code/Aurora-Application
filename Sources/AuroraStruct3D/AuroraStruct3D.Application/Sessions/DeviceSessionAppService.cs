@@ -9,6 +9,7 @@ namespace AuroraStruct3D.Sessions;
 /// 设备独占操作会话管理 AppService 实现。
 /// 提供 Acquire / ForceAcquire / Release / Get 接口供前端调用。
 /// </summary>
+[Authorize]
 public class DeviceSessionAppService : ApplicationService, IDeviceSessionAppService
 {
     private readonly IDeviceOperationSessionManager _sessionManager;

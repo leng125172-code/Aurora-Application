@@ -44,3 +44,60 @@ public class ProductModelDto : FullAuditedEntityDto<Guid>
     /// <summary>上传人用户名（审计用）</summary>
     public string? UploaderUserName { get; set; }
 }
+
+/// <summary>
+/// 三维数模操作日志输出 DTO。
+/// </summary>
+public class ProductModelOperationLogDto : EntityDto<Guid>
+{
+    /// <summary>关联的数模 ID</summary>
+    public Guid? ProductModelId { get; set; }
+
+    /// <summary>数模名称快照</summary>
+    public string ModelName { get; set; } = string.Empty;
+
+    /// <summary>原始文件名快照</summary>
+    public string? OriginalFileName { get; set; }
+
+    /// <summary>操作类型</summary>
+    public ProductModelOperationType OperationType { get; set; }
+
+    /// <summary>操作发生时间（UTC）</summary>
+    public DateTime OccurredAt { get; set; }
+
+    /// <summary>是否成功</summary>
+    public bool IsSuccess { get; set; }
+
+    /// <summary>操作参数摘要</summary>
+    public string? ParameterSummary { get; set; }
+
+    /// <summary>失败时的错误消息</summary>
+    public string? ErrorMessage { get; set; }
+
+    /// <summary>操作耗时（毫秒）</summary>
+    public long DurationMs { get; set; }
+}
+
+/// <summary>
+/// 查询三维数模操作日志请求 DTO。
+/// </summary>
+public class GetProductModelLogListInput : PagedResultRequestDto
+{
+    /// <summary>按数模 ID 过滤（可选）</summary>
+    public Guid? ProductModelId { get; set; }
+
+    /// <summary>关键字过滤（匹配数模名称、文件名、参数摘要）</summary>
+    public string? Filter { get; set; }
+
+    /// <summary>按操作类型过滤（可选）</summary>
+    public ProductModelOperationType? OperationType { get; set; }
+
+    /// <summary>仅返回失败记录</summary>
+    public bool? IsFailedOnly { get; set; }
+
+    /// <summary>开始时间（UTC）</summary>
+    public DateTime? StartTime { get; set; }
+
+    /// <summary>结束时间（UTC）</summary>
+    public DateTime? EndTime { get; set; }
+}

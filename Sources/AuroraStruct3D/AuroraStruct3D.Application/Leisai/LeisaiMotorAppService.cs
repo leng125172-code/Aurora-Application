@@ -13,6 +13,7 @@ namespace AuroraStruct3D.Leisai;
 /// 通过 <see cref="IMotorControlService"/> 获取已注册的 <see cref="LeisaiMotorDriver"/>，
 /// 仅服务 LeisaiIclRs 品牌轴。
 /// </summary>
+[Authorize]
 public class LeisaiMotorAppService : AuroraStruct3DAppService, ILeisaiMotorAppService
 {
     private readonly IMotorAxisRepository _motorAxisRepository;

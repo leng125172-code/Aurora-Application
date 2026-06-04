@@ -2,9 +2,14 @@
 // 动态渲染单个 GenICam 节点：支持 Integer / Float / Enumeration / Boolean / String / Command
 // 内联编辑模式，写入成功后会回调 emit('updated')，由父组件决定是否刷新依赖节点。
 import { computed, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { GenICamNodeDto } from '@/api/cameras'
 import { useCameraStore } from '@/stores/cameras'
 import { useAppToast } from '@/composables/useAppToast'
+import Select from 'primevue/select'
+import InputNumber from 'primevue/inputnumber'
+import InputText from 'primevue/inputtext'
+import Button from 'primevue/button'
 
 const props = defineProps<{
     /** 相机 ID */
@@ -24,6 +29,7 @@ const emit = defineEmits<{
 
 const store = useCameraStore()
 const toast = useAppToast()
+const { t } = useI18n()
 
 // ─── 节点能力判定 ──────────────────────────────────────────────────────────
 const isCommand = computed(() => props.node.nodeType === 'Command')
@@ -74,7 +80,7 @@ function cancelEdit() {
 
 async function saveEdit() {
     if (!editingValue.value && !isString.value && !isBool.value) {
-        toast.warning('请输入有效值')
+        toast.warning(t('camera.nodePleaseInputValid'))
         return
     }
     // Bug 3：强制转字符串后再发送，避免 <input type="number"> 让 v-model 变成 number。
@@ -88,10 +94,10 @@ async function saveEdit() {
         })
         editing.value = false
         emit('updated', props.node, payload)
-        toast.success(`${props.node.displayName} 已保存`)
+        toast.success(t('camera.nodeSaveSuccess', { name: props.node.displayName }))
     } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : String(e)
-        toast.error(`保存失败：${msg}`)
+        toast.error(t('camera.nodeSaveFailed', { msg }))
     } finally {
         busy.value = false
     }
@@ -102,10 +108,10 @@ async function executeCommand() {
     try {
         await store.executeGenICamCommand(props.cameraId, props.node.nodeName)
         emit('updated', props.node, '')
-        toast.success(`命令 ${props.node.displayName} 已执行`)
+        toast.success(t('camera.nodeExecuteSuccess', { name: props.node.displayName }))
     } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : String(e)
-        toast.error(`执行失败：${msg}`)
+        toast.error(t('camera.nodeExecuteFailed', { msg }))
     } finally {
         busy.value = false
     }
@@ -120,10 +126,27 @@ const displayValue = computed<string>(() => {
         return entry?.displayName ?? props.value
     }
     if (isBool.value) {
-        return props.value === '1' || props.value === 'true' ? '开启' : '关闭'
+        return props.value === '1' || props.value === 'true' ? t('camera.nodeBoolOn') : t('camera.nodeBoolOff')
     }
     if (props.node.unit) return `${props.value} ${props.node.unit}`
     return props.value
+})
+
+/** 枚举可选项（每项增加 valueStr 字符串用于 Select option-value） */
+const enumOptions = computed(() =>
+    props.node.enumEntries.filter((e) => e.isAvailable).map((e) => ({ ...e, valueStr: String(e.value) }))
+)
+/** 布尔可选项 */
+const boolOptions = computed(() => [
+    { label: t('camera.nodeBoolOn'), value: '1' },
+    { label: t('camera.nodeBoolOff'), value: '0' },
+])
+/** InputNumber 双向绑定桥（PrimeVue InputNumber 使用 number | null，editingValue 保持 string） */
+const editingValueNum = computed<number | null>({
+    get: () => (editingValue.value !== '' ? Number(editingValue.value) : null),
+    set: (v: number | null) => {
+        editingValue.value = v != null ? String(v) : ''
+    },
 })
 </script>
 
@@ -139,10 +162,10 @@ const displayValue = computed<string>(() => {
                 :class="[
                     'shrink-0 rounded px-1 py-0 text-[10px]',
                     node.access === 'ReadOnly'
-                        ? 'bg-slate-100 text-slate-400'
+                        ? 'bg-slate-500/20 text-slate-400'
                         : node.access === 'ReadWrite'
-                          ? 'bg-blue-50 text-blue-400'
-                          : 'bg-amber-50 text-amber-500',
+                          ? 'bg-blue-500/20 text-blue-400'
+                          : 'bg-amber-500/20 text-amber-400',
                 ]"
             >
                 {{ node.access === 'ReadWrite' ? 'RW' : node.access === 'ReadOnly' ? 'RO' : node.access }}
@@ -153,80 +176,89 @@ const displayValue = computed<string>(() => {
         <div class="flex min-w-0 flex-1 items-center gap-1 overflow-hidden" style="min-width: 8rem">
             <!-- Command 节点：仅执行按钮 -->
             <template v-if="isCommand">
-                <button
+                <Button
                     :disabled="disabled || busy"
-                    class="rounded border px-2 py-0.5 text-xs hover:bg-muted/50 disabled:opacity-40"
+                    size="small"
+                    severity="secondary"
+                    outlined
+                    class="!text-xs !h-7"
                     @click="void executeCommand()"
                 >
-                    {{ busy ? '执行中…' : '执行' }}
-                </button>
+                    {{ busy ? t('camera.nodeExecuting') : t('camera.nodeExecute') }}
+                </Button>
             </template>
 
             <!-- 编辑模式 -->
             <template v-else-if="editing">
-                <!-- 枚举 -->
-                <select
+                <!-- 枚举 Select -->
+                <Select
                     v-if="isEnum"
                     v-model="editingValue"
-                    class="flex-1 rounded border px-1 py-0.5 text-xs focus:outline-none"
-                >
-                    <option
-                        v-for="entry in node.enumEntries.filter((e) => e.isAvailable)"
-                        :key="entry.value"
-                        :value="String(entry.value)"
-                    >
-                        {{ entry.displayName }}
-                    </option>
-                </select>
-                <!-- 布尔 -->
-                <select
+                    :options="enumOptions"
+                    option-label="displayName"
+                    option-value="valueStr"
+                    size="small"
+                    class="flex-1 min-w-0"
+                    :pt="{
+                        root: { class: '!py-0 !px-2 !text-xs !h-7 !flex !items-center' },
+                        label: {
+                            class: '!text-xs !py-0 !leading-none !truncate !flex-1 !flex !items-center !h-full',
+                        },
+                        dropdown: { class: '!w-6 !flex !items-center !justify-center' },
+                    }"
+                />
+                <!-- 布尔 Select -->
+                <Select
                     v-else-if="isBool"
                     v-model="editingValue"
-                    class="flex-1 rounded border px-1 py-0.5 text-xs focus:outline-none"
-                >
-                    <option value="1">开启</option>
-                    <option value="0">关闭</option>
-                </select>
-                <!-- 整数 -->
-                <input
+                    :options="boolOptions"
+                    option-label="label"
+                    option-value="value"
+                    size="small"
+                    class="w-24"
+                    :pt="{
+                        root: { class: '!h-7 !py-0' },
+                        label: { class: '!text-xs !py-0 !leading-none' },
+                    }"
+                />
+                <!-- 整数 InputNumber -->
+                <InputNumber
                     v-else-if="isInt"
-                    v-model="editingValue"
-                    type="number"
-                    :min="node.intMin"
-                    :max="node.intMax"
-                    :step="node.intStep || 1"
-                    class="w-32 rounded border px-1 py-0.5 text-xs focus:outline-none"
+                    v-model="editingValueNum"
+                    :min="node.intMin ?? undefined"
+                    :max="node.intMax ?? undefined"
+                    :step="node.intStep ?? 1"
+                    :max-fraction-digits="0"
+                    size="small"
+                    class="w-32"
+                    :input-class="'!text-xs !h-7 !py-0 !px-2'"
                 />
-                <!-- 浮点 -->
-                <input
+                <!-- 浮点 InputNumber -->
+                <InputNumber
                     v-else-if="isFloat"
-                    v-model="editingValue"
-                    type="number"
-                    :min="node.floatMin"
-                    :max="node.floatMax"
-                    :step="node.floatStep || 0.01"
-                    class="w-32 rounded border px-1 py-0.5 text-xs focus:outline-none"
+                    v-model="editingValueNum"
+                    :min="node.floatMin ?? undefined"
+                    :max="node.floatMax ?? undefined"
+                    :step="node.floatStep ?? 0.01"
+                    :max-fraction-digits="6"
+                    size="small"
+                    class="w-32"
+                    :input-class="'!text-xs !h-7 !py-0 !px-2'"
                 />
-                <!-- 字符串 -->
-                <input
-                    v-else
-                    v-model="editingValue"
-                    type="text"
-                    class="flex-1 rounded border px-1 py-0.5 text-xs focus:outline-none"
-                />
-                <button
+                <!-- 字符串 InputText -->
+                <InputText v-else v-model="editingValue" size="small" class="flex-1 !text-xs !h-7 !py-0" />
+                <!-- 确认 -->
+                <Button
+                    severity="success"
+                    size="small"
                     :disabled="busy"
-                    class="shrink-0 rounded border px-1.5 py-0.5 text-xs text-green-600 hover:bg-green-50 disabled:opacity-40"
+                    class="!px-2 !py-0 !h-7"
                     @click="void saveEdit()"
                 >
                     ✓
-                </button>
-                <button
-                    class="shrink-0 rounded border px-1.5 py-0.5 text-xs text-red-500 hover:bg-red-50"
-                    @click="cancelEdit"
-                >
-                    ✗
-                </button>
+                </Button>
+                <!-- 取消 -->
+                <Button severity="danger" size="small" class="!px-2 !py-0 !h-7" @click="cancelEdit">✗</Button>
             </template>
 
             <!-- 只读显示 -->
@@ -234,13 +266,16 @@ const displayValue = computed<string>(() => {
                 <span class="flex-1 truncate font-mono" :title="String(value ?? '')">
                     {{ displayValue }}
                 </span>
-                <button
+                <Button
                     v-if="canWrite"
-                    class="ml-1 shrink-0 rounded border px-1.5 py-0.5 text-xs hover:bg-muted/50"
+                    text
+                    severity="secondary"
+                    size="small"
+                    class="ml-1 shrink-0 !text-xs"
                     @click="startEdit"
                 >
-                    编辑
-                </button>
+                    {{ t('common.edit') }}
+                </Button>
             </template>
         </div>
     </div>

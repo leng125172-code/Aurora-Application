@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Diagnostics;
 using AuroraStruct3D.DeviceState;
 using AuroraStruct3D.ProductModels.Dtos;
 using AuroraStruct3D.ProductModels.Jobs;
@@ -12,6 +13,7 @@ using Volo.Abp.BlobStoring;
 using Volo.Abp.Content;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Identity;
+using Volo.Abp.Uow;
 
 namespace AuroraStruct3D.ProductModels;
 
@@ -24,6 +26,7 @@ namespace AuroraStruct3D.ProductModels;
 public class ProductModelAppService : AuroraStruct3DAppService, IProductModelAppService
 {
     private readonly IProductModelRepository _productModelRepository;
+    private readonly IProductModelOperationLogRepository _operationLogRepository;
     private readonly IBlobContainer<ProductModelBlobContainer> _blobContainer;
     private readonly IBackgroundJobClient _backgroundJobClient;
     private readonly IIdentityUserRepository _identityUserRepository;
@@ -31,6 +34,7 @@ public class ProductModelAppService : AuroraStruct3DAppService, IProductModelApp
 
     public ProductModelAppService(
         IProductModelRepository productModelRepository,
+        IProductModelOperationLogRepository operationLogRepository,
         IBlobContainer<ProductModelBlobContainer> blobContainer,
         IBackgroundJobClient backgroundJobClient,
         IIdentityUserRepository identityUserRepository,
@@ -38,6 +42,7 @@ public class ProductModelAppService : AuroraStruct3DAppService, IProductModelApp
     )
     {
         _productModelRepository = productModelRepository;
+        _operationLogRepository = operationLogRepository;
         _blobContainer = blobContainer;
         _backgroundJobClient = backgroundJobClient;
         _identityUserRepository = identityUserRepository;
@@ -82,6 +87,50 @@ public class ProductModelAppService : AuroraStruct3DAppService, IProductModelApp
         return await MapToDtoAsync(productModel);
     }
 
+    /// <inheritdoc/>
+    public async Task<PagedResultDto<ProductModelOperationLogDto>> GetLogsAsync(
+        GetProductModelLogListInput input
+    )
+    {
+        long totalCount = await _operationLogRepository.GetCountAsync(
+            input.ProductModelId,
+            input.Filter,
+            input.OperationType,
+            input.IsFailedOnly ?? false,
+            input.StartTime,
+            input.EndTime
+        );
+
+        List<ProductModelOperationLog> logs = await _operationLogRepository.GetPagedListAsync(
+            input.ProductModelId,
+            input.Filter,
+            input.OperationType,
+            input.IsFailedOnly ?? false,
+            input.StartTime,
+            input.EndTime,
+            input.SkipCount,
+            input.MaxResultCount
+        );
+
+        return new PagedResultDto<ProductModelOperationLogDto>(
+            totalCount,
+            logs.Select(x => new ProductModelOperationLogDto
+                {
+                    Id = x.Id,
+                    ProductModelId = x.ProductModelId,
+                    ModelName = x.ModelName,
+                    OriginalFileName = x.OriginalFileName,
+                    OperationType = x.OperationType,
+                    OccurredAt = x.OccurredAt,
+                    IsSuccess = x.IsSuccess,
+                    ParameterSummary = x.ParameterSummary,
+                    ErrorMessage = x.ErrorMessage,
+                    DurationMs = x.DurationMs,
+                })
+                .ToList()
+        );
+    }
+
     // ─────────────────────────── 上传 ───────────────────────────
 
     /// <inheritdoc/>
@@ -90,58 +139,86 @@ public class ProductModelAppService : AuroraStruct3DAppService, IProductModelApp
     {
         Check.NotNull(file, nameof(file));
 
+        Stopwatch stopwatch = Stopwatch.StartNew();
+        ProductModel? productModel = null;
         string originalFileName = file.FileName ?? "unknown";
-        ProductModelFormat format = DetectFormat(originalFileName);
-
-        // 用户未指定名称时，使用「文件名（去除扩展名）+ 入库时间」作为默认名称
         string displayName = string.IsNullOrWhiteSpace(name)
             ? Path.GetFileNameWithoutExtension(originalFileName)
                 + "_"
                 + Clock.Now.ToString("yyyyMMddHHmmss")
             : name.Trim();
 
-        Guid id = GuidGenerator.Create();
-        string originalBlobName =
-            $"original/{id:N}{Path.GetExtension(originalFileName).ToLowerInvariant()}";
-
-        // ── 保存原始文件到 BLOB 存储 ──────────────────────────────────────────
-        await using (Stream stream = file.GetStream())
+        try
         {
-            await _blobContainer.SaveAsync(originalBlobName, stream, overrideExisting: false);
-        }
+            ProductModelFormat format = DetectFormat(originalFileName);
 
-        // ── 创建数模实体 ──────────────────────────────────────────────────────
-        long fileSizeBytes = file.ContentLength ?? 0;
-        ProductModel productModel = ProductModel.Create(
-            id,
-            displayName,
-            originalFileName,
-            format,
-            fileSizeBytes,
-            originalBlobName
-        );
+            Guid id = GuidGenerator.Create();
+            string originalBlobName =
+                $"original/{id:N}{Path.GetExtension(originalFileName).ToLowerInvariant()}";
 
-        await _productModelRepository.InsertAsync(productModel, autoSave: true);
-
-        // ── 非 PLY/OBJ 格式：入队 Hangfire 异步转换任务 ──────────────────────
-        // 必须在 UoW 提交后再入队，否则 Job 执行时事务尚未提交，
-        // 新连接查询不到该记录（PostgreSQL Read Committed 隔离级别）。
-        bool needsConversion = ProductModelConsts.NeedsConversion(format);
-        if (needsConversion)
-        {
-            Guid capturedId = productModel.Id;
-            UnitOfWorkManager.Current?.OnCompleted(() =>
+            await using (Stream stream = file.GetStream())
             {
-                _backgroundJobClient.Enqueue<ProductModelConversionJob>(job =>
-                    job.ExecuteAsync(capturedId)
-                );
-                return Task.CompletedTask;
-            });
-        }
+                await _blobContainer.SaveAsync(originalBlobName, stream, overrideExisting: false);
+            }
 
-        ProductModelDto dto = await MapToDtoAsync(productModel);
-        dto.NeedsConversion = needsConversion;
-        return dto;
+            long fileSizeBytes = file.ContentLength ?? 0;
+            productModel = ProductModel.Create(
+                id,
+                displayName,
+                originalFileName,
+                format,
+                fileSizeBytes,
+                originalBlobName
+            );
+
+            await _productModelRepository.InsertAsync(productModel, autoSave: true);
+
+            bool needsConversion = ProductModelConsts.NeedsConversion(format);
+            if (needsConversion)
+            {
+                Guid capturedId = productModel.Id;
+                UnitOfWorkManager.Current?.OnCompleted(() =>
+                {
+                    _backgroundJobClient.Enqueue<ProductModelConversionJob>(job =>
+                        job.ExecuteAsync(capturedId)
+                    );
+                    return Task.CompletedTask;
+                });
+            }
+
+            ProductModelDto dto = await MapToDtoAsync(productModel);
+            dto.NeedsConversion = needsConversion;
+
+            await TryRecordOperationLogAsync(
+                ProductModelOperationLog.Success(
+                    GuidGenerator.Create(),
+                    productModel.Id,
+                    productModel.Name,
+                    productModel.OriginalFileName,
+                    ProductModelOperationType.Upload,
+                    $"格式={GetFormatDisplay(format)}，大小={fileSizeBytes} B，需转换={(needsConversion ? "是" : "否")}",
+                    (int)stopwatch.ElapsedMilliseconds
+                )
+            );
+
+            return dto;
+        }
+        catch (Exception ex)
+        {
+            await TryRecordOperationLogAsync(
+                ProductModelOperationLog.Failure(
+                    GuidGenerator.Create(),
+                    productModel?.Id,
+                    productModel?.Name ?? displayName,
+                    productModel?.OriginalFileName ?? originalFileName,
+                    ProductModelOperationType.Upload,
+                    ex.Message,
+                    null,
+                    (int)stopwatch.ElapsedMilliseconds
+                )
+            );
+            throw;
+        }
     }
 
     // ─────────────────────────── 修改名称 ───────────────────────────
@@ -150,10 +227,45 @@ public class ProductModelAppService : AuroraStruct3DAppService, IProductModelApp
     [Authorize(ProductModelPermissions.Rename)]
     public async Task<ProductModelDto> UpdateNameAsync(Guid id, UpdateProductModelNameInput input)
     {
-        ProductModel productModel = await _productModelRepository.GetAsync(id);
-        productModel.UpdateName(input.Name);
-        await _productModelRepository.UpdateAsync(productModel, autoSave: true);
-        return await MapToDtoAsync(productModel);
+        Stopwatch stopwatch = Stopwatch.StartNew();
+        ProductModel? productModel = null;
+        try
+        {
+            productModel = await _productModelRepository.GetAsync(id);
+            string oldName = productModel.Name;
+            productModel.UpdateName(input.Name);
+            await _productModelRepository.UpdateAsync(productModel, autoSave: true);
+
+            await TryRecordOperationLogAsync(
+                ProductModelOperationLog.Success(
+                    GuidGenerator.Create(),
+                    productModel.Id,
+                    productModel.Name,
+                    productModel.OriginalFileName,
+                    ProductModelOperationType.Rename,
+                    $"旧名称={oldName}，新名称={productModel.Name}",
+                    (int)stopwatch.ElapsedMilliseconds
+                )
+            );
+
+            return await MapToDtoAsync(productModel);
+        }
+        catch (Exception ex)
+        {
+            await TryRecordOperationLogAsync(
+                ProductModelOperationLog.Failure(
+                    GuidGenerator.Create(),
+                    productModel?.Id ?? id,
+                    productModel?.Name ?? "未命名数模",
+                    productModel?.OriginalFileName,
+                    ProductModelOperationType.Rename,
+                    ex.Message,
+                    $"目标名称={input.Name}",
+                    (int)stopwatch.ElapsedMilliseconds
+                )
+            );
+            throw;
+        }
     }
 
     // ─────────────────────────── 删除 ───────────────────────────
@@ -162,19 +274,50 @@ public class ProductModelAppService : AuroraStruct3DAppService, IProductModelApp
     [Authorize(ProductModelPermissions.Delete)]
     public async Task DeleteAsync(Guid id)
     {
-        EnsureManualOrMaintenanceMode();
-        ProductModel productModel = await _productModelRepository.GetAsync(id);
-
-        // ── 删除 BLOB 文件（先于数据库记录，避免数据残留）──────────────────────
-        await TryDeleteBlobAsync(productModel.OriginalBlobName);
-
-        if (!string.IsNullOrEmpty(productModel.ConvertedBlobName))
+        Stopwatch stopwatch = Stopwatch.StartNew();
+        ProductModel? productModel = null;
+        try
         {
-            await TryDeleteBlobAsync(productModel.ConvertedBlobName);
-        }
+            EnsureManualOrMaintenanceMode();
+            productModel = await _productModelRepository.GetAsync(id);
 
-        // ── 删除数据库记录 ──────────────────────────────────────────────────
-        await _productModelRepository.DeleteAsync(productModel, autoSave: true);
+            await TryDeleteBlobAsync(productModel.OriginalBlobName);
+
+            if (!string.IsNullOrEmpty(productModel.ConvertedBlobName))
+            {
+                await TryDeleteBlobAsync(productModel.ConvertedBlobName);
+            }
+
+            await _productModelRepository.DeleteAsync(productModel, autoSave: true);
+
+            await TryRecordOperationLogAsync(
+                ProductModelOperationLog.Success(
+                    GuidGenerator.Create(),
+                    productModel.Id,
+                    productModel.Name,
+                    productModel.OriginalFileName,
+                    ProductModelOperationType.Delete,
+                    $"已删除原始文件={productModel.OriginalBlobName}",
+                    (int)stopwatch.ElapsedMilliseconds
+                )
+            );
+        }
+        catch (Exception ex)
+        {
+            await TryRecordOperationLogAsync(
+                ProductModelOperationLog.Failure(
+                    GuidGenerator.Create(),
+                    productModel?.Id ?? id,
+                    productModel?.Name ?? "未命名数模",
+                    productModel?.OriginalFileName,
+                    ProductModelOperationType.Delete,
+                    ex.Message,
+                    null,
+                    (int)stopwatch.ElapsedMilliseconds
+                )
+            );
+            throw;
+        }
     }
 
     // ─────────────────────────── 转换重试 ───────────────────────────
@@ -183,16 +326,47 @@ public class ProductModelAppService : AuroraStruct3DAppService, IProductModelApp
     [Authorize(ProductModelPermissions.RetryConversion)]
     public async Task RetryConversionAsync(Guid id)
     {
-        ProductModel productModel = await _productModelRepository.GetAsync(id);
+        Stopwatch stopwatch = Stopwatch.StartNew();
+        ProductModel? productModel = null;
+        try
+        {
+            productModel = await _productModelRepository.GetAsync(id);
 
-        // ResetForRetry 内部校验状态必须为 Failed，否则抛出业务异常
-        productModel.ResetForRetry();
-        await _productModelRepository.UpdateAsync(productModel, autoSave: true);
+            productModel.ResetForRetry();
+            await _productModelRepository.UpdateAsync(productModel, autoSave: true);
 
-        // 重新入队转换任务
-        _backgroundJobClient.Enqueue<ProductModelConversionJob>(job =>
-            job.ExecuteAsync(productModel.Id)
-        );
+            _backgroundJobClient.Enqueue<ProductModelConversionJob>(job =>
+                job.ExecuteAsync(productModel.Id)
+            );
+
+            await TryRecordOperationLogAsync(
+                ProductModelOperationLog.Success(
+                    GuidGenerator.Create(),
+                    productModel.Id,
+                    productModel.Name,
+                    productModel.OriginalFileName,
+                    ProductModelOperationType.RetryConversion,
+                    "已重新提交后台转换任务",
+                    (int)stopwatch.ElapsedMilliseconds
+                )
+            );
+        }
+        catch (Exception ex)
+        {
+            await TryRecordOperationLogAsync(
+                ProductModelOperationLog.Failure(
+                    GuidGenerator.Create(),
+                    productModel?.Id ?? id,
+                    productModel?.Name ?? "未命名数模",
+                    productModel?.OriginalFileName,
+                    ProductModelOperationType.RetryConversion,
+                    ex.Message,
+                    null,
+                    (int)stopwatch.ElapsedMilliseconds
+                )
+            );
+            throw;
+        }
     }
 
     // ─────────────────────────── 清理孤立记录 ───────────────────────────
@@ -201,56 +375,85 @@ public class ProductModelAppService : AuroraStruct3DAppService, IProductModelApp
     [Authorize(ProductModelPermissions.CleanUp)]
     public async Task<int> CleanUpOrphanedRecordsAsync()
     {
-        EnsureManualOrMaintenanceMode();
-
-        // 获取所有未软删除的数模记录（maxResultCount: int.MaxValue 表示不限数量）
-        List<ProductModel> all = await _productModelRepository.GetListAsync(
-            maxResultCount: int.MaxValue
-        );
-
-        if (all.Count == 0)
+        Stopwatch stopwatch = Stopwatch.StartNew();
+        try
         {
-            return 0;
-        }
+            EnsureManualOrMaintenanceMode();
 
-        List<ProductModel> orphaned = [];
-        foreach (ProductModel model in all)
-        {
-            bool exists = await ExistsBlobWithCompatAsync(model.OriginalBlobName);
-            if (!exists)
+            List<ProductModel> all = await _productModelRepository.GetListAsync(
+                maxResultCount: int.MaxValue
+            );
+
+            if (all.Count == 0)
             {
-                orphaned.Add(model);
+                return 0;
             }
-        }
 
-        // 保护机制：若本次判定为“全部孤立”，大概率是存储路径配置异常或跨平台路径分隔符问题，直接中止避免误删。
-        if (orphaned.Count == all.Count)
+            List<ProductModel> orphaned = [];
+            foreach (ProductModel model in all)
+            {
+                bool exists = await ExistsBlobWithCompatAsync(model.OriginalBlobName);
+                if (!exists)
+                {
+                    orphaned.Add(model);
+                }
+            }
+
+            if (orphaned.Count == all.Count)
+            {
+                Logger.LogError(
+                    "[ProductModelAppService] 清理孤立记录已中止：共 {Total} 条记录，全部判定为原始 BLOB 不存在。请检查 BLOB 存储路径与跨平台路径分隔符。",
+                    all.Count
+                );
+
+                throw new UserFriendlyException(
+                    "检测到全部数模记录均被判定为孤立记录，已自动中止清理以防止误删。请先检查 Linux 服务器上的 BLOB 存储路径与文件可见性。"
+                );
+            }
+
+            int cleaned = 0;
+            foreach (ProductModel model in orphaned)
+            {
+                await _productModelRepository.DeleteAsync(model, autoSave: true);
+                Logger.LogInformation(
+                    "[ProductModelAppService] 清理孤立数模记录：{Id}（{Name}），原始 BLOB: {BlobName}",
+                    model.Id,
+                    model.Name,
+                    model.OriginalBlobName
+                );
+                cleaned++;
+
+                await TryRecordOperationLogAsync(
+                    ProductModelOperationLog.Success(
+                        GuidGenerator.Create(),
+                        model.Id,
+                        model.Name,
+                        model.OriginalFileName,
+                        ProductModelOperationType.CleanUpOrphanedRecords,
+                        $"原始 BLOB 缺失：{model.OriginalBlobName}",
+                        (int)stopwatch.ElapsedMilliseconds
+                    )
+                );
+            }
+
+            return cleaned;
+        }
+        catch (Exception ex)
         {
-            Logger.LogError(
-                "[ProductModelAppService] 清理孤立记录已中止：共 {Total} 条记录，全部判定为原始 BLOB 不存在。请检查 BLOB 存储路径与跨平台路径分隔符。",
-                all.Count
+            await TryRecordOperationLogAsync(
+                ProductModelOperationLog.Failure(
+                    GuidGenerator.Create(),
+                    null,
+                    "孤立记录清理",
+                    null,
+                    ProductModelOperationType.CleanUpOrphanedRecords,
+                    ex.Message,
+                    null,
+                    (int)stopwatch.ElapsedMilliseconds
+                )
             );
-
-            throw new UserFriendlyException(
-                "检测到全部数模记录均被判定为孤立记录，已自动中止清理以防止误删。请先检查 Linux 服务器上的 BLOB 存储路径与文件可见性。"
-            );
+            throw;
         }
-
-        int cleaned = 0;
-        foreach (ProductModel model in orphaned)
-        {
-            // 原始 BLOB 已丢失，仅删除数据库记录，跳过 BLOB 删除操作
-            await _productModelRepository.DeleteAsync(model, autoSave: true);
-            Logger.LogInformation(
-                "[ProductModelAppService] 清理孤立数模记录：{Id}（{Name}），原始 BLOB: {BlobName}",
-                model.Id,
-                model.Name,
-                model.OriginalBlobName
-            );
-            cleaned++;
-        }
-
-        return cleaned;
     }
 
     // ─────────────────────────── 下载 ───────────────────────────
@@ -259,26 +462,58 @@ public class ProductModelAppService : AuroraStruct3DAppService, IProductModelApp
     [Authorize(ProductModelPermissions.Download)]
     public async Task<IRemoteStreamContent> GetDownloadAsync(Guid id)
     {
-        ProductModel productModel = await _productModelRepository.GetAsync(id);
-
-        // 优先返回转换后的 PLY 文件；无需转换的格式返回原始文件
-        string blobName = productModel.ConvertedBlobName ?? productModel.OriginalBlobName;
-
-        if (string.IsNullOrEmpty(blobName))
+        Stopwatch stopwatch = Stopwatch.StartNew();
+        ProductModel? productModel = null;
+        try
         {
-            throw new BusinessException("ProductModel:FileNotReady")
-                .WithData("id", id)
-                .WithData("status", productModel.ConversionStatus);
+            productModel = await _productModelRepository.GetAsync(id);
+
+            string blobName = productModel.ConvertedBlobName ?? productModel.OriginalBlobName;
+
+            if (string.IsNullOrEmpty(blobName))
+            {
+                throw new BusinessException("ProductModel:FileNotReady")
+                    .WithData("id", id)
+                    .WithData("status", productModel.ConversionStatus);
+            }
+
+            Stream stream = await GetBlobStreamWithCompatAsync(blobName);
+            string fileName = string.IsNullOrEmpty(productModel.ConvertedBlobName)
+                ? productModel.OriginalFileName
+                : Path.GetFileNameWithoutExtension(productModel.OriginalFileName) + ".ply";
+
+            GetMimeType(fileName, out string contentType);
+
+            await TryRecordOperationLogAsync(
+                ProductModelOperationLog.Success(
+                    GuidGenerator.Create(),
+                    productModel.Id,
+                    productModel.Name,
+                    productModel.OriginalFileName,
+                    ProductModelOperationType.Download,
+                    $"下载文件={fileName}",
+                    (int)stopwatch.ElapsedMilliseconds
+                )
+            );
+
+            return new RemoteStreamContent(stream, fileName, contentType);
         }
-
-        Stream stream = await GetBlobStreamWithCompatAsync(blobName);
-        string fileName = string.IsNullOrEmpty(productModel.ConvertedBlobName)
-            ? productModel.OriginalFileName
-            : Path.GetFileNameWithoutExtension(productModel.OriginalFileName) + ".ply";
-
-        GetMimeType(fileName, out string contentType);
-
-        return new RemoteStreamContent(stream, fileName, contentType);
+        catch (Exception ex)
+        {
+            await TryRecordOperationLogAsync(
+                ProductModelOperationLog.Failure(
+                    GuidGenerator.Create(),
+                    productModel?.Id ?? id,
+                    productModel?.Name ?? "未命名数模",
+                    productModel?.OriginalFileName,
+                    ProductModelOperationType.Download,
+                    ex.Message,
+                    null,
+                    (int)stopwatch.ElapsedMilliseconds
+                )
+            );
+            throw;
+        }
     }
 
     // ─────────────────────────── 私有方法 ───────────────────────────
@@ -323,6 +558,30 @@ public class ProductModelAppService : AuroraStruct3DAppService, IProductModelApp
         }
 
         return MapToDto(productModel, userNameMap);
+    }
+
+    /// <summary>
+    /// 使用独立工作单元写入操作日志，避免业务事务回滚时丢失记录。
+    /// </summary>
+    private async Task TryRecordOperationLogAsync(ProductModelOperationLog log)
+    {
+        try
+        {
+            using IUnitOfWork unitOfWork = UnitOfWorkManager.Begin(
+                requiresNew: true,
+                isTransactional: false
+            );
+            await _operationLogRepository.InsertAsync(log, autoSave: true);
+            await unitOfWork.CompleteAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(
+                ex,
+                "[ProductModelAppService] 写入三维数模操作日志失败：{Message}",
+                ex.Message
+            );
+        }
     }
 
     /// <summary>

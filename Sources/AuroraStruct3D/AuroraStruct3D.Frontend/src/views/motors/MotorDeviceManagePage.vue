@@ -492,7 +492,6 @@ function progressDetail(p: MotorScanProgressDto): string {
                         v-model="editForm.model"
                         :options="modelOptionsForEditing"
                         :placeholder="t('motor.selectModel')"
-                        show-clear
                         size="small"
                         class="!text-xs"
                         :pt="{

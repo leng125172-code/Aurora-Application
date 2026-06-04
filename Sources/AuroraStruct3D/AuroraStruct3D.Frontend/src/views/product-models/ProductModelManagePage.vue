@@ -646,7 +646,6 @@ onBeforeUnmount(() => {
                         option-label="label"
                         option-value="value"
                         :placeholder="t('productModel.formatPlaceholder')"
-                        show-clear
                         size="small"
                         class="!text-xs w-full"
                         :pt="{
@@ -667,7 +666,6 @@ onBeforeUnmount(() => {
                         option-label="label"
                         option-value="value"
                         :placeholder="t('productModel.statusPlaceholder')"
-                        show-clear
                         size="small"
                         class="!text-xs w-full"
                         :pt="{
@@ -903,6 +901,7 @@ onBeforeUnmount(() => {
         modal
         :header="t('productModel.uploadTitle')"
         :style="{ width: '720px', maxWidth: '90vw' }"
+        @hide="loadList"
     >
         <!-- 拖拽区域 -->
         <div
@@ -915,7 +914,7 @@ onBeforeUnmount(() => {
             @drop.prevent="handleDrop"
             @click="($refs.fileInputRef as HTMLInputElement)?.click()"
         >
-            <Upload class="mb-2 size-8 text-muted-foreground" />
+            <Upload class="m-4 size-8 text-muted-foreground" />
             <p class="text-sm text-muted-foreground">
                 {{ t('productModel.dropZoneText') }}
                 <span class="text-primary underline">{{ t('productModel.dropZoneClick') }}</span>

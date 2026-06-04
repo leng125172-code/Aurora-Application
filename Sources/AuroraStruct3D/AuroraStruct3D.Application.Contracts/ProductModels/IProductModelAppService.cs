@@ -26,6 +26,15 @@ public interface IProductModelAppService : IApplicationService
     Task<ProductModelDto> GetAsync(Guid id);
 
     /// <summary>
+    /// 分页查询数模操作日志。
+    /// GET /api/app/product-model/logs
+    /// </summary>
+    /// <param name="input">日志查询条件</param>
+    Task<PagedResultDto<ProductModelOperationLogDto>> GetLogsAsync(
+        GetProductModelLogListInput input
+    );
+
+    /// <summary>
     /// 上传三维数模文件（单文件，批量由前端多次调用）。
     /// 非 PLY/OBJ 格式会自动入队 Hangfire 后台任务进行异步转换。
     /// POST /api/app/product-model/upload

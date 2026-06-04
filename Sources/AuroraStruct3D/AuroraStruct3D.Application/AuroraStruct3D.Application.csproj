@@ -6,6 +6,7 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <ProjectReference Include="..\AuroraStruct3D.AI\AuroraStruct3D.AI.csproj" />
         <ProjectReference Include="..\AuroraStruct3D.Domain\AuroraStruct3D.Domain.csproj" />
         <ProjectReference Include="..\AuroraStruct3D.Application.Contracts\AuroraStruct3D.Application.Contracts.csproj" />
         <ProjectReference Include="..\AuroraStruct3D.DeviceStateManagement\AuroraStruct3D.DeviceStateManagement.csproj" />

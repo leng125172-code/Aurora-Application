@@ -346,3 +346,75 @@ export async function getProjectorLogs(
     const { data } = await httpClient.get<PagedResultDto<ProjectorOperationLogDto>>(`${BASE}/logs`, { params })
     return data
 }
+
+// ─── 条纹图（结构光标定） ──────────────────────────────────────────────────────
+
+/** 通过 Fp 指令读取投影机像素分辨率，返回宽度像素和像素模式 */
+export interface ProjectorPixelResolutionDto {
+    widthPixels: number
+    pixelMode: string
+}
+
+/** 条纹方向：horizontal=横条纹 vertical=竖条纹 */
+export type FringeMode = 'horizontal' | 'vertical'
+
+/** 条纹类型：bw=黑白（首色黑）wb=白黑（首色白） */
+export type FringeType = 'bw' | 'wb'
+
+/** 下载条纹图像到光机 Flash 的输入参数 */
+export interface DownloadFringePatternInput {
+    projectorId: string
+    /** 条纹方向 */
+    fringeMode: FringeMode
+    /** 条纹类型 */
+    fringeType: FringeType
+    /** 投影宽度像素（通过 Fp 指令读取） */
+    widthPixels: number
+    /** 投影高度像素（用户设置） */
+    heightPixels: number
+    /** 周期数（宽度或高度像素必须能被整除） */
+    periodCount: number
+    /** 生成图片数量 */
+    imageCount: number
+    /** 每张图相对上一张的像素相移量（0 < phaseShift < periodCount，整数） */
+    phaseShift: number
+}
+
+export interface FringePreviewImageDto {
+    index: number
+    label: string
+    /** 后端 byte[] 经 JSON 序列化后的 Base64 字符串 */
+    pixels: string
+}
+
+export type ProjectorFringeDownloadStatus = 'Idle' | 'Running' | 'Completed' | 'Failed'
+
+export interface ProjectorFringeDownloadStatusDto {
+    projectorId: string
+    status: ProjectorFringeDownloadStatus
+    progress: number
+    errorMessage: string | null
+}
+
+/** 通过 Fp 指令读取投影机像素分辨率 */
+export async function getProjectorPixelResolution(id: string): Promise<ProjectorPixelResolutionDto> {
+    const { data } = await httpClient.get<ProjectorPixelResolutionDto>(`${BASE}/${id}/pixel-resolution`)
+    return data
+}
+
+/** 在后端生成条纹图像预览数据并返回前端 */
+export async function generateFringePreview(input: DownloadFringePatternInput): Promise<FringePreviewImageDto[]> {
+    const { data } = await httpClient.post<FringePreviewImageDto[]>(`${BASE}/generate-fringe-preview`, input)
+    return data
+}
+
+/** 查询投影机当前条纹下载状态 */
+export async function getProjectorFringeDownloadStatus(id: string): Promise<ProjectorFringeDownloadStatusDto> {
+    const { data } = await httpClient.get<ProjectorFringeDownloadStatusDto>(`${BASE}/${id}/fringe-download-status`)
+    return data
+}
+
+/** 触发将条纹图像下载到光机 Flash（后台生成并写入，通过 SignalR 推送进度） */
+export async function downloadFringePattern(input: DownloadFringePatternInput): Promise<void> {
+    await httpClient.post(`${BASE}/download-fringe-pattern`, input)
+}

@@ -16,6 +16,7 @@ namespace AuroraStruct3D.Cameras;
 /// 相机设备管理及手动控制应用服务。
 /// 所有硬件写操作要求设备运行模式为手动或检修模式。
 /// </summary>
+[Authorize]
 public class CameraDeviceAppService : AuroraStruct3DAppService, ICameraDeviceAppService
 {
     private readonly ICameraDeviceRepository _cameraDeviceRepository;

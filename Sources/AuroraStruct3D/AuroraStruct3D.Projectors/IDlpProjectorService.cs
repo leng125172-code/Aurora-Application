@@ -248,4 +248,34 @@ public interface IDlpProjectorService
         int value,
         CancellationToken cancellationToken = default
     );
+
+    // ─── 像素分辨率查询与 Flash 条纹下载 ──────────────────────────
+
+    /// <summary>
+    /// 通过 Fp 指令查询投影机像素分辨率模式。
+    /// 响应格式示例："1280 Pixel Mode"，从中解析宽度像素数。
+    /// </summary>
+    /// <returns>宽度像素数与像素模式描述字符串</returns>
+    Task<(int WidthPixels, string PixelMode)> GetPixelResolutionAsync(
+        CancellationToken cancellationToken = default
+    );
+
+    /// <summary>
+    /// 将条纹图案数据写入投影机内部 Flash。
+    /// 流程：切换到默认显示(S6) → 开灯(LN) → 设置幅数(MB) → 擦除Flash(FE,等F0) → 循环写列数据(FW,每256列等待page写入应答)
+    /// </summary>
+    /// <param name="imageCount">图像总幅数</param>
+    /// <param name="columnGrayValues">
+    /// 列灰度值数组，长度 = imageCount × widthPixels。
+    /// 索引 [i * widthPixels + c] 对应第 i 幅图像第 c 列的灰度值（0~255）。
+    /// </param>
+    /// <param name="onProgress">进度回调（0~100），异步方法，返回 Task；为 null 时忽略</param>
+    /// <param name="cancellationToken">取消令牌</param>
+    Task DownloadFringePatternAsync(
+        int imageCount,
+        byte[] columnGrayValues,
+        bool isHorizontal,
+        Func<int, Task>? onProgress = null,
+        CancellationToken cancellationToken = default
+    );
 }

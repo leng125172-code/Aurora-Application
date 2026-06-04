@@ -1,4 +1,6 @@
 using AuroraStruct3D.CalibrationManagement;
+using AuroraStruct3D.AI;
+using AuroraStruct3D.Calibration;
 using AuroraStruct3D.Cameras;
 using AuroraStruct3D.DeviceState;
 using AuroraStruct3D.Motors;
@@ -91,6 +93,16 @@ namespace AuroraStruct3D.EntityFrameworkCore
         public DbSet<MasterDataType> MasterDataTypes { get; set; }
         public DbSet<MasterDataValue> MasterDataValues { get; set; }
 
+        // ── 标定模块 ──────────────────────────────────────────────────────────────
+        public DbSet<CalibProject> CalibProjects { get; set; }
+        public DbSet<CalibMotorParam> CalibMotorParams { get; set; }
+        public DbSet<CalibMotorConstraint> CalibMotorConstraints { get; set; }
+        public DbSet<CalibGimbalGroup> CalibGimbalGroups { get; set; }
+        public DbSet<CalibGimbalBinding> CalibGimbalBindings { get; set; }
+        public DbSet<CalibCameraParam> CalibCameraParams { get; set; }
+        public DbSet<CalibProjectorParam> CalibProjectorParams { get; set; }
+        public DbSet<CalibDeviceBinding> CalibDeviceBindings { get; set; }
+
         // ── 串口通讯模块 ────────────────────────────────────────────────────────────
         public DbSet<SerialPortConfig> SerialPortConfigs { get; set; }
         public DbSet<SerialPortOperationLog> SerialPortOperationLogs { get; set; }
@@ -118,6 +130,14 @@ namespace AuroraStruct3D.EntityFrameworkCore
 
         // ── 产品三维数模模块 ─────────────────────────────────────────────────────────
         public DbSet<ProductModel> ProductModels { get; set; }
+        public DbSet<ProductModelOperationLog> ProductModelOperationLogs { get; set; }
+
+        // ── AI 模型模块 ─────────────────────────────────────────────────────────
+        public DbSet<AiModel> AiModels { get; set; }
+        public DbSet<AiModelFile> AiModelFiles { get; set; }
+        public DbSet<AiModelIdentifier> AiModelIdentifiers { get; set; }
+        public DbSet<AiModelIdentifierLink> AiModelIdentifierLinks { get; set; }
+        public DbSet<AiModelOperationLog> AiModelOperationLogs { get; set; }
 
         // ── 标定管理模块 ──────────────────────────────────────────────────────────
         public DbSet<CalibrationDevice> CalibrationDevices { get; set; }
@@ -194,6 +214,11 @@ namespace AuroraStruct3D.EntityFrameworkCore
 
             // 标定管理模块
             builder.ConfigureCalibrationManagement();
+            // AI 模型模块
+            builder.ConfigureAiModel();
+
+            // 标定模块
+            builder.ConfigureCalibration();
         }
     }
 }
