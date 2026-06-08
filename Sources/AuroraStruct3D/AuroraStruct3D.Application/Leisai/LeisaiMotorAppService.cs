@@ -512,7 +512,214 @@ public class LeisaiMotorAppService : AuroraStruct3DAppService, ILeisaiMotorAppSe
         );
     }
 
+    // ===== 标定专用：回原 / 限位配置 =====
+
+    /// <inheritdoc/>
+    public async Task SaveHomingConfigAsync(Guid id, LeisaiHomingConfigInputDto input)
+    {
+        (_, LeisaiMotorDriver driver) = await ResolveAsync(id);
+
+        // 写回原参数寄存器
+        await WriteHomingParamsAsync(driver, input);
+
+        // Pr4.00（0x6000）bit2 → 1，启用回原
+        await UpdateControlRegisterAsync(driver, current => (ushort)(current | 0x0004));
+
+        // 保存至 EEPROM
+        await driver.WriteRegisterAsync(RegFaultControl, CmdSaveToEeprom);
+
+        _logger.LogInformation(
+            "[Leisai] 轴 {AxisId} 回原配置已保存：direction={Dir} mode={Mode}",
+            id,
+            input.HomingDirection,
+            input.HomingMode
+        );
+    }
+
+    /// <inheritdoc/>
+    public async Task DisableHomingAsync(Guid id)
+    {
+        (_, LeisaiMotorDriver driver) = await ResolveAsync(id);
+
+        // Pr4.00（0x6000）bit2 → 0，禁用回原
+        await UpdateControlRegisterAsync(driver, current => (ushort)(current & ~0x0004));
+
+        // 保存至 EEPROM
+        await driver.WriteRegisterAsync(RegFaultControl, CmdSaveToEeprom);
+
+        _logger.LogInformation("[Leisai] 轴 {AxisId} 回原功能已禁用", id);
+    }
+
+    /// <inheritdoc/>
+    public async Task<LeisaiHomingTestResultDto> TestHomingAsync(
+        Guid id,
+        LeisaiHomingConfigInputDto input
+    )
+    {
+        (_, LeisaiMotorDriver driver) = await ResolveAsync(id);
+
+        // 写回原参数寄存器（临时写入，不保存 EEPROM）
+        await WriteHomingParamsAsync(driver, input);
+
+        // 启用实时采样
+        _samplerStateStore.SetPollingEnabled(id, true);
+
+        // 使能驱动
+        await driver.EnableAsync();
+
+        // 触发回原：Pr8.02 / 0x6002 = 0x0020
+        await driver.WriteRegisterAsync(0x6002, 0x0020);
+
+        _logger.LogInformation("[Leisai] 轴 {AxisId} 回原测试已触发", id);
+
+        // 轮询回原完成位（0x1003 bit5 = 0x0020），最多 30 秒
+        const int TimeoutMs = 30_000;
+        const int IntervalMs = 200;
+        bool isCompleted = false;
+        var deadline = DateTime.UtcNow.AddMilliseconds(TimeoutMs);
+
+        while (DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(IntervalMs);
+            ushort statusWord = await driver.ReadRegisterAsync(0x1003);
+            if ((statusWord & 0x0020) != 0)
+            {
+                isCompleted = true;
+                break;
+            }
+        }
+
+        // 关使能
+        await driver.DisableAsync();
+
+        if (isCompleted)
+        {
+            _logger.LogInformation("[Leisai] 轴 {AxisId} 回原测试完成", id);
+        }
+        else
+        {
+            _logger.LogWarning("[Leisai] 轴 {AxisId} 回原测试超时（{Timeout}ms）", id, TimeoutMs);
+        }
+
+        return new LeisaiHomingTestResultDto { IsCompleted = isCompleted, TimedOut = !isCompleted };
+    }
+
+    /// <inheritdoc/>
+    public async Task SaveLimitConfigAsync(Guid id, LeisaiLimitConfigInputDto input)
+    {
+        (_, LeisaiMotorDriver driver) = await ResolveAsync(id);
+
+        // 写正向软限位（Int32 拆高低字：高字 → 0x6006，低字 → 0x6007）
+        if (input.PositiveSoftLimit.HasValue)
+        {
+            await WriteInt32Async(driver, 0x6007, input.PositiveSoftLimit.Value);
+        }
+
+        // 写负向软限位（高字 → 0x6008，低字 → 0x6009）
+        if (input.NegativeSoftLimit.HasValue)
+        {
+            await WriteInt32Async(driver, 0x6009, input.NegativeSoftLimit.Value);
+        }
+
+        // Pr4.00（0x6000）bit1 → 限位开关
+        if (input.LimitEnabled)
+        {
+            await UpdateControlRegisterAsync(driver, current => (ushort)(current | 0x0002));
+        }
+        else
+        {
+            await UpdateControlRegisterAsync(driver, current => (ushort)(current & ~0x0002));
+        }
+
+        // 保存至 EEPROM
+        await driver.WriteRegisterAsync(RegFaultControl, CmdSaveToEeprom);
+
+        _logger.LogInformation(
+            "[Leisai] 轴 {AxisId} 限位配置已保存：enabled={Enabled}",
+            id,
+            input.LimitEnabled
+        );
+    }
+
     // ===== 私有辅助 =====
+
+    /// <summary>
+    /// 将 Int32 值拆为高低两个 ushort 写入相邻寄存器对。
+    /// addressLow 为低字地址，addressLow-1 为高字地址（雷赛 Int32 编址惯例）。
+    /// </summary>
+    private static async Task WriteInt32Async(
+        LeisaiMotorDriver driver,
+        ushort addressLow,
+        int value
+    )
+    {
+        uint unsigned = (uint)value;
+        await driver.WriteRegisterAsync((ushort)(addressLow - 1), (ushort)(unsigned >> 16));
+        await driver.WriteRegisterAsync(addressLow, (ushort)(unsigned & 0xFFFF));
+    }
+
+    /// <summary>
+    /// 读取 Pr4.00（0x6000）控制寄存器，经 updater 修改后写回（仅在值发生变化时写）。
+    /// </summary>
+    private static async Task UpdateControlRegisterAsync(
+        LeisaiMotorDriver driver,
+        Func<ushort, ushort> updater
+    )
+    {
+        ushort current = await driver.ReadRegisterAsync(0x6000);
+        ushort next = updater(current);
+        if (next != current)
+        {
+            await driver.WriteRegisterAsync(0x6000, next);
+        }
+    }
+
+    /// <summary>
+    /// 将 <see cref="LeisaiHomingConfigInputDto"/> 中的语义字段写入对应寄存器（不写 EEPROM）。
+    /// </summary>
+    private static async Task WriteHomingParamsAsync(
+        LeisaiMotorDriver driver,
+        LeisaiHomingConfigInputDto input
+    )
+    {
+        // 拼装 0x600A：
+        //   Bit0 = HomingDirection (0=Negative/反向, 1=Positive/正向)
+        //   Bit1 = MoveAfterHome
+        //   Bit2 = HomingMode (0=Limit, 1=Origin)
+        //   Bit8 = WithZSignal
+        ushort reg600A = 0;
+        if (input.HomingDirection == LeisaiHomingDirection.Positive)
+            reg600A |= 0x0001;
+        if (input.MoveAfterHome)
+            reg600A |= 0x0002;
+        if (input.HomingMode == LeisaiHomingMode.Origin)
+            reg600A |= 0x0004;
+        if (input.WithZSignal)
+            reg600A |= 0x0100;
+        await driver.WriteRegisterAsync(0x600A, reg600A);
+
+        // 回零停止位（Int32）→ 0x600D（高字）/ 0x600E（低字）
+        if (input.MoveAfterHome && input.HomeStopPosition.HasValue)
+        {
+            await WriteInt32Async(driver, 0x600E, input.HomeStopPosition.Value);
+        }
+
+        // 回原速度：同时写高速（0x600F）和低速（0x6010）
+        if (input.HomeSpeedRpm.HasValue)
+        {
+            ushort speed = (ushort)(input.HomeSpeedRpm.Value & 0xFFFF);
+            await driver.WriteRegisterAsync(0x600F, speed);
+            await driver.WriteRegisterAsync(0x6010, speed);
+        }
+
+        // 回原加速度：同时写加速（0x6011）和减速（0x6012）
+        if (input.HomeAccelerationRpm.HasValue)
+        {
+            ushort accel = (ushort)(input.HomeAccelerationRpm.Value & 0xFFFF);
+            await driver.WriteRegisterAsync(0x6011, accel);
+            await driver.WriteRegisterAsync(0x6012, accel);
+        }
+    }
 
     private async Task<(MotorAxis Axis, LeisaiMotorDriver Driver)> ResolveAsync(Guid id)
     {

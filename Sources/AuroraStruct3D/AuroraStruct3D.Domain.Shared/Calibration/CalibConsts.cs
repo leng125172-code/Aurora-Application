@@ -25,6 +25,15 @@ public static class CalibConsts
 
     /// <summary>绑定状态信息最大长度</summary>
     public const int MaxStatusMessageLength = 512;
+
+    /// <summary>BLOB 存储键最大长度</summary>
+    public const int MaxBlobKeyLength = 512;
+
+    /// <summary>有效照片最小数量（内参/外参各需满足才可计算）</summary>
+    public const int MinValidPhotoCount = 15;
+
+    /// <summary>内外参矩阵 JSON 最大长度</summary>
+    public const int MaxCalibResultJsonLength = 2048;
 }
 
 /// <summary>
@@ -193,4 +202,16 @@ public enum CalibBindingStatus
 
     /// <summary>验证失败</summary>
     Failed = 3,
+}
+
+/// <summary>
+/// 标定照片类型枚举（Step 5）
+/// </summary>
+public enum CalibPhotoType
+{
+    /// <summary>内参拍照（关灯，拍真实棋盘格）</summary>
+    Intrinsic = 0,
+
+    /// <summary>外参拍照（开灯投影棋盘格，同时拍真实棋盘格）</summary>
+    Extrinsic = 1,
 }

@@ -101,6 +101,7 @@ namespace AuroraStruct3D.EntityFrameworkCore
         public DbSet<CalibCameraParam> CalibCameraParams { get; set; }
         public DbSet<CalibProjectorParam> CalibProjectorParams { get; set; }
         public DbSet<CalibDeviceBinding> CalibDeviceBindings { get; set; }
+        public DbSet<CalibPhotoRecord> CalibPhotoRecords { get; set; }
 
         // ── 串口通讯模块 ────────────────────────────────────────────────────────────
         public DbSet<SerialPortConfig> SerialPortConfigs { get; set; }

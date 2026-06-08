@@ -27,7 +27,8 @@ public static class CalibrationDbContextModelCreatingExtensions
             b.Property(x => x.DeviceSeries).HasConversion<int>();
             b.Property(x => x.DeviceType).HasConversion<int>();
             b.Property(x => x.CalibStatus).HasConversion<int>();
-
+            // 棋盘格标定板参数
+            b.Property(x => x.PhysicalSquareSizeMm).HasPrecision(10, 4);
             b.HasIndex(x => x.CalibStatus);
         });
 
@@ -126,6 +127,13 @@ public static class CalibrationDbContextModelCreatingExtensions
             b.HasIndex(x => x.CalibProjectId);
             b.HasIndex(x => x.CameraDeviceId);
             b.HasIndex(x => new { x.IsTemplateMode, x.TemplateCategory });
+
+            // 标定计算结果字段
+            b.Property(x => x.IntrinsicMatrixJson)
+                .HasMaxLength(CalibConsts.MaxCalibResultJsonLength);
+            b.Property(x => x.DistCoeffsJson).HasMaxLength(CalibConsts.MaxCalibResultJsonLength);
+            b.Property(x => x.ExtrinsicRvecJson).HasMaxLength(CalibConsts.MaxCalibResultJsonLength);
+            b.Property(x => x.ExtrinsicTvecJson).HasMaxLength(CalibConsts.MaxCalibResultJsonLength);
         });
 
         // ── 结构光参数表 ──────────────────────────────────────────────────────────
@@ -170,6 +178,27 @@ public static class CalibrationDbContextModelCreatingExtensions
                 .HasForeignKey(x => x.BoundGimbalGroupId)
                 .OnDelete(DeleteBehavior.Restrict)
                 .IsRequired(false);
+        });
+
+        // ── 标定照片记录表（Step 5） ──────────────────────────────────────────────
+        builder.Entity<CalibPhotoRecord>(b =>
+        {
+            b.ToTable($"{TablePrefix}CalibPhotoRecords");
+            b.ConfigureByConvention();
+
+            b.Property(x => x.BlobKey).IsRequired().HasMaxLength(CalibConsts.MaxBlobKeyLength);
+            b.Property(x => x.PhotoType).HasConversion<int>();
+            // ThumbnailBase64 为 nvarchar(max)，不限制长度
+
+            b.HasIndex(x => x.CalibProjectId);
+            b.HasIndex(x => new { x.CalibProjectId, x.CameraDeviceId });
+            b.HasIndex(x => new
+            {
+                x.CalibProjectId,
+                x.CameraDeviceId,
+                x.PhotoType,
+            });
+            b.HasIndex(x => x.CapturedAt);
         });
     }
 }

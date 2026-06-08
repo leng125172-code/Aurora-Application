@@ -139,10 +139,9 @@ WantedBy=multi-user.target
 
 # SkiaSharp 在 Ubuntu ARM64 上编码 JPEG 时需要的系统原生依赖。
 _NATIVE_DEPENDENCY_PACKAGES = ("libuuid1", "libfontconfig1")
-_PYTHON_SYSTEM_PACKAGES = ("python3", "python3-pip")
+_PYTHON_SYSTEM_PACKAGES = ("python3",)
 _PYTHON_REQUIRED_MODULES = ("onnx", "rknn")
 _PYTHON_ASSET_DIRNAME = "Python"
-_PYTHON_REQUIREMENTS_FILENAME = "requirements.txt"
 _PYTHON_CONVERTER_SCRIPT_FILENAME = "AiModelConvert.py"
 
 # WiFi 自动连接配置：当设备未连接 WiFi 时，每 5 秒扫描并尝试连接目标热点。
@@ -191,6 +190,34 @@ def _safe_send(conn: socket.socket | None, data: dict) -> bool:
         return True
     except (OSError, ConnectionError, BrokenPipeError):
         return False
+
+
+_deployment_log_context = threading.local()
+
+
+def _set_deployment_log_conn(conn: socket.socket | None) -> None:
+    _deployment_log_context.conn = conn
+
+
+def _clear_deployment_log_conn() -> None:
+    _deployment_log_context.conn = None
+
+
+def _get_deployment_log_conn() -> socket.socket | None:
+    return getattr(_deployment_log_context, "conn", None)
+
+
+def _push_deployment_log(message: str) -> None:
+    conn = _get_deployment_log_conn()
+    if conn is not None and not _safe_send(
+        conn, {"stage": "deploy_log", "message": message}
+    ):
+        _clear_deployment_log_conn()
+
+
+def _deploy_print(message: str) -> None:
+    print(message, flush=True)
+    _push_deployment_log(message)
 
 
 def _action_init(conn: socket.socket, msg: dict) -> None:
@@ -382,28 +409,43 @@ def _action_finalize(conn: socket.socket, msg: dict) -> None:
 
     print(flush=True)
     _fix_exec_permissions(target_dir)
+    _fix_opencv_symlink(target_dir)
 
     # ── 清理会话 ──────────────────────────────────────────────────────────────
     shutil.rmtree(session_dir, ignore_errors=True)
     with _sessions_lock:
         _sessions.pop(session_id, None)
 
-    done_msg = f"已解压 {total_files} 个文件到 {target_dir}"
-    _safe_send(conn, {"status": "done", "message": done_msg})
-    print(f"[完成] {done_msg}", flush=True)
+    extract_done_msg = f"已解压 {total_files} 个文件到 {target_dir}"
+    _safe_send(conn, {"stage": "extract_done", "message": extract_done_msg})
+    print(f"[完成] {extract_done_msg}", flush=True)
 
     # ── 部署后流程：原生依赖 → DbMigrator → 确保服务注册 → 启动 ────────────────
-    # 以下步骤不再依赖 conn，即使客户端提前断开也会继续执行
-    print("[部署] 开始部署后流程...", flush=True)
+    # 以下步骤会继续在服务端执行；若客户端仍在线，则同步推送日志回显
+    _set_deployment_log_conn(conn)
     try:
+        _deploy_print("[部署] 开始部署后流程...")
         _ensure_native_dependencies()
         _ensure_python_dependencies()
         _run_migrator()
         _ensure_system_service()
         _start_managed_service()
-        print("[部署] ✓ 部署后流程全部完成", flush=True)
+        _deploy_print("[部署] ✓ 部署后流程全部完成")
+        if not _safe_send(
+            conn,
+            {
+                "status": "done",
+                "message": f"{extract_done_msg}；部署后流程全部完成。",
+            },
+        ):
+            print("[部署] ! 部署已完成，但最终成功状态未送达客户端", flush=True)
     except Exception as exc:
-        print(f"[部署] ✗ 部署后流程异常：{exc}", flush=True)
+        error_msg = f"部署后流程异常：{exc}"
+        _deploy_print(f"[部署] ✗ {error_msg}")
+        if not _safe_send(conn, {"status": "error", "message": error_msg}):
+            print("[部署] ! 部署失败，但最终错误状态未送达客户端", flush=True)
+    finally:
+        _clear_deployment_log_conn()
 
 
 def _fix_exec_permissions(base_dir: Path) -> None:
@@ -423,6 +465,34 @@ def _fix_exec_permissions(base_dir: Path) -> None:
         print(f"[权限] 已为 {count} 个文件添加可执行权限")
 
 
+def _fix_opencv_symlink(base_dir: Path) -> None:
+    """为 OpenCvSharp 4.13+ 创建兼容软链接。
+
+    OpenCvSharp 4.13.x 发布的原生库名称为 libOpenCvSharpExtern.so，
+    但 OpenCvSharp.dll 的 DllImport 默认搜索 OpenCvSharpExtern（无 lib 前缀）。
+    在每个发布目录中创建符号链接 OpenCvSharpExtern.so → libOpenCvSharpExtern.so
+    以解决 DllNotFoundException。
+    """
+    arm64 = base_dir / "linux-arm64"
+    if not arm64.exists():
+        return
+    count = 0
+    for proj_dir in arm64.iterdir():
+        if not proj_dir.is_dir():
+            continue
+        src = proj_dir / "libOpenCvSharpExtern.so"
+        link = proj_dir / "OpenCvSharpExtern.so"
+        if src.exists() and not link.exists():
+            try:
+                link.symlink_to(src.name)
+                print(f"[OpenCV] 创建符号链接: {link} → {src.name}")
+                count += 1
+            except OSError as e:
+                print(f"[OpenCV] 创建符号链接失败: {e}")
+    if count:
+        print(f"[OpenCV] 已为 {count} 个目录创建 OpenCvSharpExtern.so 符号链接")
+
+
 # ── 受管服务部署辅助 ───────────────────────────────────────────────────────────────────
 
 
@@ -430,7 +500,7 @@ def _run_cmd(
     cmd: list, desc: str, timeout: int = 120, cwd: Optional[str] = None
 ) -> int:
     """执行外部命令，将 stdout/stderr 逐行打印，返回退出码。"""
-    print(f"[部署] {desc}...", flush=True)
+    _deploy_print(f"[部署] {desc}...")
     try:
         result = subprocess.run(
             cmd,
@@ -441,17 +511,17 @@ def _run_cmd(
         )
         for line in (result.stdout + result.stderr).strip().splitlines():
             if line:
-                print(f"[部署]   {line}", flush=True)
+                _deploy_print(f"[部署]   {line}")
         if result.returncode == 0:
-            print(f"[部署] ✓ {desc}", flush=True)
+            _deploy_print(f"[部署] ✓ {desc}")
         else:
-            print(f"[部署] ✗ {desc}（退出码 {result.returncode}）", flush=True)
+            _deploy_print(f"[部署] ✗ {desc}（退出码 {result.returncode}）")
         return result.returncode
     except subprocess.TimeoutExpired:
-        print(f"[部署] ✗ {desc} 超时（{timeout}s）", flush=True)
+        _deploy_print(f"[部署] ✗ {desc} 超时（{timeout}s）")
         return -1
     except Exception as exc:
-        print(f"[部署] ✗ {desc} 异常: {exc}", flush=True)
+        _deploy_print(f"[部署] ✗ {desc} 异常: {exc}")
         return -1
 
 
@@ -468,7 +538,7 @@ def _is_debian_package_installed(package_name: str) -> bool:
 def _ensure_native_dependencies() -> None:
     """安装 Host 在 RK3588 上运行所需的系统原生依赖。"""
     if shutil.which("apt-get") is None or shutil.which("dpkg-query") is None:
-        print("[部署] 当前系统不支持 apt/dpkg，跳过原生依赖检查")
+        _deploy_print("[部署] 当前系统不支持 apt/dpkg，跳过原生依赖检查")
         return
 
     missing = [
@@ -477,12 +547,12 @@ def _ensure_native_dependencies() -> None:
         if not _is_debian_package_installed(package_name)
     ]
     if not missing:
-        print("[部署] SkiaSharp 原生依赖已安装")
+        _deploy_print("[部署] SkiaSharp 原生依赖已安装")
         return
 
-    print(f"[部署] 缺少原生依赖：{', '.join(missing)}")
+    _deploy_print(f"[部署] 缺少原生依赖：{', '.join(missing)}")
     if _run_cmd(["sudo", "apt-get", "update"], "刷新 apt 索引", timeout=180) != 0:
-        print("[部署] apt 索引刷新失败，原生依赖可能仍缺失")
+        _deploy_print("[部署] apt 索引刷新失败，原生依赖可能仍缺失")
         return
 
     _run_cmd(
@@ -508,10 +578,6 @@ def _get_httpapi_python_script() -> Path:
     return _get_httpapi_python_asset_dir() / _PYTHON_CONVERTER_SCRIPT_FILENAME
 
 
-def _get_httpapi_python_requirements() -> Path:
-    return _get_httpapi_python_asset_dir() / _PYTHON_REQUIREMENTS_FILENAME
-
-
 def _find_python_executable() -> Optional[str]:
     candidates: list[str] = []
     for candidate in (
@@ -528,15 +594,8 @@ def _find_python_executable() -> Optional[str]:
 
 def _ensure_python_runtime() -> str:
     python_executable = _find_python_executable()
-    if (
-        python_executable
-        and _run_cmd(
-            [python_executable, "-m", "pip", "--version"],
-            "检查 Python/pip 环境",
-            timeout=30,
-        )
-        == 0
-    ):
+    if python_executable:
+        _deploy_print(f"[部署] 检测到 Python：{python_executable}")
         return python_executable
 
     if shutil.which("apt-get") is None or shutil.which("dpkg-query") is None:
@@ -548,7 +607,7 @@ def _ensure_python_runtime() -> str:
         if not _is_debian_package_installed(package_name)
     ]
     if missing:
-        print(f"[部署] 缺少 Python 系统依赖：{', '.join(missing)}", flush=True)
+        _deploy_print(f"[部署] 缺少 Python 系统依赖：{', '.join(missing)}")
         if (
             _run_cmd(
                 ["sudo", "apt-get", "update"],
@@ -581,16 +640,7 @@ def _ensure_python_runtime() -> str:
     if not python_executable:
         raise RuntimeError("Python 安装后仍未找到可执行文件。")
 
-    if (
-        _run_cmd(
-            [python_executable, "-m", "pip", "--version"],
-            "验证 pip 可用性",
-            timeout=30,
-        )
-        != 0
-    ):
-        raise RuntimeError("Python 已安装，但 pip 不可用。")
-
+    _deploy_print(f"[部署] 已准备 Python：{python_executable}")
     return python_executable
 
 
@@ -608,39 +658,21 @@ def _verify_python_modules(python_executable: str) -> None:
             )
             != 0
         ):
-            raise RuntimeError(f"Python 模块 {module_name} 验证失败。")
+            raise RuntimeError(
+                f"Python 模块 {module_name} 验证失败，请先手动安装所需依赖后重试。"
+            )
 
 
 def _ensure_python_dependencies() -> None:
     script_path = _get_httpapi_python_script()
-    requirements_path = _get_httpapi_python_requirements()
     if not script_path.exists():
-        print(
+        _deploy_print(
             f"[部署] 未找到 AI 转换脚本（{script_path}），跳过 Python 部署。",
-            flush=True,
         )
         return
 
     python_executable = _ensure_python_runtime()
-
-    if not requirements_path.exists():
-        print(
-            f"[部署] 未找到 requirements.txt（{requirements_path}），跳过 Python 包安装。",
-            flush=True,
-        )
-        return
-
-    if (
-        _run_cmd(
-            [python_executable, "-m", "pip", "install", "-r", str(requirements_path)],
-            "安装 AI Python 依赖",
-            timeout=900,
-            cwd=str(requirements_path.parent),
-        )
-        != 0
-    ):
-        raise RuntimeError("AI Python 依赖安装失败。")
-
+    _deploy_print("[部署] 已禁用自动 pip 安装，改为校验已手动安装的 AI Python 依赖。")
     _verify_python_modules(python_executable)
 
 
@@ -699,12 +731,12 @@ def _stop_managed_service() -> None:
             text=True,
         )
         if check.returncode != 0:
-            print(f"[部署] ✓ {_SERVICE_NAME} 进程已完全退出", flush=True)
+            _deploy_print(f"[部署] ✓ {_SERVICE_NAME} 进程已完全退出")
             return
         time.sleep(1)
 
     # 最后一步强杀
-    print(f"[部署] ⚠ {_SERVICE_NAME} 30s 内未退出，发送 SIGKILL", flush=True)
+    _deploy_print(f"[部署] ⚠ {_SERVICE_NAME} 30s 内未退出，发送 SIGKILL")
     _run_cmd(
         ["sudo", "pkill", "-9", "-f", f"dotnet.*{_SERVICE_NAME}"],
         f"强杀 dotnet 进程（{_SERVICE_NAME}）",
@@ -718,14 +750,18 @@ def _run_migrator() -> None:
     work_dir = TARGET_ROOT / "linux-arm64" / _MIGRATOR_NAME
     dll = work_dir / f"{_MIGRATOR_NAME}.dll"
     if not dll.exists():
-        print(f"[部署] DbMigrator 未找到（{dll}），跳过")
+        _deploy_print(f"[部署] DbMigrator 未找到（{dll}），跳过")
         return
-    _run_cmd(
-        ["sudo", "/usr/bin/dotnet", str(dll)],
-        "DbMigrator 更新数据库",
-        timeout=180,
-        cwd=str(work_dir),
-    )
+    if (
+        _run_cmd(
+            ["sudo", "/usr/bin/dotnet", str(dll)],
+            "DbMigrator 更新数据库",
+            timeout=180,
+            cwd=str(work_dir),
+        )
+        != 0
+    ):
+        raise RuntimeError("DbMigrator 更新数据库失败。")
 
 
 def _write_root_file(path: Path, content: str, desc: str) -> bool:
@@ -802,10 +838,7 @@ def _cleanup_httpapi_dropins() -> None:
     """
     if not _HTTPAPI_DROPIN_DIR.exists():
         return
-    print(
-        f"[部署] 清理历史 drop-in 目录：{_HTTPAPI_DROPIN_DIR}",
-        flush=True,
-    )
+    _deploy_print(f"[部署] 清理历史 drop-in 目录：{_HTTPAPI_DROPIN_DIR}")
     _run_cmd(
         ["sudo", "rm", "-rf", str(_HTTPAPI_DROPIN_DIR)],
         f"删除 {_HTTPAPI_DROPIN_DIR}",
@@ -831,29 +864,43 @@ def _ensure_system_service() -> None:
     if _HTTPAPI_SERVICE_FILE.exists() and _content_equal(
         _HTTPAPI_SERVICE_FILE, content
     ):
-        print(f"[部署] 系统服务 {_SERVICE_NAME} 已是最新", flush=True)
+        _deploy_print(f"[部署] 系统服务 {_SERVICE_NAME} 已是最新")
     else:
-        print(f"[部署] 写入系统服务文件 {_HTTPAPI_SERVICE_FILE.name}", flush=True)
+        _deploy_print(f"[部署] 写入系统服务文件 {_HTTPAPI_SERVICE_FILE.name}")
         if not _write_root_file(
             _HTTPAPI_SERVICE_FILE, content, f"写入 {_SERVICE_NAME}.service"
         ):
-            return
-        _run_cmd(["sudo", "systemctl", "daemon-reload"], "daemon-reload", timeout=15)
+            raise RuntimeError(f"写入 {_SERVICE_NAME}.service 失败。")
+        if (
+            _run_cmd(
+                ["sudo", "systemctl", "daemon-reload"], "daemon-reload", timeout=15
+            )
+            != 0
+        ):
+            raise RuntimeError("systemd daemon-reload 失败。")
 
-    _run_cmd(
-        ["sudo", "systemctl", "enable", _SERVICE_NAME],
-        f"enable {_SERVICE_NAME}",
-        timeout=15,
-    )
+    if (
+        _run_cmd(
+            ["sudo", "systemctl", "enable", _SERVICE_NAME],
+            f"enable {_SERVICE_NAME}",
+            timeout=15,
+        )
+        != 0
+    ):
+        raise RuntimeError(f"enable {_SERVICE_NAME} 失败。")
 
 
 def _start_managed_service() -> None:
     """启动被管理的目标服务。"""
-    _run_cmd(
-        ["sudo", "systemctl", "start", _SERVICE_NAME],
-        f"启动服务 {_SERVICE_NAME}",
-        timeout=30,
-    )
+    if (
+        _run_cmd(
+            ["sudo", "systemctl", "start", _SERVICE_NAME],
+            f"启动服务 {_SERVICE_NAME}",
+            timeout=30,
+        )
+        != 0
+    ):
+        raise RuntimeError(f"启动服务 {_SERVICE_NAME} 失败。")
 
 
 def _discovery_worker(tcp_port: int) -> None:

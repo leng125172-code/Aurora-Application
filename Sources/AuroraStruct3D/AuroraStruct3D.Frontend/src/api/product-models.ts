@@ -214,8 +214,8 @@ export async function downloadProductModelAsync(id: string): Promise<Blob> {
 }
 
 /**
- * 清理文件已丢失的孤立数模记录
- * @returns 清理的记录数量
+ * 清理孤立数模数据
+ * @returns 清理项总数
  */
 export async function cleanUpOrphanedRecordsAsync(): Promise<number> {
     const response = await httpClient.post<number>(`${BASE}/clean-up-orphaned-records`)

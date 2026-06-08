@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Security.Cryptography;
 using AuroraStruct3D.AI.Dtos;
 using AuroraStruct3D.AI.Jobs;
+using AuroraStruct3D.BlobStoring;
 using Hangfire;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Logging;
@@ -27,9 +28,11 @@ public class AiModelAppService : AuroraStruct3DAppService, IAiModelAppService
     private readonly IAiModelIdentifierLinkRepository _identifierLinkRepository;
     private readonly IAiModelOperationLogRepository _operationLogRepository;
     private readonly IBlobContainer<AiModelBlobContainer> _blobContainer;
+    private readonly FileSystemBlobContainerMaintenanceService _blobMaintenanceService;
     private readonly IIdentityUserRepository _identityUserRepository;
     private readonly IAiRuntimeService _aiRuntimeService;
     private readonly IAiModelConversionService _aiModelConversionService;
+    private readonly IAiModelConversionNotifier _aiModelConversionNotifier;
     private readonly IBackgroundJobClient _backgroundJobClient;
     private readonly IAiModelUploadSessionManager _uploadSessionManager;
 
@@ -40,9 +43,11 @@ public class AiModelAppService : AuroraStruct3DAppService, IAiModelAppService
         IAiModelIdentifierLinkRepository identifierLinkRepository,
         IAiModelOperationLogRepository operationLogRepository,
         IBlobContainer<AiModelBlobContainer> blobContainer,
+        FileSystemBlobContainerMaintenanceService blobMaintenanceService,
         IIdentityUserRepository identityUserRepository,
         IAiRuntimeService aiRuntimeService,
         IAiModelConversionService aiModelConversionService,
+        IAiModelConversionNotifier aiModelConversionNotifier,
         IBackgroundJobClient backgroundJobClient,
         IAiModelUploadSessionManager uploadSessionManager
     )
@@ -53,9 +58,11 @@ public class AiModelAppService : AuroraStruct3DAppService, IAiModelAppService
         _identifierLinkRepository = identifierLinkRepository;
         _operationLogRepository = operationLogRepository;
         _blobContainer = blobContainer;
+        _blobMaintenanceService = blobMaintenanceService;
         _identityUserRepository = identityUserRepository;
         _aiRuntimeService = aiRuntimeService;
         _aiModelConversionService = aiModelConversionService;
+        _aiModelConversionNotifier = aiModelConversionNotifier;
         _backgroundJobClient = backgroundJobClient;
         _uploadSessionManager = uploadSessionManager;
     }
@@ -551,6 +558,8 @@ public class AiModelAppService : AuroraStruct3DAppService, IAiModelAppService
             Dictionary<Guid, AiModelFile> originalFileMap = files
                 .Where(x => x.IsOriginalFile)
                 .ToDictionary(x => x.Id);
+            AiModelResolvedConversionType resolvedConversionType =
+                ResolveUpdatedResolvedConversionType(model, input.ConversionPreference);
 
             model.UpdateMetadata(
                 input.Name,
@@ -559,7 +568,7 @@ public class AiModelAppService : AuroraStruct3DAppService, IAiModelAppService
                 input.LocationKey,
                 input.GenerationCondition,
                 input.ConversionPreference,
-                input.ResolvedConversionType
+                resolvedConversionType
             );
             await _aiModelRepository.UpdateAsync(model, autoSave: true);
 
@@ -659,12 +668,19 @@ public class AiModelAppService : AuroraStruct3DAppService, IAiModelAppService
             }
             else
             {
-                targetType = ResolveTargetTypeFromPreference(model.ConversionPreference);
-                message = $"已根据转换偏好直接选择目标类型：{targetType}。";
-                canConvert =
-                    targetType
-                        is AiModelResolvedConversionType.ToRknn
-                            or AiModelResolvedConversionType.ToRkllm;
+                if (model.ConversionPreference == AiModelConversionPreference.ToRkllm)
+                {
+                    targetType = AiModelResolvedConversionType.ToRkllm;
+                    message =
+                        "当前版本不支持由 ONNX 直接转换为 RKLLM。若该模型需要 RKLLM/NPU 加速运行，请直接上传对应的 RKLLM 文件；如需生成 RKLLM，请在外部使用原始 HF 结构完成转换。";
+                    canConvert = false;
+                }
+                else
+                {
+                    targetType = ResolveTargetTypeFromPreference(model.ConversionPreference);
+                    message = $"已根据转换偏好直接选择目标类型：{targetType}。";
+                    canConvert = targetType == AiModelResolvedConversionType.ToRknn;
+                }
             }
 
             if (!canConvert || targetType == AiModelResolvedConversionType.DirectOnnx)
@@ -708,6 +724,34 @@ public class AiModelAppService : AuroraStruct3DAppService, IAiModelAppService
                 };
             }
 
+            bool hasActiveConversion = sourceFiles.Any(sourceFile =>
+                sourceFile.ConversionTargetType == targetType
+                && (
+                    sourceFile.ConversionStatus == AiModelFileConversionStatus.Pending
+                    || sourceFile.ConversionStatus == AiModelFileConversionStatus.Converting
+                )
+            );
+            if (hasActiveConversion)
+            {
+                AiModelFileConversionStatus currentStatus = sourceFiles.Any(sourceFile =>
+                    sourceFile.ConversionTargetType == targetType
+                    && sourceFile.ConversionStatus == AiModelFileConversionStatus.Converting
+                )
+                    ? AiModelFileConversionStatus.Converting
+                    : AiModelFileConversionStatus.Pending;
+
+                return new AiModelConversionStartResultDto
+                {
+                    ModelId = model.Id,
+                    ConversionPreference = model.ConversionPreference,
+                    ResolvedConversionType = targetType,
+                    CanConvert = false,
+                    Queued = false,
+                    Status = currentStatus,
+                    Message = $"模型 {targetType} 转换已在进行中，请稍候。",
+                };
+            }
+
             foreach (AiModelFile sourceFile in sourceFiles)
             {
                 sourceFile.UpdateConversionState(AiModelFileConversionStatus.Pending, targetType);
@@ -716,7 +760,14 @@ public class AiModelAppService : AuroraStruct3DAppService, IAiModelAppService
 
             Guid capturedModelId = model.Id;
             Guid[] capturedSourceFileIds = sourceFiles.Select(x => x.Id).ToArray();
-            UnitOfWorkManager.Current?.OnCompleted(() =>
+            AiModelConversionStateDto queuedState = CreateConversionStateDto(
+                sourceFiles,
+                targetType,
+                AiModelFileConversionStatus.Pending,
+                null,
+                DateTime.UtcNow
+            );
+            UnitOfWorkManager.Current?.OnCompleted(async () =>
             {
                 _backgroundJobClient.Enqueue<AiModelConversionJob>(job =>
                     job.ExecuteAsync(
@@ -728,7 +779,7 @@ public class AiModelAppService : AuroraStruct3DAppService, IAiModelAppService
                         }
                     )
                 );
-                return Task.CompletedTask;
+                await _aiModelConversionNotifier.NotifyQueuedAsync(queuedState);
             });
 
             AiModelConversionDispatchResult dispatchResult = new()
@@ -789,7 +840,7 @@ public class AiModelAppService : AuroraStruct3DAppService, IAiModelAppService
         try
         {
             model = await _aiModelRepository.GetAsync(id);
-            List<AiModelFile> files = await _aiModelFileRepository.GetListByModelIdAsync(model.Id);
+            List<AiModelFile> files = await _aiModelFileRepository.GetListByModelIdAsync(id);
             foreach (AiModelFile file in files)
             {
                 await _blobContainer.DeleteAsync(file.BlobName);
@@ -989,29 +1040,68 @@ public class AiModelAppService : AuroraStruct3DAppService, IAiModelAppService
         Stopwatch stopwatch = Stopwatch.StartNew();
         try
         {
+            string containerRootPath =
+                _blobMaintenanceService.GetContainerRootPath<AiModelBlobContainer>();
             List<AiModel> all = await _aiModelRepository.GetListAsync(maxResultCount: int.MaxValue);
-            if (all.Count == 0)
-            {
-                return 0;
-            }
-
             Dictionary<Guid, List<AiModelFile>> fileMap = await ResolveFilesAsync(all);
-            List<AiModel> orphaned = [];
-            foreach (AiModel model in all)
+            List<FileSystemBlobFile> initialPhysicalFiles = _blobMaintenanceService.GetBlobFiles(
+                containerRootPath
+            );
+            HashSet<string> initialPhysicalBlobNames = initialPhysicalFiles
+                .Select(x => x.BlobName)
+                .ToHashSet(StringComparer.Ordinal);
+
+            if (all.Count > 0 && initialPhysicalBlobNames.Count > 0)
             {
-                List<AiModelFile> files = fileMap.GetValueOrDefault(model.Id, []);
-                bool exists =
-                    files.Count > 0 && files.All(x => ExistsBlobWithCompatAsync(x.BlobName).Result);
-                if (!exists)
+                HashSet<string> referencedBlobNames = BuildReferencedBlobNameSet(
+                    fileMap.Values.SelectMany(x => x)
+                );
+                int matchedReferencedFileCount = referencedBlobNames.Count(x =>
+                    initialPhysicalBlobNames.Contains(x)
+                );
+
+                if (matchedReferencedFileCount == 0)
                 {
-                    orphaned.Add(model);
+                    Logger.LogError(
+                        "[AiModelAppService] 清理孤立记录已中止：数据库引用与磁盘文件零交集。请检查容器根目录 {RootPath} 是否指向了正确的 BLOB 存储。",
+                        containerRootPath
+                    );
+
+                    throw new UserFriendlyException(
+                        "当前 AI 模型数据库引用与磁盘文件完全不匹配，已自动中止清理以防止误删。请先检查 BLOB 存储路径与挂载目录。"
+                    );
                 }
             }
 
-            if (orphaned.Count == all.Count)
+            List<AiModel> missingOriginalModels = [];
+            List<AiModelFile> missingConvertedFiles = [];
+            foreach (AiModel model in all)
+            {
+                List<AiModelFile> files = fileMap.GetValueOrDefault(model.Id, []);
+                List<AiModelFile> originalFiles = files.Where(x => x.IsOriginalFile).ToList();
+                if (
+                    originalFiles.Count == 0
+                    || originalFiles.Any(x =>
+                        !ContainsPhysicalBlob(initialPhysicalBlobNames, x.BlobName)
+                    )
+                )
+                {
+                    missingOriginalModels.Add(model);
+                    continue;
+                }
+
+                missingConvertedFiles.AddRange(
+                    files.Where(x =>
+                        x.IsConvertedFile
+                        && !ContainsPhysicalBlob(initialPhysicalBlobNames, x.BlobName)
+                    )
+                );
+            }
+
+            if (all.Count > 0 && missingOriginalModels.Count == all.Count)
             {
                 Logger.LogError(
-                    "[AiModelAppService] 清理孤立记录已中止：共 {Total} 条记录，全部判定为 BLOB 不存在。请检查 BLOB 存储路径与跨平台路径分隔符。",
+                    "[AiModelAppService] 清理孤立记录已中止：共 {Total} 条记录，全部判定为原始模型文件不存在。请检查 BLOB 存储路径与跨平台路径分隔符。",
                     all.Count
                 );
 
@@ -1021,12 +1111,19 @@ public class AiModelAppService : AuroraStruct3DAppService, IAiModelAppService
             }
 
             int cleaned = 0;
-            foreach (AiModel model in orphaned)
+            HashSet<Guid> deletedModelIds = [];
+            foreach (AiModel model in missingOriginalModels)
             {
                 List<AiModelFile> files = fileMap.GetValueOrDefault(model.Id, []);
+                foreach (AiModelFile file in files)
+                {
+                    await TryDeleteBlobAsync(file.BlobName);
+                }
+
                 await _aiModelFileRepository.DeleteByModelIdAsync(model.Id);
                 await _identifierLinkRepository.DeleteByModelIdAsync(model.Id);
                 await _aiModelRepository.DeleteAsync(model, autoSave: true);
+                deletedModelIds.Add(model.Id);
                 cleaned++;
 
                 await TryRecordOperationLogAsync(
@@ -1036,13 +1133,108 @@ public class AiModelAppService : AuroraStruct3DAppService, IAiModelAppService
                         model.Name,
                         files.FirstOrDefault()?.OriginalFileName,
                         AiModelOperationType.CleanUpOrphanedRecords,
-                        $"模型文件缺失数={files.Count}",
+                        $"原始模型文件缺失数={files.Count(x => x.IsOriginalFile)}",
+                        (int)stopwatch.ElapsedMilliseconds
+                    )
+                );
+            }
+
+            Dictionary<Guid, AiModelFile> sourceFileMap = fileMap
+                .Values.SelectMany(x => x)
+                .Where(x => x.IsOriginalFile)
+                .ToDictionary(x => x.Id);
+            HashSet<Guid> deletedFileIds = [];
+            foreach (AiModelFile file in missingConvertedFiles)
+            {
+                if (deletedModelIds.Contains(file.AiModelId))
+                {
+                    continue;
+                }
+
+                if (
+                    file.SourceFileId.HasValue
+                    && sourceFileMap.TryGetValue(
+                        file.SourceFileId.Value,
+                        out AiModelFile? sourceFile
+                    )
+                )
+                {
+                    sourceFile.UpdateConversionState(
+                        AiModelFileConversionStatus.Failed,
+                        sourceFile.ConversionTargetType ?? file.ConversionTargetType,
+                        "转换产物文件缺失，已清理损坏记录，请重新执行转换。"
+                    );
+                    await _aiModelFileRepository.UpdateAsync(sourceFile, autoSave: true);
+                }
+
+                await _aiModelFileRepository.DeleteAsync(file, autoSave: true);
+                deletedFileIds.Add(file.Id);
+                cleaned++;
+
+                AiModel? model = all.FirstOrDefault(x => x.Id == file.AiModelId);
+                await TryRecordOperationLogAsync(
+                    AiModelOperationLog.Success(
+                        GuidGenerator.Create(),
+                        file.AiModelId,
+                        model?.Name ?? "未命名模型",
+                        file.OriginalFileName,
+                        AiModelOperationType.CleanUpOrphanedRecords,
+                        $"转换产物缺失，已清理文件记录：{file.BlobName}",
                         (int)stopwatch.ElapsedMilliseconds
                     )
                 );
             }
 
             await DeleteUnusedIdentifiersAsync();
+
+            HashSet<string> referencedBlobNamesAfterCleanup = BuildReferencedBlobNameSet(
+                fileMap
+                    .Where(x => !deletedModelIds.Contains(x.Key))
+                    .SelectMany(x => x.Value)
+                    .Where(x => !deletedFileIds.Contains(x.Id))
+            );
+
+            int orphanFileCount = 0;
+            foreach (
+                FileSystemBlobFile physicalFile in _blobMaintenanceService.GetBlobFiles(
+                    containerRootPath
+                )
+            )
+            {
+                if (referencedBlobNamesAfterCleanup.Contains(physicalFile.BlobName))
+                {
+                    continue;
+                }
+
+                File.Delete(physicalFile.FullPath);
+                orphanFileCount++;
+
+                Logger.LogInformation(
+                    "[AiModelAppService] 已删除 AI 模型容器中的磁盘孤儿文件：{BlobName}",
+                    physicalFile.BlobName
+                );
+            }
+
+            int emptyDirectoryCount = _blobMaintenanceService.DeleteEmptyDirectories(
+                containerRootPath
+            );
+
+            if (orphanFileCount > 0 || emptyDirectoryCount > 0)
+            {
+                await TryRecordOperationLogAsync(
+                    AiModelOperationLog.Success(
+                        GuidGenerator.Create(),
+                        null,
+                        "孤立记录清理",
+                        null,
+                        AiModelOperationType.CleanUpOrphanedRecords,
+                        $"已删除磁盘孤儿文件={orphanFileCount}，空目录={emptyDirectoryCount}",
+                        (int)stopwatch.ElapsedMilliseconds
+                    )
+                );
+            }
+
+            cleaned += orphanFileCount + emptyDirectoryCount;
 
             return cleaned;
         }
@@ -1274,6 +1466,32 @@ public class AiModelAppService : AuroraStruct3DAppService, IAiModelAppService
         );
     }
 
+    private static AiModelConversionStateDto CreateConversionStateDto(
+        IEnumerable<AiModelFile> files,
+        AiModelResolvedConversionType? targetType,
+        AiModelFileConversionStatus status,
+        string? errorMessage,
+        DateTime? lastUpdatedTime
+    )
+    {
+        List<AiModelFile> orderedFiles = files.OrderBy(file => file.SortOrder).ToList();
+        return new AiModelConversionStateDto
+        {
+            ModelId = orderedFiles[0].AiModelId,
+            SourceFileIds = orderedFiles.Select(file => file.Id).ToList(),
+            TargetType =
+                targetType
+                ?? orderedFiles
+                    .Select(file => file.ConversionTargetType)
+                    .FirstOrDefault(type => type.HasValue),
+            Status = status,
+            ConversionErrorMessage = string.IsNullOrWhiteSpace(errorMessage)
+                ? null
+                : errorMessage.Trim(),
+            LastUpdatedTime = lastUpdatedTime,
+        };
+    }
+
     private async Task<List<AiModelIdentifier>> GetOrCreateIdentifiersAsync(
         IEnumerable<string> identifierNames
     )
@@ -1380,10 +1598,43 @@ public class AiModelAppService : AuroraStruct3DAppService, IAiModelAppService
         return conversionPreference switch
         {
             AiModelConversionPreference.ToRknn => AiModelResolvedConversionType.ToRknn,
-            AiModelConversionPreference.ToRkllm => AiModelResolvedConversionType.ToRkllm,
             AiModelConversionPreference.DirectOnnx => AiModelResolvedConversionType.DirectOnnx,
             _ => AiModelResolvedConversionType.Unknown,
         };
+    }
+
+    private static AiModelResolvedConversionType ResolveInitialResolvedConversionType(
+        AiModelConversionPreference conversionPreference
+    )
+    {
+        EnsureWritableConversionPreference(conversionPreference);
+        return AiModelResolvedConversionType.Unknown;
+    }
+
+    private static AiModelResolvedConversionType ResolveUpdatedResolvedConversionType(
+        AiModel model,
+        AiModelConversionPreference conversionPreference
+    )
+    {
+        EnsureWritableConversionPreference(conversionPreference);
+
+        return
+            conversionPreference == AiModelConversionPreference.Auto
+            && model.ConversionPreference == AiModelConversionPreference.Auto
+            ? model.ResolvedConversionType
+            : AiModelResolvedConversionType.Unknown;
+    }
+
+    private static void EnsureWritableConversionPreference(
+        AiModelConversionPreference conversionPreference
+    )
+    {
+        if (conversionPreference == AiModelConversionPreference.ToRkllm)
+        {
+            throw new UserFriendlyException(
+                "当前版本不支持将转换偏好设置为 RKLLM。若模型需要 RKLLM/NPU 加速运行，请直接上传对应的 RKLLM 文件。"
+            );
+        }
     }
 
     private static void EnsureConversionSupported(
@@ -1523,7 +1774,7 @@ public class AiModelAppService : AuroraStruct3DAppService, IAiModelAppService
             input.LocationKey,
             input.GenerationCondition,
             input.ConversionPreference,
-            ResolveConversionType(input, pendingFiles, platformInfo),
+            ResolveInitialResolvedConversionType(input.ConversionPreference),
             pendingFiles.Count
         );
 
@@ -1618,39 +1869,6 @@ public class AiModelAppService : AuroraStruct3DAppService, IAiModelAppService
                 "双文件模型必须且只能包含一个 SplitEncoder 和一个 SplitDecoder。"
             );
         }
-    }
-
-    private static AiModelResolvedConversionType ResolveConversionType(
-        UploadAiModelInput input,
-        IReadOnlyList<PendingUploadedFile> files,
-        AiRuntimePlatformInfo platformInfo
-    )
-    {
-        if (input.ResolvedConversionType != AiModelResolvedConversionType.Unknown)
-        {
-            return input.ResolvedConversionType;
-        }
-
-        bool allOnnx = files.All(x =>
-            Path.GetExtension(x.OriginalFileName)
-                .Equals(".onnx", StringComparison.OrdinalIgnoreCase)
-        );
-        if (!allOnnx)
-        {
-            return AiModelResolvedConversionType.Unknown;
-        }
-
-        return input.ConversionPreference switch
-        {
-            AiModelConversionPreference.DirectOnnx => AiModelResolvedConversionType.DirectOnnx,
-            AiModelConversionPreference.ToRknn => AiModelResolvedConversionType.ToRknn,
-            AiModelConversionPreference.ToRkllm => AiModelResolvedConversionType.ToRkllm,
-            _ when platformInfo.OperatingSystem == "Windows" =>
-                AiModelResolvedConversionType.DirectOnnx,
-            _ when platformInfo.OperatingSystem == "Linux" && platformInfo.SupportsOnnxConversion =>
-                AiModelResolvedConversionType.ToRknn,
-            _ => AiModelResolvedConversionType.Unknown,
-        };
     }
 
     private static string BuildBlobName(Guid modelId, PendingUploadedFile file)
@@ -1798,6 +2016,32 @@ public class AiModelAppService : AuroraStruct3DAppService, IAiModelAppService
         catch { }
     }
 
+    private async Task TryDeleteBlobAsync(string blobName)
+    {
+        HashSet<string> tried = [];
+        foreach (string candidate in GetBlobNameCandidates(blobName))
+        {
+            if (!tried.Add(candidate))
+            {
+                continue;
+            }
+
+            try
+            {
+                await _blobContainer.DeleteAsync(candidate);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning(
+                    ex,
+                    "[AiModelAppService] 删除 BLOB 文件 {BlobName} 失败（可能已不存在）：{Message}",
+                    candidate,
+                    ex.Message
+                );
+            }
+        }
+    }
+
     private static IEnumerable<string> GetBlobNameCandidates(string blobName)
     {
         if (string.IsNullOrWhiteSpace(blobName))
@@ -1817,6 +2061,32 @@ public class AiModelAppService : AuroraStruct3DAppService, IAiModelAppService
     private static string NormalizeBlobName(string blobName)
     {
         return blobName.Replace('\\', '/').TrimStart('/');
+    }
+
+    private static bool ContainsPhysicalBlob(
+        IReadOnlySet<string> physicalBlobNames,
+        string? blobName
+    )
+    {
+        return !string.IsNullOrWhiteSpace(blobName)
+            && physicalBlobNames.Contains(NormalizeBlobName(blobName));
+    }
+
+    private static HashSet<string> BuildReferencedBlobNameSet(IEnumerable<AiModelFile> files)
+    {
+        HashSet<string> referencedBlobNames = [];
+
+        foreach (AiModelFile file in files)
+        {
+            if (string.IsNullOrWhiteSpace(file.BlobName))
+            {
+                continue;
+            }
+
+            referencedBlobNames.Add(NormalizeBlobName(file.BlobName));
+        }
+
+        return referencedBlobNames;
     }
 
     private async Task<bool> ExistsBlobWithCompatAsync(string blobName)

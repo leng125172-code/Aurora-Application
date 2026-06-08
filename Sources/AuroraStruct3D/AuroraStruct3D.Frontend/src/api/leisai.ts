@@ -279,3 +279,91 @@ export async function resetParametersToDefault(id: string, addressLows: number[]
     })
     return data
 }
+
+// ─── 标定专用：回原 / 限位配置（Phase 3）───────────────────────────────────
+
+/**
+ * 雷赛回原方向枚举。
+ * 值直接对应寄存器 0x600A Bit0（0=反向, 1=正向）。
+ * 注意：不与 calibration.ts 中的 OriginDirection 混用，两者语义相同但枚举值定义相反。
+ */
+export enum LeisaiHomingDirection {
+    Negative = 0,
+    Positive = 1,
+}
+
+/**
+ * 雷赛回原模式枚举。
+ * 值直接对应寄存器 0x600A Bit2（0=限位回零, 1=原点回零）。
+ */
+export enum LeisaiHomingMode {
+    Limit = 0,
+    Origin = 1,
+}
+
+/** 回原参数输入（与后端 LeisaiHomingConfigInputDto 对齐）。 */
+export interface LeisaiHomingConfigInputDto {
+    homingDirection: LeisaiHomingDirection
+    moveAfterHome: boolean
+    homingMode: LeisaiHomingMode
+    withZSignal: boolean
+    /** 回零停止位（脉冲数），仅 moveAfterHome=true 时有效。 */
+    homeStopPosition: number | null
+    /** 回原速度（RPM），null 表示保留驱动器当前值。 */
+    homeSpeedRpm: number | null
+    /** 回原加速度（RPM/s），null 表示保留驱动器当前值。 */
+    homeAccelerationRpm: number | null
+}
+
+/** 限位参数输入（与后端 LeisaiLimitConfigInputDto 对齐）。 */
+export interface LeisaiLimitConfigInputDto {
+    limitEnabled: boolean
+    /** 正向软限位（脉冲数 Int32），null 表示不写入。 */
+    positiveSoftLimit: number | null
+    /** 负向软限位（脉冲数 Int32），null 表示不写入。 */
+    negativeSoftLimit: number | null
+}
+
+/** 回原测试结果（与后端 LeisaiHomingTestResultDto 对齐）。 */
+export interface LeisaiHomingTestResultDto {
+    readonly isCompleted: boolean
+    readonly timedOut: boolean
+}
+
+/**
+ * 保存回原参数到驱动器并持久化至 EEPROM，同时启用回原功能位。
+ * POST /api/app/leisai-motor/{id}/save-homing-config
+ */
+export async function saveHomingConfig(id: string, dto: LeisaiHomingConfigInputDto): Promise<void> {
+    await httpClient.post(`${BASE}/${id}/save-homing-config`, dto)
+}
+
+/**
+ * 禁用回原功能（清除 0x6000 bit2 并保存 EEPROM）。
+ * POST /api/app/leisai-motor/{id}/disable-homing
+ */
+export async function disableHoming(id: string): Promise<void> {
+    await httpClient.post(`${BASE}/${id}/disable-homing`)
+}
+
+/**
+ * 回原测试：后端同步阻塞执行（最多 30 秒），前端超时设为 60 秒。
+ * POST /api/app/leisai-motor/{id}/test-homing
+ */
+export async function testHoming(
+    id: string,
+    dto: LeisaiHomingConfigInputDto,
+): Promise<LeisaiHomingTestResultDto> {
+    const { data } = await httpClient.post<LeisaiHomingTestResultDto>(`${BASE}/${id}/test-homing`, dto, {
+        timeout: 60_000,
+    })
+    return data
+}
+
+/**
+ * 保存限位参数到驱动器并持久化至 EEPROM，同时设置限位使能标志。
+ * POST /api/app/leisai-motor/{id}/save-limit-config
+ */
+export async function saveLimitConfig(id: string, dto: LeisaiLimitConfigInputDto): Promise<void> {
+    await httpClient.post(`${BASE}/${id}/save-limit-config`, dto)
+}

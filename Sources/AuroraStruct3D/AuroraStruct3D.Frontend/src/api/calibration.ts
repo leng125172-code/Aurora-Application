@@ -37,6 +37,18 @@ export enum CalibStatus {
     Completed = 7,
 }
 
+/** 标定电机类型。 */
+export enum CalibMotorType {
+    Rotation = 0,
+    Distance = 1,
+}
+
+/** 回原方向。 */
+export enum OriginDirection {
+    Positive = 0,
+    Negative = 1,
+}
+
 // ===================== 标定项目 DTO =====================
 
 export interface CalibProjectDto {
@@ -155,9 +167,45 @@ export interface CreateUpdateCalibGimbalGroupInput {
     isEnabled: boolean
 }
 
+// ===================== 标定电机参数 DTO =====================
+
+export interface CalibMotorParamDto {
+    readonly id: string
+    readonly calibProjectId: string
+    readonly motorAxisId: string
+    readonly motorType: CalibMotorType
+    readonly encoderResolution: number
+    readonly gearRatio: number
+    readonly mechanicalOriginPosition: number
+    readonly originDirection: OriginDirection
+    readonly positiveSoftLimit: number
+    readonly negativeSoftLimit: number
+    readonly homeSpeed: number
+    readonly homeAcceleration: number
+    readonly isOriginLocked: boolean
+    readonly creationTime: string
+    readonly lastModificationTime: string | null
+}
+
+export interface SaveCalibMotorParamInput {
+    calibProjectId: string
+    motorAxisId: string
+    motorType: CalibMotorType
+    encoderResolution?: number | null
+    gearRatio?: number | null
+    mechanicalOriginPosition?: number | null
+    originDirection?: OriginDirection | null
+    positiveSoftLimit?: number | null
+    negativeSoftLimit?: number | null
+    homeSpeed?: number | null
+    homeAcceleration?: number | null
+    isOriginLocked?: boolean | null
+}
+
 // ===================== 云台组 API =====================
 
 const GIMBAL_GROUP_BASE = '/api/app/calib-gimbal-group'
+const CALIB_MOTOR_PARAM_BASE = '/api/app/calib-motor-param'
 
 /** 分页查询云台组列表 */
 export async function getCalibGimbalGroupListAsync(
@@ -195,6 +243,29 @@ export async function updateCalibGimbalGroupAsync(
 /** 删除云台组 */
 export async function deleteCalibGimbalGroupAsync(id: string): Promise<void> {
     await httpClient.delete(`${GIMBAL_GROUP_BASE}/${id}`)
+}
+
+/** 获取标定项目的所有电机参数。 */
+export async function getCalibMotorParamListAsync(
+    calibProjectId: string
+): Promise<CalibMotorParamDto[]> {
+    const response = await httpClient.get<CalibMotorParamDto[]>(CALIB_MOTOR_PARAM_BASE, {
+        params: { calibProjectId },
+    })
+    return response.data
+}
+
+/** 保存（Upsert）电机参数。 */
+export async function saveCalibMotorParamAsync(
+    input: SaveCalibMotorParamInput
+): Promise<CalibMotorParamDto> {
+    const response = await httpClient.post<CalibMotorParamDto>(`${CALIB_MOTOR_PARAM_BASE}/save`, input)
+    return response.data
+}
+
+/** 删除指定电机参数记录。 */
+export async function deleteCalibMotorParamAsync(id: string): Promise<void> {
+    await httpClient.delete(`${CALIB_MOTOR_PARAM_BASE}/${id}`)
 }
 
 // ===================== 标定相机参数 =====================

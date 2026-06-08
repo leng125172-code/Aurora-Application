@@ -137,6 +137,16 @@ public class ProductModel : FullAuditedAggregateRoot<Guid>
     }
 
     /// <summary>
+    /// 当转换产物文件丢失时，清理失效引用并恢复为可重试状态。
+    /// </summary>
+    /// <param name="errorMessage">提示信息</param>
+    public void MarkConvertedBlobMissing(string errorMessage)
+    {
+        ConvertedBlobName = null;
+        SetFailed(errorMessage);
+    }
+
+    /// <summary>
     /// 重置为"待转换"状态（手动重试时调用）。
     /// </summary>
     public void ResetForRetry()

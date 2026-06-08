@@ -16,11 +16,17 @@ public class UpdateAiModelInput
     [MaxLength(AiModelConsts.MaxDescriptionLength)]
     public string? Description { get; set; }
 
-    /// <summary>转换偏好。</summary>
+    /// <summary>
+    /// 转换偏好。
+    /// 仅支持 Auto、DirectOnnx 和 ToRknn；ToRkllm 仅保留为兼容历史值。
+    /// </summary>
     public AiModelConversionPreference ConversionPreference { get; set; } =
         AiModelConversionPreference.Auto;
 
-    /// <summary>系统推断的转换结果。</summary>
+    /// <summary>
+    /// 系统推断的转换结果。
+    /// 编辑请求中应保持 Unknown，实际解析结果仅在 Auto 模式下由系统更新。
+    /// </summary>
     public AiModelResolvedConversionType ResolvedConversionType { get; set; } =
         AiModelResolvedConversionType.Unknown;
 

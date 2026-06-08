@@ -213,7 +213,7 @@ function openDeleteConfirm(item: CalibGimbalGroupDto): void {
         <h1 class="text-2xl font-bold tracking-tight">{{ t('menu.calibGimbalGroupManage') }}</h1>
 
         <!-- 主内容卡片 -->
-        <AppCard :beam="true">
+        <AppCard :beam="true" class="p-4">
             <!-- 操作按钮区 -->
             <div class="flex items-center gap-2 border-b border-border/40 px-4 py-3">
                 <Button severity="secondary" outlined size="small" :disabled="loading" @click="loadList">

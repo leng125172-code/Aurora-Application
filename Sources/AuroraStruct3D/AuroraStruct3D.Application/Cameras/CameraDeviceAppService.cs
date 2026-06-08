@@ -190,6 +190,12 @@ public class CameraDeviceAppService : AuroraStruct3DAppService, ICameraDeviceApp
     public async Task CloseCameraAsync(Guid id)
     {
         CameraDevice camera = await _cameraDeviceRepository.GetAsync(id);
+
+        if (_streamingService?.IsPreviewActive(id) == true)
+        {
+            await _streamingService.StopPreviewAsync(id);
+        }
+
         await _tucamService.CloseCameraAsync(camera.DeviceIndex);
 
         camera.SetStatus(CameraStatus.Closed);

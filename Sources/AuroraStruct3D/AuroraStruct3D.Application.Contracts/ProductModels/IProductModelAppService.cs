@@ -66,10 +66,11 @@ public interface IProductModelAppService : IApplicationService
     Task RetryConversionAsync(Guid id);
 
     /// <summary>
-    /// 清理文件已丢失的孤立数模记录（仅删除数据库记录，不操作 BLOB）。
+    /// 清理孤立数模数据。
+    /// 会同步处理缺失原始文件的数模记录、损坏的转换产物引用、无记录物理文件和空目录。
     /// POST /api/app/product-model/clean-up-orphaned-records
     /// </summary>
-    /// <returns>清理的记录数量</returns>
+    /// <returns>清理项总数</returns>
     Task<int> CleanUpOrphanedRecordsAsync();
 
     /// <summary>

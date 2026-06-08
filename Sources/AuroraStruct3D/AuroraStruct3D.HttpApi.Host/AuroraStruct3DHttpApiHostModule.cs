@@ -1,4 +1,5 @@
 using System.Net;
+using AuroraStruct3D.AI;
 using AuroraStruct3D.Cameras;
 using AuroraStruct3D.Endpoints;
 using AuroraStruct3D.HostedServices;
@@ -156,6 +157,8 @@ namespace AuroraStruct3D
                 endpoints.MapHub<LeisaiMotorHub>("/signalr-hubs/leisai-motor");
                 // 产品数模转换进度推送 Hub
                 endpoints.MapHub<ProductModelHub>("/signalr-hubs/product-model");
+                // AI 模型转换进度推送 Hub
+                endpoints.MapHub<AiModelConversionHub>("/signalr-hubs/ai-model-conversion");
                 endpoints.MapFallback(async httpContext =>
                 {
                     var path = httpContext.Request.Path.Value ?? string.Empty;

@@ -136,6 +136,21 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                         .HasColumnType("character varying(40)")
                         .HasColumnName("ConcurrencyStamp");
 
+                    b.Property<string>("ConversionErrorMessage")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
+                    b.Property<int>("ConversionStatus")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
+                    b.Property<int?>("ConversionTargetType")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("ConversionTime")
+                        .HasColumnType("timestamp without time zone");
+
                     b.Property<DateTime>("CreationTime")
                         .HasColumnType("timestamp without time zone")
                         .HasColumnName("CreationTime");
@@ -173,11 +188,21 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                     b.Property<long>("FileSizeBytes")
                         .HasColumnType("bigint");
 
+                    b.Property<bool>("IsConvertedFile")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
                     b.Property<bool>("IsDeleted")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
                         .HasDefaultValue(false)
                         .HasColumnName("IsDeleted");
+
+                    b.Property<bool>("IsOriginalFile")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
 
                     b.Property<DateTime?>("LastModificationTime")
                         .HasColumnType("timestamp without time zone")
@@ -203,15 +228,28 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                     b.Property<int>("SortOrder")
                         .HasColumnType("integer");
 
+                    b.Property<Guid?>("SourceFileId")
+                        .HasColumnType("uuid");
+
                     b.HasKey("Id");
 
                     b.HasIndex("AiModelId");
+
+                    b.HasIndex("ConversionStatus");
+
+                    b.HasIndex("ConversionTargetType");
 
                     b.HasIndex("FileFormat");
 
                     b.HasIndex("FileRole");
 
+                    b.HasIndex("IsConvertedFile");
+
+                    b.HasIndex("IsOriginalFile");
+
                     b.HasIndex("Md5");
+
+                    b.HasIndex("SourceFileId");
 
                     b.HasIndex("AiModelId", "SortOrder");
 
@@ -391,11 +429,23 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                         .HasMaxLength(1024)
                         .HasColumnType("character varying(1024)");
 
+                    b.Property<string>("DistCoeffsJson")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
                     b.Property<int>("ExposureTimeMaxUs")
                         .HasColumnType("integer");
 
                     b.Property<int>("ExposureTimeMinUs")
                         .HasColumnType("integer");
+
+                    b.Property<string>("ExtrinsicRvecJson")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
+                    b.Property<string>("ExtrinsicTvecJson")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
 
                     b.Property<decimal>("GainMaxDb")
                         .HasPrecision(8, 2)
@@ -410,6 +460,10 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
 
                     b.Property<int>("ImageWidthPixels")
                         .HasColumnType("integer");
+
+                    b.Property<string>("IntrinsicMatrixJson")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
 
                     b.Property<bool>("IsDeleted")
                         .ValueGeneratedOnAdd()
@@ -451,6 +505,9 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                     b.Property<decimal>("PixelSizeUm")
                         .HasPrecision(10, 4)
                         .HasColumnType("numeric(10,4)");
+
+                    b.Property<double?>("ReprojectionError")
+                        .HasColumnType("double precision");
 
                     b.Property<decimal>("SensorHeightMm")
                         .HasPrecision(10, 4)
@@ -847,6 +904,66 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                     b.ToTable("AbpProCalibMotorParams", (string)null);
                 });
 
+            modelBuilder.Entity("AuroraStruct3D.Calibration.CalibPhotoRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("BlobKey")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<Guid>("CalibProjectId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CameraDeviceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CapturedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<int>("CornerCountDetected")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreationTime")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("CreationTime");
+
+                    b.Property<Guid?>("CreatorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("CreatorId");
+
+                    b.Property<bool>("IsValid")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime?>("LastModificationTime")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("LastModificationTime");
+
+                    b.Property<Guid?>("LastModifierId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("LastModifierId");
+
+                    b.Property<int>("PhotoType")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ThumbnailBase64")
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CalibProjectId");
+
+                    b.HasIndex("CapturedAt");
+
+                    b.HasIndex("CalibProjectId", "CameraDeviceId");
+
+                    b.HasIndex("CalibProjectId", "CameraDeviceId", "PhotoType");
+
+                    b.ToTable("AbpProCalibPhotoRecords", (string)null);
+                });
+
             modelBuilder.Entity("AuroraStruct3D.Calibration.CalibProject", b =>
                 {
                     b.Property<Guid>("Id")
@@ -914,6 +1031,25 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                         .IsRequired()
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
+
+                    b.Property<int>("PhysicalCornerCols")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("PhysicalCornerRows")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("PhysicalSquareSizeMm")
+                        .HasPrecision(10, 4)
+                        .HasColumnType("numeric(10,4)");
+
+                    b.Property<int>("ProjectedCornerCols")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ProjectedCornerRows")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ProjectedPixelSize")
+                        .HasColumnType("integer");
 
                     b.Property<int>("ProjectorCount")
                         .HasColumnType("integer");

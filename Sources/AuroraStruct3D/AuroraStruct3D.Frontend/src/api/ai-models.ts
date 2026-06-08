@@ -68,11 +68,20 @@ export interface AiModelFileDto {
     readonly sourceFileId?: string | null
     readonly conversionTargetType?: AiModelResolvedConversionType | null
     readonly conversionStatus: AiModelFileConversionStatus
-    readonly conversionErrorMessage?: string | null
+    readonly conversionErrorMessage: string | null
     readonly conversionTime?: string | null
     readonly creatorId?: string | null
     readonly creationTime: string
     readonly lastModificationTime?: string | null
+}
+
+export interface AiModelConversionStateDto {
+    readonly modelId: string
+    readonly sourceFileIds: string[]
+    readonly targetType?: AiModelResolvedConversionType | null
+    readonly status: AiModelFileConversionStatus
+    readonly conversionErrorMessage: string | null
+    readonly lastUpdatedTime?: string | null
 }
 
 export interface AiModelConversionStartResultDto {

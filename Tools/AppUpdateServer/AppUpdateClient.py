@@ -472,10 +472,38 @@ def upload_and_deploy(
         )
 
         extract_pbar: tqdm | None = None
+        final_status_received = False
         while True:
-            msg = _recv_msg(finalize_sock)
+            try:
+                msg = _recv_msg(finalize_sock)
+            except ConnectionError as exc:
+                if extract_pbar:
+                    extract_pbar.close()
+                    extract_pbar = None
+                if final_status_received:
+                    raise
+                raise RuntimeError(
+                    "服务端在返回最终状态前关闭了连接，请检查服务端部署日志。"
+                ) from exc
+
             stage = msg.get("stage")
             status = msg.get("status")
+
+            if status == "done":
+                final_status_received = True
+                if extract_pbar:
+                    extract_pbar.close()
+                    extract_pbar = None
+                print(f"\n  ✔ {msg.get('message', '部署完成')}")
+                break
+
+            if status == "error":
+                final_status_received = True
+                if extract_pbar:
+                    extract_pbar.close()
+                    extract_pbar = None
+                print(f"\n[错误] 服务端报告: {msg.get('message')}", file=sys.stderr)
+                sys.exit(1)
 
             if stage == "merge":
                 print(f"  ▶ {msg.get('message', '合并中...')}")
@@ -499,17 +527,23 @@ def upload_and_deploy(
                 extract_pbar.set_postfix_str(name[-38:] if len(name) > 38 else name)
                 extract_pbar.refresh()
 
-            elif status == "done":
+            elif stage == "extract_done":
                 if extract_pbar:
                     extract_pbar.close()
-                print(f"\n  ✔ {msg.get('message', '部署完成')}")
-                break
+                    extract_pbar = None
+                print(f"\n  ✔ {msg.get('message', '解压完成')}")
 
-            elif status == "error":
+            elif stage == "deploy_log":
                 if extract_pbar:
                     extract_pbar.close()
-                print(f"\n[错误] 服务端报告: {msg.get('message')}", file=sys.stderr)
-                sys.exit(1)
+                    extract_pbar = None
+                print(f"  {msg.get('message', '')}")
+
+            elif msg.get("message"):
+                if extract_pbar:
+                    extract_pbar.close()
+                    extract_pbar = None
+                print(f"  ▶ {msg.get('message')}")
 
     finally:
         finalize_sock.close()

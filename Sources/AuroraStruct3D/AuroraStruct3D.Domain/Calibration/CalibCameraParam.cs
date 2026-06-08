@@ -75,6 +75,23 @@ public class CalibCameraParam : FullAuditedEntity<Guid>
     /// <summary>模板分类（按相机型号分类，仅模板模式有效）</summary>
     public string? TemplateCategory { get; private set; }
 
+    // ── 标定计算结果（Step 5 计算完成后写入） ──────────────────────────────────────
+
+    /// <summary>内参矩阵（3×3，JSON 序列化的 double[][] 数组）</summary>
+    public string? IntrinsicMatrixJson { get; private set; }
+
+    /// <summary>畸变系数（JSON 序列化的 double[] 数组）</summary>
+    public string? DistCoeffsJson { get; private set; }
+
+    /// <summary>重投影误差（像素）</summary>
+    public double? ReprojectionError { get; private set; }
+
+    /// <summary>外参旋转向量（JSON 序列化的 double[] 数组）</summary>
+    public string? ExtrinsicRvecJson { get; private set; }
+
+    /// <summary>外参平移向量（JSON 序列化的 double[] 数组）</summary>
+    public string? ExtrinsicTvecJson { get; private set; }
+
     // EF Core 所需的无参构造函数
     protected CalibCameraParam() { }
 
@@ -197,6 +214,52 @@ public class CalibCameraParam : FullAuditedEntity<Guid>
     public CalibCameraParam SetEnabled(bool isEnabled)
     {
         IsEnabled = isEnabled;
+        return this;
+    }
+
+    /// <summary>
+    /// 设置标定计算结果（内外参矩阵和重投影误差）
+    /// </summary>
+    /// <param name="intrinsicMatrixJson">内参矩阵（3×3 double[][] 的 JSON）</param>
+    /// <param name="distCoeffsJson">畸变系数（double[] 的 JSON）</param>
+    /// <param name="reprojectionError">重投影误差（px）</param>
+    /// <param name="extrinsicRvecJson">旋转向量 JSON，无投影仪时传 null</param>
+    /// <param name="extrinsicTvecJson">平移向量 JSON，无投影仪时传 null</param>
+    public CalibCameraParam SetCalibResult(
+        string intrinsicMatrixJson,
+        string distCoeffsJson,
+        double reprojectionError,
+        string? extrinsicRvecJson = null,
+        string? extrinsicTvecJson = null
+    )
+    {
+        Check.NotNullOrWhiteSpace(
+            intrinsicMatrixJson,
+            nameof(intrinsicMatrixJson),
+            CalibConsts.MaxCalibResultJsonLength
+        );
+        Check.NotNullOrWhiteSpace(
+            distCoeffsJson,
+            nameof(distCoeffsJson),
+            CalibConsts.MaxCalibResultJsonLength
+        );
+
+        IntrinsicMatrixJson = intrinsicMatrixJson;
+        DistCoeffsJson = distCoeffsJson;
+        ReprojectionError = reprojectionError;
+        ExtrinsicRvecJson = extrinsicRvecJson;
+        ExtrinsicTvecJson = extrinsicTvecJson;
+        return this;
+    }
+
+    /// <summary>清除已保存的标定结果（照片更新后需要重新计算）</summary>
+    public CalibCameraParam ClearCalibResult()
+    {
+        IntrinsicMatrixJson = null;
+        DistCoeffsJson = null;
+        ReprojectionError = null;
+        ExtrinsicRvecJson = null;
+        ExtrinsicTvecJson = null;
         return this;
     }
 }

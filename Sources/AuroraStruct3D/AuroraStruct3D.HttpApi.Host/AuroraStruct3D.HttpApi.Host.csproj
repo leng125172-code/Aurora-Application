@@ -38,6 +38,12 @@
     </ItemGroup>
 
     <ItemGroup>
+        <!-- OpenCvSharp 原生运行时包必须由启动项目引用，才能可靠地复制到发布目录 -->
+        <PackageReference Include="OpenCvSharp4.runtime.win" Version="4.13.0.20260528" />
+        <PackageReference Include="OpenCvSharp4.runtime.linux-arm64" Version="4.13.0.20260526" />
+    </ItemGroup>
+
+    <ItemGroup>
         <Compile Remove="Logs\**" />
         <Content Remove="Logs\**" />
         <EmbeddedResource Remove="Logs\**" />
@@ -84,6 +90,35 @@
             WorkingDirectory="$(SpaRoot)"
             Command="chcp 65001 > nul &amp;&amp; npm run build"
             EnvironmentVariables="NO_COLOR=1;FORCE_COLOR=0"
+        />
+    </Target>
+
+    <!--
+        OpenCvSharp4 native library 强制覆盖拷贝。
+        common.props 的 PreserveNewest 策略在 NuGet 缓存时间戳不变时会跳过复制，
+        导致 libOpenCvSharpExtern.so 虽存在于 NuGet 包中却未被写入 PublishDir。
+        此 Target 在 Publish 完成后显式复制，确保发布包含最新 .so。
+    -->
+    <Target
+        Name="ForceOpenCvSharpNative"
+        AfterTargets="Publish"
+        Condition="'$(RuntimeIdentifier)' == 'linux-arm64'"
+    >
+        <PropertyGroup>
+            <OpenCvRuntimePkg>$(NuGetPackageRoot)opencvsharp4.runtime.linux-arm64\</OpenCvRuntimePkg>
+        </PropertyGroup>
+        <ItemGroup>
+            <OpenCvNativeSo Include="$(OpenCvRuntimePkg)*\runtimes\linux-arm64\native\libOpenCvSharpExtern.so" />
+        </ItemGroup>
+        <Copy
+            SourceFiles="@(OpenCvNativeSo)"
+            DestinationFolder="$(PublishDir)"
+            OverwriteReadOnlyFiles="true"
+            SkipUnchangedFiles="false"
+        />
+        <Message
+            Importance="high"
+            Text="[OpenCV] 已强制拷贝 libOpenCvSharpExtern.so → $(PublishDir)"
         />
     </Target>
 </Project>

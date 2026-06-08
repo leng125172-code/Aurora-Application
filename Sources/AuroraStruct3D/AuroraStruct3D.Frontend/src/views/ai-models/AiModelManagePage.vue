@@ -2,6 +2,7 @@
 import SparkMD5 from 'spark-md5'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import * as signalR from '@microsoft/signalr'
 import { useConfirm } from 'primevue/useconfirm'
 import Button from 'primevue/button'
 import Column from 'primevue/column'
@@ -15,9 +16,11 @@ import Tag from 'primevue/tag'
 import Textarea from 'primevue/textarea'
 import { Eraser, RefreshCw, Search, Upload, X } from '@lucide/vue'
 import { AppCard } from '@/components/primevue'
+import { useAuthStore } from '@/stores/auth'
 import { useAppToast } from '@/composables/useAppToast'
 import {
     AiModelConversionPreference,
+    type AiModelConversionStateDto,
     AiModelFileConversionStatus,
     AiModelFileRole,
     AiModelLoadStatus,
@@ -48,7 +51,6 @@ import {
 const AI_UPLOAD_CHUNK_SIZE = 16 * 1024 * 1024
 const AI_UPLOAD_SESSION_STORAGE_KEY = 'aurora.ai-model.upload-session.v2'
 const MAX_MODEL_FILE_COUNT = 2
-const CONVERSION_STATUS_POLL_INTERVAL_MS = 3000
 
 interface AiModelUploadSessionCacheItem {
     readonly sessionId: string
@@ -83,6 +85,7 @@ interface EditFileState {
 
 const { t } = useI18n()
 const confirm = useConfirm()
+const authStore = useAuthStore()
 const toast = useAppToast()
 
 const loading = ref(false)
@@ -109,9 +112,11 @@ const uploadProgress = ref(0)
 const uploading = ref(false)
 const uploadAbortController = ref<AbortController | null>(null)
 const cleaningUp = ref(false)
-const convertingModelIds = ref<string[]>([])
+const startingConversionModelIds = ref<string[]>([])
+const activeConversionStateMap = ref<Record<string, AiModelConversionStateDto>>({})
 const deletingConvertedFileIds = ref<string[]>([])
-const conversionStatusPollTimer = ref<number | null>(null)
+const conversionHubConnected = ref(false)
+const conversionListRefreshTimer = ref<number | null>(null)
 
 const editing = ref(false)
 const editingModelId = ref<string | null>(null)
@@ -130,8 +135,13 @@ const loadingRuntimeInfo = ref(false)
 const uploadIdentifierSuggestions = ref<string[]>([])
 const editIdentifierSuggestions = ref<string[]>([])
 
+let conversionHub: signalR.HubConnection | null = null
+
 const currentPage = computed(() => Math.floor(skipCount.value / maxResultCount.value) + 1)
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / maxResultCount.value)))
+const convertingModelIds = computed(() => {
+    return Array.from(new Set([...startingConversionModelIds.value, ...Object.keys(activeConversionStateMap.value)]))
+})
 const supportedExtensionsText = computed(() => {
     if (!runtimePlatformInfo.value?.supportedExtensions.length) {
         return '—'
@@ -183,7 +193,6 @@ function getConversionPreferenceOptions(): Array<{ label: string; value: AiModel
         { label: t('aiModel.conversionPreferenceAuto'), value: AiModelConversionPreference.Auto },
         { label: t('aiModel.conversionPreferenceDirectOnnx'), value: AiModelConversionPreference.DirectOnnx },
         { label: t('aiModel.conversionPreferenceToRknn'), value: AiModelConversionPreference.ToRknn },
-        { label: t('aiModel.conversionPreferenceToRkllm'), value: AiModelConversionPreference.ToRkllm },
     ]
 }
 
@@ -250,6 +259,12 @@ function resolvedConversionTypeLabel(value: AiModelResolvedConversionType): stri
         default:
             return t('aiModel.resolvedConversionUnknown')
     }
+}
+
+function resolvedConversionTypeText(model: AiModelDto): string {
+    return model.conversionPreference === AiModelConversionPreference.Auto
+        ? resolvedConversionTypeLabel(model.resolvedConversionType)
+        : '—'
 }
 
 function fileRoleLabel(value: AiModelFileRole): string {
@@ -495,7 +510,6 @@ async function loadRuntimePlatformInfo(force = false): Promise<void> {
 
 async function loadList(): Promise<void> {
     loading.value = true
-    let loadedSuccessfully = false
     try {
         const input: GetAiModelListInput = {
             filter: filterText.value || null,
@@ -506,6 +520,7 @@ async function loadList(): Promise<void> {
         const result = await getAiModelListAsync(input)
         const expandedRowKeys = new Set(Object.keys(expandedRows.value))
         items.value = result.items
+        applyActiveStatesToLoadedItems()
         total.value = result.totalCount
         expandedRows.value = result.items.reduce<Record<string, boolean>>((accumulator, item) => {
             if (expandedRowKeys.has(item.id)) {
@@ -513,47 +528,182 @@ async function loadList(): Promise<void> {
             }
             return accumulator
         }, {})
-        loadedSuccessfully = true
     } catch (error) {
-        clearConversionStatusPolling()
         throw error
     } finally {
         loading.value = false
-        if (loadedSuccessfully) {
-            scheduleConversionStatusPolling()
-        }
     }
 }
 
-function clearConversionStatusPolling(): void {
-    if (conversionStatusPollTimer.value != null) {
-        window.clearTimeout(conversionStatusPollTimer.value)
-        conversionStatusPollTimer.value = null
+function clearConversionListRefreshTimer(): void {
+    if (conversionListRefreshTimer.value != null) {
+        window.clearTimeout(conversionListRefreshTimer.value)
+        conversionListRefreshTimer.value = null
     }
 }
 
-function hasActiveConversionStatus(list: AiModelDto[] = items.value): boolean {
-    return list.some((item) =>
-        getOriginalFiles(item.files).some(
-            (file) =>
-                file.conversionStatus === AiModelFileConversionStatus.Pending ||
-                file.conversionStatus === AiModelFileConversionStatus.Converting
-        )
-    )
-}
-
-function scheduleConversionStatusPolling(): void {
-    clearConversionStatusPolling()
-
-    if (loading.value || !hasActiveConversionStatus()) {
+function scheduleConversionListRefresh(): void {
+    if (conversionListRefreshTimer.value != null) {
         return
     }
 
-    conversionStatusPollTimer.value = window.setTimeout(() => {
+    conversionListRefreshTimer.value = window.setTimeout(() => {
+        conversionListRefreshTimer.value = null
         void loadList().catch((error: unknown) => {
             toast.error(error instanceof Error ? error.message : t('common.operationFailed'))
         })
-    }, CONVERSION_STATUS_POLL_INTERVAL_MS)
+    }, 150)
+}
+
+function stopConversionHub(): void {
+    conversionHubConnected.value = false
+
+    if (conversionHub) {
+        conversionHub.stop().catch(() => {})
+        conversionHub = null
+    }
+}
+
+function normalizeConversionState(state: AiModelConversionStateDto): AiModelConversionStateDto {
+    return {
+        ...state,
+        conversionErrorMessage: state.conversionErrorMessage ?? null,
+    }
+}
+
+function removeStartingConversionModelId(modelId: string): void {
+    startingConversionModelIds.value = startingConversionModelIds.value.filter((value) => value !== modelId)
+}
+
+function upsertActiveConversionState(state: AiModelConversionStateDto): void {
+    const normalizedState = normalizeConversionState(state)
+    activeConversionStateMap.value = {
+        ...activeConversionStateMap.value,
+        [normalizedState.modelId]: normalizedState,
+    }
+    applyConversionStateToItems(normalizedState)
+}
+
+function removeActiveConversionState(modelId: string): void {
+    if (!(modelId in activeConversionStateMap.value)) {
+        return
+    }
+
+    const nextStateMap = { ...activeConversionStateMap.value }
+    delete nextStateMap[modelId]
+    activeConversionStateMap.value = nextStateMap
+}
+
+function applyActiveConversionsSnapshot(states: AiModelConversionStateDto[]): void {
+    const normalizedStates = states.map(normalizeConversionState)
+    const hadActiveConversions = Object.keys(activeConversionStateMap.value).length > 0
+    activeConversionStateMap.value = normalizedStates.reduce<Record<string, AiModelConversionStateDto>>(
+        (accumulator, state) => {
+            accumulator[state.modelId] = state
+            return accumulator
+        },
+        {}
+    )
+    applyActiveStatesToLoadedItems()
+
+    if (hadActiveConversions && normalizedStates.length === 0) {
+        scheduleConversionListRefresh()
+    }
+}
+
+function applyActiveStatesToLoadedItems(): void {
+    for (const state of Object.values(activeConversionStateMap.value)) {
+        applyConversionStateToItems(state)
+    }
+}
+
+function applyConversionStateToItems(state: AiModelConversionStateDto): void {
+    items.value = items.value.map((item) => {
+        if (item.id !== state.modelId) {
+            return item
+        }
+
+        return {
+            ...item,
+            files: item.files.map((file) => {
+                if (!state.sourceFileIds.includes(file.id)) {
+                    return file
+                }
+
+                return {
+                    ...file,
+                    conversionTargetType: state.targetType ?? file.conversionTargetType ?? null,
+                    conversionStatus: state.status,
+                    conversionErrorMessage: state.conversionErrorMessage,
+                    conversionTime: state.lastUpdatedTime ?? file.conversionTime ?? null,
+                }
+            }),
+        }
+    })
+}
+
+async function startConversionHub(): Promise<void> {
+    stopConversionHub()
+
+    conversionHub = new signalR.HubConnectionBuilder()
+        .withUrl('/signalr-hubs/ai-model-conversion', {
+            accessTokenFactory: () => authStore.token ?? '',
+        })
+        .withAutomaticReconnect()
+        .configureLogging(signalR.LogLevel.Warning)
+        .build()
+
+    const handleActiveConversionsSnapshot = (states: AiModelConversionStateDto[]) => {
+        applyActiveConversionsSnapshot(states)
+    }
+
+    const handleConversionQueued = (state: AiModelConversionStateDto) => {
+        removeStartingConversionModelId(state.modelId)
+        upsertActiveConversionState(state)
+    }
+
+    const handleConversionStarted = (state: AiModelConversionStateDto) => {
+        removeStartingConversionModelId(state.modelId)
+        upsertActiveConversionState(state)
+    }
+
+    const handleConversionFinished = (state: AiModelConversionStateDto) => {
+        removeStartingConversionModelId(state.modelId)
+        removeActiveConversionState(state.modelId)
+        applyConversionStateToItems(normalizeConversionState(state))
+        scheduleConversionListRefresh()
+    }
+
+    conversionHub.on('ReceiveActiveConversionsSnapshot', handleActiveConversionsSnapshot)
+    conversionHub.on('ReceiveActiveConversionsSnapshotAsync', handleActiveConversionsSnapshot)
+
+    conversionHub.on('ReceiveConversionQueued', handleConversionQueued)
+    conversionHub.on('ReceiveConversionQueuedAsync', handleConversionQueued)
+
+    conversionHub.on('ReceiveConversionStarted', handleConversionStarted)
+    conversionHub.on('ReceiveConversionStartedAsync', handleConversionStarted)
+
+    conversionHub.on('ReceiveConversionFinished', handleConversionFinished)
+    conversionHub.on('ReceiveConversionFinishedAsync', handleConversionFinished)
+
+    conversionHub.onreconnecting(() => {
+        conversionHubConnected.value = false
+    })
+
+    conversionHub.onreconnected(() => {
+        conversionHubConnected.value = true
+    })
+
+    conversionHub.onclose(() => {
+        conversionHubConnected.value = false
+    })
+
+    try {
+        await conversionHub.start()
+        conversionHubConnected.value = true
+    } catch {
+        conversionHubConnected.value = false
+    }
 }
 
 function handleSearch(): void {
@@ -823,7 +973,7 @@ function createUploadFileState(file: File, index: number): UploadFileState {
     }
 }
 
-function normalizeUploadFileRoles(): void {
+function initializeUploadFileRoles(): void {
     uploadFiles.value.forEach((item, index) => {
         item.sortOrder = index
     })
@@ -846,7 +996,13 @@ function normalizeUploadFileRoles(): void {
     uploadFiles.value[1].fileRole = AiModelFileRole.SplitDecoder
 }
 
-function normalizeEditFileRoles(): void {
+function refreshUploadFileSortOrders(): void {
+    uploadFiles.value.forEach((item, index) => {
+        item.sortOrder = index
+    })
+}
+
+function initializeEditFileRoles(): void {
     editFiles.value.forEach((item, index) => {
         item.sortOrder = index
     })
@@ -867,6 +1023,12 @@ function normalizeEditFileRoles(): void {
 
     editFiles.value[0].fileRole = AiModelFileRole.SplitEncoder
     editFiles.value[1].fileRole = AiModelFileRole.SplitDecoder
+}
+
+function refreshEditFileSortOrders(): void {
+    editFiles.value.forEach((item, index) => {
+        item.sortOrder = index
+    })
 }
 
 function validateFileRoles(files: Array<{ fileRole: AiModelFileRole }>, allowEmpty: boolean): string | null {
@@ -941,7 +1103,7 @@ async function inspectSelectedFiles(selectedFiles: File[]): Promise<void> {
     }
 
     uploadFiles.value = files.map((file, index) => createUploadFileState(file, index))
-    normalizeUploadFileRoles()
+    initializeUploadFileRoles()
     uploadProgress.value = 0
     if (!showUploadConversionPreference.value) {
         uploadConversionPreference.value = AiModelConversionPreference.Auto
@@ -997,18 +1159,22 @@ function handleDrop(event: DragEvent): void {
 
 function removeSelectedUploadFile(localId: string): void {
     uploadFiles.value = uploadFiles.value.filter((item) => item.localId !== localId)
-    normalizeUploadFileRoles()
+    if (uploadFiles.value.length <= 1) {
+        initializeUploadFileRoles()
+    } else {
+        refreshUploadFileSortOrders()
+    }
     if (!showUploadConversionPreference.value) {
         uploadConversionPreference.value = AiModelConversionPreference.Auto
     }
 }
 
 function handleUploadFileRoleChanged(): void {
-    normalizeUploadFileRoles()
+    refreshUploadFileSortOrders()
 }
 
 function handleEditFileRoleChanged(): void {
-    normalizeEditFileRoles()
+    refreshEditFileSortOrders()
 }
 
 function updateOverallUploadProgress(uploadedBytes: number, totalBytes: number): void {
@@ -1168,6 +1334,55 @@ function getConvertedFiles(files: AiModelFileDto[]): AiModelFileDto[] {
     return getSortedFiles(files).filter((file) => file.isConvertedFile)
 }
 
+function getModelCurrentConversionStatus(item: AiModelDto): AiModelFileConversionStatus | null {
+    const activeState = activeConversionStateMap.value[item.id]
+    if (activeState) {
+        return activeState.status
+    }
+
+    if (startingConversionModelIds.value.includes(item.id)) {
+        return AiModelFileConversionStatus.Pending
+    }
+
+    const activeFile = getOriginalFiles(item.files).find(
+        (file) =>
+            file.conversionStatus === AiModelFileConversionStatus.Pending ||
+            file.conversionStatus === AiModelFileConversionStatus.Converting
+    )
+
+    return activeFile?.conversionStatus ?? null
+}
+
+function getModelConvertButtonLabel(item: AiModelDto): string {
+    const status = getModelCurrentConversionStatus(item)
+    return status == null ? t('aiModel.actionConvert') : conversionStatusLabel(status)
+}
+
+function getModelCurrentConversionStatusLabel(item: AiModelDto): string {
+    const status = getModelCurrentConversionStatus(item)
+    return status == null ? t('aiModel.conversionStatusNone') : conversionStatusLabel(status)
+}
+
+function getModelCurrentConversionStatusSeverity(
+    item: AiModelDto
+): 'secondary' | 'success' | 'danger' | 'warn' | 'info' {
+    const status = getModelCurrentConversionStatus(item)
+    return status == null ? 'secondary' : conversionStatusSeverity(status)
+}
+
+function getModelConvertButtonSeverity(item: AiModelDto): 'info' | 'warn' {
+    const status = getModelCurrentConversionStatus(item)
+    return status === AiModelFileConversionStatus.Pending ? 'warn' : 'info'
+}
+
+function hasItemActiveConversionStatus(item: AiModelDto): boolean {
+    return getOriginalFiles(item.files).some(
+        (file) =>
+            file.conversionStatus === AiModelFileConversionStatus.Pending ||
+            file.conversionStatus === AiModelFileConversionStatus.Converting
+    )
+}
+
 function canStartConversion(item: AiModelDto): boolean {
     if (!runtimePlatformInfo.value?.supportsOnnxConversion) {
         return false
@@ -1177,7 +1392,14 @@ function canStartConversion(item: AiModelDto): boolean {
         return false
     }
 
-    if (item.conversionPreference === AiModelConversionPreference.DirectOnnx) {
+    if (hasItemActiveConversionStatus(item)) {
+        return false
+    }
+
+    if (
+        item.conversionPreference === AiModelConversionPreference.DirectOnnx ||
+        item.conversionPreference === AiModelConversionPreference.ToRkllm
+    ) {
         return false
     }
 
@@ -1205,22 +1427,36 @@ async function handleStartConversion(item: AiModelDto): Promise<void> {
         return
     }
 
-    convertingModelIds.value = [...convertingModelIds.value, item.id]
+    startingConversionModelIds.value = [...startingConversionModelIds.value, item.id]
+    let shouldRefreshList = false
     try {
         const result = await startAiModelConversionAsync(item.id)
         if (result.queued) {
             toast.success(result.message || t('aiModel.convertQueued'))
+            shouldRefreshList = !conversionHubConnected.value
         } else if (result.canConvert) {
             toast.info(result.message || t('aiModel.convertAcceptedPending'))
+        } else if (result.resolvedConversionType === AiModelResolvedConversionType.ToRkllm) {
+            toast.warning(result.message || t('aiModel.rkllmUploadRequired'))
         } else {
             toast.warning(result.message || t('aiModel.convertSkipped'))
         }
 
-        await loadList()
+        if (
+            !result.queued &&
+            (result.status === AiModelFileConversionStatus.Pending ||
+                result.status === AiModelFileConversionStatus.Converting)
+        ) {
+            shouldRefreshList = true
+        }
+
+        if (shouldRefreshList) {
+            await loadList()
+        }
     } catch (error) {
         toast.error(error instanceof Error ? error.message : t('common.operationFailed'))
     } finally {
-        convertingModelIds.value = convertingModelIds.value.filter((value) => value !== item.id)
+        removeStartingConversionModelId(item.id)
     }
 }
 
@@ -1256,7 +1492,10 @@ function openEdit(item: AiModelDto): void {
     editVersion.value = item.version || ''
     editLocationKey.value = item.locationKey || ''
     editGenerationCondition.value = item.generationCondition || ''
-    editConversionPreference.value = item.conversionPreference
+    editConversionPreference.value =
+        item.conversionPreference === AiModelConversionPreference.ToRkllm
+            ? AiModelConversionPreference.Auto
+            : item.conversionPreference
     editFiles.value = getOriginalFiles(item.files).map((file) => ({
         id: file.id,
         originalFileName: file.originalFileName,
@@ -1268,7 +1507,7 @@ function openEdit(item: AiModelDto): void {
         fileRole: file.fileRole,
         sortOrder: file.sortOrder,
     }))
-    normalizeEditFileRoles()
+    refreshEditFileSortOrders()
     editIdentifierSuggestions.value = []
     editVisible.value = true
 }
@@ -1363,12 +1602,14 @@ async function handleCleanUp(): Promise<void> {
 }
 
 onMounted(() => {
+    void startConversionHub()
     void loadList()
     void loadRuntimePlatformInfo()
 })
 
 onBeforeUnmount(() => {
-    clearConversionStatusPolling()
+    clearConversionListRefreshTimer()
+    stopConversionHub()
 })
 </script>
 
@@ -1477,13 +1718,13 @@ onBeforeUnmount(() => {
                                                 class="!text-xs"
                                             />
                                             <Tag
-                                                v-if="file.isConvertedFile"
+                                                v-if="file.conversionTargetType != null"
                                                 :value="conversionTargetTypeText(file)"
                                                 severity="info"
                                                 class="!text-xs"
                                             />
                                             <Tag
-                                                v-if="file.isConvertedFile"
+                                                v-if="file.conversionStatus !== AiModelFileConversionStatus.None"
                                                 :value="conversionStatusLabel(file.conversionStatus)"
                                                 :severity="conversionStatusSeverity(file.conversionStatus)"
                                                 class="!text-xs"
@@ -1551,7 +1792,15 @@ onBeforeUnmount(() => {
                 <Column :header="t('aiModel.name')" style="min-width: 16rem">
                     <template #body="{ data }">
                         <div class="space-y-1 py-1">
-                            <div class="font-medium text-foreground">{{ data.name }}</div>
+                            <div class="flex flex-wrap items-center gap-2">
+                                <div class="font-medium text-foreground">{{ data.name }}</div>
+                                <Tag
+                                    v-if="getModelCurrentConversionStatus(data) != null"
+                                    :severity="getModelCurrentConversionStatusSeverity(data)"
+                                    :value="getModelCurrentConversionStatusLabel(data)"
+                                    class="!text-xs"
+                                />
+                            </div>
                             <div v-if="data.description" class="line-clamp-2 text-xs text-muted-foreground">
                                 {{ data.description }}
                             </div>
@@ -1581,7 +1830,7 @@ onBeforeUnmount(() => {
                             </div>
                             <div>
                                 <span class="text-muted-foreground">{{ t('aiModel.resolvedConversionType') }}：</span>
-                                <span>{{ resolvedConversionTypeLabel(data.resolvedConversionType) }}</span>
+                                <span>{{ resolvedConversionTypeText(data) }}</span>
                             </div>
                         </div>
                     </template>
@@ -1614,14 +1863,16 @@ onBeforeUnmount(() => {
                     <template #body="{ data }">
                         <div class="flex flex-wrap items-center gap-1">
                             <Button
-                                severity="info"
+                                :severity="getModelConvertButtonSeverity(data)"
                                 outlined
                                 size="small"
-                                :loading="convertingModelIds.includes(data.id)"
+                                :loading="
+                                    getModelCurrentConversionStatus(data) === AiModelFileConversionStatus.Converting
+                                "
                                 :disabled="!canStartConversion(data)"
                                 @click="handleStartConversion(data)"
                             >
-                                {{ t('aiModel.actionConvert') }}
+                                {{ getModelConvertButtonLabel(data) }}
                             </Button>
                             <Button severity="secondary" outlined size="small" @click="openEdit(data)">
                                 {{ t('common.edit') }}

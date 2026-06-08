@@ -5,19 +5,23 @@
  * Step 1：设备标定信息（左侧项目信息 + 右侧设备布局SVG图）
  * Step 2：相机参数配置（列出所有相机，可展开设置各相机镜头/传感器参数）
  */
-import { ref, computed, onMounted, watch, nextTick, onUnmounted } from 'vue'
+import { ref, computed, onMounted, watch, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import Button from 'primevue/button'
-import InputNumber from 'primevue/inputnumber'
-import Select from 'primevue/select'
 import Stepper from 'primevue/stepper'
 import StepList from 'primevue/steplist'
 import Step from 'primevue/step'
 import StepPanels from 'primevue/steppanels'
 import StepPanel from 'primevue/steppanel'
 import BorderBeam from '@/components/ui/border-beam/BorderBeam.vue'
-import { ArrowLeft, ChevronDown, ChevronRight, Camera, AlertCircle, RefreshCcw, Save, Loader2 } from '@lucide/vue'
+import CalibStep1ProjectInfo from './CalibStep1ProjectInfo.vue'
+import CalibStep2CameraConfig from './CalibStep2CameraConfig.vue'
+import CalibStep3ProjectorConfig from './CalibStep3ProjectorConfig.vue'
+import CalibStep4MotorConfig from './CalibStep4MotorConfig.vue'
+import CalibStep5CameraCalib from './CalibStep5CameraCalib.vue'
+import CalibStepComingSoon from './CalibStepComingSoon.vue'
+import { ArrowLeft } from '@lucide/vue'
 import { showErrorToastOnce } from '@/api/client'
 import { useAppToast } from '@/composables/useAppToast'
 import {
@@ -382,8 +386,6 @@ const selectedFringeImageIdx = ref<number>(0)
 const generatingFringe = ref(false)
 const downloadingFringe = ref(false)
 const fringeDownloadProgress = ref<number>(0)
-const previewCanvasRef = ref<HTMLCanvasElement | null>(null)
-
 let step3Hub: signalR.HubConnection | null = null
 
 function applyFringeDownloadStatus(status: ProjectorFringeDownloadStatusDto): void {
@@ -536,50 +538,6 @@ async function generateFringeImages(): Promise<void> {
     }
 }
 
-function renderFringePreview(): void {
-    const canvas = previewCanvasRef.value
-    if (!canvas) return
-    const img = generatedFringeImages.value[selectedFringeImageIdx.value]
-    const ctx = canvas.getContext('2d')
-    if (!ctx || !img) {
-        ctx?.clearRect(0, 0, canvas.width, canvas.height)
-        return
-    }
-    const pixels = img.pixels
-    const W = canvas.width
-    const H = canvas.height
-    // 使用 ImageData 批量写入，性能远优于逐像素 fillRect
-    const imageData = ctx.createImageData(W, H)
-    const data = imageData.data
-    if (fringeMode.value === 'vertical') {
-        // 竖条纹：pixels[x] 对应第 x 列的灰度，同列所有行相同
-        for (let x = 0; x < W; x++) {
-            const g = pixels[Math.min(x, pixels.length - 1)]
-            for (let y = 0; y < H; y++) {
-                const i = (y * W + x) * 4
-                data[i] = g
-                data[i + 1] = g
-                data[i + 2] = g
-                data[i + 3] = 255
-            }
-        }
-    } else {
-        // 横条纹：pixels[y] 对应第 y 行的灰度，同行所有列相同
-        for (let y = 0; y < H; y++) {
-            const g = pixels[Math.min(y, pixels.length - 1)]
-            const rowBase = y * W * 4
-            for (let x = 0; x < W; x++) {
-                const i = rowBase + x * 4
-                data[i] = g
-                data[i + 1] = g
-                data[i + 2] = g
-                data[i + 3] = 255
-            }
-        }
-    }
-    ctx.putImageData(imageData, 0, 0)
-}
-
 async function triggerFringeDownload(): Promise<void> {
     if (!selectedProjectorId.value || !projectorWidthPixels.value || downloadingFringe.value) return
     downloadingFringe.value = true
@@ -603,10 +561,6 @@ async function triggerFringeDownload(): Promise<void> {
     }
 }
 
-watch([selectedFringeImageIdx, generatedFringeImages, fringeMode], () => {
-    nextTick(() => renderFringePreview())
-})
-
 // 切换步骤时自动初始化对应步骤
 watch(activeStep, (val: string) => {
     if (val === '2') void initStep2()
@@ -627,7 +581,6 @@ onUnmounted(() => {
 
 <template>
     <div class="flex h-full flex-col gap-4">
-        <!-- 页面标题 -->
         <div class="flex items-center gap-3">
             <Button text severity="secondary" size="small" @click="goBack">
                 <ArrowLeft class="size-4" />
@@ -637,1365 +590,165 @@ onUnmounted(() => {
             </h1>
         </div>
 
-        <!-- 卡片外壳：直接用原生 div 复现 AppCard 样式，避免 PrimeVue Card 不撠满高度的问题 -->
         <div
             class="relative flex flex-col flex-1 min-h-0 overflow-hidden rounded-xl bg-card/40 backdrop-blur border border-border shadow-sm"
             style="clip-path: inset(0 round 0.75rem)"
         >
             <BorderBeam :size="120" :duration="10" />
-            <Stepper v-model:value="activeStep" linear class="flex flex-col flex-1 min-h-0 px-4 pt-4">
-                <StepList>
-                    <Step v-for="step in steps" :key="step.value" :value="step.value">
-                        {{ step.label }}
+            <Stepper
+                v-model:value="activeStep"
+                linear
+                class="flex flex-col flex-1 min-h-0"
+                :pt="{
+                    root: {
+                        class: '!bg-transparent !border-0 !shadow-none !rounded-none flex flex-col flex-1 min-h-0',
+                    },
+                }"
+            >
+                <StepList class="border-b border-border/40 px-4 pt-3" :pt="{ root: { class: '!bg-transparent' } }">
+                    <Step
+                        v-for="item in steps"
+                        :key="item.value"
+                        :value="item.value"
+                        :pt="{ root: { class: '!bg-transparent' } }"
+                    >
+                        {{ item.label }}
                     </Step>
                 </StepList>
 
                 <StepPanels class="flex flex-col flex-1 min-h-0" :pt="{ root: { class: '!bg-transparent' } }">
-                    <!-- ============ Step 1 设备初始化 ============ -->
                     <StepPanel
                         value="1"
                         class="flex flex-col flex-1 min-h-0"
                         :pt="{ root: { class: '!bg-transparent' } }"
                     >
-                        <div class="flex flex-col flex-1 min-h-0 overflow-y-auto py-6">
-                            <div v-if="loading" class="flex items-center justify-center py-12 text-muted-foreground">
-                                {{ t('common.loading') }}
-                            </div>
-                            <div v-else-if="project" class="flex flex-col flex-1 min-h-0">
-                                <!-- 顶部标题行 + 单条分割线 -->
-                                <div class="flex items-baseline gap-6 pb-2 border-b border-border/50">
-                                    <span class="w-52 shrink-0 text-base font-semibold">
-                                        {{ t('calib.projectInfo') }}
-                                    </span>
-                                    <span class="flex-1 text-base font-semibold">
-                                        {{ t('calib.deviceLayout') }}
-                                    </span>
-                                </div>
-
-                                <!-- 内容区 -->
-                                <div class="flex gap-6 flex-1 pt-5">
-                                    <!-- 左侧：项目信息 -->
-                                    <div class="w-52 shrink-0 flex flex-col gap-3">
-                                        <dl class="flex flex-col gap-3 text-sm">
-                                            <!-- 项目名称 -->
-                                            <div>
-                                                <dt class="text-muted-foreground mb-0.5">
-                                                    {{ t('calib.colName') }}
-                                                </dt>
-                                                <dd class="font-medium break-all">{{ project.name }}</dd>
-                                            </div>
-                                            <!-- 设备系列 -->
-                                            <div>
-                                                <dt class="text-muted-foreground mb-0.5">
-                                                    {{ t('calib.colDeviceSeries') }}
-                                                </dt>
-                                                <dd class="font-medium">
-                                                    {{ deviceSeriesLabel(project.deviceSeries) }}
-                                                </dd>
-                                            </div>
-                                            <!-- 设备类型 -->
-                                            <div>
-                                                <dt class="text-muted-foreground mb-0.5">
-                                                    {{ t('calib.colDeviceType') }}
-                                                </dt>
-                                                <dd class="font-medium">
-                                                    {{ deviceTypeLabel(project.deviceType) }}
-                                                </dd>
-                                            </div>
-                                            <!-- 相机数量 -->
-                                            <div>
-                                                <dt class="text-muted-foreground mb-0.5">
-                                                    {{ t('calib.colCameraCount2') }}
-                                                </dt>
-                                                <dd class="font-medium">
-                                                    {{ project.cameraCount }} {{ t('calib.cameraUnit') }}
-                                                </dd>
-                                            </div>
-                                            <!-- 结构光数量 -->
-                                            <div>
-                                                <dt class="text-muted-foreground mb-0.5">
-                                                    {{ t('calib.colProjectorCount') }}
-                                                </dt>
-                                                <dd class="font-medium">
-                                                    {{ project.projectorCount }} {{ t('calib.projectorUnit') }}
-                                                </dd>
-                                            </div>
-                                        </dl>
-                                    </div>
-
-                                    <!-- 右侧：设备布局SVG图 -->
-                                    <div class="flex-1 flex items-center justify-center min-w-0 min-h-0 self-stretch">
-                                        <!-- 2目0光：两相机左右水平排布 -->
-                                        <svg
-                                            v-if="project.deviceType === CalibDeviceType.TwoCamera0Light"
-                                            viewBox="0 0 400 220"
-                                            class="w-full max-h-72 object-contain"
-                                            aria-label="2目0光设备布局"
-                                        >
-                                            <!-- 基线 -->
-                                            <line
-                                                x1="100"
-                                                y1="110"
-                                                x2="300"
-                                                y2="110"
-                                                stroke="currentColor"
-                                                stroke-width="1.5"
-                                                stroke-dasharray="6,4"
-                                                opacity="0.4"
-                                            />
-                                            <!-- 主相机（左） -->
-                                            <rect
-                                                x="60"
-                                                y="70"
-                                                width="80"
-                                                height="80"
-                                                rx="8"
-                                                fill="none"
-                                                stroke="#60a5fa"
-                                                stroke-width="2"
-                                            />
-                                            <circle
-                                                cx="100"
-                                                cy="110"
-                                                r="16"
-                                                fill="#60a5fa"
-                                                fill-opacity="0.2"
-                                                stroke="#60a5fa"
-                                                stroke-width="1.5"
-                                            />
-                                            <circle cx="100" cy="110" r="6" fill="#60a5fa" />
-                                            <text
-                                                x="100"
-                                                y="175"
-                                                text-anchor="middle"
-                                                font-size="12"
-                                                fill="currentColor"
-                                                opacity="0.8"
-                                            >
-                                                主相机（左）
-                                            </text>
-                                            <!-- 从相机（右） -->
-                                            <rect
-                                                x="260"
-                                                y="70"
-                                                width="80"
-                                                height="80"
-                                                rx="8"
-                                                fill="none"
-                                                stroke="#34d399"
-                                                stroke-width="2"
-                                            />
-                                            <circle
-                                                cx="300"
-                                                cy="110"
-                                                r="16"
-                                                fill="#34d399"
-                                                fill-opacity="0.2"
-                                                stroke="#34d399"
-                                                stroke-width="1.5"
-                                            />
-                                            <circle cx="300" cy="110" r="6" fill="#34d399" />
-                                            <text
-                                                x="300"
-                                                y="175"
-                                                text-anchor="middle"
-                                                font-size="12"
-                                                fill="currentColor"
-                                                opacity="0.8"
-                                            >
-                                                从相机（右）
-                                            </text>
-                                            <!-- 基线标注 -->
-                                            <text
-                                                x="200"
-                                                y="105"
-                                                text-anchor="middle"
-                                                font-size="10"
-                                                fill="currentColor"
-                                                opacity="0.5"
-                                            >
-                                                基线
-                                            </text>
-                                        </svg>
-
-                                        <!-- 3目0光：三相机等腰三角形 -->
-                                        <svg
-                                            v-else-if="project.deviceType === CalibDeviceType.ThreeCamera0Light"
-                                            viewBox="0 0 400 280"
-                                            class="w-full max-h-72 object-contain"
-                                            aria-label="3目0光设备布局"
-                                        >
-                                            <!-- 连线 -->
-                                            <line
-                                                x1="200"
-                                                y1="70"
-                                                x2="90"
-                                                y2="195"
-                                                stroke="currentColor"
-                                                stroke-width="1.5"
-                                                stroke-dasharray="6,4"
-                                                opacity="0.35"
-                                            />
-                                            <line
-                                                x1="200"
-                                                y1="70"
-                                                x2="310"
-                                                y2="195"
-                                                stroke="currentColor"
-                                                stroke-width="1.5"
-                                                stroke-dasharray="6,4"
-                                                opacity="0.35"
-                                            />
-                                            <line
-                                                x1="90"
-                                                y1="195"
-                                                x2="310"
-                                                y2="195"
-                                                stroke="currentColor"
-                                                stroke-width="1.5"
-                                                stroke-dasharray="6,4"
-                                                opacity="0.35"
-                                            />
-                                            <!-- 主相机（中上） -->
-                                            <rect
-                                                x="160"
-                                                y="38"
-                                                width="80"
-                                                height="64"
-                                                rx="8"
-                                                fill="none"
-                                                stroke="#60a5fa"
-                                                stroke-width="2"
-                                            />
-                                            <circle
-                                                cx="200"
-                                                cy="70"
-                                                r="14"
-                                                fill="#60a5fa"
-                                                fill-opacity="0.2"
-                                                stroke="#60a5fa"
-                                                stroke-width="1.5"
-                                            />
-                                            <circle cx="200" cy="70" r="5" fill="#60a5fa" />
-                                            <text
-                                                x="200"
-                                                y="22"
-                                                text-anchor="middle"
-                                                font-size="11"
-                                                fill="currentColor"
-                                                opacity="0.85"
-                                            >
-                                                主相机（中上）
-                                            </text>
-                                            <!-- 左下相机 -->
-                                            <rect
-                                                x="48"
-                                                y="165"
-                                                width="80"
-                                                height="64"
-                                                rx="8"
-                                                fill="none"
-                                                stroke="#34d399"
-                                                stroke-width="2"
-                                            />
-                                            <circle
-                                                cx="88"
-                                                cy="197"
-                                                r="14"
-                                                fill="#34d399"
-                                                fill-opacity="0.2"
-                                                stroke="#34d399"
-                                                stroke-width="1.5"
-                                            />
-                                            <circle cx="88" cy="197" r="5" fill="#34d399" />
-                                            <text
-                                                x="88"
-                                                y="248"
-                                                text-anchor="middle"
-                                                font-size="11"
-                                                fill="currentColor"
-                                                opacity="0.85"
-                                            >
-                                                左下相机
-                                            </text>
-                                            <!-- 右下相机 -->
-                                            <rect
-                                                x="272"
-                                                y="165"
-                                                width="80"
-                                                height="64"
-                                                rx="8"
-                                                fill="none"
-                                                stroke="#f59e0b"
-                                                stroke-width="2"
-                                            />
-                                            <circle
-                                                cx="312"
-                                                cy="197"
-                                                r="14"
-                                                fill="#f59e0b"
-                                                fill-opacity="0.2"
-                                                stroke="#f59e0b"
-                                                stroke-width="1.5"
-                                            />
-                                            <circle cx="312" cy="197" r="5" fill="#f59e0b" />
-                                            <text
-                                                x="312"
-                                                y="248"
-                                                text-anchor="middle"
-                                                font-size="11"
-                                                fill="currentColor"
-                                                opacity="0.85"
-                                            >
-                                                右下相机
-                                            </text>
-                                        </svg>
-
-                                        <!-- 1目1光：主相机 + 中心结构光 -->
-                                        <svg
-                                            v-else-if="project.deviceType === CalibDeviceType.OneCamera1Light"
-                                            viewBox="0 0 400 220"
-                                            class="w-full max-h-72 object-contain"
-                                            aria-label="1目1光设备布局"
-                                        >
-                                            <!-- 结构光（中心） -->
-                                            <polygon
-                                                points="200,60 220,130 180,130"
-                                                fill="#f59e0b"
-                                                fill-opacity="0.25"
-                                                stroke="#f59e0b"
-                                                stroke-width="2"
-                                            />
-                                            <rect
-                                                x="180"
-                                                y="38"
-                                                width="40"
-                                                height="30"
-                                                rx="5"
-                                                fill="none"
-                                                stroke="#f59e0b"
-                                                stroke-width="2"
-                                            />
-                                            <text
-                                                x="200"
-                                                y="160"
-                                                text-anchor="middle"
-                                                font-size="12"
-                                                fill="currentColor"
-                                                opacity="0.8"
-                                            >
-                                                主结构光（中心）
-                                            </text>
-                                            <!-- 基线 -->
-                                            <line
-                                                x1="100"
-                                                y1="80"
-                                                x2="180"
-                                                y2="80"
-                                                stroke="currentColor"
-                                                stroke-width="1.5"
-                                                stroke-dasharray="5,4"
-                                                opacity="0.4"
-                                            />
-                                            <!-- 主相机（旁侧） -->
-                                            <rect
-                                                x="36"
-                                                y="50"
-                                                width="80"
-                                                height="72"
-                                                rx="8"
-                                                fill="none"
-                                                stroke="#60a5fa"
-                                                stroke-width="2"
-                                            />
-                                            <circle
-                                                cx="76"
-                                                cy="86"
-                                                r="16"
-                                                fill="#60a5fa"
-                                                fill-opacity="0.2"
-                                                stroke="#60a5fa"
-                                                stroke-width="1.5"
-                                            />
-                                            <circle cx="76" cy="86" r="6" fill="#60a5fa" />
-                                            <text
-                                                x="76"
-                                                y="145"
-                                                text-anchor="middle"
-                                                font-size="12"
-                                                fill="currentColor"
-                                                opacity="0.8"
-                                            >
-                                                主相机
-                                            </text>
-                                        </svg>
-
-                                        <!-- 2目1光：两相机 + 中间结构光 -->
-                                        <svg
-                                            v-else-if="project.deviceType === CalibDeviceType.TwoCamera1Light"
-                                            viewBox="0 0 400 220"
-                                            class="w-full max-h-72 object-contain"
-                                            aria-label="2目1光设备布局"
-                                        >
-                                            <!-- 基线 -->
-                                            <line
-                                                x1="80"
-                                                y1="110"
-                                                x2="320"
-                                                y2="110"
-                                                stroke="currentColor"
-                                                stroke-width="1.5"
-                                                stroke-dasharray="6,4"
-                                                opacity="0.35"
-                                            />
-                                            <!-- 主相机（左） -->
-                                            <rect
-                                                x="36"
-                                                y="70"
-                                                width="80"
-                                                height="80"
-                                                rx="8"
-                                                fill="none"
-                                                stroke="#60a5fa"
-                                                stroke-width="2"
-                                            />
-                                            <circle
-                                                cx="76"
-                                                cy="110"
-                                                r="15"
-                                                fill="#60a5fa"
-                                                fill-opacity="0.2"
-                                                stroke="#60a5fa"
-                                                stroke-width="1.5"
-                                            />
-                                            <circle cx="76" cy="110" r="5.5" fill="#60a5fa" />
-                                            <text
-                                                x="76"
-                                                y="175"
-                                                text-anchor="middle"
-                                                font-size="11"
-                                                fill="currentColor"
-                                                opacity="0.8"
-                                            >
-                                                主相机（左）
-                                            </text>
-                                            <!-- 结构光（中心） -->
-                                            <polygon
-                                                points="200,72 222,128 178,128"
-                                                fill="#f59e0b"
-                                                fill-opacity="0.25"
-                                                stroke="#f59e0b"
-                                                stroke-width="2"
-                                            />
-                                            <rect
-                                                x="178"
-                                                y="50"
-                                                width="44"
-                                                height="30"
-                                                rx="5"
-                                                fill="none"
-                                                stroke="#f59e0b"
-                                                stroke-width="2"
-                                            />
-                                            <text
-                                                x="200"
-                                                y="155"
-                                                text-anchor="middle"
-                                                font-size="11"
-                                                fill="currentColor"
-                                                opacity="0.8"
-                                            >
-                                                主结构光（中心）
-                                            </text>
-                                            <!-- 从相机（右） -->
-                                            <rect
-                                                x="284"
-                                                y="70"
-                                                width="80"
-                                                height="80"
-                                                rx="8"
-                                                fill="none"
-                                                stroke="#34d399"
-                                                stroke-width="2"
-                                            />
-                                            <circle
-                                                cx="324"
-                                                cy="110"
-                                                r="15"
-                                                fill="#34d399"
-                                                fill-opacity="0.2"
-                                                stroke="#34d399"
-                                                stroke-width="1.5"
-                                            />
-                                            <circle cx="324" cy="110" r="5.5" fill="#34d399" />
-                                            <text
-                                                x="324"
-                                                y="175"
-                                                text-anchor="middle"
-                                                font-size="11"
-                                                fill="currentColor"
-                                                opacity="0.8"
-                                            >
-                                                从相机（右）
-                                            </text>
-                                        </svg>
-
-                                        <!-- 3目1光：三相机等腰三角形 + 中心结构光 -->
-                                        <svg
-                                            v-else-if="project.deviceType === CalibDeviceType.ThreeCamera1Light"
-                                            viewBox="0 0 400 300"
-                                            class="w-full max-h-72 object-contain"
-                                            aria-label="3目1光设备布局"
-                                        >
-                                            <!-- 连线 -->
-                                            <line
-                                                x1="200"
-                                                y1="75"
-                                                x2="95"
-                                                y2="205"
-                                                stroke="currentColor"
-                                                stroke-width="1.5"
-                                                stroke-dasharray="6,4"
-                                                opacity="0.3"
-                                            />
-                                            <line
-                                                x1="200"
-                                                y1="75"
-                                                x2="305"
-                                                y2="205"
-                                                stroke="currentColor"
-                                                stroke-width="1.5"
-                                                stroke-dasharray="6,4"
-                                                opacity="0.3"
-                                            />
-                                            <line
-                                                x1="95"
-                                                y1="205"
-                                                x2="305"
-                                                y2="205"
-                                                stroke="currentColor"
-                                                stroke-width="1.5"
-                                                stroke-dasharray="6,4"
-                                                opacity="0.3"
-                                            />
-                                            <!-- 主相机（中上） -->
-                                            <rect
-                                                x="160"
-                                                y="44"
-                                                width="80"
-                                                height="64"
-                                                rx="8"
-                                                fill="none"
-                                                stroke="#60a5fa"
-                                                stroke-width="2"
-                                            />
-                                            <circle
-                                                cx="200"
-                                                cy="76"
-                                                r="14"
-                                                fill="#60a5fa"
-                                                fill-opacity="0.2"
-                                                stroke="#60a5fa"
-                                                stroke-width="1.5"
-                                            />
-                                            <circle cx="200" cy="76" r="5" fill="#60a5fa" />
-                                            <text
-                                                x="200"
-                                                y="28"
-                                                text-anchor="middle"
-                                                font-size="11"
-                                                fill="currentColor"
-                                                opacity="0.85"
-                                            >
-                                                主相机（中上）
-                                            </text>
-                                            <!-- 左下从相机 -->
-                                            <rect
-                                                x="50"
-                                                y="175"
-                                                width="80"
-                                                height="64"
-                                                rx="8"
-                                                fill="none"
-                                                stroke="#34d399"
-                                                stroke-width="2"
-                                            />
-                                            <circle
-                                                cx="90"
-                                                cy="207"
-                                                r="14"
-                                                fill="#34d399"
-                                                fill-opacity="0.2"
-                                                stroke="#34d399"
-                                                stroke-width="1.5"
-                                            />
-                                            <circle cx="90" cy="207" r="5" fill="#34d399" />
-                                            <text
-                                                x="90"
-                                                y="258"
-                                                text-anchor="middle"
-                                                font-size="11"
-                                                fill="currentColor"
-                                                opacity="0.85"
-                                            >
-                                                左下从相机
-                                            </text>
-                                            <!-- 右下从相机 -->
-                                            <rect
-                                                x="270"
-                                                y="175"
-                                                width="80"
-                                                height="64"
-                                                rx="8"
-                                                fill="none"
-                                                stroke="#f59e0b"
-                                                stroke-width="2"
-                                            />
-                                            <circle
-                                                cx="310"
-                                                cy="207"
-                                                r="14"
-                                                fill="#f59e0b"
-                                                fill-opacity="0.2"
-                                                stroke="#f59e0b"
-                                                stroke-width="1.5"
-                                            />
-                                            <circle cx="310" cy="207" r="5" fill="#f59e0b" />
-                                            <text
-                                                x="310"
-                                                y="258"
-                                                text-anchor="middle"
-                                                font-size="11"
-                                                fill="currentColor"
-                                                opacity="0.85"
-                                            >
-                                                右下从相机
-                                            </text>
-                                            <!-- 结构光（中心） -->
-                                            <polygon
-                                                points="200,148 212,180 188,180"
-                                                fill="#a78bfa"
-                                                fill-opacity="0.3"
-                                                stroke="#a78bfa"
-                                                stroke-width="1.5"
-                                            />
-                                            <rect
-                                                x="188"
-                                                y="134"
-                                                width="24"
-                                                height="18"
-                                                rx="4"
-                                                fill="none"
-                                                stroke="#a78bfa"
-                                                stroke-width="1.5"
-                                            />
-                                            <text
-                                                x="200"
-                                                y="196"
-                                                text-anchor="middle"
-                                                font-size="10"
-                                                fill="#a78bfa"
-                                                opacity="0.9"
-                                            >
-                                                结构光
-                                            </text>
-                                        </svg>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Step 1 底部导航 -->
-                        <div class="flex justify-end gap-2 px-4 py-3 border-t border-border/40 mt-auto">
-                            <Button size="small" :disabled="!project" @click="activeStep = '2'">
-                                {{ t('calib.nextStep') }}
-                            </Button>
-                        </div>
+                        <CalibStep1ProjectInfo
+                            :loading="loading"
+                            :project="project"
+                            :device-series-label="deviceSeriesLabel"
+                            :device-type-label="deviceTypeLabel"
+                            @next="activeStep = '2'"
+                        />
                     </StepPanel>
 
-                    <!-- ============ Step 2 相机参数配置 ============ -->
                     <StepPanel
                         value="2"
                         class="flex flex-col flex-1 min-h-0"
                         :pt="{ root: { class: '!bg-transparent' } }"
                     >
-                        <div class="flex flex-col flex-1 min-h-0 overflow-y-auto py-6 px-2">
-                            <!-- 加载中 -->
-                            <div
-                                v-if="step2Loading"
-                                class="flex items-center justify-center gap-2 py-16 text-muted-foreground text-sm"
-                            >
-                                <Loader2 class="size-4 animate-spin" />
-                                {{ t('common.loading') }}
-                            </div>
-
-                            <!-- 无相机 -->
-                            <div
-                                v-else-if="step2Cameras.length === 0"
-                                class="flex flex-col items-center justify-center gap-3 py-16 text-muted-foreground"
-                            >
-                                <Camera class="size-10 opacity-25" />
-                                <p class="text-sm">{{ t('calib.step2NoCamera') }}</p>
-                            </div>
-
-                            <!-- 相机列表（MiniProfiler 风格手风琴） -->
-                            <div v-else class="flex flex-col gap-2">
-                                <div
-                                    v-for="cam in step2Cameras"
-                                    :key="cam.id"
-                                    class="border border-border/50 rounded-lg overflow-hidden"
-                                >
-                                    <!-- 相机行头部 -->
-                                    <button
-                                        class="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-muted/30 transition-colors"
-                                        :class="{ 'bg-muted/20': expandedCameraId === cam.id }"
-                                        @click="toggleCameraExpand(cam.id)"
-                                    >
-                                        <Camera
-                                            :class="[
-                                                'size-4 shrink-0',
-                                                cam.isEnabled ? 'text-blue-400' : 'text-muted-foreground/40',
-                                            ]"
-                                        />
-                                        <span class="flex-1 font-medium text-sm">{{ cam.name }}</span>
-                                        <!-- 型号 -->
-                                        <span v-if="cam.model" class="text-xs text-muted-foreground hidden sm:inline">
-                                            {{ cam.model }}
-                                        </span>
-                                        <!-- 连接状态 -->
-                                        <span
-                                            v-if="cameraConnecting[cam.id]"
-                                            class="flex items-center gap-1 text-xs text-amber-400"
-                                        >
-                                            <Loader2 class="size-3 animate-spin" />
-                                            {{ t('calib.step2CameraConnecting') }}
-                                        </span>
-                                        <span v-else :class="['text-xs', cameraStatusColor(cam.status)]">
-                                            ● {{ cameraStatusLabel(cam.status) }}
-                                        </span>
-                                        <!-- 禁用标记 -->
-                                        <span v-if="!cam.isEnabled" class="text-xs text-muted-foreground/50 ml-1">
-                                            {{ t('calib.disabled') }}
-                                        </span>
-                                        <!-- 展开图标 -->
-                                        <ChevronDown
-                                            v-if="expandedCameraId === cam.id"
-                                            class="size-4 shrink-0 text-muted-foreground"
-                                        />
-                                        <ChevronRight v-else class="size-4 shrink-0 text-muted-foreground" />
-                                    </button>
-
-                                    <!-- 展开内容 -->
-                                    <div
-                                        v-if="expandedCameraId === cam.id"
-                                        class="border-t border-border/40 bg-background/20 px-5 py-4"
-                                    >
-                                        <!-- 已禁用提示 -->
-                                        <div
-                                            v-if="!cam.isEnabled"
-                                            class="flex items-center gap-2 text-sm text-muted-foreground py-2"
-                                        >
-                                            <AlertCircle class="size-4 shrink-0" />
-                                            {{ t('calib.step2CameraDisabled') }}
-                                        </div>
-
-                                        <!-- 正在连接中占位 -->
-                                        <div
-                                            v-else-if="cameraConnecting[cam.id]"
-                                            class="flex items-center gap-2 text-sm text-muted-foreground py-2"
-                                        >
-                                            <Loader2 class="size-4 animate-spin" />
-                                            {{ t('calib.step2CameraConnecting') }}
-                                        </div>
-
-                                        <!-- 参数表单 -->
-                                        <div v-else class="space-y-5">
-                                            <!-- 分区：传感器信息 -->
-                                            <div>
-                                                <h4
-                                                    class="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3"
-                                                >
-                                                    {{ t('calib.step2CmosSensorSize') }}
-                                                </h4>
-                                                <div class="grid grid-cols-1 sm:grid-cols-3 gap-x-6 gap-y-3 text-sm">
-                                                    <!-- CMOS 尺寸选择 -->
-                                                    <div class="sm:col-span-1">
-                                                        <label class="block text-xs text-muted-foreground mb-1">
-                                                            {{ t('calib.step2CmosSensorSize') }}
-                                                        </label>
-                                                        <Select
-                                                            v-model="cameraForms[cam.id].sensorSize"
-                                                            :options="CMOS_SENSOR_SIZES"
-                                                            :option-label="(item: CmosSensorSize) => t(item.labelKey)"
-                                                            option-value="code"
-                                                            :placeholder="t('common.pleaseSelect')"
-                                                            size="small"
-                                                            class="w-full !text-xs"
-                                                            :pt="{
-                                                                root: { class: '!py-0 !px-2 !h-7 !flex !items-center' },
-                                                                label: { class: '!text-xs !py-0' },
-                                                            }"
-                                                        />
-                                                    </div>
-                                                    <!-- 传感器宽度(mm) 自动填入 -->
-                                                    <div>
-                                                        <label class="block text-xs text-muted-foreground mb-1">
-                                                            {{ t('calib.step2SensorWidth') }}
-                                                        </label>
-                                                        <div
-                                                            class="h-7 flex items-center text-xs px-2 rounded border border-border/40 bg-muted/20 text-muted-foreground"
-                                                        >
-                                                            {{
-                                                                getSelectedCmosSize(cameraForms[cam.id]?.sensorSize)
-                                                                    ?.widthMm ?? '—'
-                                                            }}
-                                                        </div>
-                                                    </div>
-                                                    <!-- 传感器高度(mm) 自动填入 -->
-                                                    <div>
-                                                        <label class="block text-xs text-muted-foreground mb-1">
-                                                            {{ t('calib.step2SensorHeight') }}
-                                                        </label>
-                                                        <div
-                                                            class="h-7 flex items-center text-xs px-2 rounded border border-border/40 bg-muted/20 text-muted-foreground"
-                                                        >
-                                                            {{
-                                                                getSelectedCmosSize(cameraForms[cam.id]?.sensorSize)
-                                                                    ?.heightMm ?? '—'
-                                                            }}
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            <!-- 分区：镜头参数 -->
-                                            <div>
-                                                <h4
-                                                    class="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3"
-                                                >
-                                                    {{ t('calib.step2FocalLength') }}
-                                                </h4>
-                                                <div class="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-3 text-sm">
-                                                    <!-- 镜头标称焦距 -->
-                                                    <div>
-                                                        <label class="block text-xs text-muted-foreground mb-1">
-                                                            {{ t('calib.step2FocalLength') }}
-                                                        </label>
-                                                        <InputNumber
-                                                            v-model="cameraForms[cam.id].lensFocalLength"
-                                                            :min="0"
-                                                            :max="10000"
-                                                            :max-fraction-digits="2"
-                                                            size="small"
-                                                            class="w-full"
-                                                            :input-class="'!text-xs !h-7 !py-0'"
-                                                        />
-                                                    </div>
-                                                    <!-- 最大光圈 -->
-                                                    <div>
-                                                        <label class="block text-xs text-muted-foreground mb-1">
-                                                            {{ t('calib.step2MaxAperture') }}
-                                                        </label>
-                                                        <InputNumber
-                                                            v-model="cameraForms[cam.id].maxAperture"
-                                                            :min="0.7"
-                                                            :max="64"
-                                                            :max-fraction-digits="1"
-                                                            size="small"
-                                                            class="w-full"
-                                                            :input-class="'!text-xs !h-7 !py-0'"
-                                                        />
-                                                    </div>
-                                                    <!-- 最小光圈 -->
-                                                    <div>
-                                                        <label class="block text-xs text-muted-foreground mb-1">
-                                                            {{ t('calib.step2MinAperture') }}
-                                                        </label>
-                                                        <InputNumber
-                                                            v-model="cameraForms[cam.id].minAperture"
-                                                            :min="0.7"
-                                                            :max="64"
-                                                            :max-fraction-digits="1"
-                                                            size="small"
-                                                            class="w-full"
-                                                            :input-class="'!text-xs !h-7 !py-0'"
-                                                        />
-                                                    </div>
-                                                    <!-- 当前光圈 -->
-                                                    <div>
-                                                        <label class="block text-xs text-muted-foreground mb-1">
-                                                            {{ t('calib.step2CurrentAperture') }}
-                                                        </label>
-                                                        <InputNumber
-                                                            v-model="cameraForms[cam.id].currentAperture"
-                                                            :min="0.7"
-                                                            :max="64"
-                                                            :max-fraction-digits="1"
-                                                            size="small"
-                                                            class="w-full"
-                                                            :input-class="'!text-xs !h-7 !py-0'"
-                                                        />
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            <!-- 分区：从相机读取的硬件参数 -->
-                                            <div>
-                                                <div class="flex items-center justify-between mb-3">
-                                                    <h4
-                                                        class="text-xs font-semibold text-muted-foreground uppercase tracking-wide"
-                                                    >
-                                                        {{ t('calib.step2ImageResolution') }} &amp;
-                                                        {{ t('calib.step2ExposureRange') }}
-                                                    </h4>
-                                                    <Button
-                                                        text
-                                                        severity="secondary"
-                                                        size="small"
-                                                        :disabled="hardwareLoading[cam.id]"
-                                                        @click="readHardwareParams(cam)"
-                                                    >
-                                                        <Loader2
-                                                            v-if="hardwareLoading[cam.id]"
-                                                            class="size-3 animate-spin mr-1"
-                                                        />
-                                                        <RefreshCcw v-else class="size-3 mr-1" />
-                                                        <span class="text-xs">
-                                                            {{
-                                                                hardwareLoading[cam.id]
-                                                                    ? t('calib.step2ReadingCamera')
-                                                                    : t('calib.step2ReadFromCamera')
-                                                            }}
-                                                        </span>
-                                                    </Button>
-                                                </div>
-                                                <div class="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-3 text-sm">
-                                                    <!-- 分辨率 宽 -->
-                                                    <div>
-                                                        <label class="block text-xs text-muted-foreground mb-1">
-                                                            {{ t('calib.step2ImageWidth') }}
-                                                        </label>
-                                                        <div
-                                                            class="h-7 flex items-center text-xs px-2 rounded border border-border/40 bg-muted/20 text-muted-foreground"
-                                                        >
-                                                            {{ cameraHardware[cam.id]?.imageWidthPixels ?? '—' }}
-                                                        </div>
-                                                    </div>
-                                                    <!-- 分辨率 高 -->
-                                                    <div>
-                                                        <label class="block text-xs text-muted-foreground mb-1">
-                                                            {{ t('calib.step2ImageHeight') }}
-                                                        </label>
-                                                        <div
-                                                            class="h-7 flex items-center text-xs px-2 rounded border border-border/40 bg-muted/20 text-muted-foreground"
-                                                        >
-                                                            {{ cameraHardware[cam.id]?.imageHeightPixels ?? '—' }}
-                                                        </div>
-                                                    </div>
-                                                    <!-- 像素尺寸（计算值） -->
-                                                    <div>
-                                                        <label class="block text-xs text-muted-foreground mb-1">
-                                                            {{ t('calib.step2PixelSizeCalc') }}
-                                                        </label>
-                                                        <div
-                                                            class="h-7 flex items-center text-xs px-2 rounded border border-border/40 bg-muted/20 text-muted-foreground"
-                                                        >
-                                                            {{ calcPixelSize(cam.id) ?? '—' }}
-                                                        </div>
-                                                    </div>
-                                                    <!-- 最小曝光时间 -->
-                                                    <div>
-                                                        <label class="block text-xs text-muted-foreground mb-1">
-                                                            {{ t('calib.step2ExposureMin') }} (μs)
-                                                        </label>
-                                                        <div
-                                                            class="h-7 flex items-center text-xs px-2 rounded border border-border/40 bg-muted/20 text-muted-foreground"
-                                                        >
-                                                            {{ cameraHardware[cam.id]?.exposureTimeMinUs ?? '—' }}
-                                                        </div>
-                                                    </div>
-                                                    <!-- 最大曝光时间 -->
-                                                    <div>
-                                                        <label class="block text-xs text-muted-foreground mb-1">
-                                                            {{ t('calib.step2ExposureMax') }} (μs)
-                                                        </label>
-                                                        <div
-                                                            class="h-7 flex items-center text-xs px-2 rounded border border-border/40 bg-muted/20 text-muted-foreground"
-                                                        >
-                                                            {{ cameraHardware[cam.id]?.exposureTimeMaxUs ?? '—' }}
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            <!-- 保存按钮 -->
-                                            <div class="flex justify-end pt-2">
-                                                <Button
-                                                    size="small"
-                                                    :disabled="cameraSaving[cam.id]"
-                                                    @click="saveCameraParams(cam)"
-                                                >
-                                                    <Loader2
-                                                        v-if="cameraSaving[cam.id]"
-                                                        class="size-3.5 animate-spin mr-1.5"
-                                                    />
-                                                    <Save v-else class="size-3.5 mr-1.5" />
-                                                    {{
-                                                        cameraSaving[cam.id]
-                                                            ? t('calib.step2Saving')
-                                                            : t('calib.step2SaveParam')
-                                                    }}
-                                                </Button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Step 2 底部导航 -->
-                        <div class="flex justify-between gap-2 px-4 py-3 border-t border-border/40 mt-auto">
-                            <Button severity="secondary" outlined size="small" @click="activeStep = '1'">
-                                {{ t('calib.prevStep') }}
-                            </Button>
-                            <Button size="small" @click="activeStep = '3'">
-                                {{ t('calib.nextStep') }}
-                            </Button>
-                        </div>
+                        <CalibStep2CameraConfig
+                            :step2-loading="step2Loading"
+                            :step2-cameras="step2Cameras"
+                            :expanded-camera-id="expandedCameraId"
+                            :camera-connecting="cameraConnecting"
+                            :camera-forms="cameraForms"
+                            :camera-hardware="cameraHardware"
+                            :hardware-loading="hardwareLoading"
+                            :camera-saving="cameraSaving"
+                            :cmos-sensor-sizes="CMOS_SENSOR_SIZES"
+                            :get-selected-cmos-size="getSelectedCmosSize"
+                            :calc-pixel-size="calcPixelSize"
+                            :toggle-camera-expand="toggleCameraExpand"
+                            :read-hardware-params="readHardwareParams"
+                            :save-camera-params="saveCameraParams"
+                            :camera-status-color="cameraStatusColor"
+                            :camera-status-label="cameraStatusLabel"
+                            @prev="activeStep = '1'"
+                            @next="activeStep = '3'"
+                        />
                     </StepPanel>
 
-                    <!-- ============ Step 3 投影机参数 ============ -->
                     <StepPanel
                         value="3"
                         class="flex flex-col flex-1 min-h-0"
                         :pt="{ root: { class: '!bg-transparent' } }"
                     >
-                        <div v-if="step3Loading" class="flex flex-1 items-center justify-center">
-                            <Loader2 class="size-6 animate-spin text-muted-foreground" />
-                        </div>
-                        <template v-else>
-                            <div class="flex flex-1 min-h-0 overflow-hidden">
-                                <!-- 左侧：投影机选择 + 光栅设置 -->
-                                <div
-                                    class="w-72 shrink-0 border-r border-border/40 flex flex-col overflow-y-auto p-4 gap-4"
-                                >
-                                    <!-- 投影机选择 -->
-                                    <div>
-                                        <label class="block text-xs text-muted-foreground mb-1.5">
-                                            {{ t('calib.step3ProjectorSelect') }}
-                                        </label>
-                                        <div
-                                            v-if="step3Projectors.length === 0"
-                                            class="flex items-center gap-1.5 text-xs text-amber-400"
-                                        >
-                                            <AlertCircle class="size-3.5 shrink-0" />
-                                            {{ t('calib.step3NoProjector') }}
-                                        </div>
-                                        <Select
-                                            v-else
-                                            v-model="selectedProjectorId"
-                                            :options="step3Projectors"
-                                            option-label="name"
-                                            option-value="id"
-                                            size="small"
-                                            class="w-full !text-xs"
-                                            :pt="{
-                                                root: { class: '!py-0 !px-2 !h-7 !flex !items-center' },
-                                                label: { class: '!text-xs !py-0' },
-                                            }"
-                                        />
-                                    </div>
-
-                                    <!-- 光栅设置面板 -->
-                                    <div class="rounded-lg border border-border/40 bg-muted/10 p-3 flex flex-col gap-3">
-                                        <h3 class="text-xs font-semibold text-foreground/80">
-                                            {{ t('calib.step3FringeSettings') }}
-                                        </h3>
-
-                                        <!-- 条纹模式 -->
-                                        <div>
-                                            <label class="block text-xs text-muted-foreground mb-1">
-                                                {{ t('calib.step3FringeMode') }}
-                                            </label>
-                                            <div class="flex gap-1.5">
-                                                <Button
-                                                    :severity="fringeMode === 'horizontal' ? 'primary' : 'secondary'"
-                                                    size="small"
-                                                    class="!text-xs flex-1"
-                                                    @click="fringeMode = 'horizontal'"
-                                                >
-                                                    {{ t('calib.step3FringeModeH') }}
-                                                </Button>
-                                                <Button
-                                                    :severity="fringeMode === 'vertical' ? 'primary' : 'secondary'"
-                                                    size="small"
-                                                    class="!text-xs flex-1"
-                                                    @click="fringeMode = 'vertical'"
-                                                >
-                                                    {{ t('calib.step3FringeModeV') }}
-                                                </Button>
-                                            </div>
-                                        </div>
-
-                                        <!-- 条纹类型 -->
-                                        <div>
-                                            <label class="block text-xs text-muted-foreground mb-1">
-                                                {{ t('calib.step3FringeType') }}
-                                            </label>
-                                            <div class="flex gap-1.5">
-                                                <Button
-                                                    :severity="fringeType === 'bw' ? 'primary' : 'secondary'"
-                                                    size="small"
-                                                    class="!text-xs flex-1"
-                                                    @click="fringeType = 'bw'"
-                                                >
-                                                    {{ t('calib.step3FringeTypeBW') }}
-                                                </Button>
-                                                <Button
-                                                    :severity="fringeType === 'wb' ? 'primary' : 'secondary'"
-                                                    size="small"
-                                                    class="!text-xs flex-1"
-                                                    @click="fringeType = 'wb'"
-                                                >
-                                                    {{ t('calib.step3FringeTypeWB') }}
-                                                </Button>
-                                            </div>
-                                        </div>
-
-                                        <!-- 宽度像素（只读 + 从光机读取） -->
-                                        <div>
-                                            <label class="block text-xs text-muted-foreground mb-1">
-                                                {{ t('calib.step3WidthPixels') }}
-                                            </label>
-                                            <div class="flex gap-1.5 items-center">
-                                                <div
-                                                    class="flex-1 h-7 flex items-center text-xs px-2 rounded border border-border/40 bg-muted/20 text-muted-foreground"
-                                                >
-                                                    {{
-                                                        projectorWidthPixels != null
-                                                            ? `${projectorWidthPixels} px`
-                                                            : '—'
-                                                    }}
-                                                </div>
-                                                <Button
-                                                    severity="secondary"
-                                                    outlined
-                                                    size="small"
-                                                    :disabled="!selectedProjectorId || projectorReading"
-                                                    class="!text-xs shrink-0"
-                                                    @click="void fetchProjectorResolution()"
-                                                >
-                                                    <Loader2 v-if="projectorReading" class="size-3 animate-spin mr-1" />
-                                                    {{
-                                                        projectorReading
-                                                            ? t('calib.step3Reading')
-                                                            : t('calib.step3GetFromProjector')
-                                                    }}
-                                                </Button>
-                                            </div>
-                                            <div
-                                                v-if="projectorPixelMode"
-                                                class="text-[10px] text-muted-foreground mt-1"
-                                            >
-                                                {{ t('calib.step3PixelMode') }}: {{ projectorPixelMode }}
-                                            </div>
-                                        </div>
-
-                                        <!-- 高度像素（用户输入） -->
-                                        <div>
-                                            <label class="block text-xs text-muted-foreground mb-1">
-                                                {{ t('calib.step3HeightPixels') }}
-                                            </label>
-                                            <InputNumber
-                                                v-model="projectorHeightInput"
-                                                :min="1"
-                                                :max="10000"
-                                                :max-fraction-digits="0"
-                                                size="small"
-                                                class="w-full"
-                                                :input-class="'!text-xs !h-7 !py-0'"
-                                            />
-                                        </div>
-
-                                        <!-- 周期数 -->
-                                        <div>
-                                            <label class="block text-xs text-muted-foreground mb-1">
-                                                {{ t('calib.step3PeriodCount') }}
-                                            </label>
-                                            <InputNumber
-                                                v-model="fringe3PeriodCount"
-                                                :min="1"
-                                                :max="1000"
-                                                :max-fraction-digits="0"
-                                                size="small"
-                                                class="w-full"
-                                                :input-class="'!text-xs !h-7 !py-0'"
-                                            />
-                                            <p v-if="fringe3PeriodError" class="text-[10px] text-red-400 mt-1">
-                                                {{ fringe3PeriodError }}
-                                            </p>
-                                        </div>
-
-                                        <!-- 生成图片数量 -->
-                                        <div>
-                                            <label class="block text-xs text-muted-foreground mb-1">
-                                                {{ t('calib.step3ImageCount') }}
-                                            </label>
-                                            <InputNumber
-                                                v-model="fringe3ImageCount"
-                                                :min="1"
-                                                :max="100"
-                                                :max-fraction-digits="0"
-                                                size="small"
-                                                class="w-full"
-                                                :input-class="'!text-xs !h-7 !py-0'"
-                                            />
-                                        </div>
-
-                                        <!-- 相移 -->
-                                        <div>
-                                            <label class="block text-xs text-muted-foreground mb-1">
-                                                {{ t('calib.step3PhaseShift') }}
-                                            </label>
-                                            <InputNumber
-                                                v-model="fringe3PhaseShift"
-                                                :min="1"
-                                                :max="fringe3PeriodCount - 1"
-                                                :max-fraction-digits="0"
-                                                size="small"
-                                                class="w-full"
-                                                :input-class="'!text-xs !h-7 !py-0'"
-                                            />
-                                            <p v-if="fringe3PhaseError" class="text-[10px] text-red-400 mt-1">
-                                                {{ fringe3PhaseError }}
-                                            </p>
-                                        </div>
-                                    </div>
-
-                                    <!-- 操作按钮 -->
-                                    <div class="flex gap-2">
-                                        <Button
-                                            size="small"
-                                            :disabled="!fringe3CanGenerate || generatingFringe"
-                                            class="flex-1 !text-xs"
-                                            @click="generateFringeImages"
-                                        >
-                                            <Loader2 v-if="generatingFringe" class="size-3 animate-spin mr-1.5" />
-                                            {{ t('calib.step3GenerateImages') }}
-                                        </Button>
-                                        <Button
-                                            severity="secondary"
-                                            outlined
-                                            size="small"
-                                            :disabled="
-                                                !generatedFringeImages.length ||
-                                                !projectorWidthPixels ||
-                                                downloadingFringe
-                                            "
-                                            class="flex-1 !text-xs"
-                                            @click="void triggerFringeDownload()"
-                                        >
-                                            <Loader2 v-if="downloadingFringe" class="size-3 animate-spin mr-1.5" />
-                                            {{
-                                                downloadingFringe
-                                                    ? `${t('calib.step3Downloading')} ${fringeDownloadProgress}%`
-                                                    : t('calib.step3DownloadImages')
-                                            }}
-                                        </Button>
-                                    </div>
-                                </div>
-
-                                <!-- 右侧：图像列表 + 预览 -->
-                                <div class="flex flex-1 min-w-0 min-h-0 overflow-hidden">
-                                    <!-- 图像列表 -->
-                                    <div
-                                        class="w-28 shrink-0 border-r border-border/40 overflow-y-auto p-2 flex flex-col gap-1"
-                                    >
-                                        <div class="text-[10px] text-muted-foreground px-1 mb-1">
-                                            {{ t('calib.step3ImageList') }}
-                                        </div>
-                                        <div
-                                            v-if="generatedFringeImages.length === 0"
-                                            class="text-[10px] text-muted-foreground/60 text-center py-4"
-                                        >
-                                            {{ t('calib.step3NoImages') }}
-                                        </div>
-                                        <button
-                                            v-for="img in generatedFringeImages"
-                                            :key="img.index"
-                                            :class="[
-                                                'rounded px-2 py-1 text-left text-xs transition-colors',
-                                                selectedFringeImageIdx === img.index
-                                                    ? 'bg-primary/10 text-primary'
-                                                    : 'text-muted-foreground hover:bg-muted/20',
-                                            ]"
-                                            @click="selectedFringeImageIdx = img.index"
-                                        >
-                                            {{ img.label }}
-                                        </button>
-                                    </div>
-
-                                    <!-- 预览画布 -->
-                                    <div class="flex flex-1 flex-col min-w-0 min-h-0 p-4">
-                                        <div class="text-[10px] text-muted-foreground mb-2">
-                                            {{ t('calib.step3ImagePreview') }}
-                                        </div>
-                                        <div
-                                            class="flex-1 min-h-0 flex items-center justify-center rounded border border-border/40 bg-black/20"
-                                        >
-                                            <canvas
-                                                v-if="generatedFringeImages.length > 0"
-                                                ref="previewCanvasRef"
-                                                :width="projectorWidthPixels ?? 512"
-                                                :height="projectorHeightInput || 512"
-                                                class="max-w-full max-h-full"
-                                                style="image-rendering: pixelated; object-fit: contain"
-                                            />
-                                            <div v-else class="text-xs text-muted-foreground/50">
-                                                {{ t('calib.step3NoImages') }}
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Step 3 底部导航 -->
-                            <div class="flex justify-between gap-2 px-4 py-3 border-t border-border/40 mt-auto">
-                                <Button severity="secondary" outlined size="small" @click="activeStep = '2'">
-                                    {{ t('calib.prevStep') }}
-                                </Button>
-                                <Button size="small" @click="activeStep = '4'">
-                                    {{ t('calib.nextStep') }}
-                                </Button>
-                            </div>
-                        </template>
+                        <CalibStep3ProjectorConfig
+                            :step3-loading="step3Loading"
+                            :step3-projectors="step3Projectors"
+                            :selected-projector-id="selectedProjectorId"
+                            :projector-width-pixels="projectorWidthPixels"
+                            :projector-pixel-mode="projectorPixelMode"
+                            :projector-reading="projectorReading"
+                            :fringe-mode="fringeMode"
+                            :fringe-type="fringeType"
+                            :projector-height-input="projectorHeightInput"
+                            :fringe3-period-count="fringe3PeriodCount"
+                            :fringe3-image-count="fringe3ImageCount"
+                            :fringe3-phase-shift="fringe3PhaseShift"
+                            :fringe3-period-error="fringe3PeriodError"
+                            :fringe3-phase-error="fringe3PhaseError"
+                            :fringe3-can-generate="fringe3CanGenerate"
+                            :generating-fringe="generatingFringe"
+                            :generated-fringe-images="generatedFringeImages"
+                            :selected-fringe-image-idx="selectedFringeImageIdx"
+                            :downloading-fringe="downloadingFringe"
+                            :fringe-download-progress="fringeDownloadProgress"
+                            :fetch-projector-resolution="fetchProjectorResolution"
+                            :generate-fringe-images="generateFringeImages"
+                            :trigger-fringe-download="triggerFringeDownload"
+                            @prev="activeStep = '2'"
+                            @next="activeStep = '4'"
+                            @update:selected-projector-id="selectedProjectorId = $event"
+                            @update:fringe-mode="fringeMode = $event"
+                            @update:fringe-type="fringeType = $event"
+                            @update:projector-height-input="projectorHeightInput = $event"
+                            @update:fringe3-period-count="fringe3PeriodCount = $event"
+                            @update:fringe3-image-count="fringe3ImageCount = $event"
+                            @update:fringe3-phase-shift="fringe3PhaseShift = $event"
+                            @update:selected-fringe-image-idx="selectedFringeImageIdx = $event"
+                        />
                     </StepPanel>
 
-                    <!-- ============ Step 4 ~ 7 占位 ============ -->
                     <StepPanel
-                        v-for="n in ['4', '5', '6', '7']"
+                        value="4"
+                        class="flex flex-col flex-1 min-h-0"
+                        :pt="{ root: { class: '!bg-transparent' } }"
+                    >
+                        <div class="flex flex-1 min-h-0 flex-col">
+                            <CalibStep4MotorConfig :project="project" />
+                        </div>
+                        <div class="flex justify-between gap-2 px-4 py-3 border-t border-border/40 mt-auto">
+                            <Button severity="secondary" outlined size="small" @click="activeStep = '3'">
+                                {{ t('calib.prevStep') }}
+                            </Button>
+                            <Button size="small" @click="activeStep = '5'">
+                                {{ t('calib.nextStep') }}
+                            </Button>
+                        </div>
+                    </StepPanel>
+
+                    <StepPanel
+                        value="5"
+                        class="flex flex-col flex-1 min-h-0"
+                        :pt="{ root: { class: '!bg-transparent' } }"
+                    >
+                        <div class="flex flex-1 min-h-0 flex-col">
+                            <CalibStep5CameraCalib :project="project" :selected-projector-id="selectedProjectorId" />
+                        </div>
+                        <div class="flex justify-between gap-2 px-4 py-3 border-t border-border/40 mt-auto">
+                            <Button severity="secondary" outlined size="small" @click="activeStep = '4'">
+                                {{ t('calib.prevStep') }}
+                            </Button>
+                            <Button size="small" @click="activeStep = '6'">
+                                {{ t('calib.nextStep') }}
+                            </Button>
+                        </div>
+                    </StepPanel>
+
+                    <StepPanel
+                        v-for="n in ['6', '7']"
                         :key="n"
                         :value="n"
                         class="flex flex-col flex-1 min-h-0"
                         :pt="{ root: { class: '!bg-transparent' } }"
                     >
-                        <div class="flex flex-1 flex-col items-center justify-center py-16 text-muted-foreground">
-                            <span class="text-4xl mb-3 opacity-30">🚧</span>
-                            <p class="text-sm">{{ t('calib.stepComingSoon') }}</p>
-                        </div>
-                        <div class="flex justify-between gap-2 px-4 py-3 border-t border-border/40 mt-auto">
-                            <Button
-                                severity="secondary"
-                                outlined
-                                size="small"
-                                @click="activeStep = String(Number(n) - 1)"
-                            >
-                                {{ t('calib.prevStep') }}
-                            </Button>
-                            <Button v-if="n !== '7'" size="small" @click="activeStep = String(Number(n) + 1)">
-                                {{ t('calib.nextStep') }}
-                            </Button>
-                        </div>
+                        <CalibStepComingSoon
+                            :step="n"
+                            :show-next="n !== '7'"
+                            @prev="activeStep = String(Number(n) - 1)"
+                            @next="activeStep = String(Number(n) + 1)"
+                        />
                     </StepPanel>
                 </StepPanels>
             </Stepper>

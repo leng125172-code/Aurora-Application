@@ -115,7 +115,8 @@ public interface IAiModelAppService : IApplicationService
     Task<AiModelDto> UnloadAsync(Guid id);
 
     /// <summary>
-    /// 清理文件已丢失的孤立 AI 模型记录。
+    /// 清理孤立 AI 模型数据。
+    /// 会同步处理缺失原始文件的模型记录、损坏的转换产物引用、无记录物理文件和空目录。
     /// </summary>
     Task<int> CleanUpOrphanedRecordsAsync();
 }

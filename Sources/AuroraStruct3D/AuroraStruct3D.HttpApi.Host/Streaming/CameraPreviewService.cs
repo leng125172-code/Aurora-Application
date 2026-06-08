@@ -883,16 +883,44 @@ public class CameraPreviewService : ICameraStreamingService, IHostedService, IDi
         if (!_sessions.TryRemove(cameraId, out CameraPreviewSession? session))
             return null;
 
-        // 等待预览线程退出（最多 2 秒）
+        // 先主动打断采集等待，避免 Standard 外触发模式下线程仍阻塞在 WaitForFrame。
+        if (session.Thread.IsAlive && session.OwnsCapture)
+        {
+            try
+            {
+                using IServiceScope scope = _scopeFactory.CreateScope();
+                ITucamCameraService tucamService =
+                    scope.ServiceProvider.GetRequiredService<ITucamCameraService>();
+
+                if (tucamService.IsCapturing(session.DeviceIndex))
+                {
+                    await tucamService.StopCaptureAsync(session.DeviceIndex);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "相机 {Id} StopSession 主动停止采集失败", cameraId);
+            }
+        }
+
+        bool joined = true;
         if (session.Thread.IsAlive)
         {
-            await Task.Run(() => session.Thread.Join(TimeSpan.FromSeconds(2)));
+            joined = await Task.Run(() => session.Thread.Join(TimeSpan.FromSeconds(5)));
         }
 
         // 系统强制释放：null 表示不检查 clientSessionId（无论谁持有都释放）
         _sessionManager.Release(cameraId, clientSessionId: null);
 
-        _logger.LogInformation("相机 {Id} 实时预览已停止", cameraId);
+        if (joined)
+        {
+            _logger.LogInformation("相机 {Id} 实时预览已停止", cameraId);
+        }
+        else
+        {
+            _logger.LogWarning("相机 {Id} 预览线程在超时时间内未退出，会话已移除", cameraId);
+        }
+
         return session;
     }
 

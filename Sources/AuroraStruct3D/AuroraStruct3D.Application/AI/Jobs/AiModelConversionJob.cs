@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Security.Cryptography;
+using AuroraStruct3D.AI.Dtos;
 using Hangfire;
 using Microsoft.Extensions.Logging;
 using Volo.Abp;
@@ -12,13 +13,14 @@ namespace AuroraStruct3D.AI.Jobs;
 /// AI 模型转换后台任务。
 /// 负责下载 ONNX 原始文件、调用 Python 转换器并保存转换产物。
 /// </summary>
-public sealed class AiModelConversionJob : ITransientDependency
+public class AiModelConversionJob : ITransientDependency
 {
     private readonly IAiModelRepository _aiModelRepository;
     private readonly IAiModelFileRepository _aiModelFileRepository;
     private readonly IAiModelOperationLogRepository _operationLogRepository;
     private readonly IBlobContainer<AiModelBlobContainer> _blobContainer;
     private readonly IAiModelPythonConversionExecutor _pythonConversionExecutor;
+    private readonly IAiModelConversionNotifier _notifier;
     private readonly ILogger<AiModelConversionJob> _logger;
 
     public AiModelConversionJob(
@@ -27,6 +29,7 @@ public sealed class AiModelConversionJob : ITransientDependency
         IAiModelOperationLogRepository operationLogRepository,
         IBlobContainer<AiModelBlobContainer> blobContainer,
         IAiModelPythonConversionExecutor pythonConversionExecutor,
+        IAiModelConversionNotifier notifier,
         ILogger<AiModelConversionJob> logger
     )
     {
@@ -35,6 +38,7 @@ public sealed class AiModelConversionJob : ITransientDependency
         _operationLogRepository = operationLogRepository;
         _blobContainer = blobContainer;
         _pythonConversionExecutor = pythonConversionExecutor;
+        _notifier = notifier;
         _logger = logger;
     }
 
@@ -62,6 +66,20 @@ public sealed class AiModelConversionJob : ITransientDependency
             return;
         }
 
+        if (
+            sourceFiles.Any(file =>
+                file.ConversionStatus != AiModelFileConversionStatus.Pending
+                || file.ConversionTargetType != args.TargetType
+            )
+        )
+        {
+            _logger.LogInformation(
+                "[AiModelConversionJob] 模型 {ModelId} 的转换状态已变化，跳过重复执行。",
+                args.ModelId
+            );
+            return;
+        }
+
         string workDirectory = Path.Combine(
             Path.GetTempPath(),
             "aurora-ai-conversion",
@@ -77,6 +95,16 @@ public sealed class AiModelConversionJob : ITransientDependency
                 file.UpdateConversionState(AiModelFileConversionStatus.Converting, args.TargetType);
                 await _aiModelFileRepository.UpdateAsync(file, autoSave: true);
             }
+
+            await _notifier.NotifyStartedAsync(
+                CreateConversionStateDto(
+                    sourceFiles,
+                    args.TargetType,
+                    AiModelFileConversionStatus.Converting,
+                    null,
+                    DateTime.UtcNow
+                )
+            );
 
             List<AiModelPythonConversionInputFile> inputFiles = [];
             foreach (AiModelFile sourceFile in sourceFiles)
@@ -109,6 +137,7 @@ public sealed class AiModelConversionJob : ITransientDependency
                 {
                     ModelId = model.Id,
                     ModelName = model.Name,
+                    GenerationCondition = model.GenerationCondition,
                     TargetType = args.TargetType,
                     WorkingDirectory = workDirectory,
                     InputFiles = inputFiles,
@@ -180,6 +209,16 @@ public sealed class AiModelConversionJob : ITransientDependency
                 await _aiModelFileRepository.UpdateAsync(file, autoSave: true);
             }
 
+            await _notifier.NotifyFinishedAsync(
+                CreateConversionStateDto(
+                    sourceFiles,
+                    args.TargetType,
+                    AiModelFileConversionStatus.Completed,
+                    null,
+                    DateTime.UtcNow
+                )
+            );
+
             await _operationLogRepository.InsertAsync(
                 AiModelOperationLog.Success(
                     Guid.NewGuid(),
@@ -205,6 +244,16 @@ public sealed class AiModelConversionJob : ITransientDependency
                 );
                 await _aiModelFileRepository.UpdateAsync(file, autoSave: true);
             }
+
+            await _notifier.NotifyFinishedAsync(
+                CreateConversionStateDto(
+                    sourceFiles,
+                    args.TargetType,
+                    AiModelFileConversionStatus.Failed,
+                    ex.Message,
+                    DateTime.UtcNow
+                )
+            );
 
             await _operationLogRepository.InsertAsync(
                 AiModelOperationLog.Failure(
@@ -253,5 +302,31 @@ public sealed class AiModelConversionJob : ITransientDependency
         );
         byte[] hash = await md5.ComputeHashAsync(stream);
         return Convert.ToHexString(hash).ToLowerInvariant();
+    }
+
+    private static AiModelConversionStateDto CreateConversionStateDto(
+        IEnumerable<AiModelFile> files,
+        AiModelResolvedConversionType? targetType,
+        AiModelFileConversionStatus status,
+        string? errorMessage,
+        DateTime? lastUpdatedTime
+    )
+    {
+        List<AiModelFile> orderedFiles = files.OrderBy(file => file.SortOrder).ToList();
+        return new AiModelConversionStateDto
+        {
+            ModelId = orderedFiles[0].AiModelId,
+            SourceFileIds = orderedFiles.Select(file => file.Id).ToList(),
+            TargetType =
+                targetType
+                ?? orderedFiles
+                    .Select(file => file.ConversionTargetType)
+                    .FirstOrDefault(type => type.HasValue),
+            Status = status,
+            ConversionErrorMessage = string.IsNullOrWhiteSpace(errorMessage)
+                ? null
+                : errorMessage.Trim(),
+            LastUpdatedTime = lastUpdatedTime,
+        };
     }
 }

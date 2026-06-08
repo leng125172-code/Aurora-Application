@@ -11,6 +11,9 @@ public sealed class AiModelPythonConversionRequest
     /// <summary>模型名称。</summary>
     public string ModelName { get; init; } = string.Empty;
 
+    /// <summary>模型生成条件，可用于传递模型级转换参数覆盖。</summary>
+    public string? GenerationCondition { get; init; }
+
     /// <summary>转换目标类型。</summary>
     public AiModelResolvedConversionType TargetType { get; init; }
 

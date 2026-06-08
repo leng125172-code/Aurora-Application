@@ -357,6 +357,20 @@ public sealed class DefaultAiModelConversionService : IAiModelConversionService
                 : AiModelResolvedConversionType.ToRkllm;
         string summary = string.Join("；", reasons.Distinct().Take(3));
 
+        if (resolvedType == AiModelResolvedConversionType.ToRkllm)
+        {
+            string message = string.IsNullOrWhiteSpace(summary)
+                ? $"OnnxRuntime 已分析模型 {model.Name}，判断该模型更适合 RKLLM/NPU 运行。当前版本不支持由 ONNX 直接转换为 RKLLM，请直接上传对应的 RKLLM 文件；如需生成 RKLLM，请在外部使用原始 HF 结构完成转换。"
+                : $"OnnxRuntime 已分析模型 {model.Name}，判断该模型更适合 RKLLM/NPU 运行。依据：{summary}。当前版本不支持由 ONNX 直接转换为 RKLLM，请直接上传对应的 RKLLM 文件；如需生成 RKLLM，请在外部使用原始 HF 结构完成转换。";
+
+            return new AiModelConversionAnalysisResult
+            {
+                CanConvert = false,
+                ResolvedConversionType = resolvedType,
+                Message = message,
+            };
+        }
+
         return new AiModelConversionAnalysisResult
         {
             CanConvert = true,

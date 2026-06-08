@@ -66,4 +66,31 @@ public interface ILeisaiMotorAppService : IApplicationService
         Guid id,
         LeisaiBatchReadInputDto input
     );
+
+    // ====== 标定专用（Phase 3：Step 4 回原 / 限位配置）======
+
+    /// <summary>
+    /// 保存回原参数并写入 EEPROM，同时在 Pr4.00（0x6000）中启用回原功能位（bit2=1）。
+    /// POST /api/app/leisai-motor/{id}/save-homing-config
+    /// </summary>
+    Task SaveHomingConfigAsync(Guid id, LeisaiHomingConfigInputDto input);
+
+    /// <summary>
+    /// 禁用回原功能，将 Pr4.00（0x6000）bit2 清零并保存 EEPROM。
+    /// POST /api/app/leisai-motor/{id}/disable-homing
+    /// </summary>
+    Task DisableHomingAsync(Guid id);
+
+    /// <summary>
+    /// 回原测试：临时写入回原参数 → 使能驱动 → 触发回原 → 轮询完成位 → 关使能。
+    /// 后端同步阻塞，超时 30 秒。前端 axios timeout 应设为 60 秒。
+    /// POST /api/app/leisai-motor/{id}/test-homing
+    /// </summary>
+    Task<LeisaiHomingTestResultDto> TestHomingAsync(Guid id, LeisaiHomingConfigInputDto input);
+
+    /// <summary>
+    /// 保存限位参数并写入 EEPROM，同时设置 Pr4.00（0x6000）bit1 限位使能标志。
+    /// POST /api/app/leisai-motor/{id}/save-limit-config
+    /// </summary>
+    Task SaveLimitConfigAsync(Guid id, LeisaiLimitConfigInputDto input);
 }

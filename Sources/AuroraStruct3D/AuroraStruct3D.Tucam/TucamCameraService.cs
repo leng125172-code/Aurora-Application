@@ -213,8 +213,60 @@ public class TucamCameraService : ITucamCameraService, IDisposable
                 uiIdxOpen = (uint)cameraIndex,
                 hIdxTUCam = IntPtr.Zero,
             };
+            TUCamRet ret = TUCamRet.Failure;
+            int[] retryDelaysMs = { 0, 200, 500, 1000, 2000 };
+            for (int attempt = 0; attempt < retryDelaysMs.Length; attempt++)
+            {
+                if (retryDelaysMs[attempt] > 0)
+                {
+                    Thread.Sleep(retryDelaysMs[attempt]);
+                }
 
-            var ret = TUCamNative.TUCAM_Dev_Open(ref openParam);
+                openParam = new TUCamOpen
+                {
+                    uiIdxOpen = (uint)cameraIndex,
+                    hIdxTUCam = IntPtr.Zero,
+                };
+                ret = TUCamNative.TUCAM_Dev_Open(ref openParam);
+                if (ret == TUCamRet.Success)
+                {
+                    if (attempt > 0)
+                    {
+                        _logger.LogInformation(
+                            "{Tag} Camera {Index} Dev_Open 在第 {Attempt} 次重试后成功",
+                            LogTag,
+                            cameraIndex,
+                            attempt + 1
+                        );
+                    }
+                    break;
+                }
+
+                if (ret != TUCamRet.FailOpenCamera)
+                {
+                    break;
+                }
+            }
+
+            if (ret == TUCamRet.FailOpenCamera && _cameraHandles.IsEmpty)
+            {
+                _logger.LogWarning(
+                    "{Tag} Camera {Index} Dev_Open 持续返回 FailOpenCamera，尝试重置 SDK 后再打开",
+                    LogTag,
+                    cameraIndex
+                );
+
+                if (TryReinitializeSdkCore($"open camera {cameraIndex} recovery"))
+                {
+                    openParam = new TUCamOpen
+                    {
+                        uiIdxOpen = (uint)cameraIndex,
+                        hIdxTUCam = IntPtr.Zero,
+                    };
+                    ret = TUCamNative.TUCAM_Dev_Open(ref openParam);
+                }
+            }
+
             sw.Stop();
 
             if (ret != TUCamRet.Success)
@@ -286,75 +338,151 @@ public class TucamCameraService : ITucamCameraService, IDisposable
             }
         }
 
-        if (!_cameraHandles.TryRemove(cameraIndex, out IntPtr handle))
-        {
-            _logger.LogWarning(
-                "{Tag} Camera index {Index} is not opened or already closed",
-                LogTag,
-                cameraIndex
-            );
-            return Task.CompletedTask;
-        }
-        _captureStates.TryRemove(cameraIndex, out _);
-        _nodeMapCache.TryRemove(cameraIndex, out _);
-        _prewarmTasks.TryRemove(cameraIndex, out _);
+        WaitForPrewarmCompletion(cameraIndex, "close camera");
 
-        Stopwatch sw = Stopwatch.StartNew();
-        var ret = TUCamNative.TUCAM_Dev_Close(handle);
-        sw.Stop();
-
-        if (ret != TUCamRet.Success)
+        _globalSdkLock.Wait();
+        try
         {
-            string errorMsg = $"{LogTag} Close camera returned: {ret}";
-            _logger.LogWarning(
-                "{Tag} Closing camera {Index} returned: {RetCode}",
-                LogTag,
-                cameraIndex,
-                ret
-            );
-            RecordCameraLog(
-                cameraIndex,
-                CameraOperationType.Close,
-                false,
-                sw.ElapsedMilliseconds,
-                errorMsg
-            );
-        }
-        else
-        {
-            _logger.LogInformation("{Tag} Camera {Index} closed", LogTag, cameraIndex);
-            RecordCameraLog(cameraIndex, CameraOperationType.Close, true, sw.ElapsedMilliseconds);
-        }
-
-        // TUCam SDK 特性：关闭最后一台相机后必须重新初始化，否则下次 Open 会返回 FailOpenCamera
-        if (_cameraHandles.IsEmpty && _initialized)
-        {
-            TUCamNative.TUCAM_Api_Uninit();
-            _initialized = false;
-            _lastCameraCount = 0;
-            var reinitParam = new TUCamInit { uiCamCount = 0, pstrConfigPath = IntPtr.Zero };
-            TUCamRet reinitRet = TUCamNative.TUCAM_Api_Init(ref reinitParam, 1000);
-            if (reinitRet == TUCamRet.Success)
+            if (!_cameraHandles.TryRemove(cameraIndex, out IntPtr handle))
             {
-                _initialized = true;
-                _lastCameraCount = (int)reinitParam.uiCamCount;
-                _logger.LogInformation(
-                    "{Tag} SDK re-initialized after all cameras closed, {Count} camera(s) detected",
+                _logger.LogWarning(
+                    "{Tag} Camera index {Index} is not opened or already closed",
                     LogTag,
-                    reinitParam.uiCamCount
+                    cameraIndex
+                );
+                return Task.CompletedTask;
+            }
+            _captureStates.TryRemove(cameraIndex, out _);
+            _nodeMapCache.TryRemove(cameraIndex, out _);
+            _prewarmTasks.TryRemove(cameraIndex, out _);
+
+            Stopwatch sw = Stopwatch.StartNew();
+            TUCamRet ret = TUCamNative.TUCAM_Dev_Close(handle);
+            sw.Stop();
+
+            if (ret != TUCamRet.Success)
+            {
+                string errorMsg = $"{LogTag} Close camera returned: {ret}";
+                _logger.LogWarning(
+                    "{Tag} Closing camera {Index} returned: {RetCode}",
+                    LogTag,
+                    cameraIndex,
+                    ret
+                );
+                RecordCameraLog(
+                    cameraIndex,
+                    CameraOperationType.Close,
+                    false,
+                    sw.ElapsedMilliseconds,
+                    errorMsg
                 );
             }
             else
             {
-                _logger.LogWarning(
-                    "{Tag} SDK re-initialization after close returned: {Ret}",
-                    LogTag,
-                    reinitRet
+                _logger.LogInformation("{Tag} Camera {Index} closed", LogTag, cameraIndex);
+                RecordCameraLog(
+                    cameraIndex,
+                    CameraOperationType.Close,
+                    true,
+                    sw.ElapsedMilliseconds
                 );
             }
+
+            // TUCam SDK 特性：关闭最后一台相机后必须重新初始化，否则下次 Open 会返回 FailOpenCamera
+            if (_cameraHandles.IsEmpty)
+            {
+                TryReinitializeSdkCore($"close last camera {cameraIndex}");
+            }
+        }
+        finally
+        {
+            _globalSdkLock.Release();
         }
 
         return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// 关闭句柄前等待后台 GenICam 预热结束，避免 SDK 在已关闭句柄上继续枚举导致 native 异常。
+    /// </summary>
+    private void WaitForPrewarmCompletion(int cameraIndex, string operation, int timeoutMs = 5000)
+    {
+        if (
+            !_prewarmTasks.TryGetValue(cameraIndex, out Task? prewarmTask)
+            || prewarmTask.IsCompleted
+        )
+        {
+            return;
+        }
+
+        _logger.LogInformation(
+            "{Tag} Camera {Index} 等待 GenICam 预热结束后再执行 {Operation}",
+            LogTag,
+            cameraIndex,
+            operation
+        );
+
+        try
+        {
+            if (!prewarmTask.Wait(timeoutMs))
+            {
+                _logger.LogWarning(
+                    "{Tag} Camera {Index} GenICam 预热在 {Timeout}ms 内未结束，继续执行 {Operation}",
+                    LogTag,
+                    cameraIndex,
+                    timeoutMs,
+                    operation
+                );
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(
+                ex,
+                "{Tag} Camera {Index} 等待 GenICam 预热完成时发生异常，继续执行 {Operation}",
+                LogTag,
+                cameraIndex,
+                operation
+            );
+        }
+    }
+
+    /// <summary>
+    /// 在已持有全局 SDK 锁的前提下重置 SDK，供关闭最后一台相机或 Open 恢复路径复用。
+    /// </summary>
+    private bool TryReinitializeSdkCore(string reason)
+    {
+        if (!_initialized)
+        {
+            return false;
+        }
+
+        TUCamNative.TUCAM_Api_Uninit();
+        _initialized = false;
+        _lastCameraCount = 0;
+
+        var reinitParam = new TUCamInit { uiCamCount = 0, pstrConfigPath = IntPtr.Zero };
+        TUCamRet reinitRet = TUCamNative.TUCAM_Api_Init(ref reinitParam, 1000);
+        if (reinitRet == TUCamRet.Success)
+        {
+            _initialized = true;
+            _lastCameraCount = (int)reinitParam.uiCamCount;
+            _logger.LogInformation(
+                "{Tag} SDK re-initialized for {Reason}, detected {Count} camera(s)",
+                LogTag,
+                reason,
+                reinitParam.uiCamCount
+            );
+            return true;
+        }
+
+        _logger.LogWarning(
+            "{Tag} SDK re-initialization for {Reason} returned: {Ret}",
+            LogTag,
+            reason,
+            reinitRet
+        );
+        return false;
     }
 
     /// <inheritdoc/>

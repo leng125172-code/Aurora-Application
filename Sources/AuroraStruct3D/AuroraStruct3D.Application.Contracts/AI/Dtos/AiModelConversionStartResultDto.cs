@@ -11,7 +11,10 @@ public class AiModelConversionStartResultDto
     /// <summary>用户选择的转换偏好。</summary>
     public AiModelConversionPreference ConversionPreference { get; set; }
 
-    /// <summary>系统解析后的转换目标。</summary>
+    /// <summary>
+    /// 系统解析后的转换目标。
+    /// 当值为 ToRkllm 且 CanConvert 为 false 时，表示应直接上传 RKLLM 文件。
+    /// </summary>
     public AiModelResolvedConversionType ResolvedConversionType { get; set; }
 
     /// <summary>是否允许进入转换流程。</summary>

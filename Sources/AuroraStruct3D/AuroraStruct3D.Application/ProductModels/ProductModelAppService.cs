@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Diagnostics;
+using AuroraStruct3D.BlobStoring;
 using AuroraStruct3D.DeviceState;
 using AuroraStruct3D.ProductModels.Dtos;
 using AuroraStruct3D.ProductModels.Jobs;
@@ -28,6 +29,7 @@ public class ProductModelAppService : AuroraStruct3DAppService, IProductModelApp
     private readonly IProductModelRepository _productModelRepository;
     private readonly IProductModelOperationLogRepository _operationLogRepository;
     private readonly IBlobContainer<ProductModelBlobContainer> _blobContainer;
+    private readonly FileSystemBlobContainerMaintenanceService _blobMaintenanceService;
     private readonly IBackgroundJobClient _backgroundJobClient;
     private readonly IIdentityUserRepository _identityUserRepository;
     private readonly IDeviceStateManager _deviceStateManager;
@@ -36,6 +38,7 @@ public class ProductModelAppService : AuroraStruct3DAppService, IProductModelApp
         IProductModelRepository productModelRepository,
         IProductModelOperationLogRepository operationLogRepository,
         IBlobContainer<ProductModelBlobContainer> blobContainer,
+        FileSystemBlobContainerMaintenanceService blobMaintenanceService,
         IBackgroundJobClient backgroundJobClient,
         IIdentityUserRepository identityUserRepository,
         IDeviceStateManager deviceStateManager
@@ -44,6 +47,7 @@ public class ProductModelAppService : AuroraStruct3DAppService, IProductModelApp
         _productModelRepository = productModelRepository;
         _operationLogRepository = operationLogRepository;
         _blobContainer = blobContainer;
+        _blobMaintenanceService = blobMaintenanceService;
         _backgroundJobClient = backgroundJobClient;
         _identityUserRepository = identityUserRepository;
         _deviceStateManager = deviceStateManager;
@@ -380,26 +384,59 @@ public class ProductModelAppService : AuroraStruct3DAppService, IProductModelApp
         {
             EnsureManualOrMaintenanceMode();
 
+            string containerRootPath =
+                _blobMaintenanceService.GetContainerRootPath<ProductModelBlobContainer>();
             List<ProductModel> all = await _productModelRepository.GetListAsync(
                 maxResultCount: int.MaxValue
             );
 
-            if (all.Count == 0)
-            {
-                return 0;
-            }
+            List<FileSystemBlobFile> initialPhysicalFiles = _blobMaintenanceService.GetBlobFiles(
+                containerRootPath
+            );
+            HashSet<string> initialPhysicalBlobNames = initialPhysicalFiles
+                .Select(x => x.BlobName)
+                .ToHashSet(StringComparer.Ordinal);
 
-            List<ProductModel> orphaned = [];
-            foreach (ProductModel model in all)
+            if (all.Count > 0 && initialPhysicalBlobNames.Count > 0)
             {
-                bool exists = await ExistsBlobWithCompatAsync(model.OriginalBlobName);
-                if (!exists)
+                HashSet<string> referencedBlobNames = BuildReferencedBlobNameSet(all);
+                int matchedReferencedFileCount = referencedBlobNames.Count(x =>
+                    initialPhysicalBlobNames.Contains(x)
+                );
+
+                if (matchedReferencedFileCount == 0)
                 {
-                    orphaned.Add(model);
+                    Logger.LogError(
+                        "[ProductModelAppService] 清理孤立记录已中止：数据库引用与磁盘文件零交集。请检查容器根目录 {RootPath} 是否指向了正确的 BLOB 存储。",
+                        containerRootPath
+                    );
+
+                    throw new UserFriendlyException(
+                        "当前数模数据库引用与磁盘文件完全不匹配，已自动中止清理以防止误删。请先检查 BLOB 存储路径与挂载目录。"
+                    );
                 }
             }
 
-            if (orphaned.Count == all.Count)
+            List<ProductModel> missingOriginalModels = [];
+            List<ProductModel> missingConvertedModels = [];
+            foreach (ProductModel model in all)
+            {
+                if (!ContainsPhysicalBlob(initialPhysicalBlobNames, model.OriginalBlobName))
+                {
+                    missingOriginalModels.Add(model);
+                    continue;
+                }
+
+                if (
+                    !string.IsNullOrWhiteSpace(model.ConvertedBlobName)
+                    && !ContainsPhysicalBlob(initialPhysicalBlobNames, model.ConvertedBlobName)
+                )
+                {
+                    missingConvertedModels.Add(model);
+                }
+            }
+
+            if (all.Count > 0 && missingOriginalModels.Count == all.Count)
             {
                 Logger.LogError(
                     "[ProductModelAppService] 清理孤立记录已中止：共 {Total} 条记录，全部判定为原始 BLOB 不存在。请检查 BLOB 存储路径与跨平台路径分隔符。",
@@ -412,9 +449,16 @@ public class ProductModelAppService : AuroraStruct3DAppService, IProductModelApp
             }
 
             int cleaned = 0;
-            foreach (ProductModel model in orphaned)
+            HashSet<Guid> deletedModelIds = [];
+            foreach (ProductModel model in missingOriginalModels)
             {
+                if (!string.IsNullOrWhiteSpace(model.ConvertedBlobName))
+                {
+                    await TryDeleteBlobAsync(model.ConvertedBlobName);
+                }
+
                 await _productModelRepository.DeleteAsync(model, autoSave: true);
+                deletedModelIds.Add(model.Id);
                 Logger.LogInformation(
                     "[ProductModelAppService] 清理孤立数模记录：{Id}（{Name}），原始 BLOB: {BlobName}",
                     model.Id,
@@ -435,6 +479,88 @@ public class ProductModelAppService : AuroraStruct3DAppService, IProductModelApp
                     )
                 );
             }
+
+            foreach (ProductModel model in missingConvertedModels)
+            {
+                if (deletedModelIds.Contains(model.Id))
+                {
+                    continue;
+                }
+
+                string missingConvertedBlobName = model.ConvertedBlobName!;
+                model.MarkConvertedBlobMissing(
+                    "转换产物文件缺失，已清理损坏引用，请重新执行转换。"
+                );
+                await _productModelRepository.UpdateAsync(model, autoSave: true);
+
+                Logger.LogInformation(
+                    "[ProductModelAppService] 已修复数模 {Id}（{Name}）的损坏转换产物引用：{BlobName}",
+                    model.Id,
+                    model.Name,
+                    missingConvertedBlobName
+                );
+                cleaned++;
+
+                await TryRecordOperationLogAsync(
+                    ProductModelOperationLog.Success(
+                        GuidGenerator.Create(),
+                        model.Id,
+                        model.Name,
+                        model.OriginalFileName,
+                        ProductModelOperationType.CleanUpOrphanedRecords,
+                        $"转换产物缺失，已清理损坏引用：{missingConvertedBlobName}",
+                        (int)stopwatch.ElapsedMilliseconds
+                    )
+                );
+            }
+
+            List<ProductModel> remainingModels = all.Where(x => !deletedModelIds.Contains(x.Id))
+                .ToList();
+            HashSet<string> referencedBlobNamesAfterCleanup = BuildReferencedBlobNameSet(
+                remainingModels
+            );
+
+            int orphanFileCount = 0;
+            foreach (
+                FileSystemBlobFile physicalFile in _blobMaintenanceService.GetBlobFiles(
+                    containerRootPath
+                )
+            )
+            {
+                if (referencedBlobNamesAfterCleanup.Contains(physicalFile.BlobName))
+                {
+                    continue;
+                }
+
+                File.Delete(physicalFile.FullPath);
+                orphanFileCount++;
+
+                Logger.LogInformation(
+                    "[ProductModelAppService] 已删除数模容器中的磁盘孤儿文件：{BlobName}",
+                    physicalFile.BlobName
+                );
+            }
+
+            int emptyDirectoryCount = _blobMaintenanceService.DeleteEmptyDirectories(
+                containerRootPath
+            );
+
+            if (orphanFileCount > 0 || emptyDirectoryCount > 0)
+            {
+                await TryRecordOperationLogAsync(
+                    ProductModelOperationLog.Success(
+                        GuidGenerator.Create(),
+                        null,
+                        "孤立记录清理",
+                        null,
+                        ProductModelOperationType.CleanUpOrphanedRecords,
+                        $"已删除磁盘孤儿文件={orphanFileCount}，空目录={emptyDirectoryCount}",
+                        (int)stopwatch.ElapsedMilliseconds
+                    )
+                );
+            }
+
+            cleaned += orphanFileCount + emptyDirectoryCount;
 
             return cleaned;
         }
@@ -750,6 +876,38 @@ public class ProductModelAppService : AuroraStruct3DAppService, IProductModelApp
     private static string NormalizeBlobName(string blobName)
     {
         return blobName.Replace('\\', '/').TrimStart('/');
+    }
+
+    /// <summary>
+    /// 判断物理文件列表中是否存在指定 BLOB。
+    /// </summary>
+    private static bool ContainsPhysicalBlob(
+        IReadOnlySet<string> physicalBlobNames,
+        string? blobName
+    )
+    {
+        return !string.IsNullOrWhiteSpace(blobName)
+            && physicalBlobNames.Contains(NormalizeBlobName(blobName));
+    }
+
+    /// <summary>
+    /// 汇总仍被数据库记录引用的 BLOB 键名。
+    /// </summary>
+    private static HashSet<string> BuildReferencedBlobNameSet(IEnumerable<ProductModel> models)
+    {
+        HashSet<string> referencedBlobNames = [];
+
+        foreach (ProductModel model in models)
+        {
+            referencedBlobNames.Add(NormalizeBlobName(model.OriginalBlobName));
+
+            if (!string.IsNullOrWhiteSpace(model.ConvertedBlobName))
+            {
+                referencedBlobNames.Add(NormalizeBlobName(model.ConvertedBlobName));
+            }
+        }
+
+        return referencedBlobNames;
     }
 
     /// <summary>

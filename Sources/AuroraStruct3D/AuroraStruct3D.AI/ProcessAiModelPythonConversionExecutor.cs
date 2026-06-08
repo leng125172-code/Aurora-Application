@@ -27,6 +27,13 @@ public sealed class ProcessAiModelPythonConversionExecutor : IAiModelPythonConve
         CancellationToken cancellationToken = default
     )
     {
+        if (request.TargetType != AiModelResolvedConversionType.ToRknn)
+        {
+            throw new NotSupportedException(
+                "当前 Python 转换执行器仅支持 RKNN 目标。若模型需要 RKLLM/NPU 运行，请直接上传对应的 RKLLM 文件。"
+            );
+        }
+
         string scriptPath = ResolveScriptPath();
         string pythonExecutable = ResolvePythonExecutable();
         string resultFilePath = Path.Combine(request.WorkingDirectory, "conversion-result.json");
@@ -52,13 +59,16 @@ public sealed class ProcessAiModelPythonConversionExecutor : IAiModelPythonConve
 
         startInfo.ArgumentList.Add(scriptPath);
         startInfo.ArgumentList.Add("--target");
-        startInfo.ArgumentList.Add(
-            request.TargetType == AiModelResolvedConversionType.ToRknn ? "rknn" : "rkllm"
-        );
+        startInfo.ArgumentList.Add("rknn");
         startInfo.ArgumentList.Add("--model-id");
         startInfo.ArgumentList.Add(request.ModelId.ToString("D"));
         startInfo.ArgumentList.Add("--model-name");
         startInfo.ArgumentList.Add(request.ModelName);
+        if (!string.IsNullOrWhiteSpace(request.GenerationCondition))
+        {
+            startInfo.ArgumentList.Add("--generation-condition");
+            startInfo.ArgumentList.Add(request.GenerationCondition);
+        }
         startInfo.ArgumentList.Add("--output-dir");
         startInfo.ArgumentList.Add(Path.Combine(request.WorkingDirectory, "outputs"));
         startInfo.ArgumentList.Add("--result-json");

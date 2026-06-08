@@ -33,6 +33,26 @@ public class CalibProject : FullAuditedAggregateRoot<Guid>
     /// <summary>当前标定流程状态（对应 Step 1~7）</summary>
     public CalibStatus CalibStatus { get; private set; }
 
+    // ── 标定板参数（Step 5 使用） ─────────────────────────────────────────────────
+
+    /// <summary>实体棋盘格内角点行数</summary>
+    public int PhysicalCornerRows { get; private set; }
+
+    /// <summary>实体棋盘格内角点列数</summary>
+    public int PhysicalCornerCols { get; private set; }
+
+    /// <summary>实体棋盘格单个方格物理边长（mm）</summary>
+    public decimal PhysicalSquareSizeMm { get; private set; }
+
+    /// <summary>投影棋盘格内角点行数</summary>
+    public int ProjectedCornerRows { get; private set; }
+
+    /// <summary>投影棋盘格内角点列数</summary>
+    public int ProjectedCornerCols { get; private set; }
+
+    /// <summary>投影棋盘格单个方格像素尺寸（px）</summary>
+    public int ProjectedPixelSize { get; private set; }
+
     // EF Core 所需的无参构造函数
     protected CalibProject() { }
 
@@ -89,6 +109,58 @@ public class CalibProject : FullAuditedAggregateRoot<Guid>
     public CalibProject AdvanceStatus(CalibStatus status)
     {
         CalibStatus = status;
+        return this;
+    }
+
+    /// <summary>
+    /// 设置标定板（棋盘格）参数
+    /// </summary>
+    /// <param name="physicalCornerRows">实体棋盘格内角点行数</param>
+    /// <param name="physicalCornerCols">实体棋盘格内角点列数</param>
+    /// <param name="physicalSquareSizeMm">实体方格物理边长（mm）</param>
+    /// <param name="projectedCornerRows">投影棋盘格内角点行数</param>
+    /// <param name="projectedCornerCols">投影棋盘格内角点列数</param>
+    /// <param name="projectedPixelSize">投影棋盘格方格像素尺寸（px）</param>
+    public CalibProject SetBoardConfig(
+        int physicalCornerRows,
+        int physicalCornerCols,
+        decimal physicalSquareSizeMm,
+        int projectedCornerRows,
+        int projectedCornerCols,
+        int projectedPixelSize
+    )
+    {
+        if (physicalCornerRows < 2)
+            throw new ArgumentOutOfRangeException(nameof(physicalCornerRows), "内角点行数至少为 2");
+        if (physicalCornerCols < 2)
+            throw new ArgumentOutOfRangeException(nameof(physicalCornerCols), "内角点列数至少为 2");
+        if (physicalSquareSizeMm <= 0)
+            throw new ArgumentOutOfRangeException(
+                nameof(physicalSquareSizeMm),
+                "方格边长必须大于 0"
+            );
+        if (projectedCornerRows < 2)
+            throw new ArgumentOutOfRangeException(
+                nameof(projectedCornerRows),
+                "投影内角点行数至少为 2"
+            );
+        if (projectedCornerCols < 2)
+            throw new ArgumentOutOfRangeException(
+                nameof(projectedCornerCols),
+                "投影内角点列数至少为 2"
+            );
+        if (projectedPixelSize < 1)
+            throw new ArgumentOutOfRangeException(
+                nameof(projectedPixelSize),
+                "投影像素尺寸至少为 1"
+            );
+
+        PhysicalCornerRows = physicalCornerRows;
+        PhysicalCornerCols = physicalCornerCols;
+        PhysicalSquareSizeMm = physicalSquareSizeMm;
+        ProjectedCornerRows = projectedCornerRows;
+        ProjectedCornerCols = projectedCornerCols;
+        ProjectedPixelSize = projectedPixelSize;
         return this;
     }
 }
