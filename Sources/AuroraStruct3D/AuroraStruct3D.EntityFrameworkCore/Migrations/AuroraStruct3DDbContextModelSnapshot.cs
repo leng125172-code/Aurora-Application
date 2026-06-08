@@ -24,34 +24,11 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
-            modelBuilder.Entity("AuroraStruct3D.CalibrationManagement.CalibrationCameraBinding", b =>
             modelBuilder.Entity("AuroraStruct3D.AI.AiModel", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
-                    b.Property<Guid>("CalibrationDeviceId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("CameraDeviceId")
-                        .HasColumnType("uuid");
-
-                    b.Property<int>("Role")
-                        .HasColumnType("integer");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CalibrationDeviceId");
-
-                    b.HasIndex("CameraDeviceId");
-
-                    b.HasIndex("CalibrationDeviceId", "Role")
-                        .IsUnique();
-
-                    b.ToTable("AbpProCalibCameraBindings", (string)null);
-                });
-
-            modelBuilder.Entity("AuroraStruct3D.CalibrationManagement.CalibrationCameraParameter", b =>
                     b.Property<string>("ConcurrencyStamp")
                         .IsConcurrencyToken()
                         .IsRequired()
@@ -144,75 +121,6 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
-                    b.Property<Guid>("CalibrationDeviceId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("CameraDeviceId")
-                        .HasColumnType("uuid");
-
-                    b.Property<double>("CmosHeightMm")
-                        .HasColumnType("double precision");
-
-                    b.Property<int>("CmosSize")
-                        .HasColumnType("integer");
-
-                    b.Property<double>("CmosWidthMm")
-                        .HasColumnType("double precision");
-
-                    b.Property<double>("CurrentAperture")
-                        .HasColumnType("double precision");
-
-                    b.Property<double>("MaxAperture")
-                        .HasColumnType("double precision");
-
-                    b.Property<double>("MaxExposureUs")
-                        .HasColumnType("double precision");
-
-                    b.Property<double>("MaxGainDb")
-                        .HasColumnType("double precision");
-
-                    b.Property<double>("MinAperture")
-                        .HasColumnType("double precision");
-
-                    b.Property<double>("MinExposureUs")
-                        .HasColumnType("double precision");
-
-                    b.Property<double>("MinGainDb")
-                        .HasColumnType("double precision");
-
-                    b.Property<double>("NominalFocalLengthMm")
-                        .HasColumnType("double precision");
-
-                    b.Property<double>("PixelSizeUm")
-                        .HasColumnType("double precision");
-
-                    b.Property<int>("ResolutionHeightPx")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("ResolutionWidthPx")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("Role")
-                        .HasColumnType("integer");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CalibrationDeviceId");
-
-                    b.HasIndex("CameraDeviceId");
-
-                    b.HasIndex("CalibrationDeviceId", "CameraDeviceId")
-                        .IsUnique();
-
-                    b.ToTable("AbpProCalibCameraParameters", (string)null);
-                });
-
-            modelBuilder.Entity("AuroraStruct3D.CalibrationManagement.CalibrationCameraTemplate", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("CameraModel")
                     b.Property<Guid>("AiModelId")
                         .HasColumnType("uuid");
 
@@ -243,10 +151,6 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                     b.Property<DateTime?>("DeletionTime")
                         .HasColumnType("timestamp without time zone")
                         .HasColumnName("DeletionTime");
-
-                    b.Property<string>("Description")
-                        .HasMaxLength(512)
-                        .HasColumnType("character varying(512)");
 
                     b.Property<string>("DisplayName")
                         .IsRequired()
@@ -366,20 +270,6 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                         .HasMaxLength(128)
                         .HasColumnType("character varying(128)");
 
-                    b.Property<string>("ParametersJson")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CameraModel");
-
-                    b.HasIndex("Name");
-
-                    b.ToTable("AbpProCalibCameraTemplates", (string)null);
-                });
-
-            modelBuilder.Entity("AuroraStruct3D.CalibrationManagement.CalibrationCaptureFrame", b =>
                     b.Property<string>("NormalizedName")
                         .IsRequired()
                         .HasMaxLength(128)
@@ -398,19 +288,6 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
-                    b.Property<Guid>("CalibrationProjectId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("CapturedTime")
-                        .HasColumnType("timestamp without time zone");
-
-                    b.Property<int>("FrameIndex")
-                        .HasColumnType("integer");
-
-                    b.Property<bool>("IsAccepted")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("RejectionReason")
                     b.Property<Guid>("AiModelId")
                         .HasColumnType("uuid");
 
@@ -468,15 +345,6 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("CalibrationProjectId");
-
-                    b.HasIndex("CalibrationProjectId", "FrameIndex")
-                        .IsUnique();
-
-                    b.ToTable("AbpProCalibCaptureFrames", (string)null);
-                });
-
-            modelBuilder.Entity("AuroraStruct3D.CalibrationManagement.CalibrationCaptureImage", b =>
                     b.HasIndex("AiModelId");
 
                     b.HasIndex("IsSuccess");
@@ -493,43 +361,12 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
-                    b.Property<string>("BlobName")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
-
-                    b.Property<Guid>("CalibrationCaptureFrameId")
                     b.Property<Guid>("CalibProjectId")
                         .HasColumnType("uuid");
 
                     b.Property<Guid>("CameraDeviceId")
                         .HasColumnType("uuid");
 
-                    b.Property<int>("CameraRole")
-                        .HasColumnType("integer");
-
-                    b.Property<long>("FileSizeBytes")
-                        .HasColumnType("bigint");
-
-                    b.Property<int>("Height")
-                        .HasColumnType("integer");
-
-                    b.Property<double?>("ReprojectionError")
-                        .HasColumnType("double precision");
-
-                    b.Property<int>("Width")
-                        .HasColumnType("integer");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CalibrationCaptureFrameId");
-
-                    b.HasIndex("CameraDeviceId");
-
-                    b.ToTable("AbpProCalibCaptureImages", (string)null);
-                });
-
-            modelBuilder.Entity("AuroraStruct3D.CalibrationManagement.CalibrationDevice", b =>
                     b.Property<DateTime>("CreationTime")
                         .HasColumnType("timestamp without time zone")
                         .HasColumnName("CreationTime");
@@ -1045,8 +882,6 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                         .HasColumnName("DeletionTime");
 
                     b.Property<string>("Description")
-                        .HasMaxLength(512)
-                        .HasColumnType("character varying(512)");
                         .HasMaxLength(1024)
                         .HasColumnType("character varying(1024)");
 
@@ -1061,9 +896,6 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                         .HasColumnType("text")
                         .HasColumnName("ExtraProperties");
 
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("boolean");
-
                     b.Property<bool>("IsDeleted")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
@@ -1080,115 +912,6 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("DeviceType");
-
-                    b.HasIndex("IsActive");
-
-                    b.HasIndex("Name");
-
-                    b.ToTable("AbpProCalibDevices", (string)null);
-                });
-
-            modelBuilder.Entity("AuroraStruct3D.CalibrationManagement.CalibrationGimbalGroup", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
-
-                    b.Property<double>("AccelDecelTime")
-                        .HasColumnType("double precision");
-
-                    b.Property<double>("Acceleration")
-                        .HasColumnType("double precision");
-
-                    b.Property<Guid>("CalibrationDeviceId")
-                        .HasColumnType("uuid");
-
-                    b.Property<double>("MaxVelocity")
-                        .HasColumnType("double precision");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
-
-                    b.Property<Guid>("XAxisMotorId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("YAxisMotorId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid?>("ZRotateAxisMotorId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid?>("ZTranslateAxisMotorId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CalibrationDeviceId");
-
-                    b.HasIndex("CalibrationDeviceId", "Name")
-                        .IsUnique();
-
-                    b.ToTable("AbpProCalibGimbalGroups", (string)null);
-                });
-
-            modelBuilder.Entity("AuroraStruct3D.CalibrationManagement.CalibrationGimbalPreset", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("GimbalGroupId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
-
-                    b.Property<string>("Remarks")
-                        .HasMaxLength(512)
-                        .HasColumnType("character varying(512)");
-
-                    b.Property<double>("XPosition")
-                        .HasColumnType("double precision");
-
-                    b.Property<double>("YPosition")
-                        .HasColumnType("double precision");
-
-                    b.Property<double?>("ZRotatePosition")
-                        .HasColumnType("double precision");
-
-                    b.Property<double?>("ZTranslatePosition")
-                        .HasColumnType("double precision");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("GimbalGroupId");
-
-                    b.ToTable("AbpProCalibGimbalPresets", (string)null);
-                });
-
-            modelBuilder.Entity("AuroraStruct3D.CalibrationManagement.CalibrationMotorBinding", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("CalibrationDeviceId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid?>("GimbalGroupId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("MotorAxisId")
-                        .HasColumnType("uuid");
-
-                    b.Property<int>("Role")
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
 
@@ -1197,334 +920,15 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("CalibrationDeviceId");
-
-                    b.HasIndex("GimbalGroupId");
-
-                    b.HasIndex("MotorAxisId");
-
-                    b.ToTable("AbpProCalibMotorBindings", (string)null);
-                });
-
-            modelBuilder.Entity("AuroraStruct3D.CalibrationManagement.CalibrationMotorInterlockRule", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
-
-                    b.Property<int>("BlockedDirection")
-                        .HasColumnType("integer");
-
-                    b.Property<Guid>("CalibrationDeviceId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Description")
-                        .HasMaxLength(512)
-                        .HasColumnType("character varying(512)");
-
-                    b.Property<bool>("IsEnabled")
-                        .HasColumnType("boolean");
-
-                    b.Property<Guid>("SourceMotorAxisId")
-                        .HasColumnType("uuid");
-
-                    b.Property<double>("SourcePositionMax")
-                        .HasColumnType("double precision");
-
-                    b.Property<double>("SourcePositionMin")
-                        .HasColumnType("double precision");
-
-                    b.Property<Guid>("TargetMotorAxisId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CalibrationDeviceId");
-
-                    b.HasIndex("SourceMotorAxisId");
-
-                    b.HasIndex("TargetMotorAxisId");
-
-                    b.ToTable("AbpProCalibMotorInterlockRules", (string)null);
-                });
-
-            modelBuilder.Entity("AuroraStruct3D.CalibrationManagement.CalibrationMotorParameter", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("CalibrationDeviceId")
-                        .HasColumnType("uuid");
-
-                    b.Property<int>("EncoderResolution")
-                        .HasColumnType("integer");
-
-                    b.Property<double>("GearRatio")
-                        .HasColumnType("double precision");
-
-                    b.Property<int>("HomeDirection")
-                        .HasColumnType("integer");
-
-                    b.Property<double>("HomePosition")
-                        .HasColumnType("double precision");
-
-                    b.Property<double>("HomingAcceleration")
-                        .HasColumnType("double precision");
-
-                    b.Property<double>("HomingVelocity")
-                        .HasColumnType("double precision");
-
-                    b.Property<bool>("IsHomed")
-                        .HasColumnType("boolean");
-
-                    b.Property<DateTime?>("LastHomedTime")
-                        .HasColumnType("timestamp without time zone");
-
-                    b.Property<Guid>("MotorAxisId")
-                        .HasColumnType("uuid");
-
-                    b.Property<int>("Role")
-                        .HasColumnType("integer");
-
-                    b.Property<double>("SoftLimitMax")
-                        .HasColumnType("double precision");
-
-                    b.Property<double>("SoftLimitMin")
-                        .HasColumnType("double precision");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CalibrationDeviceId");
-
-                    b.HasIndex("MotorAxisId");
-
-                    b.HasIndex("CalibrationDeviceId", "MotorAxisId")
-                        .IsUnique();
-
-                    b.ToTable("AbpProCalibMotorParameters", (string)null);
-                });
-
-            modelBuilder.Entity("AuroraStruct3D.CalibrationManagement.CalibrationProject", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("AprilTagFamily")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.Property<double?>("AprilTagSizeMm")
-                        .HasColumnType("double precision");
-
-                    b.Property<double?>("AprilTagSpacingMm")
-                        .HasColumnType("double precision");
-
-                    b.Property<int>("BoardCols")
-                        .HasColumnType("integer");
-
-                    b.Property<double>("BoardManufactureAccuracyMm")
-                        .HasColumnType("double precision");
-
-                    b.Property<int>("BoardRows")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("BoardType")
-                        .HasColumnType("integer");
-
-                    b.Property<Guid>("CalibrationDeviceId")
-                        .HasColumnType("uuid");
-
-                    b.Property<int?>("CapturesPerPhase")
-                        .HasColumnType("integer");
-
-                    b.Property<double?>("CircleDiameterMm")
-                        .HasColumnType("double precision");
-
-                    b.Property<double?>("CircleSpacingMm")
-                        .HasColumnType("double precision");
-
-                    b.Property<DateTime?>("CompletedTime")
-                        .HasColumnType("timestamp without time zone");
-
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
-
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp without time zone")
-                        .HasColumnName("CreationTime");
-
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
-
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
-
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp without time zone")
-                        .HasColumnName("DeletionTime");
-
-                    b.Property<string>("Description")
-                        .HasMaxLength(512)
-                        .HasColumnType("character varying(512)");
-
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
-
-                    b.Property<string>("FailureReason")
-                        .HasMaxLength(2048)
-                        .HasColumnType("character varying(2048)");
-
-                    b.Property<int>("ImageFormat")
-                        .HasColumnType("integer");
-
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
-
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp without time zone")
-                        .HasColumnName("LastModificationTime");
-
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
-
-                    b.Property<int?>("PatternIntervalMs")
-                        .HasColumnType("integer");
-
-                    b.Property<double?>("SquareSizeMm")
-                        .HasColumnType("double precision");
-
-                    b.Property<DateTime?>("StartedTime")
-                        .HasColumnType("timestamp without time zone");
-
-                    b.Property<int>("Status")
-                        .HasColumnType("integer");
-
-                    b.Property<int?>("StructuredLightBrightness")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("TargetCaptureCount")
-                        .HasColumnType("integer");
-
-                    b.Property<double>("UnifiedExposureUs")
-                        .HasColumnType("double precision");
-
-                    b.Property<double>("UnifiedGainDb")
-                        .HasColumnType("double precision");
-
-                    b.Property<string>("UnifiedWhiteBalance")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CalibrationDeviceId");
-
-                    b.HasIndex("CreationTime");
-
-                    b.HasIndex("Status");
                     b.HasIndex("CalibStatus");
 
                     b.ToTable("AbpProCalibProjects", (string)null);
                 });
 
-            modelBuilder.Entity("AuroraStruct3D.CalibrationManagement.CalibrationProjectorBinding", b =>
             modelBuilder.Entity("AuroraStruct3D.Calibration.CalibProjectorParam", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
-
-                    b.Property<Guid>("CalibrationDeviceId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("ProjectorDeviceId")
-                        .HasColumnType("uuid");
-
-                    b.Property<int>("Role")
-                        .HasColumnType("integer");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CalibrationDeviceId");
-
-                    b.HasIndex("ProjectorDeviceId");
-
-                    b.ToTable("AbpProCalibProjectorBindings", (string)null);
-                });
-
-            modelBuilder.Entity("AuroraStruct3D.CalibrationManagement.CalibrationProjectorParameter", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("CalibrationDeviceId")
-                        .HasColumnType("uuid");
-
-                    b.Property<double>("MaxWorkingDistanceMm")
-                        .HasColumnType("double precision");
-
-                    b.Property<double>("MinWorkingDistanceMm")
-                        .HasColumnType("double precision");
-
-                    b.Property<int>("Pattern")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("PatternCount")
-                        .HasColumnType("integer");
-
-                    b.Property<double>("PhaseShift")
-                        .HasColumnType("double precision");
-
-                    b.Property<Guid>("ProjectorDeviceId")
-                        .HasColumnType("uuid");
-
-                    b.Property<int>("ResolutionHeightPx")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("ResolutionWidthPx")
-                        .HasColumnType("integer");
-
-                    b.Property<double>("ThrowRatio")
-                        .HasColumnType("double precision");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CalibrationDeviceId");
-
-                    b.HasIndex("ProjectorDeviceId");
-
-                    b.HasIndex("CalibrationDeviceId", "ProjectorDeviceId")
-                        .IsUnique();
-
-                    b.ToTable("AbpProCalibProjectorParameters", (string)null);
-                });
-
-            modelBuilder.Entity("AuroraStruct3D.CalibrationManagement.CalibrationProjectorTemplate", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
 
                     b.Property<Guid>("CalibProjectId")
                         .HasColumnType("uuid");
@@ -1546,13 +950,6 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                         .HasColumnName("DeletionTime");
 
                     b.Property<string>("Description")
-                        .HasMaxLength(512)
-                        .HasColumnType("character varying(512)");
-
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
                         .HasMaxLength(1024)
                         .HasColumnType("character varying(1024)");
 
@@ -1578,154 +975,6 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
-
-                    b.Property<string>("ParametersJson")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("ProjectorModel")
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("Name");
-
-                    b.HasIndex("ProjectorModel");
-
-                    b.ToTable("AbpProCalibProjectorTemplates", (string)null);
-                });
-
-            modelBuilder.Entity("AuroraStruct3D.CalibrationManagement.CalibrationResult", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("CalibrationDeviceId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("CalibrationProjectId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("CameraExtrinsicsJson")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("CameraIntrinsicsJson")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<DateTime>("ComputedTime")
-                        .HasColumnType("timestamp without time zone");
-
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
-
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp without time zone")
-                        .HasColumnName("CreationTime");
-
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
-
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
-
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp without time zone")
-                        .HasColumnName("DeletionTime");
-
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("boolean");
-
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
-
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp without time zone")
-                        .HasColumnName("LastModificationTime");
-
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
-
-                    b.Property<double>("MaxError")
-                        .HasColumnType("double precision");
-
-                    b.Property<double>("MeanError")
-                        .HasColumnType("double precision");
-
-                    b.Property<double>("MinError")
-                        .HasColumnType("double precision");
-
-                    b.Property<double>("OverallReprojectionError")
-                        .HasColumnType("double precision");
-
-                    b.Property<double>("RmsError")
-                        .HasColumnType("double precision");
-
-                    b.Property<string>("StructuredLightCalibrationJson")
-                        .HasColumnType("text");
-
-                    b.Property<int>("Version")
-                        .HasColumnType("integer");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CalibrationDeviceId");
-
-                    b.HasIndex("CalibrationProjectId");
-
-                    b.HasIndex("CalibrationDeviceId", "IsActive");
-
-                    b.HasIndex("CalibrationProjectId", "Version")
-                        .IsUnique();
-
-                    b.ToTable("AbpProCalibResults", (string)null);
-                });
-
-            modelBuilder.Entity("AuroraStruct3D.CalibrationManagement.CalibrationValidationRecord", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("CalibrationResultId")
-                        .HasColumnType("uuid");
-
-                    b.Property<bool>("IsPassed")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("MetricsJson")
-                        .HasColumnType("text");
-
-                    b.Property<string>("Remarks")
-                        .HasMaxLength(512)
-                        .HasColumnType("character varying(512)");
-
-                    b.Property<string>("ReportBlobName")
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
-
-                    b.Property<DateTime>("ValidatedTime")
-                        .HasColumnType("timestamp without time zone");
-
-                    b.Property<int>("ValidationType")
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
 
@@ -1764,11 +1013,6 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("CalibrationResultId");
-
-                    b.HasIndex("ValidationType");
-
-                    b.ToTable("AbpProCalibValidationRecords", (string)null);
                     b.HasIndex("CalibProjectId");
 
                     b.HasIndex("ProjectorDeviceId");
@@ -6636,11 +5880,6 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                     b.ToTable("AbpTenantConnectionStrings", (string)null);
                 });
 
-            modelBuilder.Entity("AuroraStruct3D.CalibrationManagement.CalibrationCameraBinding", b =>
-                {
-                    b.HasOne("AuroraStruct3D.CalibrationManagement.CalibrationDevice", null)
-                        .WithMany("CameraBindings")
-                        .HasForeignKey("CalibrationDeviceId")
             modelBuilder.Entity("AuroraStruct3D.AI.AiModelFile", b =>
                 {
                     b.HasOne("AuroraStruct3D.AI.AiModel", null)
@@ -6650,11 +5889,6 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("AuroraStruct3D.CalibrationManagement.CalibrationCameraParameter", b =>
-                {
-                    b.HasOne("AuroraStruct3D.CalibrationManagement.CalibrationDevice", null)
-                        .WithMany("CameraParameters")
-                        .HasForeignKey("CalibrationDeviceId")
             modelBuilder.Entity("AuroraStruct3D.AI.AiModelIdentifierLink", b =>
                 {
                     b.HasOne("AuroraStruct3D.AI.AiModel", null)
@@ -6670,37 +5904,6 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("AuroraStruct3D.CalibrationManagement.CalibrationCaptureFrame", b =>
-                {
-                    b.HasOne("AuroraStruct3D.CalibrationManagement.CalibrationProject", null)
-                        .WithMany("Frames")
-                        .HasForeignKey("CalibrationProjectId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("AuroraStruct3D.CalibrationManagement.CalibrationCaptureImage", b =>
-                {
-                    b.HasOne("AuroraStruct3D.CalibrationManagement.CalibrationCaptureFrame", null)
-                        .WithMany("Images")
-                        .HasForeignKey("CalibrationCaptureFrameId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("AuroraStruct3D.CalibrationManagement.CalibrationGimbalGroup", b =>
-                {
-                    b.HasOne("AuroraStruct3D.CalibrationManagement.CalibrationDevice", null)
-                        .WithMany("GimbalGroups")
-                        .HasForeignKey("CalibrationDeviceId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("AuroraStruct3D.CalibrationManagement.CalibrationGimbalPreset", b =>
-                {
-                    b.HasOne("AuroraStruct3D.CalibrationManagement.CalibrationGimbalGroup", null)
-                        .WithMany("PresetPositions")
             modelBuilder.Entity("AuroraStruct3D.Calibration.CalibDeviceBinding", b =>
                 {
                     b.HasOne("AuroraStruct3D.Calibration.CalibGimbalGroup", null)
@@ -6714,60 +5917,6 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                     b.HasOne("AuroraStruct3D.Calibration.CalibGimbalGroup", null)
                         .WithMany("Bindings")
                         .HasForeignKey("GimbalGroupId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("AuroraStruct3D.CalibrationManagement.CalibrationMotorBinding", b =>
-                {
-                    b.HasOne("AuroraStruct3D.CalibrationManagement.CalibrationDevice", null)
-                        .WithMany("MotorBindings")
-                        .HasForeignKey("CalibrationDeviceId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("AuroraStruct3D.CalibrationManagement.CalibrationMotorInterlockRule", b =>
-                {
-                    b.HasOne("AuroraStruct3D.CalibrationManagement.CalibrationDevice", null)
-                        .WithMany("InterlockRules")
-                        .HasForeignKey("CalibrationDeviceId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("AuroraStruct3D.CalibrationManagement.CalibrationMotorParameter", b =>
-                {
-                    b.HasOne("AuroraStruct3D.CalibrationManagement.CalibrationDevice", null)
-                        .WithMany("MotorParameters")
-                        .HasForeignKey("CalibrationDeviceId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("AuroraStruct3D.CalibrationManagement.CalibrationProjectorBinding", b =>
-                {
-                    b.HasOne("AuroraStruct3D.CalibrationManagement.CalibrationDevice", null)
-                        .WithMany("ProjectorBindings")
-                        .HasForeignKey("CalibrationDeviceId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("AuroraStruct3D.CalibrationManagement.CalibrationProjectorParameter", b =>
-                {
-                    b.HasOne("AuroraStruct3D.CalibrationManagement.CalibrationDevice", null)
-                        .WithMany("ProjectorParameters")
-                        .HasForeignKey("CalibrationDeviceId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("AuroraStruct3D.CalibrationManagement.CalibrationValidationRecord", b =>
-                {
-                    b.HasOne("AuroraStruct3D.CalibrationManagement.CalibrationResult", null)
-                        .WithMany("Validations")
-                        .HasForeignKey("CalibrationResultId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
@@ -7075,43 +6224,6 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("AuroraStruct3D.CalibrationManagement.CalibrationCaptureFrame", b =>
-                {
-                    b.Navigation("Images");
-                });
-
-            modelBuilder.Entity("AuroraStruct3D.CalibrationManagement.CalibrationDevice", b =>
-                {
-                    b.Navigation("CameraBindings");
-
-                    b.Navigation("CameraParameters");
-
-                    b.Navigation("GimbalGroups");
-
-                    b.Navigation("InterlockRules");
-
-                    b.Navigation("MotorBindings");
-
-                    b.Navigation("MotorParameters");
-
-                    b.Navigation("ProjectorBindings");
-
-                    b.Navigation("ProjectorParameters");
-                });
-
-            modelBuilder.Entity("AuroraStruct3D.CalibrationManagement.CalibrationGimbalGroup", b =>
-                {
-                    b.Navigation("PresetPositions");
-                });
-
-            modelBuilder.Entity("AuroraStruct3D.CalibrationManagement.CalibrationProject", b =>
-                {
-                    b.Navigation("Frames");
-                });
-
-            modelBuilder.Entity("AuroraStruct3D.CalibrationManagement.CalibrationResult", b =>
-                {
-                    b.Navigation("Validations");
             modelBuilder.Entity("AuroraStruct3D.Calibration.CalibGimbalGroup", b =>
                 {
                     b.Navigation("Bindings");

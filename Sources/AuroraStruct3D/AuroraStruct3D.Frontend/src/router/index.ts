@@ -151,22 +151,6 @@ const routes: RouteRecordRaw[] = [
                 meta: { requiresAuth: true, title: 'menu.productModelManage' },
             },
             {
-                path: 'calibration/devices',
-                name: 'CalibrationDevices',
-                component: () => import('@/views/calibration/CalibrationDevicePage.vue'),
-                meta: { requiresAuth: true, title: 'menu.calibrationDevices' },
-            },
-            {
-                path: 'calibration/projects',
-                name: 'CalibrationProjects',
-                component: () => import('@/views/calibration/CalibrationProjectPage.vue'),
-                meta: { requiresAuth: true, title: 'menu.calibrationProjects' },
-            },
-            {
-                path: 'calibration/projects/:id/wizard',
-                name: 'CalibrationWizard',
-                component: () => import('@/views/calibration/CalibrationWizardPage.vue'),
-                meta: { requiresAuth: true, title: 'menu.calibrationWizard' },
                 path: 'product-models/logs',
                 name: 'ProductModelLogs',
                 component: () => import('@/views/product-models/ProductModelLogsPage.vue'),

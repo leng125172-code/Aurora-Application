@@ -32,15 +32,4 @@
     <ItemGroup>
         <ProjectReference Include="..\..\AuroraAbpPro\Volo.Abp.BackgroundJobs.HangFire\Volo.Abp.BackgroundJobs.HangFire.csproj" />
     </ItemGroup>
-
-    <!-- OpenCV：用于 CalibrationComputeJob 真实标定计算（角点检测、Cv2.CalibrateCamera、Cv2.StereoCalibrate） -->
-    <!-- 注：Linux/ARM64 部署时需自行 apt 安装 libopencv 系统包，本项目仅声明 Windows 运行时 -->
-    <ItemGroup>
-        <PackageReference Include="OpenCvSharp4" Version="4.10.0.20241108" />
-        <PackageReference
-            Include="OpenCvSharp4.runtime.win"
-            Version="4.10.0.20241108"
-            Condition="'$(OS)' == 'Windows_NT'"
-        />
-    </ItemGroup>
 </Project>

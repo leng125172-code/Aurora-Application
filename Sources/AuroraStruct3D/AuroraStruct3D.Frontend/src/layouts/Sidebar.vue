@@ -16,7 +16,6 @@ import {
     Cable,
     Cpu,
     Box,
-    Crosshair,
     ScanLine,
     Layers,
     ChevronDown,
@@ -36,7 +35,6 @@ const projectorExpanded = ref(route.path.startsWith('/projectors'))
 const cameraExpanded = ref(route.path.startsWith('/cameras'))
 const serialPortExpanded = ref(route.path.startsWith('/serial-ports'))
 const motorExpanded = ref(route.path.startsWith('/motors'))
-const calibrationExpanded = ref(route.path.startsWith('/calibration'))
 const productModelExpanded = ref(route.path.startsWith('/product-models'))
 const aiModelExpanded = ref(route.path.startsWith('/ai-models'))
 
@@ -454,24 +452,6 @@ function navigate(path: string, tab?: string): void {
             </div>
 
             <!-- 三维数模管理 -->
-<<<<<<< HEAD
-            <button
-                :class="
-                    cn(
-                        'flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors text-left',
-                        isExactActive('/product-models')
-                            ? 'bg-accent text-accent-foreground'
-                            : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
-                    )
-                "
-                @click="navigate('/product-models')"
-            >
-                <Box class="size-4 shrink-0" />
-                {{ t('menu.productModelManage') }}
-            </button>
-
-            <!-- 标定管理 -->
-=======
             <div>
                 <button
                     :class="
@@ -568,45 +548,12 @@ function navigate(path: string, tab?: string): void {
             </div>
 
             <!-- 标定管理 可展开菜单 -->
->>>>>>> dev-calib
             <div>
                 <button
                     :class="
                         cn(
                             'flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors text-left',
                             route.path.startsWith('/calibration')
-<<<<<<< HEAD
-                                ? 'text-accent-foreground'
-                                : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
-                        )
-                    "
-                    @click="calibrationExpanded = !calibrationExpanded"
-                >
-                    <Crosshair class="size-4 shrink-0" />
-                    <span class="flex-1">{{ t('menu.calibrationManage') }}</span>
-                    <ChevronDown v-if="calibrationExpanded" class="size-3.5" />
-                    <ChevronRight v-else class="size-3.5" />
-                </button>
-                <div v-if="calibrationExpanded" class="ml-6 mt-0.5 space-y-0.5">
-                    <button
-                        :class="
-                            cn(
-                                'flex w-full items-center rounded-md px-3 py-1.5 text-sm transition-colors text-left',
-                                isExactActive('/calibration/devices')
-                                    ? 'bg-accent text-accent-foreground'
-                                    : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
-                            )
-                        "
-                        @click="navigate('/calibration/devices')"
-                    >
-                        {{ t('menu.calibrationDevices') }}
-                    </button>
-                    <button
-                        :class="
-                            cn(
-                                'flex w-full items-center rounded-md px-3 py-1.5 text-sm transition-colors text-left',
-                                route.path.startsWith('/calibration/projects')
-=======
                                 ? 'bg-accent text-accent-foreground'
                                 : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
                         )
@@ -624,16 +571,12 @@ function navigate(path: string, tab?: string): void {
                             cn(
                                 'flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors text-left',
                                 isExactActive('/calibration/projects')
->>>>>>> dev-calib
                                     ? 'bg-accent text-accent-foreground'
                                     : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
                             )
                         "
                         @click="navigate('/calibration/projects')"
                     >
-<<<<<<< HEAD
-                        {{ t('menu.calibrationProjects') }}
-=======
                         <ScanLine class="size-3.5 shrink-0" />
                         {{ t('menu.calibProjectManage') }}
                     </button>
@@ -650,7 +593,6 @@ function navigate(path: string, tab?: string): void {
                     >
                         <Layers class="size-3.5 shrink-0" />
                         {{ t('menu.calibGimbalGroupManage') }}
->>>>>>> dev-calib
                     </button>
                 </div>
             </div>

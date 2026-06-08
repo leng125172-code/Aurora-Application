@@ -156,8 +156,6 @@ namespace AuroraStruct3D
                 endpoints.MapHub<LeisaiMotorHub>("/signalr-hubs/leisai-motor");
                 // 产品数模转换进度推送 Hub
                 endpoints.MapHub<ProductModelHub>("/signalr-hubs/product-model");
-                // 标定计算实时进度推送 Hub
-                endpoints.MapHub<CalibrationHub>("/signalr-hubs/calibration");
                 endpoints.MapFallback(async httpContext =>
                 {
                     var path = httpContext.Request.Path.Value ?? string.Empty;
