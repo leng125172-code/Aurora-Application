@@ -96,12 +96,11 @@ namespace AuroraStruct3D.EntityFrameworkCore
         public DbSet<CalibProject> CalibProjects { get; set; }
         public DbSet<CalibMotorParam> CalibMotorParams { get; set; }
         public DbSet<CalibMotorConstraint> CalibMotorConstraints { get; set; }
-        public DbSet<CalibGimbalGroup> CalibGimbalGroups { get; set; }
-        public DbSet<CalibGimbalBinding> CalibGimbalBindings { get; set; }
         public DbSet<CalibCameraParam> CalibCameraParams { get; set; }
         public DbSet<CalibProjectorParam> CalibProjectorParams { get; set; }
         public DbSet<CalibDeviceBinding> CalibDeviceBindings { get; set; }
         public DbSet<CalibPhotoRecord> CalibPhotoRecords { get; set; }
+        public DbSet<CalibStereoResult> CalibStereoResults { get; set; }
 
         // ── 串口通讯模块 ────────────────────────────────────────────────────────────
         public DbSet<SerialPortConfig> SerialPortConfigs { get; set; }

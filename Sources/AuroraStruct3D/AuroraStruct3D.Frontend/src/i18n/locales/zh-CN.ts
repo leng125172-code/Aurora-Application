@@ -70,7 +70,7 @@ export default {
         aiModelLogs: 'AI 模型操作记录',
         calibration: '标定管理',
         calibProjectManage: '设备标定管理',
-        calibGimbalGroupManage: '标定结构管理',
+
         calibWizard: '标定向导',
         ktechMotorConsole: '瓴控电机操作台',
         leisaiMotorConsole: '雷赛电机操作台',
@@ -1284,8 +1284,7 @@ export default {
         refresh: '刷新',
         addProject: '新增标定项目',
         editProject: '编辑标定项目',
-        addGimbalGroup: '新增云台组',
-        editGimbalGroup: '编辑云台组',
+
         // 筛选占位符
         filterName: '搜索名称…',
         filterSeries: '设备系列',
@@ -1323,15 +1322,13 @@ export default {
         seriesSingleLight: '单光系列',
         // 设备类型（几目几光）
         type2C0L: '2目0光',
-        type3C0L: '3目0光',
         type1C1L: '1目1光',
         type2C1L: '2目1光',
-        type3C1L: '3目1光',
         // 标定状态
         statusInitializing: '初始化',
         statusMotorParam: '电机参数配置',
         statusMotorConstraint: '电机限制配置',
-        statusGimbal: '云台组配置',
+
         statusCameraParam: '相机参数配置',
         statusProjectorParam: '结构光参数配置',
         statusDeviceBinding: '设备绑定',
@@ -1347,13 +1344,13 @@ export default {
         // 向导 Step 标签
         step1Label: '设备标定信息',
         step2Label: '相机参数配置',
-        step3Label: '投影机参数',
-        step4Label: '电机/云台参数',
-        step5Label: '相机参数',
-        step6Label: '结构光参数',
-        step7Label: '设备绑定',
+        step3Label: '投影机参数配置',
+        step4Label: '伺服参数配置',
+        step5Label: '参数标定',
+        step6Label: '在线扫描',
+        step7Label: '点云生成',
         step4MotorTab: '电机参数配置',
-        step4GimbalTab: '云台参数配置',
+
         step4MotorTitle: '电机参数配置',
         step4MotorHint: '列出所有电机轴，并按品牌显示对应的回原与限位配置。',
         step4Refresh: '刷新',
@@ -1399,9 +1396,7 @@ export default {
         step4HomeCompleted: '回原测试已完成，驱动已按流程关闭使能。',
         step4HomeWaitTimeout: '回原测试已触发，但在等待时间内未检测到完成位，请继续结合实时监控确认现场状态。',
         step4HomeMoveAfterNotImplemented: '当前版本暂未实现“回原后移动到指定位置”的32位停止位写入。',
-        step4GimbalReservedTitle: '云台参数配置预留',
-        step4GimbalReservedDesc: '仅三目设备显示该标签。当前已检测到 {count} 个云台组，详细内容后续实现。',
-        step4OpenGimbalManage: '打开云台组管理',
+
         // Step 5 相机投影仪标定
         step5BoardConfigTitle: '标定板参数配置',
         step5PhysicalBoard: '实体棋盘格',

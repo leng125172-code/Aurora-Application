@@ -14,6 +14,9 @@ public class CameraDeviceDto : FullAuditedEntityDto<Guid>
     /// <summary>相机型号</summary>
     public string? Model { get; set; }
 
+    /// <summary>设备序列号（来自 DeviceControl/DeviceSerialNumber）</summary>
+    public string? DeviceSerialNumber { get; set; }
+
     /// <summary>设备物理索引</summary>
     public int DeviceIndex { get; set; }
 

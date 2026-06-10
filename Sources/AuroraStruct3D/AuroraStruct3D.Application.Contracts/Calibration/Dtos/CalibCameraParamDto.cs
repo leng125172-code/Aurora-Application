@@ -70,4 +70,7 @@ public class CalibCameraParamDto
 
     /// <summary>最后修改时间</summary>
     public DateTime? LastModificationTime { get; set; }
+
+    /// <summary>相机在项目中的位置绑定标签（如"主相机(左)"、"从相机(右)"），未绑定时为 null</summary>
+    public string? CameraPosition { get; set; }
 }

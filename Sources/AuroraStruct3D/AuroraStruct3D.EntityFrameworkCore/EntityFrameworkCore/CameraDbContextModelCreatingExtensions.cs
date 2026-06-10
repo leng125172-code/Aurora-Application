@@ -26,6 +26,8 @@ public static class CameraDbContextModelCreatingExtensions
 
             b.Property(x => x.Model).HasMaxLength(CameraConsts.MaxNameLength);
 
+            b.Property(x => x.DeviceSerialNumber).HasMaxLength(CameraConsts.MaxSerialNumberLength);
+
             b.Property(x => x.Description).HasMaxLength(CameraConsts.MaxDescriptionLength);
 
             b.Property(x => x.Status).HasConversion<int>();
@@ -33,6 +35,7 @@ public static class CameraDbContextModelCreatingExtensions
             b.Property(x => x.ImageRotationAngle).HasDefaultValue(0);
 
             b.HasIndex(x => x.DeviceIndex).IsUnique();
+            b.HasIndex(x => x.DeviceSerialNumber).IsUnique();
             b.HasIndex(x => x.IsEnabled);
 
             // 一个相机拥有多个参数集（级联删除）

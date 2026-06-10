@@ -62,7 +62,7 @@
         aiModelLogs: 'AI-Modellprotokolle',
         calibration: 'Kalibrierung',
         calibProjectManage: 'Kalibrierungsprojekte',
-        calibGimbalGroupManage: 'Gimbal-Gruppen',
+
         calibWizard: 'Kalibrierungsassistent',
         ktechMotorConsole: 'KTECH-Motor-Konsole',
         leisaiMotorConsole: 'Leisai-Motor-Konsole',
@@ -1283,8 +1283,7 @@
         refresh: 'Aktualisieren',
         addProject: 'Projekt hinzufügen',
         editProject: 'Projekt bearbeiten',
-        addGimbalGroup: 'Gimbal-Gruppe hinzufügen',
-        editGimbalGroup: 'Gimbal-Gruppe bearbeiten',
+
         filterName: 'Name suchen…',
         filterSeries: 'Geräteserie',
         filterType: 'Gerätetyp',
@@ -1314,14 +1313,12 @@
         seriesNoLight: 'Ohne Licht',
         seriesSingleLight: 'Mit Licht',
         type2C0L: '2-Kamera 0-Licht',
-        type3C0L: '3-Kamera 0-Licht',
         type1C1L: '1-Kamera 1-Licht',
         type2C1L: '2-Kamera 1-Licht',
-        type3C1L: '3-Kamera 1-Licht',
         statusInitializing: 'Initialisierung',
         statusMotorParam: 'Motorparameter',
         statusMotorConstraint: 'Motorbeschränkungen',
-        statusGimbal: 'Gimbal-Konfiguration',
+
         statusCameraParam: 'Kameraparameter',
         statusProjectorParam: 'Projektorparameter',
         statusDeviceBinding: 'Gerätebindung',
@@ -1336,13 +1333,13 @@
         // Schritt-Bezeichnungen
         step1Label: 'Geräteinformation',
         step2Label: 'Kamera-Parameter',
-        step3Label: 'Projektorparameter',
-        step4Label: 'Motor / Gimbal-Parameter',
-        step5Label: 'Kamera-Parameter',
-        step6Label: 'Projektor-Parameter',
-        step7Label: 'Gerätebindung',
+        step3Label: 'Projektor-Konfiguration',
+        step4Label: 'Servo-Konfiguration',
+        step5Label: 'Kalibrierung',
+        step6Label: 'Online-Scan',
+        step7Label: 'Punktwolke',
         step4MotorTab: 'Motorparameter',
-        step4GimbalTab: 'Gimbalparameter',
+
         step4MotorTitle: 'Motorparameter konfigurieren',
         step4MotorHint: 'Listet alle Motorachsen auf und zeigt markenspezifische Referenz- und Limit-Einstellungen an.',
         step4Refresh: 'Aktualisieren',
@@ -1389,9 +1386,7 @@
         step4HomeWaitTimeout:
             'Der Referenztest wurde ausgelöst, aber das Abschluss-Bit wurde vor dem Timeout nicht erkannt. Bitte Echtzeitüberwachung und Vor-Ort-Status weiter prüfen.',
         step4HomeMoveAfterNotImplemented: 'Das Schreiben der 32-Bit-Stopp-Position nach der Referenzfahrt ist noch nicht implementiert.',
-        step4GimbalReservedTitle: 'Gimbal-Parameter reserviert',
-        step4GimbalReservedDesc: 'Nur bei 3-Kamera-Geräten sichtbar. Derzeit sind {count} Gimbal-Gruppen vorhanden; Details folgen später.',
-        step4OpenGimbalManage: 'Gimbal-Gruppenverwaltung öffnen',
+
         // Step 5 Kamera- und Projektorkalibration
         step5BoardConfigTitle: 'Kalibrierplattenparameter',
         step5PhysicalBoard: 'Physisches Schachbrett',

@@ -16,6 +16,9 @@ public class CameraDevice : FullAuditedAggregateRoot<Guid>
     /// <summary>相机型号（从SDK读取）</summary>
     public string? Model { get; private set; }
 
+    /// <summary>设备序列号（来自 DeviceControl/DeviceSerialNumber）</summary>
+    public string? DeviceSerialNumber { get; private set; }
+
     /// <summary>物理索引（SDK中的相机位置，从0开始）</summary>
     public int DeviceIndex { get; private set; }
 
@@ -73,6 +76,27 @@ public class CameraDevice : FullAuditedAggregateRoot<Guid>
             Check.Length(model, nameof(model), CameraConsts.MaxNameLength);
         }
         Model = model;
+        return this;
+    }
+
+    /// <summary>更新设备序列号（空字符串会被归一化为 null）</summary>
+    public CameraDevice UpdateDeviceSerialNumber(string? serialNumber)
+    {
+        string? normalized = string.IsNullOrWhiteSpace(serialNumber) ? null : serialNumber.Trim();
+        if (normalized != null)
+        {
+            Check.Length(normalized, nameof(serialNumber), CameraConsts.MaxSerialNumberLength);
+        }
+
+        DeviceSerialNumber = normalized;
+        return this;
+    }
+
+    /// <summary>更新相机索引（用于序列号重映射）</summary>
+    public CameraDevice SetDeviceIndex(int deviceIndex)
+    {
+        Check.Range(deviceIndex, nameof(deviceIndex), 0, int.MaxValue);
+        DeviceIndex = deviceIndex;
         return this;
     }
 

@@ -70,7 +70,7 @@
         aiModelLogs: 'AI Model Operation Logs',
         calibration: 'Calibration',
         calibProjectManage: 'Calib Projects',
-        calibGimbalGroupManage: 'Gimbal Groups',
+
         calibWizard: 'Calibration Wizard',
         ktechMotorConsole: 'KTECH Motor Console',
         leisaiMotorConsole: 'Leisai Motor Console',
@@ -1283,8 +1283,7 @@
         refresh: 'Refresh',
         addProject: 'Add Project',
         editProject: 'Edit Project',
-        addGimbalGroup: 'Add Gimbal Group',
-        editGimbalGroup: 'Edit Gimbal Group',
+
         filterName: 'Search name…',
         filterSeries: 'Device Series',
         filterType: 'Device Type',
@@ -1314,14 +1313,12 @@
         seriesNoLight: 'No-light Series',
         seriesSingleLight: 'Single-light Series',
         type2C0L: '2-Cam 0-Light',
-        type3C0L: '3-Cam 0-Light',
         type1C1L: '1-Cam 1-Light',
         type2C1L: '2-Cam 1-Light',
-        type3C1L: '3-Cam 1-Light',
         statusInitializing: 'Initializing',
         statusMotorParam: 'Motor Params',
         statusMotorConstraint: 'Motor Constraints',
-        statusGimbal: 'Gimbal Config',
+
         statusCameraParam: 'Camera Params',
         statusProjectorParam: 'Projector Params',
         statusDeviceBinding: 'Device Binding',
@@ -1336,13 +1333,13 @@
         // Wizard step labels
         step1Label: 'Device Info',
         step2Label: 'Camera Params',
-        step3Label: 'Projector Parameters',
-        step4Label: 'Motor / Gimbal Params',
-        step5Label: 'Camera Params',
-        step6Label: 'Projector Params',
-        step7Label: 'Device Binding',
+        step3Label: 'Projector Config',
+        step4Label: 'Servo Config',
+        step5Label: 'Calibration',
+        step6Label: 'Online Scan',
+        step7Label: 'Point Cloud',
         step4MotorTab: 'Motor Params',
-        step4GimbalTab: 'Gimbal Params',
+
         step4MotorTitle: 'Motor Parameter Configuration',
         step4MotorHint: 'List all motor axes and show brand-specific homing and limit settings.',
         step4Refresh: 'Refresh',
@@ -1389,9 +1386,7 @@
         step4HomeWaitTimeout:
             'Homing test was triggered, but the completion bit was not detected before timeout. Please continue checking the realtime monitor and on-site status.',
         step4HomeMoveAfterNotImplemented: 'Move-to-target-after-home 32-bit stop position writing is not implemented yet.',
-        step4GimbalReservedTitle: 'Reserved Gimbal Settings',
-        step4GimbalReservedDesc: 'Shown only for 3-camera devices. {count} gimbal groups are detected; detailed content will be implemented later.',
-        step4OpenGimbalManage: 'Open Gimbal Group Management',
+
         // Step 5 Camera & Projector Calibration
         step5BoardConfigTitle: 'Calibration Board Configuration',
         step5PhysicalBoard: 'Physical Chessboard',

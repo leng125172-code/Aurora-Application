@@ -15,6 +15,14 @@ export enum CalibPhotoType {
   Intrinsic = 0,
   /** 外参拍照（开灯投影棋盘格） */
   Extrinsic = 1,
+  /** 双目联合外参成对拍照（左右同步拍真实棋盘格） */
+  StereoExtrinsicPair = 2,
+}
+
+/** 双目成对照片角色 */
+export enum StereoPhotoRole {
+  Main = 0,
+  Secondary = 1,
 }
 
 // ─── 接口定义 ─────────────────────────────────────────────────────────────────
@@ -27,6 +35,8 @@ export interface CalibPhotoDto {
   cornerCountDetected: number
   capturedAt: string
   thumbnailBase64: string | null
+  pairGroupId: string | null
+  stereoRole: StereoPhotoRole | null
 }
 
 /** 标定板参数（读/写） */
@@ -63,7 +73,18 @@ export interface TakeIntrinsicPhotoInput {
 export interface TakeExtrinsicPhotoInput {
   calibProjectId: string
   cameraDeviceId: string
-  projectorDeviceId: string
+}
+
+/** 双目联合外参成对拍照输入 */
+export interface TakeStereoExtrinsicPairPhotoInput {
+  calibProjectId: string
+}
+
+/** 双目成对拍照返回 */
+export interface CalibStereoPairPhotoDto {
+  pairGroupId: string
+  mainPhoto: CalibPhotoDto
+  secondaryPhoto: CalibPhotoDto
 }
 
 /** 标定计算结果 */
@@ -71,8 +92,30 @@ export interface CalibComputeResultDto {
   intrinsicMatrixJson: string
   distCoeffsJson: string
   reprojectionError: number
+  projectorReprojectionError: number | null
   extrinsicRvecJson: string | null
   extrinsicTvecJson: string | null
+}
+
+/** 双目联合标定计算结果 */
+export interface CalibStereoComputeResultDto {
+  mainCameraDeviceId: string
+  secondaryCameraDeviceId: string
+  stereoReprojectionError: number
+  rotationMatrixJson: string
+  translationVectorJson: string
+  transformLtoRJson: string
+  transformRtoLJson: string
+  rectificationR1Json: string
+  rectificationR2Json: string
+  projectionP1Json: string
+  projectionP2Json: string
+  rectifyMapWidth: number
+  rectifyMapHeight: number
+  map1XBlobKey: string
+  map1YBlobKey: string
+  map2XBlobKey: string
+  map2YBlobKey: string
 }
 
 /** 相机标定汇总（照片计数 + 最新结果） */
@@ -83,6 +126,13 @@ export interface CalibCameraStatusDto {
   extrinsicTotal: number
   extrinsicValid: number
   latestResult: CalibComputeResultDto | null
+}
+
+/** 双目联合标定状态 */
+export interface CalibStereoStatusDto {
+  pairTotal: number
+  pairValid: number
+  latestResult: CalibStereoComputeResultDto | null
 }
 
 // ─── API 函数 ─────────────────────────────────────────────────────────────────
@@ -98,12 +148,11 @@ export async function updateBoardConfig(input: UpdateBoardConfigInput): Promise<
 
 /**
  * 获取标定项目当前棋盘格参数
- * ABP 路由: GET /api/app/calib-photo/board-config?calibProjectId=...（非 id 字段走 query string）
+ * ABP 路由: GET /api/app/calib-photo/board-config/{calibProjectId}
+ * 注意：ABP 约定路由会把单个 *Id 参数提升为路径段，而不是 query 参数。
  */
 export async function getBoardConfig(calibProjectId: string): Promise<CalibBoardConfigDto> {
-  const res = await httpClient.get<CalibBoardConfigDto>(`${BASE}/board-config`, {
-    params: { calibProjectId },
-  })
+  const res = await httpClient.get<CalibBoardConfigDto>(`${BASE}/board-config/${calibProjectId}`)
   return res.data
 }
 
@@ -128,6 +177,19 @@ export async function takeExtrinsicPhoto(
   timeout = 30000,
 ): Promise<CalibPhotoDto> {
   const res = await httpClient.post<CalibPhotoDto>(`${BASE}/take-extrinsic-photo`, input, {
+    timeout,
+  })
+  return res.data
+}
+
+/**
+ * 双目联合外参成对拍照（一次采集主/从相机两张）
+ */
+export async function takeStereoExtrinsicPairPhoto(
+  input: TakeStereoExtrinsicPairPhotoInput,
+  timeout = 30000,
+): Promise<CalibStereoPairPhotoDto> {
+  const res = await httpClient.post<CalibStereoPairPhotoDto>(`${BASE}/take-stereo-extrinsic-pair-photo`, input, {
     timeout,
   })
   return res.data
@@ -179,9 +241,9 @@ export async function computeCalibration(
   timeout = 120000,
 ): Promise<CalibComputeResultDto> {
   const res = await httpClient.post<CalibComputeResultDto>(
-    `${BASE}/compute`,
-    { calibProjectId, cameraDeviceId },
-    { timeout },
+    `${BASE}/compute-calibration`,
+    null,
+    { params: { calibProjectId, cameraDeviceId }, timeout },
   )
   return res.data
 }
@@ -196,5 +258,31 @@ export async function getCameraStatus(
   const res = await httpClient.get<CalibCameraStatusDto>(`${BASE}/camera-status`, {
     params: { calibProjectId, cameraDeviceId },
   })
+  return res.data
+}
+
+/**
+ * 计算双目联合外参（StereoCalibrate）
+ */
+export async function computeStereoCalibration(
+  calibProjectId: string,
+  timeout = 120000,
+): Promise<CalibStereoComputeResultDto> {
+  const res = await httpClient.post<CalibStereoComputeResultDto>(
+    `${BASE}/compute-stereo-calibration`,
+    null,
+    { params: { calibProjectId }, timeout },
+  )
+  return res.data
+}
+
+/**
+ * 获取双目联合标定状态（成对样本计数 + 最新结果）
+ * ABP 路由: GET /api/app/calib-photo/stereo-status/{calibProjectId}
+ */
+export async function getStereoStatus(calibProjectId: string): Promise<CalibStereoStatusDto> {
+  const res = await httpClient.get<CalibStereoStatusDto>(
+    `${BASE}/stereo-status/${calibProjectId}`,
+  )
   return res.data
 }

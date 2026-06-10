@@ -132,13 +132,30 @@ public static class ServiceCollectionExtensions
         IConfiguration configuration
     )
     {
-        // 优先读取配置文件中的路径，未配置时回退到程序目录（开发环境兼容）
-        var productModelsBasePath =
-            configuration["BlobStoring:ProductModels:BasePath"]
-            ?? Path.Combine(AppContext.BaseDirectory, "files", "product-models");
-        var aiModelsBasePath =
-            configuration["BlobStoring:AiModels:BasePath"]
-            ?? Path.Combine(AppContext.BaseDirectory, "files", "ai-models");
+        var defaultBasePath = ResolveBlobBasePath(
+            configuration,
+            "BlobStoring:Default:BasePath",
+            "files",
+            "default"
+        );
+        var productModelsBasePath = ResolveBlobBasePath(
+            configuration,
+            "BlobStoring:ProductModels:BasePath",
+            "files",
+            "product-models"
+        );
+        var aiModelsBasePath = ResolveBlobBasePath(
+            configuration,
+            "BlobStoring:AiModels:BasePath",
+            "files",
+            "ai-models"
+        );
+        var calibPhotosBasePath = ResolveBlobBasePath(
+            configuration,
+            "BlobStoring:CalibPhotos:BasePath",
+            "files",
+            "calib-photos"
+        );
 
         service.Configure<AbpBlobStoringOptions>(options =>
         {
@@ -146,7 +163,7 @@ public static class ServiceCollectionExtensions
             {
                 container.UseFileSystem(fileSystem =>
                 {
-                    fileSystem.BasePath = "C:\\my-files";
+                    fileSystem.BasePath = defaultBasePath;
                 });
             });
 
@@ -169,8 +186,61 @@ public static class ServiceCollectionExtensions
                     fileSystem.BasePath = aiModelsBasePath;
                 });
             });
+
+            options.Containers.Configure<AuroraStruct3D.Calibration.CalibPhotoBlobContainer>(
+                container =>
+                {
+                    container.UseFileSystem(fileSystem =>
+                    {
+                        fileSystem.BasePath = calibPhotosBasePath;
+                    });
+                }
+            );
         });
         return service;
+    }
+
+    private static string ResolveBlobBasePath(
+        IConfiguration configuration,
+        string configurationKey,
+        params string[] fallbackSegments
+    )
+    {
+        string? configuredBasePath = configuration[configurationKey];
+        if (string.IsNullOrWhiteSpace(configuredBasePath))
+        {
+            return BuildFallbackBlobBasePath(fallbackSegments);
+        }
+
+        if (!OperatingSystem.IsWindows() && LooksLikeWindowsAbsolutePath(configuredBasePath))
+        {
+            throw new InvalidOperationException(
+                $"Blob 存储配置项 {configurationKey} 使用了 Windows 绝对路径 {configuredBasePath}，请改为 Linux 绝对路径或相对程序目录的路径。"
+            );
+        }
+
+        return Path.IsPathRooted(configuredBasePath)
+            ? Path.GetFullPath(configuredBasePath)
+            : Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, configuredBasePath));
+    }
+
+    private static string BuildFallbackBlobBasePath(params string[] segments)
+    {
+        string path = AppContext.BaseDirectory;
+        foreach (string segment in segments)
+        {
+            path = Path.Combine(path, segment);
+        }
+
+        return Path.GetFullPath(path);
+    }
+
+    private static bool LooksLikeWindowsAbsolutePath(string path)
+    {
+        return path.Length >= 3
+            && char.IsLetter(path[0])
+            && path[1] == ':'
+            && (path[2] == '\\' || path[2] == '/');
     }
 
     /// <summary>

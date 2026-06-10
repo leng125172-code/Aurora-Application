@@ -405,6 +405,10 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                     b.Property<Guid>("CameraDeviceId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("CameraPosition")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
                     b.Property<DateTime>("CreationTime")
                         .HasColumnType("timestamp without time zone")
                         .HasColumnName("CreationTime");
@@ -506,6 +510,9 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                         .HasPrecision(10, 4)
                         .HasColumnType("numeric(10,4)");
 
+                    b.Property<double?>("ProjectorReprojectionError")
+                        .HasColumnType("double precision");
+
                     b.Property<double?>("ReprojectionError")
                         .HasColumnType("double precision");
 
@@ -549,9 +556,6 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                         .HasColumnType("integer");
 
                     b.Property<Guid?>("BoundCameraParamId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid?>("BoundGimbalGroupId")
                         .HasColumnType("uuid");
 
                     b.Property<Guid?>("BoundMotorParamId")
@@ -607,8 +611,6 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("BoundGimbalGroupId");
-
                     b.HasIndex("CalibProjectId");
 
                     b.HasIndex("CalibProjectId", "BindingType");
@@ -617,133 +619,6 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                         .IsUnique();
 
                     b.ToTable("AbpProCalibDeviceBindings", (string)null);
-                });
-
-            modelBuilder.Entity("AuroraStruct3D.Calibration.CalibGimbalBinding", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
-
-                    b.Property<int>("AxisType")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp without time zone")
-                        .HasColumnName("CreationTime");
-
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
-
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
-
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp without time zone")
-                        .HasColumnName("DeletionTime");
-
-                    b.Property<Guid>("GimbalGroupId")
-                        .HasColumnType("uuid");
-
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
-
-                    b.Property<bool>("IsRequired")
-                        .HasColumnType("boolean");
-
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp without time zone")
-                        .HasColumnName("LastModificationTime");
-
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
-
-                    b.Property<Guid>("MotorAxisId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("GimbalGroupId");
-
-                    b.HasIndex("GimbalGroupId", "AxisType")
-                        .IsUnique();
-
-                    b.ToTable("AbpProCalibGimbalBindings", (string)null);
-                });
-
-            modelBuilder.Entity("AuroraStruct3D.Calibration.CalibGimbalGroup", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
-
-                    b.Property<decimal>("Acceleration")
-                        .HasPrecision(18, 6)
-                        .HasColumnType("numeric(18,6)");
-
-                    b.Property<decimal>("AccelerationTime")
-                        .HasPrecision(18, 3)
-                        .HasColumnType("numeric(18,3)");
-
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp without time zone")
-                        .HasColumnName("CreationTime");
-
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
-
-                    b.Property<decimal>("DecelerationTime")
-                        .HasPrecision(18, 3)
-                        .HasColumnType("numeric(18,3)");
-
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
-
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp without time zone")
-                        .HasColumnName("DeletionTime");
-
-                    b.Property<string>("Description")
-                        .HasMaxLength(1024)
-                        .HasColumnType("character varying(1024)");
-
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
-
-                    b.Property<bool>("IsEnabled")
-                        .HasColumnType("boolean");
-
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp without time zone")
-                        .HasColumnName("LastModificationTime");
-
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
-
-                    b.Property<decimal>("MaxSpeed")
-                        .HasPrecision(18, 6)
-                        .HasColumnType("numeric(18,6)");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("IsEnabled");
-
-                    b.ToTable("AbpProCalibGimbalGroups", (string)null);
                 });
 
             modelBuilder.Entity("AuroraStruct3D.Calibration.CalibMotorConstraint", b =>
@@ -945,7 +820,13 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("LastModifierId");
 
+                    b.Property<Guid?>("PairGroupId")
+                        .HasColumnType("uuid");
+
                     b.Property<int>("PhotoType")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("StereoRole")
                         .HasColumnType("integer");
 
                     b.Property<string>("ThumbnailBase64")
@@ -959,6 +840,8 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
 
                     b.HasIndex("CalibProjectId", "CameraDeviceId");
 
+                    b.HasIndex("CalibProjectId", "PairGroupId");
+
                     b.HasIndex("CalibProjectId", "CameraDeviceId", "PhotoType");
 
                     b.ToTable("AbpProCalibPhotoRecords", (string)null);
@@ -967,6 +850,9 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
             modelBuilder.Entity("AuroraStruct3D.Calibration.CalibProject", b =>
                 {
                     b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("BoundProjectorDeviceId")
                         .HasColumnType("uuid");
 
                     b.Property<int>("CalibStatus")
@@ -1008,6 +894,9 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                     b.Property<int>("DeviceType")
                         .HasColumnType("integer");
 
+                    b.Property<Guid?>("DistanceMotorAxisId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("ExtraProperties")
                         .IsRequired()
                         .HasColumnType("text")
@@ -1026,6 +915,12 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                     b.Property<Guid?>("LastModifierId")
                         .HasColumnType("uuid")
                         .HasColumnName("LastModifierId");
+
+                    b.Property<Guid?>("MainCameraDeviceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("MainCameraMotorAxisId")
+                        .HasColumnType("uuid");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -1053,6 +948,12 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
 
                     b.Property<int>("ProjectorCount")
                         .HasColumnType("integer");
+
+                    b.Property<Guid?>("SecondaryCameraDeviceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("SecondaryCameraMotorAxisId")
+                        .HasColumnType("uuid");
 
                     b.HasKey("Id");
 
@@ -1158,6 +1059,129 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                     b.ToTable("AbpProCalibProjectorParams", (string)null);
                 });
 
+            modelBuilder.Entity("AuroraStruct3D.Calibration.CalibStereoResult", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CalibProjectId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreationTime")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("CreationTime");
+
+                    b.Property<Guid?>("CreatorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("CreatorId");
+
+                    b.Property<Guid?>("DeleterId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("DeleterId");
+
+                    b.Property<DateTime?>("DeletionTime")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("DeletionTime");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("IsDeleted");
+
+                    b.Property<DateTime?>("LastModificationTime")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("LastModificationTime");
+
+                    b.Property<Guid?>("LastModifierId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("LastModifierId");
+
+                    b.Property<Guid>("MainCameraDeviceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Map1XBlobKey")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<string>("Map1YBlobKey")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<string>("Map2XBlobKey")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<string>("Map2YBlobKey")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<string>("ProjectionP1Json")
+                        .IsRequired()
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
+                    b.Property<string>("ProjectionP2Json")
+                        .IsRequired()
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
+                    b.Property<string>("RectificationR1Json")
+                        .IsRequired()
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
+                    b.Property<string>("RectificationR2Json")
+                        .IsRequired()
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
+                    b.Property<int>("RectifyMapHeight")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("RectifyMapWidth")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("RotationMatrixJson")
+                        .IsRequired()
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
+                    b.Property<Guid>("SecondaryCameraDeviceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<double>("StereoReprojectionError")
+                        .HasColumnType("double precision");
+
+                    b.Property<string>("TransformLtoRJson")
+                        .IsRequired()
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
+                    b.Property<string>("TransformRtoLJson")
+                        .IsRequired()
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
+                    b.Property<string>("TranslationVectorJson")
+                        .IsRequired()
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CalibProjectId")
+                        .IsUnique();
+
+                    b.HasIndex("MainCameraDeviceId", "SecondaryCameraDeviceId");
+
+                    b.ToTable("AbpProCalibStereoResults", (string)null);
+                });
+
             modelBuilder.Entity("AuroraStruct3D.Cameras.CameraDevice", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1195,6 +1219,10 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
 
                     b.Property<int>("DeviceIndex")
                         .HasColumnType("integer");
+
+                    b.Property<string>("DeviceSerialNumber")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
 
                     b.Property<string>("ExtraProperties")
                         .IsRequired()
@@ -1238,6 +1266,9 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("DeviceIndex")
+                        .IsUnique();
+
+                    b.HasIndex("DeviceSerialNumber")
                         .IsUnique();
 
                     b.HasIndex("IsEnabled");
@@ -6040,23 +6071,6 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("AuroraStruct3D.Calibration.CalibDeviceBinding", b =>
-                {
-                    b.HasOne("AuroraStruct3D.Calibration.CalibGimbalGroup", null)
-                        .WithMany()
-                        .HasForeignKey("BoundGimbalGroupId")
-                        .OnDelete(DeleteBehavior.Restrict);
-                });
-
-            modelBuilder.Entity("AuroraStruct3D.Calibration.CalibGimbalBinding", b =>
-                {
-                    b.HasOne("AuroraStruct3D.Calibration.CalibGimbalGroup", null)
-                        .WithMany("Bindings")
-                        .HasForeignKey("GimbalGroupId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
             modelBuilder.Entity("AuroraStruct3D.Cameras.CameraOperationLog", b =>
                 {
                     b.HasOne("AuroraStruct3D.Cameras.CameraDevice", null)
@@ -6358,11 +6372,6 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                         .HasForeignKey("TenantId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-                });
-
-            modelBuilder.Entity("AuroraStruct3D.Calibration.CalibGimbalGroup", b =>
-                {
-                    b.Navigation("Bindings");
                 });
 
             modelBuilder.Entity("AuroraStruct3D.Cameras.CameraDevice", b =>

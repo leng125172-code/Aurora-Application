@@ -193,7 +193,7 @@ def publish_project(project_name: str, index: int, total: int) -> None:
         "-r",
         RUNTIME,
         "--self-contained",
-        "true",
+        "false",
         "-f",
         FRAMEWORK,
         "-v",

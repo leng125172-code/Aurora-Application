@@ -140,30 +140,78 @@ public class CameraDeviceAppService : AuroraStruct3DAppService, ICameraDeviceApp
             // 扫描阶段无需打开相机，直接按索引读取型号
             string model = await _tucamService.GetModelByIndexAsync(i);
 
-            CameraDevice? existing = await _cameraDeviceRepository.FindByDeviceIndexAsync(i);
-            if (existing == null)
+            // 扫描阶段读取序列号用于稳定识别相机归属
+            string? serialNumber = await TryReadSerialNumberByIndexAsync(i);
+
+            CameraDevice? matchedCamera = null;
+            if (!string.IsNullOrWhiteSpace(serialNumber))
             {
-                // 自动创建数据库记录，附带型号信息
+                matchedCamera = await _cameraDeviceRepository.FindByDeviceSerialNumberAsync(
+                    serialNumber
+                );
+            }
+
+            // 回退策略：序列号缺失时按索引匹配老记录
+            if (matchedCamera == null)
+            {
+                matchedCamera = await _cameraDeviceRepository.FindByDeviceIndexAsync(i);
+            }
+
+            if (matchedCamera == null)
+            {
                 var newCamera = new CameraDevice(GuidGenerator.Create(), $"相机 #{i}", i);
-                if (!string.IsNullOrEmpty(model))
-                {
-                    newCamera.UpdateHardwareInfo(model);
-                }
+                newCamera.UpdateHardwareInfo(model);
+                newCamera.UpdateDeviceSerialNumber(serialNumber);
                 await _cameraDeviceRepository.InsertAsync(newCamera);
-                Logger.LogInformation("自动注册相机设备，索引: {Index}，型号: {Model}", i, model);
+
+                Logger.LogInformation(
+                    "自动注册相机设备，索引: {Index}，型号: {Model}，序列号: {SerialNumber}",
+                    i,
+                    model,
+                    serialNumber ?? "(空)"
+                );
                 deviceIdMap[i] = newCamera.Id;
+                continue;
             }
-            else
+
+            bool updated = false;
+            if (matchedCamera.DeviceIndex != i)
             {
-                if (!string.IsNullOrEmpty(model) && existing.Model != model)
-                {
-                    // 型号有变化时更新
-                    existing.UpdateHardwareInfo(model);
-                    await _cameraDeviceRepository.UpdateAsync(existing);
-                    Logger.LogInformation("更新相机 {Index} 型号: {Model}", i, model);
-                }
-                deviceIdMap[i] = existing.Id;
+                matchedCamera.SetDeviceIndex(i);
+                updated = true;
             }
+
+            if (!string.Equals(matchedCamera.Model, model, StringComparison.Ordinal))
+            {
+                matchedCamera.UpdateHardwareInfo(model);
+                updated = true;
+            }
+
+            if (
+                !string.Equals(
+                    matchedCamera.DeviceSerialNumber,
+                    serialNumber,
+                    StringComparison.Ordinal
+                )
+            )
+            {
+                matchedCamera.UpdateDeviceSerialNumber(serialNumber);
+                updated = true;
+            }
+
+            if (updated)
+            {
+                await _cameraDeviceRepository.UpdateAsync(matchedCamera);
+                Logger.LogInformation(
+                    "更新相机记录，ID: {CameraId}，索引: {Index}，型号: {Model}，序列号: {SerialNumber}",
+                    matchedCamera.Id,
+                    i,
+                    model,
+                    serialNumber ?? "(空)"
+                );
+            }
+
+            deviceIdMap[i] = matchedCamera.Id;
         }
 
         // 扫描完成后刷新 TucamCameraService 的操作日志映射，防止外键违规
@@ -181,7 +229,9 @@ public class CameraDeviceAppService : AuroraStruct3DAppService, ICameraDeviceApp
 
         // 读取硬件信息并更新数据库
         string model = await _tucamService.GetCameraModelAsync(camera.DeviceIndex);
+        string? serialNumber = await TryReadSerialNumberFromOpenCameraAsync(camera.DeviceIndex);
         camera.UpdateHardwareInfo(model);
+        camera.UpdateDeviceSerialNumber(serialNumber);
         camera.SetStatus(CameraStatus.Ready);
         await _cameraDeviceRepository.UpdateAsync(camera);
     }
@@ -262,6 +312,52 @@ public class CameraDeviceAppService : AuroraStruct3DAppService, ICameraDeviceApp
                 Logger.LogWarning("未识别的能力键: {Key}，已跳过", param.ParamKey);
             }
         }
+    }
+
+    /// <summary>
+    /// 扫描阶段按索引临时打开相机读取 DeviceSerialNumber，读取后立即关闭。
+    /// </summary>
+    private async Task<string?> TryReadSerialNumberByIndexAsync(int deviceIndex)
+    {
+        try
+        {
+            await _tucamService.OpenCameraAsync(deviceIndex);
+            try
+            {
+                return await TryReadSerialNumberFromOpenCameraAsync(deviceIndex);
+            }
+            finally
+            {
+                await _tucamService.CloseCameraAsync(deviceIndex);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(
+                ex,
+                "扫描阶段读取相机序列号失败，索引: {Index}，将回退索引匹配",
+                deviceIndex
+            );
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// 在相机已打开时读取 DeviceSerialNumber，并做空值归一化。
+    /// </summary>
+    private async Task<string?> TryReadSerialNumberFromOpenCameraAsync(int deviceIndex)
+    {
+        string? serialNumber = await _tucamService.GetGenICamStringAsync(
+            deviceIndex,
+            "DeviceSerialNumber"
+        );
+
+        if (string.IsNullOrWhiteSpace(serialNumber))
+        {
+            return null;
+        }
+
+        return serialNumber.Trim();
     }
 
     // ─── 手动控制：硬件信息 ─────────────────────────────────────────────────

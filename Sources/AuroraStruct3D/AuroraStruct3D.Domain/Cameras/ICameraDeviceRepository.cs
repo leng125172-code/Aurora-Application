@@ -18,6 +18,16 @@ public interface ICameraDeviceRepository : IRepository<CameraDevice, Guid>
     );
 
     /// <summary>
+    /// 根据设备序列号查找相机
+    /// </summary>
+    /// <param name="deviceSerialNumber">设备序列号（DeviceControl/DeviceSerialNumber）</param>
+    /// <param name="cancellationToken">取消令牌</param>
+    Task<CameraDevice?> FindByDeviceSerialNumberAsync(
+        string deviceSerialNumber,
+        CancellationToken cancellationToken = default
+    );
+
+    /// <summary>
     /// 获取所有启用的相机列表
     /// </summary>
     /// <param name="cancellationToken">取消令牌</param>

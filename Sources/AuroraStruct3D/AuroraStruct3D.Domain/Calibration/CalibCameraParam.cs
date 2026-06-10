@@ -66,6 +66,9 @@ public class CalibCameraParam : FullAuditedEntity<Guid>
     /// <summary>最大增益（dB）</summary>
     public decimal GainMaxDb { get; private set; }
 
+    /// <summary>相机在项目中的位置绑定标签（如"主相机(左)"、"从相机(右)"、"主相机(中上)"等）</summary>
+    public string? CameraPosition { get; private set; }
+
     /// <summary>是否启用</summary>
     public bool IsEnabled { get; private set; }
 
@@ -91,6 +94,9 @@ public class CalibCameraParam : FullAuditedEntity<Guid>
 
     /// <summary>外参平移向量（JSON 序列化的 double[] 数组）</summary>
     public string? ExtrinsicTvecJson { get; private set; }
+
+    /// <summary>投影外参重投影误差（像素）</summary>
+    public double? ProjectorReprojectionError { get; private set; }
 
     // EF Core 所需的无参构造函数
     protected CalibCameraParam() { }
@@ -217,6 +223,17 @@ public class CalibCameraParam : FullAuditedEntity<Guid>
         return this;
     }
 
+    /// <summary>设置相机在项目中的位置绑定标签（如"主相机(左)"），传 null 清除绑定</summary>
+    public CalibCameraParam SetCameraPosition(string? position)
+    {
+        if (position != null)
+        {
+            Check.Length(position, nameof(position), CalibConsts.MaxCameraPositionLength);
+        }
+        CameraPosition = position;
+        return this;
+    }
+
     /// <summary>
     /// 设置标定计算结果（内外参矩阵和重投影误差）
     /// </summary>
@@ -225,12 +242,14 @@ public class CalibCameraParam : FullAuditedEntity<Guid>
     /// <param name="reprojectionError">重投影误差（px）</param>
     /// <param name="extrinsicRvecJson">旋转向量 JSON，无投影仪时传 null</param>
     /// <param name="extrinsicTvecJson">平移向量 JSON，无投影仪时传 null</param>
+    /// <param name="projectorReprojectionError">投影外参重投影误差（px，无投影仪时传 null）</param>
     public CalibCameraParam SetCalibResult(
         string intrinsicMatrixJson,
         string distCoeffsJson,
         double reprojectionError,
         string? extrinsicRvecJson = null,
-        string? extrinsicTvecJson = null
+        string? extrinsicTvecJson = null,
+        double? projectorReprojectionError = null
     )
     {
         Check.NotNullOrWhiteSpace(
@@ -249,6 +268,7 @@ public class CalibCameraParam : FullAuditedEntity<Guid>
         ReprojectionError = reprojectionError;
         ExtrinsicRvecJson = extrinsicRvecJson;
         ExtrinsicTvecJson = extrinsicTvecJson;
+        ProjectorReprojectionError = projectorReprojectionError;
         return this;
     }
 
@@ -260,6 +280,7 @@ public class CalibCameraParam : FullAuditedEntity<Guid>
         ReprojectionError = null;
         ExtrinsicRvecJson = null;
         ExtrinsicTvecJson = null;
+        ProjectorReprojectionError = null;
         return this;
     }
 }

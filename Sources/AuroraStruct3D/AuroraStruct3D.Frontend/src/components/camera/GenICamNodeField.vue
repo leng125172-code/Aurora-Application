@@ -198,7 +198,7 @@ const editingValueNum = computed<number | null>({
                     option-label="displayName"
                     option-value="valueStr"
                     size="small"
-                    class="flex-1 min-w-0"
+                    class="flex-1 min-w-0 !text-xs"
                     :pt="{
                         root: { class: '!py-0 !px-2 !text-xs !h-7 !flex !items-center' },
                         label: {
@@ -215,10 +215,13 @@ const editingValueNum = computed<number | null>({
                     option-label="label"
                     option-value="value"
                     size="small"
-                    class="w-24"
+                    class="w-24 !text-xs"
                     :pt="{
-                        root: { class: '!h-7 !py-0' },
-                        label: { class: '!text-xs !py-0 !leading-none' },
+                        root: { class: '!py-0 !px-2 !text-xs !h-7 !flex !items-center' },
+                        label: {
+                            class: '!text-xs !py-0 !leading-none !truncate !flex-1 !flex !items-center !h-full',
+                        },
+                        dropdown: { class: '!w-6 !flex !items-center !justify-center' },
                     }"
                 />
                 <!-- 整数 InputNumber -->

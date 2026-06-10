@@ -62,7 +62,7 @@
         aiModelLogs: 'AI モデル操作履歴',
         calibration: 'キャリブレーション',
         calibProjectManage: '標定プロジェクト',
-        calibGimbalGroupManage: 'ギンバルグループ',
+
         calibWizard: 'キャリブレーションウィザード',
         ktechMotorConsole: 'KTECH モーターコンソール',
         leisaiMotorConsole: 'レイサイモーターコンソール',
@@ -1283,8 +1283,7 @@
         refresh: '更新',
         addProject: 'プロジェクト追加',
         editProject: 'プロジェクト編集',
-        addGimbalGroup: 'ギンバルグループ追加',
-        editGimbalGroup: 'ギンバルグループ編集',
+
         filterName: '名前で検索…',
         filterSeries: 'デバイスシリーズ',
         filterType: 'デバイスタイプ',
@@ -1314,14 +1313,12 @@
         seriesNoLight: 'ノーライト',
         seriesSingleLight: 'シングルライト',
         type2C0L: '2カメラ 0光',
-        type3C0L: '3カメラ 0光',
         type1C1L: '1カメラ 1光',
         type2C1L: '2カメラ 1光',
-        type3C1L: '3カメラ 1光',
         statusInitializing: '初期化',
         statusMotorParam: 'モーターパラメーター',
         statusMotorConstraint: 'モーター制限',
-        statusGimbal: 'ギンバル設定',
+
         statusCameraParam: 'カメラパラメーター',
         statusProjectorParam: 'プロジェクターパラメーター',
         statusDeviceBinding: 'デバイスバインディング',
@@ -1336,13 +1333,13 @@
         // ステップラベル
         step1Label: 'デバイス情報',
         step2Label: 'カメラパラメータ',
-        step3Label: 'プロジェクターパラメーター',
-        step4Label: 'モーター / ジンバル設定',
-        step5Label: 'カメラパラメータ',
-        step6Label: 'プロジェクターパラメータ',
-        step7Label: 'デバイスバインド',
+        step3Label: 'プロジェクター設定',
+        step4Label: 'サーボ設定',
+        step5Label: 'キャリブレーション',
+        step6Label: 'オンラインスキャン',
+        step7Label: 'ポイントクラウド',
         step4MotorTab: 'モーターパラメータ',
-        step4GimbalTab: 'ジンバルパラメータ',
+
         step4MotorTitle: 'モーターパラメータ設定',
         step4MotorHint: 'すべてのモーター軸を一覧し、ブランド別の原点復帰・リミット設定を表示します。',
         step4Refresh: '更新',
@@ -1389,9 +1386,7 @@
         step4HomeWaitTimeout:
             '原点復帰テストは開始されましたが、待機時間内に完了ビットを検出できませんでした。リアルタイム監視と現場状態を継続して確認してください。',
         step4HomeMoveAfterNotImplemented: '原点復帰後移動の 32 ビット停止位置書き込みはまだ未実装です。',
-        step4GimbalReservedTitle: 'ジンバル設定（予約）',
-        step4GimbalReservedDesc: '3 カメラ設備のみ表示されます。現在 {count} 件のジンバルグループがあり、詳細は後続で実装します。',
-        step4OpenGimbalManage: 'ジンバルグループ管理を開く',
+
         // Step 5 カメラ・プロジェクターキャリブレーション
         step5BoardConfigTitle: 'キャリブレーションボード設定',
         step5PhysicalBoard: '実体チェッカーボード',

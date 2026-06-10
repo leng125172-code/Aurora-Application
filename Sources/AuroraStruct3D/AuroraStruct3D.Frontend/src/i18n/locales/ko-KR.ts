@@ -62,7 +62,7 @@ export default {
         aiModelLogs: 'AI 모델 작업 기록',
         calibration: '쾘리브레이션',
         calibProjectManage: '캘리브 프로젝트',
-        calibGimbalGroupManage: '짐벌 그룹',
+
         calibWizard: '보정 마법사',
         ktechMotorConsole: 'KTECH 모터 콘솔',
         leisaiMotorConsole: 'Leisai 모터 콘솔',
@@ -1284,8 +1284,7 @@ export default {
         refresh: '새로고침',
         addProject: '프로젝트 추가',
         editProject: '프로젝트 편집',
-        addGimbalGroup: '짐벌 그룹 추가',
-        editGimbalGroup: '짐벌 그룹 편집',
+
         filterName: '이름 검색…',
         filterSeries: '기기 시리즈',
         filterType: '기기 유형',
@@ -1315,14 +1314,12 @@ export default {
         seriesNoLight: '로 라이트',
         seriesSingleLight: '싱글 라이트',
         type2C0L: '2카메라 0광',
-        type3C0L: '3카메라 0광',
         type1C1L: '1카메라 1광',
         type2C1L: '2카메라 1광',
-        type3C1L: '3카메라 1광',
         statusInitializing: '초기화',
         statusMotorParam: '모터 매개변수',
         statusMotorConstraint: '모터 제한',
-        statusGimbal: '짐벌 설정',
+
         statusCameraParam: '카메라 매개변수',
         statusProjectorParam: '프로젝터 매개변수',
         statusDeviceBinding: '기기 바인딩',
@@ -1337,13 +1334,13 @@ export default {
         // 단계 레이블
         step1Label: '장치 정보',
         step2Label: '카메라 파라미터',
-        step3Label: '프로젝터 파라미터',
-        step4Label: '모터 / 짐벌 설정',
-        step5Label: '카메라 파라미터',
-        step6Label: '프로젝터 파라미터',
-        step7Label: '장치 바인딩',
+        step3Label: '프로젝터 설정',
+        step4Label: '서보 설정',
+        step5Label: '캘리브레이션',
+        step6Label: '온라인 스캔',
+        step7Label: '포인트 클라우드',
         step4MotorTab: '모터 파라미터',
-        step4GimbalTab: '짐벌 파라미터',
+
         step4MotorTitle: '모터 파라미터 설정',
         step4MotorHint: '모든 모터 축을 나열하고 브랜드별 원점복귀/리미트 설정을 표시합니다.',
         step4Refresh: '새로고침',
@@ -1390,9 +1387,7 @@ export default {
         step4HomeWaitTimeout:
             '원점복귀 테스트는 시작되었지만 대기 시간 안에 완료 비트를 확인하지 못했습니다. 실시간 모니터링과 현장 상태를 계속 확인해 주세요.',
         step4HomeMoveAfterNotImplemented: '원점복귀 후 이동용 32비트 정지 위치 쓰기는 아직 구현되지 않았습니다.',
-        step4GimbalReservedTitle: '짐벌 파라미터 예약',
-        step4GimbalReservedDesc: '3카메라 장치에서만 표시됩니다. 현재 {count}개의 짐벌 그룹이 있으며 상세 내용은 추후 구현됩니다.',
-        step4OpenGimbalManage: '짐벌 그룹 관리 열기',
+
         // Step 5 카메라 정사 캘리브레이션
         step5BoardConfigTitle: '캘리브레이션 보드 설정',
         step5PhysicalBoard: '실체 체스보드',

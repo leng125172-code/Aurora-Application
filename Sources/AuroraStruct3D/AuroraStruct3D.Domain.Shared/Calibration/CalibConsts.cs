@@ -29,8 +29,20 @@ public static class CalibConsts
     /// <summary>BLOB 存储键最大长度</summary>
     public const int MaxBlobKeyLength = 512;
 
+    /// <summary>相机位置绑定标签最大长度（如"主相机(左)"）</summary>
+    public const int MaxCameraPositionLength = 64;
+
     /// <summary>有效照片最小数量（内参/外参各需满足才可计算）</summary>
     public const int MinValidPhotoCount = 15;
+
+    /// <summary>单光系列投影外参最小有效照片数量</summary>
+    public const int MinProjectorExtrinsicPhotoCount = 18;
+
+    /// <summary>单目标定允许的最大重投影误差（像素）</summary>
+    public const double MaxSingleCameraReprojectionError = 0.08d;
+
+    /// <summary>双目标定允许的最大重投影误差（像素）</summary>
+    public const double MaxStereoReprojectionError = 0.1d;
 
     /// <summary>内外参矩阵 JSON 最大长度</summary>
     public const int MaxCalibResultJsonLength = 2048;
@@ -56,17 +68,11 @@ public enum CalibDeviceType
     /// <summary>2目0光：主相机(左) + 从相机(右)</summary>
     TwoCamera0Light = 0,
 
-    /// <summary>3目0光：主相机(中上) + 左下相机 + 右下相机</summary>
-    ThreeCamera0Light = 1,
-
     /// <summary>1目1光：主相机 + 主结构光</summary>
     OneCamera1Light = 2,
 
     /// <summary>2目1光：主相机(左) + 从相机(右) + 主结构光</summary>
     TwoCamera1Light = 3,
-
-    /// <summary>3目1光：主相机(中上) + 左下从相机 + 右下从相机 + 主结构光</summary>
-    ThreeCamera1Light = 4,
 }
 
 /// <summary>
@@ -83,9 +89,6 @@ public enum CalibStatus
     /// <summary>Step 3：电机联动限制配置中</summary>
     MotorConstraintConfig = 2,
 
-    /// <summary>Step 4：云台组配置中</summary>
-    GimbalConfig = 3,
-
     /// <summary>Step 5：相机硬件参数配置中</summary>
     CameraParamConfig = 4,
 
@@ -97,6 +100,42 @@ public enum CalibStatus
 
     /// <summary>全部步骤已完成</summary>
     Completed = 7,
+}
+
+/// <summary>
+/// Step6 在线扫描模式枚举
+/// </summary>
+public enum CalibScanMode
+{
+    /// <summary>双目无光模式</summary>
+    TwoCamera0Light = 0,
+
+    /// <summary>单目一光模式</summary>
+    OneCamera1Light = 1,
+
+    /// <summary>双目一光模式</summary>
+    TwoCamera1Light = 2,
+}
+
+/// <summary>
+/// Step6 在线扫描会话状态枚举
+/// </summary>
+public enum CalibScanRunState
+{
+    /// <summary>未运行</summary>
+    Idle = 0,
+
+    /// <summary>启动中</summary>
+    Starting = 1,
+
+    /// <summary>运行中</summary>
+    Running = 2,
+
+    /// <summary>停止中</summary>
+    Stopping = 3,
+
+    /// <summary>失败</summary>
+    Failed = 4,
 }
 
 /// <summary>
@@ -136,24 +175,6 @@ public enum ForbiddenDirection
 
     /// <summary>禁止双向运动</summary>
     Both = 2,
-}
-
-/// <summary>
-/// 云台轴类型枚举
-/// </summary>
-public enum GimbalAxisType
-{
-    /// <summary>X轴旋转（必须）</summary>
-    RotateX = 0,
-
-    /// <summary>Y轴旋转（必须）</summary>
-    RotateY = 1,
-
-    /// <summary>Z轴旋转（可选）</summary>
-    RotateZ = 2,
-
-    /// <summary>Z轴平移（可选）</summary>
-    TranslateZ = 3,
 }
 
 /// <summary>
@@ -214,4 +235,19 @@ public enum CalibPhotoType
 
     /// <summary>外参拍照（开灯投影棋盘格，同时拍真实棋盘格）</summary>
     Extrinsic = 1,
+
+    /// <summary>双目联合外参成对拍照（左右同步拍真实棋盘格）</summary>
+    StereoExtrinsicPair = 2,
+}
+
+/// <summary>
+/// 双目成对照片中的相机角色
+/// </summary>
+public enum StereoPhotoRole
+{
+    /// <summary>主相机（左）</summary>
+    Main = 0,
+
+    /// <summary>从相机（右）</summary>
+    Secondary = 1,
 }

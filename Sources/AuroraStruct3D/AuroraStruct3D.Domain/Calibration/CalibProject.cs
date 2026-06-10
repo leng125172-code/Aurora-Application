@@ -53,6 +53,24 @@ public class CalibProject : FullAuditedAggregateRoot<Guid>
     /// <summary>投影棋盘格单个方格像素尺寸（px）</summary>
     public int ProjectedPixelSize { get; private set; }
 
+    /// <summary>绑定的结构光投影仪设备ID（单光系列在 Step 3 选定后持久化）</summary>
+    public Guid? BoundProjectorDeviceId { get; private set; }
+
+    /// <summary>绑定的主相机设备ID</summary>
+    public Guid? MainCameraDeviceId { get; private set; }
+
+    /// <summary>绑定的从相机设备ID</summary>
+    public Guid? SecondaryCameraDeviceId { get; private set; }
+
+    /// <summary>绑定的主相机角度控制电机轴ID</summary>
+    public Guid? MainCameraMotorAxisId { get; private set; }
+
+    /// <summary>绑定的从相机角度控制电机轴ID</summary>
+    public Guid? SecondaryCameraMotorAxisId { get; private set; }
+
+    /// <summary>绑定的间距控制电机轴ID</summary>
+    public Guid? DistanceMotorAxisId { get; private set; }
+
     // EF Core 所需的无参构造函数
     protected CalibProject() { }
 
@@ -96,10 +114,8 @@ public class CalibProject : FullAuditedAggregateRoot<Guid>
         (DeviceSeries, CameraCount, ProjectorCount) = deviceType switch
         {
             CalibDeviceType.TwoCamera0Light => (DeviceSeries.NoLight, 2, 0),
-            CalibDeviceType.ThreeCamera0Light => (DeviceSeries.NoLight, 3, 0),
             CalibDeviceType.OneCamera1Light => (DeviceSeries.SingleLight, 1, 1),
             CalibDeviceType.TwoCamera1Light => (DeviceSeries.SingleLight, 2, 1),
-            CalibDeviceType.ThreeCamera1Light => (DeviceSeries.SingleLight, 3, 1),
             _ => throw new ArgumentOutOfRangeException(nameof(deviceType)),
         };
         return this;
@@ -109,6 +125,34 @@ public class CalibProject : FullAuditedAggregateRoot<Guid>
     public CalibProject AdvanceStatus(CalibStatus status)
     {
         CalibStatus = status;
+        return this;
+    }
+
+    /// <summary>设置绑定的结构光投影仪设备ID（传 null 清除绑定）</summary>
+    public CalibProject SetBoundProjector(Guid? projectorDeviceId)
+    {
+        BoundProjectorDeviceId = projectorDeviceId;
+        return this;
+    }
+
+    /// <summary>
+    /// 设置设备绑定（相机/电机/结构光），传 null 可清除对应绑定。
+    /// </summary>
+    public CalibProject SetDeviceBindings(
+        Guid? mainCameraDeviceId,
+        Guid? secondaryCameraDeviceId,
+        Guid? mainCameraMotorAxisId,
+        Guid? secondaryCameraMotorAxisId,
+        Guid? distanceMotorAxisId,
+        Guid? boundProjectorDeviceId
+    )
+    {
+        MainCameraDeviceId = mainCameraDeviceId;
+        SecondaryCameraDeviceId = secondaryCameraDeviceId;
+        MainCameraMotorAxisId = mainCameraMotorAxisId;
+        SecondaryCameraMotorAxisId = secondaryCameraMotorAxisId;
+        DistanceMotorAxisId = distanceMotorAxisId;
+        BoundProjectorDeviceId = boundProjectorDeviceId;
         return this;
     }
 

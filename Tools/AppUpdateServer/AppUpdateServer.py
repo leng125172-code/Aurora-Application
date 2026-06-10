@@ -143,6 +143,16 @@ _PYTHON_SYSTEM_PACKAGES = ("python3",)
 _PYTHON_REQUIRED_MODULES = ("onnx", "rknn")
 _PYTHON_ASSET_DIRNAME = "Python"
 _PYTHON_CONVERTER_SCRIPT_FILENAME = "AiModelConvert.py"
+_MANUAL_OPENCV_BUILD_ARTIFACT = (
+    _USER_HOME
+    / "opencvsharp-4.13.0.20260602"
+    / "src"
+    / "build"
+    / "OpenCvSharpExtern"
+    / "libOpenCvSharpExtern.so"
+)
+_HTTPAPI_PUBLISH_DIR = TARGET_ROOT / "linux-arm64" / _SERVICE_NAME
+_HTTPAPI_OPENCV_NATIVE_LIB = _HTTPAPI_PUBLISH_DIR / "libOpenCvSharpExtern.so"
 
 # WiFi 自动连接配置：当设备未连接 WiFi 时，每 5 秒扫描并尝试连接目标热点。
 _WIFI_TARGET_SSID = "OnePlus 15 02D0"
@@ -409,6 +419,7 @@ def _action_finalize(conn: socket.socket, msg: dict) -> None:
 
     print(flush=True)
     _fix_exec_permissions(target_dir)
+    _deploy_manual_opencvsharp_native_artifact()
     _fix_opencv_symlink(target_dir)
 
     # ── 清理会话 ──────────────────────────────────────────────────────────────
@@ -463,6 +474,34 @@ def _fix_exec_permissions(base_dir: Path) -> None:
                 count += 1
     if count:
         print(f"[权限] 已为 {count} 个文件添加可执行权限")
+
+
+def _deploy_manual_opencvsharp_native_artifact() -> None:
+    """将手工构建的 OpenCvSharp 原生库部署到 HttpApi.Host 发布目录。"""
+    source = _MANUAL_OPENCV_BUILD_ARTIFACT
+    destination = _HTTPAPI_OPENCV_NATIVE_LIB
+
+    if not source.exists():
+        raise RuntimeError(f"未找到手工构建的 OpenCvSharp 原生库：{source}")
+
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    _deploy_print(f"[OpenCV] 部署手工构建产物：{source} -> {destination}")
+    if (
+        _run_cmd(
+            [
+                "sudo",
+                "install",
+                "-m",
+                "0755",
+                str(source),
+                str(destination),
+            ],
+            "部署 OpenCvSharp 原生库",
+            timeout=30,
+        )
+        != 0
+    ):
+        raise RuntimeError("部署 OpenCvSharp 原生库失败。")
 
 
 def _fix_opencv_symlink(base_dir: Path) -> None:

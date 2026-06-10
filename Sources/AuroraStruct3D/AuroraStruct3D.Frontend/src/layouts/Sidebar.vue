@@ -17,7 +17,6 @@ import {
     Cpu,
     Box,
     ScanLine,
-    Layers,
     ChevronDown,
     ChevronRight,
 } from '@lucide/vue'
@@ -579,20 +578,6 @@ function navigate(path: string, tab?: string): void {
                     >
                         <ScanLine class="size-3.5 shrink-0" />
                         {{ t('menu.calibProjectManage') }}
-                    </button>
-                    <button
-                        :class="
-                            cn(
-                                'flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors text-left',
-                                isExactActive('/calibration/gimbal-groups')
-                                    ? 'bg-accent text-accent-foreground'
-                                    : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
-                            )
-                        "
-                        @click="navigate('/calibration/gimbal-groups')"
-                    >
-                        <Layers class="size-3.5 shrink-0" />
-                        {{ t('menu.calibGimbalGroupManage') }}
                     </button>
                 </div>
             </div>

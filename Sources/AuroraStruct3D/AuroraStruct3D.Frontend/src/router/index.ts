@@ -175,12 +175,6 @@ const routes: RouteRecordRaw[] = [
                 meta: { requiresAuth: true, title: 'menu.calibProjectManage' },
             },
             {
-                path: 'calibration/gimbal-groups',
-                name: 'CalibGimbalGroupManage',
-                component: () => import('@/views/calibration/CalibGimbalGroupManagePage.vue'),
-                meta: { requiresAuth: true, title: 'menu.calibGimbalGroupManage' },
-            },
-            {
                 path: 'calibration/projects/:id/wizard',
                 name: 'CalibWizard',
                 component: () => import('@/views/calibration/CalibWizardPage.vue'),

@@ -108,4 +108,35 @@ public class CameraHub : AbpHub<ICameraHub>
     {
         return Task.FromResult(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
     }
+
+    /// <summary>
+    /// 加入 Step6 在线扫描项目分组。
+    /// </summary>
+    public async Task JoinCalibScanGroupAsync(string calibProjectId)
+    {
+        if (!Guid.TryParse(calibProjectId, out Guid id))
+        {
+            return;
+        }
+
+        await Groups.AddToGroupAsync(Context.ConnectionId, BuildCalibScanGroupName(id));
+    }
+
+    /// <summary>
+    /// 退出 Step6 在线扫描项目分组。
+    /// </summary>
+    public async Task LeaveCalibScanGroupAsync(string calibProjectId)
+    {
+        if (!Guid.TryParse(calibProjectId, out Guid id))
+        {
+            return;
+        }
+
+        await Groups.RemoveFromGroupAsync(Context.ConnectionId, BuildCalibScanGroupName(id));
+    }
+
+    private static string BuildCalibScanGroupName(Guid calibProjectId)
+    {
+        return $"calib-scan:{calibProjectId:N}";
+    }
 }

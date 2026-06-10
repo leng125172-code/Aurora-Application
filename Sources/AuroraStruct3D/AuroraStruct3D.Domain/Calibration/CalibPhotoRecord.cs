@@ -20,6 +20,12 @@ public class CalibPhotoRecord : AuditedEntity<Guid>
     /// <summary>照片类型（内参 / 外参）</summary>
     public CalibPhotoType PhotoType { get; private set; }
 
+    /// <summary>双目成对拍照分组ID（仅 StereoExtrinsicPair 使用）</summary>
+    public Guid? PairGroupId { get; private set; }
+
+    /// <summary>双目成对拍照角色（仅 StereoExtrinsicPair 使用）</summary>
+    public StereoPhotoRole? StereoRole { get; private set; }
+
     /// <summary>BLOB 存储键（calib-photos 容器内的相对路径）</summary>
     public string BlobKey { get; private set; } = null!;
 
@@ -57,7 +63,9 @@ public class CalibPhotoRecord : AuditedEntity<Guid>
         string blobKey,
         bool isValid,
         int cornerCountDetected,
-        string? thumbnailBase64 = null
+        string? thumbnailBase64 = null,
+        Guid? pairGroupId = null,
+        StereoPhotoRole? stereoRole = null
     )
         : base(id)
     {
@@ -68,6 +76,8 @@ public class CalibPhotoRecord : AuditedEntity<Guid>
         IsValid = isValid;
         CornerCountDetected = cornerCountDetected;
         ThumbnailBase64 = thumbnailBase64;
+        PairGroupId = pairGroupId;
+        StereoRole = stereoRole;
         CapturedAt = DateTime.UtcNow;
     }
 

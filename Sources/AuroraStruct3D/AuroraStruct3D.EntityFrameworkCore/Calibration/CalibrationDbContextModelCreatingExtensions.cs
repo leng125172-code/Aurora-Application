@@ -29,6 +29,12 @@ public static class CalibrationDbContextModelCreatingExtensions
             b.Property(x => x.CalibStatus).HasConversion<int>();
             // 棋盘格标定板参数
             b.Property(x => x.PhysicalSquareSizeMm).HasPrecision(10, 4);
+            b.Property(x => x.BoundProjectorDeviceId).IsRequired(false);
+            b.Property(x => x.MainCameraDeviceId).IsRequired(false);
+            b.Property(x => x.SecondaryCameraDeviceId).IsRequired(false);
+            b.Property(x => x.MainCameraMotorAxisId).IsRequired(false);
+            b.Property(x => x.SecondaryCameraMotorAxisId).IsRequired(false);
+            b.Property(x => x.DistanceMotorAxisId).IsRequired(false);
             b.HasIndex(x => x.CalibStatus);
         });
 
@@ -67,41 +73,6 @@ public static class CalibrationDbContextModelCreatingExtensions
             b.HasIndex(x => x.IsEnabled);
         });
 
-        // ── 云台组表 ──────────────────────────────────────────────────────────────
-        builder.Entity<CalibGimbalGroup>(b =>
-        {
-            b.ToTable($"{TablePrefix}CalibGimbalGroups");
-            b.ConfigureByConvention();
-
-            b.Property(x => x.Name).IsRequired().HasMaxLength(CalibConsts.MaxNameLength);
-            b.Property(x => x.Description).HasMaxLength(CalibConsts.MaxDescriptionLength);
-            b.Property(x => x.MaxSpeed).HasPrecision(18, 6);
-            b.Property(x => x.Acceleration).HasPrecision(18, 6);
-            b.Property(x => x.AccelerationTime).HasPrecision(18, 3);
-            b.Property(x => x.DecelerationTime).HasPrecision(18, 3);
-
-            b.HasIndex(x => x.IsEnabled);
-
-            // 云台组与绑定轴：一对多，级联删除
-            b.HasMany(x => x.Bindings)
-                .WithOne()
-                .HasForeignKey(x => x.GimbalGroupId)
-                .OnDelete(DeleteBehavior.Cascade);
-        });
-
-        // ── 云台绑定表 ────────────────────────────────────────────────────────────
-        builder.Entity<CalibGimbalBinding>(b =>
-        {
-            b.ToTable($"{TablePrefix}CalibGimbalBindings");
-            b.ConfigureByConvention();
-
-            b.Property(x => x.AxisType).HasConversion<int>();
-
-            b.HasIndex(x => x.GimbalGroupId);
-            // 同一云台组内，每种轴类型仅允许绑定一个电机
-            b.HasIndex(x => new { x.GimbalGroupId, x.AxisType }).IsUnique();
-        });
-
         // ── 相机参数表 ────────────────────────────────────────────────────────────
         builder.Entity<CalibCameraParam>(b =>
         {
@@ -123,6 +94,9 @@ public static class CalibrationDbContextModelCreatingExtensions
             b.Property(x => x.CurrentAperture).HasPrecision(8, 2);
             b.Property(x => x.GainMinDb).HasPrecision(8, 2);
             b.Property(x => x.GainMaxDb).HasPrecision(8, 2);
+            b.Property(x => x.CameraPosition)
+                .HasMaxLength(CalibConsts.MaxCameraPositionLength)
+                .IsRequired(false);
 
             b.HasIndex(x => x.CalibProjectId);
             b.HasIndex(x => x.CameraDeviceId);
@@ -134,6 +108,7 @@ public static class CalibrationDbContextModelCreatingExtensions
             b.Property(x => x.DistCoeffsJson).HasMaxLength(CalibConsts.MaxCalibResultJsonLength);
             b.Property(x => x.ExtrinsicRvecJson).HasMaxLength(CalibConsts.MaxCalibResultJsonLength);
             b.Property(x => x.ExtrinsicTvecJson).HasMaxLength(CalibConsts.MaxCalibResultJsonLength);
+            b.Property(x => x.ProjectorReprojectionError);
         });
 
         // ── 结构光参数表 ──────────────────────────────────────────────────────────
@@ -171,13 +146,6 @@ public static class CalibrationDbContextModelCreatingExtensions
             b.HasIndex(x => new { x.CalibProjectId, x.BindingType });
             // 同一项目内，目标角色唯一（每个逻辑角色只能绑定一个设备）
             b.HasIndex(x => new { x.CalibProjectId, x.TargetRole }).IsUnique();
-
-            // 云台组关联（三目设备电机绑定时使用，Restrict：云台组被引用时不允许直接删除）
-            b.HasOne<CalibGimbalGroup>()
-                .WithMany()
-                .HasForeignKey(x => x.BoundGimbalGroupId)
-                .OnDelete(DeleteBehavior.Restrict)
-                .IsRequired(false);
         });
 
         // ── 标定照片记录表（Step 5） ──────────────────────────────────────────────
@@ -188,6 +156,7 @@ public static class CalibrationDbContextModelCreatingExtensions
 
             b.Property(x => x.BlobKey).IsRequired().HasMaxLength(CalibConsts.MaxBlobKeyLength);
             b.Property(x => x.PhotoType).HasConversion<int>();
+            b.Property(x => x.StereoRole).HasConversion<int>().IsRequired(false);
             // ThumbnailBase64 为 nvarchar(max)，不限制长度
 
             b.HasIndex(x => x.CalibProjectId);
@@ -198,7 +167,47 @@ public static class CalibrationDbContextModelCreatingExtensions
                 x.CameraDeviceId,
                 x.PhotoType,
             });
+            b.HasIndex(x => new { x.CalibProjectId, x.PairGroupId });
             b.HasIndex(x => x.CapturedAt);
+        });
+
+        // ── 双目标定结果表（Step 5 双目联合）────────────────────────────────────
+        builder.Entity<CalibStereoResult>(b =>
+        {
+            b.ToTable($"{TablePrefix}CalibStereoResults");
+            b.ConfigureByConvention();
+
+            b.Property(x => x.RotationMatrixJson)
+                .IsRequired()
+                .HasMaxLength(CalibConsts.MaxCalibResultJsonLength);
+            b.Property(x => x.TranslationVectorJson)
+                .IsRequired()
+                .HasMaxLength(CalibConsts.MaxCalibResultJsonLength);
+            b.Property(x => x.TransformLtoRJson)
+                .IsRequired()
+                .HasMaxLength(CalibConsts.MaxCalibResultJsonLength);
+            b.Property(x => x.TransformRtoLJson)
+                .IsRequired()
+                .HasMaxLength(CalibConsts.MaxCalibResultJsonLength);
+            b.Property(x => x.RectificationR1Json)
+                .IsRequired()
+                .HasMaxLength(CalibConsts.MaxCalibResultJsonLength);
+            b.Property(x => x.RectificationR2Json)
+                .IsRequired()
+                .HasMaxLength(CalibConsts.MaxCalibResultJsonLength);
+            b.Property(x => x.ProjectionP1Json)
+                .IsRequired()
+                .HasMaxLength(CalibConsts.MaxCalibResultJsonLength);
+            b.Property(x => x.ProjectionP2Json)
+                .IsRequired()
+                .HasMaxLength(CalibConsts.MaxCalibResultJsonLength);
+            b.Property(x => x.Map1XBlobKey).IsRequired().HasMaxLength(CalibConsts.MaxBlobKeyLength);
+            b.Property(x => x.Map1YBlobKey).IsRequired().HasMaxLength(CalibConsts.MaxBlobKeyLength);
+            b.Property(x => x.Map2XBlobKey).IsRequired().HasMaxLength(CalibConsts.MaxBlobKeyLength);
+            b.Property(x => x.Map2YBlobKey).IsRequired().HasMaxLength(CalibConsts.MaxBlobKeyLength);
+
+            b.HasIndex(x => x.CalibProjectId).IsUnique();
+            b.HasIndex(x => new { x.MainCameraDeviceId, x.SecondaryCameraDeviceId });
         });
     }
 }

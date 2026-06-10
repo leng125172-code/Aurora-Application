@@ -65,10 +65,16 @@ public class TakeExtrinsicPhotoInput
     /// <summary>相机设备ID</summary>
     [Required]
     public Guid CameraDeviceId { get; set; }
+}
 
-    /// <summary>投影仪设备ID（用于打开 LED 并投影棋盘图）</summary>
+/// <summary>
+/// 双目联合外参成对拍照输入 DTO
+/// </summary>
+public class TakeStereoExtrinsicPairPhotoInput
+{
+    /// <summary>标定项目ID</summary>
     [Required]
-    public Guid ProjectorDeviceId { get; set; }
+    public Guid CalibProjectId { get; set; }
 }
 
 /// <summary>
@@ -93,6 +99,27 @@ public class CalibPhotoDto
 
     /// <summary>缩略图 Base64（JPEG，约 400px 宽）；前端显示用，可能为 null</summary>
     public string? ThumbnailBase64 { get; set; }
+
+    /// <summary>双目成对拍照分组ID（仅 StereoExtrinsicPair 有值）</summary>
+    public Guid? PairGroupId { get; set; }
+
+    /// <summary>双目成对拍照角色（仅 StereoExtrinsicPair 有值）</summary>
+    public StereoPhotoRole? StereoRole { get; set; }
+}
+
+/// <summary>
+/// 双目成对拍照返回 DTO
+/// </summary>
+public class CalibStereoPairPhotoDto
+{
+    /// <summary>成对拍照分组ID</summary>
+    public Guid PairGroupId { get; set; }
+
+    /// <summary>主相机照片记录</summary>
+    public CalibPhotoDto MainPhoto { get; set; } = null!;
+
+    /// <summary>从相机照片记录</summary>
+    public CalibPhotoDto SecondaryPhoto { get; set; } = null!;
 }
 
 /// <summary>
@@ -109,11 +136,71 @@ public class CalibComputeResultDto
     /// <summary>重投影误差（像素）</summary>
     public double ReprojectionError { get; set; }
 
+    /// <summary>投影外参重投影误差（像素，无投影仪时为 null）</summary>
+    public double? ProjectorReprojectionError { get; set; }
+
     /// <summary>外参旋转向量（JSON，无投影仪时为 null）</summary>
     public string? ExtrinsicRvecJson { get; set; }
 
     /// <summary>外参平移向量（JSON，无投影仪时为 null）</summary>
     public string? ExtrinsicTvecJson { get; set; }
+}
+
+/// <summary>
+/// 双目联合标定结果 DTO
+/// </summary>
+public class CalibStereoComputeResultDto
+{
+    /// <summary>主相机设备ID</summary>
+    public Guid MainCameraDeviceId { get; set; }
+
+    /// <summary>从相机设备ID</summary>
+    public Guid SecondaryCameraDeviceId { get; set; }
+
+    /// <summary>双目标定重投影误差（像素）</summary>
+    public double StereoReprojectionError { get; set; }
+
+    /// <summary>左到右旋转矩阵 R(3x3) JSON</summary>
+    public string RotationMatrixJson { get; set; } = string.Empty;
+
+    /// <summary>左到右平移向量 t(3x1) JSON</summary>
+    public string TranslationVectorJson { get; set; } = string.Empty;
+
+    /// <summary>左到右 4x4 变换矩阵 JSON</summary>
+    public string TransformLtoRJson { get; set; } = string.Empty;
+
+    /// <summary>右到左 4x4 变换矩阵 JSON</summary>
+    public string TransformRtoLJson { get; set; } = string.Empty;
+
+    /// <summary>左相机立体校正旋转矩阵 R1 JSON</summary>
+    public string RectificationR1Json { get; set; } = string.Empty;
+
+    /// <summary>右相机立体校正旋转矩阵 R2 JSON</summary>
+    public string RectificationR2Json { get; set; } = string.Empty;
+
+    /// <summary>左相机投影矩阵 P1 JSON</summary>
+    public string ProjectionP1Json { get; set; } = string.Empty;
+
+    /// <summary>右相机投影矩阵 P2 JSON</summary>
+    public string ProjectionP2Json { get; set; } = string.Empty;
+
+    /// <summary>立体校正 map 宽度（像素）</summary>
+    public int RectifyMapWidth { get; set; }
+
+    /// <summary>立体校正 map 高度（像素）</summary>
+    public int RectifyMapHeight { get; set; }
+
+    /// <summary>左相机 map1x 数据 Blob Key</summary>
+    public string Map1XBlobKey { get; set; } = string.Empty;
+
+    /// <summary>左相机 map1y 数据 Blob Key</summary>
+    public string Map1YBlobKey { get; set; } = string.Empty;
+
+    /// <summary>右相机 map2x 数据 Blob Key</summary>
+    public string Map2XBlobKey { get; set; } = string.Empty;
+
+    /// <summary>右相机 map2y 数据 Blob Key</summary>
+    public string Map2YBlobKey { get; set; } = string.Empty;
 }
 
 /// <summary>
@@ -162,4 +249,19 @@ public class CalibCameraStatusDto
 
     /// <summary>最新标定结果（未计算则为 null）</summary>
     public CalibComputeResultDto? LatestResult { get; set; }
+}
+
+/// <summary>
+/// 双目联合标定状态 DTO
+/// </summary>
+public class CalibStereoStatusDto
+{
+    /// <summary>成对拍照总组数</summary>
+    public int PairTotal { get; set; }
+
+    /// <summary>有效成对组数（左右均检测到角点）</summary>
+    public int PairValid { get; set; }
+
+    /// <summary>最新双目联合标定结果（未计算则为 null）</summary>
+    public CalibStereoComputeResultDto? LatestResult { get; set; }
 }

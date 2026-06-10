@@ -25,6 +25,7 @@ public static class CameraObjectMapperExtensions
             DeleterId = entity.DeleterId,
             Name = entity.Name,
             Model = entity.Model,
+            DeviceSerialNumber = entity.DeviceSerialNumber,
             DeviceIndex = entity.DeviceIndex,
             Status = entity.Status,
             Description = entity.Description,

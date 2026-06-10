@@ -33,6 +33,9 @@ import {
     type CreateCalibProjectInput,
     type UpdateCalibProjectInput,
 } from '@/api/calibration'
+import { getCameraList, type CameraDeviceDto } from '@/api/cameras'
+import { getMotorAxisList, type MotorAxisDto } from '@/api/motors'
+import { getProjectorList, type ProjectorDeviceDto } from '@/api/projectors'
 
 const { t } = useI18n()
 const toast = useAppToast()
@@ -57,10 +60,15 @@ const filterEndTime = ref<Date | null>(null)
 /** 设备类型选项（几目几光） */
 const deviceTypeOptions = computed(() => [
     { label: t('calib.type2C0L'), value: CalibDeviceType.TwoCamera0Light },
-    { label: t('calib.type3C0L'), value: CalibDeviceType.ThreeCamera0Light },
     { label: t('calib.type1C1L'), value: CalibDeviceType.OneCamera1Light },
     { label: t('calib.type2C1L'), value: CalibDeviceType.TwoCamera1Light },
-    { label: t('calib.type3C1L'), value: CalibDeviceType.ThreeCamera1Light },
+])
+
+/** 新建/编辑支持的设备类型（3目暂不支持） */
+const editableDeviceTypeOptions = computed(() => [
+    { label: t('calib.type2C0L'), value: CalibDeviceType.TwoCamera0Light },
+    { label: t('calib.type1C1L'), value: CalibDeviceType.OneCamera1Light },
+    { label: t('calib.type2C1L'), value: CalibDeviceType.TwoCamera1Light },
 ])
 
 /** 标定状态选项 */
@@ -68,7 +76,6 @@ const calibStatusOptions = computed(() => [
     { label: t('calib.statusInitializing'), value: CalibStatus.Initializing },
     { label: t('calib.statusMotorParam'), value: CalibStatus.MotorParamConfig },
     { label: t('calib.statusMotorConstraint'), value: CalibStatus.MotorConstraintConfig },
-    { label: t('calib.statusGimbal'), value: CalibStatus.GimbalConfig },
     { label: t('calib.statusCameraParam'), value: CalibStatus.CameraParamConfig },
     { label: t('calib.statusProjectorParam'), value: CalibStatus.ProjectorParamConfig },
     { label: t('calib.statusDeviceBinding'), value: CalibStatus.DeviceBinding },
@@ -162,16 +169,128 @@ const createForm = ref<CreateCalibProjectInput>({
     name: '',
     description: null,
     deviceType: CalibDeviceType.TwoCamera0Light,
+    mainCameraDeviceId: null,
+    secondaryCameraDeviceId: null,
+    mainCameraMotorAxisId: null,
+    secondaryCameraMotorAxisId: null,
+    distanceMotorAxisId: null,
+    boundProjectorDeviceId: null,
 })
 
+const bindingOptionsLoading = ref(false)
+const cameraOptions = ref<CameraDeviceDto[]>([])
+const motorOptions = ref<MotorAxisDto[]>([])
+const projectorOptions = ref<ProjectorDeviceDto[]>([])
+
+function isTwoCameraType(deviceType: CalibDeviceType): boolean {
+    return deviceType === CalibDeviceType.TwoCamera0Light || deviceType === CalibDeviceType.TwoCamera1Light
+}
+
+function isSingleLightType(deviceType: CalibDeviceType): boolean {
+    return deviceType === CalibDeviceType.OneCamera1Light || deviceType === CalibDeviceType.TwoCamera1Light
+}
+
+async function loadBindingOptions(): Promise<void> {
+    bindingOptionsLoading.value = true
+    try {
+        const [cameraRes, motorRes, projectorRes] = await Promise.all([
+            getCameraList({ maxResultCount: 200 }),
+            getMotorAxisList({ maxResultCount: 200, refreshHardware: true }),
+            getProjectorList({ maxResultCount: 100 }),
+        ])
+        cameraOptions.value = cameraRes.items.filter((x) => x.isEnabled)
+        motorOptions.value = motorRes.items.filter((x) => x.isEnabled)
+        projectorOptions.value = projectorRes.items.filter((x) => x.isEnabled)
+    } finally {
+        bindingOptionsLoading.value = false
+    }
+}
+
+function validateDeviceBindings(
+    deviceType: CalibDeviceType,
+    form: Pick<
+        CreateCalibProjectInput,
+        | 'mainCameraDeviceId'
+        | 'secondaryCameraDeviceId'
+        | 'mainCameraMotorAxisId'
+        | 'secondaryCameraMotorAxisId'
+        | 'distanceMotorAxisId'
+        | 'boundProjectorDeviceId'
+    >
+): string | null {
+    if (!form.mainCameraDeviceId) {
+        return '必须绑定主相机'
+    }
+    if (!form.mainCameraMotorAxisId) {
+        return '必须绑定主相机角度控制'
+    }
+    if (!form.distanceMotorAxisId) {
+        return '必须绑定间距控制'
+    }
+
+    if (isTwoCameraType(deviceType)) {
+        if (!form.secondaryCameraDeviceId) {
+            return '双目设备必须绑定从相机'
+        }
+        if (!form.secondaryCameraMotorAxisId) {
+            return '双目设备必须绑定从相机角度控制'
+        }
+    } else {
+        if (form.secondaryCameraDeviceId) {
+            return '单目设备不允许绑定从相机'
+        }
+        if (form.secondaryCameraMotorAxisId) {
+            return '单目设备不允许绑定从相机角度控制'
+        }
+    }
+
+    if (isSingleLightType(deviceType)) {
+        if (!form.boundProjectorDeviceId) {
+            return '单光系列必须绑定主结构光机'
+        }
+    } else if (form.boundProjectorDeviceId) {
+        return '无光系列不允许绑定结构光机'
+    }
+
+    const cameraIds = [form.mainCameraDeviceId, form.secondaryCameraDeviceId].filter((id): id is string => !!id)
+    if (new Set(cameraIds).size !== cameraIds.length) {
+        return '相机绑定重复：主相机和从相机必须互斥'
+    }
+
+    const motorIds = [form.mainCameraMotorAxisId, form.secondaryCameraMotorAxisId, form.distanceMotorAxisId].filter(
+        (id): id is string => !!id
+    )
+    if (new Set(motorIds).size !== motorIds.length) {
+        return '电机绑定重复：主相机角度、从相机角度、间距控制必须互斥'
+    }
+
+    return null
+}
+
 function openCreate(): void {
-    createForm.value = { name: '', description: null, deviceType: CalibDeviceType.TwoCamera0Light }
+    createForm.value = {
+        name: '',
+        description: null,
+        deviceType: CalibDeviceType.TwoCamera0Light,
+        mainCameraDeviceId: null,
+        secondaryCameraDeviceId: null,
+        mainCameraMotorAxisId: null,
+        secondaryCameraMotorAxisId: null,
+        distanceMotorAxisId: null,
+        boundProjectorDeviceId: null,
+    }
     showCreate.value = true
+    void loadBindingOptions()
 }
 
 async function handleCreate(): Promise<void> {
     if (!createForm.value.name.trim()) {
         toast.warn(t('common.requiredFields'))
+        return
+    }
+    const bindingError = validateDeviceBindings(createForm.value.deviceType, createForm.value)
+    if (bindingError) {
+        toast.warn(bindingError)
         return
     }
     creating.value = true
@@ -180,6 +299,12 @@ async function handleCreate(): Promise<void> {
             name: createForm.value.name.trim(),
             description: createForm.value.description || null,
             deviceType: createForm.value.deviceType,
+            mainCameraDeviceId: createForm.value.mainCameraDeviceId,
+            secondaryCameraDeviceId: createForm.value.secondaryCameraDeviceId,
+            mainCameraMotorAxisId: createForm.value.mainCameraMotorAxisId,
+            secondaryCameraMotorAxisId: createForm.value.secondaryCameraMotorAxisId,
+            distanceMotorAxisId: createForm.value.distanceMotorAxisId,
+            boundProjectorDeviceId: createForm.value.boundProjectorDeviceId,
         })
         toast.success(t('calib.createSuccess'))
         showCreate.value = false
@@ -197,17 +322,35 @@ const showEdit = ref(false)
 const editing = ref(false)
 const editingId = ref<string | null>(null)
 const editDeviceTypeName = ref('')
+const editDeviceType = ref<CalibDeviceType | null>(null)
 
 const editForm = ref<UpdateCalibProjectInput>({
     name: '',
     description: null,
+    mainCameraDeviceId: null,
+    secondaryCameraDeviceId: null,
+    mainCameraMotorAxisId: null,
+    secondaryCameraMotorAxisId: null,
+    distanceMotorAxisId: null,
+    boundProjectorDeviceId: null,
 })
 
 function openEdit(item: CalibProjectDto): void {
     editingId.value = item.id
+    editDeviceType.value = item.deviceType
     editDeviceTypeName.value = deviceTypeLabel(item.deviceType)
-    editForm.value = { name: item.name, description: item.description }
+    editForm.value = {
+        name: item.name,
+        description: item.description,
+        mainCameraDeviceId: item.mainCameraDeviceId,
+        secondaryCameraDeviceId: item.secondaryCameraDeviceId,
+        mainCameraMotorAxisId: item.mainCameraMotorAxisId,
+        secondaryCameraMotorAxisId: item.secondaryCameraMotorAxisId,
+        distanceMotorAxisId: item.distanceMotorAxisId,
+        boundProjectorDeviceId: item.boundProjectorDeviceId,
+    }
     showEdit.value = true
+    void loadBindingOptions()
 }
 
 async function handleEdit(): Promise<void> {
@@ -215,11 +358,26 @@ async function handleEdit(): Promise<void> {
         toast.warn(t('common.requiredFields'))
         return
     }
+    if (editDeviceType.value == null) {
+        toast.warn('无法识别设备类型')
+        return
+    }
+    const bindingError = validateDeviceBindings(editDeviceType.value, editForm.value)
+    if (bindingError) {
+        toast.warn(bindingError)
+        return
+    }
     editing.value = true
     try {
         await updateCalibProjectAsync(editingId.value, {
             name: editForm.value.name.trim(),
             description: editForm.value.description || null,
+            mainCameraDeviceId: editForm.value.mainCameraDeviceId,
+            secondaryCameraDeviceId: editForm.value.secondaryCameraDeviceId,
+            mainCameraMotorAxisId: editForm.value.mainCameraMotorAxisId,
+            secondaryCameraMotorAxisId: editForm.value.secondaryCameraMotorAxisId,
+            distanceMotorAxisId: editForm.value.distanceMotorAxisId,
+            boundProjectorDeviceId: editForm.value.boundProjectorDeviceId,
         })
         toast.success(t('calib.editSuccess'))
         showEdit.value = false
@@ -265,7 +423,7 @@ function openDeleteConfirm(item: CalibProjectDto): void {
 
         <!-- 主内容卡片：直接用原生 div 复现 AppCard 样式，并支持自动撞满高度 -->
         <div
-            class="relative flex-1 min-h-0 flex flex-col overflow-hidden rounded-xl bg-card/40 backdrop-blur border border-border shadow-sm"
+            class="relative flex-1 min-h-0 flex flex-col overflow-hidden rounded-xl bg-card/40 backdrop-blur border border-border shadow-sm p-4"
             style="clip-path: inset(0 round 0.75rem)"
         >
             <BorderBeam :size="120" :duration="10" />
@@ -558,7 +716,7 @@ function openDeleteConfirm(item: CalibProjectDto): void {
                     </label>
                     <Select
                         v-model="createForm.deviceType"
-                        :options="deviceTypeOptions"
+                        :options="editableDeviceTypeOptions"
                         option-label="label"
                         option-value="value"
                         size="small"
@@ -588,6 +746,95 @@ function openDeleteConfirm(item: CalibProjectDto): void {
                         rows="3"
                         auto-resize
                     />
+                </div>
+
+                <div class="rounded-lg border border-border/40 bg-muted/10 p-3">
+                    <h4 class="mb-3 text-sm font-medium">下面设备绑定</h4>
+                    <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <div>
+                            <label class="mb-1 block text-xs text-muted-foreground">主相机（左）</label>
+                            <Select
+                                v-model="createForm.mainCameraDeviceId"
+                                :options="cameraOptions"
+                                option-label="name"
+                                option-value="id"
+                                :loading="bindingOptionsLoading"
+                                :placeholder="t('common.pleaseSelect')"
+                                size="small"
+                                class="w-full !text-xs"
+                            />
+                        </div>
+
+                        <div v-if="isTwoCameraType(createForm.deviceType)">
+                            <label class="mb-1 block text-xs text-muted-foreground">从相机（右）</label>
+                            <Select
+                                v-model="createForm.secondaryCameraDeviceId"
+                                :options="cameraOptions"
+                                option-label="name"
+                                option-value="id"
+                                :loading="bindingOptionsLoading"
+                                :placeholder="t('common.pleaseSelect')"
+                                size="small"
+                                class="w-full !text-xs"
+                            />
+                        </div>
+
+                        <div>
+                            <label class="mb-1 block text-xs text-muted-foreground">主相机角度控制</label>
+                            <Select
+                                v-model="createForm.mainCameraMotorAxisId"
+                                :options="motorOptions"
+                                option-label="name"
+                                option-value="id"
+                                :loading="bindingOptionsLoading"
+                                :placeholder="t('common.pleaseSelect')"
+                                size="small"
+                                class="w-full !text-xs"
+                            />
+                        </div>
+
+                        <div v-if="isTwoCameraType(createForm.deviceType)">
+                            <label class="mb-1 block text-xs text-muted-foreground">从相机角度控制</label>
+                            <Select
+                                v-model="createForm.secondaryCameraMotorAxisId"
+                                :options="motorOptions"
+                                option-label="name"
+                                option-value="id"
+                                :loading="bindingOptionsLoading"
+                                :placeholder="t('common.pleaseSelect')"
+                                size="small"
+                                class="w-full !text-xs"
+                            />
+                        </div>
+
+                        <div>
+                            <label class="mb-1 block text-xs text-muted-foreground">间距控制</label>
+                            <Select
+                                v-model="createForm.distanceMotorAxisId"
+                                :options="motorOptions"
+                                option-label="name"
+                                option-value="id"
+                                :loading="bindingOptionsLoading"
+                                :placeholder="t('common.pleaseSelect')"
+                                size="small"
+                                class="w-full !text-xs"
+                            />
+                        </div>
+
+                        <div v-if="isSingleLightType(createForm.deviceType)">
+                            <label class="mb-1 block text-xs text-muted-foreground">主结构光机</label>
+                            <Select
+                                v-model="createForm.boundProjectorDeviceId"
+                                :options="projectorOptions"
+                                option-label="name"
+                                option-value="id"
+                                :loading="bindingOptionsLoading"
+                                :placeholder="t('common.pleaseSelect')"
+                                size="small"
+                                class="w-full !text-xs"
+                            />
+                        </div>
+                    </div>
                 </div>
             </div>
             <template #footer>
@@ -628,6 +875,95 @@ function openDeleteConfirm(item: CalibProjectDto): void {
                         rows="3"
                         auto-resize
                     />
+                </div>
+
+                <div class="rounded-lg border border-border/40 bg-muted/10 p-3">
+                    <h4 class="mb-3 text-sm font-medium">下面设备绑定</h4>
+                    <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <div>
+                            <label class="mb-1 block text-xs text-muted-foreground">主相机（左）</label>
+                            <Select
+                                v-model="editForm.mainCameraDeviceId"
+                                :options="cameraOptions"
+                                option-label="name"
+                                option-value="id"
+                                :loading="bindingOptionsLoading"
+                                :placeholder="t('common.pleaseSelect')"
+                                size="small"
+                                class="w-full !text-xs"
+                            />
+                        </div>
+
+                        <div v-if="editDeviceType != null && isTwoCameraType(editDeviceType)">
+                            <label class="mb-1 block text-xs text-muted-foreground">从相机（右）</label>
+                            <Select
+                                v-model="editForm.secondaryCameraDeviceId"
+                                :options="cameraOptions"
+                                option-label="name"
+                                option-value="id"
+                                :loading="bindingOptionsLoading"
+                                :placeholder="t('common.pleaseSelect')"
+                                size="small"
+                                class="w-full !text-xs"
+                            />
+                        </div>
+
+                        <div>
+                            <label class="mb-1 block text-xs text-muted-foreground">主相机角度控制</label>
+                            <Select
+                                v-model="editForm.mainCameraMotorAxisId"
+                                :options="motorOptions"
+                                option-label="name"
+                                option-value="id"
+                                :loading="bindingOptionsLoading"
+                                :placeholder="t('common.pleaseSelect')"
+                                size="small"
+                                class="w-full !text-xs"
+                            />
+                        </div>
+
+                        <div v-if="editDeviceType != null && isTwoCameraType(editDeviceType)">
+                            <label class="mb-1 block text-xs text-muted-foreground">从相机角度控制</label>
+                            <Select
+                                v-model="editForm.secondaryCameraMotorAxisId"
+                                :options="motorOptions"
+                                option-label="name"
+                                option-value="id"
+                                :loading="bindingOptionsLoading"
+                                :placeholder="t('common.pleaseSelect')"
+                                size="small"
+                                class="w-full !text-xs"
+                            />
+                        </div>
+
+                        <div>
+                            <label class="mb-1 block text-xs text-muted-foreground">间距控制</label>
+                            <Select
+                                v-model="editForm.distanceMotorAxisId"
+                                :options="motorOptions"
+                                option-label="name"
+                                option-value="id"
+                                :loading="bindingOptionsLoading"
+                                :placeholder="t('common.pleaseSelect')"
+                                size="small"
+                                class="w-full !text-xs"
+                            />
+                        </div>
+
+                        <div v-if="editDeviceType != null && isSingleLightType(editDeviceType)">
+                            <label class="mb-1 block text-xs text-muted-foreground">主结构光机</label>
+                            <Select
+                                v-model="editForm.boundProjectorDeviceId"
+                                :options="projectorOptions"
+                                option-label="name"
+                                option-value="id"
+                                :loading="bindingOptionsLoading"
+                                :placeholder="t('common.pleaseSelect')"
+                                size="small"
+                                class="w-full !text-xs"
+                            />
+                        </div>
+                    </div>
                 </div>
             </div>
             <template #footer>

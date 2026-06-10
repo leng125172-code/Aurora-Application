@@ -59,6 +59,9 @@ namespace AuroraStruct3D
             // 注册雷赛 iCL-RS 实时数据采集后台服务
             context.Services.AddSingleton<LeisaiSamplerStateStore>();
             context.Services.AddHostedService<LeisaiSamplerHostedService>();
+
+            // 注册 Step6 在线扫描会话状态存储（进程内共享）
+            context.Services.AddSingleton<Calibration.CalibScanStateStore>();
         }
     }
 }

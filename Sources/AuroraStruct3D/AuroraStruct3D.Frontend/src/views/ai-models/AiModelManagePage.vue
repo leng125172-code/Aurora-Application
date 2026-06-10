@@ -1002,29 +1002,6 @@ function refreshUploadFileSortOrders(): void {
     })
 }
 
-function initializeEditFileRoles(): void {
-    editFiles.value.forEach((item, index) => {
-        item.sortOrder = index
-    })
-
-    if (editFiles.value.length <= 1) {
-        editFiles.value.forEach((item) => {
-            item.fileRole = AiModelFileRole.SingleWholeModel
-        })
-        return
-    }
-
-    const encoderCount = editFiles.value.filter((item) => item.fileRole === AiModelFileRole.SplitEncoder).length
-    const decoderCount = editFiles.value.filter((item) => item.fileRole === AiModelFileRole.SplitDecoder).length
-    const singleCount = editFiles.value.filter((item) => item.fileRole === AiModelFileRole.SingleWholeModel).length
-    if (encoderCount === 1 && decoderCount === 1 && singleCount === 0) {
-        return
-    }
-
-    editFiles.value[0].fileRole = AiModelFileRole.SplitEncoder
-    editFiles.value[1].fileRole = AiModelFileRole.SplitDecoder
-}
-
 function refreshEditFileSortOrders(): void {
     editFiles.value.forEach((item, index) => {
         item.sortOrder = index

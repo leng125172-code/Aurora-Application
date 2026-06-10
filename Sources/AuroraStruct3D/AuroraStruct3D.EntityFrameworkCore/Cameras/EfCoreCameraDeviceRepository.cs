@@ -31,6 +31,22 @@ public class EfCoreCameraDeviceRepository
     }
 
     /// <inheritdoc/>
+    public async Task<CameraDevice?> FindByDeviceSerialNumberAsync(
+        string deviceSerialNumber,
+        CancellationToken cancellationToken = default
+    )
+    {
+        string normalizedSerial = deviceSerialNumber.Trim();
+        AuroraStruct3DDbContext context = await GetDbContextAsync();
+        return await context
+            .CameraDevices.AsNoTracking()
+            .FirstOrDefaultAsync(
+                c => c.DeviceSerialNumber != null && c.DeviceSerialNumber == normalizedSerial,
+                cancellationToken
+            );
+    }
+
+    /// <inheritdoc/>
     public async Task<List<CameraDevice>> GetEnabledListAsync(
         CancellationToken cancellationToken = default
     )

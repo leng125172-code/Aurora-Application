@@ -67,4 +67,8 @@ public class SaveCalibCameraParamInput
 
     /// <summary>最大增益（dB）</summary>
     public decimal? GainMaxDb { get; set; }
+
+    /// <summary>相机在项目中的位置绑定标签（如"主相机(左)"、"从相机(右)"），传 null 清除绑定</summary>
+    [MaxLength(CalibConsts.MaxCameraPositionLength)]
+    public string? CameraPosition { get; set; }
 }

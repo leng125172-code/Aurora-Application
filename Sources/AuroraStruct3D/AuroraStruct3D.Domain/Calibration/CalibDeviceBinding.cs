@@ -38,9 +38,6 @@ public class CalibDeviceBinding : FullAuditedEntity<Guid>
     /// <summary>关联的投射器参数配置ID（仅BindingType=Projector时有效）</summary>
     public Guid? BoundProjectorParamId { get; private set; }
 
-    /// <summary>关联的云台组ID（仅三目设备电机绑定时有效，关联AbpProCalibGimbalGroups）</summary>
-    public Guid? BoundGimbalGroupId { get; private set; }
-
     /// <summary>绑定状态（待绑定 / 已绑定 / 验证中 / 验证失败）</summary>
     public CalibBindingStatus BindingStatus { get; private set; }
 
@@ -95,16 +92,6 @@ public class CalibDeviceBinding : FullAuditedEntity<Guid>
     public CalibDeviceBinding BindMotor(Guid motorParamId)
     {
         BoundMotorParamId = motorParamId;
-        BindingStatus = CalibBindingStatus.Bound;
-        StatusMessage = null;
-        return this;
-    }
-
-    /// <summary>完成云台电机绑定（三目设备，同时关联云台组）</summary>
-    public CalibDeviceBinding BindGimbalMotor(Guid motorParamId, Guid gimbalGroupId)
-    {
-        BoundMotorParamId = motorParamId;
-        BoundGimbalGroupId = gimbalGroupId;
         BindingStatus = CalibBindingStatus.Bound;
         StatusMessage = null;
         return this;

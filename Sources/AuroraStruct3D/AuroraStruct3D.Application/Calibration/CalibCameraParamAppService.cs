@@ -119,6 +119,9 @@ public class CalibCameraParamAppService : AuroraStruct3DAppService, ICalibCamera
                 input.GainMaxDb ?? entity.GainMaxDb
             );
         }
+
+        // 位置绑定标签（始终写入，允许 null 清除）
+        entity.SetCameraPosition(input.CameraPosition);
     }
 
     /// <summary>将实体转换为 DTO（可空字段在未赋值时返回 null）</summary>
@@ -147,5 +150,6 @@ public class CalibCameraParamAppService : AuroraStruct3DAppService, ICalibCamera
             GainMaxDb = entity.GainMaxDb == 0 ? null : entity.GainMaxDb,
             CreationTime = entity.CreationTime,
             LastModificationTime = entity.LastModificationTime,
+            CameraPosition = entity.CameraPosition,
         };
 }

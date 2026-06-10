@@ -20,6 +20,7 @@ import CalibStep2CameraConfig from './CalibStep2CameraConfig.vue'
 import CalibStep3ProjectorConfig from './CalibStep3ProjectorConfig.vue'
 import CalibStep4MotorConfig from './CalibStep4MotorConfig.vue'
 import CalibStep5CameraCalib from './CalibStep5CameraCalib.vue'
+import CalibStep6OnlineScan from './CalibStep6OnlineScan.vue'
 import CalibStepComingSoon from './CalibStepComingSoon.vue'
 import { ArrowLeft } from '@lucide/vue'
 import { showErrorToastOnce } from '@/api/client'
@@ -68,6 +69,7 @@ async function loadProject(): Promise<void> {
     loading.value = true
     try {
         project.value = await getCalibProjectAsync(id)
+        selectedProjectorId.value = project.value?.boundProjectorDeviceId ?? null
     } catch (e) {
         showErrorToastOnce(e)
     } finally {
@@ -88,10 +90,8 @@ function deviceSeriesLabel(series: DeviceSeries): string {
 function deviceTypeLabel(type: CalibDeviceType): string {
     const map: Record<CalibDeviceType, string> = {
         [CalibDeviceType.TwoCamera0Light]: t('calib.type2C0L'),
-        [CalibDeviceType.ThreeCamera0Light]: t('calib.type3C0L'),
         [CalibDeviceType.OneCamera1Light]: t('calib.type1C1L'),
         [CalibDeviceType.TwoCamera1Light]: t('calib.type2C1L'),
-        [CalibDeviceType.ThreeCamera1Light]: t('calib.type3C1L'),
     }
     return map[type] ?? String(type)
 }
@@ -100,17 +100,65 @@ function deviceTypeLabel(type: CalibDeviceType): string {
 
 const activeStep = ref('1')
 
-// ===================== 步骤列表 =====================
+type WizardStepKind = 'project' | 'camera' | 'projector' | 'motor' | 'calib' | 'scan' | 'soon'
 
-const steps = computed(() => [
-    { value: '1', label: t('calib.step1Label') },
-    { value: '2', label: t('calib.step2Label') },
-    { value: '3', label: t('calib.step3Label') },
-    { value: '4', label: t('calib.step4Label') },
-    { value: '5', label: t('calib.step5Label') },
-    { value: '6', label: t('calib.step6Label') },
-    { value: '7', label: t('calib.step7Label') },
-])
+interface WizardStepItem {
+    value: string
+    label: string
+    kind: WizardStepKind
+}
+
+const showProjectorStep = computed(
+    () => project.value?.deviceSeries === DeviceSeries.SingleLight && !!project.value?.boundProjectorDeviceId
+)
+
+const stepItems = computed<WizardStepItem[]>(() => {
+    if (showProjectorStep.value) {
+        return [
+            { value: '1', label: t('calib.step1Label'), kind: 'project' },
+            { value: '2', label: t('calib.step2Label'), kind: 'camera' },
+            { value: '3', label: t('calib.step3Label'), kind: 'projector' },
+            { value: '4', label: t('calib.step4Label'), kind: 'motor' },
+            { value: '5', label: t('calib.step5Label'), kind: 'calib' },
+            { value: '6', label: t('calib.step6Label'), kind: 'scan' },
+            { value: '7', label: t('calib.step7Label'), kind: 'soon' },
+        ]
+    }
+
+    return [
+        { value: '1', label: t('calib.step1Label'), kind: 'project' },
+        { value: '2', label: t('calib.step2Label'), kind: 'camera' },
+        { value: '3', label: t('calib.step4Label'), kind: 'motor' },
+        { value: '4', label: t('calib.step5Label'), kind: 'calib' },
+        { value: '5', label: t('calib.step6Label'), kind: 'scan' },
+        { value: '6', label: t('calib.step7Label'), kind: 'soon' },
+    ]
+})
+
+const stepValueMap = computed<Record<WizardStepKind, string>>(() => {
+    return stepItems.value.reduce<Record<WizardStepKind, string>>(
+        (map, item) => {
+            map[item.kind] = item.value
+            return map
+        },
+        {} as Record<WizardStepKind, string>
+    )
+})
+
+function getStepValue(kind: WizardStepKind): string | null {
+    return stepValueMap.value[kind] ?? null
+}
+
+function goToStep(kind: WizardStepKind): void {
+    const value = getStepValue(kind)
+    if (value) {
+        activeStep.value = value
+    }
+}
+
+function goToNumericStep(stepNumber: number): void {
+    activeStep.value = String(stepNumber)
+}
 
 function goBack(): void {
     void router.push({ name: 'CalibProjectManage' })
@@ -216,7 +264,12 @@ async function initStep2(): Promise<void> {
     step2Cameras.value = []
     try {
         const result = await getCameraList({ maxResultCount: 200 })
-        step2Cameras.value = result.items
+        const boundIds = new Set<string>(
+            [project.value?.mainCameraDeviceId, project.value?.secondaryCameraDeviceId].filter(
+                (id): id is string => id !== null && id !== undefined
+            )
+        )
+        step2Cameras.value = result.items.filter((c) => c.isEnabled && boundIds.has(c.id))
 
         // 加载已保存的标定相机参数
         if (project.value) {
@@ -358,8 +411,114 @@ async function saveCameraParams(cam: CameraDeviceDto): Promise<void> {
     }
 }
 
+// ===================== Step 2 — 项目绑定校验与 Next 处理 =====================
+
+function validateProjectBindingsForStep2(): string | null {
+    if (!project.value) {
+        return '项目未加载完成'
+    }
+
+    const dt = project.value.deviceType
+    if (!project.value.mainCameraDeviceId) {
+        return '请先在项目管理页绑定主相机'
+    }
+
+    if (!project.value.mainCameraMotorAxisId) {
+        return '请先在项目管理页绑定主相机角度控制电机'
+    }
+
+    if (!project.value.distanceMotorAxisId) {
+        return '请先在项目管理页绑定间距控制电机'
+    }
+
+    if (dt === CalibDeviceType.OneCamera1Light) {
+        if (project.value.secondaryCameraDeviceId || project.value.secondaryCameraMotorAxisId) {
+            return '1目1光不允许绑定从相机或从相机角度控制电机'
+        }
+        if (!project.value.boundProjectorDeviceId) {
+            return '请先在项目管理页绑定主结构光机'
+        }
+    }
+
+    if (dt === CalibDeviceType.TwoCamera0Light || dt === CalibDeviceType.TwoCamera1Light) {
+        if (!project.value.secondaryCameraDeviceId) {
+            return '请先在项目管理页绑定从相机'
+        }
+        if (!project.value.secondaryCameraMotorAxisId) {
+            return '请先在项目管理页绑定从相机角度控制电机'
+        }
+    }
+
+    if (dt === CalibDeviceType.TwoCamera1Light && !project.value.boundProjectorDeviceId) {
+        return '请先在项目管理页绑定主结构光机'
+    }
+
+    return null
+}
+
+const step2Saving = ref(false)
+
+/** Step 2 Next：校验位置绑定 → 全量保存所有相机参数（含位置） → 前进 */
+async function handleStep2Next(): Promise<void> {
+    const error = validateProjectBindingsForStep2()
+    if (error) {
+        const { error: toastError } = useAppToast()
+        toastError(error)
+        return
+    }
+    if (!project.value || step2Saving.value) return
+    step2Saving.value = true
+    try {
+        await Promise.all(
+            step2Cameras.value.map(async (cam: CameraDeviceDto) => {
+                const form = cameraForms.value[cam.id]
+                const hw = cameraHardware.value[cam.id]
+                const cmos = getSelectedCmosSize(form?.sensorSize ?? null)
+                await saveCalibCameraParamAsync({
+                    calibProjectId: project.value!.id,
+                    cameraDeviceId: cam.id,
+                    name: cam.name,
+                    description: cam.description ?? null,
+                    isEnabled: cam.isEnabled,
+                    sensorSize: form?.sensorSize ?? null,
+                    sensorWidthMm: cmos?.widthMm ?? null,
+                    sensorHeightMm: cmos?.heightMm ?? null,
+                    imageWidthPixels: hw?.imageWidthPixels ?? null,
+                    imageHeightPixels: hw?.imageHeightPixels ?? null,
+                    lensFocalLength: form?.lensFocalLength ?? null,
+                    maxAperture: form?.maxAperture ?? null,
+                    minAperture: form?.minAperture ?? null,
+                    currentAperture: form?.currentAperture ?? null,
+                    exposureTimeMinUs: hw?.exposureTimeMinUs ?? null,
+                    exposureTimeMaxUs: hw?.exposureTimeMaxUs ?? null,
+                })
+            })
+        )
+        if (showProjectorStep.value) {
+            goToStep('projector')
+        } else {
+            goToStep('motor')
+        }
+    } catch (e) {
+        showErrorToastOnce(e)
+    } finally {
+        step2Saving.value = false
+    }
+}
+
 // ===================== Step 3 投影机参数 =====================
 
+/** Step 3 Next（单光系列）：校验项目已绑定主结构光机 → 前进 */
+async function handleStep3Next(): Promise<void> {
+    if (project.value?.projectorCount && project.value.projectorCount > 0) {
+        if (!project.value.boundProjectorDeviceId) {
+            const { error: toastError } = useAppToast()
+            toastError('单光系列必须先在项目管理页绑定主结构光机才能继续')
+            return
+        }
+    }
+    goToStep('motor')
+}
 const step3Loading = ref(false)
 const step3Projectors = ref<ProjectorDeviceDto[]>([])
 const selectedProjectorId = ref<string | null>(null)
@@ -467,9 +626,12 @@ async function initStep3(): Promise<void> {
     try {
         if (!step3Hub) await initStep3Hub()
         const result = await getProjectorList({ maxResultCount: 100 })
-        step3Projectors.value = result.items.filter((p) => p.isEnabled)
-        if (step3Projectors.value.length > 0 && !selectedProjectorId.value) {
-            selectedProjectorId.value = step3Projectors.value[0].id
+        const boundProjectorId = project.value?.boundProjectorDeviceId ?? null
+        step3Projectors.value = result.items.filter(
+            (p) => p.isEnabled && (!boundProjectorId || p.id === boundProjectorId)
+        )
+        if (boundProjectorId) {
+            selectedProjectorId.value = boundProjectorId
         }
         await refreshCurrentFringeDownloadStatus()
     } catch (e) {
@@ -564,7 +726,7 @@ async function triggerFringeDownload(): Promise<void> {
 // 切换步骤时自动初始化对应步骤
 watch(activeStep, (val: string) => {
     if (val === '2') void initStep2()
-    if (val === '3') void initStep3()
+    if (val === getStepValue('projector')) void initStep3()
 })
 
 watch(selectedProjectorId, () => {
@@ -607,7 +769,7 @@ onUnmounted(() => {
             >
                 <StepList class="border-b border-border/40 px-4 pt-3" :pt="{ root: { class: '!bg-transparent' } }">
                     <Step
-                        v-for="item in steps"
+                        v-for="item in stepItems"
                         :key="item.value"
                         :value="item.value"
                         :pt="{ root: { class: '!bg-transparent' } }"
@@ -618,137 +780,136 @@ onUnmounted(() => {
 
                 <StepPanels class="flex flex-col flex-1 min-h-0" :pt="{ root: { class: '!bg-transparent' } }">
                     <StepPanel
-                        value="1"
+                        v-for="item in stepItems"
+                        :key="item.value"
+                        :value="item.value"
                         class="flex flex-col flex-1 min-h-0"
                         :pt="{ root: { class: '!bg-transparent' } }"
                     >
-                        <CalibStep1ProjectInfo
-                            :loading="loading"
-                            :project="project"
-                            :device-series-label="deviceSeriesLabel"
-                            :device-type-label="deviceTypeLabel"
-                            @next="activeStep = '2'"
-                        />
-                    </StepPanel>
-
-                    <StepPanel
-                        value="2"
-                        class="flex flex-col flex-1 min-h-0"
-                        :pt="{ root: { class: '!bg-transparent' } }"
-                    >
-                        <CalibStep2CameraConfig
-                            :step2-loading="step2Loading"
-                            :step2-cameras="step2Cameras"
-                            :expanded-camera-id="expandedCameraId"
-                            :camera-connecting="cameraConnecting"
-                            :camera-forms="cameraForms"
-                            :camera-hardware="cameraHardware"
-                            :hardware-loading="hardwareLoading"
-                            :camera-saving="cameraSaving"
-                            :cmos-sensor-sizes="CMOS_SENSOR_SIZES"
-                            :get-selected-cmos-size="getSelectedCmosSize"
-                            :calc-pixel-size="calcPixelSize"
-                            :toggle-camera-expand="toggleCameraExpand"
-                            :read-hardware-params="readHardwareParams"
-                            :save-camera-params="saveCameraParams"
-                            :camera-status-color="cameraStatusColor"
-                            :camera-status-label="cameraStatusLabel"
-                            @prev="activeStep = '1'"
-                            @next="activeStep = '3'"
-                        />
-                    </StepPanel>
-
-                    <StepPanel
-                        value="3"
-                        class="flex flex-col flex-1 min-h-0"
-                        :pt="{ root: { class: '!bg-transparent' } }"
-                    >
-                        <CalibStep3ProjectorConfig
-                            :step3-loading="step3Loading"
-                            :step3-projectors="step3Projectors"
-                            :selected-projector-id="selectedProjectorId"
-                            :projector-width-pixels="projectorWidthPixels"
-                            :projector-pixel-mode="projectorPixelMode"
-                            :projector-reading="projectorReading"
-                            :fringe-mode="fringeMode"
-                            :fringe-type="fringeType"
-                            :projector-height-input="projectorHeightInput"
-                            :fringe3-period-count="fringe3PeriodCount"
-                            :fringe3-image-count="fringe3ImageCount"
-                            :fringe3-phase-shift="fringe3PhaseShift"
-                            :fringe3-period-error="fringe3PeriodError"
-                            :fringe3-phase-error="fringe3PhaseError"
-                            :fringe3-can-generate="fringe3CanGenerate"
-                            :generating-fringe="generatingFringe"
-                            :generated-fringe-images="generatedFringeImages"
-                            :selected-fringe-image-idx="selectedFringeImageIdx"
-                            :downloading-fringe="downloadingFringe"
-                            :fringe-download-progress="fringeDownloadProgress"
-                            :fetch-projector-resolution="fetchProjectorResolution"
-                            :generate-fringe-images="generateFringeImages"
-                            :trigger-fringe-download="triggerFringeDownload"
-                            @prev="activeStep = '2'"
-                            @next="activeStep = '4'"
-                            @update:selected-projector-id="selectedProjectorId = $event"
-                            @update:fringe-mode="fringeMode = $event"
-                            @update:fringe-type="fringeType = $event"
-                            @update:projector-height-input="projectorHeightInput = $event"
-                            @update:fringe3-period-count="fringe3PeriodCount = $event"
-                            @update:fringe3-image-count="fringe3ImageCount = $event"
-                            @update:fringe3-phase-shift="fringe3PhaseShift = $event"
-                            @update:selected-fringe-image-idx="selectedFringeImageIdx = $event"
-                        />
-                    </StepPanel>
-
-                    <StepPanel
-                        value="4"
-                        class="flex flex-col flex-1 min-h-0"
-                        :pt="{ root: { class: '!bg-transparent' } }"
-                    >
-                        <div class="flex flex-1 min-h-0 flex-col">
-                            <CalibStep4MotorConfig :project="project" />
-                        </div>
-                        <div class="flex justify-between gap-2 px-4 py-3 border-t border-border/40 mt-auto">
-                            <Button severity="secondary" outlined size="small" @click="activeStep = '3'">
-                                {{ t('calib.prevStep') }}
-                            </Button>
-                            <Button size="small" @click="activeStep = '5'">
-                                {{ t('calib.nextStep') }}
-                            </Button>
-                        </div>
-                    </StepPanel>
-
-                    <StepPanel
-                        value="5"
-                        class="flex flex-col flex-1 min-h-0"
-                        :pt="{ root: { class: '!bg-transparent' } }"
-                    >
-                        <div class="flex flex-1 min-h-0 flex-col">
-                            <CalibStep5CameraCalib :project="project" :selected-projector-id="selectedProjectorId" />
-                        </div>
-                        <div class="flex justify-between gap-2 px-4 py-3 border-t border-border/40 mt-auto">
-                            <Button severity="secondary" outlined size="small" @click="activeStep = '4'">
-                                {{ t('calib.prevStep') }}
-                            </Button>
-                            <Button size="small" @click="activeStep = '6'">
-                                {{ t('calib.nextStep') }}
-                            </Button>
-                        </div>
-                    </StepPanel>
-
-                    <StepPanel
-                        v-for="n in ['6', '7']"
-                        :key="n"
-                        :value="n"
-                        class="flex flex-col flex-1 min-h-0"
-                        :pt="{ root: { class: '!bg-transparent' } }"
-                    >
-                        <CalibStepComingSoon
-                            :step="n"
-                            :show-next="n !== '7'"
-                            @prev="activeStep = String(Number(n) - 1)"
-                            @next="activeStep = String(Number(n) + 1)"
-                        />
+                        <template v-if="item.kind === 'project'">
+                            <CalibStep1ProjectInfo
+                                :loading="loading"
+                                :project="project"
+                                :device-series-label="deviceSeriesLabel"
+                                :device-type-label="deviceTypeLabel"
+                                @next="goToStep('camera')"
+                            />
+                        </template>
+                        <template v-else-if="item.kind === 'camera'">
+                            <CalibStep2CameraConfig
+                                :step2-loading="step2Loading"
+                                :step2-cameras="step2Cameras"
+                                :expanded-camera-id="expandedCameraId"
+                                :camera-connecting="cameraConnecting"
+                                :camera-forms="cameraForms"
+                                :camera-hardware="cameraHardware"
+                                :hardware-loading="hardwareLoading"
+                                :camera-saving="cameraSaving"
+                                :cmos-sensor-sizes="CMOS_SENSOR_SIZES"
+                                :get-selected-cmos-size="getSelectedCmosSize"
+                                :calc-pixel-size="calcPixelSize"
+                                :toggle-camera-expand="toggleCameraExpand"
+                                :read-hardware-params="readHardwareParams"
+                                :save-camera-params="saveCameraParams"
+                                :camera-status-color="cameraStatusColor"
+                                :camera-status-label="cameraStatusLabel"
+                                @prev="goToStep('project')"
+                                @next="handleStep2Next"
+                            />
+                        </template>
+                        <template v-else-if="item.kind === 'projector'">
+                            <CalibStep3ProjectorConfig
+                                :step3-loading="step3Loading"
+                                :step3-projectors="step3Projectors"
+                                :selected-projector-id="selectedProjectorId"
+                                :projector-width-pixels="projectorWidthPixels"
+                                :projector-pixel-mode="projectorPixelMode"
+                                :projector-reading="projectorReading"
+                                :fringe-mode="fringeMode"
+                                :fringe-type="fringeType"
+                                :projector-height-input="projectorHeightInput"
+                                :fringe3-period-count="fringe3PeriodCount"
+                                :fringe3-image-count="fringe3ImageCount"
+                                :fringe3-phase-shift="fringe3PhaseShift"
+                                :fringe3-period-error="fringe3PeriodError"
+                                :fringe3-phase-error="fringe3PhaseError"
+                                :fringe3-can-generate="fringe3CanGenerate"
+                                :generating-fringe="generatingFringe"
+                                :generated-fringe-images="generatedFringeImages"
+                                :selected-fringe-image-idx="selectedFringeImageIdx"
+                                :downloading-fringe="downloadingFringe"
+                                :fringe-download-progress="fringeDownloadProgress"
+                                :fetch-projector-resolution="fetchProjectorResolution"
+                                :generate-fringe-images="generateFringeImages"
+                                :trigger-fringe-download="triggerFringeDownload"
+                                @prev="goToStep('camera')"
+                                @next="handleStep3Next"
+                                @update:selected-projector-id="selectedProjectorId = $event"
+                                @update:fringe-mode="fringeMode = $event"
+                                @update:fringe-type="fringeType = $event"
+                                @update:projector-height-input="projectorHeightInput = $event"
+                                @update:fringe3-period-count="fringe3PeriodCount = $event"
+                                @update:fringe3-image-count="fringe3ImageCount = $event"
+                                @update:fringe3-phase-shift="fringe3PhaseShift = $event"
+                                @update:selected-fringe-image-idx="selectedFringeImageIdx = $event"
+                            />
+                        </template>
+                        <template v-else-if="item.kind === 'motor'">
+                            <div class="flex flex-1 min-h-0 flex-col">
+                                <CalibStep4MotorConfig v-if="project" :project="project" />
+                            </div>
+                            <div class="mt-auto flex justify-between gap-2 border-t border-border/40 px-4 py-3">
+                                <Button
+                                    severity="secondary"
+                                    outlined
+                                    size="small"
+                                    @click="goToStep(showProjectorStep ? 'projector' : 'camera')"
+                                >
+                                    {{ t('calib.prevStep') }}
+                                </Button>
+                                <Button size="small" @click="goToStep('calib')">
+                                    {{ t('calib.nextStep') }}
+                                </Button>
+                            </div>
+                        </template>
+                        <template v-else-if="item.kind === 'calib'">
+                            <div class="flex flex-1 min-h-0 flex-col">
+                                <CalibStep5CameraCalib
+                                    v-if="project"
+                                    :project="project"
+                                    :selected-projector-id="selectedProjectorId"
+                                />
+                            </div>
+                            <div class="mt-auto flex justify-between gap-2 border-t border-border/40 px-4 py-3">
+                                <Button severity="secondary" outlined size="small" @click="goToStep('motor')">
+                                    {{ t('calib.prevStep') }}
+                                </Button>
+                                <Button size="small" @click="goToNumericStep(Number(item.value) + 1)">
+                                    {{ t('calib.nextStep') }}
+                                </Button>
+                            </div>
+                        </template>
+                        <template v-else-if="item.kind === 'scan'">
+                            <div class="flex flex-1 min-h-0 flex-col">
+                                <CalibStep6OnlineScan v-if="project" :project="project" />
+                            </div>
+                            <div class="mt-auto flex justify-between gap-2 border-t border-border/40 px-4 py-3">
+                                <Button severity="secondary" outlined size="small" @click="goToStep('calib')">
+                                    {{ t('calib.prevStep') }}
+                                </Button>
+                                <Button size="small" @click="goToNumericStep(Number(item.value) + 1)">
+                                    {{ t('calib.nextStep') }}
+                                </Button>
+                            </div>
+                        </template>
+                        <template v-else>
+                            <CalibStepComingSoon
+                                :step="item.value"
+                                :show-next="item.value !== stepItems[stepItems.length - 1].value"
+                                @prev="goToNumericStep(Number(item.value) - 1)"
+                                @next="goToNumericStep(Number(item.value) + 1)"
+                            />
+                        </template>
                     </StepPanel>
                 </StepPanels>
             </Stepper>

@@ -2,7 +2,6 @@
  * 标定模块相关 API
  * 端点由 ABP 自动生成，基础路径：
  *   /api/app/calib-project       — 设备标定项目
- *   /api/app/calib-gimbal-group  — 云台组（标定结构）
  */
 import { httpClient } from '@/api/client'
 
@@ -19,10 +18,8 @@ export enum DeviceSeries {
 /** 设备类型 */
 export enum CalibDeviceType {
     TwoCamera0Light = 0,
-    ThreeCamera0Light = 1,
     OneCamera1Light = 2,
     TwoCamera1Light = 3,
-    ThreeCamera1Light = 4,
 }
 
 /** 标定流程状态 */
@@ -30,7 +27,6 @@ export enum CalibStatus {
     Initializing = 0,
     MotorParamConfig = 1,
     MotorConstraintConfig = 2,
-    GimbalConfig = 3,
     CameraParamConfig = 4,
     ProjectorParamConfig = 5,
     DeviceBinding = 6,
@@ -62,6 +58,12 @@ export interface CalibProjectDto {
     readonly calibStatus: CalibStatus
     readonly creationTime: string
     readonly lastModificationTime: string | null
+    readonly boundProjectorDeviceId: string | null
+    readonly mainCameraDeviceId: string | null
+    readonly secondaryCameraDeviceId: string | null
+    readonly mainCameraMotorAxisId: string | null
+    readonly secondaryCameraMotorAxisId: string | null
+    readonly distanceMotorAxisId: string | null
 }
 
 export interface GetCalibProjectListInput {
@@ -80,11 +82,23 @@ export interface CreateCalibProjectInput {
     name: string
     description?: string | null
     deviceType: CalibDeviceType
+    mainCameraDeviceId?: string | null
+    secondaryCameraDeviceId?: string | null
+    mainCameraMotorAxisId?: string | null
+    secondaryCameraMotorAxisId?: string | null
+    distanceMotorAxisId?: string | null
+    boundProjectorDeviceId?: string | null
 }
 
 export interface UpdateCalibProjectInput {
     name: string
     description?: string | null
+    mainCameraDeviceId?: string | null
+    secondaryCameraDeviceId?: string | null
+    mainCameraMotorAxisId?: string | null
+    secondaryCameraMotorAxisId?: string | null
+    distanceMotorAxisId?: string | null
+    boundProjectorDeviceId?: string | null
 }
 
 export interface PagedResult<T> {
@@ -133,40 +147,6 @@ export async function deleteCalibProjectAsync(id: string): Promise<void> {
 }
 
 // ===================== 云台组 DTO =====================
-
-export interface CalibGimbalGroupDto {
-    readonly id: string
-    readonly name: string
-    readonly description: string | null
-    readonly maxSpeed: number
-    readonly acceleration: number
-    readonly accelerationTime: number
-    readonly decelerationTime: number
-    readonly isEnabled: boolean
-    readonly creationTime: string
-    readonly lastModificationTime: string | null
-}
-
-export interface GetCalibGimbalGroupListInput {
-    filter?: string | null
-    isEnabled?: boolean | null
-    startTime?: string | null
-    endTime?: string | null
-    sorting?: string | null
-    skipCount?: number
-    maxResultCount?: number
-}
-
-export interface CreateUpdateCalibGimbalGroupInput {
-    name: string
-    description?: string | null
-    maxSpeed: number
-    acceleration: number
-    accelerationTime: number
-    decelerationTime: number
-    isEnabled: boolean
-}
-
 // ===================== 标定电机参数 DTO =====================
 
 export interface CalibMotorParamDto {
@@ -203,47 +183,7 @@ export interface SaveCalibMotorParamInput {
 }
 
 // ===================== 云台组 API =====================
-
-const GIMBAL_GROUP_BASE = '/api/app/calib-gimbal-group'
 const CALIB_MOTOR_PARAM_BASE = '/api/app/calib-motor-param'
-
-/** 分页查询云台组列表 */
-export async function getCalibGimbalGroupListAsync(
-    input: GetCalibGimbalGroupListInput
-): Promise<PagedResult<CalibGimbalGroupDto>> {
-    const response = await httpClient.get<PagedResult<CalibGimbalGroupDto>>(GIMBAL_GROUP_BASE, {
-        params: input,
-    })
-    return response.data
-}
-
-/** 获取单个云台组 */
-export async function getCalibGimbalGroupAsync(id: string): Promise<CalibGimbalGroupDto> {
-    const response = await httpClient.get<CalibGimbalGroupDto>(`${GIMBAL_GROUP_BASE}/${id}`)
-    return response.data
-}
-
-/** 新增云台组 */
-export async function createCalibGimbalGroupAsync(
-    input: CreateUpdateCalibGimbalGroupInput
-): Promise<CalibGimbalGroupDto> {
-    const response = await httpClient.post<CalibGimbalGroupDto>(GIMBAL_GROUP_BASE, input)
-    return response.data
-}
-
-/** 修改云台组 */
-export async function updateCalibGimbalGroupAsync(
-    id: string,
-    input: CreateUpdateCalibGimbalGroupInput
-): Promise<CalibGimbalGroupDto> {
-    const response = await httpClient.put<CalibGimbalGroupDto>(`${GIMBAL_GROUP_BASE}/${id}`, input)
-    return response.data
-}
-
-/** 删除云台组 */
-export async function deleteCalibGimbalGroupAsync(id: string): Promise<void> {
-    await httpClient.delete(`${GIMBAL_GROUP_BASE}/${id}`)
-}
 
 /** 获取标定项目的所有电机参数。 */
 export async function getCalibMotorParamListAsync(
@@ -321,6 +261,8 @@ export interface CalibCameraParamDto {
     readonly gainMaxDb: number | null
     readonly creationTime: string
     readonly lastModificationTime: string | null
+    /** 相机位置绑定标签，如"主相机(左)"、"从相机(右)"，未绑定时为 null */
+    readonly cameraPosition: string | null
 }
 
 export interface SaveCalibCameraParamInput {
@@ -342,6 +284,8 @@ export interface SaveCalibCameraParamInput {
     exposureTimeMaxUs?: number | null
     gainMinDb?: number | null
     gainMaxDb?: number | null
+    /** 相机位置绑定标签，如"主相机(左)"、"从相机(右)"，传 null 清除绑定 */
+    cameraPosition?: string | null
 }
 
 const CALIB_CAMERA_PARAM_BASE = '/api/app/calib-camera-param'

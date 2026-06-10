@@ -1,4 +1,5 @@
 using AuroraStruct3D.Cameras.Dtos;
+using AuroraStruct3D.Calibration.Dtos;
 
 namespace AuroraStruct3D.Hubs;
 
@@ -42,4 +43,14 @@ public interface ICameraHub
     /// <param name="cameraId">相机设备 ID</param>
     /// <param name="enumeratedAt">枚举完成时间（UTC）</param>
     Task OnGenICamNodeMapReloadedAsync(string cameraId, DateTime enumeratedAt);
+
+    /// <summary>
+    /// 推送 Step6 扫描状态变化。
+    /// </summary>
+    Task ReceiveCalibScanStateAsync(CalibScanStatusDto status);
+
+    /// <summary>
+    /// 推送 Step6 扫描实时指标。
+    /// </summary>
+    Task ReceiveCalibScanMetricsAsync(string calibProjectId, CalibScanMetricsDto metrics);
 }

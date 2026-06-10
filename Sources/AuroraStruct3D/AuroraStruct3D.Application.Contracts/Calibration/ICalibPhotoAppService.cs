@@ -32,6 +32,13 @@ public interface ICalibPhotoAppService : IApplicationService
     Task<CalibPhotoDto> TakeExtrinsicPhotoAsync(TakeExtrinsicPhotoInput input);
 
     /// <summary>
+    /// 双目联合外参成对拍照：一次采集主/从相机两张实体棋盘格照片，并以同组 ID 关联
+    /// </summary>
+    Task<CalibStereoPairPhotoDto> TakeStereoExtrinsicPairPhotoAsync(
+        TakeStereoExtrinsicPairPhotoInput input
+    );
+
+    /// <summary>
     /// 获取指定相机的照片列表（按类型过滤，传 null 则返回全部）
     /// </summary>
     Task<List<CalibPhotoDto>> GetPhotoListAsync(
@@ -65,4 +72,14 @@ public interface ICalibPhotoAppService : IApplicationService
     /// 获取指定相机的照片计数及最新标定结果汇总
     /// </summary>
     Task<CalibCameraStatusDto> GetCameraStatusAsync(Guid calibProjectId, Guid cameraDeviceId);
+
+    /// <summary>
+    /// 计算双目联合外参（StereoCalibrate），结果写入 CalibStereoResult
+    /// </summary>
+    Task<CalibStereoComputeResultDto> ComputeStereoCalibrationAsync(Guid calibProjectId);
+
+    /// <summary>
+    /// 获取双目联合标定状态（成对样本计数 + 最新结果）
+    /// </summary>
+    Task<CalibStereoStatusDto> GetStereoStatusAsync(Guid calibProjectId);
 }

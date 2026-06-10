@@ -4024,20 +4024,34 @@ public class TucamCameraService : ITucamCameraService, IDisposable
                 };
             }
 
-            // String 节点必须走 GetElementValue 触发 SDK 重新从硬件读取，
-            // 否则 attrElement.pTransfer 可能是 ElementAttr 缓存的旧字符串
-            // （Bug 1：修改 DeviceUserID 后立刻显示旧值的根因）。
-            string value =
-                actualType == TuElemType.String
-                    ? (Marshal.PtrToStringAnsi(valElement.pTransfer) ?? string.Empty)
-                : actualType == TuElemType.Float
-                    ? valElement.uValue.FloatValue.dbVal.ToString(
-                        "G",
-                        System.Globalization.CultureInfo.InvariantCulture
-                    )
-                : valElement.uValue.IntValue.nVal.ToString(
+            // String 节点兼容读取策略：
+            // 1) 先走 GetElementValue 触发 SDK 刷新（解决 DeviceUserID 写后读旧值问题）
+            // 2) 若 pTransfer 为空，再回退到 ElementAttr.pTransfer（兼容部分 RO 字符串节点）
+            string value;
+            if (actualType == TuElemType.String)
+            {
+                string? latest = SanitizeGenICamString(
+                    Marshal.PtrToStringAnsi(valElement.pTransfer)
+                );
+                if (latest is null)
+                {
+                    latest = GenICamGetString(handle, nodeName);
+                }
+                value = latest ?? string.Empty;
+            }
+            else if (actualType == TuElemType.Float)
+            {
+                value = valElement.uValue.FloatValue.dbVal.ToString(
+                    "G",
                     System.Globalization.CultureInfo.InvariantCulture
                 );
+            }
+            else
+            {
+                value = valElement.uValue.IntValue.nVal.ToString(
+                    System.Globalization.CultureInfo.InvariantCulture
+                );
+            }
 
             return new GenICamNodeValue
             {
