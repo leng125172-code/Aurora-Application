@@ -5,6 +5,7 @@ using AuroraStruct3D.Cameras;
 using AuroraStruct3D.Cameras.Dtos;
 using AuroraStruct3D.Projectors;
 using AuroraStruct3D.Projectors.Dtos;
+using AuroraStruct3D.Tucam;
 using Microsoft.Extensions.Logging;
 using OpenCvSharp;
 using SkiaSharp;
@@ -26,7 +27,8 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
     private readonly IRepository<CalibPhotoRecord, Guid> _photoRepo;
     private readonly IRepository<CalibStereoResult, Guid> _stereoResultRepo;
     private readonly IBlobContainer<CalibPhotoBlobContainer> _blobContainer;
-    private readonly ICameraDeviceAppService _cameraService;
+    private readonly IRepository<CameraDevice, Guid> _cameraDeviceRepository;
+    private readonly ITucamCameraService _tucamService;
     private readonly IProjectorDeviceAppService _projectorService;
     private readonly ILogger<CalibPhotoAppService> _logger;
 
@@ -37,7 +39,8 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
         IRepository<CalibPhotoRecord, Guid> photoRepo,
         IRepository<CalibStereoResult, Guid> stereoResultRepo,
         IBlobContainer<CalibPhotoBlobContainer> blobContainer,
-        ICameraDeviceAppService cameraService,
+        IRepository<CameraDevice, Guid> cameraDeviceRepository,
+        ITucamCameraService tucamService,
         IProjectorDeviceAppService projectorService,
         ILogger<CalibPhotoAppService> logger
     )
@@ -47,7 +50,8 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
         _photoRepo = photoRepo;
         _stereoResultRepo = stereoResultRepo;
         _blobContainer = blobContainer;
-        _cameraService = cameraService;
+        _cameraDeviceRepository = cameraDeviceRepository;
+        _tucamService = tucamService;
         _projectorService = projectorService;
         _logger = logger;
     }
@@ -99,11 +103,8 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
             await _projectorService.LedOffAsync(input.ProjectorDeviceId.Value);
         }
 
-        // 拍照
-        CameraSnapshotDto snapshot = await _cameraService.TakeSnapshotAsync(input.CameraDeviceId);
-
-        // 从 data URI 提取 JPEG bytes
-        byte[] jpegBytes = ExtractJpegBytes(snapshot.DataUri);
+        // 内参拍照：切换到软件触发模式，避免自由运行模式下相机持续输出干扰拍照
+        byte[] jpegBytes = await GrabCalibFrameRawAsync(input.CameraDeviceId, targetTriggerMode: 2);
 
         // OpenCV 棋盘格角点检测
         (bool isValid, int cornerCount) = DetectChessboardCorners(
@@ -191,13 +192,17 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
         // 4. 短暂延迟，等待投影仪稳定（约 200ms）
         await Task.Delay(200);
 
-        // 5. 拍照
-        CameraSnapshotDto snapshot = await _cameraService.TakeSnapshotAsync(input.CameraDeviceId);
-
-        // 6. 关灯（拍完立即关）
-        await _projectorService.LedOffAsync(projectorDeviceId);
-
-        byte[] jpegBytes = ExtractJpegBytes(snapshot.DataUri);
+        // 5. 外参拍照：切换到软件触发模式（TriggerSoftwarePulse），投影仪已稳定输出棋盘格
+        byte[] jpegBytes;
+        try
+        {
+            jpegBytes = await GrabCalibFrameRawAsync(input.CameraDeviceId, targetTriggerMode: 2);
+        }
+        finally
+        {
+            // 6. 关灯（拍完立即关，无论拍照是否成功）
+            await _projectorService.LedOffAsync(projectorDeviceId);
+        }
 
         // 外参照片检测：使用投影棋盘格内角点配置
         (bool isValid, int cornerCount) = DetectChessboardCorners(
@@ -245,13 +250,19 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
         Guid mainCameraId = project.MainCameraDeviceId.Value;
         Guid secondaryCameraId = project.SecondaryCameraDeviceId.Value;
 
-        CameraSnapshotDto mainSnapshot = await _cameraService.TakeSnapshotAsync(mainCameraId);
-        CameraSnapshotDto secondarySnapshot = await _cameraService.TakeSnapshotAsync(
-            secondaryCameraId
-        );
+        // 若项目绑定了投影仪，先关灯确保不受投影光干扰
+        if (project.BoundProjectorDeviceId.HasValue)
+        {
+            await _projectorService.LedOffAsync(project.BoundProjectorDeviceId.Value);
+        }
 
-        byte[] mainBytes = ExtractJpegBytes(mainSnapshot.DataUri);
-        byte[] secondaryBytes = ExtractJpegBytes(secondarySnapshot.DataUri);
+        // 主相机先拍，从相机再拍（_capStartActiveLock 保证顶序执行）
+        // 两台均切换到软件触发模式进行标定拍照
+        byte[] mainBytes = await GrabCalibFrameRawAsync(mainCameraId, targetTriggerMode: 2);
+        byte[] secondaryBytes = await GrabCalibFrameRawAsync(
+            secondaryCameraId,
+            targetTriggerMode: 2
+        );
 
         (bool mainValid, int mainCornerCount) = DetectChessboardCorners(
             mainBytes,
@@ -1217,6 +1228,104 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
     }
 
     // ─── 私有辅助方法 ─────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Step5 标定拍照专用帧抓取方法。
+    /// 直接调用 ITucamCameraService，无需手动模式检查。
+    /// 流程：读取并保存当前触发模式 → 切换到目标模式 →
+    ///         StartCapture（获取单活锁）→ 必要时发软件触发 → GrabFrame → StopCapture（释放锁）→ 恢复触发模式。
+    /// </summary>
+    /// <param name="cameraDeviceId">相机设备 ID</param>
+    /// <param name="targetTriggerMode">
+    ///     0 = 自由运行；1 = 标准触发（硬件 IO）；2 = 软件触发
+    /// </param>
+    private async Task<byte[]> GrabCalibFrameRawAsync(Guid cameraDeviceId, int targetTriggerMode)
+    {
+        CameraDevice camera = await _cameraDeviceRepository.GetAsync(cameraDeviceId);
+        int idx = camera.DeviceIndex;
+
+        if (!_tucamService.IsCameraOpen(idx))
+        {
+            throw new UserFriendlyException(
+                $"相机未打开（DeviceIndex={idx}），请先打开相机后再进行标定拍照"
+            );
+        }
+
+        // 读取并保存原始触发模式（拍照完成后恢复）
+        long originalTriggerMode = 0;
+        try
+        {
+            originalTriggerMode = await _tucamService.GetGenICamIntAsync(idx, "TriggerMode");
+        }
+        catch
+        { /* 读取失败按自由运行处理 */
+        }
+
+        // 切换触发模式（必须在 Cap_Start 之前执行）
+        bool needRestore = originalTriggerMode != targetTriggerMode;
+        if (needRestore)
+        {
+            await _tucamService.SetGenICamIntAsync(idx, "TriggerMode", targetTriggerMode);
+            _logger.LogInformation(
+                "标定拍照：相机 {Index} TriggerMode {Old} → {New}",
+                idx,
+                originalTriggerMode,
+                targetTriggerMode
+            );
+        }
+
+        try
+        {
+            // 单活锁保证：同一时刻仅一台相机处于 Cap_Start 活跃状态（USB 带宽限制）
+            await _tucamService.StartCaptureAsync(idx);
+            try
+            {
+                // 软件触发模式：发送 TriggerSoftwarePulse
+                if (targetTriggerMode == 2)
+                {
+                    await _tucamService.DoSoftwareTriggerAsync(idx);
+                }
+
+                // 动态计算超时：曝光时间（微秒）× 2 + 1s，最小 8s；标准触发模式最小 15s
+                int timeoutMs = targetTriggerMode == 1 ? 15000 : 8000;
+                try
+                {
+                    long exposureUs = await _tucamService.GetGenICamIntAsync(idx, "ExposureTime");
+                    timeoutMs = Math.Max((int)(exposureUs / 1000L) * 2 + 1000, timeoutMs);
+                }
+                catch
+                { /* 读取失败使用默认超时 */
+                }
+
+                (byte[] jpegBytes, _) = await _tucamService.GrabFrameRawAsync(idx, timeoutMs);
+                return jpegBytes;
+            }
+            finally
+            {
+                await _tucamService.StopCaptureAsync(idx);
+            }
+        }
+        finally
+        {
+            // 恢复原始触发模式
+            if (needRestore)
+            {
+                try
+                {
+                    await _tucamService.SetGenICamIntAsync(idx, "TriggerMode", originalTriggerMode);
+                    _logger.LogInformation(
+                        "标定拍照：相机 {Index} TriggerMode 已恢复为 {Original}",
+                        idx,
+                        originalTriggerMode
+                    );
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "标定拍照：相机 {Index} 恢复触发模式失败", idx);
+                }
+            }
+        }
+    }
 
     /// <summary>从 data URI 提取 JPEG 二进制</summary>
     private static byte[] ExtractJpegBytes(string dataUri)

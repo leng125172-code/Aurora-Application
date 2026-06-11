@@ -3,6 +3,8 @@
     <Import Project="..\..\..\common.props" />
     <PropertyGroup>
         <TargetFramework>net10.0</TargetFramework>
+        <!-- 版本号集中管理，PackageReference 和 XML 路径均引用此属性 -->
+        <OpenCvSharp4Version>4.13.0.20260602</OpenCvSharp4Version>
     </PropertyGroup>
 
     <ItemGroup>
@@ -35,49 +37,56 @@
 
     <ItemGroup>
         <!-- 核心主包，全平台通用 -->
-        <PackageReference Include="OpenCvSharp4" Version="4.13.0.20260602" />
+        <PackageReference Include="OpenCvSharp4" Version="$(OpenCvSharp4Version)" />
 
         <!-- Windows 运行时 -->
         <PackageReference
             Include="OpenCvSharp4.runtime.win"
-            Version="4.13.0.20260602"
+            Version="$(OpenCvSharp4Version)"
             Condition="'$(RuntimeIdentifier)' == 'win-x64' OR '$(RuntimeIdentifier)' == 'win-x86'"
         />
 
         <!-- Linux ARM64 运行时 (需要手动构建)-->
         <!-- <PackageReference
             Include="OpenCvSharp4.runtime.linux-arm64"
-            Version="4.13.0.20260602"
+            Version="$(OpenCvSharp4Version)"
             Condition="'$(RuntimeIdentifier)' == 'linux-arm64'"
         /> -->
     </ItemGroup>
 
-    <Target Name="CopyOpenCvSharpXml" AfterTargets="Build">
-        <!--
-            将 OpenCvSharp.xml（智能感知文档）拷贝到生成目录。
-            版本号自动从 PackageReference 读取，lib TFM 子目录用 glob 适配，
-            升级 OpenCvSharp4 包版本或切换目标框架后无需手动修改此 Target。
-        -->
-        <!-- 从 PackageReference 中筛选 OpenCvSharp4，提取其 Version 元数据 -->
-        <ItemGroup>
-            <_OcvPkg Include="@(PackageReference)" Condition="'%(Identity)' == 'OpenCvSharp4'" />
-        </ItemGroup>
-        <PropertyGroup>
-            <_OcvVersion>@(_OcvPkg->Metadata('Version'))</_OcvVersion>
-        </PropertyGroup>
-        <!-- glob 匹配该版本 lib 目录下任意 TFM 子文件夹中的 OpenCvSharp.xml -->
-        <ItemGroup>
-            <_OcvXmlFiles Include="$(NuGetPackageRoot)opencvsharp4\$(_OcvVersion)\lib\**\OpenCvSharp.xml" />
-        </ItemGroup>
-        <Copy
-            SourceFiles="@(_OcvXmlFiles)"
-            DestinationFolder="$(OutputPath)"
-            SkipUnchangedFiles="true"
-            Condition="'@(_OcvXmlFiles)' != ''"
+    <!--
+        OpenCvSharp.xml（IntelliSense 文档）声明为 None 内容文件。
+        使用 CopyToOutputDirectory 而非 Copy Task：
+          - Copy Task 只写入本项目输出目录，引用方不会自动获得该文件
+          - None + CopyToOutputDirectory 通过 MSBuild GetCopyToOutputDirectoryItems
+            机制，自动传播到引用本项目的所有上层项目（如 HttpApi.Host）
+        _OcvXmlBase 按 TFM 优先级降序探测，升级包版本只需改 OpenCvSharp4Version 属性。
+    -->
+    <PropertyGroup>
+        <_OcvXmlBase>$(NuGetPackageRoot)opencvsharp4\$(OpenCvSharp4Version)\lib\</_OcvXmlBase>
+        <_OcvXmlPath Condition="Exists('$(_OcvXmlBase)net8.0\OpenCvSharp.xml')"
+            >$(_OcvXmlBase)net8.0\OpenCvSharp.xml</_OcvXmlPath
+        >
+        <_OcvXmlPath
+            Condition="'$(_OcvXmlPath)' == '' AND Exists('$(_OcvXmlBase)net6.0\OpenCvSharp.xml')"
+            >$(_OcvXmlBase)net6.0\OpenCvSharp.xml</_OcvXmlPath
+        >
+        <_OcvXmlPath
+            Condition="'$(_OcvXmlPath)' == '' AND Exists('$(_OcvXmlBase)netstandard2.1\OpenCvSharp.xml')"
+            >$(_OcvXmlBase)netstandard2.1\OpenCvSharp.xml</_OcvXmlPath
+        >
+        <_OcvXmlPath
+            Condition="'$(_OcvXmlPath)' == '' AND Exists('$(_OcvXmlBase)netstandard2.0\OpenCvSharp.xml')"
+            >$(_OcvXmlBase)netstandard2.0\OpenCvSharp.xml</_OcvXmlPath
+        >
+    </PropertyGroup>
+    <ItemGroup>
+        <None
+            Include="$(_OcvXmlPath)"
+            CopyToOutputDirectory="PreserveNewest"
+            Link="OpenCvSharp.xml"
+            Visible="false"
+            Condition="'$(_OcvXmlPath)' != ''"
         />
-        <Warning
-            Text="OpenCvSharp.xml 未找到，路径: $(NuGetPackageRoot)opencvsharp4\$(_OcvVersion)\lib\**\，请确认 NuGet 还原已完成"
-            Condition="'@(_OcvXmlFiles)' == ''"
-        />
-    </Target>
+    </ItemGroup>
 </Project>

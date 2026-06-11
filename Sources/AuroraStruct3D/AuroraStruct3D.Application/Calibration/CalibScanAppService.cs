@@ -1,6 +1,6 @@
 using AuroraStruct3D.Calibration.Dtos;
 using AuroraStruct3D.Cameras;
-using AuroraStruct3D.Cameras.Dtos;
+using AuroraStruct3D.Tucam;
 using Microsoft.Extensions.Logging;
 using OpenCvSharp;
 using Volo.Abp;
@@ -18,7 +18,8 @@ public class CalibScanAppService : AuroraStruct3DAppService, ICalibScanAppServic
     private readonly IRepository<CalibProject, Guid> _projectRepository;
     private readonly CalibScanStateStore _stateStore;
     private readonly ICalibScanNotifier _scanNotifier;
-    private readonly ICameraDeviceAppService _cameraService;
+    private readonly IRepository<CameraDevice, Guid> _cameraDeviceRepository;
+    private readonly ITucamCameraService _tucamService;
     private readonly ILogger<CalibScanAppService> _logger;
 
     /// <summary>构造注入</summary>
@@ -26,14 +27,16 @@ public class CalibScanAppService : AuroraStruct3DAppService, ICalibScanAppServic
         IRepository<CalibProject, Guid> projectRepository,
         CalibScanStateStore stateStore,
         ICalibScanNotifier scanNotifier,
-        ICameraDeviceAppService cameraService,
+        IRepository<CameraDevice, Guid> cameraDeviceRepository,
+        ITucamCameraService tucamService,
         ILogger<CalibScanAppService> logger
     )
     {
         _projectRepository = projectRepository;
         _stateStore = stateStore;
         _scanNotifier = scanNotifier;
-        _cameraService = cameraService;
+        _cameraDeviceRepository = cameraDeviceRepository;
+        _tucamService = tucamService;
         _logger = logger;
     }
 
@@ -103,15 +106,23 @@ public class CalibScanAppService : AuroraStruct3DAppService, ICalibScanAppServic
                 };
             }
 
-            CameraSnapshotDto leftSnapshot = await _cameraService.TakeSnapshotAsync(
-                project.MainCameraDeviceId.Value
-            );
-            CameraSnapshotDto rightSnapshot = await _cameraService.TakeSnapshotAsync(
-                project.SecondaryCameraDeviceId.Value
-            );
+            // 按照测试结论（TucamMultiCameraProbe）：顺序单活采集——主相机先拍，从相机再拍
+            // _capStartActiveLock 保证同一时刻只有一台相机处于 Cap_Start 状态
+            byte[]? leftBytes = await GrabMetricFrameAsync(project.MainCameraDeviceId.Value);
+            byte[]? rightBytes = await GrabMetricFrameAsync(project.SecondaryCameraDeviceId.Value);
 
-            byte[] leftBytes = ExtractJpegBytes(leftSnapshot.DataUri);
-            byte[] rightBytes = ExtractJpegBytes(rightSnapshot.DataUri);
+            if (leftBytes == null || rightBytes == null)
+            {
+                return new CalibScanMetricsDto
+                {
+                    Fps = fps,
+                    DepthValidRate = 0,
+                    Confidence = 0,
+                    DepthMapDataUri = null,
+                    FrameIndex = frameIndex,
+                    Timestamp = now,
+                };
+            }
 
             (double depthValidRate, double confidence, string? depthMapDataUri) =
                 ComputeStereoMetrics(leftBytes, rightBytes);
@@ -140,10 +151,20 @@ public class CalibScanAppService : AuroraStruct3DAppService, ICalibScanAppServic
             };
         }
 
-        CameraSnapshotDto snapshot = await _cameraService.TakeSnapshotAsync(
-            project.MainCameraDeviceId.Value
-        );
-        byte[] bytes = ExtractJpegBytes(snapshot.DataUri);
+        byte[]? bytes = await GrabMetricFrameAsync(project.MainCameraDeviceId.Value);
+
+        if (bytes == null)
+        {
+            return new CalibScanMetricsDto
+            {
+                Fps = fps,
+                DepthValidRate = 0,
+                Confidence = 0,
+                DepthMapDataUri = null,
+                FrameIndex = frameIndex,
+                Timestamp = now,
+            };
+        }
 
         using Mat gray = Cv2.ImDecode(bytes, ImreadModes.Grayscale);
         double confidenceMono = NormalizeSharpness(ComputeLaplacianVariance(gray));
@@ -259,6 +280,91 @@ public class CalibScanAppService : AuroraStruct3DAppService, ICalibScanAppServic
         const double baseline = 50d;
         const double scale = 200d;
         return Math.Clamp((variance - baseline) / scale, 0d, 1d);
+    }
+
+    /// <summary>
+    /// Step6 指标帧抓取：直接调用 TucamCameraService 进行单帧采集。
+    /// 不经过 ICameraDeviceAppService.TakeSnapshotAsync，避免手动模式检查限制。
+    /// 遵循测试结论（TucamMultiCameraProbe）：Cap_Start → 触发 → WaitForFrame → Cap_Stop，
+    /// _capStartActiveLock 自动保证同一时刻仅一台相机处于活跃采集状态。
+    /// </summary>
+    private async Task<byte[]?> GrabMetricFrameAsync(Guid cameraDeviceId)
+    {
+        CameraDevice camera;
+        try
+        {
+            camera = await _cameraDeviceRepository.GetAsync(cameraDeviceId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Step6 指标帧抓取：相机设备 {Id} 不存在", cameraDeviceId);
+            return null;
+        }
+
+        int idx = camera.DeviceIndex;
+        if (!_tucamService.IsCameraOpen(idx))
+        {
+            _logger.LogDebug("Step6 指标帧抓取：相机 {Index} 未打开，跳过", idx);
+            return null;
+        }
+
+        try
+        {
+            await _tucamService.StartCaptureAsync(idx);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Step6 指标帧抓取：相机 {Index} 启动采集失败", idx);
+            return null;
+        }
+
+        try
+        {
+            // 软件触发模式（TriggerMode=2）需要手动发送触发脉冲，否则 WaitForFrame 不返回
+            long triggerMode = 0;
+            try
+            {
+                triggerMode = await _tucamService.GetGenICamIntAsync(idx, "TriggerMode");
+            }
+            catch
+            { /* 读取失败按自由运行处理 */
+            }
+
+            if (triggerMode == 2)
+            {
+                await _tucamService.DoSoftwareTriggerAsync(idx);
+            }
+
+            // 动态计算超时：曝光时间（微秒）× 2 + 1s 裕量，最少 8s
+            int timeoutMs = 8000;
+            try
+            {
+                long exposureUs = await _tucamService.GetGenICamIntAsync(idx, "ExposureTime");
+                timeoutMs = Math.Max((int)(exposureUs / 1000L) * 2 + 1000, 8000);
+            }
+            catch
+            { /* 读取失败使用默认超时 */
+            }
+
+            (byte[] jpegBytes, _) = await _tucamService.GrabFrameRawAsync(idx, timeoutMs);
+            return jpegBytes;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Step6 指标帧抓取：相机 {Index} 抓帧失败", idx);
+            return null;
+        }
+        finally
+        {
+            try
+            {
+                await _tucamService.StopCaptureAsync(idx);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Step6 指标帧抓取：相机 {Index} 停止采集失败", idx);
+            }
+        }
     }
 
     private static byte[] ExtractJpegBytes(string dataUri)
