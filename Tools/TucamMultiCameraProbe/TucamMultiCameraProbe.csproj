@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <TargetFramework>net10.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <RootNamespace>TucamMultiCameraProbe</RootNamespace>
+        <AssemblyName>TucamMultiCameraProbe</AssemblyName>
+        <RuntimeIdentifiers>linux-arm64;win-x64</RuntimeIdentifiers>
+    </PropertyGroup>
+
+    <!-- Windows x64：自动复制 TUCam 运行时 -->
+    <ItemGroup Condition="Exists('C:\Program Files (x86)\TUCam_SDK\runtime\x64_all')">
+        <None Include="C:\Program Files (x86)\TUCam_SDK\runtime\x64_all\*.*">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+    </ItemGroup>
+
+    <!-- Linux ARM64：自动复制项目内已保存的 TUCam so -->
+    <ItemGroup Condition="'$(RuntimeIdentifier)' == 'linux-arm64'">
+        <None Include="$(MSBuildThisFileDirectory)..\..\Documents\TUCam_aarch64\lib\*.so*">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+            <TargetPath>%(Filename)%(Extension)</TargetPath>
+        </None>
+    </ItemGroup>
+</Project>

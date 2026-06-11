@@ -1170,15 +1170,18 @@ public class CameraDeviceAppService : AuroraStruct3DAppService, ICameraDeviceApp
             })
             .ToList();
 
-        // 按 Category 节点 + Level 构建层级分组：
+        // 按 Category 节点 + Level 构建多级嵌套分组树：
         // 节点列表来自 SDK，顺序为先父 Category 再其子节点；
         // 同 XmlScope 内子节点 Level = 父 Category.Level + 1。
-        // 算法：维护 Category 栈，遇到 Category 入栈，遇到普通节点归到栈顶 Category。
+        // 算法：维护带 Level 的 Category 栈，遇到 Category 时入栈并挂载到正确的父节点，
+        //       遇到普通节点时归到栈顶 Category 的 Nodes 列表。
         string categoryTypeName = TuElemType.Category.ToString();
-        List<GenICamCategoryDto> categories = new();
+        // rootCategories：顶层 Category 列表（Level 最低的 Category）
+        List<GenICamCategoryDto> rootCategories = new();
+        // categoryStack：(dto, level) 栈，用于追踪当前活跃的 Category 层级
+        Stack<(GenICamCategoryDto Dto, int Level)> categoryStack = new();
         Dictionary<string, GenICamCategoryDto> categoryByName = new(StringComparer.Ordinal);
         GenICamCategoryDto? fallbackCategory = null;
-        Stack<GenICamNodeDto> categoryStack = new();
         int currentXmlScope = int.MinValue;
 
         GenICamCategoryDto EnsureFallback()
@@ -1190,7 +1193,7 @@ public class CameraDeviceAppService : AuroraStruct3DAppService, ICameraDeviceApp
                     Name = string.Empty,
                     DisplayName = "其它",
                 };
-                categories.Add(fallbackCategory);
+                rootCategories.Add(fallbackCategory);
             }
             return fallbackCategory;
         }
@@ -1204,7 +1207,7 @@ public class CameraDeviceAppService : AuroraStruct3DAppService, ICameraDeviceApp
                 categoryStack.Clear();
             }
 
-            // 弹出所有 Level >= 当前节点 Level 的 Category（同级或更深）
+            // 弹出所有 Level >= 当前节点 Level 的 Category（同级或更深），维持栈的单调递增
             while (categoryStack.Count > 0 && categoryStack.Peek().Level >= node.Level)
             {
                 categoryStack.Pop();
@@ -1212,7 +1215,7 @@ public class CameraDeviceAppService : AuroraStruct3DAppService, ICameraDeviceApp
 
             if (node.NodeType == categoryTypeName)
             {
-                // 创建 Category 容器并入栈；同名 Category 复用
+                // 创建 Category 容器；同名 Category 复用（跨 XmlScope 可能重名）
                 if (!categoryByName.TryGetValue(node.NodeName, out GenICamCategoryDto? dto))
                 {
                     dto = new GenICamCategoryDto
@@ -1222,17 +1225,35 @@ public class CameraDeviceAppService : AuroraStruct3DAppService, ICameraDeviceApp
                             ? node.NodeName
                             : node.DisplayName,
                     };
-                    categories.Add(dto);
                     categoryByName[node.NodeName] = dto;
                 }
-                categoryStack.Push(node);
+
+                if (categoryStack.Count > 0)
+                {
+                    // 有父 Category：加入父节点的 Children 列表（避免重复添加）
+                    GenICamCategoryDto parent = categoryStack.Peek().Dto;
+                    if (!parent.Children.Contains(dto))
+                    {
+                        parent.Children.Add(dto);
+                    }
+                }
+                else
+                {
+                    // 无父 Category：加入顶层列表（避免重复添加）
+                    if (!rootCategories.Contains(dto))
+                    {
+                        rootCategories.Add(dto);
+                    }
+                }
+
+                categoryStack.Push((dto, node.Level));
                 continue;
             }
 
+            // 普通节点：归到栈顶 Category 的 Nodes；无栈顶则归到 fallback
             if (categoryStack.Count > 0)
             {
-                string parentName = categoryStack.Peek().NodeName;
-                categoryByName[parentName].Nodes.Add(node);
+                categoryStack.Peek().Dto.Nodes.Add(node);
             }
             else
             {
@@ -1240,8 +1261,15 @@ public class CameraDeviceAppService : AuroraStruct3DAppService, ICameraDeviceApp
             }
         }
 
-        // 移除空的 Category（仅作为中间层、自身无直属节点的容器）
-        categories = categories.Where(c => c.Nodes.Count > 0).ToList();
+        // 递归过滤：移除自身无叶子节点且无子分类的空 Category
+        static bool HasContent(GenICamCategoryDto cat)
+        {
+            if (cat.Nodes.Count > 0)
+                return true;
+            cat.Children = cat.Children.Where(HasContent).ToList();
+            return cat.Children.Count > 0;
+        }
+        List<GenICamCategoryDto> categories = rootCategories.Where(HasContent).ToList();
 
         List<GenICamDependencyDto> deps =
             depGraph

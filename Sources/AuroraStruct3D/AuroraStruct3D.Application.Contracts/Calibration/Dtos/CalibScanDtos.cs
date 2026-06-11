@@ -39,6 +39,9 @@ public class CalibScanMetricsDto
     /// <summary>重建置信度（0~1）</summary>
     public double Confidence { get; set; }
 
+    /// <summary>深度图 JPEG DataUri（无数据时为 null）</summary>
+    public string? DepthMapDataUri { get; set; }
+
     /// <summary>当前帧序号</summary>
     public long FrameIndex { get; set; }
 

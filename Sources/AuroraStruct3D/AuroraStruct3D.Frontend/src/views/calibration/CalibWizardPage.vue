@@ -21,6 +21,7 @@ import CalibStep3ProjectorConfig from './CalibStep3ProjectorConfig.vue'
 import CalibStep4MotorConfig from './CalibStep4MotorConfig.vue'
 import CalibStep5CameraCalib from './CalibStep5CameraCalib.vue'
 import CalibStep6OnlineScan from './CalibStep6OnlineScan.vue'
+import CalibStep7PointCloud from './CalibStep7PointCloud.vue'
 import CalibStepComingSoon from './CalibStepComingSoon.vue'
 import { ArrowLeft } from '@lucide/vue'
 import { showErrorToastOnce } from '@/api/client'
@@ -100,7 +101,7 @@ function deviceTypeLabel(type: CalibDeviceType): string {
 
 const activeStep = ref('1')
 
-type WizardStepKind = 'project' | 'camera' | 'projector' | 'motor' | 'calib' | 'scan' | 'soon'
+type WizardStepKind = 'project' | 'camera' | 'projector' | 'motor' | 'calib' | 'scan' | 'pointcloud' | 'soon'
 
 interface WizardStepItem {
     value: string
@@ -121,7 +122,7 @@ const stepItems = computed<WizardStepItem[]>(() => {
             { value: '4', label: t('calib.step4Label'), kind: 'motor' },
             { value: '5', label: t('calib.step5Label'), kind: 'calib' },
             { value: '6', label: t('calib.step6Label'), kind: 'scan' },
-            { value: '7', label: t('calib.step7Label'), kind: 'soon' },
+            { value: '7', label: t('calib.step7Label'), kind: 'pointcloud' },
         ]
     }
 
@@ -131,7 +132,7 @@ const stepItems = computed<WizardStepItem[]>(() => {
         { value: '3', label: t('calib.step4Label'), kind: 'motor' },
         { value: '4', label: t('calib.step5Label'), kind: 'calib' },
         { value: '5', label: t('calib.step6Label'), kind: 'scan' },
-        { value: '6', label: t('calib.step7Label'), kind: 'soon' },
+        { value: '6', label: t('calib.step7Label'), kind: 'pointcloud' },
     ]
 })
 
@@ -897,8 +898,18 @@ onUnmounted(() => {
                                 <Button severity="secondary" outlined size="small" @click="goToStep('calib')">
                                     {{ t('calib.prevStep') }}
                                 </Button>
-                                <Button size="small" @click="goToNumericStep(Number(item.value) + 1)">
+                                <Button size="small" @click="goToStep('pointcloud')">
                                     {{ t('calib.nextStep') }}
+                                </Button>
+                            </div>
+                        </template>
+                        <template v-else-if="item.kind === 'pointcloud'">
+                            <div class="flex flex-1 min-h-0 flex-col">
+                                <CalibStep7PointCloud v-if="project" :project="project" />
+                            </div>
+                            <div class="mt-auto flex justify-between gap-2 border-t border-border/40 px-4 py-3">
+                                <Button severity="secondary" outlined size="small" @click="goToStep('scan')">
+                                    {{ t('calib.prevStep') }}
                                 </Button>
                             </div>
                         </template>

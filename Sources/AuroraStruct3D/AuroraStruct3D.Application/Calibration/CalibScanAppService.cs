@@ -47,8 +47,6 @@ public class CalibScanAppService : AuroraStruct3DAppService, ICalibScanAppServic
 
         CalibScanSessionState session = _stateStore.Start(project.Id, mode);
 
-        await EnsurePreviewStartedAsync(project, mode);
-
         DateTime lastMetricAt = DateTime.UtcNow;
         _stateStore.StartMetricLoop(
             project.Id,
@@ -99,6 +97,7 @@ public class CalibScanAppService : AuroraStruct3DAppService, ICalibScanAppServic
                     Fps = fps,
                     DepthValidRate = 0,
                     Confidence = 0,
+                    DepthMapDataUri = null,
                     FrameIndex = frameIndex,
                     Timestamp = now,
                 };
@@ -114,13 +113,15 @@ public class CalibScanAppService : AuroraStruct3DAppService, ICalibScanAppServic
             byte[] leftBytes = ExtractJpegBytes(leftSnapshot.DataUri);
             byte[] rightBytes = ExtractJpegBytes(rightSnapshot.DataUri);
 
-            (double depthValidRate, double confidence) = ComputeStereoMetrics(leftBytes, rightBytes);
+            (double depthValidRate, double confidence, string? depthMapDataUri) =
+                ComputeStereoMetrics(leftBytes, rightBytes);
 
             return new CalibScanMetricsDto
             {
                 Fps = fps,
                 DepthValidRate = depthValidRate,
                 Confidence = confidence,
+                DepthMapDataUri = depthMapDataUri,
                 FrameIndex = frameIndex,
                 Timestamp = now,
             };
@@ -133,6 +134,7 @@ public class CalibScanAppService : AuroraStruct3DAppService, ICalibScanAppServic
                 Fps = fps,
                 DepthValidRate = 0,
                 Confidence = 0,
+                DepthMapDataUri = null,
                 FrameIndex = frameIndex,
                 Timestamp = now,
             };
@@ -151,22 +153,24 @@ public class CalibScanAppService : AuroraStruct3DAppService, ICalibScanAppServic
             Fps = fps,
             DepthValidRate = 0,
             Confidence = confidenceMono,
+            DepthMapDataUri = null,
             FrameIndex = frameIndex,
             Timestamp = now,
         };
     }
 
-    private static (double depthValidRate, double confidence) ComputeStereoMetrics(
-        byte[] leftBytes,
-        byte[] rightBytes
-    )
+    private static (
+        double depthValidRate,
+        double confidence,
+        string? depthMapDataUri
+    ) ComputeStereoMetrics(byte[] leftBytes, byte[] rightBytes)
     {
         using Mat leftGray = Cv2.ImDecode(leftBytes, ImreadModes.Grayscale);
         using Mat rightGray = Cv2.ImDecode(rightBytes, ImreadModes.Grayscale);
 
         if (leftGray.Empty() || rightGray.Empty())
         {
-            return (0, 0);
+            return (0, 0, null);
         }
 
         using Mat left = ResizeForStereo(leftGray);
@@ -179,6 +183,18 @@ public class CalibScanAppService : AuroraStruct3DAppService, ICalibScanAppServic
         using Mat validMask = new();
         Cv2.Compare(disparity16, Scalar.All(0), validMask, CmpTypes.GT);
 
+        using Mat disparity8 = new();
+        Cv2.ConvertScaleAbs(disparity16, disparity8, 255d / (96d * 16d));
+
+        using Mat depthColor = new();
+        Cv2.ApplyColorMap(disparity8, depthColor, ColormapTypes.Jet);
+
+        using Mat depthBgr = new();
+        depthColor.CopyTo(depthBgr);
+        using Mat invalidMask = new();
+        Cv2.BitwiseNot(validMask, invalidMask);
+        depthBgr.SetTo(Scalar.All(0), invalidMask);
+
         int total = validMask.Rows * validMask.Cols;
         int valid = Cv2.CountNonZero(validMask);
         double depthValidRate = total > 0 ? (double)valid / total : 0;
@@ -188,7 +204,23 @@ public class CalibScanAppService : AuroraStruct3DAppService, ICalibScanAppServic
         double sharpness = (leftSharpness + rightSharpness) / 2d;
 
         double confidence = Math.Clamp(depthValidRate * 0.7d + sharpness * 0.3d, 0d, 1d);
-        return (Math.Clamp(depthValidRate, 0d, 1d), confidence);
+        string? depthMapDataUri = BuildJpegDataUri(depthBgr);
+        return (Math.Clamp(depthValidRate, 0d, 1d), confidence, depthMapDataUri);
+    }
+
+    private static string? BuildJpegDataUri(Mat image)
+    {
+        if (image.Empty())
+        {
+            return null;
+        }
+
+        if (!Cv2.ImEncode(".jpg", image, out byte[] encoded) || encoded.Length == 0)
+        {
+            return null;
+        }
+
+        return $"data:image/jpeg;base64,{Convert.ToBase64String(encoded)}";
     }
 
     private static Mat ResizeForStereo(Mat gray)
@@ -198,7 +230,14 @@ public class CalibScanAppService : AuroraStruct3DAppService, ICalibScanAppServic
         int targetHeight = Math.Max(64, (int)Math.Round(gray.Height * scale));
 
         Mat resized = new();
-        Cv2.Resize(gray, resized, new Size(targetWidth, targetHeight), 0, 0, InterpolationFlags.Area);
+        Cv2.Resize(
+            gray,
+            resized,
+            new Size(targetWidth, targetHeight),
+            0,
+            0,
+            InterpolationFlags.Area
+        );
         return resized;
     }
 
@@ -250,8 +289,6 @@ public class CalibScanAppService : AuroraStruct3DAppService, ICalibScanAppServic
             await _scanNotifier.NotifyStateAsync(idleStatus);
             return idleStatus;
         }
-
-        await EnsurePreviewStoppedAsync(project, stopped.ScanMode);
 
         _logger.LogInformation("Step6 扫描停止：ProjectId={ProjectId}", project.Id);
         CalibScanStatusDto status = ToStatusDto(stopped);
@@ -337,46 +374,6 @@ public class CalibScanAppService : AuroraStruct3DAppService, ICalibScanAppServic
             {
                 throw new UserFriendlyException("含结构光扫描模式下必须绑定投影机");
             }
-        }
-    }
-
-    private async Task EnsurePreviewStartedAsync(CalibProject project, CalibScanMode scanMode)
-    {
-        if (!project.MainCameraDeviceId.HasValue)
-        {
-            return;
-        }
-
-        await _cameraService.StartPreviewAsync(
-            project.MainCameraDeviceId.Value,
-            new StartCameraPreviewDto { EnableRtp = false, ConnectionId = null }
-        );
-
-        if (
-            scanMode is CalibScanMode.TwoCamera0Light or CalibScanMode.TwoCamera1Light
-            && project.SecondaryCameraDeviceId.HasValue
-        )
-        {
-            await _cameraService.StartPreviewAsync(
-                project.SecondaryCameraDeviceId.Value,
-                new StartCameraPreviewDto { EnableRtp = false, ConnectionId = null }
-            );
-        }
-    }
-
-    private async Task EnsurePreviewStoppedAsync(CalibProject project, CalibScanMode scanMode)
-    {
-        if (project.MainCameraDeviceId.HasValue)
-        {
-            await _cameraService.StopPreviewAsync(project.MainCameraDeviceId.Value);
-        }
-
-        if (
-            scanMode is CalibScanMode.TwoCamera0Light or CalibScanMode.TwoCamera1Light
-            && project.SecondaryCameraDeviceId.HasValue
-        )
-        {
-            await _cameraService.StopPreviewAsync(project.SecondaryCameraDeviceId.Value);
         }
     }
 }

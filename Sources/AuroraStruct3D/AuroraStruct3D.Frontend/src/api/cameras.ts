@@ -311,6 +311,8 @@ export interface GenICamCategoryDto {
     name: string
     displayName: string
     nodes: GenICamNodeDto[]
+    /** 子 Category 列表（对应 GenICam Category 树的嵌套层级） */
+    children: GenICamCategoryDto[]
 }
 
 /** Selector → AffectedNode 依赖项 */

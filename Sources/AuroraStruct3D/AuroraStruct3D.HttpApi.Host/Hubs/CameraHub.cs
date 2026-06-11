@@ -135,8 +135,39 @@ public class CameraHub : AbpHub<ICameraHub>
         await Groups.RemoveFromGroupAsync(Context.ConnectionId, BuildCalibScanGroupName(id));
     }
 
+    /// <summary>
+    /// 加入 Step7 点云生成项目分组。
+    /// </summary>
+    public async Task JoinPointCloudGroupAsync(string calibProjectId)
+    {
+        if (!Guid.TryParse(calibProjectId, out Guid id))
+        {
+            return;
+        }
+
+        await Groups.AddToGroupAsync(Context.ConnectionId, BuildPointCloudGroupName(id));
+    }
+
+    /// <summary>
+    /// 退出 Step7 点云生成项目分组。
+    /// </summary>
+    public async Task LeavePointCloudGroupAsync(string calibProjectId)
+    {
+        if (!Guid.TryParse(calibProjectId, out Guid id))
+        {
+            return;
+        }
+
+        await Groups.RemoveFromGroupAsync(Context.ConnectionId, BuildPointCloudGroupName(id));
+    }
+
     private static string BuildCalibScanGroupName(Guid calibProjectId)
     {
         return $"calib-scan:{calibProjectId:N}";
+    }
+
+    private static string BuildPointCloudGroupName(Guid calibProjectId)
+    {
+        return $"calib-point-cloud:{calibProjectId:N}";
     }
 }

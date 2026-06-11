@@ -51,4 +51,33 @@
             Condition="'$(RuntimeIdentifier)' == 'linux-arm64'"
         /> -->
     </ItemGroup>
+
+    <Target Name="CopyOpenCvSharpXml" AfterTargets="Build">
+        <!--
+            将 OpenCvSharp.xml（智能感知文档）拷贝到生成目录。
+            版本号自动从 PackageReference 读取，lib TFM 子目录用 glob 适配，
+            升级 OpenCvSharp4 包版本或切换目标框架后无需手动修改此 Target。
+        -->
+        <!-- 从 PackageReference 中筛选 OpenCvSharp4，提取其 Version 元数据 -->
+        <ItemGroup>
+            <_OcvPkg Include="@(PackageReference)" Condition="'%(Identity)' == 'OpenCvSharp4'" />
+        </ItemGroup>
+        <PropertyGroup>
+            <_OcvVersion>@(_OcvPkg->Metadata('Version'))</_OcvVersion>
+        </PropertyGroup>
+        <!-- glob 匹配该版本 lib 目录下任意 TFM 子文件夹中的 OpenCvSharp.xml -->
+        <ItemGroup>
+            <_OcvXmlFiles Include="$(NuGetPackageRoot)opencvsharp4\$(_OcvVersion)\lib\**\OpenCvSharp.xml" />
+        </ItemGroup>
+        <Copy
+            SourceFiles="@(_OcvXmlFiles)"
+            DestinationFolder="$(OutputPath)"
+            SkipUnchangedFiles="true"
+            Condition="'@(_OcvXmlFiles)' != ''"
+        />
+        <Warning
+            Text="OpenCvSharp.xml 未找到，路径: $(NuGetPackageRoot)opencvsharp4\$(_OcvVersion)\lib\**\，请确认 NuGet 还原已完成"
+            Condition="'@(_OcvXmlFiles)' == ''"
+        />
+    </Target>
 </Project>

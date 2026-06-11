@@ -29,18 +29,17 @@ public class CalibScanStateStore
         DateTime now = DateTime.UtcNow;
         CalibScanSessionState session = _sessions.AddOrUpdate(
             calibProjectId,
-            _ =>
-                new CalibScanSessionState
-                {
-                    CalibProjectId = calibProjectId,
-                    ScanMode = scanMode,
-                    State = CalibScanRunState.Running,
-                    IsRunning = true,
-                    StartedAt = now,
-                    LastUpdatedAt = now,
-                    ErrorMessage = null,
-                    LatestMetrics = BuildInitialMetrics(now),
-                },
+            _ => new CalibScanSessionState
+            {
+                CalibProjectId = calibProjectId,
+                ScanMode = scanMode,
+                State = CalibScanRunState.Running,
+                IsRunning = true,
+                StartedAt = now,
+                LastUpdatedAt = now,
+                ErrorMessage = null,
+                LatestMetrics = BuildInitialMetrics(now),
+            },
             (_, old) =>
             {
                 old.ScanMode = scanMode;
@@ -98,17 +97,16 @@ public class CalibScanStateStore
         DateTime now = DateTime.UtcNow;
         CalibScanSessionState session = _sessions.AddOrUpdate(
             calibProjectId,
-            _ =>
-                new CalibScanSessionState
-                {
-                    CalibProjectId = calibProjectId,
-                    ScanMode = CalibScanMode.TwoCamera0Light,
-                    State = CalibScanRunState.Failed,
-                    IsRunning = false,
-                    LastUpdatedAt = now,
-                    ErrorMessage = errorMessage,
-                    LatestMetrics = BuildInitialMetrics(now),
-                },
+            _ => new CalibScanSessionState
+            {
+                CalibProjectId = calibProjectId,
+                ScanMode = CalibScanMode.TwoCamera0Light,
+                State = CalibScanRunState.Failed,
+                IsRunning = false,
+                LastUpdatedAt = now,
+                ErrorMessage = errorMessage,
+                LatestMetrics = BuildInitialMetrics(now),
+            },
             (_, old) =>
             {
                 old.State = CalibScanRunState.Failed;

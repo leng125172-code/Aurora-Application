@@ -22,7 +22,7 @@ public class CameraNodeMapDto
 }
 
 /// <summary>
-/// GenICam Category（按 Level 折叠生成的层级容器）
+/// GenICam Category（按 Level 折叠生成的层级容器，支持多级嵌套）
 /// </summary>
 public class GenICamCategoryDto
 {
@@ -32,8 +32,11 @@ public class GenICamCategoryDto
     /// <summary>Category 显示名称</summary>
     public string DisplayName { get; set; } = string.Empty;
 
-    /// <summary>该 Category 下包含的节点</summary>
+    /// <summary>该 Category 下包含的直属叶子节点</summary>
     public List<GenICamNodeDto> Nodes { get; set; } = new();
+
+    /// <summary>子 Category 列表（对应 GenICam Category 树的嵌套层级）</summary>
+    public List<GenICamCategoryDto> Children { get; set; } = new();
 }
 
 /// <summary>

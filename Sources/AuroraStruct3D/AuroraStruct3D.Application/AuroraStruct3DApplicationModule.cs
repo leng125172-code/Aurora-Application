@@ -62,6 +62,9 @@ namespace AuroraStruct3D
 
             // 注册 Step6 在线扫描会话状态存储（进程内共享）
             context.Services.AddSingleton<Calibration.CalibScanStateStore>();
+
+            // 注册 Step7 点云生成会话状态存储（进程内共享）
+            context.Services.AddSingleton<Calibration.CalibPointCloudStateStore>();
         }
     }
 }

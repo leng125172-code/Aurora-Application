@@ -40,6 +40,13 @@ public class TucamCameraService : ITucamCameraService, IDisposable
     /// </summary>
     private static readonly SemaphoreSlim _globalSdkLock = new(1, 1);
 
+    /// <summary>
+    /// 进程级单活采集锁：同一时刻仅允许一台相机处于 Cap_Start 活跃状态。
+    /// TUCam SDK 在 RK3588 USB 环境下不支持多相机并发 Cap_Start，USB 带宽竞争会导致采集失败。
+    /// 第二台相机的 StartCaptureAsync 会阻塞等待（最长 30s），直到前一台调用 StopCaptureAsync 后释放。
+    /// </summary>
+    private static readonly SemaphoreSlim _capStartActiveLock = new(1, 1);
+
     /// <summary>GenICam 节点探测/枚举互斥锁，避免同一相机并发探测污染选择器状态</summary>
     private readonly ConcurrentDictionary<int, SemaphoreSlim> _nodeMapProbeLocks = new();
 
@@ -964,17 +971,11 @@ public class TucamCameraService : ITucamCameraService, IDisposable
             }
         }
 
-        Stopwatch sw = Stopwatch.StartNew();
+        // 快速幂等检查：相机已在采集中则直接返回，无需竞争单活锁
         lock (captureState.SyncRoot)
         {
-            while (captureState.StopRequested || captureState.ActiveWaiters > 0)
-            {
-                Monitor.Wait(captureState.SyncRoot, TimeSpan.FromMilliseconds(100));
-            }
-
             if (captureState.IsCapturing && captureState.Frame.pBuffer != IntPtr.Zero)
             {
-                sw.Stop();
                 _logger.LogDebug(
                     "{Tag} Camera {Index} continuous capture already started",
                     LogTag,
@@ -982,238 +983,102 @@ public class TucamCameraService : ITucamCameraService, IDisposable
                 );
                 return Task.CompletedTask;
             }
+        }
 
-            // 防御性释放：若上次会话崩溃未正常 Release，相机硬件仍保有旧缓冲区，
-            // 此时 TUCAM_Buf_Alloc 会返回 Excluded（资源冲突）。先无条件 Release，
-            // 忽略返回值（无缓冲区时 Release 也会返回非 Success，属于正常情况）。
-            TUCamNative.TUCAM_Buf_Release(handle);
+        // 单活采集锁：同一时刻仅允许一台相机处于 Cap_Start 活跃状态（USB 带宽限制）
+        if (!_capStartActiveLock.Wait(30_000))
+        {
+            string lockTimeoutMsg =
+                $"{LogTag} Camera {cameraIndex} 等待单活 Cap_Start 锁超时（30s），"
+                + "另一台相机正在采集中，请先停止其他相机的采集再试。";
+            _logger.LogWarning(
+                "{Tag} Camera {Index} 单活 Cap_Start 锁等待超时",
+                LogTag,
+                cameraIndex
+            );
+            RecordCameraLog(
+                cameraIndex,
+                CameraOperationType.StartCapture,
+                false,
+                30_000,
+                lockTimeoutMsg
+            );
+            throw new InvalidOperationException(lockTimeoutMsg);
+        }
 
-            // 先分配帧缓冲区，再启动连续采集。WaitForFrame 必须复用此处返回的 pBuffer。
-            // 多相机并发场景下，另一台相机大流量 USB 传输会导致本相机的 Buf_Alloc 控制
-            // 传输被抢占而返回 Excluded。采用指数退避重试，最多 5 次（约 1.5s 总等待）。
-            var frame = new TUCamFrame { uiRsdSize = 1 };
-            TUCamRet allocRet = TUCamRet.Failure;
-            int[] retryDelaysMs = { 0, 100, 200, 400, 800 };
-            for (int attempt = 0; attempt < retryDelaysMs.Length; attempt++)
+        // capStartLockAcquired 用于失败路径的 catch 块释放锁；
+        // 成功路径将其置 false，表示锁已转移给 StopCaptureAsync 持有。
+        bool capStartLockAcquired = true;
+        Stopwatch sw = Stopwatch.StartNew();
+        try
+        {
+            lock (captureState.SyncRoot)
             {
-                if (retryDelaysMs[attempt] > 0)
+                while (captureState.StopRequested || captureState.ActiveWaiters > 0)
                 {
-                    Thread.Sleep(retryDelaysMs[attempt]);
-                    // 每次重试前再次 Release，确保 SDK 内部状态清零
-                    TUCamNative.TUCAM_Buf_Release(handle);
+                    Monitor.Wait(captureState.SyncRoot, TimeSpan.FromMilliseconds(100));
                 }
 
-                allocRet = TUCamNative.TUCAM_Buf_Alloc(handle, ref frame);
-                if (allocRet == TUCamRet.Success)
+                if (captureState.IsCapturing && captureState.Frame.pBuffer != IntPtr.Zero)
                 {
-                    if (attempt > 0)
-                    {
-                        _logger.LogInformation(
-                            "{Tag} Camera {Index} Buf_Alloc 在第 {Attempt} 次重试后成功（可能因另一相机占用 USB 带宽）",
-                            LogTag,
-                            cameraIndex,
-                            attempt + 1
-                        );
-                    }
-                    break;
+                    sw.Stop();
+                    _logger.LogDebug(
+                        "{Tag} Camera {Index} continuous capture already started",
+                        LogTag,
+                        cameraIndex
+                    );
+                    // 已在采集中：释放单活锁后幂等返回
+                    _capStartActiveLock.Release();
+                    capStartLockAcquired = false;
+                    return Task.CompletedTask;
                 }
 
-                // Excluded 是典型的"资源被占用"返回码，可重试；其他错误码立即失败
-                if (allocRet != TUCamRet.Excluded)
-                {
-                    break;
-                }
-            }
-
-            if (allocRet != TUCamRet.Success)
-            {
-                sw.Stop();
-                string errorMsg = $"{LogTag} Failed to allocate frame buffer: {allocRet}";
-                RecordCameraLog(
-                    cameraIndex,
-                    CameraOperationType.StartCapture,
-                    false,
-                    sw.ElapsedMilliseconds,
-                    errorMsg
-                );
-                throw new InvalidOperationException(errorMsg);
-            }
-
-            // 启动连续采集，对 FailOpenBulkIn 进行指数退避重试：
-            // 多相机共享 USB 控制器场景下，另一台相机正在 bulk-in 传输时，
-            // 本相机的 OpenBulkIn 会因带宽预留失败而返回 FailOpenBulkIn。
-            // 等待对方完成一帧传输（约 200ms）后重试通常即可成功。
-            TUCamRet ret = TUCamRet.Failure;
-            int[] capRetryDelaysMs = { 0, 100, 200, 400, 800 };
-            for (int attempt = 0; attempt < capRetryDelaysMs.Length; attempt++)
-            {
-                if (capRetryDelaysMs[attempt] > 0)
-                {
-                    Thread.Sleep(capRetryDelaysMs[attempt]);
-                }
-
-                ret = TUCamNative.TUCAM_Cap_Start(handle, (uint)TUCamCaptureMode.Sequence);
-                if (ret == TUCamRet.Success)
-                {
-                    if (attempt > 0)
-                    {
-                        _logger.LogInformation(
-                            "{Tag} Camera {Index} Cap_Start 在第 {Attempt} 次重试后成功（USB bulk-in 带宽竞争）",
-                            LogTag,
-                            cameraIndex,
-                            attempt + 1
-                        );
-                    }
-                    break;
-                }
-
-                // 仅对 FailOpenBulkIn 重试；其他错误立即失败
-                if (ret != TUCamRet.FailOpenBulkIn)
-                {
-                    break;
-                }
-            }
-
-            // 终极回退：若所有重试仍是 FailOpenBulkIn，说明设备句柄已进入持久错误态
-            // （SDK 内部 USB bulk-in 端点状态损坏），简单重试无法恢复。必须 Close + Open
-            // 重新拿到一个干净的设备句柄，再走一次完整的 Release/Alloc/Cap_Start 流程。
-            if (ret == TUCamRet.FailOpenBulkIn)
-            {
-                _logger.LogWarning(
-                    "{Tag} Camera {Index} Cap_Start 持续 FailOpenBulkIn，尝试关闭并重新打开设备句柄进行恢复",
-                    LogTag,
-                    cameraIndex
-                );
-
+                // 防御性释放：若上次会话崩溃未正常 Release，相机硬件仍保有旧缓冲区，
+                // 此时 TUCAM_Buf_Alloc 会返回 Excluded（资源冲突）。先无条件 Release，
+                // 忽略返回值（无缓冲区时 Release 也会返回非 Success，属于正常情况）。
                 TUCamNative.TUCAM_Buf_Release(handle);
-                TUCamRet closeRet = TUCamNative.TUCAM_Dev_Close(handle);
-                _cameraHandles.TryRemove(cameraIndex, out _);
-                _nodeMapCache.TryRemove(cameraIndex, out _);
-                _logger.LogInformation(
-                    "{Tag} Camera {Index} Dev_Close 返回 {Ret}",
-                    LogTag,
-                    cameraIndex,
-                    closeRet
-                );
 
-                // 给 USB 驱动一点时间复位端点
-                Thread.Sleep(500);
-
-                // TUCam SDK 特性：在所有相机句柄释放后，再次 Dev_Open 会返回 FailOpenCamera，
-                // 必须先 Api_Uninit + Api_Init 让 SDK 重新枚举设备。CloseCameraAsync 内已对
-                // "关闭最后一台相机" 场景做了此处理，但本恢复路径在多相机场景下可能仍有其他
-                // 相机句柄存在，故仅在 _cameraHandles 为空时执行 SDK 级重置。
-                if (_cameraHandles.IsEmpty && _initialized)
+                // 先分配帧缓冲区，再启动连续采集。WaitForFrame 必须复用此处返回的 pBuffer。
+                // 多相机并发场景下，另一台相机大流量 USB 传输会导致本相机的 Buf_Alloc 控制
+                // 传输被抢占而返回 Excluded。采用指数退避重试，最多 5 次（约 1.5s 总等待）。
+                var frame = new TUCamFrame { uiRsdSize = 1 };
+                TUCamRet allocRet = TUCamRet.Failure;
+                int[] retryDelaysMs = { 0, 100, 200, 400, 800 };
+                for (int attempt = 0; attempt < retryDelaysMs.Length; attempt++)
                 {
-                    TUCamNative.TUCAM_Api_Uninit();
-                    _initialized = false;
-                    _lastCameraCount = 0;
-                    var reinitParam = new TUCamInit
+                    if (retryDelaysMs[attempt] > 0)
                     {
-                        uiCamCount = 0,
-                        pstrConfigPath = IntPtr.Zero,
-                    };
-                    TUCamRet reinitRet = TUCamNative.TUCAM_Api_Init(ref reinitParam, 1000);
-                    if (reinitRet == TUCamRet.Success)
-                    {
-                        _initialized = true;
-                        _lastCameraCount = (int)reinitParam.uiCamCount;
-                        _logger.LogInformation(
-                            "{Tag} Camera {Index} SDK 重新初始化成功（恢复路径），检测到 {Count} 台相机",
-                            LogTag,
-                            cameraIndex,
-                            reinitParam.uiCamCount
-                        );
-                    }
-                    else
-                    {
-                        _logger.LogWarning(
-                            "{Tag} Camera {Index} SDK 重新初始化失败（恢复路径）: {Ret}",
-                            LogTag,
-                            cameraIndex,
-                            reinitRet
-                        );
-                    }
-                }
-
-                // 对 Dev_Open 做多次重试：USB 端点复位 + 设备重新枚举均可能需要更长时间，
-                // 单次 300ms 等待往往不够。退避序列累计 ~3.5s 通常足以让设备恢复。
-                TUCamRet openRet = TUCamRet.Failure;
-                IntPtr reopenedHandle = IntPtr.Zero;
-                int[] openRetryDelaysMs = { 0, 500, 1000, 2000 };
-                for (int openAttempt = 0; openAttempt < openRetryDelaysMs.Length; openAttempt++)
-                {
-                    if (openRetryDelaysMs[openAttempt] > 0)
-                    {
-                        Thread.Sleep(openRetryDelaysMs[openAttempt]);
+                        Thread.Sleep(retryDelaysMs[attempt]);
+                        // 每次重试前再次 Release，确保 SDK 内部状态清零
+                        TUCamNative.TUCAM_Buf_Release(handle);
                     }
 
-                    var reopenParam = new TUCamOpen
+                    allocRet = TUCamNative.TUCAM_Buf_Alloc(handle, ref frame);
+                    if (allocRet == TUCamRet.Success)
                     {
-                        uiIdxOpen = (uint)cameraIndex,
-                        hIdxTUCam = IntPtr.Zero,
-                    };
-                    openRet = TUCamNative.TUCAM_Dev_Open(ref reopenParam);
-                    if (openRet == TUCamRet.Success)
-                    {
-                        reopenedHandle = reopenParam.hIdxTUCam;
-                        if (openAttempt > 0)
+                        if (attempt > 0)
                         {
                             _logger.LogInformation(
-                                "{Tag} Camera {Index} Dev_Open 在第 {Attempt} 次重试后成功",
+                                "{Tag} Camera {Index} Buf_Alloc 在第 {Attempt} 次重试后成功（可能因另一相机占用 USB 带宽）",
                                 LogTag,
                                 cameraIndex,
-                                openAttempt + 1
+                                attempt + 1
                             );
                         }
                         break;
                     }
 
-                    _logger.LogWarning(
-                        "{Tag} Camera {Index} Dev_Open 第 {Attempt} 次返回 {Ret}，继续重试",
-                        LogTag,
-                        cameraIndex,
-                        openAttempt + 1,
-                        openRet
-                    );
+                    // Excluded 是典型的"资源被占用"返回码，可重试；其他错误码立即失败
+                    if (allocRet != TUCamRet.Excluded)
+                    {
+                        break;
+                    }
                 }
 
-                if (openRet != TUCamRet.Success)
-                {
-                    captureState.Frame = default;
-                    captureState.IsCapturing = false;
-                    sw.Stop();
-                    string errorMsg =
-                        $"{LogTag} Failed to reopen camera after FailOpenBulkIn: {openRet}";
-                    RecordCameraLog(
-                        cameraIndex,
-                        CameraOperationType.StartCapture,
-                        false,
-                        sw.ElapsedMilliseconds,
-                        errorMsg
-                    );
-                    throw new InvalidOperationException(errorMsg);
-                }
-                handle = reopenedHandle;
-                _cameraHandles[cameraIndex] = handle;
-                _logger.LogInformation(
-                    "{Tag} Camera {Index} Dev_Open 重新打开成功，新句柄: {Handle}",
-                    LogTag,
-                    cameraIndex,
-                    handle
-                );
-
-                // 重新分配缓冲区（新句柄上 SDK 状态干净，Buf_Alloc 通常一次即成功）
-                TUCamNative.TUCAM_Buf_Release(handle);
-                frame = new TUCamFrame { uiRsdSize = 1 };
-                allocRet = TUCamNative.TUCAM_Buf_Alloc(handle, ref frame);
                 if (allocRet != TUCamRet.Success)
                 {
-                    captureState.Frame = default;
-                    captureState.IsCapturing = false;
                     sw.Stop();
-                    string errorMsg =
-                        $"{LogTag} Failed to re-alloc buffer after reopen: {allocRet}";
+                    string errorMsg = $"{LogTag} Failed to allocate frame buffer: {allocRet}";
                     RecordCameraLog(
                         cameraIndex,
                         CameraOperationType.StartCapture,
@@ -1224,79 +1089,281 @@ public class TucamCameraService : ITucamCameraService, IDisposable
                     throw new InvalidOperationException(errorMsg);
                 }
 
-                // 重新启动采集
-                ret = TUCamNative.TUCAM_Cap_Start(handle, (uint)TUCamCaptureMode.Sequence);
-                if (ret == TUCamRet.Success)
+                // 启动连续采集，对 FailOpenBulkIn 进行指数退避重试：
+                // 多相机共享 USB 控制器场景下，另一台相机正在 bulk-in 传输时，
+                // 本相机的 OpenBulkIn 会因带宽预留失败而返回 FailOpenBulkIn。
+                // 等待对方完成一帧传输（约 200ms）后重试通常即可成功。
+                TUCamRet ret = TUCamRet.Failure;
+                int[] capRetryDelaysMs = { 0, 100, 200, 400, 800 };
+                for (int attempt = 0; attempt < capRetryDelaysMs.Length; attempt++)
                 {
-                    _logger.LogInformation(
-                        "{Tag} Camera {Index} Cap_Start 在 Dev_Close+Open 复位后成功",
+                    if (capRetryDelaysMs[attempt] > 0)
+                    {
+                        Thread.Sleep(capRetryDelaysMs[attempt]);
+                    }
+
+                    ret = TUCamNative.TUCAM_Cap_Start(handle, (uint)TUCamCaptureMode.Sequence);
+                    if (ret == TUCamRet.Success)
+                    {
+                        if (attempt > 0)
+                        {
+                            _logger.LogInformation(
+                                "{Tag} Camera {Index} Cap_Start 在第 {Attempt} 次重试后成功（USB bulk-in 带宽竞争）",
+                                LogTag,
+                                cameraIndex,
+                                attempt + 1
+                            );
+                        }
+                        break;
+                    }
+
+                    // 仅对 FailOpenBulkIn 重试；其他错误立即失败
+                    if (ret != TUCamRet.FailOpenBulkIn)
+                    {
+                        break;
+                    }
+                }
+
+                // 终极回退：若所有重试仍是 FailOpenBulkIn，说明设备句柄已进入持久错误态
+                // （SDK 内部 USB bulk-in 端点状态损坏），简单重试无法恢复。必须 Close + Open
+                // 重新拿到一个干净的设备句柄，再走一次完整的 Release/Alloc/Cap_Start 流程。
+                if (ret == TUCamRet.FailOpenBulkIn)
+                {
+                    _logger.LogWarning(
+                        "{Tag} Camera {Index} Cap_Start 持续 FailOpenBulkIn，尝试关闭并重新打开设备句柄进行恢复",
                         LogTag,
                         cameraIndex
                     );
+
+                    TUCamNative.TUCAM_Buf_Release(handle);
+                    TUCamRet closeRet = TUCamNative.TUCAM_Dev_Close(handle);
+                    _cameraHandles.TryRemove(cameraIndex, out _);
+                    _nodeMapCache.TryRemove(cameraIndex, out _);
+                    _logger.LogInformation(
+                        "{Tag} Camera {Index} Dev_Close 返回 {Ret}",
+                        LogTag,
+                        cameraIndex,
+                        closeRet
+                    );
+
+                    // 给 USB 驱动一点时间复位端点
+                    Thread.Sleep(500);
+
+                    // TUCam SDK 特性：在所有相机句柄释放后，再次 Dev_Open 会返回 FailOpenCamera，
+                    // 必须先 Api_Uninit + Api_Init 让 SDK 重新枚举设备。CloseCameraAsync 内已对
+                    // "关闭最后一台相机" 场景做了此处理，但本恢复路径在多相机场景下可能仍有其他
+                    // 相机句柄存在，故仅在 _cameraHandles 为空时执行 SDK 级重置。
+                    if (_cameraHandles.IsEmpty && _initialized)
+                    {
+                        TUCamNative.TUCAM_Api_Uninit();
+                        _initialized = false;
+                        _lastCameraCount = 0;
+                        var reinitParam = new TUCamInit
+                        {
+                            uiCamCount = 0,
+                            pstrConfigPath = IntPtr.Zero,
+                        };
+                        TUCamRet reinitRet = TUCamNative.TUCAM_Api_Init(ref reinitParam, 1000);
+                        if (reinitRet == TUCamRet.Success)
+                        {
+                            _initialized = true;
+                            _lastCameraCount = (int)reinitParam.uiCamCount;
+                            _logger.LogInformation(
+                                "{Tag} Camera {Index} SDK 重新初始化成功（恢复路径），检测到 {Count} 台相机",
+                                LogTag,
+                                cameraIndex,
+                                reinitParam.uiCamCount
+                            );
+                        }
+                        else
+                        {
+                            _logger.LogWarning(
+                                "{Tag} Camera {Index} SDK 重新初始化失败（恢复路径）: {Ret}",
+                                LogTag,
+                                cameraIndex,
+                                reinitRet
+                            );
+                        }
+                    }
+
+                    // 对 Dev_Open 做多次重试：USB 端点复位 + 设备重新枚举均可能需要更长时间，
+                    // 单次 300ms 等待往往不够。退避序列累计 ~3.5s 通常足以让设备恢复。
+                    TUCamRet openRet = TUCamRet.Failure;
+                    IntPtr reopenedHandle = IntPtr.Zero;
+                    int[] openRetryDelaysMs = { 0, 500, 1000, 2000 };
+                    for (int openAttempt = 0; openAttempt < openRetryDelaysMs.Length; openAttempt++)
+                    {
+                        if (openRetryDelaysMs[openAttempt] > 0)
+                        {
+                            Thread.Sleep(openRetryDelaysMs[openAttempt]);
+                        }
+
+                        var reopenParam = new TUCamOpen
+                        {
+                            uiIdxOpen = (uint)cameraIndex,
+                            hIdxTUCam = IntPtr.Zero,
+                        };
+                        openRet = TUCamNative.TUCAM_Dev_Open(ref reopenParam);
+                        if (openRet == TUCamRet.Success)
+                        {
+                            reopenedHandle = reopenParam.hIdxTUCam;
+                            if (openAttempt > 0)
+                            {
+                                _logger.LogInformation(
+                                    "{Tag} Camera {Index} Dev_Open 在第 {Attempt} 次重试后成功",
+                                    LogTag,
+                                    cameraIndex,
+                                    openAttempt + 1
+                                );
+                            }
+                            break;
+                        }
+
+                        _logger.LogWarning(
+                            "{Tag} Camera {Index} Dev_Open 第 {Attempt} 次返回 {Ret}，继续重试",
+                            LogTag,
+                            cameraIndex,
+                            openAttempt + 1,
+                            openRet
+                        );
+                    }
+
+                    if (openRet != TUCamRet.Success)
+                    {
+                        captureState.Frame = default;
+                        captureState.IsCapturing = false;
+                        sw.Stop();
+                        string errorMsg =
+                            $"{LogTag} Failed to reopen camera after FailOpenBulkIn: {openRet}";
+                        RecordCameraLog(
+                            cameraIndex,
+                            CameraOperationType.StartCapture,
+                            false,
+                            sw.ElapsedMilliseconds,
+                            errorMsg
+                        );
+                        throw new InvalidOperationException(errorMsg);
+                    }
+                    handle = reopenedHandle;
+                    _cameraHandles[cameraIndex] = handle;
+                    _logger.LogInformation(
+                        "{Tag} Camera {Index} Dev_Open 重新打开成功，新句柄: {Handle}",
+                        LogTag,
+                        cameraIndex,
+                        handle
+                    );
+
+                    // 重新分配缓冲区（新句柄上 SDK 状态干净，Buf_Alloc 通常一次即成功）
+                    TUCamNative.TUCAM_Buf_Release(handle);
+                    frame = new TUCamFrame { uiRsdSize = 1 };
+                    allocRet = TUCamNative.TUCAM_Buf_Alloc(handle, ref frame);
+                    if (allocRet != TUCamRet.Success)
+                    {
+                        captureState.Frame = default;
+                        captureState.IsCapturing = false;
+                        sw.Stop();
+                        string errorMsg =
+                            $"{LogTag} Failed to re-alloc buffer after reopen: {allocRet}";
+                        RecordCameraLog(
+                            cameraIndex,
+                            CameraOperationType.StartCapture,
+                            false,
+                            sw.ElapsedMilliseconds,
+                            errorMsg
+                        );
+                        throw new InvalidOperationException(errorMsg);
+                    }
+
+                    // 重新启动采集
+                    ret = TUCamNative.TUCAM_Cap_Start(handle, (uint)TUCamCaptureMode.Sequence);
+                    if (ret == TUCamRet.Success)
+                    {
+                        _logger.LogInformation(
+                            "{Tag} Camera {Index} Cap_Start 在 Dev_Close+Open 复位后成功",
+                            LogTag,
+                            cameraIndex
+                        );
+                    }
+                }
+
+                if (ret != TUCamRet.Success)
+                {
+                    TUCamNative.TUCAM_Buf_Release(handle);
+                    captureState.Frame = default;
+                    captureState.IsCapturing = false;
+                    sw.Stop();
+                    string errorMsg = $"{LogTag} Failed to start capture: {ret}";
+                    RecordCameraLog(
+                        cameraIndex,
+                        CameraOperationType.StartCapture,
+                        false,
+                        sw.ElapsedMilliseconds,
+                        errorMsg
+                    );
+                    throw new InvalidOperationException(errorMsg);
+                }
+
+                captureState.Frame = frame;
+                captureState.IsCapturing = true;
+                captureState.StopRequested = false;
+                captureState.HoldsCapStartLock = true;
+                capStartLockAcquired = false; // 单活锁转移给 StopCaptureAsync 持有并释放
+            }
+
+            // 部分 GenICam 设备需要显式发送 AcquisitionStart 命令才能真正开始出帧
+            // （TUCAM SDK 的 TUCAM_Cap_Start 仅在 Transport Layer 启动采集线程，
+            //  但 ACQ 状态机仍处于 Stopped）。失败仅记录警告，不影响主流程。
+            try
+            {
+                TUCamRet acqRet = GenICamSetInt(handle, "AcquisitionStart", 1);
+                if (acqRet != TUCamRet.Success)
+                {
+                    _logger.LogDebug(
+                        "{Tag} Camera {Index} AcquisitionStart 命令返回 {Ret}，部分设备无需此命令，已忽略",
+                        LogTag,
+                        cameraIndex,
+                        acqRet
+                    );
                 }
             }
-
-            if (ret != TUCamRet.Success)
-            {
-                TUCamNative.TUCAM_Buf_Release(handle);
-                captureState.Frame = default;
-                captureState.IsCapturing = false;
-                sw.Stop();
-                string errorMsg = $"{LogTag} Failed to start capture: {ret}";
-                RecordCameraLog(
-                    cameraIndex,
-                    CameraOperationType.StartCapture,
-                    false,
-                    sw.ElapsedMilliseconds,
-                    errorMsg
-                );
-                throw new InvalidOperationException(errorMsg);
-            }
-
-            captureState.Frame = frame;
-            captureState.IsCapturing = true;
-            captureState.StopRequested = false;
-        }
-
-        // 部分 GenICam 设备需要显式发送 AcquisitionStart 命令才能真正开始出帧
-        // （TUCAM SDK 的 TUCAM_Cap_Start 仅在 Transport Layer 启动采集线程，
-        //  但 ACQ 状态机仍处于 Stopped）。失败仅记录警告，不影响主流程。
-        try
-        {
-            TUCamRet acqRet = GenICamSetInt(handle, "AcquisitionStart", 1);
-            if (acqRet != TUCamRet.Success)
+            catch (Exception ex)
             {
                 _logger.LogDebug(
-                    "{Tag} Camera {Index} AcquisitionStart 命令返回 {Ret}，部分设备无需此命令，已忽略",
+                    ex,
+                    "{Tag} Camera {Index} AcquisitionStart 命令异常，已忽略",
                     LogTag,
-                    cameraIndex,
-                    acqRet
+                    cameraIndex
                 );
             }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogDebug(
-                ex,
-                "{Tag} Camera {Index} AcquisitionStart 命令异常，已忽略",
+
+            sw.Stop();
+            _logger.LogInformation(
+                "{Tag} Camera {Index} started continuous capture",
                 LogTag,
                 cameraIndex
             );
+            RecordCameraLog(
+                cameraIndex,
+                CameraOperationType.StartCapture,
+                true,
+                sw.ElapsedMilliseconds
+            );
+            return Task.CompletedTask;
         }
-
-        sw.Stop();
-        _logger.LogInformation(
-            "{Tag} Camera {Index} started continuous capture",
-            LogTag,
-            cameraIndex
-        );
-        RecordCameraLog(
-            cameraIndex,
-            CameraOperationType.StartCapture,
-            true,
-            sw.ElapsedMilliseconds
-        );
-        return Task.CompletedTask;
+        catch
+        {
+            // 采集启动失败：释放单活锁（成功路径已将 capStartLockAcquired 置 false，锁由 Stop 负责释放）
+            if (capStartLockAcquired)
+            {
+                _capStartActiveLock.Release();
+                _logger.LogDebug(
+                    "{Tag} Camera {Index} 单活 Cap_Start 锁已在失败路径中释放",
+                    LogTag,
+                    cameraIndex
+                );
+            }
+            throw;
+        }
     }
 
     /// <inheritdoc/>
@@ -1370,6 +1437,17 @@ public class TucamCameraService : ITucamCameraService, IDisposable
                 captureState.Frame = default;
                 captureState.IsCapturing = false;
                 captureState.StopRequested = false;
+                // 释放单活采集锁，允许下一台相机执行 Cap_Start
+                if (captureState.HoldsCapStartLock)
+                {
+                    captureState.HoldsCapStartLock = false;
+                    _capStartActiveLock.Release();
+                    _logger.LogInformation(
+                        "{Tag} Camera {Index} 已释放单活 Cap_Start 锁",
+                        LogTag,
+                        cameraIndex
+                    );
+                }
                 Monitor.PulseAll(captureState.SyncRoot);
             }
         }
@@ -1378,6 +1456,12 @@ public class TucamCameraService : ITucamCameraService, IDisposable
             lock (captureState.SyncRoot)
             {
                 captureState.StopRequested = false;
+                // 即使 Stop 失败也释放单活锁，避免系统永久阻塞
+                if (captureState.HoldsCapStartLock)
+                {
+                    captureState.HoldsCapStartLock = false;
+                    _capStartActiveLock.Release();
+                }
                 Monitor.PulseAll(captureState.SyncRoot);
             }
             sw.Stop();
@@ -3453,6 +3537,12 @@ public class TucamCameraService : ITucamCameraService, IDisposable
         public int ActiveWaiters { get; set; }
 
         public TUCamFrame Frame { get; set; }
+
+        /// <summary>
+        /// 当前相机是否持有进程级单活 Cap_Start 锁（_capStartActiveLock）。
+        /// StartCaptureAsync 成功后置 true，StopCaptureAsync 释放锁时置 false。
+        /// </summary>
+        public bool HoldsCapStartLock { get; set; }
     }
 
     /// <summary>

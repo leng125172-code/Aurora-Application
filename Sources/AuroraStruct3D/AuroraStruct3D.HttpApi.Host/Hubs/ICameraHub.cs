@@ -1,5 +1,5 @@
-using AuroraStruct3D.Cameras.Dtos;
 using AuroraStruct3D.Calibration.Dtos;
+using AuroraStruct3D.Cameras.Dtos;
 
 namespace AuroraStruct3D.Hubs;
 
@@ -53,4 +53,9 @@ public interface ICameraHub
     /// 推送 Step6 扫描实时指标。
     /// </summary>
     Task ReceiveCalibScanMetricsAsync(string calibProjectId, CalibScanMetricsDto metrics);
+
+    /// <summary>
+    /// 推送 Step7 点云生成状态变更（含进度）。
+    /// </summary>
+    Task ReceivePointCloudStatusAsync(PointCloudStatusDto status);
 }

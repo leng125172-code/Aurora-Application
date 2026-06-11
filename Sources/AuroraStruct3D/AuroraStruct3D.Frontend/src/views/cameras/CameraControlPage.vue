@@ -117,7 +117,14 @@ async function refreshCategory(categoryName: string) {
     if (!cat) return
     categoryLoading.value[categoryName] = true
     try {
-        await readNodes(cat.nodes.map((n) => n.nodeName))
+        // 递归收集分类及所有后代子分类的节点名，确保刷新覆盖嵌套节点
+        const nodeNames: string[] = []
+        function collectNodeNames(c: typeof cat) {
+            for (const n of c.nodes) nodeNames.push(n.nodeName)
+            for (const child of c.children) collectNodeNames(child)
+        }
+        collectNodeNames(cat)
+        await readNodes(nodeNames)
     } finally {
         categoryLoading.value[categoryName] = false
     }
