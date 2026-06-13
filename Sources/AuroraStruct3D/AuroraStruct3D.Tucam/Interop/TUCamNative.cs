@@ -140,7 +140,15 @@ public static class TUCamNative
         ref TUCamTriggerAttr pTgrAttr
     );
 
-    /// <summary>发出软件触发信号</summary>
+    /// <summary>
+    /// ⛔ 在 RK3588 ARM64 上此 SDK API 返回 NotSupport，禁止调用。
+    /// 软件触发必须通过 GenICam 命令节点执行：
+    /// <c>GenICamSetInt(handle, "TriggerSoftwarePulse", 1)</c>（即 DoSoftwareTriggerAsync 内部实现）。
+    /// </summary>
+    [Obsolete(
+        "RK3588 不支持此 API，请调用 ITucamCameraService.DoSoftwareTriggerAsync() 替代。",
+        error: true
+    )]
     [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
     public static extern TUCamRet TUCAM_Cap_DoSoftwareTrigger(IntPtr hTUCam, uint uiMode = 0);
 

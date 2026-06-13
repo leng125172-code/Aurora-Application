@@ -14,9 +14,6 @@ public class CalibMotorParamDto
     /// <summary>电机轴 ID。</summary>
     public Guid MotorAxisId { get; set; }
 
-    /// <summary>电机类型。</summary>
-    public CalibMotorType MotorType { get; set; }
-
     /// <summary>编码器分辨率。</summary>
     public int EncoderResolution { get; set; }
 
@@ -44,6 +41,12 @@ public class CalibMotorParamDto
     /// <summary>是否已锁定原点。</summary>
     public bool IsOriginLocked { get; set; }
 
+    /// <summary>限位是否启用（雷赛 0x6000 Bit1；瓴控固定 true）。</summary>
+    public bool LimitEnabled { get; set; }
+
+    /// <summary>回原模式（限位回零 / 原点回零）。</summary>
+    public CalibHomingMode HomingMode { get; set; }
+
     /// <summary>创建时间。</summary>
     public DateTime CreationTime { get; set; }
 
@@ -61,9 +64,6 @@ public class SaveCalibMotorParamInput
 
     /// <summary>电机轴 ID。</summary>
     public Guid MotorAxisId { get; set; }
-
-    /// <summary>电机类型。</summary>
-    public CalibMotorType MotorType { get; set; }
 
     /// <summary>编码器分辨率。</summary>
     public int? EncoderResolution { get; set; }
@@ -91,4 +91,10 @@ public class SaveCalibMotorParamInput
 
     /// <summary>是否已锁定原点。</summary>
     public bool? IsOriginLocked { get; set; }
+
+    /// <summary>限位是否启用（雷赛 0x6000 Bit1；瓴控固定 true）。</summary>
+    public bool? LimitEnabled { get; set; }
+
+    /// <summary>回原模式（限位回零 / 原点回零）。</summary>
+    public CalibHomingMode? HomingMode { get; set; }
 }

@@ -53,7 +53,7 @@ const trace = computed<LeisaiTraceDto>(
 )
 
 // ───── 采样开关 ─────────────────────────────────────────────────────
-const isSamplingEnabled = ref(true)
+const isSamplingEnabled = ref(false)
 
 /** 切换实时采样开关；ToggleSwitch v-model 已将 isSamplingEnabled 更新为新值后调用。 */
 async function toggleSampling(): Promise<void> {

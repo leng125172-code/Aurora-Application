@@ -44,7 +44,6 @@ public static class CalibrationDbContextModelCreatingExtensions
             b.ToTable($"{TablePrefix}CalibMotorParams");
             b.ConfigureByConvention();
 
-            b.Property(x => x.MotorType).HasConversion<int>();
             b.Property(x => x.OriginDirection).HasConversion<int>();
             b.Property(x => x.GearRatio).HasPrecision(18, 6);
             b.Property(x => x.MechanicalOriginPosition).HasPrecision(18, 6);

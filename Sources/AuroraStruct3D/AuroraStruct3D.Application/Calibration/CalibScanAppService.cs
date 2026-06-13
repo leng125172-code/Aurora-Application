@@ -44,7 +44,7 @@ public class CalibScanAppService : AuroraStruct3DAppService, ICalibScanAppServic
     public async Task<CalibScanStatusDto> StartAsync(StartCalibScanInput input)
     {
         CalibProject project = await _projectRepository.GetAsync(input.CalibProjectId);
-        CalibScanMode mode = ResolveAndValidateScanMode(project, input.ScanMode);
+        CalibScanMode mode = ResolveScanMode(project);
 
         ValidateBindingsForScanMode(project, mode);
 
@@ -58,12 +58,14 @@ public class CalibScanAppService : AuroraStruct3DAppService, ICalibScanAppServic
                 DateTime now = DateTime.UtcNow;
                 DateTime previousMetricAt = lastMetricAt;
                 lastMetricAt = now;
+                bool imageEnhance = _stateStore.GetImageEnhanceEnabled(project.Id);
                 return await BuildRealtimeMetricsAsync(
                     project,
                     mode,
                     previousMetricAt,
                     now,
-                    frameIndex
+                    frameIndex,
+                    imageEnhance
                 );
             },
             metrics => _scanNotifier.NotifyMetricsAsync(project.Id, metrics)
@@ -85,7 +87,8 @@ public class CalibScanAppService : AuroraStruct3DAppService, ICalibScanAppServic
         CalibScanMode mode,
         DateTime previousMetricAt,
         DateTime now,
-        long frameIndex
+        long frameIndex,
+        bool imageEnhance
     )
     {
         double elapsedSeconds = Math.Max((now - previousMetricAt).TotalSeconds, 1e-3);
@@ -122,6 +125,12 @@ public class CalibScanAppService : AuroraStruct3DAppService, ICalibScanAppServic
                     FrameIndex = frameIndex,
                     Timestamp = now,
                 };
+            }
+
+            if (imageEnhance)
+            {
+                leftBytes = ApplyClahe(leftBytes);
+                rightBytes = ApplyClahe(rightBytes);
             }
 
             (double depthValidRate, double confidence, string? depthMapDataUri) =
@@ -164,6 +173,11 @@ public class CalibScanAppService : AuroraStruct3DAppService, ICalibScanAppServic
                 FrameIndex = frameIndex,
                 Timestamp = now,
             };
+        }
+
+        if (imageEnhance)
+        {
+            bytes = ApplyClahe(bytes);
         }
 
         using Mat gray = Cv2.ImDecode(bytes, ImreadModes.Grayscale);
@@ -283,6 +297,30 @@ public class CalibScanAppService : AuroraStruct3DAppService, ICalibScanAppServic
     }
 
     /// <summary>
+    /// 使用 OpenCV CLAHE 算法对 JPEG 字节帧进行对比度限制自适应直方图均衡，
+    /// 增强图像细节，改善低光或曝光不足场景下的视觉质量。
+    /// </summary>
+    private static byte[] ApplyClahe(byte[] jpegBytes)
+    {
+        using Mat src = Cv2.ImDecode(jpegBytes, ImreadModes.Grayscale);
+        if (src.Empty())
+        {
+            return jpegBytes;
+        }
+
+        using CLAHE clahe = Cv2.CreateCLAHE(clipLimit: 2.0, tileGridSize: new Size(8, 8));
+        using Mat enhanced = new();
+        clahe.Apply(src, enhanced);
+
+        if (!Cv2.ImEncode(".jpg", enhanced, out byte[] result) || result.Length == 0)
+        {
+            return jpegBytes;
+        }
+
+        return result;
+    }
+
+    /// <summary>
     /// Step6 指标帧抓取：直接调用 TucamCameraService 进行单帧采集。
     /// 不经过 ICameraDeviceAppService.TakeSnapshotAsync，避免手动模式检查限制。
     /// 遵循测试结论（TucamMultiCameraProbe）：Cap_Start → 触发 → WaitForFrame → Cap_Stop，
@@ -386,7 +424,6 @@ public class CalibScanAppService : AuroraStruct3DAppService, ICalibScanAppServic
             CalibScanStatusDto idleStatus = new()
             {
                 CalibProjectId = project.Id,
-                ScanMode = ResolveAndValidateScanMode(project, null),
                 State = CalibScanRunState.Idle,
                 IsRunning = false,
                 LastUpdatedAt = DateTime.UtcNow,
@@ -413,7 +450,6 @@ public class CalibScanAppService : AuroraStruct3DAppService, ICalibScanAppServic
             return new CalibScanStatusDto
             {
                 CalibProjectId = project.Id,
-                ScanMode = ResolveAndValidateScanMode(project, null),
                 State = CalibScanRunState.Idle,
                 IsRunning = false,
                 LastUpdatedAt = DateTime.UtcNow,
@@ -428,7 +464,6 @@ public class CalibScanAppService : AuroraStruct3DAppService, ICalibScanAppServic
         return new CalibScanStatusDto
         {
             CalibProjectId = session.CalibProjectId,
-            ScanMode = session.ScanMode,
             State = session.State,
             IsRunning = session.IsRunning,
             StartedAt = session.StartedAt,
@@ -438,25 +473,27 @@ public class CalibScanAppService : AuroraStruct3DAppService, ICalibScanAppServic
         };
     }
 
-    private static CalibScanMode ResolveAndValidateScanMode(
-        CalibProject project,
-        CalibScanMode? requestedMode
-    )
+    /// <inheritdoc/>
+    public Task SetImageEnhanceAsync(SetCalibScanImageEnhanceInput input)
     {
-        CalibScanMode expectedMode = project.DeviceType switch
+        _stateStore.SetImageEnhance(input.CalibProjectId, input.Enabled);
+        _logger.LogInformation(
+            "Step6 图像增强已{Status}：ProjectId={ProjectId}",
+            input.Enabled ? "启用" : "禁用",
+            input.CalibProjectId
+        );
+        return Task.CompletedTask;
+    }
+
+    private static CalibScanMode ResolveScanMode(CalibProject project)
+    {
+        return project.DeviceType switch
         {
             CalibDeviceType.TwoCamera0Light => CalibScanMode.TwoCamera0Light,
             CalibDeviceType.OneCamera1Light => CalibScanMode.OneCamera1Light,
             CalibDeviceType.TwoCamera1Light => CalibScanMode.TwoCamera1Light,
             _ => throw new UserFriendlyException("当前项目设备类型不支持在线扫描"),
         };
-
-        if (requestedMode.HasValue && requestedMode.Value != expectedMode)
-        {
-            throw new UserFriendlyException("扫描模式与当前项目设备类型不匹配");
-        }
-
-        return requestedMode ?? expectedMode;
     }
 
     private static void ValidateBindingsForScanMode(CalibProject project, CalibScanMode scanMode)

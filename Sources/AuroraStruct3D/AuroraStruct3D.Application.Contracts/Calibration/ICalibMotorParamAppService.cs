@@ -26,4 +26,11 @@ public interface ICalibMotorParamAppService : IApplicationService
     /// DELETE /api/app/calib-motor-param/{id}
     /// </summary>
     Task DeleteAsync(Guid id);
+
+    /// <summary>
+    /// 校验 Step 4 电机参数是否已全部配置完成。
+    /// 项目绑定的所有电机轴在 AbpProCalibMotorParams 中均有记录。
+    /// GET /api/app/calib-motor-param/validate-step4?calibProjectId={id}
+    /// </summary>
+    Task<bool> ValidateStep4Async(Guid calibProjectId);
 }

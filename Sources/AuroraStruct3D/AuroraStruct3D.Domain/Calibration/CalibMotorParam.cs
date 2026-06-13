@@ -17,9 +17,6 @@ public class CalibMotorParam : FullAuditedEntity<Guid>
     /// <summary>电机轴ID（关联AbpProMotorAxes）</summary>
     public Guid MotorAxisId { get; private set; }
 
-    /// <summary>电机类型（旋转电机 / 距离电机）</summary>
-    public CalibMotorType MotorType { get; private set; }
-
     /// <summary>编码器分辨率（脉冲/圈）</summary>
     public int EncoderResolution { get; private set; }
 
@@ -47,6 +44,15 @@ public class CalibMotorParam : FullAuditedEntity<Guid>
     /// <summary>原点是否已锁定（完成回原操作后置true）</summary>
     public bool IsOriginLocked { get; private set; }
 
+    /// <summary>
+    /// 雷赛电机软限位是否启用（对应 0x6000 Bit1）。
+    /// 瓴控电机固定启用，雷赛电机由用户配置。
+    /// </summary>
+    public bool LimitEnabled { get; private set; }
+
+    /// <summary>回原模式（限位回零 / 原点回零）。对应雷赛 0x600A Bit2。</summary>
+    public CalibHomingMode HomingMode { get; private set; }
+
     // EF Core 所需的无参构造函数
     protected CalibMotorParam() { }
 
@@ -56,13 +62,11 @@ public class CalibMotorParam : FullAuditedEntity<Guid>
     /// <param name="id">实体ID</param>
     /// <param name="calibProjectId">所属标定项目ID</param>
     /// <param name="motorAxisId">电机轴ID</param>
-    /// <param name="motorType">电机类型</param>
-    public CalibMotorParam(Guid id, Guid calibProjectId, Guid motorAxisId, CalibMotorType motorType)
+    public CalibMotorParam(Guid id, Guid calibProjectId, Guid motorAxisId)
         : base(id)
     {
         CalibProjectId = calibProjectId;
         MotorAxisId = motorAxisId;
-        MotorType = motorType;
         EncoderResolution = 10000;
         GearRatio = 1m;
         IsOriginLocked = false;
@@ -107,6 +111,20 @@ public class CalibMotorParam : FullAuditedEntity<Guid>
     public CalibMotorParam SetOriginLocked(bool isLocked)
     {
         IsOriginLocked = isLocked;
+        return this;
+    }
+
+    /// <summary>设置限位启用状态（雷赛电机 0x6000 Bit1 对应值，瓴控固定为 true）</summary>
+    public CalibMotorParam SetLimitEnabled(bool limitEnabled)
+    {
+        LimitEnabled = limitEnabled;
+        return this;
+    }
+
+    /// <summary>设置回原模式（限位回零 / 原点回零）</summary>
+    public CalibMotorParam SetHomingMode(CalibHomingMode homingMode)
+    {
+        HomingMode = homingMode;
         return this;
     }
 }

@@ -26,4 +26,11 @@ public interface ICalibScanAppService : IApplicationService
     /// GET /api/app/calib-scan/status/{calibProjectId}
     /// </summary>
     Task<CalibScanStatusDto> GetStatusAsync(Guid calibProjectId);
+
+    /// <summary>
+    /// 设置当前扫描会话的 OpenCV 图像自动优化开关。
+    /// 启用后，后续抓帧将通过 CLAHE 算法自动增强对比度。
+    /// POST /api/app/calib-scan/set-image-enhance
+    /// </summary>
+    Task SetImageEnhanceAsync(SetCalibScanImageEnhanceInput input);
 }

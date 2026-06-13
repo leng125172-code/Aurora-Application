@@ -33,16 +33,15 @@ export enum CalibStatus {
     Completed = 7,
 }
 
-/** 标定电机类型。 */
-export enum CalibMotorType {
-    Rotation = 0,
-    Distance = 1,
-}
-
 /** 回原方向。 */
 export enum OriginDirection {
-    Positive = 0,
-    Negative = 1,
+    Negative = 0,
+    Positive = 1,
+}
+
+export enum CalibHomingMode {
+    Limit = 0,
+    Origin = 1,
 }
 
 // ===================== 标定项目 DTO =====================
@@ -153,7 +152,6 @@ export interface CalibMotorParamDto {
     readonly id: string
     readonly calibProjectId: string
     readonly motorAxisId: string
-    readonly motorType: CalibMotorType
     readonly encoderResolution: number
     readonly gearRatio: number
     readonly mechanicalOriginPosition: number
@@ -163,6 +161,8 @@ export interface CalibMotorParamDto {
     readonly homeSpeed: number
     readonly homeAcceleration: number
     readonly isOriginLocked: boolean
+    readonly limitEnabled: boolean
+    readonly homingMode: CalibHomingMode
     readonly creationTime: string
     readonly lastModificationTime: string | null
 }
@@ -170,7 +170,6 @@ export interface CalibMotorParamDto {
 export interface SaveCalibMotorParamInput {
     calibProjectId: string
     motorAxisId: string
-    motorType: CalibMotorType
     encoderResolution?: number | null
     gearRatio?: number | null
     mechanicalOriginPosition?: number | null
@@ -180,6 +179,8 @@ export interface SaveCalibMotorParamInput {
     homeSpeed?: number | null
     homeAcceleration?: number | null
     isOriginLocked?: boolean | null
+    limitEnabled?: boolean | null
+    homingMode?: CalibHomingMode | null
 }
 
 // ===================== 云台组 API =====================
@@ -206,6 +207,14 @@ export async function saveCalibMotorParamAsync(
 /** 删除指定电机参数记录。 */
 export async function deleteCalibMotorParamAsync(id: string): Promise<void> {
     await httpClient.delete(`${CALIB_MOTOR_PARAM_BASE}/${id}`)
+}
+
+/** 校验 Step 4 电机参数是否已全部配置完成（所有绑定电机轴均已存在参数记录）。 */
+export async function validateStep4Async(calibProjectId: string): Promise<boolean> {
+    const response = await httpClient.get<boolean>(`${CALIB_MOTOR_PARAM_BASE}/validate-step4`, {
+        params: { calibProjectId },
+    })
+    return response.data
 }
 
 // ===================== 标定相机参数 =====================
@@ -311,3 +320,10 @@ export async function saveCalibCameraParamAsync(
     return response.data
 }
 
+/** 校验 Step 2 相机参数是否已全部配置完成（所有绑定相机均已有记录且传感器参数已填写）。 */
+export async function validateStep2Async(calibProjectId: string): Promise<boolean> {
+    const response = await httpClient.get<boolean>(`${CALIB_CAMERA_PARAM_BASE}/validate-step2`, {
+        params: { calibProjectId },
+    })
+    return response.data
+}

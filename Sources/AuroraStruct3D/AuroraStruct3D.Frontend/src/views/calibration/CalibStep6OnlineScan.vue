@@ -3,17 +3,17 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import * as signalR from '@microsoft/signalr'
 import { MessagePackHubProtocol } from '@microsoft/signalr-protocol-msgpack'
 import Button from 'primevue/button'
-import Select from 'primevue/select'
 import Tag from 'primevue/tag'
+import Checkbox from 'primevue/checkbox'
 import { showErrorToastOnce } from '@/api/client'
 import { useAppToast } from '@/composables/useAppToast'
-import { CalibDeviceType, type CalibProjectDto } from '@/api/calibration'
+import type { CalibProjectDto } from '@/api/calibration'
 import {
-    CalibScanMode,
     CalibScanRunState,
     getCalibScanStatus,
     startCalibScan,
     stopCalibScan,
+    setCalibScanImageEnhance,
     type CalibScanStatusDto,
 } from '@/api/calib-scan'
 
@@ -25,29 +25,11 @@ const { success: toastSuccess } = useAppToast()
 
 const loading = ref(false)
 const status = ref<CalibScanStatusDto | null>(null)
-const selectedMode = ref<CalibScanMode | null>(null)
 const hubConnected = ref(false)
 const reconnecting = ref(false)
 const conflictHint = ref<string | null>(null)
+const imageEnhanceEnabled = ref(false)
 let hubConnection: signalR.HubConnection | null = null
-
-const modeOptions = computed(() => {
-    const options = [
-        { label: '双目无光', value: CalibScanMode.TwoCamera0Light },
-        { label: '单目一光', value: CalibScanMode.OneCamera1Light },
-        { label: '双目一光', value: CalibScanMode.TwoCamera1Light },
-    ]
-
-    if (props.project.deviceType === CalibDeviceType.TwoCamera0Light) {
-        return options.filter((x) => x.value === CalibScanMode.TwoCamera0Light)
-    }
-
-    if (props.project.deviceType === CalibDeviceType.OneCamera1Light) {
-        return options.filter((x) => x.value === CalibScanMode.OneCamera1Light)
-    }
-
-    return options.filter((x) => x.value === CalibScanMode.TwoCamera1Light)
-})
 
 const stateText = computed(() => {
     switch (status.value?.state) {
@@ -79,7 +61,7 @@ const stateSeverity = computed<'success' | 'info' | 'warn' | 'danger' | 'seconda
 })
 
 const canStart = computed(() => {
-    return !loading.value && !status.value?.isRunning && selectedMode.value != null
+    return !loading.value && !status.value?.isRunning
 })
 
 const canStop = computed(() => {
@@ -132,9 +114,6 @@ async function startHub(): Promise<void> {
             return
         }
         status.value = next
-        if (selectedMode.value == null) {
-            selectedMode.value = next.scanMode
-        }
     })
 
     hubConnection.on(
@@ -190,9 +169,6 @@ async function refreshStatus(showLoading = true): Promise<void> {
     try {
         const res = await getCalibScanStatus(props.project.id)
         status.value = res
-        if (selectedMode.value == null) {
-            selectedMode.value = res.scanMode
-        }
     } catch (e) {
         showErrorToastOnce(e)
     } finally {
@@ -203,16 +179,11 @@ async function refreshStatus(showLoading = true): Promise<void> {
 }
 
 async function onStart(): Promise<void> {
-    if (!selectedMode.value) {
-        return
-    }
-
     loading.value = true
     conflictHint.value = null
     try {
         const res = await startCalibScan({
             calibProjectId: props.project.id,
-            scanMode: selectedMode.value,
         })
         status.value = res
         toastSuccess('已启动在线扫描会话')
@@ -243,8 +214,19 @@ async function onStop(): Promise<void> {
     }
 }
 
+async function onImageEnhanceChange(): Promise<void> {
+    try {
+        await setCalibScanImageEnhance({
+            calibProjectId: props.project.id,
+            enabled: imageEnhanceEnabled.value,
+        })
+    } catch (e) {
+        imageEnhanceEnabled.value = !imageEnhanceEnabled.value
+        showErrorToastOnce(e)
+    }
+}
+
 onMounted(async () => {
-    selectedMode.value = modeOptions.value[0]?.value ?? null
     await startHub()
     await refreshStatus(true)
 })
@@ -268,19 +250,7 @@ onUnmounted(async () => {
             </div>
 
             <div class="grid grid-cols-1 gap-3 md:grid-cols-3">
-                <div class="space-y-1 md:col-span-1">
-                    <label class="text-xs text-muted-foreground">扫描模式</label>
-                    <Select
-                        v-model="selectedMode"
-                        :options="modeOptions"
-                        option-label="label"
-                        option-value="value"
-                        class="w-full"
-                        :disabled="status?.isRunning"
-                    />
-                </div>
-
-                <div class="md:col-span-2 flex items-end gap-2">
+                <div class="md:col-span-3 flex items-end gap-2">
                     <Button
                         label="启动扫描"
                         icon="pi pi-play"
@@ -305,6 +275,13 @@ onUnmounted(async () => {
                         @click="refreshStatus(true)"
                     />
                 </div>
+            </div>
+
+            <div class="mt-3 flex items-center gap-2">
+                <Checkbox v-model="imageEnhanceEnabled" input-id="imageEnhance" binary @change="onImageEnhanceChange" />
+                <label for="imageEnhance" class="text-sm cursor-pointer select-none">
+                    启用 OpenCV 图像增强（CLAHE 自适应对比度优化）
+                </label>
             </div>
 
             <p v-if="status?.errorMessage" class="mt-3 text-sm text-red-400">

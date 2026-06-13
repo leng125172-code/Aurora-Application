@@ -48,7 +48,11 @@ async function run(fn: () => Promise<boolean | void>) {
 
 // ─── LED 控制 ─────────────────────────────────────────────────────────────
 async function onLedOn() {
-    await run(() => store.ledOn(deviceId.value))
+    await run(async () => {
+        await store.ledOn(deviceId.value)
+        // 开灯后切换到内置图像 2
+        await store.setDisplayMode({ projectorDeviceId: deviceId.value, mode: ProjectorDisplayMode.Internal2 })
+    })
 }
 async function onLedOff() {
     await run(() => store.ledOff(deviceId.value))

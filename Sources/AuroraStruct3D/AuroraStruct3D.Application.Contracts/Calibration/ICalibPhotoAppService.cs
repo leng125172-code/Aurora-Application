@@ -82,4 +82,11 @@ public interface ICalibPhotoAppService : IApplicationService
     /// 获取双目联合标定状态（成对样本计数 + 最新结果）
     /// </summary>
     Task<CalibStereoStatusDto> GetStereoStatusAsync(Guid calibProjectId);
+
+    /// <summary>
+    /// 校验 Step 5 标定结果是否已全部完成。
+    /// 所有绑定相机的内参已计算；单光系列还需外参已计算；双目还需双目外参已计算。
+    /// GET /api/app/calib-photo/validate-step5?calibProjectId={id}
+    /// </summary>
+    Task<bool> ValidateStep5Async(Guid calibProjectId);
 }

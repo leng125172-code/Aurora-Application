@@ -697,7 +697,15 @@ internal static class TUCamNative
     [DllImport("TUCam", CallingConvention = CallingConvention.Cdecl)]
     public static extern int TUCAM_Cap_Stop(IntPtr hTUCam);
 
-    /// <summary>向相机发送软件触发信号（需在软件触发模式下调用）</summary>
+    /// <summary>
+    /// ⛔ 在 RK3588 ARM64 上此 SDK API 返回 NotSupport，禁止调用。
+    /// 软件触发必须通过 GenICam 命令节点执行：
+    /// <code>DoGenICamCommand(handle, "TriggerSoftwarePulse")</code>
+    /// </summary>
+    [Obsolete(
+        "RK3588 不支持此 API，请使用 DoGenICamCommand(handle, \"TriggerSoftwarePulse\") 替代。",
+        error: true
+    )]
     [DllImport("TUCam", CallingConvention = CallingConvention.Cdecl)]
     public static extern int TUCAM_Cap_DoSoftwareTrigger(IntPtr hTUCam, uint uiMode = 0); // 0 = TUCTS_TIMED
 

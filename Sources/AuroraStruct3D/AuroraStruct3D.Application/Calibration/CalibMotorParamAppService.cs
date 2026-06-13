@@ -47,8 +47,7 @@ public class CalibMotorParamAppService : AuroraStruct3DAppService, ICalibMotorPa
         CalibMotorParam entity = new(
             GuidGenerator.Create(),
             input.CalibProjectId,
-            input.MotorAxisId,
-            input.MotorType
+            input.MotorAxisId
         );
         ApplyInputToEntity(entity, input);
         await _repository.InsertAsync(entity);
@@ -80,6 +79,8 @@ public class CalibMotorParamAppService : AuroraStruct3DAppService, ICalibMotorPa
             input.HomeAcceleration ?? entity.HomeAcceleration
         );
         entity.SetOriginLocked(input.IsOriginLocked ?? entity.IsOriginLocked);
+        entity.SetLimitEnabled(input.LimitEnabled ?? entity.LimitEnabled);
+        entity.SetHomingMode(input.HomingMode ?? entity.HomingMode);
     }
 
     private static CalibMotorParamDto ToDto(CalibMotorParam entity) =>
@@ -88,7 +89,6 @@ public class CalibMotorParamAppService : AuroraStruct3DAppService, ICalibMotorPa
             Id = entity.Id,
             CalibProjectId = entity.CalibProjectId,
             MotorAxisId = entity.MotorAxisId,
-            MotorType = entity.MotorType,
             EncoderResolution = entity.EncoderResolution,
             GearRatio = entity.GearRatio,
             MechanicalOriginPosition = entity.MechanicalOriginPosition,
@@ -98,7 +98,44 @@ public class CalibMotorParamAppService : AuroraStruct3DAppService, ICalibMotorPa
             HomeSpeed = entity.HomeSpeed,
             HomeAcceleration = entity.HomeAcceleration,
             IsOriginLocked = entity.IsOriginLocked,
+            LimitEnabled = entity.LimitEnabled,
+            HomingMode = entity.HomingMode,
             CreationTime = entity.CreationTime,
             LastModificationTime = entity.LastModificationTime,
         };
+
+    /// <inheritdoc/>
+    public async Task<bool> ValidateStep4Async(Guid calibProjectId)
+    {
+        // 读取项目以获得绑定电机轴列表
+        IQueryable<CalibProject> projectQuery = await LazyServiceProvider
+            .LazyGetRequiredService<Volo.Abp.Domain.Repositories.IRepository<CalibProject, Guid>>()
+            .GetQueryableAsync();
+        CalibProject? project = await AsyncExecuter.FirstOrDefaultAsync(
+            projectQuery.Where(x => x.Id == calibProjectId)
+        );
+        if (project == null)
+            return false;
+
+        // 收集绑定的电机轴 ID
+        List<Guid> axisIds = new();
+        if (project.MainCameraMotorAxisId.HasValue)
+            axisIds.Add(project.MainCameraMotorAxisId.Value);
+        if (project.SecondaryCameraMotorAxisId.HasValue)
+            axisIds.Add(project.SecondaryCameraMotorAxisId.Value);
+        if (project.DistanceMotorAxisId.HasValue)
+            axisIds.Add(project.DistanceMotorAxisId.Value);
+        if (axisIds.Count == 0)
+            return false;
+
+        IQueryable<CalibMotorParam> paramQuery = await _repository.GetQueryableAsync();
+        List<Guid> savedAxisIds = await AsyncExecuter.ToListAsync(
+            paramQuery
+                .Where(x => x.CalibProjectId == calibProjectId && axisIds.Contains(x.MotorAxisId))
+                .Select(x => x.MotorAxisId)
+        );
+
+        // 每个绑定的电机轴均必须有配置记录
+        return axisIds.All(id => savedAxisIds.Contains(id));
+    }
 }

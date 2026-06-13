@@ -26,7 +26,6 @@ export enum CalibScanRunState {
 /** 启动扫描输入 */
 export interface StartCalibScanInput {
     calibProjectId: string
-    scanMode?: CalibScanMode
 }
 
 /** 停止扫描输入 */
@@ -47,7 +46,6 @@ export interface CalibScanMetricsDto {
 /** 扫描状态 */
 export interface CalibScanStatusDto {
     calibProjectId: string
-    scanMode: CalibScanMode
     state: CalibScanRunState
     isRunning: boolean
     startedAt: string | null
@@ -72,4 +70,15 @@ export async function stopCalibScan(input: StopCalibScanInput): Promise<CalibSca
 export async function getCalibScanStatus(calibProjectId: string): Promise<CalibScanStatusDto> {
     const res = await httpClient.get<CalibScanStatusDto>(`${BASE}/status/${calibProjectId}`)
     return res.data
+}
+
+/** 设置图像增强开关输入 */
+export interface SetCalibScanImageEnhanceInput {
+    calibProjectId: string
+    enabled: boolean
+}
+
+/** 设置 OpenCV CLAHE 图像增强开关 */
+export async function setCalibScanImageEnhance(input: SetCalibScanImageEnhanceInput): Promise<void> {
+    await httpClient.post(`${BASE}/set-image-enhance`, input)
 }

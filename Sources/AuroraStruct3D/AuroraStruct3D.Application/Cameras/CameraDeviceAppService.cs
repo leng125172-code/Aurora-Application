@@ -231,7 +231,35 @@ public class CameraDeviceAppService : AuroraStruct3DAppService, ICameraDeviceApp
         string model = await _tucamService.GetCameraModelAsync(camera.DeviceIndex);
         string? serialNumber = await TryReadSerialNumberFromOpenCameraAsync(camera.DeviceIndex);
         camera.UpdateHardwareInfo(model);
-        camera.UpdateDeviceSerialNumber(serialNumber);
+
+        // DeviceSerialNumber 在库内唯一；若当前读到的序列号已属于其他相机记录，
+        // 则跳过本次写入，避免触发唯一约束异常导致接口 500。
+        if (string.IsNullOrWhiteSpace(serialNumber))
+        {
+            camera.UpdateDeviceSerialNumber(null);
+        }
+        else
+        {
+            CameraDevice? serialOwner = await _cameraDeviceRepository.FindByDeviceSerialNumberAsync(
+                serialNumber
+            );
+
+            if (serialOwner != null && serialOwner.Id != camera.Id)
+            {
+                Logger.LogWarning(
+                    "[Cameras] Skip updating DeviceSerialNumber for camera {CameraId}. "
+                        + "Serial '{SerialNumber}' already belongs to camera {OwnerCameraId}.",
+                    camera.Id,
+                    serialNumber,
+                    serialOwner.Id
+                );
+            }
+            else
+            {
+                camera.UpdateDeviceSerialNumber(serialNumber);
+            }
+        }
+
         camera.SetStatus(CameraStatus.Ready);
         await _cameraDeviceRepository.UpdateAsync(camera);
     }

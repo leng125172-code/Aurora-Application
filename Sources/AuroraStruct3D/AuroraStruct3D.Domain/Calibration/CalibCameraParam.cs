@@ -98,6 +98,23 @@ public class CalibCameraParam : FullAuditedEntity<Guid>
     /// <summary>投影外参重投影误差（像素）</summary>
     public double? ProjectorReprojectionError { get; private set; }
 
+    // ── 投影仪标定结果（投影仪内参 + 相机-投影仪外参）──────────────────────────────
+
+    /// <summary>投影仪内参矩阵（3×3，JSON 序列化的 double[][] 数组）</summary>
+    public string? ProjectorIntrinsicMatrixJson { get; private set; }
+
+    /// <summary>投影仪畸变系数（JSON 序列化的 double[] 数组）</summary>
+    public string? ProjectorDistCoeffsJson { get; private set; }
+
+    /// <summary>相机→投影仪旋转矩阵（3×3，JSON 序列化的 double[][] 数组）</summary>
+    public string? CameraToProjectorRJson { get; private set; }
+
+    /// <summary>相机→投影仪平移向量（3×1，JSON 序列化的 double[] 数组）</summary>
+    public string? CameraToProjectorTJson { get; private set; }
+
+    /// <summary>投影仪标定重投影误差（像素）</summary>
+    public double? ProjectorCalibReprojectionError { get; private set; }
+
     // EF Core 所需的无参构造函数
     protected CalibCameraParam() { }
 
@@ -243,13 +260,23 @@ public class CalibCameraParam : FullAuditedEntity<Guid>
     /// <param name="extrinsicRvecJson">旋转向量 JSON，无投影仪时传 null</param>
     /// <param name="extrinsicTvecJson">平移向量 JSON，无投影仪时传 null</param>
     /// <param name="projectorReprojectionError">投影外参重投影误差（px，无投影仪时传 null）</param>
+    /// <param name="projectorIntrinsicMatrixJson">投影仪内参矩阵 JSON（无时传 null）</param>
+    /// <param name="projectorDistCoeffsJson">投影仪畸变系数 JSON（无时传 null）</param>
+    /// <param name="cameraToProjectorRJson">相机→投影仪旋转矩阵 JSON（无时传 null）</param>
+    /// <param name="cameraToProjectorTJson">相机→投影仪平移向量 JSON（无时传 null）</param>
+    /// <param name="projectorCalibReprojectionError">投影仪标定重投影误差（px，无时传 null）</param>
     public CalibCameraParam SetCalibResult(
         string intrinsicMatrixJson,
         string distCoeffsJson,
         double reprojectionError,
         string? extrinsicRvecJson = null,
         string? extrinsicTvecJson = null,
-        double? projectorReprojectionError = null
+        double? projectorReprojectionError = null,
+        string? projectorIntrinsicMatrixJson = null,
+        string? projectorDistCoeffsJson = null,
+        string? cameraToProjectorRJson = null,
+        string? cameraToProjectorTJson = null,
+        double? projectorCalibReprojectionError = null
     )
     {
         Check.NotNullOrWhiteSpace(
@@ -269,6 +296,11 @@ public class CalibCameraParam : FullAuditedEntity<Guid>
         ExtrinsicRvecJson = extrinsicRvecJson;
         ExtrinsicTvecJson = extrinsicTvecJson;
         ProjectorReprojectionError = projectorReprojectionError;
+        ProjectorIntrinsicMatrixJson = projectorIntrinsicMatrixJson;
+        ProjectorDistCoeffsJson = projectorDistCoeffsJson;
+        CameraToProjectorRJson = cameraToProjectorRJson;
+        CameraToProjectorTJson = cameraToProjectorTJson;
+        ProjectorCalibReprojectionError = projectorCalibReprojectionError;
         return this;
     }
 
@@ -281,6 +313,11 @@ public class CalibCameraParam : FullAuditedEntity<Guid>
         ExtrinsicRvecJson = null;
         ExtrinsicTvecJson = null;
         ProjectorReprojectionError = null;
+        ProjectorIntrinsicMatrixJson = null;
+        ProjectorDistCoeffsJson = null;
+        CameraToProjectorRJson = null;
+        CameraToProjectorTJson = null;
+        ProjectorCalibReprojectionError = null;
         return this;
     }
 }

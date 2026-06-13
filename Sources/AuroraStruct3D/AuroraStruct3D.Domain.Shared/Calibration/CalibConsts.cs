@@ -139,27 +139,27 @@ public enum CalibScanRunState
 }
 
 /// <summary>
-/// 标定用电机类型枚举
-/// </summary>
-public enum CalibMotorType
-{
-    /// <summary>旋转电机（用于相机角度调节，单位：度°）</summary>
-    Rotation = 0,
-
-    /// <summary>距离电机/平移电机（用于基线距离调节，单位：mm）</summary>
-    Distance = 1,
-}
-
-/// <summary>
-/// 回原方向枚举
+/// 回原方向枚举。值与 LeisaiHomingDirection 统一（Negative=0, Positive=1）。
 /// </summary>
 public enum OriginDirection
 {
-    /// <summary>正向回原</summary>
-    Positive = 0,
+    /// <summary>反向回原（0）</summary>
+    Negative = 0,
 
-    /// <summary>反向回原</summary>
-    Negative = 1,
+    /// <summary>正向回原（1）</summary>
+    Positive = 1,
+}
+
+/// <summary>
+/// 回原模式枚举（对应雷赛 0x600A Bit2，值与 LeisaiHomingMode 相同，但定义于标定领域共享层）
+/// </summary>
+public enum CalibHomingMode
+{
+    /// <summary>限位回零（Bit2 = 0）</summary>
+    Limit = 0,
+
+    /// <summary>原点回零（Bit2 = 1）</summary>
+    Origin = 1,
 }
 
 /// <summary>

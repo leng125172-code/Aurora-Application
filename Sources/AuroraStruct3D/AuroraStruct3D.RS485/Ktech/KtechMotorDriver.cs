@@ -190,8 +190,11 @@ public class KtechMotorDriver : IMotorDriver
             SlaveId
         );
         // CmdClose(0x80)：立即切断电机输出，最快停止
+        // 使用紧急队列，跳过所有普通命令优先执行
         byte[] request = KtechFrame.BuildCommandFrame((byte)SlaveId, KtechFrame.CmdClose);
-        await _port.SendAndReceiveAsync(request, 0, 200, cancellationToken).ConfigureAwait(false);
+        await _port
+            .SendAndReceiveUrgentAsync(request, 0, 200, cancellationToken)
+            .ConfigureAwait(false);
     }
 
     /// <inheritdoc/>

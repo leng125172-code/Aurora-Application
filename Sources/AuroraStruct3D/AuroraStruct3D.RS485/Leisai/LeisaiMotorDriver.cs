@@ -240,7 +240,16 @@ public class LeisaiMotorDriver : IMotorDriver
     public async Task EmergencyStopAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogWarning("{Tag} [Leisai iCL-RS SlaveId={Id}] Emergency stop", LogTag, SlaveId);
-        await WriteRegisterAsync(RegControlWord, CtrlDisable, cancellationToken)
+        // 去使能（CtrlDisable=0x0000）立即断开驱动器输出
+        // 使用紧急队列，跳过所有普通命令优先执行
+        byte[] request = ModbusRtuHelper.BuildWriteSingleRegister(
+            (byte)SlaveId,
+            RegControlWord,
+            CtrlDisable
+        );
+        int responseLen = ModbusRtuHelper.GetWriteResponseLength();
+        await _port
+            .SendAndReceiveUrgentAsync(request, responseLen, 200, cancellationToken)
             .ConfigureAwait(false);
     }
 

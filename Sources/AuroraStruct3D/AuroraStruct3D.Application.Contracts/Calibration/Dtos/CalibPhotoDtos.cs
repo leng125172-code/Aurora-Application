@@ -144,6 +144,23 @@ public class CalibComputeResultDto
 
     /// <summary>外参平移向量（JSON，无投影仪时为 null）</summary>
     public string? ExtrinsicTvecJson { get; set; }
+
+    // ── 投影仪内参 + 相机-投影仪外参 ────────────────────────────────────────────
+
+    /// <summary>投影仪内参矩阵（3×3，JSON；无投影仪或未计算时为 null）</summary>
+    public string? ProjectorIntrinsicMatrixJson { get; set; }
+
+    /// <summary>投影仪畸变系数（JSON；无投影仪或未计算时为 null）</summary>
+    public string? ProjectorDistCoeffsJson { get; set; }
+
+    /// <summary>相机→投影仪旋转矩阵（3×3，JSON；无投影仪或未计算时为 null）</summary>
+    public string? CameraToProjectorRJson { get; set; }
+
+    /// <summary>相机→投影仪平移向量（3×1，JSON；无投影仪或未计算时为 null）</summary>
+    public string? CameraToProjectorTJson { get; set; }
+
+    /// <summary>投影仪标定重投影误差（px；无投影仪或未计算时为 null）</summary>
+    public double? ProjectorCalibReprojectionError { get; set; }
 }
 
 /// <summary>

@@ -97,14 +97,38 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
             throw new UserFriendlyException("当前项目绑定的投影机与拍照参数不一致，请刷新后重试");
         }
 
-        // 如果传入了投影仪 ID，先关圆 LED，确保内参拍照不受投影光干扰
+        // 有结构光：开灯并切换到白屏，为内参拍照提供均匀背景光
         if (input.ProjectorDeviceId.HasValue && project.DeviceSeries == DeviceSeries.SingleLight)
         {
-            await _projectorService.LedOffAsync(input.ProjectorDeviceId.Value);
+            Guid projId = input.ProjectorDeviceId.Value;
+            await _projectorService.LedOnAsync(projId);
+            await _projectorService.SetDisplayModeAsync(
+                new SetProjectorDisplayModeDto
+                {
+                    ProjectorDeviceId = projId,
+                    Mode = ProjectorDisplayMode.White,
+                }
+            );
+            await Task.Delay(200);
         }
 
         // 内参拍照：切换到软件触发模式，避免自由运行模式下相机持续输出干扰拍照
-        byte[] jpegBytes = await GrabCalibFrameRawAsync(input.CameraDeviceId, targetTriggerMode: 2);
+        byte[] jpegBytes;
+        try
+        {
+            jpegBytes = await GrabCalibFrameRawAsync(input.CameraDeviceId, targetTriggerMode: 2);
+        }
+        finally
+        {
+            // 拍完立即关灯（无论拍照是否成功）
+            if (
+                input.ProjectorDeviceId.HasValue
+                && project.DeviceSeries == DeviceSeries.SingleLight
+            )
+            {
+                await _projectorService.LedOffAsync(input.ProjectorDeviceId.Value);
+            }
+        }
 
         // OpenCV 棋盘格角点检测
         (bool isValid, int cornerCount) = DetectChessboardCorners(
@@ -250,19 +274,38 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
         Guid mainCameraId = project.MainCameraDeviceId.Value;
         Guid secondaryCameraId = project.SecondaryCameraDeviceId.Value;
 
-        // 若项目绑定了投影仪，先关灯确保不受投影光干扰
-        if (project.BoundProjectorDeviceId.HasValue)
+        // 若项目绑定了投影仪，开灯并切换到白屏，为双目成对拍照提供均匀背景光
+        Guid? projectorId = project.BoundProjectorDeviceId;
+        if (projectorId.HasValue)
         {
-            await _projectorService.LedOffAsync(project.BoundProjectorDeviceId.Value);
+            await _projectorService.LedOnAsync(projectorId.Value);
+            await _projectorService.SetDisplayModeAsync(
+                new SetProjectorDisplayModeDto
+                {
+                    ProjectorDeviceId = projectorId.Value,
+                    Mode = ProjectorDisplayMode.White,
+                }
+            );
+            await Task.Delay(200);
         }
 
-        // 主相机先拍，从相机再拍（_capStartActiveLock 保证顶序执行）
+        // 主相机先拍，从相机再拍（_capStartActiveLock 保证顺序执行）
         // 两台均切换到软件触发模式进行标定拍照
-        byte[] mainBytes = await GrabCalibFrameRawAsync(mainCameraId, targetTriggerMode: 2);
-        byte[] secondaryBytes = await GrabCalibFrameRawAsync(
-            secondaryCameraId,
-            targetTriggerMode: 2
-        );
+        byte[] mainBytes;
+        byte[] secondaryBytes;
+        try
+        {
+            mainBytes = await GrabCalibFrameRawAsync(mainCameraId, targetTriggerMode: 2);
+            secondaryBytes = await GrabCalibFrameRawAsync(secondaryCameraId, targetTriggerMode: 2);
+        }
+        finally
+        {
+            // 拍完立即关灯（无论拍照是否成功）
+            if (projectorId.HasValue)
+            {
+                await _projectorService.LedOffAsync(projectorId.Value);
+            }
+        }
 
         (bool mainValid, int mainCornerCount) = DetectChessboardCorners(
             mainBytes,
@@ -687,11 +730,213 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
             }
         }
 
-        _logger.LogInformation(
-            "[单目标定] 全流程完成，总耗时 {TotalMs}ms，内参误差 {InErr:F4} px",
-            totalSw.ElapsedMilliseconds,
-            reprojError
-        );
+        // ── 计算投影仪内参与相机-投影仪外参 ───────────────────────────────────────────────
+        string? projIntrinsicJson = null;
+        string? projDistJson = null;
+        string? camToProjectorRJson = null;
+        string? camToProjectorTJson = null;
+        double? projCalibReprojError = null;
+
+        if (
+            shouldComputeProjectorExtrinsic
+            && extrinsicPhotos.Count >= CalibConsts.MinProjectorExtrinsicPhotoCount
+        )
+        {
+            int projCols = project.ProjectedCornerCols;
+            int projRows = project.ProjectedCornerRows;
+            int projPx = Math.Max(project.ProjectedPixelSize, 1);
+            Size projPatternSize = new(projCols, projRows);
+
+            // 投影仪待标定的对应关系：
+            //   对象点（Object Points）：投影棋盘格角点在相机坐标系中的 3D 坐标，
+            //     通过 SolvePnP（单位网格 → 相机坐标系）得到。
+            //   图像点（Image Points）：投影仪小个内角点在投影仪像素坐标中的已知位置。
+            //   采用 calibrateCamera 拟合投影仪内参；由于对象点已在相机坐标系中，
+            //   输出的 rvec/tvec 就是相机→投影仪的外参变换。
+
+            // 单位网格坐标（与 SolvePnP 一致，用于推算 3D 位置）
+            Point3f[] projWorldUnit = new Point3f[projCols * projRows];
+            for (int r = 0; r < projRows; r++)
+            for (int c = 0; c < projCols; c++)
+                projWorldUnit[r * projCols + c] = new Point3f(c, r, 0f);
+
+            // 投影仪像素坐标（已知，由投影图案决定）
+            // 内角点布局：第 (c,r) 个角点在投影仪中为 ((c+1)*px, (r+1)*px)。
+            Point2f[] projPixels = new Point2f[projCols * projRows];
+            for (int r = 0; r < projRows; r++)
+            for (int c = 0; c < projCols; c++)
+                projPixels[r * projCols + c] = new Point2f((c + 1) * projPx, (r + 1) * projPx);
+
+            // 投影仪分辨率估算（按图案大小，两边各留 1 格边距）
+            Size projectorSize = new((projCols + 2) * projPx, (projRows + 2) * projPx);
+
+            List<Mat> projObjMats = [];
+            List<Mat> projImgMats = [];
+
+            phaseSw.Restart();
+            _logger.LogInformation(
+                "[单目标定] 开始计算投影仪内参 — {Count} 张外参照片",
+                extrinsicPhotos.Count
+            );
+
+            for (int ei = 0; ei < extrinsicPhotos.Count; ei++)
+            {
+                CalibPhotoRecord photo = extrinsicPhotos[ei];
+                try
+                {
+                    byte[] bytes = await _blobContainer.GetAllBytesAsync(photo.BlobKey);
+                    using Mat exGray = LoadGrayMat(bytes);
+                    if (exGray.Empty())
+                        continue;
+
+                    Point2f[]? camCorners = FindCornersSubpixGray(exGray, projPatternSize);
+                    if (camCorners == null)
+                        continue;
+
+                    // SolvePnP：将单位网格坐标变换到相机坐标系
+                    using Mat rvecCam = new();
+                    using Mat tvecCam = new();
+                    Cv2.SolvePnP(
+                        InputArray.Create(projWorldUnit),
+                        InputArray.Create(camCorners),
+                        cameraMatrix,
+                        distCoeffs,
+                        rvecCam,
+                        tvecCam
+                    );
+
+                    // 将单位网格角点变换到相机 3D 坐标
+                    using Mat R_cam = new();
+                    Cv2.Rodrigues(rvecCam, R_cam);
+
+                    Point3f[] pts3D = new Point3f[projWorldUnit.Length];
+                    for (int i = 0; i < projWorldUnit.Length; i++)
+                    {
+                        float wx = projWorldUnit[i].X;
+                        float wy = projWorldUnit[i].Y;
+                        double x3 =
+                            R_cam.At<double>(0, 0) * wx
+                            + R_cam.At<double>(0, 1) * wy
+                            + tvecCam.At<double>(0, 0);
+                        double y3 =
+                            R_cam.At<double>(1, 0) * wx
+                            + R_cam.At<double>(1, 1) * wy
+                            + tvecCam.At<double>(1, 0);
+                        double z3 =
+                            R_cam.At<double>(2, 0) * wx
+                            + R_cam.At<double>(2, 1) * wy
+                            + tvecCam.At<double>(2, 0);
+                        pts3D[i] = new Point3f((float)x3, (float)y3, (float)z3);
+                    }
+
+                    projObjMats.Add(Mat.FromArray(pts3D));
+                    projImgMats.Add(Mat.FromArray(projPixels));
+
+                    _logger.LogDebug("[单目标定] 投影仪标定 外参照片[{Idx}] SolvePnP 完成", ei);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "[单目标定] 外参照片[{Idx}]投影仪预处理失败，跳过", ei);
+                }
+            }
+
+            if (projObjMats.Count >= CalibConsts.MinProjectorExtrinsicPhotoCount)
+            {
+                using Mat projKMat = new();
+                using Mat projDistMat = new();
+                Mat[] projRvecs = [];
+                Mat[] projTvecs = [];
+                try
+                {
+                    projCalibReprojError = Cv2.CalibrateCamera(
+                        projObjMats,
+                        projImgMats,
+                        projectorSize,
+                        projKMat,
+                        projDistMat,
+                        out projRvecs,
+                        out projTvecs,
+                        CalibrationFlags.None
+                    );
+
+                    _logger.LogInformation(
+                        "[单目标定] 投影仪内参计算完成，耐倦{Ms}ms，重投影误差 {Error:F4} px",
+                        phaseSw.ElapsedMilliseconds,
+                        projCalibReprojError
+                    );
+
+                    projIntrinsicJson = SerializeMatToJson(projKMat);
+                    projDistJson = SerializeVecToJson(projDistMat);
+
+                    // 相机→投影仪外参：对所有姿态的 R/t 为半正定矩阵平均
+                    // 由于对象点已在相机坐标系中，
+                    // calibrateCamera 的输出 rvec/tvec 直接是相机坐标系→投影仪的外参变换
+                    int nPoses = projRvecs.Length;
+                    double[] sumR = new double[9];
+                    double[] sumT = new double[3];
+
+                    for (int pi = 0; pi < nPoses; pi++)
+                    {
+                        using Mat R_proj_i = new();
+                        Cv2.Rodrigues(projRvecs[pi], R_proj_i);
+                        for (int rr = 0; rr < 3; rr++)
+                        {
+                            for (int cc = 0; cc < 3; cc++)
+                                sumR[rr * 3 + cc] += R_proj_i.At<double>(rr, cc);
+                            sumT[rr] += projTvecs[pi].At<double>(rr, 0);
+                        }
+                    }
+
+                    // 构建平均 R 并通过 SVD 正交化
+                    using Mat R_cp_avg = new(3, 3, MatType.CV_64FC1);
+                    for (int rr = 0; rr < 3; rr++)
+                    for (int cc = 0; cc < 3; cc++)
+                        R_cp_avg.Set(rr, cc, sumR[rr * 3 + cc] / nPoses);
+
+                    using Mat U_svd = new();
+                    using Mat S_svd = new();
+                    using Mat Vt_svd = new();
+                    Cv2.SVDecomp(R_cp_avg, S_svd, U_svd, Vt_svd, SVD.Flags.FullUV);
+                    using Mat R_cp_ortho = U_svd * Vt_svd;
+
+                    using Mat t_cp_avg = new(3, 1, MatType.CV_64FC1);
+                    for (int rr = 0; rr < 3; rr++)
+                        t_cp_avg.Set(rr, 0, sumT[rr] / nPoses);
+
+                    camToProjectorRJson = SerializeMatToJson(R_cp_ortho);
+                    camToProjectorTJson = SerializeVecToJson(t_cp_avg);
+
+                    _logger.LogInformation(
+                        "[单目标定] 相机-投影仪外参计算完成，共 {Count} 帧平均",
+                        nPoses
+                    );
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "[单目标定] 投影仪内参计算失败，跳过");
+                    projCalibReprojError = null;
+                }
+                finally
+                {
+                    foreach (Mat m in projRvecs)
+                        m.Dispose();
+                    foreach (Mat m in projTvecs)
+                        m.Dispose();
+                }
+            }
+            else
+            {
+                _logger.LogWarning(
+                    "[单目标定] 投影仪标定有效帧数不足（{Count}），跳过投影仪内参计算",
+                    projObjMats.Count
+                );
+            }
+
+            foreach (Mat m in projObjMats)
+                m.Dispose();
+            foreach (Mat m in projImgMats)
+                m.Dispose();
+        }
 
         if (reprojError > CalibConsts.MaxSingleCameraReprojectionError)
         {
@@ -733,7 +978,12 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
                 reprojError,
                 rvecJson,
                 tvecJson,
-                projectorReprojectionError
+                projectorReprojectionError,
+                projIntrinsicJson,
+                projDistJson,
+                camToProjectorRJson,
+                camToProjectorTJson,
+                projCalibReprojError
             );
             await _cameraParamRepo.UpdateAsync(camParam);
         }
@@ -746,6 +996,11 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
             ProjectorReprojectionError = projectorReprojectionError,
             ExtrinsicRvecJson = rvecJson,
             ExtrinsicTvecJson = tvecJson,
+            ProjectorIntrinsicMatrixJson = projIntrinsicJson,
+            ProjectorDistCoeffsJson = projDistJson,
+            CameraToProjectorRJson = camToProjectorRJson,
+            CameraToProjectorTJson = camToProjectorTJson,
+            ProjectorCalibReprojectionError = projCalibReprojError,
         };
     }
 
@@ -786,6 +1041,11 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
                 ProjectorReprojectionError = camParam.ProjectorReprojectionError,
                 ExtrinsicRvecJson = camParam.ExtrinsicRvecJson,
                 ExtrinsicTvecJson = camParam.ExtrinsicTvecJson,
+                ProjectorIntrinsicMatrixJson = camParam.ProjectorIntrinsicMatrixJson,
+                ProjectorDistCoeffsJson = camParam.ProjectorDistCoeffsJson,
+                CameraToProjectorRJson = camParam.CameraToProjectorRJson,
+                CameraToProjectorTJson = camParam.CameraToProjectorTJson,
+                ProjectorCalibReprojectionError = camParam.ProjectorCalibReprojectionError,
             };
         }
 
@@ -2047,4 +2307,61 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
             Map2XBlobKey = result.Map2XBlobKey,
             Map2YBlobKey = result.Map2YBlobKey,
         };
+
+    /// <inheritdoc/>
+    public async Task<bool> ValidateStep5Async(Guid calibProjectId)
+    {
+        CalibProject project = await _projectRepo.GetAsync(calibProjectId);
+
+        // 收集所有绑定相机 ID
+        List<Guid> cameraIds = new();
+        if (project.MainCameraDeviceId.HasValue)
+            cameraIds.Add(project.MainCameraDeviceId.Value);
+        if (project.SecondaryCameraDeviceId.HasValue)
+            cameraIds.Add(project.SecondaryCameraDeviceId.Value);
+        if (cameraIds.Count == 0)
+            return false;
+
+        IQueryable<CalibCameraParam> paramQuery = await _cameraParamRepo.GetQueryableAsync();
+        List<CalibCameraParam> camParams = await AsyncExecuter.ToListAsync(
+            paramQuery.Where(x =>
+                x.CalibProjectId == calibProjectId && cameraIds.Contains(x.CameraDeviceId)
+            )
+        );
+
+        // 所有相机的内参必须已计算
+        bool allIntrinsicDone = cameraIds.All(id =>
+            camParams.Any(p =>
+                p.CameraDeviceId == id && !string.IsNullOrEmpty(p.IntrinsicMatrixJson)
+            )
+        );
+        if (!allIntrinsicDone)
+            return false;
+
+        // 单光系列：主相机的外参（相机→投影棋盘格位姿）也必须已计算
+        if (project.DeviceSeries == DeviceSeries.SingleLight)
+        {
+            if (!project.MainCameraDeviceId.HasValue)
+                return false;
+            bool extrinsicDone = camParams.Any(p =>
+                p.CameraDeviceId == project.MainCameraDeviceId.Value
+                && !string.IsNullOrEmpty(p.ExtrinsicRvecJson)
+            );
+            if (!extrinsicDone)
+                return false;
+        }
+
+        // 双目项目：双目外参也必须已计算
+        if (project.SecondaryCameraDeviceId.HasValue)
+        {
+            IQueryable<CalibStereoResult> stereoQuery = await _stereoResultRepo.GetQueryableAsync();
+            bool stereoExists = await AsyncExecuter.AnyAsync(
+                stereoQuery.Where(x => x.CalibProjectId == calibProjectId)
+            );
+            if (!stereoExists)
+                return false;
+        }
+
+        return true;
+    }
 }

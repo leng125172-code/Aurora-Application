@@ -206,6 +206,26 @@ public class CalibScanStateStore
         });
     }
 
+    /// <summary>
+    /// 设置指定项目会话的图像增强开关。
+    /// </summary>
+    public void SetImageEnhance(Guid calibProjectId, bool enabled)
+    {
+        if (_sessions.TryGetValue(calibProjectId, out CalibScanSessionState? session))
+        {
+            session.ImageEnhanceEnabled = enabled;
+        }
+    }
+
+    /// <summary>
+    /// 获取指定项目会话是否启用图像增强。
+    /// </summary>
+    public bool GetImageEnhanceEnabled(Guid calibProjectId)
+    {
+        return _sessions.TryGetValue(calibProjectId, out CalibScanSessionState? session)
+            && session.ImageEnhanceEnabled;
+    }
+
     private static CalibScanMetricsDto BuildInitialMetrics(DateTime now)
     {
         return new CalibScanMetricsDto
@@ -239,4 +259,7 @@ public class CalibScanSessionState
     public string? ErrorMessage { get; set; }
 
     public CalibScanMetricsDto? LatestMetrics { get; set; }
+
+    /// <summary>是否启用 OpenCV CLAHE 图像增强</summary>
+    public bool ImageEnhanceEnabled { get; set; }
 }

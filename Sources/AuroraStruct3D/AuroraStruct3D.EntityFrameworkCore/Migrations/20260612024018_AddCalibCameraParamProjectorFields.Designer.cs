@@ -3,6 +3,7 @@ using System;
 using AuroraStruct3D.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Volo.Abp.EntityFrameworkCore;
@@ -12,9 +13,11 @@ using Volo.Abp.EntityFrameworkCore;
 namespace AuroraStruct3D.EntityFrameworkCore.Migrations
 {
     [DbContext(typeof(AuroraStruct3DDbContext))]
-    partial class AuroraStruct3DDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260612024018_AddCalibCameraParamProjectorFields")]
+    partial class AddCalibCameraParamProjectorFields
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -409,6 +412,12 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
 
+                    b.Property<string>("CameraToProjectorRJson")
+                        .HasColumnType("text");
+
+                    b.Property<string>("CameraToProjectorTJson")
+                        .HasColumnType("text");
+
                     b.Property<DateTime>("CreationTime")
                         .HasColumnType("timestamp without time zone")
                         .HasColumnName("CreationTime");
@@ -509,6 +518,15 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                     b.Property<decimal>("PixelSizeUm")
                         .HasPrecision(10, 4)
                         .HasColumnType("numeric(10,4)");
+
+                    b.Property<double?>("ProjectorCalibReprojectionError")
+                        .HasColumnType("double precision");
+
+                    b.Property<string>("ProjectorDistCoeffsJson")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ProjectorIntrinsicMatrixJson")
+                        .HasColumnType("text");
 
                     b.Property<double?>("ProjectorReprojectionError")
                         .HasColumnType("double precision");
@@ -751,15 +769,15 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                     b.Property<bool>("LimitEnabled")
                         .HasColumnType("boolean");
 
-                    b.Property<int>("HomingMode")
-                        .HasColumnType("integer");
-
                     b.Property<decimal>("MechanicalOriginPosition")
                         .HasPrecision(18, 6)
                         .HasColumnType("numeric(18,6)");
 
                     b.Property<Guid>("MotorAxisId")
                         .HasColumnType("uuid");
+
+                    b.Property<int>("MotorType")
+                        .HasColumnType("integer");
 
                     b.Property<decimal>("NegativeSoftLimit")
                         .HasPrecision(18, 6)

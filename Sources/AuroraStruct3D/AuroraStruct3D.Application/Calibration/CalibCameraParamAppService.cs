@@ -152,4 +152,39 @@ public class CalibCameraParamAppService : AuroraStruct3DAppService, ICalibCamera
             LastModificationTime = entity.LastModificationTime,
             CameraPosition = entity.CameraPosition,
         };
+
+    /// <inheritdoc/>
+    public async Task<bool> ValidateStep2Async(Guid calibProjectId)
+    {
+        // 读取项目以获得绑定相机列表
+        IQueryable<CalibProject> projectQuery = await LazyServiceProvider
+            .LazyGetRequiredService<Volo.Abp.Domain.Repositories.IRepository<CalibProject, Guid>>()
+            .GetQueryableAsync();
+        CalibProject? project = await AsyncExecuter.FirstOrDefaultAsync(
+            projectQuery.Where(x => x.Id == calibProjectId)
+        );
+        if (project == null)
+            return false;
+
+        // 收集绑定相机 ID（主相机必填，从相机根据项目类型可能为空）
+        List<Guid> cameraIds = new();
+        if (project.MainCameraDeviceId.HasValue)
+            cameraIds.Add(project.MainCameraDeviceId.Value);
+        if (project.SecondaryCameraDeviceId.HasValue)
+            cameraIds.Add(project.SecondaryCameraDeviceId.Value);
+        if (cameraIds.Count == 0)
+            return false;
+
+        IQueryable<CalibCameraParam> paramQuery = await _repository.GetQueryableAsync();
+        List<CalibCameraParam> existing = await AsyncExecuter.ToListAsync(
+            paramQuery.Where(x =>
+                x.CalibProjectId == calibProjectId && cameraIds.Contains(x.CameraDeviceId)
+            )
+        );
+
+        // 所有绑定相机均必须有记录，且传感器尺寸已填写（代表基础参数已保存）
+        return cameraIds.All(id =>
+            existing.Any(p => p.CameraDeviceId == id && !string.IsNullOrEmpty(p.SensorSize))
+        );
+    }
 }

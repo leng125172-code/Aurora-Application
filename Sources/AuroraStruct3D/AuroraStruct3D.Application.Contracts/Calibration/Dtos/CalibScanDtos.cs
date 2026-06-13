@@ -10,9 +10,6 @@ public class StartCalibScanInput
     /// <summary>标定项目 ID</summary>
     [Required]
     public Guid CalibProjectId { get; set; }
-
-    /// <summary>扫描模式（为空时按项目设备类型自动推断）</summary>
-    public CalibScanMode? ScanMode { get; set; }
 }
 
 /// <summary>
@@ -57,9 +54,6 @@ public class CalibScanStatusDto
     /// <summary>标定项目 ID</summary>
     public Guid CalibProjectId { get; set; }
 
-    /// <summary>扫描模式</summary>
-    public CalibScanMode ScanMode { get; set; }
-
     /// <summary>当前状态</summary>
     public CalibScanRunState State { get; set; }
 
@@ -77,4 +71,17 @@ public class CalibScanStatusDto
 
     /// <summary>最近实时指标</summary>
     public CalibScanMetricsDto? LatestMetrics { get; set; }
+}
+
+/// <summary>
+/// 设置图像增强开关输入
+/// </summary>
+public class SetCalibScanImageEnhanceInput
+{
+    /// <summary>标定项目 ID</summary>
+    [Required]
+    public Guid CalibProjectId { get; set; }
+
+    /// <summary>是否启用 OpenCV CLAHE 图像增强</summary>
+    public bool Enabled { get; set; }
 }

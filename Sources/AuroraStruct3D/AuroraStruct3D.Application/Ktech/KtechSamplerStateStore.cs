@@ -19,9 +19,9 @@ public class KtechSamplerStateStore
 
     /// <summary>
     /// 获取指定轴的采样开关。
-    /// 若该轴尚未显式设置，返回默认值 <c>true</c>（启用）。
+    /// 若该轴尚未显式设置，返回默认值 <c>false</c>（停止），需前端主动开启。
     /// </summary>
     /// <param name="axisId">电机轴 UUID</param>
     public bool IsPollingEnabled(Guid axisId) =>
-        _pollingEnabled.GetValueOrDefault(axisId, defaultValue: true);
+        _pollingEnabled.GetValueOrDefault(axisId, defaultValue: false);
 }

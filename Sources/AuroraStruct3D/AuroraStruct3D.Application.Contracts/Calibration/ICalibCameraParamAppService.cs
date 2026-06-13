@@ -27,4 +27,11 @@ public interface ICalibCameraParamAppService : IApplicationService
     /// DELETE /api/app/calib-camera-param/{id}
     /// </summary>
     Task DeleteAsync(Guid id);
+
+    /// <summary>
+    /// 校验 Step 2 相机参数是否已全部配置完成。
+    /// 项目绑定的所有相机在 AbpProCalibCameraParams 中均有记录且传感器基础参数已填写。
+    /// GET /api/app/calib-camera-param/validate-step2?calibProjectId={id}
+    /// </summary>
+    Task<bool> ValidateStep2Async(Guid calibProjectId);
 }

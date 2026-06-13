@@ -8,8 +8,8 @@ import Select from 'primevue/select'
 import Tag from 'primevue/tag'
 import { useAppToast } from '@/composables/useAppToast'
 import {
-    CalibMotorType,
     OriginDirection,
+    CalibHomingMode,
     getCalibMotorParamListAsync,
     saveCalibMotorParamAsync,
     type CalibMotorParamDto,
@@ -35,7 +35,6 @@ import {
 // ─── 表单类型 ────────────────────────────────────────────────────────────────
 
 interface Step4MotorForm {
-    motorType: CalibMotorType
     /** 雷赛回原方向（枚举值直接对应寄存器 Bit0） */
     homingDirection: LeisaiHomingDirection
     homingMode: LeisaiHomingMode
@@ -81,11 +80,6 @@ const selectPt = {
 
 // ─── Select 选项 ──────────────────────────────────────────────────────────────
 
-const motorTypeOptions = computed(() => [
-    { label: t('calib.step4MotorTypeRotation'), value: CalibMotorType.Rotation },
-    { label: t('calib.step4MotorTypeDistance'), value: CalibMotorType.Distance },
-])
-
 const homingDirectionOptions = computed(() => [
     { label: t('calib.step4OriginDirectionNegative'), value: LeisaiHomingDirection.Negative },
     { label: t('calib.step4OriginDirectionPositive'), value: LeisaiHomingDirection.Positive },
@@ -122,7 +116,7 @@ function statusSeverity(axis: MotorAxisDto): 'secondary' | 'success' | 'danger' 
 // ─── 表单初始化 ───────────────────────────────────────────────────────────────
 
 function createDefaultForm(axis: MotorAxisDto, saved?: CalibMotorParamDto): Step4MotorForm {
-    // OriginDirection.Positive=0/Negative=1，LeisaiHomingDirection.Positive=1/Negative=0，语义相同值相反
+    // OriginDirection 与 LeisaiHomingDirection 值统一：Negative=0, Positive=1
     const savedDirection = saved?.originDirection
     let homingDirection: LeisaiHomingDirection
     if (savedDirection === OriginDirection.Positive) {
@@ -132,9 +126,9 @@ function createDefaultForm(axis: MotorAxisDto, saved?: CalibMotorParamDto): Step
     }
 
     return {
-        motorType: saved?.motorType ?? CalibMotorType.Rotation,
         homingDirection,
-        homingMode: LeisaiHomingMode.Limit,
+        homingMode:
+            saved?.homingMode != null ? (saved.homingMode as unknown as LeisaiHomingMode) : LeisaiHomingMode.Limit,
         moveAfterHome: false,
         withZSignal: false,
         homeStopPosition: saved?.mechanicalOriginPosition != null ? Number(saved.mechanicalOriginPosition) : null,
@@ -152,7 +146,7 @@ function createDefaultForm(axis: MotorAxisDto, saved?: CalibMotorParamDto): Step
                 : isKtech(axis)
                   ? (axis.minRotationAngle ?? null)
                   : null,
-        limitEnabled: isKtech(axis),
+        limitEnabled: saved?.limitEnabled ?? isKtech(axis),
     }
 }
 
@@ -250,13 +244,14 @@ function buildSavePayload(axis: MotorAxisDto, form: Step4MotorForm) {
     return {
         calibProjectId: props.project!.id,
         motorAxisId: axis.id,
-        motorType: form.motorType,
         mechanicalOriginPosition: form.homeStopPosition,
         originDirection: toOriginDirection(form.homingDirection),
+        homingMode: form.homingMode as unknown as CalibHomingMode,
         positiveSoftLimit: form.positiveSoftLimit,
         negativeSoftLimit: form.negativeSoftLimit,
         homeSpeed: form.homeSpeedRpm,
         homeAcceleration: form.homeAccelerationRpm,
+        limitEnabled: form.limitEnabled,
     }
 }
 
@@ -295,7 +290,8 @@ async function saveHomeConfig(axis: MotorAxisDto): Promise<void> {
 }
 
 async function disableHomeConfig(axis: MotorAxisDto): Promise<void> {
-    if (!props.project) return
+    const form = motorForms.value[axis.id]
+    if (!props.project || !form) return
 
     setBusy(savingHomeIds, axis.id, true)
     try {
@@ -303,6 +299,8 @@ async function disableHomeConfig(axis: MotorAxisDto): Promise<void> {
             // 后端清除 0x6000 bit2 并保存 EEPROM
             await disableHoming(axis.id)
         }
+        // 所有品牌均同步到数据库（保存当前回原参数）
+        await saveCalibMotorParamAsync(buildSavePayload(axis, form))
         toast.success(t('calib.step4HomeDisableSuccess'))
     } catch (error) {
         toast.error(error instanceof Error ? error.message : t('common.operationFailed'))
@@ -454,20 +452,6 @@ async function saveLimitConfigAction(axis: MotorAxisDto): Promise<void> {
                                 <div class="grid grid-cols-1 gap-x-6 gap-y-3 text-sm md:grid-cols-2 xl:grid-cols-4">
                                     <div>
                                         <label class="mb-1 block text-xs text-muted-foreground">
-                                            {{ t('calib.step4MotorType') }}
-                                        </label>
-                                        <Select
-                                            v-model="motorForms[axis.id].motorType"
-                                            size="small"
-                                            class="w-full"
-                                            :options="motorTypeOptions"
-                                            option-label="label"
-                                            option-value="value"
-                                            :pt="selectPt"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label class="mb-1 block text-xs text-muted-foreground">
                                             {{ t('calib.step4LimitEnabled') }}
                                         </label>
                                         <Select
@@ -491,6 +475,7 @@ async function saveLimitConfigAction(axis: MotorAxisDto): Promise<void> {
                                             :use-grouping="false"
                                             class="w-full"
                                             :input-class="'!text-xs !h-7 !py-0'"
+                                            :disabled="isLeisai(axis) && motorForms[axis.id].limitEnabled"
                                         />
                                     </div>
                                     <div>
@@ -503,6 +488,7 @@ async function saveLimitConfigAction(axis: MotorAxisDto): Promise<void> {
                                             :use-grouping="false"
                                             class="w-full"
                                             :input-class="'!text-xs !h-7 !py-0'"
+                                            :disabled="isLeisai(axis) && motorForms[axis.id].limitEnabled"
                                         />
                                     </div>
                                 </div>

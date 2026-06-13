@@ -1718,12 +1718,19 @@ public class TucamCameraService : ITucamCameraService, IDisposable
         ThrowIfDisposed();
         IntPtr handle = GetHandle(cameraIndex);
 
-        TUCamRet ret = TUCamNative.TUCAM_Cap_DoSoftwareTrigger(handle);
+        // RK3588 上 TUCAM_Cap_DoSoftwareTrigger 返回 NotSupport。
+        // 按照 TucamMultiCameraProbe 测试结论：软件触发必须通过 GenICam 命令节点
+        // "TriggerSoftwarePulse" 执行，与测试工具 DoGenICamCommand 保持一致。
+        TUCamRet ret = GenICamSetInt(handle, "TriggerSoftwarePulse", 1);
         if (ret != TUCamRet.Success)
         {
             throw new InvalidOperationException($"{LogTag} Software trigger failed: {ret}");
         }
-        _logger.LogDebug("{Tag} Camera {Index} software trigger sent", LogTag, cameraIndex);
+        _logger.LogDebug(
+            "{Tag} Camera {Index} software trigger (TriggerSoftwarePulse) sent",
+            LogTag,
+            cameraIndex
+        );
         return Task.CompletedTask;
     }
 
