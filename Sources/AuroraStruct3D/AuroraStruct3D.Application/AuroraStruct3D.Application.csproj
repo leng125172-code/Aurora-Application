@@ -3,8 +3,6 @@
     <Import Project="..\..\..\common.props" />
     <PropertyGroup>
         <TargetFramework>net10.0</TargetFramework>
-        <!-- 版本号集中管理，PackageReference 和 XML 路径均引用此属性 -->
-        <OpenCvSharp4Version>4.13.0.20260602</OpenCvSharp4Version>
     </PropertyGroup>
 
     <ItemGroup>
@@ -15,6 +13,7 @@
         <ProjectReference Include="..\AuroraStruct3D.Projectors\AuroraStruct3D.Projectors.csproj" />
         <ProjectReference Include="..\AuroraStruct3D.RS485\AuroraStruct3D.RS485.csproj" />
         <ProjectReference Include="..\AuroraStruct3D.Tucam\AuroraStruct3D.Tucam.csproj" />
+        <ProjectReference Include="..\AuroraStruct3D.OpenCV\AuroraStruct3D.OpenCV.csproj" />
     </ItemGroup>
 
     <ItemGroup>
@@ -33,60 +32,5 @@
 
     <ItemGroup>
         <ProjectReference Include="..\..\AuroraAbpPro\Volo.Abp.BackgroundJobs.HangFire\Volo.Abp.BackgroundJobs.HangFire.csproj" />
-    </ItemGroup>
-
-    <ItemGroup>
-        <!-- 核心主包，全平台通用 -->
-        <PackageReference Include="OpenCvSharp4" Version="$(OpenCvSharp4Version)" />
-
-        <!-- Windows 运行时 -->
-        <PackageReference
-            Include="OpenCvSharp4.runtime.win"
-            Version="$(OpenCvSharp4Version)"
-            Condition="'$(RuntimeIdentifier)' == 'win-x64' OR '$(RuntimeIdentifier)' == 'win-x86'"
-        />
-
-        <!-- Linux ARM64 运行时 (需要手动构建)-->
-        <!-- <PackageReference
-            Include="OpenCvSharp4.runtime.linux-arm64"
-            Version="$(OpenCvSharp4Version)"
-            Condition="'$(RuntimeIdentifier)' == 'linux-arm64'"
-        /> -->
-    </ItemGroup>
-
-    <!--
-        OpenCvSharp.xml（IntelliSense 文档）声明为 None 内容文件。
-        使用 CopyToOutputDirectory 而非 Copy Task：
-          - Copy Task 只写入本项目输出目录，引用方不会自动获得该文件
-          - None + CopyToOutputDirectory 通过 MSBuild GetCopyToOutputDirectoryItems
-            机制，自动传播到引用本项目的所有上层项目（如 HttpApi.Host）
-        _OcvXmlBase 按 TFM 优先级降序探测，升级包版本只需改 OpenCvSharp4Version 属性。
-    -->
-    <PropertyGroup>
-        <_OcvXmlBase>$(NuGetPackageRoot)opencvsharp4\$(OpenCvSharp4Version)\lib\</_OcvXmlBase>
-        <_OcvXmlPath Condition="Exists('$(_OcvXmlBase)net8.0\OpenCvSharp.xml')"
-            >$(_OcvXmlBase)net8.0\OpenCvSharp.xml</_OcvXmlPath
-        >
-        <_OcvXmlPath
-            Condition="'$(_OcvXmlPath)' == '' AND Exists('$(_OcvXmlBase)net6.0\OpenCvSharp.xml')"
-            >$(_OcvXmlBase)net6.0\OpenCvSharp.xml</_OcvXmlPath
-        >
-        <_OcvXmlPath
-            Condition="'$(_OcvXmlPath)' == '' AND Exists('$(_OcvXmlBase)netstandard2.1\OpenCvSharp.xml')"
-            >$(_OcvXmlBase)netstandard2.1\OpenCvSharp.xml</_OcvXmlPath
-        >
-        <_OcvXmlPath
-            Condition="'$(_OcvXmlPath)' == '' AND Exists('$(_OcvXmlBase)netstandard2.0\OpenCvSharp.xml')"
-            >$(_OcvXmlBase)netstandard2.0\OpenCvSharp.xml</_OcvXmlPath
-        >
-    </PropertyGroup>
-    <ItemGroup>
-        <None
-            Include="$(_OcvXmlPath)"
-            CopyToOutputDirectory="PreserveNewest"
-            Link="OpenCvSharp.xml"
-            Visible="false"
-            Condition="'$(_OcvXmlPath)' != ''"
-        />
     </ItemGroup>
 </Project>

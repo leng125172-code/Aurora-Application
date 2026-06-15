@@ -4,6 +4,7 @@ using AuroraStruct3D.DeviceState;
 using AuroraStruct3D.Motors;
 using AuroraStruct3D.ProductModels;
 using AuroraStruct3D.Projectors;
+using AuroraStruct3D.Projects;
 using AuroraStruct3D.SerialPorts;
 using Microsoft.EntityFrameworkCore;
 
@@ -86,5 +87,10 @@ namespace AuroraStruct3D.EntityFrameworkCore
 
         /// <summary>串口操作日志集合</summary>
         DbSet<SerialPortOperationLog> SerialPortOperationLogs { get; }
+
+        // ── 项目管理模块 ──────────────────────────────────────────────────────
+
+        /// <summary>项目主表集合</summary>
+        DbSet<ProjectInfo> ProjectInfos { get; }
     }
 }

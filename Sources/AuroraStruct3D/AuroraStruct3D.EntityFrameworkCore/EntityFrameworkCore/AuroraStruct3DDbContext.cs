@@ -5,6 +5,7 @@ using AuroraStruct3D.DeviceState;
 using AuroraStruct3D.Motors;
 using AuroraStruct3D.ProductModels;
 using AuroraStruct3D.Projectors;
+using AuroraStruct3D.Projects;
 using AuroraStruct3D.SerialPorts;
 using Lion.AbpPro.BasicManagement.UserRefreshTokens;
 using Lion.AbpPro.CodeManagement.DataTypes.Aggregates;
@@ -138,6 +139,9 @@ namespace AuroraStruct3D.EntityFrameworkCore
         public DbSet<AiModelIdentifierLink> AiModelIdentifierLinks { get; set; }
         public DbSet<AiModelOperationLog> AiModelOperationLogs { get; set; }
 
+        // ── 项目管理模块 ─────────────────────────────────────────────────────────
+        public DbSet<ProjectInfo> ProjectInfos { get; set; }
+
         public AuroraStruct3DDbContext(DbContextOptions<AuroraStruct3DDbContext> options)
             : base(options) { }
 
@@ -197,6 +201,9 @@ namespace AuroraStruct3D.EntityFrameworkCore
 
             // 标定模块
             builder.ConfigureCalibration();
+
+            // 项目管理模块
+            builder.ConfigureProjectInfo();
         }
     }
 }

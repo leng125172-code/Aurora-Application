@@ -1,0 +1,11 @@
+  姝ｅ湪纭畾瑕佽繕鍘熺殑椤圭洰鈥?
+  鎵€鏈夐」鐩潎鏄渶鏂扮殑锛屾棤娉曡繕鍘熴€?
+C:\Program Files\dotnet\sdk\10.0.300\Current\SolutionFile\ImportAfter\Microsoft.NET.Sdk.Solution.targets(27,5): error NETSDK1134: 涓嶆敮鎸佷娇鐢ㄧ壒瀹?RuntimeIdentifier 鐢熸垚瑙ｅ喅鏂规銆傚鏋滆涓哄崟涓?RID 鍙戝竷锛岃鏀逛负鍦ㄥ崟鐙殑椤圭洰绾у埆鎸囧畾 RID銆?[D:\GitRepos\Aurora Application\Aurora Application.slnx]
+
+鐢熸垚澶辫触銆?
+
+C:\Program Files\dotnet\sdk\10.0.300\Current\SolutionFile\ImportAfter\Microsoft.NET.Sdk.Solution.targets(27,5): error NETSDK1134: 涓嶆敮鎸佷娇鐢ㄧ壒瀹?RuntimeIdentifier 鐢熸垚瑙ｅ喅鏂规銆傚鏋滆涓哄崟涓?RID 鍙戝竷锛岃鏀逛负鍦ㄥ崟鐙殑椤圭洰绾у埆鎸囧畾 RID銆?[D:\GitRepos\Aurora Application\Aurora Application.slnx]
+    0 涓鍛?
+    1 涓敊璇?
+
+宸茬敤鏃堕棿 00:00:29.25
