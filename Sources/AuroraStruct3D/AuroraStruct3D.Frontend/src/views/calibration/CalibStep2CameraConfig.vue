@@ -312,7 +312,6 @@ const { t } = useI18n()
                                 </div>
                             </div>
                         </div>
-
                         <div class="flex justify-end pt-2">
                             <Button
                                 size="small"

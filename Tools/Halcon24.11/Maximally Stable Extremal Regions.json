@@ -1,0 +1,8 @@
+{
+  "通用": [
+    {
+      "name": "segment_image_mser",
+      "short": "Segment image using Maximally Stable Extremal Regions (MSER)."
+    }
+  ]
+}

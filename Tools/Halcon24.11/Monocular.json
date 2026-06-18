@@ -1,0 +1,8 @@
+{
+  "通用": [
+    {
+      "name": "camera_calibration",
+      "short": "Determine all camera parameters by a simultaneous minimization"
+    }
+  ]
+}

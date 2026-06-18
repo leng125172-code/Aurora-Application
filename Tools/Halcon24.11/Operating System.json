@@ -1,0 +1,20 @@
+{
+  "通用": [
+    {
+      "name": "get_system_time",
+      "short": "Read out the system time."
+    },
+    {
+      "name": "wait_seconds",
+      "short": "Delaying the execution of the program."
+    },
+    {
+      "name": "system_call",
+      "short": "Execute a system command."
+    },
+    {
+      "name": "count_seconds",
+      "short": "Passed Time."
+    }
+  ]
+}

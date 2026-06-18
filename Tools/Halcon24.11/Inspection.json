@@ -1,0 +1,220 @@
+{
+  "通用": [
+    {
+      "name": "deserialize_variation_model",
+      "short": "Deserialize a variation model."
+    },
+    {
+      "name": "serialize_variation_model",
+      "short": "Serialize a variation model."
+    },
+    {
+      "name": "read_variation_model",
+      "short": "Read a variation model from a file."
+    },
+    {
+      "name": "write_variation_model",
+      "short": "Write a variation model to a file."
+    },
+    {
+      "name": "get_thresh_images_variation_model",
+      "short": "Return the threshold images used for image comparison by a variation"
+    },
+    {
+      "name": "get_variation_model",
+      "short": "Return the images used for image comparison by a variation model."
+    },
+    {
+      "name": "compare_ext_variation_model",
+      "short": "Compare an image to a variation model."
+    },
+    {
+      "name": "compare_variation_model",
+      "short": "Compare an image to a variation model."
+    },
+    {
+      "name": "prepare_direct_variation_model",
+      "short": "Prepare a variation model for comparison with an image."
+    },
+    {
+      "name": "prepare_variation_model",
+      "short": "Prepare a variation model for comparison with an image."
+    },
+    {
+      "name": "train_variation_model",
+      "short": "Train a variation model."
+    },
+    {
+      "name": "clear_variation_model",
+      "short": "Free the memory of a variation model."
+    },
+    {
+      "name": "clear_train_data_variation_model",
+      "short": "Free the memory of the training data of a variation model."
+    },
+    {
+      "name": "create_variation_model",
+      "short": "Create a variation model for image comparison."
+    },
+    {
+      "name": "do_ocv_simple",
+      "short": "Verification of a pattern using an OCV tool."
+    },
+    {
+      "name": "traind_ocv_proj",
+      "short": "Training of an OCV tool."
+    },
+    {
+      "name": "deserialize_ocv",
+      "short": "Deserialize a serialized OCV tool."
+    },
+    {
+      "name": "serialize_ocv",
+      "short": "Serialize an OCV tool."
+    },
+    {
+      "name": "read_ocv",
+      "short": "Reading an OCV tool from file."
+    },
+    {
+      "name": "write_ocv",
+      "short": "Saving an OCV tool to file."
+    },
+    {
+      "name": "close_ocv",
+      "short": "Clear an OCV tool."
+    },
+    {
+      "name": "create_ocv_proj",
+      "short": "Create a new OCV tool based on gray value projections."
+    },
+    {
+      "name": "get_bead_inspection_param",
+      "short": "Get the value of a parameter in a specific bead inspection model."
+    },
+    {
+      "name": "set_bead_inspection_param",
+      "short": "Set parameters of the bead inspection model."
+    },
+    {
+      "name": "apply_bead_inspection_model",
+      "short": "Inspect beads in an image, as defined by the bead inspection"
+    },
+    {
+      "name": "clear_bead_inspection_model",
+      "short": "Delete the bead inspection model and free the allocated memory."
+    },
+    {
+      "name": "create_bead_inspection_model",
+      "short": "Create a model to inspect beads or adhesive in images."
+    },
+    {
+      "name": "add_texture_inspection_model_image",
+      "short": "Add training images to the texture inspection model."
+    },
+    {
+      "name": "apply_texture_inspection_model",
+      "short": "Inspection of the texture within an image."
+    },
+    {
+      "name": "clear_texture_inspection_model",
+      "short": "Clear a texture inspection model and free the allocated memory."
+    },
+    {
+      "name": "clear_texture_inspection_result",
+      "short": "Clear a texture inspection result handle and free the allocated memory."
+    },
+    {
+      "name": "create_texture_inspection_model",
+      "short": "Create a texture inspection model."
+    },
+    {
+      "name": "deserialize_texture_inspection_model",
+      "short": "Deserialize a serialized texture inspection model."
+    },
+    {
+      "name": "get_texture_inspection_model_image",
+      "short": "Get the training images contained in a texture inspection model."
+    },
+    {
+      "name": "get_texture_inspection_model_param",
+      "short": "Query parameters of a texture inspection model."
+    },
+    {
+      "name": "get_texture_inspection_result_object",
+      "short": "Query iconic results of a texture inspection."
+    },
+    {
+      "name": "read_texture_inspection_model",
+      "short": "Read a texture inspection model from a file."
+    },
+    {
+      "name": "remove_texture_inspection_model_image",
+      "short": "Clear all or a user-defined subset of the images of a"
+    },
+    {
+      "name": "serialize_texture_inspection_model",
+      "short": "Serialize a texture inspection model."
+    },
+    {
+      "name": "set_texture_inspection_model_param",
+      "short": "Set parameters of a texture inspection model."
+    },
+    {
+      "name": "train_texture_inspection_model",
+      "short": "Train a texture inspection model."
+    },
+    {
+      "name": "write_texture_inspection_model",
+      "short": "Write a texture inspection model to a file."
+    },
+    {
+      "name": "clear_structured_light_model",
+      "short": "Clear a structured light model and free the allocated memory."
+    },
+    {
+      "name": "create_structured_light_model",
+      "short": "Create a structured light model."
+    },
+    {
+      "name": "decode_structured_light_pattern",
+      "short": "Decode the camera images acquired with a structured light setup."
+    },
+    {
+      "name": "deserialize_structured_light_model",
+      "short": "Deserialize a structured light model."
+    },
+    {
+      "name": "gen_structured_light_pattern",
+      "short": "Generate the pattern images to be displayed in a structured light setup."
+    },
+    {
+      "name": "get_structured_light_model_param",
+      "short": "Query parameters of a structured light model."
+    },
+    {
+      "name": "get_structured_light_object",
+      "short": "Get (intermediate) iconic results of a structured light model."
+    },
+    {
+      "name": "read_structured_light_model",
+      "short": "Read a structured light model from a file."
+    },
+    {
+      "name": "serialize_structured_light_model",
+      "short": "Serialize a structured light model."
+    },
+    {
+      "name": "set_structured_light_model_param",
+      "short": "Set parameters of a structured light model."
+    },
+    {
+      "name": "write_structured_light_model",
+      "short": "Write a structured light model to a file."
+    },
+    {
+      "name": "reconstruct_surface_structured_light",
+      "short": "Reconstruct a surface from a decoded structured light setup."
+    }
+  ]
+}

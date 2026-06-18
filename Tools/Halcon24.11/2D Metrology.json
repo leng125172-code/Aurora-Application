@@ -1,0 +1,132 @@
+{
+  "通用": [
+    {
+      "name": "get_metrology_object_model_contour",
+      "short": "Query the model contour of a metrology object in image coordinates. "
+    },
+    {
+      "name": "get_metrology_object_result_contour",
+      "short": "Query the result contour of a metrology object. "
+    },
+    {
+      "name": "align_metrology_model",
+      "short": "Alignment of a metrology model."
+    },
+    {
+      "name": "add_metrology_object_generic",
+      "short": "Add a metrology object to a metrology model."
+    },
+    {
+      "name": "get_metrology_model_param",
+      "short": "Get parameters that are valid for the entire metrology model."
+    },
+    {
+      "name": "set_metrology_model_param",
+      "short": "Set parameters that are valid for the entire metrology model."
+    },
+    {
+      "name": "deserialize_metrology_model",
+      "short": "Deserialize a serialized metrology model."
+    },
+    {
+      "name": "serialize_metrology_model",
+      "short": "Serialize a metrology model."
+    },
+    {
+      "name": "transform_metrology_object",
+      "short": "Transform metrology objects of a metrology model, e.g., for alignment."
+    },
+    {
+      "name": "write_metrology_model",
+      "short": "Write a metrology model to a file."
+    },
+    {
+      "name": "read_metrology_model",
+      "short": "Read a metrology model from a file."
+    },
+    {
+      "name": "copy_metrology_model",
+      "short": "Copy a metrology model."
+    },
+    {
+      "name": "copy_metrology_object",
+      "short": "Copy metrology metrology objects of a metrology model."
+    },
+    {
+      "name": "get_metrology_object_num_instances",
+      "short": "Get the number of instances of the metrology objects of a metrology model."
+    },
+    {
+      "name": "get_metrology_object_result",
+      "short": "Get the results of the measurement of a metrology model."
+    },
+    {
+      "name": "get_metrology_object_measures",
+      "short": "Get the measure regions and the results of the edge location for the"
+    },
+    {
+      "name": "apply_metrology_model",
+      "short": "Measure and fit the geometric shapes of all metrology objects of"
+    },
+    {
+      "name": "get_metrology_object_indices",
+      "short": "Get the indices of the metrology objects of a metrology model."
+    },
+    {
+      "name": "reset_metrology_object_fuzzy_param",
+      "short": "Reset all fuzzy parameters and fuzzy functions of a metrology"
+    },
+    {
+      "name": "reset_metrology_object_param",
+      "short": "Reset all parameters of a metrology model."
+    },
+    {
+      "name": "get_metrology_object_fuzzy_param",
+      "short": "Get a fuzzy parameter of a metrology model."
+    },
+    {
+      "name": "get_metrology_object_param",
+      "short": "Get one or several parameters of a metrology model."
+    },
+    {
+      "name": "set_metrology_object_fuzzy_param",
+      "short": "Set fuzzy parameters or fuzzy functions for a metrology model."
+    },
+    {
+      "name": "set_metrology_object_param",
+      "short": "Set parameters for the metrology objects of a metrology model."
+    },
+    {
+      "name": "add_metrology_object_rectangle2_measure",
+      "short": "Add a rectangle to a metrology model."
+    },
+    {
+      "name": "add_metrology_object_line_measure",
+      "short": "Add a line to a metrology model."
+    },
+    {
+      "name": "add_metrology_object_ellipse_measure",
+      "short": "Add an ellipse or an elliptic arc to a metrology model."
+    },
+    {
+      "name": "add_metrology_object_circle_measure",
+      "short": "Add a circle or a circular arc to a metrology model."
+    },
+    {
+      "name": "clear_metrology_model",
+      "short": "Delete a metrology model and free the allocated memory."
+    },
+    {
+      "name": "clear_metrology_object",
+      "short": "Delete metrology objects and free the allocated memory."
+    },
+    {
+      "name": "set_metrology_model_image_size",
+      "short": "Set the size of the image of metrology objects."
+    },
+    {
+      "name": "create_metrology_model",
+      "short": "Create the data structure that is needed to measure geometric shapes."
+    }
+  ]
+}

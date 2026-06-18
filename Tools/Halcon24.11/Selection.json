@@ -1,0 +1,48 @@
+{
+  "通用": [
+    {
+      "name": "tuple_select_rank",
+      "short": "Select the element of rank n of a tuple."
+    },
+    {
+      "name": "tuple_uniq",
+      "short": "Discard all but one of successive identical elements of a tuple."
+    },
+    {
+      "name": "tuple_find_last",
+      "short": "Return the index of the last occurrence of a tuple within another tuple."
+    },
+    {
+      "name": "tuple_find_first",
+      "short": "Return the index of the first occurrence of a tuple within another tuple."
+    },
+    {
+      "name": "tuple_find",
+      "short": "Return the indices of all occurrences of a tuple within another tuple."
+    },
+    {
+      "name": "tuple_select_range",
+      "short": "Select several elements of a tuple."
+    },
+    {
+      "name": "tuple_last_n",
+      "short": "Select all elements from index \"n\" to the end of a tuple."
+    },
+    {
+      "name": "tuple_first_n",
+      "short": "Select the first elements of a tuple up to the index \"n\"."
+    },
+    {
+      "name": "tuple_select_mask",
+      "short": "Select in mask specified elements of a tuple."
+    },
+    {
+      "name": "tuple_select",
+      "short": "Select single elements of a tuple."
+    },
+    {
+      "name": "tuple_str_bit_select",
+      "short": "Select single character or bit from a tuple."
+    }
+  ]
+}

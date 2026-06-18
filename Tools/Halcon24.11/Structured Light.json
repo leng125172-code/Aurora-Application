@@ -1,0 +1,52 @@
+{
+  "通用": [
+    {
+      "name": "clear_structured_light_model",
+      "short": "Clear a structured light model and free the allocated memory."
+    },
+    {
+      "name": "create_structured_light_model",
+      "short": "Create a structured light model."
+    },
+    {
+      "name": "decode_structured_light_pattern",
+      "short": "Decode the camera images acquired with a structured light setup."
+    },
+    {
+      "name": "deserialize_structured_light_model",
+      "short": "Deserialize a structured light model."
+    },
+    {
+      "name": "gen_structured_light_pattern",
+      "short": "Generate the pattern images to be displayed in a structured light setup."
+    },
+    {
+      "name": "get_structured_light_model_param",
+      "short": "Query parameters of a structured light model."
+    },
+    {
+      "name": "get_structured_light_object",
+      "short": "Get (intermediate) iconic results of a structured light model."
+    },
+    {
+      "name": "read_structured_light_model",
+      "short": "Read a structured light model from a file."
+    },
+    {
+      "name": "serialize_structured_light_model",
+      "short": "Serialize a structured light model."
+    },
+    {
+      "name": "set_structured_light_model_param",
+      "short": "Set parameters of a structured light model."
+    },
+    {
+      "name": "write_structured_light_model",
+      "short": "Write a structured light model to a file."
+    },
+    {
+      "name": "reconstruct_surface_structured_light",
+      "short": "Reconstruct a surface from a decoded structured light setup."
+    }
+  ]
+}

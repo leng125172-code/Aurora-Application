@@ -1,0 +1,68 @@
+{
+  "通用": [
+    {
+      "name": "tuple_is_string_elem",
+      "short": "Test whether the types of the elements of a tuple are of type"
+    },
+    {
+      "name": "tuple_is_real_elem",
+      "short": "Test whether the types of the elements of a tuple are of type real."
+    },
+    {
+      "name": "tuple_is_int_elem",
+      "short": "Test whether the types of the elements of a tuple are of type"
+    },
+    {
+      "name": "tuple_type_elem",
+      "short": "Return the types of the elements of a tuple."
+    },
+    {
+      "name": "tuple_is_mixed",
+      "short": "Test whether a tuple is of type mixed."
+    },
+    {
+      "name": "tuple_is_string",
+      "short": "Test if the internal representation of a tuple is of type string."
+    },
+    {
+      "name": "tuple_is_real",
+      "short": "Test if the internal representation of a tuple is of type real."
+    },
+    {
+      "name": "tuple_is_int",
+      "short": "Test if the internal representation of a tuple is of type integer."
+    },
+    {
+      "name": "tuple_type",
+      "short": "Return the type of a tuple."
+    },
+    {
+      "name": "tuple_is_number",
+      "short": "Check a tuple (of strings) whether it represents numbers."
+    },
+    {
+      "name": "tuple_is_handle",
+      "short": "Test if the internal representation of a tuple is of type handle."
+    },
+    {
+      "name": "tuple_is_handle_elem",
+      "short": "Test whether the elements of a tuple are of type handle."
+    },
+    {
+      "name": "tuple_is_valid_handle",
+      "short": "Check if a handle is valid."
+    },
+    {
+      "name": "tuple_sem_type",
+      "short": "Return the semantic type of a tuple."
+    },
+    {
+      "name": "tuple_sem_type_elem",
+      "short": "Return the semantic type of the elements of a tuple."
+    },
+    {
+      "name": "tuple_is_nan_elem",
+      "short": "Check a tuple whether it represents NaNs (Not-a-number)."
+    }
+  ]
+}

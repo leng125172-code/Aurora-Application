@@ -1,0 +1,28 @@
+{
+  "通用": [
+    {
+      "name": "apply_deep_ocr",
+      "short": "Apply a Deep OCR model on a set of images for inference."
+    },
+    {
+      "name": "create_deep_ocr",
+      "short": "Create a Deep OCR model."
+    },
+    {
+      "name": "get_deep_ocr_param",
+      "short": "Return the parameters of a Deep OCR model."
+    },
+    {
+      "name": "read_deep_ocr",
+      "short": "Read a Deep OCR model from a file."
+    },
+    {
+      "name": "set_deep_ocr_param",
+      "short": "Set the parameters of a Deep OCR model."
+    },
+    {
+      "name": "write_deep_ocr",
+      "short": "Write a Deep OCR model in a file."
+    }
+  ]
+}

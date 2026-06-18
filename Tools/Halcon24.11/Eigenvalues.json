@@ -1,0 +1,20 @@
+{
+  "通用": [
+    {
+      "name": "generalized_eigenvalues_general_matrix",
+      "short": "Compute the generalized eigenvalues and optionally the generalized"
+    },
+    {
+      "name": "generalized_eigenvalues_symmetric_matrix",
+      "short": "Compute the generalized eigenvalues and optionally generalized"
+    },
+    {
+      "name": "eigenvalues_general_matrix",
+      "short": "Compute the eigenvalues and optionally the eigenvectors of a general"
+    },
+    {
+      "name": "eigenvalues_symmetric_matrix",
+      "short": "Compute the eigenvalues and optionally eigenvectors of a symmetric"
+    }
+  ]
+}

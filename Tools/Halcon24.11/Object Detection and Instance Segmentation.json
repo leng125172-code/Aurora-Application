@@ -1,0 +1,8 @@
+{
+  "通用": [
+    {
+      "name": "create_dl_model_detection",
+      "short": "Create a deep learning network for object detection or instance segmentation."
+    }
+  ]
+}

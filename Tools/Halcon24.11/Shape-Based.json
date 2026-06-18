@@ -1,0 +1,200 @@
+{
+  "通用": [
+    {
+      "name": "deserialize_shape_model",
+      "short": "Deserialize a serialized shape model."
+    },
+    {
+      "name": "read_shape_model",
+      "short": "Read a shape model from a file."
+    },
+    {
+      "name": "serialize_shape_model",
+      "short": "Serialize a shape model."
+    },
+    {
+      "name": "write_shape_model",
+      "short": "Write a shape model to a file."
+    },
+    {
+      "name": "clear_shape_model",
+      "short": "Free the memory of a shape model."
+    },
+    {
+      "name": "get_shape_model_contours",
+      "short": "Return the contour representation of a shape model."
+    },
+    {
+      "name": "determine_shape_model_params",
+      "short": "Determine the parameters of a shape model."
+    },
+    {
+      "name": "get_shape_model_params",
+      "short": "Return the parameters of a shape model."
+    },
+    {
+      "name": "get_shape_model_origin",
+      "short": "Return the origin (reference point) of a shape model."
+    },
+    {
+      "name": "set_shape_model_origin",
+      "short": "Set the origin (reference point) of a shape model."
+    },
+    {
+      "name": "find_aniso_shape_models",
+      "short": "Find the best matches of multiple anisotropically scaled shape"
+    },
+    {
+      "name": "find_scaled_shape_models",
+      "short": "Find the best matches of multiple isotropically scaled shape models."
+    },
+    {
+      "name": "find_shape_models",
+      "short": "Find the best matches of multiple shape models."
+    },
+    {
+      "name": "find_aniso_shape_model",
+      "short": "Find the best matches of an anisotropically scaled shape model"
+    },
+    {
+      "name": "find_scaled_shape_model",
+      "short": "Find the best matches of an isotropically scaled shape model in an image."
+    },
+    {
+      "name": "find_shape_model",
+      "short": "Find the best matches of a shape model in an image."
+    },
+    {
+      "name": "set_shape_model_metric",
+      "short": "Set the metric of a shape model that was created from XLD contours."
+    },
+    {
+      "name": "set_shape_model_param",
+      "short": "Set selected parameters of the shape model."
+    },
+    {
+      "name": "create_aniso_shape_model_xld",
+      "short": "Prepare an anisotropically scaled shape model for matching"
+    },
+    {
+      "name": "create_scaled_shape_model_xld",
+      "short": "Prepare an isotropically scaled shape model for matching from XLD contours."
+    },
+    {
+      "name": "create_shape_model_xld",
+      "short": "Prepare a shape model for matching from XLD contours."
+    },
+    {
+      "name": "create_aniso_shape_model",
+      "short": "Prepare an anisotropically scaled shape model for matching."
+    },
+    {
+      "name": "create_scaled_shape_model",
+      "short": "Prepare an isotropically scaled shape model for matching."
+    },
+    {
+      "name": "create_shape_model",
+      "short": "Prepare a shape model for matching."
+    },
+    {
+      "name": "inspect_shape_model",
+      "short": "Create the representation of a shape model."
+    },
+    {
+      "name": "create_cam_pose_look_at_point",
+      "short": "Create a 3D camera pose from camera center and viewing direction."
+    },
+    {
+      "name": "clear_shape_model_3d",
+      "short": "Free the memory of a 3D shape model."
+    },
+    {
+      "name": "deserialize_shape_model_3d",
+      "short": "Deserialize a serialized 3D shape model."
+    },
+    {
+      "name": "serialize_shape_model_3d",
+      "short": "Serialize a 3D shape model."
+    },
+    {
+      "name": "read_shape_model_3d",
+      "short": "Read a 3D shape model from a file."
+    },
+    {
+      "name": "write_shape_model_3d",
+      "short": "Write a 3D shape model to a file."
+    },
+    {
+      "name": "trans_pose_shape_model_3d",
+      "short": "Transform a pose that refers to the coordinate system of a 3D object"
+    },
+    {
+      "name": "project_shape_model_3d",
+      "short": "Project the edges of a 3D shape model into image coordinates."
+    },
+    {
+      "name": "get_shape_model_3d_contours",
+      "short": "Return the contour representation of a 3D shape model view."
+    },
+    {
+      "name": "get_shape_model_3d_params",
+      "short": "Return the parameters of a 3D shape model."
+    },
+    {
+      "name": "find_shape_model_3d",
+      "short": "Find the best matches of a 3D shape model in an image."
+    },
+    {
+      "name": "create_shape_model_3d",
+      "short": "Prepare a 3D object model for matching."
+    },
+    {
+      "name": "get_shape_model_clutter",
+      "short": "Get the clutter parameters of a shape model."
+    },
+    {
+      "name": "set_shape_model_clutter",
+      "short": "Set the clutter parameters of a shape model."
+    },
+    {
+      "name": "adapt_shape_model_high_noise",
+      "short": "Adapt a shape model's parameters for high noise images."
+    },
+    {
+      "name": "create_generic_shape_model",
+      "short": "Create a shape model."
+    },
+    {
+      "name": "find_generic_shape_model",
+      "short": "Find the best matches of one or multiple shape models in an image."
+    },
+    {
+      "name": "get_generic_shape_model_param",
+      "short": "Return the parameters of a shape model."
+    },
+    {
+      "name": "get_generic_shape_model_result",
+      "short": "Get alphanumerical values from a shape matching result."
+    },
+    {
+      "name": "get_generic_shape_model_result_object",
+      "short": "Get objects from a shape matching result."
+    },
+    {
+      "name": "set_generic_shape_model_object",
+      "short": "Set iconic objects to the shape model."
+    },
+    {
+      "name": "set_generic_shape_model_param",
+      "short": "Set selected parameters of the shape model."
+    },
+    {
+      "name": "train_generic_shape_model",
+      "short": "Train a shape model for matching."
+    },
+    {
+      "name": "get_generic_shape_model_object",
+      "short": "Get iconic objects of the shape model."
+    }
+  ]
+}

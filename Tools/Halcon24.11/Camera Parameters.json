@@ -1,0 +1,28 @@
+{
+  "通用": [
+    {
+      "name": "cam_par_to_cam_mat",
+      "short": "Compute a camera matrix from internal camera parameters."
+    },
+    {
+      "name": "cam_mat_to_cam_par",
+      "short": "Compute the internal camera parameters from a camera matrix."
+    },
+    {
+      "name": "deserialize_cam_par",
+      "short": "  Deserialize the serialized internal camera parameters."
+    },
+    {
+      "name": "serialize_cam_par",
+      "short": "Serialize the internal camera parameters."
+    },
+    {
+      "name": "read_cam_par",
+      "short": "Read internal camera parameters from a file."
+    },
+    {
+      "name": "write_cam_par",
+      "short": "Write internal camera parameters into a file."
+    }
+  ]
+}

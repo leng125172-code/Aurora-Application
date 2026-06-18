@@ -1,0 +1,80 @@
+{
+  "通用": [
+    {
+      "name": "union2_closed_polygons_xld",
+      "short": "Compute the union of closed polygons."
+    },
+    {
+      "name": "union2_closed_contours_xld",
+      "short": "Compute the union of closed contours."
+    },
+    {
+      "name": "symm_difference_closed_polygons_xld",
+      "short": "Compute the symmetric difference of closed polygons."
+    },
+    {
+      "name": "symm_difference_closed_contours_xld",
+      "short": "Compute the symmetric difference of closed contours."
+    },
+    {
+      "name": "difference_closed_polygons_xld",
+      "short": "Compute the difference of closed polygons."
+    },
+    {
+      "name": "difference_closed_contours_xld",
+      "short": "Compute the difference of closed contours."
+    },
+    {
+      "name": "intersection_closed_polygons_xld",
+      "short": "Intersect closed polygons."
+    },
+    {
+      "name": "intersection_closed_contours_xld",
+      "short": "Intersect closed contours."
+    },
+    {
+      "name": "tuple_union",
+      "short": "Compute the union set of two input tuples."
+    },
+    {
+      "name": "tuple_intersection",
+      "short": "Compute the intersection set of two input tuples."
+    },
+    {
+      "name": "tuple_difference",
+      "short": "Compute the difference set of two input tuples."
+    },
+    {
+      "name": "tuple_symmdiff",
+      "short": "Compute the symmetric difference set of two input tuples."
+    },
+    {
+      "name": "union2",
+      "short": "Return the union of two regions."
+    },
+    {
+      "name": "union1",
+      "short": "Return the union of all input regions."
+    },
+    {
+      "name": "intersection",
+      "short": "Calculate the intersection of two regions."
+    },
+    {
+      "name": "symm_difference",
+      "short": "Calculate the symmetric difference of two regions."
+    },
+    {
+      "name": "difference",
+      "short": "Calculate the difference of two regions."
+    },
+    {
+      "name": "complement",
+      "short": "Return the complement of a region."
+    },
+    {
+      "name": "intersection_region_contour_xld",
+      "short": "Intersect a contour with a region."
+    }
+  ]
+}

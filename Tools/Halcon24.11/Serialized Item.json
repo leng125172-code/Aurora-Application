@@ -1,0 +1,32 @@
+{
+  "通用": [
+    {
+      "name": "fwrite_serialized_item",
+      "short": "Write a serialized item to a file."
+    },
+    {
+      "name": "fread_serialized_item",
+      "short": "Read a serialized item from a file."
+    },
+    {
+      "name": "clear_serialized_item",
+      "short": "Delete a serialized item."
+    },
+    {
+      "name": "get_serialized_item_ptr",
+      "short": "Access the data pointer of a serialized item."
+    },
+    {
+      "name": "create_serialized_item_ptr",
+      "short": "Create a serialized item."
+    },
+    {
+      "name": "decrypt_serialized_item",
+      "short": "Decrypt an encrypted item."
+    },
+    {
+      "name": "encrypt_serialized_item",
+      "short": "Encrypt a serialized item."
+    }
+  ]
+}

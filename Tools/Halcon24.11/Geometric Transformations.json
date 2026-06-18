@@ -1,0 +1,108 @@
+{
+  "通用": [
+    {
+      "name": "polar_trans_contour_xld_inv",
+      "short": "Transform a contour in polar coordinates back to Cartesian coordinates"
+    },
+    {
+      "name": "polar_trans_contour_xld",
+      "short": "Transform a contour in an annular arc to polar coordinates."
+    },
+    {
+      "name": "gen_parallel_contour_xld",
+      "short": "Compute the parallel contour of an XLD contour."
+    },
+    {
+      "name": "projective_trans_contour_xld",
+      "short": "Apply a projective transformation to an XLD contour."
+    },
+    {
+      "name": "affine_trans_polygon_xld",
+      "short": "Apply an arbitrary affine transformation to XLD polygons."
+    },
+    {
+      "name": "affine_trans_contour_xld",
+      "short": "Apply an arbitrary affine 2D transformation to XLD contours."
+    },
+    {
+      "name": "polar_trans_region_inv",
+      "short": "Transform a region in polar coordinates back to Cartesian"
+    },
+    {
+      "name": "polar_trans_region",
+      "short": "Transform a region within an annular arc to polar coordinates."
+    },
+    {
+      "name": "projective_trans_region",
+      "short": "Apply a projective transformation to a region."
+    },
+    {
+      "name": "affine_trans_region",
+      "short": "Apply an arbitrary affine 2D transformation to regions."
+    },
+    {
+      "name": "mirror_region",
+      "short": "Reflect a region about an axis."
+    },
+    {
+      "name": "zoom_region",
+      "short": "Zoom a region."
+    },
+    {
+      "name": "move_region",
+      "short": "Translate a region."
+    },
+    {
+      "name": "transpose_region",
+      "short": "Reflect a region about a point."
+    },
+    {
+      "name": "projective_trans_image_size",
+      "short": "Apply a projective transformation to an image and specify the output"
+    },
+    {
+      "name": "projective_trans_image",
+      "short": "Apply a projective transformation to an image."
+    },
+    {
+      "name": "affine_trans_image_size",
+      "short": "Apply an arbitrary affine 2D transformation to an image and specify"
+    },
+    {
+      "name": "affine_trans_image",
+      "short": "Apply an arbitrary affine 2D transformation to images."
+    },
+    {
+      "name": "zoom_image_factor",
+      "short": "Zoom an image by a given factor."
+    },
+    {
+      "name": "zoom_image_size",
+      "short": "Zoom an image to a given size."
+    },
+    {
+      "name": "mirror_image",
+      "short": "Mirror an image."
+    },
+    {
+      "name": "rotate_image",
+      "short": "Rotate an image about its center."
+    },
+    {
+      "name": "polar_trans_image_inv",
+      "short": "Transform an image in polar coordinates back to Cartesian coordinates"
+    },
+    {
+      "name": "polar_trans_image_ext",
+      "short": "Transform an annular arc in an image to polar coordinates."
+    },
+    {
+      "name": "convert_map_type",
+      "short": "Convert image maps into other map types."
+    },
+    {
+      "name": "map_image",
+      "short": "Apply a general transformation to an image."
+    }
+  ]
+}

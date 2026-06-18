@@ -1,0 +1,324 @@
+{
+  "通用": [
+    {
+      "name": "gen_nurbs_interp",
+      "short": "Create control data of a NURBS curve that interpolates given points."
+    },
+    {
+      "name": "gen_contour_nurbs_xld",
+      "short": "Transform a NURBS curve into an XLD contour."
+    },
+    {
+      "name": "gen_cross_contour_xld",
+      "short": "Generate one XLD contour in the shape of a cross for each input point."
+    },
+    {
+      "name": "gen_rectangle2_contour_xld",
+      "short": "Create an XLD contour in the shape of a rectangle."
+    },
+    {
+      "name": "gen_circle_contour_xld",
+      "short": "Create XLD contours corresponding to circles or circular arcs."
+    },
+    {
+      "name": "gen_ellipse_contour_xld",
+      "short": "Create an XLD contour that corresponds to an elliptic arc."
+    },
+    {
+      "name": "mod_parallels_xld",
+      "short": "Extract parallel XLD polygons enclosing a homogeneous area."
+    },
+    {
+      "name": "gen_parallels_xld",
+      "short": "Extract parallel XLD polygons."
+    },
+    {
+      "name": "gen_polygons_xld",
+      "short": "Approximate XLD contours by polygons."
+    },
+    {
+      "name": "gen_contour_region_xld",
+      "short": "Generate XLD contours from regions."
+    },
+    {
+      "name": "gen_contour_polygon_rounded_xld",
+      "short": "Generate an XLD contour with rounded corners from a polygon (given"
+    },
+    {
+      "name": "gen_contour_polygon_xld",
+      "short": "Generate an XLD contour from a polygon (given as tuples)."
+    },
+    {
+      "name": "gen_contours_skeleton_xld",
+      "short": "Convert a skeleton into XLD contours."
+    },
+    {
+      "name": "tuple_rand",
+      "short": "Return a tuple of random numbers between 0 and 1."
+    },
+    {
+      "name": "tuple_concat",
+      "short": "Concatenate two tuples to a new one."
+    },
+    {
+      "name": "tuple_gen_sequence",
+      "short": "Generate a tuple with a sequence of equidistant values."
+    },
+    {
+      "name": "tuple_gen_const",
+      "short": "Generate a tuple of a specific length and initialize its elements."
+    },
+    {
+      "name": "label_to_region",
+      "short": "Extract regions with equal gray values from an image."
+    },
+    {
+      "name": "region_to_label",
+      "short": "Convert regions to a label image."
+    },
+    {
+      "name": "region_to_bin",
+      "short": "Convert a region into a binary byte-image."
+    },
+    {
+      "name": "gen_region_histo",
+      "short": "Convert a histogram into a region."
+    },
+    {
+      "name": "gen_image_proto",
+      "short": "Create an image with a specified constant gray value."
+    },
+    {
+      "name": "copy_image",
+      "short": "Copy an image and allocate new memory for it."
+    },
+    {
+      "name": "gen_image_interleaved",
+      "short": "Create a three-channel image from a pointer to the interleaved pixels."
+    },
+    {
+      "name": "gen_region_polygon_xld",
+      "short": "Create a region from an XLD polygon."
+    },
+    {
+      "name": "gen_region_contour_xld",
+      "short": "Create a region from an XLD contour."
+    },
+    {
+      "name": "gen_region_polygon_filled",
+      "short": "Store a polygon as a \"filled\" region."
+    },
+    {
+      "name": "gen_region_polygon",
+      "short": "Store a polygon as a region."
+    },
+    {
+      "name": "gen_region_points",
+      "short": "Store individual pixels as image region."
+    },
+    {
+      "name": "gen_region_runs",
+      "short": "Create a region from a runlength coding."
+    },
+    {
+      "name": "gen_rectangle2",
+      "short": "Create a rectangle of any orientation."
+    },
+    {
+      "name": "gen_rectangle1",
+      "short": "Create a rectangle parallel to the coordinate axes."
+    },
+    {
+      "name": "gen_random_region",
+      "short": "Create a random region."
+    },
+    {
+      "name": "gen_image3",
+      "short": "Create an image from three pointers to the pixels (red/green/blue)."
+    },
+    {
+      "name": "gen_image1",
+      "short": "Create an image from a pointer to the pixels."
+    },
+    {
+      "name": "gen_image_const",
+      "short": "Create an image with constant gray value."
+    },
+    {
+      "name": "gen_ellipse_sector",
+      "short": "Create an ellipse sector."
+    },
+    {
+      "name": "gen_ellipse",
+      "short": "Create an ellipse."
+    },
+    {
+      "name": "gen_circle_sector",
+      "short": "Create a circle sector."
+    },
+    {
+      "name": "gen_circle",
+      "short": "Create a circle."
+    },
+    {
+      "name": "gen_checker_region",
+      "short": "Create a checkered region."
+    },
+    {
+      "name": "gen_grid_region",
+      "short": "Create a region from lines or pixels."
+    },
+    {
+      "name": "gen_random_regions",
+      "short": "Create random regions like circles, rectangles and ellipses."
+    },
+    {
+      "name": "gen_region_hline",
+      "short": "Store input lines described in Hesse normal form as regions."
+    },
+    {
+      "name": "gen_region_line",
+      "short": "Store input lines as regions."
+    },
+    {
+      "name": "gen_empty_region",
+      "short": "Create an empty region."
+    },
+    {
+      "name": "gen_image_gray_ramp",
+      "short": "Create a gray value ramp."
+    },
+    {
+      "name": "gen_image3_extern",
+      "short": "Create a three-channel image from three pointers on the pixels with storage"
+    },
+    {
+      "name": "gen_image1_extern",
+      "short": "Create an image from a pointer on the pixels with storage management."
+    },
+    {
+      "name": "gen_image1_rect",
+      "short": "Create an image with a rectangular domain from a pointer on the pixels"
+    },
+    {
+      "name": "repeat_matrix",
+      "short": "Repeat a matrix."
+    },
+    {
+      "name": "copy_matrix",
+      "short": "Copy a matrix."
+    },
+    {
+      "name": "clear_matrix",
+      "short": "Free the memory of a matrix."
+    },
+    {
+      "name": "create_matrix",
+      "short": "Create a matrix."
+    },
+    {
+      "name": "union_object_model_3d",
+      "short": "Combine several 3D object models to a new 3D object model."
+    },
+    {
+      "name": "set_object_model_3d_attrib_mod",
+      "short": "Set attributes of a 3D object model."
+    },
+    {
+      "name": "set_object_model_3d_attrib",
+      "short": "Set attributes of a 3D object model."
+    },
+    {
+      "name": "gen_empty_object_model_3d",
+      "short": "Create an empty 3D object model."
+    },
+    {
+      "name": "gen_object_model_3d_from_points",
+      "short": "Create a 3D object model that represents a point cloud from a set of 3D points."
+    },
+    {
+      "name": "gen_box_object_model_3d",
+      "short": "Create a 3D object model that represents a box."
+    },
+    {
+      "name": "gen_plane_object_model_3d",
+      "short": "Create a 3D object model that represents a plane."
+    },
+    {
+      "name": "gen_sphere_object_model_3d_center",
+      "short": "Create a 3D object model that represents a sphere from x,y,z coordinates."
+    },
+    {
+      "name": "gen_sphere_object_model_3d",
+      "short": "Create a 3D object model that represents a sphere."
+    },
+    {
+      "name": "gen_cylinder_object_model_3d",
+      "short": "Create a 3D object model that represents a cylinder."
+    },
+    {
+      "name": "copy_object_model_3d",
+      "short": "Copy a 3D object model."
+    },
+    {
+      "name": "clear_object_model_3d",
+      "short": "Free the memory of a 3D object model."
+    },
+    {
+      "name": "serialize_object_model_3d",
+      "short": "Serialize a 3D object model."
+    },
+    {
+      "name": "deserialize_object_model_3d",
+      "short": "Deserialize a serialized 3D object model."
+    },
+    {
+      "name": "write_object_model_3d",
+      "short": "Writes a 3D object model to a file."
+    },
+    {
+      "name": "read_object_model_3d",
+      "short": "Read a 3D object model from a file."
+    },
+    {
+      "name": "region_to_mean",
+      "short": "Paint regions with their average gray value."
+    },
+    {
+      "name": "gen_image_surface_second_order",
+      "short": "Create a curved gray surface with second order polynomial."
+    },
+    {
+      "name": "gen_image_surface_first_order",
+      "short": "Create a tilted gray surface with first order polynomial."
+    },
+    {
+      "name": "interleave_channels",
+      "short": "Create an interleaved image from a multichannel image."
+    },
+    {
+      "name": "clear_handle",
+      "short": "Clear the content of a handle."
+    },
+    {
+      "name": "remove_object_model_3d_attrib",
+      "short": "Remove attributes of a 3D object model."
+    },
+    {
+      "name": "remove_object_model_3d_attrib_mod",
+      "short": "Remove attributes of a 3D object model."
+    },
+    {
+      "name": "tuple_constant",
+      "short": "Generate a tuple with the value of a HDevelop language constant."
+    },
+    {
+      "name": "tuple_repeat",
+      "short": "Repeat a tuple."
+    },
+    {
+      "name": "tuple_repeat_elem",
+      "short": "Repeat the elements of a tuple."
+    }
+  ]
+}

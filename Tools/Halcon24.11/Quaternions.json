@@ -1,0 +1,40 @@
+{
+  "通用": [
+    {
+      "name": "quat_rotate_point_3d",
+      "short": "Perform a rotation by a unit quaternion."
+    },
+    {
+      "name": "quat_conjugate",
+      "short": "Generate the conjugation of a quaternion."
+    },
+    {
+      "name": "quat_normalize",
+      "short": "Normalize a quaternion."
+    },
+    {
+      "name": "axis_angle_to_quat",
+      "short": "Create a rotation quaternion."
+    },
+    {
+      "name": "quat_to_hom_mat3d",
+      "short": "Convert a quaternion into the corresponding rotation matrix."
+    },
+    {
+      "name": "quat_interpolate",
+      "short": "Interpolation of two quaternions."
+    },
+    {
+      "name": "quat_compose",
+      "short": "Multiply two quaternions."
+    },
+    {
+      "name": "deserialize_quat",
+      "short": "Deserialize a serialized quaternion."
+    },
+    {
+      "name": "serialize_quat",
+      "short": "Serialize a quaternion."
+    }
+  ]
+}

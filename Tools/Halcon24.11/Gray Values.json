@@ -1,0 +1,76 @@
+{
+  "通用": [
+    {
+      "name": "gray_bothat",
+      "short": "Perform a gray value bottom hat transformation on an image."
+    },
+    {
+      "name": "gray_tophat",
+      "short": "Perform a gray value top hat transformation on an image."
+    },
+    {
+      "name": "gray_closing",
+      "short": "Perform a gray value closing on an image."
+    },
+    {
+      "name": "gray_opening",
+      "short": "Perform a gray value opening on an image."
+    },
+    {
+      "name": "gray_dilation",
+      "short": "Perform a gray value dilation on an image."
+    },
+    {
+      "name": "gray_erosion",
+      "short": "Perform a gray value erosion on an image."
+    },
+    {
+      "name": "read_gray_se",
+      "short": "Load a structuring element for gray morphology."
+    },
+    {
+      "name": "gen_disc_se",
+      "short": "Generate ellipsoidal structuring elements for gray morphology."
+    },
+    {
+      "name": "dual_rank",
+      "short": "Opening, Median and Closing with circle or rectangle mask."
+    },
+    {
+      "name": "gray_closing_shape",
+      "short": "Perform a gray value closing with a selected mask."
+    },
+    {
+      "name": "gray_opening_shape",
+      "short": "Perform a gray value opening with a selected mask."
+    },
+    {
+      "name": "gray_erosion_shape",
+      "short": "Determine the minimum gray value within a selected mask."
+    },
+    {
+      "name": "gray_dilation_shape",
+      "short": "Determine the maximum gray value within a selected mask."
+    },
+    {
+      "name": "gray_range_rect",
+      "short": "Determine the gray value range within a rectangle."
+    },
+    {
+      "name": "gray_closing_rect",
+      "short": "Perform a gray value closing with a rectangular mask."
+    },
+    {
+      "name": "gray_opening_rect",
+      "short": "Perform a gray value opening with a rectangular mask."
+    },
+    {
+      "name": "gray_erosion_rect",
+      "short": "Determine the minimum gray value within a rectangle."
+    },
+    {
+      "name": "gray_dilation_rect",
+      "short": "Determine the maximum gray value within a rectangle."
+    }
+  ]
+}

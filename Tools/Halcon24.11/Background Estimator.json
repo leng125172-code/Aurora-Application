@@ -1,0 +1,32 @@
+{
+  "通用": [
+    {
+      "name": "close_bg_esti",
+      "short": "Delete the background estimation data set."
+    },
+    {
+      "name": "give_bg_esti",
+      "short": "Return the estimated background image."
+    },
+    {
+      "name": "update_bg_esti",
+      "short": "Change the estimated background image."
+    },
+    {
+      "name": "run_bg_esti",
+      "short": "Estimate the background and return the foreground region."
+    },
+    {
+      "name": "get_bg_esti_params",
+      "short": "Return the parameters of the data set."
+    },
+    {
+      "name": "set_bg_esti_params",
+      "short": "Change the parameters of the data set."
+    },
+    {
+      "name": "create_bg_esti",
+      "short": "Generate and initialize a data set for the background estimation."
+    }
+  ]
+}

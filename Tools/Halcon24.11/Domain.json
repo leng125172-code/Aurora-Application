@@ -1,0 +1,28 @@
+{
+  "通用": [
+    {
+      "name": "change_domain",
+      "short": "Change definition domain of an image."
+    },
+    {
+      "name": "add_channels",
+      "short": "Add gray values to regions."
+    },
+    {
+      "name": "rectangle1_domain",
+      "short": "Reduce the domain of an image to a rectangle."
+    },
+    {
+      "name": "reduce_domain",
+      "short": "Reduce the domain of an image."
+    },
+    {
+      "name": "full_domain",
+      "short": "Expand the domain of an image to maximum."
+    },
+    {
+      "name": "get_domain",
+      "short": "Get the domain of an image."
+    }
+  ]
+}

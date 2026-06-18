@@ -1,0 +1,184 @@
+{
+  "通用": [
+    {
+      "name": "get_deformable_surface_matching_result",
+      "short": "Get details of a result from deformable surface based matching."
+    },
+    {
+      "name": "clear_deformable_surface_matching_result",
+      "short": "Free the memory of a deformable surface matching result."
+    },
+    {
+      "name": "clear_deformable_surface_model",
+      "short": "Free the memory of a deformable surface model."
+    },
+    {
+      "name": "deserialize_deformable_surface_model",
+      "short": "Deserialize a deformable surface model."
+    },
+    {
+      "name": "serialize_deformable_surface_model",
+      "short": "Serialize a deformable surface_model."
+    },
+    {
+      "name": "read_deformable_surface_model",
+      "short": "Read a deformable surface model from a file."
+    },
+    {
+      "name": "write_deformable_surface_model",
+      "short": "Write a deformable surface model to a file."
+    },
+    {
+      "name": "refine_deformable_surface_model",
+      "short": "Refine the position and deformation of a deformable surface model in a"
+    },
+    {
+      "name": "find_deformable_surface_model",
+      "short": "Find the best match of a deformable surface model in a 3D scene."
+    },
+    {
+      "name": "get_deformable_surface_model_param",
+      "short": "Return the parameters and properties of a deformable surface model."
+    },
+    {
+      "name": "add_deformable_surface_model_reference_point",
+      "short": "Add a reference point to a deformable surface model."
+    },
+    {
+      "name": "add_deformable_surface_model_sample",
+      "short": "Add a sample deformation to a deformable surface model"
+    },
+    {
+      "name": "create_deformable_surface_model",
+      "short": "Create the data structure needed to perform deformable"
+    },
+    {
+      "name": "get_surface_matching_result",
+      "short": "Get details of a result from surface based matching."
+    },
+    {
+      "name": "clear_surface_matching_result",
+      "short": "Free the memory of a surface matching result."
+    },
+    {
+      "name": "clear_surface_model",
+      "short": "Free the memory of a surface model."
+    },
+    {
+      "name": "deserialize_surface_model",
+      "short": "Deserialize a surface model."
+    },
+    {
+      "name": "serialize_surface_model",
+      "short": "Serialize a surface_model."
+    },
+    {
+      "name": "read_surface_model",
+      "short": "Read a surface model from a file."
+    },
+    {
+      "name": "write_surface_model",
+      "short": "Write a surface model to a file."
+    },
+    {
+      "name": "refine_surface_model_pose",
+      "short": "Refine the pose of a surface model in a 3D scene."
+    },
+    {
+      "name": "find_surface_model",
+      "short": "Find the best matches of a surface model in a 3D scene."
+    },
+    {
+      "name": "get_surface_model_param",
+      "short": "Return the parameters and properties of a surface model."
+    },
+    {
+      "name": "create_surface_model",
+      "short": "Create the data structure needed to perform surface-based matching."
+    },
+    {
+      "name": "create_cam_pose_look_at_point",
+      "short": "Create a 3D camera pose from camera center and viewing direction."
+    },
+    {
+      "name": "clear_shape_model_3d",
+      "short": "Free the memory of a 3D shape model."
+    },
+    {
+      "name": "deserialize_shape_model_3d",
+      "short": "Deserialize a serialized 3D shape model."
+    },
+    {
+      "name": "serialize_shape_model_3d",
+      "short": "Serialize a 3D shape model."
+    },
+    {
+      "name": "read_shape_model_3d",
+      "short": "Read a 3D shape model from a file."
+    },
+    {
+      "name": "write_shape_model_3d",
+      "short": "Write a 3D shape model to a file."
+    },
+    {
+      "name": "trans_pose_shape_model_3d",
+      "short": "Transform a pose that refers to the coordinate system of a 3D object"
+    },
+    {
+      "name": "project_shape_model_3d",
+      "short": "Project the edges of a 3D shape model into image coordinates."
+    },
+    {
+      "name": "get_shape_model_3d_contours",
+      "short": "Return the contour representation of a 3D shape model view."
+    },
+    {
+      "name": "get_shape_model_3d_params",
+      "short": "Return the parameters of a 3D shape model."
+    },
+    {
+      "name": "find_shape_model_3d",
+      "short": "Find the best matches of a 3D shape model in an image."
+    },
+    {
+      "name": "create_shape_model_3d",
+      "short": "Prepare a 3D object model for matching."
+    },
+    {
+      "name": "find_surface_model_image",
+      "short": "Find the best matches of a surface model in a 3D scene and images."
+    },
+    {
+      "name": "refine_surface_model_pose_image",
+      "short": "Refine the pose of a surface model in a 3D scene and in images."
+    },
+    {
+      "name": "set_surface_model_param",
+      "short": "Set parameters and properties of a surface model."
+    },
+    {
+      "name": "find_box_3d",
+      "short": "Find boxes in 3D data."
+    },
+    {
+      "name": "apply_deep_matching_3d",
+      "short": "Find the pose of objects using Deep 3D Matching."
+    },
+    {
+      "name": "get_deep_matching_3d_param",
+      "short": "Read a parameter from a Deep 3D Matching model."
+    },
+    {
+      "name": "read_deep_matching_3d",
+      "short": "Read a Deep 3D Matching model from a file."
+    },
+    {
+      "name": "set_deep_matching_3d_param",
+      "short": "Set a parameter of a Deep 3D Matching model."
+    },
+    {
+      "name": "write_deep_matching_3d",
+      "short": "Write a Deep 3D Matching model in a file."
+    }
+  ]
+}

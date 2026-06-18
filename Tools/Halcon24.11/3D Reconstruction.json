@@ -1,0 +1,264 @@
+{
+  "通用": [
+    {
+      "name": "binocular_distance_ms",
+      "short": "Compute the distance values for a rectified stereo image pair using"
+    },
+    {
+      "name": "binocular_disparity_ms",
+      "short": "Compute the disparities of a rectified stereo image pair using"
+    },
+    {
+      "name": "binocular_distance_mg",
+      "short": "Compute the distance values for a rectified stereo image pair using"
+    },
+    {
+      "name": "binocular_disparity_mg",
+      "short": "Compute the disparities of a rectified stereo image pair using multigrid"
+    },
+    {
+      "name": "reconst3d_from_fundamental_matrix",
+      "short": "Compute the projective 3d reconstruction of points based on the fundamental"
+    },
+    {
+      "name": "gen_binocular_proj_rectification",
+      "short": "Compute the projective rectification of weakly calibrated binocular"
+    },
+    {
+      "name": "vector_to_fundamental_matrix_distortion",
+      "short": "Compute the fundamental matrix and the radial distortion coefficient"
+    },
+    {
+      "name": "rel_pose_to_fundamental_matrix",
+      "short": "Compute the fundamental matrix from the relative orientation of two"
+    },
+    {
+      "name": "essential_to_fundamental_matrix",
+      "short": "Compute the fundamental matrix from an essential matrix."
+    },
+    {
+      "name": "vector_to_rel_pose",
+      "short": "Compute the relative orientation between two cameras given image point"
+    },
+    {
+      "name": "vector_to_essential_matrix",
+      "short": "Compute the essential matrix given image point correspondences"
+    },
+    {
+      "name": "vector_to_fundamental_matrix",
+      "short": "Compute the fundamental matrix given a set of image point"
+    },
+    {
+      "name": "match_fundamental_matrix_distortion_ransac",
+      "short": "Compute the fundamental matrix and the radial distortion coefficient"
+    },
+    {
+      "name": "match_rel_pose_ransac",
+      "short": "Compute the relative orientation between two cameras by automatically"
+    },
+    {
+      "name": "match_essential_matrix_ransac",
+      "short": "Compute the essential matrix for a pair of stereo images by automatically"
+    },
+    {
+      "name": "match_fundamental_matrix_ransac",
+      "short": "Compute the fundamental matrix for a pair of stereo images by"
+    },
+    {
+      "name": "binocular_distance",
+      "short": "Compute the distance values for a rectified stereo image pair using"
+    },
+    {
+      "name": "binocular_disparity",
+      "short": "Compute the disparities of a rectified image pair using correlation"
+    },
+    {
+      "name": "intersect_lines_of_sight",
+      "short": "Get a 3D point from the intersection of two lines of sight"
+    },
+    {
+      "name": "disparity_image_to_xyz",
+      "short": "Transform a disparity image into 3D points in a rectified stereo"
+    },
+    {
+      "name": "disparity_to_point_3d",
+      "short": "Transform an image point and its disparity into a 3D point in a"
+    },
+    {
+      "name": "disparity_to_distance",
+      "short": "Transform a disparity value into a distance value in a rectified"
+    },
+    {
+      "name": "distance_to_disparity",
+      "short": "Transform a distance value into a disparity in a rectified stereo"
+    },
+    {
+      "name": "gen_binocular_rectification_map",
+      "short": "Generate transformation maps that describe the mapping of the images"
+    },
+    {
+      "name": "read_sheet_of_light_model",
+      "short": "Read a sheet-of-light model from a file and create a new model."
+    },
+    {
+      "name": "write_sheet_of_light_model",
+      "short": "Write a sheet-of-light model to a file."
+    },
+    {
+      "name": "deserialize_sheet_of_light_model",
+      "short": "Deserialize a sheet-of-light model."
+    },
+    {
+      "name": "serialize_sheet_of_light_model",
+      "short": "Serialize a sheet-of-light model."
+    },
+    {
+      "name": "create_sheet_of_light_calib_object",
+      "short": "Create a calibration object for sheet-of-light calibration."
+    },
+    {
+      "name": "calibrate_sheet_of_light",
+      "short": "Calibrate a sheet-of-light setup with a 3D calibration object."
+    },
+    {
+      "name": "get_sheet_of_light_result_object_model_3d",
+      "short": "Get the result of a calibrated measurement performed with the"
+    },
+    {
+      "name": "get_sheet_of_light_result",
+      "short": "Get the iconic results of a measurement performed with the sheet-of light"
+    },
+    {
+      "name": "apply_sheet_of_light_calibration",
+      "short": "Apply the calibration transformations to the input disparity image."
+    },
+    {
+      "name": "set_profile_sheet_of_light",
+      "short": "Set sheet of light profiles by measured disparities."
+    },
+    {
+      "name": "measure_profile_sheet_of_light",
+      "short": "Process the profile image provided as input and store the resulting"
+    },
+    {
+      "name": "set_sheet_of_light_param",
+      "short": "Set selected parameters of the sheet-of-light model."
+    },
+    {
+      "name": "get_sheet_of_light_param",
+      "short": "Get the value of a parameter, which has been set in a sheet-of-light model."
+    },
+    {
+      "name": "query_sheet_of_light_params",
+      "short": "For a given sheet-of-light model get the names of the generic iconic"
+    },
+    {
+      "name": "reset_sheet_of_light_model",
+      "short": "Reset a sheet-of-light model."
+    },
+    {
+      "name": "clear_sheet_of_light_model",
+      "short": "Delete a sheet-of-light model and free the allocated memory."
+    },
+    {
+      "name": "create_sheet_of_light_model",
+      "short": "Create a model to perform 3D-measurements using the sheet-of-light"
+    },
+    {
+      "name": "shade_height_field",
+      "short": "Shade a height field."
+    },
+    {
+      "name": "estimate_al_am",
+      "short": "Estimate the albedo of a surface and the amount of ambient light."
+    },
+    {
+      "name": "estimate_sl_al_zc",
+      "short": "Estimate the slant of a light source and the albedo of a surface."
+    },
+    {
+      "name": "estimate_sl_al_lr",
+      "short": "Estimate the slant of a light source and the albedo of a surface."
+    },
+    {
+      "name": "estimate_tilt_zc",
+      "short": "Estimate the tilt of a light source."
+    },
+    {
+      "name": "estimate_tilt_lr",
+      "short": "Estimate the tilt of a light source."
+    },
+    {
+      "name": "reconstruct_height_field_from_gradient",
+      "short": "Reconstruct a surface from surface gradients."
+    },
+    {
+      "name": "photometric_stereo",
+      "short": "Reconstruct a surface according to the photometric stereo technique."
+    },
+    {
+      "name": "sfs_pentland",
+      "short": "Reconstruct a surface from a gray value image."
+    },
+    {
+      "name": "sfs_orig_lr",
+      "short": "Reconstruct a surface from a gray value image."
+    },
+    {
+      "name": "sfs_mod_lr",
+      "short": "Reconstruct a surface from a gray value image."
+    },
+    {
+      "name": "clear_stereo_model",
+      "short": "Free the memory of a stereo model."
+    },
+    {
+      "name": "reconstruct_points_stereo",
+      "short": "Reconstruct 3D points from calibrated multi-view stereo images."
+    },
+    {
+      "name": "reconstruct_surface_stereo",
+      "short": "Reconstruct surface from calibrated multi-view stereo images."
+    },
+    {
+      "name": "get_stereo_model_object",
+      "short": "Get intermediate iconic results of a stereo reconstruction."
+    },
+    {
+      "name": "get_stereo_model_image_pairs",
+      "short": "Return the list of image pairs set in a stereo model."
+    },
+    {
+      "name": "set_stereo_model_image_pairs",
+      "short": "Specify image pairs to be used for surface stereo reconstruction."
+    },
+    {
+      "name": "get_stereo_model_param",
+      "short": "Get stereo model parameters."
+    },
+    {
+      "name": "set_stereo_model_param",
+      "short": "Set stereo model parameters."
+    },
+    {
+      "name": "create_stereo_model",
+      "short": "Create a HALCON stereo model."
+    },
+    {
+      "name": "select_grayvalues_from_channels",
+      "short": "Selection of gray values of a multi-channel image using an index image."
+    },
+    {
+      "name": "depth_from_focus",
+      "short": "Extract depth using multiple focus levels."
+    },
+    {
+      "name": "get_stereo_model_object_model_3d",
+      "short": "Get intermediate 3D object model of a stereo reconstruction"
+    },
+    {
+      "name": "uncalibrated_photometric_stereo",
+      "short": "Reconstruct a surface from several, differently illuminated images."
+    }
+  ]
+}

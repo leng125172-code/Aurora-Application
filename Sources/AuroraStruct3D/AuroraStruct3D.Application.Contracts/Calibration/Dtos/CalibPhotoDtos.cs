@@ -123,8 +123,59 @@ public class CalibStereoPairPhotoDto
 }
 
 /// <summary>
-/// 标定计算结果 DTO
+/// 单台相机自动对齐的执行结果
 /// </summary>
+public class CameraAlignCameraResult
+{
+    /// <summary>相机设备 ID</summary>
+    public Guid CameraDeviceId { get; set; }
+
+    /// <summary>相机角色名称（"主相机"/"从相机"）</summary>
+    public string CameraRole { get; set; } = string.Empty;
+
+    /// <summary>是否跳过（未绑定电机时为 true）</summary>
+    public bool Skipped { get; set; }
+
+    /// <summary>十字架中心相对图像中心的 X 偏差（像素，正值=偏右）</summary>
+    public double? CrossOffsetXPixels { get; set; }
+
+    /// <summary>十字架中心相对图像中心的 Y 偏差（像素，正值=偏下）</summary>
+    public double? CrossOffsetYPixels { get; set; }
+
+    /// <summary>对齐前的单圈角度（°）</summary>
+    public double? AngleBeforeDeg { get; set; }
+
+    /// <summary>对齐后的单圈角度（°）</summary>
+    public double? AngleAfterDeg { get; set; }
+
+    /// <summary>调整量（°，正值=正向移动）</summary>
+    public double? AdjustedAngleDeg { get; set; }
+
+    /// <summary>对齐是否成功（检测到十字架且已移动）</summary>
+    public bool IsAligned { get; set; }
+
+    /// <summary>未对齐或跳过时的原因说明</summary>
+    public string? Message { get; set; }
+}
+
+/// <summary>
+/// 相机自动对齐（投影十字架拍照并调整电机）的整体结果 DTO
+/// </summary>
+public class AutoAlignCamerasResultDto
+{
+    /// <summary>主相机对齐结果</summary>
+    public CameraAlignCameraResult? MainCamera { get; set; }
+
+    /// <summary>从相机对齐结果</summary>
+    public CameraAlignCameraResult? SecondaryCamera { get; set; }
+
+    /// <summary>整体是否成功（所有已绑定电机的相机均已对齐）</summary>
+    public bool Success { get; set; }
+
+    /// <summary>整体说明</summary>
+    public string Message { get; set; } = string.Empty;
+}
+
 public class CalibComputeResultDto
 {
     /// <summary>内参矩阵（3×3，JSON 序列化的 double[][] 数组）</summary>

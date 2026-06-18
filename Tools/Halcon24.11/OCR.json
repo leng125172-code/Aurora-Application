@@ -1,0 +1,440 @@
+{
+  "通用": [
+    {
+      "name": "clear_text_result",
+      "short": "Clear a text result."
+    },
+    {
+      "name": "get_text_object",
+      "short": "Query an iconic value of a text segmentation result."
+    },
+    {
+      "name": "get_text_result",
+      "short": "Query a control value of a text segmentation result."
+    },
+    {
+      "name": "find_text",
+      "short": "Find text in an image."
+    },
+    {
+      "name": "get_text_model_param",
+      "short": "Query parameters of a text model."
+    },
+    {
+      "name": "set_text_model_param",
+      "short": "Set parameters of a text model."
+    },
+    {
+      "name": "clear_text_model",
+      "short": "Clear a text model."
+    },
+    {
+      "name": "create_text_model_reader",
+      "short": "Create a text model."
+    },
+    {
+      "name": "create_text_model",
+      "short": "Create a text model."
+    },
+    {
+      "name": "select_characters",
+      "short": "Selects characters from a given region."
+    },
+    {
+      "name": "segment_characters",
+      "short": "Segments characters in a given region of an image."
+    },
+    {
+      "name": "text_line_slant",
+      "short": "Determines the slant of characters of a text line or paragraph."
+    },
+    {
+      "name": "text_line_orientation",
+      "short": "Determines the orientation of a text line or paragraph."
+    },
+    {
+      "name": "do_ocr_word_knn",
+      "short": "Classify a related group of characters with an OCR classifier."
+    },
+    {
+      "name": "deserialize_ocr_class_knn",
+      "short": "Deserialize a serialized k-NN-based OCR classifier."
+    },
+    {
+      "name": "serialize_ocr_class_knn",
+      "short": "Serialize a k-NN-based OCR classifier."
+    },
+    {
+      "name": "read_ocr_class_knn",
+      "short": "Read an OCR classifier from a file."
+    },
+    {
+      "name": "write_ocr_class_knn",
+      "short": "Write a k-NN classifier for an OCR task to a file."
+    },
+    {
+      "name": "clear_ocr_class_knn",
+      "short": "Clear an OCR classifier."
+    },
+    {
+      "name": "create_ocr_class_knn",
+      "short": "Create an OCR classifier using a k-Nearest Neighbor (k-NN) classifier."
+    },
+    {
+      "name": "trainf_ocr_class_knn",
+      "short": "Trains an k-NN classifier for an OCR task."
+    },
+    {
+      "name": "get_features_ocr_class_knn",
+      "short": "Compute the features of a character."
+    },
+    {
+      "name": "get_params_ocr_class_knn",
+      "short": "Return the parameters of an OCR classifier."
+    },
+    {
+      "name": "do_ocr_multi_class_knn",
+      "short": "Classify multiple characters with an k-NN classifier."
+    },
+    {
+      "name": "do_ocr_single_class_knn",
+      "short": "Classify a single character with an OCR classifier."
+    },
+    {
+      "name": "select_feature_set_trainf_knn",
+      "short": "Select an optimal combination of features to classify OCR data."
+    },
+    {
+      "name": "select_feature_set_trainf_mlp_protected",
+      "short": "Select an optimal combination of features to classify OCR data"
+    },
+    {
+      "name": "select_feature_set_trainf_mlp",
+      "short": "Selects an optimal combination of features to classify OCR data."
+    },
+    {
+      "name": "select_feature_set_trainf_svm_protected",
+      "short": "Select an optimal combination of features to classify OCR data"
+    },
+    {
+      "name": "select_feature_set_trainf_svm",
+      "short": "Selects an optimal combination of features to classify OCR  data."
+    },
+    {
+      "name": "clear_lexicon",
+      "short": "Clear a lexicon."
+    },
+    {
+      "name": "suggest_lexicon",
+      "short": "Find a similar word in a lexicon."
+    },
+    {
+      "name": "lookup_lexicon",
+      "short": "Check if a word is contained in a lexicon."
+    },
+    {
+      "name": "inspect_lexicon",
+      "short": "Query all words from a lexicon."
+    },
+    {
+      "name": "import_lexicon",
+      "short": "Create a lexicon from a text file."
+    },
+    {
+      "name": "create_lexicon",
+      "short": "Create a lexicon from a tuple of words."
+    },
+    {
+      "name": "clear_ocr_class_svm",
+      "short": "Clear an SVM-based OCR classifier."
+    },
+    {
+      "name": "deserialize_ocr_class_svm",
+      "short": "Deserialize a serialized SVM-based OCR classifier."
+    },
+    {
+      "name": "serialize_ocr_class_svm",
+      "short": "Serialize a SVM-based OCR classifier"
+    },
+    {
+      "name": "read_ocr_class_svm",
+      "short": "Read a SVM-based OCR classifier from a file."
+    },
+    {
+      "name": "write_ocr_class_svm",
+      "short": "Write an OCR classifier to a file."
+    },
+    {
+      "name": "get_features_ocr_class_svm",
+      "short": "Compute the features of a character."
+    },
+    {
+      "name": "do_ocr_word_svm",
+      "short": "Classify a related group of characters with an OCR classifier."
+    },
+    {
+      "name": "do_ocr_multi_class_svm",
+      "short": "Classify multiple characters with an SVM-based OCR classifier."
+    },
+    {
+      "name": "do_ocr_single_class_svm",
+      "short": "Classify a single character with an SVM-based OCR classifier."
+    },
+    {
+      "name": "reduce_ocr_class_svm",
+      "short": "Approximate a trained SVM-based OCR classifier by a reduced SVM."
+    },
+    {
+      "name": "trainf_ocr_class_svm_protected",
+      "short": "Train an OCR classifier with data from a (protected) training file."
+    },
+    {
+      "name": "trainf_ocr_class_svm",
+      "short": "Train an OCR classifier."
+    },
+    {
+      "name": "get_prep_info_ocr_class_svm",
+      "short": "Compute the information content of the preprocessed feature vectors"
+    },
+    {
+      "name": "get_support_vector_num_ocr_class_svm",
+      "short": "Return the number of support vectors of an OCR classifier."
+    },
+    {
+      "name": "get_support_vector_ocr_class_svm",
+      "short": "Return the index of a support vector from a trained OCR classifier that is"
+    },
+    {
+      "name": "get_params_ocr_class_svm",
+      "short": "Return the parameters of an OCR classifier."
+    },
+    {
+      "name": "create_ocr_class_svm",
+      "short": "Create an OCR classifier using a support vector machine."
+    },
+    {
+      "name": "clear_ocr_class_mlp",
+      "short": "Clear an OCR classifier."
+    },
+    {
+      "name": "deserialize_ocr_class_mlp",
+      "short": "Deserialize a serialized MLP-based OCR classifier."
+    },
+    {
+      "name": "serialize_ocr_class_mlp",
+      "short": "Serialize a MLP-based OCR classifier."
+    },
+    {
+      "name": "read_ocr_class_mlp",
+      "short": "Read an OCR classifier from a file."
+    },
+    {
+      "name": "write_ocr_class_mlp",
+      "short": "Write an OCR classifier to a file."
+    },
+    {
+      "name": "get_features_ocr_class_mlp",
+      "short": "Compute the features of a character."
+    },
+    {
+      "name": "do_ocr_word_mlp",
+      "short": "Classify a related group of characters with an OCR classifier."
+    },
+    {
+      "name": "do_ocr_multi_class_mlp",
+      "short": "Classify multiple characters with an OCR classifier."
+    },
+    {
+      "name": "do_ocr_single_class_mlp",
+      "short": "Classify a single character with an OCR classifier."
+    },
+    {
+      "name": "trainf_ocr_class_mlp_protected",
+      "short": "Train an OCR classifier with data from a (protected) training file."
+    },
+    {
+      "name": "trainf_ocr_class_mlp",
+      "short": "Train an OCR classifier."
+    },
+    {
+      "name": "get_prep_info_ocr_class_mlp",
+      "short": "Compute the information content of the preprocessed feature vectors"
+    },
+    {
+      "name": "get_rejection_params_ocr_class_mlp",
+      "short": "Return the rejection class parameters of an OCR classifier."
+    },
+    {
+      "name": "set_rejection_params_ocr_class_mlp",
+      "short": "Set the rejection class parameters of an OCR classifier."
+    },
+    {
+      "name": "get_regularization_params_ocr_class_mlp",
+      "short": "Return the regularization parameters of an OCR classifier."
+    },
+    {
+      "name": "set_regularization_params_ocr_class_mlp",
+      "short": "Set the regularization parameters of an OCR classifier."
+    },
+    {
+      "name": "get_params_ocr_class_mlp",
+      "short": "Return the parameters of an OCR classifier."
+    },
+    {
+      "name": "create_ocr_class_mlp",
+      "short": "Create an OCR classifier using a multilayer perceptron."
+    },
+    {
+      "name": "serialize_ocr",
+      "short": "Serialize an OCR classifier."
+    },
+    {
+      "name": "deserialize_ocr",
+      "short": "Deserialize a serialized OCR classifier."
+    },
+    {
+      "name": "write_ocr",
+      "short": "Writing an OCR classifier into a file."
+    },
+    {
+      "name": "read_ocr",
+      "short": "Read an OCR classifier from a file."
+    },
+    {
+      "name": "do_ocr_single",
+      "short": "Classify one character."
+    },
+    {
+      "name": "do_ocr_multi",
+      "short": "Classify characters."
+    },
+    {
+      "name": "info_ocr_class_box",
+      "short": "Get information about an OCR classifier."
+    },
+    {
+      "name": "create_ocr_class_box",
+      "short": "Create a new OCR-classifier."
+    },
+    {
+      "name": "traind_ocr_class_box",
+      "short": "Train an OCR classifier by the input of regions."
+    },
+    {
+      "name": "trainf_ocr_class_box",
+      "short": "Train an OCR classifier with the help of a training file."
+    },
+    {
+      "name": "protect_ocr_trainf",
+      "short": "Protection of training data."
+    },
+    {
+      "name": "write_ocr_trainf",
+      "short": "Storing of training characters into a file."
+    },
+    {
+      "name": "ocr_change_char",
+      "short": "Define a new conversion table for the characters."
+    },
+    {
+      "name": "close_ocr",
+      "short": "Deallocation of the memory of an OCR classifier."
+    },
+    {
+      "name": "testd_ocr_class_box",
+      "short": "Test an OCR classifier."
+    },
+    {
+      "name": "ocr_get_features",
+      "short": "Access the features which correspond to a character."
+    },
+    {
+      "name": "concat_ocr_trainf",
+      "short": "Concat training files."
+    },
+    {
+      "name": "write_ocr_trainf_image",
+      "short": "Write characters into a training file."
+    },
+    {
+      "name": "append_ocr_trainf",
+      "short": "Add characters to a training file."
+    },
+    {
+      "name": "read_ocr_trainf_names_protected",
+      "short": "Query which characters are stored in a (protected) training file."
+    },
+    {
+      "name": "read_ocr_trainf_names",
+      "short": "Query which characters are stored in a training file."
+    },
+    {
+      "name": "read_ocr_trainf_select",
+      "short": "Read training specific characters from files and convert to images."
+    },
+    {
+      "name": "read_ocr_trainf",
+      "short": "Read training characters from files and convert to images."
+    },
+    {
+      "name": "clear_ocr_class_cnn",
+      "short": "Clear an CNN-based OCR classifier."
+    },
+    {
+      "name": "deserialize_ocr_class_cnn",
+      "short": "Deserialize a serialized CNN-based OCR classifier."
+    },
+    {
+      "name": "do_ocr_multi_class_cnn",
+      "short": "Classify multiple characters with an CNN-based OCR classifier."
+    },
+    {
+      "name": "do_ocr_single_class_cnn",
+      "short": "Classify a single character with an CNN-based OCR classifier."
+    },
+    {
+      "name": "do_ocr_word_cnn",
+      "short": "Classify a related group of characters with an CNN-based OCR classifier."
+    },
+    {
+      "name": "get_params_ocr_class_cnn",
+      "short": "Return the parameters of a CNN-based OCR classifier."
+    },
+    {
+      "name": "query_params_ocr_class_cnn",
+      "short": "Get the names of the parameters that can be used in"
+    },
+    {
+      "name": "read_ocr_class_cnn",
+      "short": "Read an CNN-based OCR classifier from a file."
+    },
+    {
+      "name": "serialize_ocr_class_cnn",
+      "short": "Serialize a CNN-based OCR classifier"
+    },
+    {
+      "name": "apply_deep_ocr",
+      "short": "Apply a Deep OCR model on a set of images for inference."
+    },
+    {
+      "name": "create_deep_ocr",
+      "short": "Create a Deep OCR model."
+    },
+    {
+      "name": "get_deep_ocr_param",
+      "short": "Return the parameters of a Deep OCR model."
+    },
+    {
+      "name": "read_deep_ocr",
+      "short": "Read a Deep OCR model from a file."
+    },
+    {
+      "name": "set_deep_ocr_param",
+      "short": "Set the parameters of a Deep OCR model."
+    },
+    {
+      "name": "write_deep_ocr",
+      "short": "Write a Deep OCR model in a file."
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "通用": [
+    {
+      "name": "convert_image_type",
+      "short": "Convert the type of an image."
+    },
+    {
+      "name": "real_to_vector_field",
+      "short": "Convert two real-valued images into a vector field image."
+    },
+    {
+      "name": "vector_field_to_real",
+      "short": "Convert a vector field image into two real-valued images."
+    },
+    {
+      "name": "real_to_complex",
+      "short": "Convert two real images into a complex image."
+    },
+    {
+      "name": "complex_to_real",
+      "short": "Convert a complex image into two real images."
+    }
+  ]
+}

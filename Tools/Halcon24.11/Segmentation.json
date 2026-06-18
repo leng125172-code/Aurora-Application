@@ -1,0 +1,288 @@
+{
+  "通用": [
+    {
+      "name": "fit_primitives_object_model_3d",
+      "short": "Fit 3D primitives into a set of 3D points."
+    },
+    {
+      "name": "segment_object_model_3d",
+      "short": "Segment a set of 3D points into sub-sets with similar characteristics."
+    },
+    {
+      "name": "clear_text_result",
+      "short": "Clear a text result."
+    },
+    {
+      "name": "get_text_object",
+      "short": "Query an iconic value of a text segmentation result."
+    },
+    {
+      "name": "get_text_result",
+      "short": "Query a control value of a text segmentation result."
+    },
+    {
+      "name": "find_text",
+      "short": "Find text in an image."
+    },
+    {
+      "name": "get_text_model_param",
+      "short": "Query parameters of a text model."
+    },
+    {
+      "name": "set_text_model_param",
+      "short": "Set parameters of a text model."
+    },
+    {
+      "name": "clear_text_model",
+      "short": "Clear a text model."
+    },
+    {
+      "name": "create_text_model_reader",
+      "short": "Create a text model."
+    },
+    {
+      "name": "select_characters",
+      "short": "Selects characters from a given region."
+    },
+    {
+      "name": "segment_characters",
+      "short": "Segments characters in a given region of an image."
+    },
+    {
+      "name": "text_line_slant",
+      "short": "Determines the slant of characters of a text line or paragraph."
+    },
+    {
+      "name": "text_line_orientation",
+      "short": "Determines the orientation of a text line or paragraph."
+    },
+    {
+      "name": "classify_image_class_lut",
+      "short": "Classify a byte image using a look-up table."
+    },
+    {
+      "name": "classify_image_class_knn",
+      "short": "Classify an image with a k-Nearest-Neighbor classifier."
+    },
+    {
+      "name": "add_samples_image_class_knn",
+      "short": "Add training samples from an image to the training data of a"
+    },
+    {
+      "name": "classify_image_class_gmm",
+      "short": "Classify an image with a Gaussian Mixture Model."
+    },
+    {
+      "name": "add_samples_image_class_gmm",
+      "short": "Add training samples from an image to the training data of a"
+    },
+    {
+      "name": "classify_image_class_svm",
+      "short": "Classify an image with a support vector machine."
+    },
+    {
+      "name": "add_samples_image_class_svm",
+      "short": "Add training samples from an image to the training data of a support"
+    },
+    {
+      "name": "classify_image_class_mlp",
+      "short": "Classify an image with a multilayer perceptron."
+    },
+    {
+      "name": "add_samples_image_class_mlp",
+      "short": "Add training samples from an image to the training data of a"
+    },
+    {
+      "name": "learn_ndim_norm",
+      "short": "Construct classes for class_ndim_norm."
+    },
+    {
+      "name": "learn_ndim_box",
+      "short": "Train a classificator using a multi-channel image."
+    },
+    {
+      "name": "class_ndim_box",
+      "short": "Classify pixels using hyper-cuboids."
+    },
+    {
+      "name": "class_ndim_norm",
+      "short": "Classify pixels using hyper-spheres or hyper-cubes."
+    },
+    {
+      "name": "class_2dim_sup",
+      "short": "Segment an image using two-dimensional pixel classification."
+    },
+    {
+      "name": "class_2dim_unsup",
+      "short": "Segment two images by clustering."
+    },
+    {
+      "name": "check_difference",
+      "short": "Compare two images pixel by pixel."
+    },
+    {
+      "name": "char_threshold",
+      "short": "Perform a threshold segmentation for extracting characters."
+    },
+    {
+      "name": "nonmax_suppression_amp",
+      "short": "Suppress non-maximum points on an edge."
+    },
+    {
+      "name": "nonmax_suppression_dir",
+      "short": "Suppress non-maximum points on an edge using a direction image."
+    },
+    {
+      "name": "hysteresis_threshold",
+      "short": "Perform a hysteresis threshold operation on an image."
+    },
+    {
+      "name": "binary_threshold",
+      "short": "Segment an image using binary thresholding."
+    },
+    {
+      "name": "local_threshold",
+      "short": "Segment an image using local thresholding."
+    },
+    {
+      "name": "var_threshold",
+      "short": "Threshold an image by local mean and standard deviation analysis."
+    },
+    {
+      "name": "dyn_threshold",
+      "short": "Segment an image using a local threshold."
+    },
+    {
+      "name": "threshold",
+      "short": "Segment an image using global threshold."
+    },
+    {
+      "name": "threshold_sub_pix",
+      "short": "Extract level crossings from an image with subpixel accuracy."
+    },
+    {
+      "name": "regiongrowing_n",
+      "short": "Segment an image using regiongrowing for multi-channel images."
+    },
+    {
+      "name": "regiongrowing",
+      "short": "Segment an image using regiongrowing."
+    },
+    {
+      "name": "regiongrowing_mean",
+      "short": "Perform a regiongrowing using mean gray values."
+    },
+    {
+      "name": "pouring",
+      "short": "Segment an image by \"pouring water\" over it."
+    },
+    {
+      "name": "watersheds_threshold",
+      "short": "Extract watershed basins from an image using a threshold."
+    },
+    {
+      "name": "watersheds",
+      "short": "Extract watersheds and basins from an image."
+    },
+    {
+      "name": "zero_crossing",
+      "short": "Extract zero crossings from an image."
+    },
+    {
+      "name": "zero_crossing_sub_pix",
+      "short": "Extract zero crossings from an image with subpixel accuracy."
+    },
+    {
+      "name": "dual_threshold",
+      "short": "Threshold operator for signed images."
+    },
+    {
+      "name": "expand_line",
+      "short": "Expand a region starting at a given line."
+    },
+    {
+      "name": "local_min",
+      "short": "Detect all local minima in an image."
+    },
+    {
+      "name": "lowlands",
+      "short": "Detect all gray value lowlands."
+    },
+    {
+      "name": "lowlands_center",
+      "short": "Detect the centers of all gray value lowlands."
+    },
+    {
+      "name": "local_max",
+      "short": "Detect all local maxima in an image."
+    },
+    {
+      "name": "plateaus",
+      "short": "Detect all gray value plateaus."
+    },
+    {
+      "name": "plateaus_center",
+      "short": "Detect the centers of all gray value plateaus."
+    },
+    {
+      "name": "histo_to_thresh",
+      "short": "Determine gray value thresholds from a histogram."
+    },
+    {
+      "name": "auto_threshold",
+      "short": "Segment an image using thresholds determined from its histogram."
+    },
+    {
+      "name": "bin_threshold",
+      "short": "Segment an image using an automatically determined"
+    },
+    {
+      "name": "fast_threshold",
+      "short": "Fast thresholding of images using global thresholds."
+    },
+    {
+      "name": "expand_gray",
+      "short": "Fill gaps between regions (depending on gray value or color) or split"
+    },
+    {
+      "name": "expand_gray_ref",
+      "short": "Fill gaps between regions (depending on gray value or color) or split"
+    },
+    {
+      "name": "reduce_object_model_3d_by_view",
+      "short": "Remove points from a 3D object model by projecting it to a virtual view"
+    },
+    {
+      "name": "select_points_object_model_3d",
+      "short": "Apply a threshold to an attribute of 3D object models."
+    },
+    {
+      "name": "local_min_sub_pix",
+      "short": "Subpixel precise detection of local minima in an image."
+    },
+    {
+      "name": "local_max_sub_pix",
+      "short": "Subpixel precise detection of local maxima in an image."
+    },
+    {
+      "name": "saddle_points_sub_pix",
+      "short": "Subpixel precise detection of saddle points in an image."
+    },
+    {
+      "name": "critical_points_sub_pix",
+      "short": "Subpixel precise detection of critical points in an image."
+    },
+    {
+      "name": "detect_edge_segments",
+      "short": "Detect straight edge segments."
+    },
+    {
+      "name": "segment_image_mser",
+      "short": "Segment image using Maximally Stable Extremal Regions (MSER)."
+    },
+    {
+      "name": "watersheds_marker",
+      "short": "Extract watersheds and combine basins based on markers."
+    }
+  ]
+}

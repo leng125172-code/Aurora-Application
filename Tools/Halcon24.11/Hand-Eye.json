@@ -1,0 +1,20 @@
+{
+  "通用": [
+    {
+      "name": "hand_eye_calibration",
+      "short": "Perform a hand-eye calibration."
+    },
+    {
+      "name": "calibrate_hand_eye",
+      "short": "Perform a hand-eye calibration."
+    },
+    {
+      "name": "get_calib_data_observ_pose",
+      "short": "Get observed calibration object poses from a calibration data model."
+    },
+    {
+      "name": "set_calib_data_observ_pose",
+      "short": "Set observed calibration object poses in a calibration data model."
+    }
+  ]
+}

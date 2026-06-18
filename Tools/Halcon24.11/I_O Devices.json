@@ -1,0 +1,64 @@
+{
+  "通用": [
+    {
+      "name": "control_io_channel",
+      "short": "Perform an action on I/O channels."
+    },
+    {
+      "name": "write_io_channel",
+      "short": "Write a value to the specified I/O channels."
+    },
+    {
+      "name": "read_io_channel",
+      "short": "Read a value from the specified I/O channels."
+    },
+    {
+      "name": "set_io_channel_param",
+      "short": "Set specific parameters of I/O channels."
+    },
+    {
+      "name": "get_io_channel_param",
+      "short": "Query specific parameters of I/O channels."
+    },
+    {
+      "name": "close_io_channel",
+      "short": "Close I/O channels."
+    },
+    {
+      "name": "open_io_channel",
+      "short": "Open and configure I/O channels."
+    },
+    {
+      "name": "query_io_device",
+      "short": "Query information about channels of the specified I/O device."
+    },
+    {
+      "name": "control_io_device",
+      "short": "Perform an action on the I/O device."
+    },
+    {
+      "name": "set_io_device_param",
+      "short": "Configure a specific I/O device instance."
+    },
+    {
+      "name": "get_io_device_param",
+      "short": "Query settings of an I/O device instance."
+    },
+    {
+      "name": "close_io_device",
+      "short": "Close the specified I/O device."
+    },
+    {
+      "name": "open_io_device",
+      "short": "Open and configure an I/O device."
+    },
+    {
+      "name": "control_io_interface",
+      "short": "Perform an action on the I/O interface."
+    },
+    {
+      "name": "query_io_interface",
+      "short": "Query information about the specified I/O device interface."
+    }
+  ]
+}

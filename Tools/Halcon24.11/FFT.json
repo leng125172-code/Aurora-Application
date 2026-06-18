@@ -1,0 +1,128 @@
+{
+  "通用": [
+    {
+      "name": "gen_filter_mask",
+      "short": "Store a filter mask in the spatial domain as a real-image."
+    },
+    {
+      "name": "gen_mean_filter",
+      "short": "Generate a mean filter in the frequency domain."
+    },
+    {
+      "name": "gen_gauss_filter",
+      "short": "Generate a Gaussian filter in the frequency domain."
+    },
+    {
+      "name": "gen_derivative_filter",
+      "short": "Generate a derivative filter in the frequency domain."
+    },
+    {
+      "name": "gen_std_bandpass",
+      "short": "Generate a bandpass filter with Gaussian or sinusoidal shape."
+    },
+    {
+      "name": "gen_sin_bandpass",
+      "short": "Generate a bandpass filter with sinusoidal shape."
+    },
+    {
+      "name": "gen_bandfilter",
+      "short": "Generate an ideal band filter."
+    },
+    {
+      "name": "gen_bandpass",
+      "short": "Generate an ideal bandpass filter."
+    },
+    {
+      "name": "gen_lowpass",
+      "short": "Generate an ideal lowpass filter."
+    },
+    {
+      "name": "gen_highpass",
+      "short": "Generate an ideal highpass filter."
+    },
+    {
+      "name": "power_ln",
+      "short": "Return the power spectrum of a complex image."
+    },
+    {
+      "name": "power_real",
+      "short": "Return the power spectrum of a complex image."
+    },
+    {
+      "name": "power_byte",
+      "short": "Return the power spectrum of a complex image."
+    },
+    {
+      "name": "phase_deg",
+      "short": "Return the phase of a complex image in degrees."
+    },
+    {
+      "name": "phase_rad",
+      "short": "Return the phase of a complex image in radians."
+    },
+    {
+      "name": "energy_gabor",
+      "short": "Calculate the energy of a two-channel image."
+    },
+    {
+      "name": "convol_gabor",
+      "short": "Convolve an image with a Gabor filter in the frequency domain."
+    },
+    {
+      "name": "gen_gabor",
+      "short": "Generate a Gabor filter."
+    },
+    {
+      "name": "phase_correlation_fft",
+      "short": "Compute the phase correlation of two images in the frequency domain."
+    },
+    {
+      "name": "correlation_fft",
+      "short": "Multiply one image with the complex conjugate of another image in the"
+    },
+    {
+      "name": "convol_fft",
+      "short": "Multiply an image with a filter image in the frequency domain."
+    },
+    {
+      "name": "deserialize_fft_optimization_data",
+      "short": "Deserialize FFT speed optimization data."
+    },
+    {
+      "name": "serialize_fft_optimization_data",
+      "short": "Serialize FFT speed optimization data."
+    },
+    {
+      "name": "read_fft_optimization_data",
+      "short": "Load FFT speed optimization data from a file."
+    },
+    {
+      "name": "write_fft_optimization_data",
+      "short": "Store FFT speed optimization data in a file."
+    },
+    {
+      "name": "optimize_rft_speed",
+      "short": "Optimize the runtime of the real-valued FFT."
+    },
+    {
+      "name": "optimize_fft_speed",
+      "short": "Optimize the runtime of the FFT."
+    },
+    {
+      "name": "rft_generic",
+      "short": "Compute the real-valued fast Fourier transform of an image."
+    },
+    {
+      "name": "fft_image_inv",
+      "short": "Compute the inverse fast Fourier transform of an image."
+    },
+    {
+      "name": "fft_image",
+      "short": "Compute the fast Fourier transform of an image."
+    },
+    {
+      "name": "fft_generic",
+      "short": "Compute the fast Fourier transform of an image."
+    }
+  ]
+}

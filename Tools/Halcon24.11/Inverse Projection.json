@@ -1,0 +1,8 @@
+{
+  "通用": [
+    {
+      "name": "get_line_of_sight",
+      "short": "Compute the line of sight corresponding to a point in the image."
+    }
+  ]
+}

@@ -1,0 +1,32 @@
+{
+  "通用": [
+    {
+      "name": "clear_serial",
+      "short": "Clear the buffer of a serial connection."
+    },
+    {
+      "name": "write_serial",
+      "short": "Write to a serial connection."
+    },
+    {
+      "name": "read_serial",
+      "short": "Read from a serial device."
+    },
+    {
+      "name": "get_serial_param",
+      "short": "Get the parameters of a serial device."
+    },
+    {
+      "name": "set_serial_param",
+      "short": "Set the parameters of a serial device."
+    },
+    {
+      "name": "close_serial",
+      "short": "Close a serial device."
+    },
+    {
+      "name": "open_serial",
+      "short": "Open a serial device."
+    }
+  ]
+}

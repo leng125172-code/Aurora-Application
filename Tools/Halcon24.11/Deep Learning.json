@@ -1,0 +1,244 @@
+{
+  "通用": [
+    {
+      "name": "apply_dl_model",
+      "short": "Apply a deep-learning-based network on a set of images for inference."
+    },
+    {
+      "name": "clear_dl_model",
+      "short": "Clear a deep learning model."
+    },
+    {
+      "name": "create_dl_model_detection",
+      "short": "Create a deep learning network for object detection or instance segmentation."
+    },
+    {
+      "name": "deserialize_dl_model",
+      "short": "Deserialize a deep learning model."
+    },
+    {
+      "name": "get_dl_model_param",
+      "short": "Return the parameters of a deep learning model."
+    },
+    {
+      "name": "read_dl_model",
+      "short": "Read a deep learning model from a file."
+    },
+    {
+      "name": "serialize_dl_model",
+      "short": "Serialize a deep learning model."
+    },
+    {
+      "name": "set_dl_model_param",
+      "short": "Set the parameters of a deep learning model."
+    },
+    {
+      "name": "train_dl_model_batch",
+      "short": "Train a deep learning model."
+    },
+    {
+      "name": "write_dl_model",
+      "short": "Write a deep learning model in a file."
+    },
+    {
+      "name": "gen_dl_model_heatmap",
+      "short": "Infer the sample and generate a heatmap."
+    },
+    {
+      "name": "train_dl_model_anomaly_dataset",
+      "short": "Train a deep learning model for anomaly detection."
+    },
+    {
+      "name": "add_dl_pruning_batch",
+      "short": "Calculate scores to prune a deep learning model."
+    },
+    {
+      "name": "create_dl_pruning",
+      "short": "Create a pruning data handle."
+    },
+    {
+      "name": "gen_dl_pruned_model",
+      "short": "Prune a deep learning model."
+    },
+    {
+      "name": "get_dl_device_param",
+      "short": "Return the parameters of a deep-learning-capable hardware device."
+    },
+    {
+      "name": "get_dl_pruning_param",
+      "short": "Get information from a pruning data handle."
+    },
+    {
+      "name": "query_available_dl_devices",
+      "short": "Get list of deep-learning-capable hardware devices."
+    },
+    {
+      "name": "set_dl_pruning_param",
+      "short": "Set parameter in a pruning data handle."
+    },
+    {
+      "name": "optimize_dl_model_for_inference",
+      "short": "Optimize a model for inference on a device via the"
+    },
+    {
+      "name": "set_dl_device_param",
+      "short": "Set the parameters of a deep-learning-capable hardware device."
+    },
+    {
+      "name": "create_dl_layer_activation",
+      "short": "Create an activation layer."
+    },
+    {
+      "name": "create_dl_layer_batch_normalization",
+      "short": "Create a batch normalization layer."
+    },
+    {
+      "name": "create_dl_layer_class_id_conversion",
+      "short": "Create a class ID conversion layer."
+    },
+    {
+      "name": "create_dl_layer_concat",
+      "short": "Create a concatenation layer."
+    },
+    {
+      "name": "create_dl_layer_convolution",
+      "short": "Create a convolutional layer."
+    },
+    {
+      "name": "create_dl_layer_dense",
+      "short": "Create a dense layer."
+    },
+    {
+      "name": "create_dl_layer_depth_max",
+      "short": "Create a depth max layer."
+    },
+    {
+      "name": "create_dl_layer_dropout",
+      "short": "Create a DropOut layer."
+    },
+    {
+      "name": "create_dl_layer_elementwise",
+      "short": "Create an elementwise layer."
+    },
+    {
+      "name": "create_dl_layer_input",
+      "short": "Create an input layer."
+    },
+    {
+      "name": "create_dl_layer_loss_cross_entropy",
+      "short": "Create a cross entropy loss layer."
+    },
+    {
+      "name": "create_dl_layer_loss_ctc",
+      "short": "Create a CTC loss layer."
+    },
+    {
+      "name": "create_dl_layer_loss_distance",
+      "short": "Create a distance loss layer."
+    },
+    {
+      "name": "create_dl_layer_loss_focal",
+      "short": "Create a focal loss layer."
+    },
+    {
+      "name": "create_dl_layer_loss_huber",
+      "short": "Create a Huber loss layer."
+    },
+    {
+      "name": "create_dl_layer_lrn",
+      "short": "Create a LRN layer."
+    },
+    {
+      "name": "create_dl_layer_pooling",
+      "short": "Create a pooling layer."
+    },
+    {
+      "name": "create_dl_layer_reshape",
+      "short": "Create a reshape layer."
+    },
+    {
+      "name": "create_dl_layer_softmax",
+      "short": "Create a softmax layer."
+    },
+    {
+      "name": "create_dl_layer_transposed_convolution",
+      "short": "Create a transposed convolution layer."
+    },
+    {
+      "name": "create_dl_layer_zoom_factor",
+      "short": "Create a zoom layer using size factors."
+    },
+    {
+      "name": "create_dl_layer_zoom_size",
+      "short": "Create a zoom layer using an absolute output size."
+    },
+    {
+      "name": "create_dl_layer_zoom_to_layer_size",
+      "short": "Create a zoom layer using the output size of a reference layer."
+    },
+    {
+      "name": "create_dl_model",
+      "short": "Create a deep learning model."
+    },
+    {
+      "name": "get_dl_layer_param",
+      "short": "Return the parameters of a deep learning layer."
+    },
+    {
+      "name": "get_dl_model_layer",
+      "short": "Create a deep copy of the layers and all"
+    },
+    {
+      "name": "get_dl_model_layer_activations",
+      "short": "Get the activations of a Deep Learning model layer."
+    },
+    {
+      "name": "get_dl_model_layer_gradients",
+      "short": "Get the gradients of a Deep Learning model layer."
+    },
+    {
+      "name": "get_dl_model_layer_param",
+      "short": "Retrieve parameter values for a given layer."
+    },
+    {
+      "name": "get_dl_model_layer_weights",
+      "short": "Get the weights (or values) of a Deep Learning model layer."
+    },
+    {
+      "name": "load_dl_model_weights",
+      "short": "Load the weights of a source model into a target model."
+    },
+    {
+      "name": "set_dl_model_layer_param",
+      "short": "Set parameter values of a given layer."
+    },
+    {
+      "name": "set_dl_model_layer_weights",
+      "short": "Set the weights (or values) of a Deep Learning model layer."
+    },
+    {
+      "name": "create_dl_layer_permutation",
+      "short": "Create a permutation layer."
+    },
+    {
+      "name": "create_dl_layer_depth_to_space",
+      "short": "Create a depth to space layer."
+    },
+    {
+      "name": "create_dl_layer_identity",
+      "short": "Create an identity layer."
+    },
+    {
+      "name": "create_dl_layer_matmul",
+      "short": "Create a MatMul layer."
+    },
+    {
+      "name": "create_dl_layer_reduce",
+      "short": "Create a reduce layer."
+    },
+    {
+      "name": "fit_dl_out_of_distribution",
+      "short": "Extend a deep learning model for Out-of-Distribution Detection."
+    }
+  ]
+}

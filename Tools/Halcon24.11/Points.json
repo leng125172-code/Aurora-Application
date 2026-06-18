@@ -1,0 +1,32 @@
+{
+  "通用": [
+    {
+      "name": "points_sojka",
+      "short": "Find corners using the Sojka operator."
+    },
+    {
+      "name": "dots_image",
+      "short": "Enhance circular dots in an image."
+    },
+    {
+      "name": "points_harris",
+      "short": "Detect points of interest using the Harris operator."
+    },
+    {
+      "name": "points_harris_binomial",
+      "short": "Detect points of interest using the binomial approximation of the Harris"
+    },
+    {
+      "name": "points_lepetit",
+      "short": "Detect points of interest using the Lepetit operator."
+    },
+    {
+      "name": "points_foerstner",
+      "short": "Detect points of interest using the Förstner operator."
+    },
+    {
+      "name": "corner_response",
+      "short": "Searching corners in images."
+    }
+  ]
+}

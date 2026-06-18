@@ -1,0 +1,36 @@
+{
+  "通用": [
+    {
+      "name": "bit_mask",
+      "short": "Logical \"AND\" of each pixel using a bit mask."
+    },
+    {
+      "name": "bit_slice",
+      "short": "Extract a bit from the pixels."
+    },
+    {
+      "name": "bit_rshift",
+      "short": "Right shift of all pixels of the image."
+    },
+    {
+      "name": "bit_lshift",
+      "short": "Left shift of all pixels of the image."
+    },
+    {
+      "name": "bit_not",
+      "short": "Complement all bits of the pixels."
+    },
+    {
+      "name": "bit_xor",
+      "short": "Bit-by-bit XOR of all pixels of the input images."
+    },
+    {
+      "name": "bit_or",
+      "short": "Bit-by-bit OR of all pixels of the input images."
+    },
+    {
+      "name": "bit_and",
+      "short": "Bit-by-bit AND of all pixels of the input images."
+    }
+  ]
+}

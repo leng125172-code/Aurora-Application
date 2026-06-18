@@ -1,0 +1,208 @@
+{
+  "通用": [
+    {
+      "name": "fit_primitives_object_model_3d",
+      "short": "Fit 3D primitives into a set of 3D points."
+    },
+    {
+      "name": "segment_object_model_3d",
+      "short": "Segment a set of 3D points into sub-sets with similar characteristics."
+    },
+    {
+      "name": "surface_normals_object_model_3d",
+      "short": "Calculate the 3D surface normals of a 3D object model."
+    },
+    {
+      "name": "smooth_object_model_3d",
+      "short": "Smooth the 3D points of a 3D object model."
+    },
+    {
+      "name": "triangulate_object_model_3d",
+      "short": "Create a surface triangulation for a 3D object model."
+    },
+    {
+      "name": "simplify_object_model_3d",
+      "short": "Simplify a triangulated 3D object model."
+    },
+    {
+      "name": "distance_object_model_3d",
+      "short": "Compute the distances of the points of one 3D object model to another"
+    },
+    {
+      "name": "union_object_model_3d",
+      "short": "Combine several 3D object models to a new 3D object model."
+    },
+    {
+      "name": "set_object_model_3d_attrib_mod",
+      "short": "Set attributes of a 3D object model."
+    },
+    {
+      "name": "set_object_model_3d_attrib",
+      "short": "Set attributes of a 3D object model."
+    },
+    {
+      "name": "gen_empty_object_model_3d",
+      "short": "Create an empty 3D object model."
+    },
+    {
+      "name": "sample_object_model_3d",
+      "short": "Sample a 3D object model."
+    },
+    {
+      "name": "register_object_model_3d_global",
+      "short": "Improve the relative transformations between 3D object models based on"
+    },
+    {
+      "name": "register_object_model_3d_pair",
+      "short": "Search for a transformation between two 3D object models."
+    },
+    {
+      "name": "gen_object_model_3d_from_points",
+      "short": "Create a 3D object model that represents a point cloud from a set of 3D points."
+    },
+    {
+      "name": "gen_box_object_model_3d",
+      "short": "Create a 3D object model that represents a box."
+    },
+    {
+      "name": "gen_plane_object_model_3d",
+      "short": "Create a 3D object model that represents a plane."
+    },
+    {
+      "name": "gen_sphere_object_model_3d_center",
+      "short": "Create a 3D object model that represents a sphere from x,y,z coordinates."
+    },
+    {
+      "name": "gen_sphere_object_model_3d",
+      "short": "Create a 3D object model that represents a sphere."
+    },
+    {
+      "name": "gen_cylinder_object_model_3d",
+      "short": "Create a 3D object model that represents a cylinder."
+    },
+    {
+      "name": "smallest_bounding_box_object_model_3d",
+      "short": " Calculate the smallest bounding box around the points of a"
+    },
+    {
+      "name": "smallest_sphere_object_model_3d",
+      "short": "Calculate the smallest sphere around the points of a 3D object model."
+    },
+    {
+      "name": "intersect_plane_object_model_3d",
+      "short": "Intersect a 3D object model with a plane."
+    },
+    {
+      "name": "convex_hull_object_model_3d",
+      "short": "Calculate the convex hull of a 3D object model. "
+    },
+    {
+      "name": "select_object_model_3d",
+      "short": "Select 3D object models from an array of 3D object models according"
+    },
+    {
+      "name": "area_object_model_3d",
+      "short": "Calculate the area of all faces of a 3D object model."
+    },
+    {
+      "name": "max_diameter_object_model_3d",
+      "short": "Calculate the maximal diameter of a 3D object model."
+    },
+    {
+      "name": "moments_object_model_3d",
+      "short": "Calculates the mean or the central moment of second order for a 3D object"
+    },
+    {
+      "name": "volume_object_model_3d_relative_to_plane",
+      "short": "Calculate the volume of a 3D object model."
+    },
+    {
+      "name": "reduce_object_model_3d_by_view",
+      "short": "Remove points from a 3D object model by projecting it to a virtual view"
+    },
+    {
+      "name": "connection_object_model_3d",
+      "short": "Determine the connected components of the"
+    },
+    {
+      "name": "select_points_object_model_3d",
+      "short": "Apply a threshold to an attribute of 3D object models."
+    },
+    {
+      "name": "render_object_model_3d",
+      "short": "Render 3D object models to get an image."
+    },
+    {
+      "name": "copy_object_model_3d",
+      "short": "Copy a 3D object model."
+    },
+    {
+      "name": "prepare_object_model_3d",
+      "short": "Prepare a 3D object model for a certain operation."
+    },
+    {
+      "name": "object_model_3d_to_xyz",
+      "short": "Transform 3D points from a 3D object model to images."
+    },
+    {
+      "name": "xyz_to_object_model_3d",
+      "short": "Transform 3D points from images to a 3D object model."
+    },
+    {
+      "name": "get_object_model_3d_params",
+      "short": "Return attributes of 3D object models."
+    },
+    {
+      "name": "project_object_model_3d",
+      "short": "Project a 3D object model into image coordinates."
+    },
+    {
+      "name": "rigid_trans_object_model_3d",
+      "short": "Apply a rigid 3D transformation to 3D object models."
+    },
+    {
+      "name": "projective_trans_object_model_3d",
+      "short": "Apply an arbitrary projective 3D transformation to 3D object models."
+    },
+    {
+      "name": "affine_trans_object_model_3d",
+      "short": "Apply an arbitrary affine 3D transformation to 3D object models."
+    },
+    {
+      "name": "clear_object_model_3d",
+      "short": "Free the memory of a 3D object model."
+    },
+    {
+      "name": "serialize_object_model_3d",
+      "short": "Serialize a 3D object model."
+    },
+    {
+      "name": "deserialize_object_model_3d",
+      "short": "Deserialize a serialized 3D object model."
+    },
+    {
+      "name": "write_object_model_3d",
+      "short": "Writes a 3D object model to a file."
+    },
+    {
+      "name": "read_object_model_3d",
+      "short": "Read a 3D object model from a file."
+    },
+    {
+      "name": "edges_object_model_3d",
+      "short": "Find edges in a 3D object model."
+    },
+    {
+      "name": "fuse_object_model_3d",
+      "short": "Fuse 3D object models into a surface."
+    },
+    {
+      "name": "remove_object_model_3d_attrib",
+      "short": "Remove attributes of a 3D object model."
+    },
+    {
+      "name": "remove_object_model_3d_attrib_mod",
+      "short": "Remove attributes of a 3D object model."
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "通用": [
+    {
+      "name": "noise_distribution_mean",
+      "short": "Determine the noise distribution of an image."
+    },
+    {
+      "name": "add_noise_white",
+      "short": "Add noise to an image."
+    },
+    {
+      "name": "add_noise_distribution",
+      "short": "Add noise to an image."
+    },
+    {
+      "name": "gauss_distribution",
+      "short": "Generate a Gaussian noise distribution."
+    },
+    {
+      "name": "sp_distribution",
+      "short": "Generate a salt-and-pepper noise distribution."
+    }
+  ]
+}

@@ -1,0 +1,32 @@
+{
+  "通用": [
+    {
+      "name": "set_check",
+      "short": "Activating and deactivating of HALCON control modes."
+    },
+    {
+      "name": "get_check",
+      "short": "State of the HALCON control modes."
+    },
+    {
+      "name": "get_error_text",
+      "short": "Inquiry after the error text of a HALCON error number."
+    },
+    {
+      "name": "get_extended_error_info",
+      "short": "Returns the extended error information for the calling thread's last"
+    },
+    {
+      "name": "query_spy",
+      "short": "Inquiring for possible settings of the HALCON debugging tool."
+    },
+    {
+      "name": "set_spy",
+      "short": "Control of the HALCON Debugging Tools."
+    },
+    {
+      "name": "get_spy",
+      "short": "Current configuration of the HALCON debugging-tool."
+    }
+  ]
+}

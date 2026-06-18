@@ -1,0 +1,112 @@
+{
+  "通用": [
+    {
+      "name": "pruning",
+      "short": "Prune the branches of a region."
+    },
+    {
+      "name": "boundary",
+      "short": "Reduce a region to its boundary."
+    },
+    {
+      "name": "hit_or_miss",
+      "short": "Hit-or-miss operation for regions."
+    },
+    {
+      "name": "bottom_hat",
+      "short": "Compute the bottom hat of regions."
+    },
+    {
+      "name": "top_hat",
+      "short": "Compute the top hat of regions."
+    },
+    {
+      "name": "minkowski_sub2",
+      "short": "Erode a region (using a reference point)."
+    },
+    {
+      "name": "minkowski_sub1",
+      "short": "Erode a region."
+    },
+    {
+      "name": "minkowski_add2",
+      "short": "Dilate a region (using a reference point)."
+    },
+    {
+      "name": "minkowski_add1",
+      "short": "Perform a Minkowski addition on a region."
+    },
+    {
+      "name": "closing_rectangle1",
+      "short": "Close a region with a rectangular structuring element."
+    },
+    {
+      "name": "closing_circle",
+      "short": "Close a region with a circular structuring element."
+    },
+    {
+      "name": "closing",
+      "short": "Close a region."
+    },
+    {
+      "name": "opening_rectangle1",
+      "short": "Open a region with a rectangular structuring element."
+    },
+    {
+      "name": "opening_circle",
+      "short": "Open a region with a circular structuring element."
+    },
+    {
+      "name": "opening",
+      "short": "Open a region."
+    },
+    {
+      "name": "erosion_rectangle1",
+      "short": "Erode a region with a rectangular structuring element."
+    },
+    {
+      "name": "erosion_circle",
+      "short": "Erode a region with a circular structuring element."
+    },
+    {
+      "name": "erosion2",
+      "short": "Erode a region (using a reference point)."
+    },
+    {
+      "name": "erosion1",
+      "short": "Erode a region."
+    },
+    {
+      "name": "dilation_rectangle1",
+      "short": "Dilate a region with a rectangular structuring element."
+    },
+    {
+      "name": "dilation_circle",
+      "short": "Dilate a region with a circular structuring element."
+    },
+    {
+      "name": "dilation2",
+      "short": "Dilate a region (using a reference point)."
+    },
+    {
+      "name": "dilation1",
+      "short": "Dilate a region."
+    },
+    {
+      "name": "deserialize_region",
+      "short": "Deserialize a serialized region."
+    },
+    {
+      "name": "serialize_region",
+      "short": "Serialize a region."
+    },
+    {
+      "name": "write_region",
+      "short": "Write regions to a file."
+    },
+    {
+      "name": "read_region",
+      "short": "Read binary images or HALCON regions."
+    }
+  ]
+}

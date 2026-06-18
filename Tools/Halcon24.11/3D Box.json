@@ -1,0 +1,8 @@
+{
+  "通用": [
+    {
+      "name": "find_box_3d",
+      "short": "Find boxes in 3D data."
+    }
+  ]
+}

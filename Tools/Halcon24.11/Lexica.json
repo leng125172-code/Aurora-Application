@@ -1,0 +1,28 @@
+{
+  "通用": [
+    {
+      "name": "clear_lexicon",
+      "short": "Clear a lexicon."
+    },
+    {
+      "name": "suggest_lexicon",
+      "short": "Find a similar word in a lexicon."
+    },
+    {
+      "name": "lookup_lexicon",
+      "short": "Check if a word is contained in a lexicon."
+    },
+    {
+      "name": "inspect_lexicon",
+      "short": "Query all words from a lexicon."
+    },
+    {
+      "name": "import_lexicon",
+      "short": "Create a lexicon from a text file."
+    },
+    {
+      "name": "create_lexicon",
+      "short": "Create a lexicon from a tuple of words."
+    }
+  ]
+}

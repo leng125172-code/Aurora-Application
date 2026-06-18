@@ -1,0 +1,436 @@
+{
+  "通用": [
+    {
+      "name": "union_cotangential_contours_xld",
+      "short": "Compute the union of cotangential contours."
+    },
+    {
+      "name": "polar_trans_contour_xld_inv",
+      "short": "Transform a contour in polar coordinates back to Cartesian coordinates"
+    },
+    {
+      "name": "polar_trans_contour_xld",
+      "short": "Transform a contour in an annular arc to polar coordinates."
+    },
+    {
+      "name": "gen_nurbs_interp",
+      "short": "Create control data of a NURBS curve that interpolates given points."
+    },
+    {
+      "name": "gen_contour_nurbs_xld",
+      "short": "Transform a NURBS curve into an XLD contour."
+    },
+    {
+      "name": "union2_closed_polygons_xld",
+      "short": "Compute the union of closed polygons."
+    },
+    {
+      "name": "union2_closed_contours_xld",
+      "short": "Compute the union of closed contours."
+    },
+    {
+      "name": "symm_difference_closed_polygons_xld",
+      "short": "Compute the symmetric difference of closed polygons."
+    },
+    {
+      "name": "symm_difference_closed_contours_xld",
+      "short": "Compute the symmetric difference of closed contours."
+    },
+    {
+      "name": "difference_closed_polygons_xld",
+      "short": "Compute the difference of closed polygons."
+    },
+    {
+      "name": "difference_closed_contours_xld",
+      "short": "Compute the difference of closed contours."
+    },
+    {
+      "name": "intersection_closed_polygons_xld",
+      "short": "Intersect closed polygons."
+    },
+    {
+      "name": "intersection_closed_contours_xld",
+      "short": "Intersect closed contours."
+    },
+    {
+      "name": "union_cocircular_contours_xld",
+      "short": "Compute the union of contours that belong to the same circle."
+    },
+    {
+      "name": "crop_contours_xld",
+      "short": "Crop an XLD contour."
+    },
+    {
+      "name": "gen_cross_contour_xld",
+      "short": "Generate one XLD contour in the shape of a cross for each input point."
+    },
+    {
+      "name": "sort_contours_xld",
+      "short": "Sort contours with respect to their relative position."
+    },
+    {
+      "name": "merge_cont_line_scan_xld",
+      "short": "Merge XLD contours from successive line scan images."
+    },
+    {
+      "name": "read_polygon_xld_arc_info",
+      "short": "Read XLD polygons from a file in ARC/INFO generate format."
+    },
+    {
+      "name": "write_polygon_xld_arc_info",
+      "short": "Write XLD polygons to a file in ARC/INFO generate format."
+    },
+    {
+      "name": "read_contour_xld_arc_info",
+      "short": "Read XLD contours to a file in ARC/INFO generate format."
+    },
+    {
+      "name": "write_contour_xld_arc_info",
+      "short": "Write XLD contours to a file in ARC/INFO generate format."
+    },
+    {
+      "name": "gen_parallel_contour_xld",
+      "short": "Compute the parallel contour of an XLD contour."
+    },
+    {
+      "name": "gen_rectangle2_contour_xld",
+      "short": "Create an XLD contour in the shape of a rectangle."
+    },
+    {
+      "name": "dist_rectangle2_contour_points_xld",
+      "short": "Compute the distances of all contour points to a rectangle."
+    },
+    {
+      "name": "fit_rectangle2_contour_xld",
+      "short": "Fit rectangles to XLD contours."
+    },
+    {
+      "name": "segment_contour_attrib_xld",
+      "short": "Segment XLD contour parts whose local attributes fulfill given"
+    },
+    {
+      "name": "segment_contours_xld",
+      "short": "Segment XLD contours into line segments and circular or elliptic arcs."
+    },
+    {
+      "name": "fit_circle_contour_xld",
+      "short": "Approximate XLD contours by circles."
+    },
+    {
+      "name": "fit_line_contour_xld",
+      "short": "Approximate XLD contours by line segments."
+    },
+    {
+      "name": "dist_ellipse_contour_points_xld",
+      "short": "Compute the distances of all contour points to an ellipse."
+    },
+    {
+      "name": "dist_ellipse_contour_xld",
+      "short": "Compute the distance of contours to an ellipse."
+    },
+    {
+      "name": "fit_ellipse_contour_xld",
+      "short": "Approximate XLD contours by ellipses or elliptic arcs."
+    },
+    {
+      "name": "gen_circle_contour_xld",
+      "short": "Create XLD contours corresponding to circles or circular arcs."
+    },
+    {
+      "name": "gen_ellipse_contour_xld",
+      "short": "Create an XLD contour that corresponds to an elliptic arc."
+    },
+    {
+      "name": "add_noise_white_contour_xld",
+      "short": "Add noise to XLD contours."
+    },
+    {
+      "name": "combine_roads_xld",
+      "short": "Combine road hypotheses from two resolution levels."
+    },
+    {
+      "name": "max_parallels_xld",
+      "short": "Join modified XLD parallels lying on the same polygon."
+    },
+    {
+      "name": "mod_parallels_xld",
+      "short": "Extract parallel XLD polygons enclosing a homogeneous area."
+    },
+    {
+      "name": "info_parallels_xld",
+      "short": "Return information about the gray values of the area enclosed by XLD"
+    },
+    {
+      "name": "get_parallels_xld",
+      "short": "Return an XLD parallel's data (as lines)."
+    },
+    {
+      "name": "gen_parallels_xld",
+      "short": "Extract parallel XLD polygons."
+    },
+    {
+      "name": "get_lines_xld",
+      "short": "Return an XLD polygon's data (as lines)."
+    },
+    {
+      "name": "get_polygon_xld",
+      "short": "Return an XLD polygon's data."
+    },
+    {
+      "name": "gen_polygons_xld",
+      "short": "Approximate XLD contours by polygons."
+    },
+    {
+      "name": "split_contours_xld",
+      "short": "Split XLD contours at dominant points."
+    },
+    {
+      "name": "projective_trans_contour_xld",
+      "short": "Apply a projective transformation to an XLD contour."
+    },
+    {
+      "name": "affine_trans_polygon_xld",
+      "short": "Apply an arbitrary affine transformation to XLD polygons."
+    },
+    {
+      "name": "affine_trans_contour_xld",
+      "short": "Apply an arbitrary affine 2D transformation to XLD contours."
+    },
+    {
+      "name": "close_contours_xld",
+      "short": "Close an XLD contour."
+    },
+    {
+      "name": "clip_end_points_contours_xld",
+      "short": "Clip the end points of an XLD contour."
+    },
+    {
+      "name": "clip_contours_xld",
+      "short": "Clip an XLD contour."
+    },
+    {
+      "name": "local_max_contours_xld",
+      "short": "Select XLD contours with a local maximum of gray values."
+    },
+    {
+      "name": "union_straight_contours_histo_xld",
+      "short": "Compute the union of neighboring straight contours that have a similar"
+    },
+    {
+      "name": "union_straight_contours_xld",
+      "short": "Compute the union of neighboring straight contours that have a similar"
+    },
+    {
+      "name": "union_collinear_contours_ext_xld",
+      "short": "Compute the union of collinear contours"
+    },
+    {
+      "name": "union_collinear_contours_xld",
+      "short": "Unite approximately collinear contours."
+    },
+    {
+      "name": "union_adjacent_contours_xld",
+      "short": "Compute the union of contours whose end points are close together."
+    },
+    {
+      "name": "select_contours_xld",
+      "short": "Select XLD contours according to several features."
+    },
+    {
+      "name": "get_regress_params_xld",
+      "short": "Return XLD contour parameters."
+    },
+    {
+      "name": "regress_contours_xld",
+      "short": "Calculate the parameters of a regression line to an XLD contour."
+    },
+    {
+      "name": "get_contour_angle_xld",
+      "short": "Calculate the direction of an XLD contour for each contour point."
+    },
+    {
+      "name": "smooth_contours_xld",
+      "short": "Smooth an XLD contour."
+    },
+    {
+      "name": "contour_point_num_xld",
+      "short": "Return the number of points in an XLD contour."
+    },
+    {
+      "name": "query_contour_global_attribs_xld",
+      "short": "Return the names of the defined global attributes of an XLD contour."
+    },
+    {
+      "name": "get_contour_global_attrib_xld",
+      "short": "Return global attributes values of an XLD contour."
+    },
+    {
+      "name": "query_contour_attribs_xld",
+      "short": "Return the names of the defined attributes of an XLD contour."
+    },
+    {
+      "name": "get_contour_attrib_xld",
+      "short": "Return point attribute values of an XLD contour."
+    },
+    {
+      "name": "get_contour_xld",
+      "short": "Return the coordinates of an XLD contour."
+    },
+    {
+      "name": "gen_contour_region_xld",
+      "short": "Generate XLD contours from regions."
+    },
+    {
+      "name": "gen_contour_polygon_rounded_xld",
+      "short": "Generate an XLD contour with rounded corners from a polygon (given"
+    },
+    {
+      "name": "gen_contour_polygon_xld",
+      "short": "Generate an XLD contour from a polygon (given as tuples)."
+    },
+    {
+      "name": "gen_contours_skeleton_xld",
+      "short": "Convert a skeleton into XLD contours."
+    },
+    {
+      "name": "deserialize_xld",
+      "short": "Deserialize a serialized XLD object."
+    },
+    {
+      "name": "serialize_xld",
+      "short": "Serialize an XLD object."
+    },
+    {
+      "name": "read_polygon_xld_dxf",
+      "short": "Read XLD polygons from a DXF file."
+    },
+    {
+      "name": "write_polygon_xld_dxf",
+      "short": "Write XLD polygons to a file in DXF format."
+    },
+    {
+      "name": "read_contour_xld_dxf",
+      "short": "Read XLD contours from a DXF file."
+    },
+    {
+      "name": "write_contour_xld_dxf",
+      "short": "Write XLD contours to a file in DXF format."
+    },
+    {
+      "name": "test_closed_xld",
+      "short": "Test whether contours or polygons are closed."
+    },
+    {
+      "name": "moments_any_points_xld",
+      "short": "Arbitrary geometric moments of contours or polygons treated as point"
+    },
+    {
+      "name": "eccentricity_points_xld",
+      "short": "Anisometry of contours or polygons treated as point clouds."
+    },
+    {
+      "name": "elliptic_axis_points_xld",
+      "short": "Parameters of the equivalent ellipse of contours or polygons treated as"
+    },
+    {
+      "name": "orientation_points_xld",
+      "short": "Calculate the orientation of contours or polygons treated as point clouds."
+    },
+    {
+      "name": "moments_points_xld",
+      "short": "Geometric moments M20, M02, and M11"
+    },
+    {
+      "name": "area_center_points_xld",
+      "short": "Area and center of gravity (centroid) of contours and polygons"
+    },
+    {
+      "name": "test_self_intersection_xld",
+      "short": "Test XLD contours or polygons for self intersection."
+    },
+    {
+      "name": "select_xld_point",
+      "short": "Choose all contours or polygons containing a given point."
+    },
+    {
+      "name": "test_xld_point",
+      "short": "Test whether one or more contours or polygons enclose the given point(s)."
+    },
+    {
+      "name": "select_shape_xld",
+      "short": "Select contours or polygons using shape features."
+    },
+    {
+      "name": "orientation_xld",
+      "short": "Calculate the orientation of contours or polygons."
+    },
+    {
+      "name": "eccentricity_xld",
+      "short": "Shape features derived from the ellipse parameters of contours or polygons."
+    },
+    {
+      "name": "compactness_xld",
+      "short": "Shape factor for the compactness of contours or polygons."
+    },
+    {
+      "name": "diameter_xld",
+      "short": "Maximum distance between two contour or polygon points."
+    },
+    {
+      "name": "convexity_xld",
+      "short": "Shape factor for the convexity of contours or polygons."
+    },
+    {
+      "name": "circularity_xld",
+      "short": "Shape factor for the circularity (similarity to a circle) of contours or"
+    },
+    {
+      "name": "elliptic_axis_xld",
+      "short": "Parameters of the equivalent ellipse of contours or polygons."
+    },
+    {
+      "name": "smallest_rectangle2_xld",
+      "short": "Smallest enclosing rectangle with arbitrary orientation of contours or"
+    },
+    {
+      "name": "smallest_rectangle1_xld",
+      "short": "Enclosing rectangle parallel to the coordinate axes of contours or polygons."
+    },
+    {
+      "name": "smallest_circle_xld",
+      "short": "Smallest enclosing circle of contours or polygons."
+    },
+    {
+      "name": "shape_trans_xld",
+      "short": "Transform the shape of contours or polygons."
+    },
+    {
+      "name": "length_xld",
+      "short": "Length of contours or polygons."
+    },
+    {
+      "name": "moments_any_xld",
+      "short": "Arbitrary geometric moments of contours or polygons."
+    },
+    {
+      "name": "moments_xld",
+      "short": "Geometric moments M20, M02, and"
+    },
+    {
+      "name": "area_center_xld",
+      "short": "Area and center of gravity (centroid) of contours and polygons."
+    },
+    {
+      "name": "height_width_ratio_xld",
+      "short": "Compute the width, height, and aspect ratio of the enclosing"
+    },
+    {
+      "name": "rectangularity_xld",
+      "short": "Shape factor for the rectangularity of contours or polygons."
+    },
+    {
+      "name": "intersection_region_contour_xld",
+      "short": "Intersect a contour with a region."
+    }
+  ]
+}

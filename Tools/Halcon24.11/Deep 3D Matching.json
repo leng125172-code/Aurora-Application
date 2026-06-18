@@ -1,0 +1,24 @@
+{
+  "通用": [
+    {
+      "name": "apply_deep_matching_3d",
+      "short": "Find the pose of objects using Deep 3D Matching."
+    },
+    {
+      "name": "get_deep_matching_3d_param",
+      "short": "Read a parameter from a Deep 3D Matching model."
+    },
+    {
+      "name": "read_deep_matching_3d",
+      "short": "Read a Deep 3D Matching model from a file."
+    },
+    {
+      "name": "set_deep_matching_3d_param",
+      "short": "Set a parameter of a Deep 3D Matching model."
+    },
+    {
+      "name": "write_deep_matching_3d",
+      "short": "Write a Deep 3D Matching model in a file."
+    }
+  ]
+}

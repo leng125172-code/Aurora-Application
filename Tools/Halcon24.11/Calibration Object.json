@@ -1,0 +1,36 @@
+{
+  "通用": [
+    {
+      "name": "gen_caltab",
+      "short": "Generate a calibration plate description file and a corresponding"
+    },
+    {
+      "name": "create_caltab",
+      "short": "Generate a calibration plate description file and a corresponding"
+    },
+    {
+      "name": "caltab_points",
+      "short": "Read the mark center points from the calibration plate description file."
+    },
+    {
+      "name": "sim_caltab",
+      "short": "Simulate an image with calibration plate."
+    },
+    {
+      "name": "disp_caltab",
+      "short": "Project and visualize the 3D model of the calibration plate in the image."
+    },
+    {
+      "name": "find_marks_and_pose",
+      "short": "Extract rectangularly arranged 2D calibration marks from the image and"
+    },
+    {
+      "name": "find_caltab",
+      "short": "Segment the region of a standard calibration plate with rectangularly"
+    },
+    {
+      "name": "find_calib_object",
+      "short": "Find the HALCON calibration plate and set the extracted points and"
+    }
+  ]
+}

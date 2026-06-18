@@ -1,0 +1,232 @@
+{
+  "通用": [
+    {
+      "name": "deserialize_matrix",
+      "short": "  Deserialize a serialized matrix."
+    },
+    {
+      "name": "serialize_matrix",
+      "short": "Serialize a matrix."
+    },
+    {
+      "name": "read_matrix",
+      "short": "Read a matrix from a file."
+    },
+    {
+      "name": "write_matrix",
+      "short": "Write a matrix to a file."
+    },
+    {
+      "name": "orthogonal_decompose_matrix",
+      "short": "Perform an orthogonal decomposition of a matrix."
+    },
+    {
+      "name": "decompose_matrix",
+      "short": "Decompose a matrix."
+    },
+    {
+      "name": "svd_matrix",
+      "short": "Compute the singular value decomposition of a matrix."
+    },
+    {
+      "name": "generalized_eigenvalues_general_matrix",
+      "short": "Compute the generalized eigenvalues and optionally the generalized"
+    },
+    {
+      "name": "generalized_eigenvalues_symmetric_matrix",
+      "short": "Compute the generalized eigenvalues and optionally generalized"
+    },
+    {
+      "name": "eigenvalues_general_matrix",
+      "short": "Compute the eigenvalues and optionally the eigenvectors of a general"
+    },
+    {
+      "name": "eigenvalues_symmetric_matrix",
+      "short": "Compute the eigenvalues and optionally eigenvectors of a symmetric"
+    },
+    {
+      "name": "solve_matrix",
+      "short": "Compute the solution of a system of equations."
+    },
+    {
+      "name": "determinant_matrix",
+      "short": "Compute the determinant of a matrix."
+    },
+    {
+      "name": "invert_matrix_mod",
+      "short": "Invert a matrix."
+    },
+    {
+      "name": "invert_matrix",
+      "short": "Invert a matrix."
+    },
+    {
+      "name": "transpose_matrix_mod",
+      "short": "Transpose a matrix."
+    },
+    {
+      "name": "transpose_matrix",
+      "short": "Transpose a matrix."
+    },
+    {
+      "name": "max_matrix",
+      "short": "Returns the elementwise maximum of a matrix."
+    },
+    {
+      "name": "min_matrix",
+      "short": "Returns the elementwise minimum of a matrix."
+    },
+    {
+      "name": "pow_matrix_mod",
+      "short": "Compute the power functions of a matrix."
+    },
+    {
+      "name": "pow_matrix",
+      "short": "Compute the power functions of a matrix."
+    },
+    {
+      "name": "pow_element_matrix_mod",
+      "short": "Compute the power functions of the elements of a matrix."
+    },
+    {
+      "name": "pow_element_matrix",
+      "short": "Compute the power functions of the elements of a matrix."
+    },
+    {
+      "name": "pow_scalar_element_matrix_mod",
+      "short": "Compute the power functions of the elements of a matrix."
+    },
+    {
+      "name": "pow_scalar_element_matrix",
+      "short": "Compute the power functions of the elements of a matrix."
+    },
+    {
+      "name": "sqrt_matrix_mod",
+      "short": "Compute the square root values of the elements of a matrix."
+    },
+    {
+      "name": "sqrt_matrix",
+      "short": "Compute the square root values of the elements of a matrix."
+    },
+    {
+      "name": "abs_matrix_mod",
+      "short": "Compute the absolute values of the elements of a matrix."
+    },
+    {
+      "name": "abs_matrix",
+      "short": "Compute the absolute values of the elements of a matrix."
+    },
+    {
+      "name": "norm_matrix",
+      "short": "Norm of a matrix."
+    },
+    {
+      "name": "mean_matrix",
+      "short": "Returns the elementwise mean of a matrix."
+    },
+    {
+      "name": "sum_matrix",
+      "short": "Returns the elementwise sum of a matrix."
+    },
+    {
+      "name": "div_element_matrix_mod",
+      "short": "Divide matrices element-by-element."
+    },
+    {
+      "name": "div_element_matrix",
+      "short": "Divide matrices element-by-element."
+    },
+    {
+      "name": "mult_element_matrix_mod",
+      "short": "Multiply matrices element-by-element."
+    },
+    {
+      "name": "mult_element_matrix",
+      "short": "Multiply matrices element-by-element."
+    },
+    {
+      "name": "scale_matrix_mod",
+      "short": "Scale a matrix."
+    },
+    {
+      "name": "scale_matrix",
+      "short": "Scale a matrix."
+    },
+    {
+      "name": "sub_matrix_mod",
+      "short": "Subtract two matrices."
+    },
+    {
+      "name": "sub_matrix",
+      "short": "Subtract two matrices."
+    },
+    {
+      "name": "add_matrix_mod",
+      "short": "Add two matrices."
+    },
+    {
+      "name": "add_matrix",
+      "short": "Add two matrices."
+    },
+    {
+      "name": "mult_matrix_mod",
+      "short": "Multiply two matrices."
+    },
+    {
+      "name": "mult_matrix",
+      "short": "Multiply two matrices."
+    },
+    {
+      "name": "get_size_matrix",
+      "short": "Get the size of a matrix."
+    },
+    {
+      "name": "repeat_matrix",
+      "short": "Repeat a matrix."
+    },
+    {
+      "name": "copy_matrix",
+      "short": "Copy a matrix."
+    },
+    {
+      "name": "set_diagonal_matrix",
+      "short": "Set the diagonal elements of a matrix."
+    },
+    {
+      "name": "get_diagonal_matrix",
+      "short": "Get the diagonal elements of a matrix."
+    },
+    {
+      "name": "set_sub_matrix",
+      "short": "Set a sub-matrix of a matrix."
+    },
+    {
+      "name": "get_sub_matrix",
+      "short": "Get a sub-matrix of a matrix."
+    },
+    {
+      "name": "set_full_matrix",
+      "short": "Set all values of a matrix."
+    },
+    {
+      "name": "get_full_matrix",
+      "short": "Return all values of a matrix."
+    },
+    {
+      "name": "set_value_matrix",
+      "short": "Set one or more elements of a matrix."
+    },
+    {
+      "name": "get_value_matrix",
+      "short": "Return one ore more elements of a matrix."
+    },
+    {
+      "name": "clear_matrix",
+      "short": "Free the memory of a matrix."
+    },
+    {
+      "name": "create_matrix",
+      "short": "Create a matrix."
+    }
+  ]
+}

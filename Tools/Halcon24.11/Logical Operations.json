@@ -1,0 +1,20 @@
+{
+  "通用": [
+    {
+      "name": "tuple_not",
+      "short": "Compute the logical not of a tuple."
+    },
+    {
+      "name": "tuple_xor",
+      "short": "Compute the logical exclusive or of two tuples."
+    },
+    {
+      "name": "tuple_or",
+      "short": "Compute the logical or of two tuples."
+    },
+    {
+      "name": "tuple_and",
+      "short": "Compute the logical and of two tuples."
+    }
+  ]
+}

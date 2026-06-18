@@ -1,0 +1,48 @@
+{
+  "通用": [
+    {
+      "name": "linear_trans_color",
+      "short": "Compute an affine transformation of the color values of a"
+    },
+    {
+      "name": "gen_principal_comp_trans",
+      "short": "Compute the transformation matrix of the principal component"
+    },
+    {
+      "name": "principal_comp",
+      "short": "Compute the principal components of multichannel images."
+    },
+    {
+      "name": "clear_color_trans_lut",
+      "short": "Release the look-up-table needed for color space transformation."
+    },
+    {
+      "name": "apply_color_trans_lut",
+      "short": "Color space transformation using pre-generated look-up-table."
+    },
+    {
+      "name": "create_color_trans_lut",
+      "short": "Creates the look-up-table for transformation of an image from the"
+    },
+    {
+      "name": "cfa_to_rgb",
+      "short": "Convert a single-channel color filter array image into an RGB image."
+    },
+    {
+      "name": "rgb1_to_gray",
+      "short": "Transform an RGB image into a gray scale image."
+    },
+    {
+      "name": "rgb3_to_gray",
+      "short": "Transform an RGB image to a gray scale image."
+    },
+    {
+      "name": "trans_from_rgb",
+      "short": "Transform an image from the RGB color space to an arbitrary color space."
+    },
+    {
+      "name": "trans_to_rgb",
+      "short": "Transform an image from an arbitrary color space to the RGB color space."
+    }
+  ]
+}

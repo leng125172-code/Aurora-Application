@@ -1,0 +1,520 @@
+{
+  "通用": [
+    {
+      "name": "classify_image_class_lut",
+      "short": "Classify a byte image using a look-up table."
+    },
+    {
+      "name": "classify_image_class_knn",
+      "short": "Classify an image with a k-Nearest-Neighbor classifier."
+    },
+    {
+      "name": "add_samples_image_class_knn",
+      "short": "Add training samples from an image to the training data of a"
+    },
+    {
+      "name": "classify_image_class_gmm",
+      "short": "Classify an image with a Gaussian Mixture Model."
+    },
+    {
+      "name": "add_samples_image_class_gmm",
+      "short": "Add training samples from an image to the training data of a"
+    },
+    {
+      "name": "classify_image_class_svm",
+      "short": "Classify an image with a support vector machine."
+    },
+    {
+      "name": "add_samples_image_class_svm",
+      "short": "Add training samples from an image to the training data of a support"
+    },
+    {
+      "name": "classify_image_class_mlp",
+      "short": "Classify an image with a multilayer perceptron."
+    },
+    {
+      "name": "add_samples_image_class_mlp",
+      "short": "Add training samples from an image to the training data of a"
+    },
+    {
+      "name": "learn_ndim_norm",
+      "short": "Construct classes for class_ndim_norm."
+    },
+    {
+      "name": "class_ndim_norm",
+      "short": "Classify pixels using hyper-spheres or hyper-cubes."
+    },
+    {
+      "name": "class_2dim_sup",
+      "short": "Segment an image using two-dimensional pixel classification."
+    },
+    {
+      "name": "class_2dim_unsup",
+      "short": "Segment two images by clustering."
+    },
+    {
+      "name": "deserialize_class_train_data",
+      "short": "Deserialize serialized training data for classifiers."
+    },
+    {
+      "name": "serialize_class_train_data",
+      "short": "Serialize training data for classifiers."
+    },
+    {
+      "name": "read_class_train_data",
+      "short": "Read the training data for classifiers from a file."
+    },
+    {
+      "name": "write_class_train_data",
+      "short": "Save the training data for classifiers in a file."
+    },
+    {
+      "name": "select_sub_feature_class_train_data",
+      "short": "Select certain features from training data to create"
+    },
+    {
+      "name": "set_feature_lengths_class_train_data",
+      "short": "Define subfeatures in training data."
+    },
+    {
+      "name": "get_class_train_data_gmm",
+      "short": "Get the training data of a Gaussian Mixture Model (GMM)."
+    },
+    {
+      "name": "add_class_train_data_gmm",
+      "short": "Add training data to a Gaussian Mixture Model (GMM)."
+    },
+    {
+      "name": "get_class_train_data_mlp",
+      "short": "Get the training data of a multilayer perceptron (MLP)."
+    },
+    {
+      "name": "add_class_train_data_mlp",
+      "short": "Add training data to a multilayer perceptron (MLP)."
+    },
+    {
+      "name": "get_class_train_data_knn",
+      "short": "Get the training data of a k-nearest neighbors (k-NN) classifier."
+    },
+    {
+      "name": "add_class_train_data_knn",
+      "short": "Add training data to a k-nearest neighbors (k-NN) classifier."
+    },
+    {
+      "name": "get_class_train_data_svm",
+      "short": "Get the training data of a support vector machine (SVM)."
+    },
+    {
+      "name": "add_class_train_data_svm",
+      "short": "Add training data to a support vector machine (SVM)."
+    },
+    {
+      "name": "get_sample_num_class_train_data",
+      "short": "Return the number of training samples stored in the training data."
+    },
+    {
+      "name": "get_sample_class_train_data",
+      "short": "Return a training sample from training data."
+    },
+    {
+      "name": "clear_class_train_data",
+      "short": "Clears training data for classifiers."
+    },
+    {
+      "name": "add_sample_class_train_data",
+      "short": "Add a training sample to training data."
+    },
+    {
+      "name": "create_class_train_data",
+      "short": "Create a handle for training data for classifiers."
+    },
+    {
+      "name": "select_feature_set_mlp",
+      "short": "Selects an optimal combination of features to classify the provided data."
+    },
+    {
+      "name": "select_feature_set_svm",
+      "short": "Selects an optimal combination of features to classify the provided data."
+    },
+    {
+      "name": "select_feature_set_gmm",
+      "short": "Selects an optimal combination from a set of features to classify the"
+    },
+    {
+      "name": "select_feature_set_knn",
+      "short": "Selects an optimal subset from a set of features to solve a certain"
+    },
+    {
+      "name": "clear_class_knn",
+      "short": "Clear a k-NN classifier."
+    },
+    {
+      "name": "get_sample_num_class_knn",
+      "short": "Return the number of training samples stored in the training data of"
+    },
+    {
+      "name": "get_sample_class_knn",
+      "short": "Return a training sample from the training data of a k-nearest neighbors"
+    },
+    {
+      "name": "deserialize_class_knn",
+      "short": "Deserialize a serialized k-NN classifier."
+    },
+    {
+      "name": "serialize_class_knn",
+      "short": "Serialize a k-NN classifier."
+    },
+    {
+      "name": "read_class_knn",
+      "short": "Read the k-NN classifier from a file."
+    },
+    {
+      "name": "write_class_knn",
+      "short": "Save the k-NN classifier in a file."
+    },
+    {
+      "name": "get_params_class_knn",
+      "short": "Get parameters of a k-NN classification."
+    },
+    {
+      "name": "set_params_class_knn",
+      "short": "Set parameters for k-NN classification."
+    },
+    {
+      "name": "classify_class_knn",
+      "short": "Search for the next neighbors for a given feature vector."
+    },
+    {
+      "name": "train_class_knn",
+      "short": "Creates the search trees for a k-NN classifier."
+    },
+    {
+      "name": "add_sample_class_knn",
+      "short": "Add a sample to a  k-nearest neighbors (k-NN) classifier."
+    },
+    {
+      "name": "create_class_knn",
+      "short": "Create a k-nearest neighbors (k-NN) classifier."
+    },
+    {
+      "name": "clear_class_lut",
+      "short": "Clear a look-up table classifier."
+    },
+    {
+      "name": "create_class_lut_knn",
+      "short": "Create a look-up table using a k-nearest neighbors"
+    },
+    {
+      "name": "create_class_lut_gmm",
+      "short": "Create a look-up table using a gaussian mixture model to classify byte"
+    },
+    {
+      "name": "create_class_lut_svm",
+      "short": "Create a look-up table using a Support-Vector-Machine to classify byte"
+    },
+    {
+      "name": "create_class_lut_mlp",
+      "short": "Create a look-up table using a multi-layer perceptron to classify byte"
+    },
+    {
+      "name": "clear_class_gmm",
+      "short": "Clear a Gaussian Mixture Model."
+    },
+    {
+      "name": "clear_samples_class_gmm",
+      "short": "Clear the training data of a Gaussian Mixture Model."
+    },
+    {
+      "name": "deserialize_class_gmm",
+      "short": "Deserialize a serialized Gaussian Mixture Model."
+    },
+    {
+      "name": "serialize_class_gmm",
+      "short": "Serialize a Gaussian Mixture Model (GMM)."
+    },
+    {
+      "name": "read_class_gmm",
+      "short": "Read a Gaussian Mixture Model from a file."
+    },
+    {
+      "name": "write_class_gmm",
+      "short": "Write a Gaussian Mixture Model to a file."
+    },
+    {
+      "name": "read_samples_class_gmm",
+      "short": "Read the training data of a Gaussian Mixture Model from a file."
+    },
+    {
+      "name": "write_samples_class_gmm",
+      "short": "Write the training data of a Gaussian Mixture Model to a file."
+    },
+    {
+      "name": "classify_class_gmm",
+      "short": "Calculate the class of a feature vector by a Gaussian Mixture"
+    },
+    {
+      "name": "evaluate_class_gmm",
+      "short": "Evaluate a feature vector by a Gaussian Mixture Model."
+    },
+    {
+      "name": "train_class_gmm",
+      "short": "Train a Gaussian Mixture Model."
+    },
+    {
+      "name": "get_prep_info_class_gmm",
+      "short": "Compute the information content of the preprocessed feature vectors"
+    },
+    {
+      "name": "get_sample_num_class_gmm",
+      "short": "Return the number of training samples stored in the training data of"
+    },
+    {
+      "name": "get_sample_class_gmm",
+      "short": "Return a training sample from the training data of a Gaussian"
+    },
+    {
+      "name": "add_sample_class_gmm",
+      "short": "Add a training sample to the training data of a Gaussian Mixture"
+    },
+    {
+      "name": "get_params_class_gmm",
+      "short": "Return the parameters of a Gaussian Mixture Model."
+    },
+    {
+      "name": "create_class_gmm",
+      "short": "Create a Gaussian Mixture Model for classification"
+    },
+    {
+      "name": "clear_class_svm",
+      "short": "Clear a support vector machine."
+    },
+    {
+      "name": "clear_samples_class_svm",
+      "short": "Clear the training data of a support vector machine."
+    },
+    {
+      "name": "deserialize_class_svm",
+      "short": "Deserialize a serialized support vector machine (SVM)."
+    },
+    {
+      "name": "serialize_class_svm",
+      "short": "Serialize a support vector machine (SVM)."
+    },
+    {
+      "name": "read_class_svm",
+      "short": "Read a support vector machine from a file."
+    },
+    {
+      "name": "write_class_svm",
+      "short": "Write a support vector machine to a file."
+    },
+    {
+      "name": "read_samples_class_svm",
+      "short": "Read the training data of a support vector machine from a file."
+    },
+    {
+      "name": "write_samples_class_svm",
+      "short": "Write the training data of a support vector machine to a file."
+    },
+    {
+      "name": "evaluate_class_svm",
+      "short": "Evaluate a feature vector by a support vector machine."
+    },
+    {
+      "name": "classify_class_svm",
+      "short": "Classify a feature vector by a support vector machine."
+    },
+    {
+      "name": "reduce_class_svm",
+      "short": "Approximate a trained support vector machine by a reduced support"
+    },
+    {
+      "name": "train_class_svm",
+      "short": "Train a support vector machine."
+    },
+    {
+      "name": "get_prep_info_class_svm",
+      "short": "Compute the information content of the preprocessed feature vectors"
+    },
+    {
+      "name": "get_support_vector_num_class_svm",
+      "short": "Return the number of support vectors of a support vector machine."
+    },
+    {
+      "name": "get_support_vector_class_svm",
+      "short": "Return the index of a support vector from a trained support vector"
+    },
+    {
+      "name": "get_sample_num_class_svm",
+      "short": "Return the number of training samples stored in the training data of"
+    },
+    {
+      "name": "get_sample_class_svm",
+      "short": "Return a training sample from the training data of a support vector"
+    },
+    {
+      "name": "add_sample_class_svm",
+      "short": "Add a training sample to the training data of a support vector"
+    },
+    {
+      "name": "get_params_class_svm",
+      "short": "Return the parameters of a support vector machine."
+    },
+    {
+      "name": "create_class_svm",
+      "short": "Create a support vector machine for pattern classification."
+    },
+    {
+      "name": "clear_class_mlp",
+      "short": "Clear a multilayer perceptron."
+    },
+    {
+      "name": "clear_samples_class_mlp",
+      "short": "Clear the training data of a multilayer perceptron."
+    },
+    {
+      "name": "deserialize_class_mlp",
+      "short": "Deserialize a serialized multilayer perceptron."
+    },
+    {
+      "name": "serialize_class_mlp",
+      "short": "Serialize a multilayer perceptron (MLP)."
+    },
+    {
+      "name": "read_class_mlp",
+      "short": "Read a multilayer perceptron from a file."
+    },
+    {
+      "name": "write_class_mlp",
+      "short": "Write a multilayer perceptron to a file."
+    },
+    {
+      "name": "read_samples_class_mlp",
+      "short": "Read the training data of a multilayer perceptron from a file."
+    },
+    {
+      "name": "write_samples_class_mlp",
+      "short": "Write the training data of a multilayer perceptron to a file."
+    },
+    {
+      "name": "classify_class_mlp",
+      "short": "Calculate the class of a feature vector by a multilayer perceptron."
+    },
+    {
+      "name": "evaluate_class_mlp",
+      "short": "Calculate the evaluation of a feature vector by a multilayer"
+    },
+    {
+      "name": "train_class_mlp",
+      "short": "Train a multilayer perceptron."
+    },
+    {
+      "name": "get_prep_info_class_mlp",
+      "short": "Compute the information content of the preprocessed feature vectors"
+    },
+    {
+      "name": "get_sample_num_class_mlp",
+      "short": "Return the number of training samples stored in the training data of"
+    },
+    {
+      "name": "get_sample_class_mlp",
+      "short": "Return a training sample from the training data of a multilayer"
+    },
+    {
+      "name": "get_rejection_params_class_mlp",
+      "short": "Get the parameters of a rejection class."
+    },
+    {
+      "name": "set_rejection_params_class_mlp",
+      "short": "Set the parameters of a rejection class."
+    },
+    {
+      "name": "add_sample_class_mlp",
+      "short": "Add a training sample to the training data of a multilayer"
+    },
+    {
+      "name": "get_regularization_params_class_mlp",
+      "short": "Return the regularization parameters of a multilayer perceptron."
+    },
+    {
+      "name": "set_regularization_params_class_mlp",
+      "short": "Set the regularization parameters of a multilayer perceptron."
+    },
+    {
+      "name": "get_params_class_mlp",
+      "short": "Return the parameters of a multilayer perceptron."
+    },
+    {
+      "name": "create_class_mlp",
+      "short": "Create a multilayer perceptron for classification or regression."
+    },
+    {
+      "name": "deserialize_class_box",
+      "short": "Deserialize a serialized classifier."
+    },
+    {
+      "name": "serialize_class_box",
+      "short": "Serialize a classifier."
+    },
+    {
+      "name": "write_class_box",
+      "short": "Save a classifier in a file."
+    },
+    {
+      "name": "set_class_box_param",
+      "short": "Set system parameters for classification."
+    },
+    {
+      "name": "read_sampset",
+      "short": "Read a training data set from a file."
+    },
+    {
+      "name": "read_class_box",
+      "short": "Read a classifier from a file."
+    },
+    {
+      "name": "learn_sampset_box",
+      "short": "Train the classifier with one data set."
+    },
+    {
+      "name": "learn_class_box",
+      "short": "Train the classifier."
+    },
+    {
+      "name": "get_class_box_param",
+      "short": "Get information about the current parameter."
+    },
+    {
+      "name": "clear_sampset",
+      "short": "Free memory of a data set."
+    },
+    {
+      "name": "close_class_box",
+      "short": "Destroy the classifier."
+    },
+    {
+      "name": "create_class_box",
+      "short": "Create a new classifier."
+    },
+    {
+      "name": "descript_class_box",
+      "short": "Describe the classes of a box classifier."
+    },
+    {
+      "name": "test_sampset_box",
+      "short": "Classify a set of arrays."
+    },
+    {
+      "name": "enquire_reject_class_box",
+      "short": "Classify a tuple of attributes with rejection class."
+    },
+    {
+      "name": "enquire_class_box",
+      "short": "Classify a tuple of attributes."
+    },
+    {
+      "name": "fit_dl_out_of_distribution",
+      "short": "Extend a deep learning model for Out-of-Distribution Detection."
+    }
+  ]
+}

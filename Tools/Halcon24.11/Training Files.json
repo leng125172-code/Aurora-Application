@@ -1,0 +1,40 @@
+{
+  "通用": [
+    {
+      "name": "protect_ocr_trainf",
+      "short": "Protection of training data."
+    },
+    {
+      "name": "write_ocr_trainf",
+      "short": "Storing of training characters into a file."
+    },
+    {
+      "name": "concat_ocr_trainf",
+      "short": "Concat training files."
+    },
+    {
+      "name": "write_ocr_trainf_image",
+      "short": "Write characters into a training file."
+    },
+    {
+      "name": "append_ocr_trainf",
+      "short": "Add characters to a training file."
+    },
+    {
+      "name": "read_ocr_trainf_names_protected",
+      "short": "Query which characters are stored in a (protected) training file."
+    },
+    {
+      "name": "read_ocr_trainf_names",
+      "short": "Query which characters are stored in a training file."
+    },
+    {
+      "name": "read_ocr_trainf_select",
+      "short": "Read training specific characters from files and convert to images."
+    },
+    {
+      "name": "read_ocr_trainf",
+      "short": "Read training characters from files and convert to images."
+    }
+  ]
+}

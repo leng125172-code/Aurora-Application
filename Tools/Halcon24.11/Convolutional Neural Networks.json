@@ -1,0 +1,40 @@
+{
+  "通用": [
+    {
+      "name": "clear_ocr_class_cnn",
+      "short": "Clear an CNN-based OCR classifier."
+    },
+    {
+      "name": "deserialize_ocr_class_cnn",
+      "short": "Deserialize a serialized CNN-based OCR classifier."
+    },
+    {
+      "name": "do_ocr_multi_class_cnn",
+      "short": "Classify multiple characters with an CNN-based OCR classifier."
+    },
+    {
+      "name": "do_ocr_single_class_cnn",
+      "short": "Classify a single character with an CNN-based OCR classifier."
+    },
+    {
+      "name": "do_ocr_word_cnn",
+      "short": "Classify a related group of characters with an CNN-based OCR classifier."
+    },
+    {
+      "name": "get_params_ocr_class_cnn",
+      "short": "Return the parameters of a CNN-based OCR classifier."
+    },
+    {
+      "name": "query_params_ocr_class_cnn",
+      "short": "Get the names of the parameters that can be used in"
+    },
+    {
+      "name": "read_ocr_class_cnn",
+      "short": "Read an CNN-based OCR classifier from a file."
+    },
+    {
+      "name": "serialize_ocr_class_cnn",
+      "short": "Serialize a CNN-based OCR classifier"
+    }
+  ]
+}

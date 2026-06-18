@@ -61,12 +61,16 @@ public interface ICalibPhotoAppService : IApplicationService
     Task<int> DeleteInvalidPhotosAsync(Guid calibProjectId, Guid cameraDeviceId);
 
     /// <summary>
-    /// 计算内参（calibrateCamera）及外参（solvePnP），结果写入 CalibCameraParam
+    /// 仅计算相机内参（calibrateCamera），结果写入 CalibCameraParam。
+    /// POST /api/app/calib-photo/compute-intrinsic
     /// </summary>
-    /// <param name="calibProjectId">标定项目ID</param>
-    /// <param name="cameraDeviceId">相机设备ID</param>
-    /// <returns>计算结果 DTO</returns>
-    Task<CalibComputeResultDto> ComputeCalibrationAsync(Guid calibProjectId, Guid cameraDeviceId);
+    Task<CalibComputeResultDto> ComputeIntrinsicAsync(Guid calibProjectId, Guid cameraDeviceId);
+
+    /// <summary>
+    /// 仅计算外参（solvePnP + 投影仪内参），依赖已保存的相机内参，结果写入 CalibCameraParam。
+    /// POST /api/app/calib-photo/compute-extrinsic
+    /// </summary>
+    Task<CalibComputeResultDto> ComputeExtrinsicAsync(Guid calibProjectId, Guid cameraDeviceId);
 
     /// <summary>
     /// 获取指定相机的照片计数及最新标定结果汇总
@@ -89,4 +93,12 @@ public interface ICalibPhotoAppService : IApplicationService
     /// GET /api/app/calib-photo/validate-step5?calibProjectId={id}
     /// </summary>
     Task<bool> ValidateStep5Async(Guid calibProjectId);
+
+    /// <summary>
+    /// 相机自动对齐：投影十字架 → 左右相机各拍一帧 → OpenCV 检测十字架中心偏差
+    ///   → 计算目标角度 → 调整瓴控伺服电机，使两台相机都能看到十字架中心区域。
+    /// 仅对已绑定角度控制电机（MainCameraMotorAxisId / SecondaryCameraMotorAxisId）的相机执行调整。
+    /// POST /api/app/calib-photo/auto-align-cameras?calibProjectId={id}
+    /// </summary>
+    Task<AutoAlignCamerasResultDto> AutoAlignCamerasAsync(Guid id);
 }

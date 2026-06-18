@@ -1,0 +1,552 @@
+{
+  "通用": [
+    {
+      "name": "deserialize_shape_model",
+      "short": "Deserialize a serialized shape model."
+    },
+    {
+      "name": "read_shape_model",
+      "short": "Read a shape model from a file."
+    },
+    {
+      "name": "serialize_shape_model",
+      "short": "Serialize a shape model."
+    },
+    {
+      "name": "write_shape_model",
+      "short": "Write a shape model to a file."
+    },
+    {
+      "name": "clear_shape_model",
+      "short": "Free the memory of a shape model."
+    },
+    {
+      "name": "get_shape_model_contours",
+      "short": "Return the contour representation of a shape model."
+    },
+    {
+      "name": "determine_shape_model_params",
+      "short": "Determine the parameters of a shape model."
+    },
+    {
+      "name": "get_shape_model_params",
+      "short": "Return the parameters of a shape model."
+    },
+    {
+      "name": "get_shape_model_origin",
+      "short": "Return the origin (reference point) of a shape model."
+    },
+    {
+      "name": "set_shape_model_origin",
+      "short": "Set the origin (reference point) of a shape model."
+    },
+    {
+      "name": "find_aniso_shape_models",
+      "short": "Find the best matches of multiple anisotropically scaled shape"
+    },
+    {
+      "name": "find_scaled_shape_models",
+      "short": "Find the best matches of multiple isotropically scaled shape models."
+    },
+    {
+      "name": "find_shape_models",
+      "short": "Find the best matches of multiple shape models."
+    },
+    {
+      "name": "find_aniso_shape_model",
+      "short": "Find the best matches of an anisotropically scaled shape model"
+    },
+    {
+      "name": "find_scaled_shape_model",
+      "short": "Find the best matches of an isotropically scaled shape model in an image."
+    },
+    {
+      "name": "find_shape_model",
+      "short": "Find the best matches of a shape model in an image."
+    },
+    {
+      "name": "set_shape_model_metric",
+      "short": "Set the metric of a shape model that was created from XLD contours."
+    },
+    {
+      "name": "set_shape_model_param",
+      "short": "Set selected parameters of the shape model."
+    },
+    {
+      "name": "create_aniso_shape_model_xld",
+      "short": "Prepare an anisotropically scaled shape model for matching"
+    },
+    {
+      "name": "create_scaled_shape_model_xld",
+      "short": "Prepare an isotropically scaled shape model for matching from XLD contours."
+    },
+    {
+      "name": "create_shape_model_xld",
+      "short": "Prepare a shape model for matching from XLD contours."
+    },
+    {
+      "name": "create_aniso_shape_model",
+      "short": "Prepare an anisotropically scaled shape model for matching."
+    },
+    {
+      "name": "create_scaled_shape_model",
+      "short": "Prepare an isotropically scaled shape model for matching."
+    },
+    {
+      "name": "create_shape_model",
+      "short": "Prepare a shape model for matching."
+    },
+    {
+      "name": "inspect_shape_model",
+      "short": "Create the representation of a shape model."
+    },
+    {
+      "name": "clear_descriptor_model",
+      "short": "Free the memory of a descriptor model."
+    },
+    {
+      "name": "deserialize_descriptor_model",
+      "short": "Deserialize a descriptor model."
+    },
+    {
+      "name": "serialize_descriptor_model",
+      "short": "Serialize a descriptor model."
+    },
+    {
+      "name": "read_descriptor_model",
+      "short": "Read a descriptor model from a file."
+    },
+    {
+      "name": "write_descriptor_model",
+      "short": "Write a descriptor model to a file."
+    },
+    {
+      "name": "find_calib_descriptor_model",
+      "short": "Find the best matches of a calibrated descriptor model in an image and"
+    },
+    {
+      "name": "find_uncalib_descriptor_model",
+      "short": "Find the best matches of a descriptor model in an image."
+    },
+    {
+      "name": "get_descriptor_model_points",
+      "short": "Query the interest points of the descriptor model or the last processed"
+    },
+    {
+      "name": "get_descriptor_model_params",
+      "short": "Return the parameters of a descriptor model."
+    },
+    {
+      "name": "create_calib_descriptor_model",
+      "short": "Create a descriptor model for calibrated perspective matching."
+    },
+    {
+      "name": "create_uncalib_descriptor_model",
+      "short": "Prepare a descriptor model for interest point matching."
+    },
+    {
+      "name": "get_descriptor_model_results",
+      "short": "Query alphanumerical results that were accumulated during descriptor-based"
+    },
+    {
+      "name": "get_descriptor_model_origin",
+      "short": "Return the origin of a descriptor model."
+    },
+    {
+      "name": "set_descriptor_model_origin",
+      "short": "Sets the origin of a descriptor model."
+    },
+    {
+      "name": "get_deformable_model_origin",
+      "short": "Return the origin (reference point) of a deformable model."
+    },
+    {
+      "name": "set_deformable_model_origin",
+      "short": "Set the origin (reference point) of a deformable model."
+    },
+    {
+      "name": "set_deformable_model_param",
+      "short": "Set selected parameters of the deformable model."
+    },
+    {
+      "name": "get_deformable_model_params",
+      "short": "Return the parameters of a deformable model."
+    },
+    {
+      "name": "get_deformable_model_contours",
+      "short": "Return the contour representation of a deformable model."
+    },
+    {
+      "name": "determine_deformable_model_params",
+      "short": "Determine the parameters of a deformable model."
+    },
+    {
+      "name": "deserialize_deformable_model",
+      "short": "Deserialize a deformable model."
+    },
+    {
+      "name": "serialize_deformable_model",
+      "short": "Serialize a deformable model."
+    },
+    {
+      "name": "read_deformable_model",
+      "short": "Read a deformable model from a file."
+    },
+    {
+      "name": "write_deformable_model",
+      "short": "Write a deformable model to a file."
+    },
+    {
+      "name": "clear_deformable_model",
+      "short": "Free the memory of a deformable model."
+    },
+    {
+      "name": "find_local_deformable_model",
+      "short": "Find the best matches of a local deformable model in an image."
+    },
+    {
+      "name": "find_planar_calib_deformable_model",
+      "short": "Find the best matches of a calibrated deformable model in an image and return"
+    },
+    {
+      "name": "find_planar_uncalib_deformable_model",
+      "short": "Find the best matches of a planar projective invariant deformable model"
+    },
+    {
+      "name": "set_local_deformable_model_metric",
+      "short": "Set the metric of a local deformable model that was created from XLD"
+    },
+    {
+      "name": "set_planar_calib_deformable_model_metric",
+      "short": "Set the metric of a planar calibrated deformable model that was created"
+    },
+    {
+      "name": "set_planar_uncalib_deformable_model_metric",
+      "short": "Set the metric of a planar uncalibrated deformable model that was created"
+    },
+    {
+      "name": "create_local_deformable_model_xld",
+      "short": "Prepare a deformable model for local deformable matching from XLD contours."
+    },
+    {
+      "name": "create_planar_calib_deformable_model_xld",
+      "short": "Prepare a deformable model for planar calibrated matching from XLD contours."
+    },
+    {
+      "name": "create_planar_uncalib_deformable_model_xld",
+      "short": "Prepare a deformable model for planar uncalibrated matching"
+    },
+    {
+      "name": "create_local_deformable_model",
+      "short": "Creates a deformable model for local, deformable matching."
+    },
+    {
+      "name": "create_planar_calib_deformable_model",
+      "short": "Create a deformable model for calibrated perspective matching."
+    },
+    {
+      "name": "create_planar_uncalib_deformable_model",
+      "short": "Creates a deformable model for uncalibrated, perspective matching."
+    },
+    {
+      "name": "clear_ncc_model",
+      "short": "Free the memory of an NCC model."
+    },
+    {
+      "name": "deserialize_ncc_model",
+      "short": "Deserialize an NCC model."
+    },
+    {
+      "name": "serialize_ncc_model",
+      "short": "Serialize an NCC model."
+    },
+    {
+      "name": "read_ncc_model",
+      "short": "Read an NCC model from a file."
+    },
+    {
+      "name": "write_ncc_model",
+      "short": "Write an NCC model to a file."
+    },
+    {
+      "name": "determine_ncc_model_params",
+      "short": "Determine the parameters of an NCC model."
+    },
+    {
+      "name": "get_ncc_model_params",
+      "short": "Return the parameters of an NCC model."
+    },
+    {
+      "name": "get_ncc_model_origin",
+      "short": "Return the origin (reference point) of an NCC model."
+    },
+    {
+      "name": "set_ncc_model_origin",
+      "short": "Set the origin (reference point) of an NCC model."
+    },
+    {
+      "name": "find_ncc_model",
+      "short": "Find the best matches of an NCC model in an image."
+    },
+    {
+      "name": "set_ncc_model_param",
+      "short": "Set selected parameters of the NCC model."
+    },
+    {
+      "name": "create_ncc_model",
+      "short": "Prepare an NCC model for matching."
+    },
+    {
+      "name": "get_found_component_model",
+      "short": "Return the components of a found instance of a component model."
+    },
+    {
+      "name": "find_component_model",
+      "short": "Find the best matches of a component model in an image."
+    },
+    {
+      "name": "clear_all_component_models",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "clear_component_model",
+      "short": "Free the memory of a component model."
+    },
+    {
+      "name": "get_component_model_tree",
+      "short": "Return the search tree of a component model."
+    },
+    {
+      "name": "get_component_model_params",
+      "short": "Return the parameters of a component model."
+    },
+    {
+      "name": "deserialize_component_model",
+      "short": "Deserialize a serialized component model."
+    },
+    {
+      "name": "serialize_component_model",
+      "short": "Serialize a component model."
+    },
+    {
+      "name": "read_component_model",
+      "short": "Read a component model from a file."
+    },
+    {
+      "name": "write_component_model",
+      "short": "Write a component model to a file."
+    },
+    {
+      "name": "create_component_model",
+      "short": "Prepare a component model for matching based on explicitly specified"
+    },
+    {
+      "name": "create_trained_component_model",
+      "short": "Prepare a component model for matching based on trained components."
+    },
+    {
+      "name": "clear_all_training_components",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "clear_training_components",
+      "short": "Free the memory of a component training result."
+    },
+    {
+      "name": "get_component_relations",
+      "short": "Return the relations between the model components that are contained in"
+    },
+    {
+      "name": "get_training_components",
+      "short": "Return the initial or model components in a certain image."
+    },
+    {
+      "name": "modify_component_relations",
+      "short": "Modify the relations within a training result."
+    },
+    {
+      "name": "deserialize_training_components",
+      "short": "Deserialize a component training result."
+    },
+    {
+      "name": "serialize_training_components",
+      "short": "Serialize a component training result."
+    },
+    {
+      "name": "read_training_components",
+      "short": "Read a component training result from a file."
+    },
+    {
+      "name": "write_training_components",
+      "short": "Write a component training result to a file."
+    },
+    {
+      "name": "cluster_model_components",
+      "short": "Adopt new parameters that are used to create the model components into the"
+    },
+    {
+      "name": "inspect_clustered_components",
+      "short": "Inspect the rigid model components obtained from the training."
+    },
+    {
+      "name": "train_model_components",
+      "short": "Train components and relations for the component-based matching."
+    },
+    {
+      "name": "gen_initial_components",
+      "short": "Extract the initial components of a component model."
+    },
+    {
+      "name": "create_template_rot",
+      "short": "Preparing a pattern for template matching with rotation."
+    },
+    {
+      "name": "create_template",
+      "short": "Preparing a pattern for template matching."
+    },
+    {
+      "name": "serialize_template",
+      "short": "Serialize a template."
+    },
+    {
+      "name": "deserialize_template",
+      "short": "Deserialize a serialized template."
+    },
+    {
+      "name": "write_template",
+      "short": "Writing a template to file."
+    },
+    {
+      "name": "read_template",
+      "short": "Reading a template from file."
+    },
+    {
+      "name": "clear_template",
+      "short": "Deallocation of the memory of a template."
+    },
+    {
+      "name": "set_offset_template",
+      "short": "Gray value offset for template."
+    },
+    {
+      "name": "set_reference_template",
+      "short": "Define reference position for a matching template."
+    },
+    {
+      "name": "adapt_template",
+      "short": "Adapting a template to the size of an image."
+    },
+    {
+      "name": "fast_match_mg",
+      "short": "Searching all good gray value matches in a pyramid."
+    },
+    {
+      "name": "best_match_pre_mg",
+      "short": "Searching the best gray value matches in a pre generated pyramid."
+    },
+    {
+      "name": "best_match_mg",
+      "short": "Searching the best gray value matches in a pyramid."
+    },
+    {
+      "name": "fast_match",
+      "short": "Searching all good matches of a template and an image."
+    },
+    {
+      "name": "best_match_rot_mg",
+      "short": "Searching the best matching of a template and a pyramid with rotation."
+    },
+    {
+      "name": "best_match_rot",
+      "short": "Searching the best matching of a template and an image with rotation."
+    },
+    {
+      "name": "best_match",
+      "short": "Searching the best matching of a template and an image."
+    },
+    {
+      "name": "find_ncc_models",
+      "short": "Find the best matches of multiple NCC models."
+    },
+    {
+      "name": "get_ncc_model_region",
+      "short": "Return the region used to create an NCC model."
+    },
+    {
+      "name": "get_shape_model_clutter",
+      "short": "Get the clutter parameters of a shape model."
+    },
+    {
+      "name": "set_shape_model_clutter",
+      "short": "Set the clutter parameters of a shape model."
+    },
+    {
+      "name": "adapt_shape_model_high_noise",
+      "short": "Adapt a shape model's parameters for high noise images."
+    },
+    {
+      "name": "create_generic_shape_model",
+      "short": "Create a shape model."
+    },
+    {
+      "name": "find_generic_shape_model",
+      "short": "Find the best matches of one or multiple shape models in an image."
+    },
+    {
+      "name": "get_generic_shape_model_param",
+      "short": "Return the parameters of a shape model."
+    },
+    {
+      "name": "get_generic_shape_model_result",
+      "short": "Get alphanumerical values from a shape matching result."
+    },
+    {
+      "name": "get_generic_shape_model_result_object",
+      "short": "Get objects from a shape matching result."
+    },
+    {
+      "name": "set_generic_shape_model_object",
+      "short": "Set iconic objects to the shape model."
+    },
+    {
+      "name": "set_generic_shape_model_param",
+      "short": "Set selected parameters of the shape model."
+    },
+    {
+      "name": "train_generic_shape_model",
+      "short": "Train a shape model for matching."
+    },
+    {
+      "name": "get_generic_shape_model_object",
+      "short": "Get iconic objects of the shape model."
+    },
+    {
+      "name": "apply_deep_counting_model",
+      "short": "Apply a Deep Counting model on a set of images for inference."
+    },
+    {
+      "name": "create_deep_counting_model",
+      "short": "Create a Deep Counting model for counting objects."
+    },
+    {
+      "name": "get_deep_counting_model_param",
+      "short": "Return the parameters of a Deep Counting model."
+    },
+    {
+      "name": "prepare_deep_counting_model",
+      "short": "Set templates of a Deep Counting model."
+    },
+    {
+      "name": "read_deep_counting_model",
+      "short": "Read a Deep Counting model from a file."
+    },
+    {
+      "name": "set_deep_counting_model_param",
+      "short": "Set selected parameters of the Deep Counting model."
+    },
+    {
+      "name": "write_deep_counting_model",
+      "short": "Write a Deep Counting model in a file."
+    }
+  ]
+}

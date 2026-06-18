@@ -1,0 +1,28 @@
+{
+  "通用": [
+    {
+      "name": "bandpass_image",
+      "short": "Edge extraction using bandpass filters."
+    },
+    {
+      "name": "lines_color",
+      "short": "Detect color lines and their width."
+    },
+    {
+      "name": "lines_gauss",
+      "short": "Detect lines and their width."
+    },
+    {
+      "name": "lines_facet",
+      "short": "Detection of lines using the facet model."
+    },
+    {
+      "name": "line_position",
+      "short": "Calculate the center of gravity, length, and orientation of a line."
+    },
+    {
+      "name": "line_orientation",
+      "short": "Calculate the orientation of lines."
+    }
+  ]
+}

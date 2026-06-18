@@ -1,0 +1,56 @@
+{
+  "通用": [
+    {
+      "name": "get_deformable_surface_matching_result",
+      "short": "Get details of a result from deformable surface based matching."
+    },
+    {
+      "name": "clear_deformable_surface_matching_result",
+      "short": "Free the memory of a deformable surface matching result."
+    },
+    {
+      "name": "clear_deformable_surface_model",
+      "short": "Free the memory of a deformable surface model."
+    },
+    {
+      "name": "deserialize_deformable_surface_model",
+      "short": "Deserialize a deformable surface model."
+    },
+    {
+      "name": "serialize_deformable_surface_model",
+      "short": "Serialize a deformable surface_model."
+    },
+    {
+      "name": "read_deformable_surface_model",
+      "short": "Read a deformable surface model from a file."
+    },
+    {
+      "name": "write_deformable_surface_model",
+      "short": "Write a deformable surface model to a file."
+    },
+    {
+      "name": "refine_deformable_surface_model",
+      "short": "Refine the position and deformation of a deformable surface model in a"
+    },
+    {
+      "name": "find_deformable_surface_model",
+      "short": "Find the best match of a deformable surface model in a 3D scene."
+    },
+    {
+      "name": "get_deformable_surface_model_param",
+      "short": "Return the parameters and properties of a deformable surface model."
+    },
+    {
+      "name": "add_deformable_surface_model_reference_point",
+      "short": "Add a reference point to a deformable surface model."
+    },
+    {
+      "name": "add_deformable_surface_model_sample",
+      "short": "Add a sample deformation to a deformable surface model"
+    },
+    {
+      "name": "create_deformable_surface_model",
+      "short": "Create the data structure needed to perform deformable"
+    }
+  ]
+}

@@ -1,0 +1,48 @@
+{
+  "通用": [
+    {
+      "name": "get_compute_device_param",
+      "short": "Query compute device parameters."
+    },
+    {
+      "name": "set_compute_device_param",
+      "short": "Set parameters of an compute device."
+    },
+    {
+      "name": "release_all_compute_devices",
+      "short": "Close all compute devices."
+    },
+    {
+      "name": "release_compute_device",
+      "short": "Close a compute_device."
+    },
+    {
+      "name": "deactivate_all_compute_devices",
+      "short": "Deactivate all compute devices."
+    },
+    {
+      "name": "deactivate_compute_device",
+      "short": "Deactivate a compute device."
+    },
+    {
+      "name": "activate_compute_device",
+      "short": "Activate a compute device."
+    },
+    {
+      "name": "init_compute_device",
+      "short": "Initialize a compute device."
+    },
+    {
+      "name": "open_compute_device",
+      "short": "Open a compute device."
+    },
+    {
+      "name": "get_compute_device_info",
+      "short": "Get information on a compute device."
+    },
+    {
+      "name": "query_available_compute_devices",
+      "short": "Get the list of available compute devices."
+    }
+  ]
+}

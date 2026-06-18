@@ -1,0 +1,124 @@
+{
+  "通用": [
+    {
+      "name": "read_world_file",
+      "short": "Read the geo coding from an ARC/INFO world file."
+    },
+    {
+      "name": "convert_point_3d_spher_to_cart",
+      "short": "Convert spherical coordinates of a 3D point to Cartesian"
+    },
+    {
+      "name": "convert_point_3d_cart_to_spher",
+      "short": "Convert Cartesian coordinates of a 3D point to spherical"
+    },
+    {
+      "name": "deviation_n",
+      "short": "Calculate standard deviation over several channels."
+    },
+    {
+      "name": "expand_domain_gray",
+      "short": "Expand the domain of an image and set the gray values in the"
+    },
+    {
+      "name": "topographic_sketch",
+      "short": "Compute the topographic primal sketch of an image."
+    },
+    {
+      "name": "gray_skeleton",
+      "short": "Thinning of gray value images."
+    },
+    {
+      "name": "lut_trans",
+      "short": "Transform an image with a gray-value look-up-table"
+    },
+    {
+      "name": "convol_image",
+      "short": "Calculate the correlation between an image and an arbitrary filter mask"
+    },
+    {
+      "name": "gray_inside",
+      "short": "Calculate the lowest possible gray value on an arbitrary path to the"
+    },
+    {
+      "name": "symmetry",
+      "short": "Symmetry of gray values along a row."
+    },
+    {
+      "name": "copy_file",
+      "short": "Copy a file to a new location."
+    },
+    {
+      "name": "set_current_dir",
+      "short": "Set the current working directory."
+    },
+    {
+      "name": "get_current_dir",
+      "short": "Get the current working directory."
+    },
+    {
+      "name": "remove_dir",
+      "short": "Delete an empty directory."
+    },
+    {
+      "name": "make_dir",
+      "short": "Make a directory."
+    },
+    {
+      "name": "list_files",
+      "short": "List all files in a directory."
+    },
+    {
+      "name": "delete_file",
+      "short": "Delete a file."
+    },
+    {
+      "name": "file_exists",
+      "short": "Check whether file exists."
+    },
+    {
+      "name": "deserialize_class_train_data",
+      "short": "Deserialize serialized training data for classifiers."
+    },
+    {
+      "name": "serialize_class_train_data",
+      "short": "Serialize training data for classifiers."
+    },
+    {
+      "name": "read_class_train_data",
+      "short": "Read the training data for classifiers from a file."
+    },
+    {
+      "name": "write_class_train_data",
+      "short": "Save the training data for classifiers in a file."
+    },
+    {
+      "name": "select_sub_feature_class_train_data",
+      "short": "Select certain features from training data to create"
+    },
+    {
+      "name": "set_feature_lengths_class_train_data",
+      "short": "Define subfeatures in training data."
+    },
+    {
+      "name": "get_sample_num_class_train_data",
+      "short": "Return the number of training samples stored in the training data."
+    },
+    {
+      "name": "get_sample_class_train_data",
+      "short": "Return a training sample from training data."
+    },
+    {
+      "name": "clear_class_train_data",
+      "short": "Clears training data for classifiers."
+    },
+    {
+      "name": "add_sample_class_train_data",
+      "short": "Add a training sample to training data."
+    },
+    {
+      "name": "create_class_train_data",
+      "short": "Create a handle for training data for classifiers."
+    }
+  ]
+}

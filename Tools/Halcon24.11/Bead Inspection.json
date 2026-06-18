@@ -1,0 +1,24 @@
+{
+  "通用": [
+    {
+      "name": "get_bead_inspection_param",
+      "short": "Get the value of a parameter in a specific bead inspection model."
+    },
+    {
+      "name": "set_bead_inspection_param",
+      "short": "Set parameters of the bead inspection model."
+    },
+    {
+      "name": "apply_bead_inspection_model",
+      "short": "Inspect beads in an image, as defined by the bead inspection"
+    },
+    {
+      "name": "clear_bead_inspection_model",
+      "short": "Delete the bead inspection model and free the allocated memory."
+    },
+    {
+      "name": "create_bead_inspection_model",
+      "short": "Create a model to inspect beads or adhesive in images."
+    }
+  ]
+}

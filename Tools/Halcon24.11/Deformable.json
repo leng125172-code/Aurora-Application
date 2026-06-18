@@ -1,0 +1,96 @@
+{
+  "通用": [
+    {
+      "name": "get_deformable_model_origin",
+      "short": "Return the origin (reference point) of a deformable model."
+    },
+    {
+      "name": "set_deformable_model_origin",
+      "short": "Set the origin (reference point) of a deformable model."
+    },
+    {
+      "name": "set_deformable_model_param",
+      "short": "Set selected parameters of the deformable model."
+    },
+    {
+      "name": "get_deformable_model_params",
+      "short": "Return the parameters of a deformable model."
+    },
+    {
+      "name": "get_deformable_model_contours",
+      "short": "Return the contour representation of a deformable model."
+    },
+    {
+      "name": "determine_deformable_model_params",
+      "short": "Determine the parameters of a deformable model."
+    },
+    {
+      "name": "deserialize_deformable_model",
+      "short": "Deserialize a deformable model."
+    },
+    {
+      "name": "serialize_deformable_model",
+      "short": "Serialize a deformable model."
+    },
+    {
+      "name": "read_deformable_model",
+      "short": "Read a deformable model from a file."
+    },
+    {
+      "name": "write_deformable_model",
+      "short": "Write a deformable model to a file."
+    },
+    {
+      "name": "clear_deformable_model",
+      "short": "Free the memory of a deformable model."
+    },
+    {
+      "name": "find_local_deformable_model",
+      "short": "Find the best matches of a local deformable model in an image."
+    },
+    {
+      "name": "find_planar_calib_deformable_model",
+      "short": "Find the best matches of a calibrated deformable model in an image and return"
+    },
+    {
+      "name": "find_planar_uncalib_deformable_model",
+      "short": "Find the best matches of a planar projective invariant deformable model"
+    },
+    {
+      "name": "set_local_deformable_model_metric",
+      "short": "Set the metric of a local deformable model that was created from XLD"
+    },
+    {
+      "name": "set_planar_calib_deformable_model_metric",
+      "short": "Set the metric of a planar calibrated deformable model that was created"
+    },
+    {
+      "name": "set_planar_uncalib_deformable_model_metric",
+      "short": "Set the metric of a planar uncalibrated deformable model that was created"
+    },
+    {
+      "name": "create_local_deformable_model_xld",
+      "short": "Prepare a deformable model for local deformable matching from XLD contours."
+    },
+    {
+      "name": "create_planar_calib_deformable_model_xld",
+      "short": "Prepare a deformable model for planar calibrated matching from XLD contours."
+    },
+    {
+      "name": "create_planar_uncalib_deformable_model_xld",
+      "short": "Prepare a deformable model for planar uncalibrated matching"
+    },
+    {
+      "name": "create_local_deformable_model",
+      "short": "Creates a deformable model for local, deformable matching."
+    },
+    {
+      "name": "create_planar_calib_deformable_model",
+      "short": "Create a deformable model for calibrated perspective matching."
+    },
+    {
+      "name": "create_planar_uncalib_deformable_model",
+      "short": "Creates a deformable model for uncalibrated, perspective matching."
+    }
+  ]
+}

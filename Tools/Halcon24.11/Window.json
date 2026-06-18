@@ -1,0 +1,88 @@
+{
+  "通用": [
+    {
+      "name": "get_disp_object_model_3d_info",
+      "short": "Get the depth or the index of a displayed 3D object model."
+    },
+    {
+      "name": "update_window_pose",
+      "short": "Modify the pose of a 3D plot."
+    },
+    {
+      "name": "unproject_coordinates",
+      "short": "Calculates image coordinates for a point in a 3D plot window."
+    },
+    {
+      "name": "get_os_window_handle",
+      "short": "Get the operating system window handle."
+    },
+    {
+      "name": "set_window_dc",
+      "short": "Set the device context of a virtual graphics window (Windows NT)."
+    },
+    {
+      "name": "new_extern_window",
+      "short": "Create a virtual graphics window under Windows."
+    },
+    {
+      "name": "set_window_type",
+      "short": "Specify a window type."
+    },
+    {
+      "name": "set_window_extents",
+      "short": "Modify position and size of a window."
+    },
+    {
+      "name": "get_window_attr",
+      "short": "Get window characteristics."
+    },
+    {
+      "name": "set_window_attr",
+      "short": "Set window characteristics."
+    },
+    {
+      "name": "query_window_type",
+      "short": "Query all available window types."
+    },
+    {
+      "name": "open_window",
+      "short": "Open a graphics window."
+    },
+    {
+      "name": "get_window_type",
+      "short": "Get the window type."
+    },
+    {
+      "name": "get_window_pointer3",
+      "short": "Access to a window's pixel data."
+    },
+    {
+      "name": "get_window_extents",
+      "short": "Information about a window's size and position."
+    },
+    {
+      "name": "dump_window_image",
+      "short": "Write the window content in an image object."
+    },
+    {
+      "name": "dump_window",
+      "short": "Write the window content to a file."
+    },
+    {
+      "name": "copy_rectangle",
+      "short": "Copy all pixels within rectangles between output windows."
+    },
+    {
+      "name": "close_window",
+      "short": "Close an output window."
+    },
+    {
+      "name": "clear_window",
+      "short": "Delete the contents of an output window."
+    },
+    {
+      "name": "flush_buffer",
+      "short": "Flush the contents of a window."
+    }
+  ]
+}

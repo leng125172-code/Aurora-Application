@@ -1,0 +1,168 @@
+{
+  "通用": [
+    {
+      "name": "obj_diff",
+      "short": "Calculate the difference of two object tuples."
+    },
+    {
+      "name": "integer_to_obj",
+      "short": "Convert an \"integer number\" into an iconic object."
+    },
+    {
+      "name": "obj_to_integer",
+      "short": "Convert an iconic object into an \"integer number.\""
+    },
+    {
+      "name": "copy_obj",
+      "short": "Copy an iconic object in the HALCON database."
+    },
+    {
+      "name": "concat_obj",
+      "short": "Concatenate two iconic object tuples."
+    },
+    {
+      "name": "clear_obj",
+      "short": "Delete an iconic object from the HALCON database."
+    },
+    {
+      "name": "select_obj",
+      "short": "Select objects from an object tuple."
+    },
+    {
+      "name": "compare_obj",
+      "short": "Compare iconic objects regarding equality."
+    },
+    {
+      "name": "test_equal_obj",
+      "short": "Compare image objects regarding equality."
+    },
+    {
+      "name": "count_obj",
+      "short": "Number of objects in a tuple."
+    },
+    {
+      "name": "get_channel_info",
+      "short": "Information about the components of an image object."
+    },
+    {
+      "name": "get_obj_class",
+      "short": "Name of the class of an image object."
+    },
+    {
+      "name": "gen_empty_obj",
+      "short": "Create an empty object tuple."
+    },
+    {
+      "name": "get_window_background_image",
+      "short": "Gets a copy of the background image of the HALCON window."
+    },
+    {
+      "name": "set_drawing_object_callback",
+      "short": "Add a callback function to a drawing object."
+    },
+    {
+      "name": "detach_background_from_window",
+      "short": "Detach the background image from a HALCON window."
+    },
+    {
+      "name": "attach_background_to_window",
+      "short": "Attach a background image to a HALCON window."
+    },
+    {
+      "name": "detach_drawing_object_from_window",
+      "short": "Detach an existing drawing object from a HALCON window."
+    },
+    {
+      "name": "attach_drawing_object_to_window",
+      "short": "Attach an existing drawing object to a HALCON window."
+    },
+    {
+      "name": "create_drawing_object_text",
+      "short": "Create a text object which can be moved interactively."
+    },
+    {
+      "name": "get_drawing_object_iconic",
+      "short": "Return the iconic object of a drawing object."
+    },
+    {
+      "name": "clear_drawing_object",
+      "short": "Delete drawing object."
+    },
+    {
+      "name": "set_drawing_object_params",
+      "short": "Set the parameters of a drawing object."
+    },
+    {
+      "name": "get_drawing_object_params",
+      "short": "Get the parameters of a drawing object."
+    },
+    {
+      "name": "set_drawing_object_xld",
+      "short": "Set the contour of an interactive draw XLD."
+    },
+    {
+      "name": "create_drawing_object_xld",
+      "short": "Create a XLD contour which can be modified interactively."
+    },
+    {
+      "name": "create_drawing_object_circle_sector",
+      "short": "Create a circle sector which can be modified interactively."
+    },
+    {
+      "name": "create_drawing_object_ellipse_sector",
+      "short": "Create an elliptic sector which can be modified interactively."
+    },
+    {
+      "name": "create_drawing_object_line",
+      "short": "Create a line which can be modified interactively."
+    },
+    {
+      "name": "create_drawing_object_circle",
+      "short": "Create a circle which can be modified interactively."
+    },
+    {
+      "name": "create_drawing_object_ellipse",
+      "short": "Create an ellipse which can be modified interactively."
+    },
+    {
+      "name": "create_drawing_object_rectangle2",
+      "short": "Create a rectangle of any orientation which can be modified interactively."
+    },
+    {
+      "name": "create_drawing_object_rectangle1",
+      "short": "Create a rectangle parallel to the coordinate axis which can be"
+    },
+    {
+      "name": "read_object",
+      "short": "Read an iconic object."
+    },
+    {
+      "name": "write_object",
+      "short": "Write an iconic object."
+    },
+    {
+      "name": "deserialize_object",
+      "short": "Deserialize a serialized iconic object."
+    },
+    {
+      "name": "serialize_object",
+      "short": "Serialize an iconic object."
+    },
+    {
+      "name": "set_content_update_callback",
+      "short": "Sets the callback for content updates in buffer window."
+    },
+    {
+      "name": "insert_obj",
+      "short": "Insert objects into an iconic object tuple."
+    },
+    {
+      "name": "remove_obj",
+      "short": "Remove objects from an iconic object tuple."
+    },
+    {
+      "name": "replace_obj",
+      "short": "Replaces one or more elements of an iconic object tuple."
+    }
+  ]
+}

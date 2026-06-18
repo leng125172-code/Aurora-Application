@@ -1,0 +1,56 @@
+{
+  "通用": [
+    {
+      "name": "apply_dl_classifier",
+      "short": "Infer the class affiliations for a set of images using a"
+    },
+    {
+      "name": "clear_dl_classifier",
+      "short": "Clear a deep-learning-based classifier."
+    },
+    {
+      "name": "clear_dl_classifier_result",
+      "short": "Clear a handle containing the results of the deep-learning-based"
+    },
+    {
+      "name": "clear_dl_classifier_train_result",
+      "short": "Clear the handle of a deep-learning-based classifier training result."
+    },
+    {
+      "name": "deserialize_dl_classifier",
+      "short": "Deserialize a deep-learning-based classifier."
+    },
+    {
+      "name": "get_dl_classifier_param",
+      "short": "Return the parameters of a deep-learning-based classifier."
+    },
+    {
+      "name": "get_dl_classifier_result",
+      "short": "Retrieve classification results inferred by a deep-learning-based"
+    },
+    {
+      "name": "get_dl_classifier_train_result",
+      "short": "Return the results for the single training step of a deep-learning-based"
+    },
+    {
+      "name": "read_dl_classifier",
+      "short": "Read a deep-learning-based classifier from a file."
+    },
+    {
+      "name": "serialize_dl_classifier",
+      "short": "Serialize a deep-learning-based classifier."
+    },
+    {
+      "name": "set_dl_classifier_param",
+      "short": "Set the parameters of a deep-learning-based classifier."
+    },
+    {
+      "name": "train_dl_classifier_batch",
+      "short": "Perform a training step of a deep-learning-based classifier on a batch of"
+    },
+    {
+      "name": "write_dl_classifier",
+      "short": "Write a deep-learning-based classifier in a file."
+    }
+  ]
+}

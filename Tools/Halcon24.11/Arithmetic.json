@@ -1,0 +1,380 @@
+{
+  "通用": [
+    {
+      "name": "tuple_sgn",
+      "short": "Calculate the sign of a tuple."
+    },
+    {
+      "name": "tuple_max2",
+      "short": "Calculate the elementwise maximum of two tuples."
+    },
+    {
+      "name": "tuple_min2",
+      "short": "Calculate the elementwise minimum of two tuples."
+    },
+    {
+      "name": "tuple_cumul",
+      "short": "Calculate the cumulative sums of a tuple."
+    },
+    {
+      "name": "tuple_ldexp",
+      "short": "Calculate the ldexp function of two tuples."
+    },
+    {
+      "name": "tuple_fmod",
+      "short": "Calculate the remainder of the floating point division of two tuples."
+    },
+    {
+      "name": "tuple_mod",
+      "short": "Calculate the remainder of the integer division of two tuples."
+    },
+    {
+      "name": "tuple_ceil",
+      "short": "Compute the ceiling function of a tuple."
+    },
+    {
+      "name": "tuple_floor",
+      "short": "Compute the floor function of a tuple."
+    },
+    {
+      "name": "tuple_pow",
+      "short": "Calculate the power function of two tuples."
+    },
+    {
+      "name": "tuple_log10",
+      "short": "Compute the base 10 logarithm of a tuple."
+    },
+    {
+      "name": "tuple_log",
+      "short": "Compute the natural logarithm of a tuple."
+    },
+    {
+      "name": "tuple_exp",
+      "short": "Compute the exponential of a tuple."
+    },
+    {
+      "name": "tuple_tanh",
+      "short": "Compute the hyperbolic tangent of a tuple."
+    },
+    {
+      "name": "tuple_cosh",
+      "short": "Compute the hyperbolic cosine of a tuple."
+    },
+    {
+      "name": "tuple_sinh",
+      "short": "Compute the hyperbolic sine of a tuple."
+    },
+    {
+      "name": "tuple_rad",
+      "short": "Convert a tuple from degrees to radians."
+    },
+    {
+      "name": "tuple_deg",
+      "short": "Convert a tuple from radians to degrees."
+    },
+    {
+      "name": "tuple_atan2",
+      "short": "Compute the arctangent of a tuple for all four quadrants."
+    },
+    {
+      "name": "tuple_atan",
+      "short": "Compute the arctangent of a tuple."
+    },
+    {
+      "name": "tuple_acos",
+      "short": "Compute the arccosine of a tuple."
+    },
+    {
+      "name": "tuple_asin",
+      "short": "Compute the arcsine of a tuple."
+    },
+    {
+      "name": "tuple_tan",
+      "short": "Compute the tangent of a tuple."
+    },
+    {
+      "name": "tuple_cos",
+      "short": "Compute the cosine of a tuple."
+    },
+    {
+      "name": "tuple_sin",
+      "short": "Compute the sine of a tuple."
+    },
+    {
+      "name": "tuple_fabs",
+      "short": "Compute the absolute value of a tuple (as floating point numbers)."
+    },
+    {
+      "name": "tuple_sqrt",
+      "short": "Compute the square root of a tuple."
+    },
+    {
+      "name": "tuple_abs",
+      "short": "Compute the absolute value of a tuple."
+    },
+    {
+      "name": "tuple_neg",
+      "short": "Negate a tuple."
+    },
+    {
+      "name": "tuple_div",
+      "short": "Divide two tuples."
+    },
+    {
+      "name": "tuple_mult",
+      "short": "Multiply two tuples."
+    },
+    {
+      "name": "tuple_sub",
+      "short": "Subtract two tuples."
+    },
+    {
+      "name": "tuple_add",
+      "short": "Add two tuples."
+    },
+    {
+      "name": "solve_matrix",
+      "short": "Compute the solution of a system of equations."
+    },
+    {
+      "name": "invert_matrix_mod",
+      "short": "Invert a matrix."
+    },
+    {
+      "name": "invert_matrix",
+      "short": "Invert a matrix."
+    },
+    {
+      "name": "transpose_matrix_mod",
+      "short": "Transpose a matrix."
+    },
+    {
+      "name": "transpose_matrix",
+      "short": "Transpose a matrix."
+    },
+    {
+      "name": "pow_matrix_mod",
+      "short": "Compute the power functions of a matrix."
+    },
+    {
+      "name": "pow_matrix",
+      "short": "Compute the power functions of a matrix."
+    },
+    {
+      "name": "pow_element_matrix_mod",
+      "short": "Compute the power functions of the elements of a matrix."
+    },
+    {
+      "name": "pow_element_matrix",
+      "short": "Compute the power functions of the elements of a matrix."
+    },
+    {
+      "name": "pow_scalar_element_matrix_mod",
+      "short": "Compute the power functions of the elements of a matrix."
+    },
+    {
+      "name": "pow_scalar_element_matrix",
+      "short": "Compute the power functions of the elements of a matrix."
+    },
+    {
+      "name": "sqrt_matrix_mod",
+      "short": "Compute the square root values of the elements of a matrix."
+    },
+    {
+      "name": "sqrt_matrix",
+      "short": "Compute the square root values of the elements of a matrix."
+    },
+    {
+      "name": "abs_matrix_mod",
+      "short": "Compute the absolute values of the elements of a matrix."
+    },
+    {
+      "name": "abs_matrix",
+      "short": "Compute the absolute values of the elements of a matrix."
+    },
+    {
+      "name": "div_element_matrix_mod",
+      "short": "Divide matrices element-by-element."
+    },
+    {
+      "name": "div_element_matrix",
+      "short": "Divide matrices element-by-element."
+    },
+    {
+      "name": "mult_element_matrix_mod",
+      "short": "Multiply matrices element-by-element."
+    },
+    {
+      "name": "mult_element_matrix",
+      "short": "Multiply matrices element-by-element."
+    },
+    {
+      "name": "scale_matrix_mod",
+      "short": "Scale a matrix."
+    },
+    {
+      "name": "scale_matrix",
+      "short": "Scale a matrix."
+    },
+    {
+      "name": "sub_matrix_mod",
+      "short": "Subtract two matrices."
+    },
+    {
+      "name": "sub_matrix",
+      "short": "Subtract two matrices."
+    },
+    {
+      "name": "add_matrix_mod",
+      "short": "Add two matrices."
+    },
+    {
+      "name": "add_matrix",
+      "short": "Add two matrices."
+    },
+    {
+      "name": "mult_matrix_mod",
+      "short": "Multiply two matrices."
+    },
+    {
+      "name": "mult_matrix",
+      "short": "Multiply two matrices."
+    },
+    {
+      "name": "gamma_image",
+      "short": "Perform a gamma encoding or decoding of an image."
+    },
+    {
+      "name": "pow_image",
+      "short": "Raise an image to a power."
+    },
+    {
+      "name": "exp_image",
+      "short": "Calculate the exponentiation of an image."
+    },
+    {
+      "name": "log_image",
+      "short": "Calculate the logarithm of an image."
+    },
+    {
+      "name": "atan2_image",
+      "short": "Calculate the arctangent of two images."
+    },
+    {
+      "name": "atan_image",
+      "short": "Calculate the arctangent of an image."
+    },
+    {
+      "name": "acos_image",
+      "short": "Calculate the arccosine of an image."
+    },
+    {
+      "name": "asin_image",
+      "short": "Calculate the arcsine of an image."
+    },
+    {
+      "name": "tan_image",
+      "short": "Calculate the tangent of an image."
+    },
+    {
+      "name": "cos_image",
+      "short": "Calculate the cosine of an image."
+    },
+    {
+      "name": "sin_image",
+      "short": "Calculate the sine of an image."
+    },
+    {
+      "name": "abs_diff_image",
+      "short": "Calculate the absolute difference of two images."
+    },
+    {
+      "name": "sqrt_image",
+      "short": "Calculate the square root of an image."
+    },
+    {
+      "name": "sub_image",
+      "short": "Subtract two images."
+    },
+    {
+      "name": "scale_image",
+      "short": "Scale the gray values of an image."
+    },
+    {
+      "name": "div_image",
+      "short": "Divide two images."
+    },
+    {
+      "name": "mult_image",
+      "short": "Multiply two images."
+    },
+    {
+      "name": "add_image",
+      "short": "Add two images."
+    },
+    {
+      "name": "abs_image",
+      "short": "Calculate the absolute value (modulus) of an image."
+    },
+    {
+      "name": "min_image",
+      "short": "Calculate the minimum of two images pixel by pixel."
+    },
+    {
+      "name": "max_image",
+      "short": "Calculate the maximum of two images pixel by pixel."
+    },
+    {
+      "name": "invert_image",
+      "short": "Invert an image."
+    },
+    {
+      "name": "tuple_acosh",
+      "short": "Compute the inverse hyperbolic cosine of a tuple."
+    },
+    {
+      "name": "tuple_asinh",
+      "short": "Compute the inverse hyperbolic sine of a tuple."
+    },
+    {
+      "name": "tuple_atanh",
+      "short": "Compute the inverse hyperbolic tangent of a tuple."
+    },
+    {
+      "name": "tuple_cbrt",
+      "short": "Compute the cube root of a tuple."
+    },
+    {
+      "name": "tuple_erf",
+      "short": "Compute the error function of a tuple."
+    },
+    {
+      "name": "tuple_erfc",
+      "short": "Compute the complementary error function of a tuple."
+    },
+    {
+      "name": "tuple_exp10",
+      "short": "Compute the base 10 exponential of a tuple."
+    },
+    {
+      "name": "tuple_exp2",
+      "short": "Compute the base 2 exponential of a tuple."
+    },
+    {
+      "name": "tuple_hypot",
+      "short": "Calculate the hypotenuse of two tuples."
+    },
+    {
+      "name": "tuple_lgamma",
+      "short": "Compute the logarithm of the absolute value of the gamma function of"
+    },
+    {
+      "name": "tuple_log2",
+      "short": "Compute the base 2 logarithm of a tuple."
+    },
+    {
+      "name": "tuple_tgamma",
+      "short": "Compute the gamma function of a tuple."
+    }
+  ]
+}

@@ -1,0 +1,64 @@
+{
+  "通用": [
+    {
+      "name": "apply_dl_model",
+      "short": "Apply a deep-learning-based network on a set of images for inference."
+    },
+    {
+      "name": "clear_dl_model",
+      "short": "Clear a deep learning model."
+    },
+    {
+      "name": "deserialize_dl_model",
+      "short": "Deserialize a deep learning model."
+    },
+    {
+      "name": "get_dl_model_param",
+      "short": "Return the parameters of a deep learning model."
+    },
+    {
+      "name": "read_dl_model",
+      "short": "Read a deep learning model from a file."
+    },
+    {
+      "name": "serialize_dl_model",
+      "short": "Serialize a deep learning model."
+    },
+    {
+      "name": "set_dl_model_param",
+      "short": "Set the parameters of a deep learning model."
+    },
+    {
+      "name": "train_dl_model_batch",
+      "short": "Train a deep learning model."
+    },
+    {
+      "name": "write_dl_model",
+      "short": "Write a deep learning model in a file."
+    },
+    {
+      "name": "gen_dl_model_heatmap",
+      "short": "Infer the sample and generate a heatmap."
+    },
+    {
+      "name": "add_dl_pruning_batch",
+      "short": "Calculate scores to prune a deep learning model."
+    },
+    {
+      "name": "create_dl_pruning",
+      "short": "Create a pruning data handle."
+    },
+    {
+      "name": "gen_dl_pruned_model",
+      "short": "Prune a deep learning model."
+    },
+    {
+      "name": "get_dl_pruning_param",
+      "short": "Get information from a pruning data handle."
+    },
+    {
+      "name": "set_dl_pruning_param",
+      "short": "Set parameter in a pruning data handle."
+    }
+  ]
+}

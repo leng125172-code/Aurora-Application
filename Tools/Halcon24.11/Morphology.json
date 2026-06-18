@@ -1,0 +1,252 @@
+{
+  "通用": [
+    {
+      "name": "pruning",
+      "short": "Prune the branches of a region."
+    },
+    {
+      "name": "boundary",
+      "short": "Reduce a region to its boundary."
+    },
+    {
+      "name": "fitting",
+      "short": "Perform a closing after an opening with multiple structuring elements."
+    },
+    {
+      "name": "gen_struct_elements",
+      "short": "Generate standard structuring elements."
+    },
+    {
+      "name": "thinning_seq",
+      "short": "Remove the result of a hit-or-miss operation from a region (sequential)."
+    },
+    {
+      "name": "thinning_golay",
+      "short": "Remove the result of a hit-or-miss operation from a region (using a"
+    },
+    {
+      "name": "thinning",
+      "short": "Remove the result of a hit-or-miss operation from a region."
+    },
+    {
+      "name": "thickening_seq",
+      "short": "Add the result of a hit-or-miss operation to a region (sequential)."
+    },
+    {
+      "name": "thickening_golay",
+      "short": "Add the result of a hit-or-miss operation to a region (using a Golay"
+    },
+    {
+      "name": "thickening",
+      "short": "Add the result of a hit-or-miss operation to a region."
+    },
+    {
+      "name": "hit_or_miss_seq",
+      "short": "Hit-or-miss operation for regions using the Golay alphabet (sequential)."
+    },
+    {
+      "name": "hit_or_miss_golay",
+      "short": "Hit-or-miss operation for regions using the Golay alphabet."
+    },
+    {
+      "name": "hit_or_miss",
+      "short": "Hit-or-miss operation for regions."
+    },
+    {
+      "name": "golay_elements",
+      "short": "Generate the structuring elements of the Golay alphabet."
+    },
+    {
+      "name": "morph_skiz",
+      "short": "Thinning of a region."
+    },
+    {
+      "name": "morph_skeleton",
+      "short": "Compute the morphological skeleton of a region."
+    },
+    {
+      "name": "morph_hat",
+      "short": "Compute the union of bottom_hat and top_hat."
+    },
+    {
+      "name": "bottom_hat",
+      "short": "Compute the bottom hat of regions."
+    },
+    {
+      "name": "top_hat",
+      "short": "Compute the top hat of regions."
+    },
+    {
+      "name": "minkowski_sub2",
+      "short": "Erode a region (using a reference point)."
+    },
+    {
+      "name": "minkowski_sub1",
+      "short": "Erode a region."
+    },
+    {
+      "name": "minkowski_add2",
+      "short": "Dilate a region (using a reference point)."
+    },
+    {
+      "name": "minkowski_add1",
+      "short": "Perform a Minkowski addition on a region."
+    },
+    {
+      "name": "closing_rectangle1",
+      "short": "Close a region with a rectangular structuring element."
+    },
+    {
+      "name": "closing_golay",
+      "short": "Close a region with an element from the Golay alphabet."
+    },
+    {
+      "name": "closing_circle",
+      "short": "Close a region with a circular structuring element."
+    },
+    {
+      "name": "closing",
+      "short": "Close a region."
+    },
+    {
+      "name": "opening_seg",
+      "short": "Separate overlapping regions."
+    },
+    {
+      "name": "opening_golay",
+      "short": "Open a region with an element from the Golay alphabet."
+    },
+    {
+      "name": "opening_rectangle1",
+      "short": "Open a region with a rectangular structuring element."
+    },
+    {
+      "name": "opening_circle",
+      "short": "Open a region with a circular structuring element."
+    },
+    {
+      "name": "opening",
+      "short": "Open a region."
+    },
+    {
+      "name": "erosion_seq",
+      "short": "Erode a region sequentially."
+    },
+    {
+      "name": "erosion_golay",
+      "short": "Erode a region with an element from the Golay alphabet."
+    },
+    {
+      "name": "erosion_rectangle1",
+      "short": "Erode a region with a rectangular structuring element."
+    },
+    {
+      "name": "erosion_circle",
+      "short": "Erode a region with a circular structuring element."
+    },
+    {
+      "name": "erosion2",
+      "short": "Erode a region (using a reference point)."
+    },
+    {
+      "name": "erosion1",
+      "short": "Erode a region."
+    },
+    {
+      "name": "dilation_seq",
+      "short": "Dilate a region sequentially."
+    },
+    {
+      "name": "dilation_golay",
+      "short": "Dilate a region with an element from the Golay alphabet."
+    },
+    {
+      "name": "dilation_rectangle1",
+      "short": "Dilate a region with a rectangular structuring element."
+    },
+    {
+      "name": "dilation_circle",
+      "short": "Dilate a region with a circular structuring element."
+    },
+    {
+      "name": "dilation2",
+      "short": "Dilate a region (using a reference point)."
+    },
+    {
+      "name": "dilation1",
+      "short": "Dilate a region."
+    },
+    {
+      "name": "gray_bothat",
+      "short": "Perform a gray value bottom hat transformation on an image."
+    },
+    {
+      "name": "gray_tophat",
+      "short": "Perform a gray value top hat transformation on an image."
+    },
+    {
+      "name": "gray_closing",
+      "short": "Perform a gray value closing on an image."
+    },
+    {
+      "name": "gray_opening",
+      "short": "Perform a gray value opening on an image."
+    },
+    {
+      "name": "gray_dilation",
+      "short": "Perform a gray value dilation on an image."
+    },
+    {
+      "name": "gray_erosion",
+      "short": "Perform a gray value erosion on an image."
+    },
+    {
+      "name": "read_gray_se",
+      "short": "Load a structuring element for gray morphology."
+    },
+    {
+      "name": "gen_disc_se",
+      "short": "Generate ellipsoidal structuring elements for gray morphology."
+    },
+    {
+      "name": "dual_rank",
+      "short": "Opening, Median and Closing with circle or rectangle mask."
+    },
+    {
+      "name": "gray_closing_shape",
+      "short": "Perform a gray value closing with a selected mask."
+    },
+    {
+      "name": "gray_opening_shape",
+      "short": "Perform a gray value opening with a selected mask."
+    },
+    {
+      "name": "gray_erosion_shape",
+      "short": "Determine the minimum gray value within a selected mask."
+    },
+    {
+      "name": "gray_dilation_shape",
+      "short": "Determine the maximum gray value within a selected mask."
+    },
+    {
+      "name": "gray_range_rect",
+      "short": "Determine the gray value range within a rectangle."
+    },
+    {
+      "name": "gray_closing_rect",
+      "short": "Perform a gray value closing with a rectangular mask."
+    },
+    {
+      "name": "gray_opening_rect",
+      "short": "Perform a gray value opening with a rectangular mask."
+    },
+    {
+      "name": "gray_erosion_rect",
+      "short": "Determine the minimum gray value within a rectangle."
+    },
+    {
+      "name": "gray_dilation_rect",
+      "short": "Determine the maximum gray value within a rectangle."
+    }
+  ]
+}

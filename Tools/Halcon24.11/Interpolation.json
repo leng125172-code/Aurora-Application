@@ -1,0 +1,24 @@
+{
+  "通用": [
+    {
+      "name": "clear_scattered_data_interpolator",
+      "short": "Clear a scattered data interpolator."
+    },
+    {
+      "name": "interpolate_scattered_data",
+      "short": "Interpolation of scattered data using a scattered data interpolator."
+    },
+    {
+      "name": "create_scattered_data_interpolator",
+      "short": "Creates an interpolator for the interpolation of scattered data."
+    },
+    {
+      "name": "interpolate_scattered_data_points_to_image",
+      "short": "Creating an image from the interpolation of scattered data."
+    },
+    {
+      "name": "interpolate_scattered_data_image",
+      "short": "Interpolation of an image."
+    }
+  ]
+}

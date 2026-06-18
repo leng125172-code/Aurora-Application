@@ -7,8 +7,55 @@ import clr
 import xml.etree.ElementTree as ET
 from typing import Dict, Any, List
 import json
+import requests
+import time
 
-# ===================== 配置路径 =====================
+# ===================== Ollama翻译配置 =====================
+OLLAMA_URL = "http://127.0.0.1:11434/api/generate"
+MODEL_NAME = "translategemma:4b"
+TRANS_CACHE = {}
+MAX_RETRY = 3
+TIMEOUT_SEC = 30
+
+
+def translate_en_to_cn(text: str) -> str:
+    """简短英文注释批量翻译，缓存+重试"""
+    if not text or not text.strip():
+        return ""
+    if text in TRANS_CACHE:
+        return TRANS_CACHE[text]
+    print(f"翻译中：{text[:40]}...")  # 打印前40字符预览
+    payload = {
+        "model": MODEL_NAME,
+        "prompt": "只输出标准简体中文译文，不要额外解释、符号、换行：" + text.strip(),
+        "temperature": 0,
+        "max_new_tokens": 256,
+        "stream": False,
+    }
+
+    retry_times = 0
+    while retry_times < MAX_RETRY:
+        try:
+            resp = requests.post(OLLAMA_URL, json=payload, timeout=TIMEOUT_SEC)
+            resp.raise_for_status()
+            res_json = resp.json()
+            cn_text = res_json.get("response", "").strip()
+            TRANS_CACHE[text] = cn_text
+            print(f"翻译成功：{text[:40]}... -> {cn_text[:40]}...")
+            return cn_text
+        except Exception as err:
+            retry_times += 1
+            print(
+                f"翻译重试{retry_times}/{MAX_RETRY} | 原文片段：{text[:40]} 错误：{str(err)[:60]}"
+            )
+            time.sleep(1)
+    # 多次失败兜底返回原文
+    TRANS_CACHE[text] = text
+    print(f"⚠️ 翻译失败，使用原文：{text[:40]}...")
+    return text
+
+
+# ===================== 路径配置 =====================
 DLL_PATH = r"D:\GitRepos\Aurora Application\Builds\Release\AuroraStruct3D.HttpApi.Host\net10.0\linux-arm64\OpenCvSharp.dll"
 XML_DOC_PATH = r"D:\GitRepos\Aurora Application\Builds\Release\AuroraStruct3D.HttpApi.Host\net10.0\linux-arm64\OpenCvSharp.xml"
 OUTPUT_JSON = "OpenCvSharp_BlueprintNodes.json"
@@ -102,22 +149,22 @@ class XmlDocParser:
             if not member_name:
                 continue
             summary_node = member.find("summary")
-            summary = ""
+            summary_en = ""
             if summary_node is not None and summary_node.text is not None:
-                summary = summary_node.text.strip()
-            param_dict = {}
+                summary_en = summary_node.text.strip()
+            param_dict_en = {}
             for param in member.findall("param"):
                 p_name = param.attrib.get("name", "")
                 p_text = param.text.strip() if param.text is not None else ""
-                param_dict[p_name] = p_text
+                param_dict_en[p_name] = p_text
             returns_node = member.find("returns")
-            returns_text = ""
+            returns_en = ""
             if returns_node is not None and returns_node.text is not None:
-                returns_text = returns_node.text.strip()
+                returns_en = returns_node.text.strip()
             self.member_map[member_name] = {
-                "summary": summary,
-                "params": param_dict,
-                "returns": returns_text,
+                "summary_en": summary_en,
+                "params_en": param_dict_en,
+                "returns_en": returns_en,
             }
 
     def get_method_comment(self, method_info) -> Dict[str, Any]:
@@ -125,7 +172,7 @@ class XmlDocParser:
             decl_type = method_info.DeclaringType
             class_full = decl_type.FullName or decl_type.Name or ""
             if not class_full:
-                return {"summary": "", "params": {}, "returns": ""}
+                return {"summary_en": "", "params_en": {}, "returns_en": ""}
             raw_params = method_info.GetParameters()
             type_sig_parts = []
             for p in raw_params:
@@ -145,10 +192,10 @@ class XmlDocParser:
             type_sig = ",".join(type_sig_parts)
             member_key = f"M:{class_full}.{method_info.Name}({type_sig})"
             return self.member_map.get(
-                member_key, {"summary": "", "params": {}, "returns": ""}
+                member_key, {"summary_en": "", "params_en": {}, "returns_en": ""}
             )
         except Exception:
-            return {"summary": "", "params": {}, "returns": ""}
+            return {"summary_en": "", "params_en": {}, "returns_en": ""}
 
 
 # ===================== 枚举解析 =====================
@@ -241,7 +288,16 @@ def parse_method_nodes(all_types, xml_parser: XmlDocParser) -> List[Dict]:
                 continue
 
             try:
-                comment = xml_parser.get_method_comment(m)
+                raw_comment = xml_parser.get_method_comment(m)
+
+                # 翻译摘要
+                summary_en = raw_comment["summary_en"]
+                summary_cn = translate_en_to_cn(summary_en)
+
+                # 返回值翻译
+                ret_en = raw_comment["returns_en"]
+                ret_cn = translate_en_to_cn(ret_en)
+
                 # 返回值
                 ret_type_display = get_type_display_name(m.ReturnType)
                 ret_type_full = get_type_full_name(m.ReturnType)
@@ -259,20 +315,26 @@ def parse_method_nodes(all_types, xml_parser: XmlDocParser) -> List[Dict]:
                             "type_display": class_name,
                             "type_full": class_full,
                             "is_target": True,
-                            "description": f"{class_name} 实例对象",
+                            "desc_en": f"{class_name} instance object",
+                            "desc_cn": f"{translate_en_to_cn(f'{class_name} instance object')}",
                         }
                     )
 
                 raw_params = m.GetParameters()
                 for p in raw_params:
+                    p_name = p.Name or "unnamed"
+                    param_en_text = raw_comment["params_en"].get(p_name, "")
+                    param_cn_text = translate_en_to_cn(param_en_text)
+
                     is_output = p.IsOut or (p.ParameterType.IsByRef and p.IsOut)
                     pin_info = {
-                        "pin_name": p.Name or "unnamed",
+                        "pin_name": p_name,
                         "type_display": get_type_display_name(p.ParameterType),
                         "type_full": get_type_full_name(p.ParameterType),
                         "is_output": is_output,
                         "is_by_ref": p.ParameterType.IsByRef,
-                        "description": comment["params"].get(p.Name, ""),
+                        "desc_en": param_en_text,
+                        "desc_cn": param_cn_text,
                     }
                     if is_output:
                         output_pins.append(pin_info)
@@ -288,7 +350,8 @@ def parse_method_nodes(all_types, xml_parser: XmlDocParser) -> List[Dict]:
                             "type_display": ret_type_display,
                             "type_full": ret_type_full,
                             "is_return": True,
-                            "description": comment["returns"],
+                            "desc_en": ret_en,
+                            "desc_cn": ret_cn,
                         },
                     )
 
@@ -302,7 +365,8 @@ def parse_method_nodes(all_types, xml_parser: XmlDocParser) -> List[Dict]:
                         "category": category,
                         "declaring_class": class_full,
                         "is_static": m.IsStatic,
-                        "summary": comment["summary"],
+                        "summary_en": summary_en,
+                        "summary_cn": summary_cn,
                         "input_pins": input_pins,
                         "output_pins": output_pins,
                         "overload_key": f"{class_full}.{m.Name}({','.join(p['type_full'] for p in input_pins[1:] if not p.get('is_target'))})",
@@ -316,42 +380,40 @@ def parse_method_nodes(all_types, xml_parser: XmlDocParser) -> List[Dict]:
 # ===================== 注释覆盖率统计 =====================
 def calc_comment_stats(method_nodes: List[Dict]) -> Dict:
     total_methods = len(method_nodes)
-    empty_summary = 0
+    empty_summary_en = 0
     total_input_pins = 0
-    empty_input_desc = 0
+    empty_input_en = 0
     total_output_pins = 0
-    empty_output_desc = 0
+    empty_output_en = 0
 
     for node in method_nodes:
-        # 统计空摘要
-        if not node["summary"].strip():
-            empty_summary += 1
+        if not node["summary_en"].strip():
+            empty_summary_en += 1
 
-        # 统计输入引脚空描述
         for pin in node["input_pins"]:
             total_input_pins += 1
-            if not pin["description"].strip():
-                empty_input_desc += 1
+            if not pin["desc_en"].strip():
+                empty_input_en += 1
 
-        # 统计输出引脚空描述
         for pin in node["output_pins"]:
             total_output_pins += 1
-            if not pin["description"].strip():
-                empty_output_desc += 1
+            if not pin["desc_en"].strip():
+                empty_output_en += 1
 
     def ratio(part, total):
         return round(part / total * 100, 2) if total > 0 else 0.0
 
     return {
         "total_methods": total_methods,
-        "empty_summary_methods": empty_summary,
-        "empty_summary_ratio": ratio(empty_summary, total_methods),
+        "empty_summary_en_count": empty_summary_en,
+        "empty_summary_ratio": ratio(empty_summary_en, total_methods),
         "total_input_pins": total_input_pins,
-        "empty_input_desc_pins": empty_input_desc,
-        "empty_input_desc_ratio": ratio(empty_input_desc, total_input_pins),
+        "empty_input_desc_en_count": empty_input_en,
+        "empty_input_ratio": ratio(empty_input_en, total_input_pins),
         "total_output_pins": total_output_pins,
-        "empty_output_desc_pins": empty_output_desc,
-        "empty_output_desc_ratio": ratio(empty_output_desc, total_output_pins),
+        "empty_output_desc_en_count": empty_output_en,
+        "empty_output_ratio": ratio(empty_output_en, total_output_pins),
+        "trans_cache_size": len(TRANS_CACHE),
     }
 
 
@@ -366,7 +428,7 @@ def main():
         all_types = [t for t in ex.Types if t is not None]
         print(f"警告：{len(ex.LoaderExceptions)} 个类型加载失败，已跳过")
 
-    print(f"共读取 {len(all_types)} 个类型，正在解析蓝图元数据...")
+    print(f"共读取 {len(all_types)} 个类型，开始解析+翻译注释...")
 
     enums = parse_enums(all_types)
     structs = parse_structs(all_types)
@@ -377,12 +439,7 @@ def main():
         "version": "1.0",
         "assembly": "OpenCvSharp",
         "target_framework": "net10.0",
-        "stats": {
-            "enum_count": len(enums),
-            "struct_count": len(structs),
-            "method_node_count": len(methods),
-            "comment_coverage": comment_stats,
-        },
+        "stats": comment_stats,
         "enums": enums,
         "structs": structs,
         "method_nodes": methods,
@@ -391,25 +448,26 @@ def main():
     with open(OUTPUT_JSON, "w", encoding="utf-8") as f:
         json.dump(result, f, ensure_ascii=False, indent=2)
 
-    # 控制台打印统计结果
-    print("\n" + "=" * 50)
-    print("📊 注释缺失统计")
-    print("=" * 50)
+    # 控制台打印统计
+    print("\n" + "=" * 60)
+    print("📊 导出&翻译统计")
+    print("=" * 60)
     s = comment_stats
     print(f"方法总数：{s['total_methods']}")
     print(
-        f"无摘要方法数：{s['empty_summary_methods']} (占比 {s['empty_summary_ratio']}%)"
+        f"英文空摘要方法：{s['empty_summary_en_count']} ({s['empty_summary_ratio']}%)"
     )
+    print(f"翻译缓存独立文本数：{s['trans_cache_size']}")
     print(f"\n输入引脚总数：{s['total_input_pins']}")
     print(
-        f"无描述输入引脚：{s['empty_input_desc_pins']} (占比 {s['empty_input_desc_ratio']}%)"
+        f"输入无英文描述：{s['empty_input_desc_en_count']} ({s['empty_input_ratio']}%)"
     )
     print(f"\n输出引脚总数：{s['total_output_pins']}")
     print(
-        f"无描述输出引脚：{s['empty_output_desc_pins']} (占比 {s['empty_output_desc_ratio']}%)"
+        f"输出无英文描述：{s['empty_output_desc_en_count']} ({s['empty_output_ratio']}%)"
     )
-    print("=" * 50)
-    print(f"\n✅ 蓝图元数据导出完成，输出文件：{OUTPUT_JSON}")
+    print("=" * 60)
+    print(f"\n✅ 完成！输出文件：{OUTPUT_JSON}")
 
 
 if __name__ == "__main__":

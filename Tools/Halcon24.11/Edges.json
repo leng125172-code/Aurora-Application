@@ -1,0 +1,112 @@
+{
+  "通用": [
+    {
+      "name": "nonmax_suppression_amp",
+      "short": "Suppress non-maximum points on an edge."
+    },
+    {
+      "name": "nonmax_suppression_dir",
+      "short": "Suppress non-maximum points on an edge using a direction image."
+    },
+    {
+      "name": "hysteresis_threshold",
+      "short": "Perform a hysteresis threshold operation on an image."
+    },
+    {
+      "name": "robinson_dir",
+      "short": "Detect edges (amplitude and direction) using the Robinson operator."
+    },
+    {
+      "name": "robinson_amp",
+      "short": "Detect edges (amplitude) using the Robinson operator."
+    },
+    {
+      "name": "kirsch_dir",
+      "short": "Detect edges (amplitude and direction) using the Kirsch operator."
+    },
+    {
+      "name": "kirsch_amp",
+      "short": "Detect edges (amplitude) using the Kirsch operator."
+    },
+    {
+      "name": "frei_dir",
+      "short": "Detect edges (amplitude and direction) using the Frei-Chen operator."
+    },
+    {
+      "name": "frei_amp",
+      "short": "Detect edges (amplitude) using the Frei-Chen operator."
+    },
+    {
+      "name": "prewitt_dir",
+      "short": "Detect edges (amplitude and direction) using the Prewitt operator."
+    },
+    {
+      "name": "prewitt_amp",
+      "short": "Detect edges (amplitude) using the Prewitt operator."
+    },
+    {
+      "name": "sobel_amp",
+      "short": "Detect edges (amplitude) using the Sobel operator."
+    },
+    {
+      "name": "sobel_dir",
+      "short": "Detect edges (amplitude and direction) using the Sobel operator."
+    },
+    {
+      "name": "roberts",
+      "short": "Detect edges using the Roberts filter."
+    },
+    {
+      "name": "laplace",
+      "short": "Calculate the Laplace operator by using finite differences."
+    },
+    {
+      "name": "highpass_image",
+      "short": "Extract high frequency components from an image."
+    },
+    {
+      "name": "info_edges",
+      "short": "Return the filter coefficients of a filter in edges_image."
+    },
+    {
+      "name": "edges_color_sub_pix",
+      "short": "Extract subpixel precise color edges using Deriche, Shen, or Canny filters."
+    },
+    {
+      "name": "edges_color",
+      "short": "Extract color edges using Canny, Deriche, or Shen filters."
+    },
+    {
+      "name": "edges_sub_pix",
+      "short": "Extract sub-pixel precise edges using Deriche, Lanser, Shen, or Canny"
+    },
+    {
+      "name": "edges_image",
+      "short": "Extract edges using Deriche, Lanser, Shen, or Canny filters."
+    },
+    {
+      "name": "derivate_gauss",
+      "short": "Convolve an image with derivatives of the Gaussian."
+    },
+    {
+      "name": "laplace_of_gauss",
+      "short": "LoG-Operator (Laplace of Gaussian)."
+    },
+    {
+      "name": "diff_of_gauss",
+      "short": "Approximate the LoG operator (Laplace of Gaussian)."
+    },
+    {
+      "name": "close_edges_length",
+      "short": "Close edge gaps using the edge amplitude image."
+    },
+    {
+      "name": "close_edges",
+      "short": "Close edge gaps using the edge amplitude image."
+    },
+    {
+      "name": "detect_edge_segments",
+      "short": "Detect straight edge segments."
+    }
+  ]
+}

@@ -251,15 +251,6 @@ public class MotorAxis : FullAuditedAggregateRoot<Guid>
         ValidateRotationAngle(minRotationAngle);
         ValidateRotationAngle(maxRotationAngle);
 
-        if (
-            minRotationAngle.HasValue
-            && maxRotationAngle.HasValue
-            && minRotationAngle.Value > maxRotationAngle.Value
-        )
-        {
-            throw new ArgumentException("旋转角度最小值不能大于最大值");
-        }
-
         MinRotationAngle = minRotationAngle;
         MaxRotationAngle = maxRotationAngle;
         return this;

@@ -1,0 +1,44 @@
+{
+  "通用": [
+    {
+      "name": "crop_domain_rel",
+      "short": "Cut out an image area relative to the domain."
+    },
+    {
+      "name": "tile_images_offset",
+      "short": "Tile multiple image objects into a large image with explicit"
+    },
+    {
+      "name": "tile_images",
+      "short": "Tile multiple image objects into a large image."
+    },
+    {
+      "name": "tile_channels",
+      "short": "Tile multiple images into a large image."
+    },
+    {
+      "name": "crop_domain",
+      "short": "Cut out of defined gray values."
+    },
+    {
+      "name": "crop_rectangle1",
+      "short": "Cut out one or more rectangular image areas."
+    },
+    {
+      "name": "crop_part",
+      "short": "Cut out one or more rectangular image areas."
+    },
+    {
+      "name": "change_format",
+      "short": "Change image size."
+    },
+    {
+      "name": "crop_rectangle2",
+      "short": "Cut out one or more arbitrarily oriented rectangular image areas."
+    },
+    {
+      "name": "add_image_border",
+      "short": "Add a border to an image."
+    }
+  ]
+}

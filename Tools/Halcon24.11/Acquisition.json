@@ -1,0 +1,60 @@
+{
+  "通用": [
+    {
+      "name": "get_framegrabber_param",
+      "short": "Query specific parameters of an image acquisition device."
+    },
+    {
+      "name": "set_framegrabber_param",
+      "short": "Set specific parameters of an image acquisition device."
+    },
+    {
+      "name": "get_framegrabber_callback",
+      "short": "Query callback function of an image acquisition device."
+    },
+    {
+      "name": "set_framegrabber_callback",
+      "short": "Register a callback function for an image acquisition device."
+    },
+    {
+      "name": "grab_data_async",
+      "short": "Asynchronous grab of images and preprocessed image data from the specified"
+    },
+    {
+      "name": "grab_data",
+      "short": "Synchronous grab of images and preprocessed image data from the specified"
+    },
+    {
+      "name": "grab_image_async",
+      "short": "Asynchronous grab of an image from the specified image acquisition device."
+    },
+    {
+      "name": "grab_image_start",
+      "short": "Start an asynchronous grab from the specified image acquisition device."
+    },
+    {
+      "name": "grab_image",
+      "short": "Synchronous grab of an image from the specified image acquisition device."
+    },
+    {
+      "name": "info_framegrabber",
+      "short": "Query information about the specified image acquisition interface."
+    },
+    {
+      "name": "close_framegrabber",
+      "short": "Close specified image acquisition device."
+    },
+    {
+      "name": "open_framegrabber",
+      "short": "Open and configure an image acquisition device."
+    },
+    {
+      "name": "get_framegrabber_lut",
+      "short": "Query look-up table of the image acquisition device."
+    },
+    {
+      "name": "set_framegrabber_lut",
+      "short": "Set look-up table of the image acquisition device."
+    }
+  ]
+}

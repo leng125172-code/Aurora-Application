@@ -1,0 +1,16 @@
+{
+  "通用": [
+    {
+      "name": "radial_distortion_self_calibration",
+      "short": "Calibrate the radial distortion."
+    },
+    {
+      "name": "stationary_camera_self_calibration",
+      "short": "Perform a self-calibration of a stationary projective camera."
+    },
+    {
+      "name": "radiometric_self_calibration",
+      "short": "Perform a radiometric self-calibration of a camera."
+    }
+  ]
+}

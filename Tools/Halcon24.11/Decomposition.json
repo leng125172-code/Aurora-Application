@@ -1,0 +1,16 @@
+{
+  "通用": [
+    {
+      "name": "orthogonal_decompose_matrix",
+      "short": "Perform an orthogonal decomposition of a matrix."
+    },
+    {
+      "name": "decompose_matrix",
+      "short": "Decompose a matrix."
+    },
+    {
+      "name": "svd_matrix",
+      "short": "Compute the singular value decomposition of a matrix."
+    }
+  ]
+}

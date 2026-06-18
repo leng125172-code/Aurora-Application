@@ -1,0 +1,84 @@
+{
+  "通用": [
+    {
+      "name": "get_class_train_data_gmm",
+      "short": "Get the training data of a Gaussian Mixture Model (GMM)."
+    },
+    {
+      "name": "add_class_train_data_gmm",
+      "short": "Add training data to a Gaussian Mixture Model (GMM)."
+    },
+    {
+      "name": "select_feature_set_gmm",
+      "short": "Selects an optimal combination from a set of features to classify the"
+    },
+    {
+      "name": "clear_class_gmm",
+      "short": "Clear a Gaussian Mixture Model."
+    },
+    {
+      "name": "clear_samples_class_gmm",
+      "short": "Clear the training data of a Gaussian Mixture Model."
+    },
+    {
+      "name": "deserialize_class_gmm",
+      "short": "Deserialize a serialized Gaussian Mixture Model."
+    },
+    {
+      "name": "serialize_class_gmm",
+      "short": "Serialize a Gaussian Mixture Model (GMM)."
+    },
+    {
+      "name": "read_class_gmm",
+      "short": "Read a Gaussian Mixture Model from a file."
+    },
+    {
+      "name": "write_class_gmm",
+      "short": "Write a Gaussian Mixture Model to a file."
+    },
+    {
+      "name": "read_samples_class_gmm",
+      "short": "Read the training data of a Gaussian Mixture Model from a file."
+    },
+    {
+      "name": "write_samples_class_gmm",
+      "short": "Write the training data of a Gaussian Mixture Model to a file."
+    },
+    {
+      "name": "classify_class_gmm",
+      "short": "Calculate the class of a feature vector by a Gaussian Mixture"
+    },
+    {
+      "name": "evaluate_class_gmm",
+      "short": "Evaluate a feature vector by a Gaussian Mixture Model."
+    },
+    {
+      "name": "train_class_gmm",
+      "short": "Train a Gaussian Mixture Model."
+    },
+    {
+      "name": "get_prep_info_class_gmm",
+      "short": "Compute the information content of the preprocessed feature vectors"
+    },
+    {
+      "name": "get_sample_num_class_gmm",
+      "short": "Return the number of training samples stored in the training data of"
+    },
+    {
+      "name": "get_sample_class_gmm",
+      "short": "Return a training sample from the training data of a Gaussian"
+    },
+    {
+      "name": "add_sample_class_gmm",
+      "short": "Add a training sample to the training data of a Gaussian Mixture"
+    },
+    {
+      "name": "get_params_class_gmm",
+      "short": "Return the parameters of a Gaussian Mixture Model."
+    },
+    {
+      "name": "create_class_gmm",
+      "short": "Create a Gaussian Mixture Model for classification"
+    }
+  ]
+}

@@ -1,0 +1,60 @@
+{
+  "通用": [
+    {
+      "name": "check_difference",
+      "short": "Compare two images pixel by pixel."
+    },
+    {
+      "name": "char_threshold",
+      "short": "Perform a threshold segmentation for extracting characters."
+    },
+    {
+      "name": "binary_threshold",
+      "short": "Segment an image using binary thresholding."
+    },
+    {
+      "name": "local_threshold",
+      "short": "Segment an image using local thresholding."
+    },
+    {
+      "name": "var_threshold",
+      "short": "Threshold an image by local mean and standard deviation analysis."
+    },
+    {
+      "name": "dyn_threshold",
+      "short": "Segment an image using a local threshold."
+    },
+    {
+      "name": "threshold",
+      "short": "Segment an image using global threshold."
+    },
+    {
+      "name": "threshold_sub_pix",
+      "short": "Extract level crossings from an image with subpixel accuracy."
+    },
+    {
+      "name": "zero_crossing",
+      "short": "Extract zero crossings from an image."
+    },
+    {
+      "name": "zero_crossing_sub_pix",
+      "short": "Extract zero crossings from an image with subpixel accuracy."
+    },
+    {
+      "name": "dual_threshold",
+      "short": "Threshold operator for signed images."
+    },
+    {
+      "name": "histo_to_thresh",
+      "short": "Determine gray value thresholds from a histogram."
+    },
+    {
+      "name": "auto_threshold",
+      "short": "Segment an image using thresholds determined from its histogram."
+    },
+    {
+      "name": "fast_threshold",
+      "short": "Fast thresholding of images using global thresholds."
+    }
+  ]
+}

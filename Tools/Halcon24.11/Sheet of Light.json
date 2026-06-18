@@ -1,0 +1,72 @@
+{
+  "通用": [
+    {
+      "name": "read_sheet_of_light_model",
+      "short": "Read a sheet-of-light model from a file and create a new model."
+    },
+    {
+      "name": "write_sheet_of_light_model",
+      "short": "Write a sheet-of-light model to a file."
+    },
+    {
+      "name": "deserialize_sheet_of_light_model",
+      "short": "Deserialize a sheet-of-light model."
+    },
+    {
+      "name": "serialize_sheet_of_light_model",
+      "short": "Serialize a sheet-of-light model."
+    },
+    {
+      "name": "create_sheet_of_light_calib_object",
+      "short": "Create a calibration object for sheet-of-light calibration."
+    },
+    {
+      "name": "calibrate_sheet_of_light",
+      "short": "Calibrate a sheet-of-light setup with a 3D calibration object."
+    },
+    {
+      "name": "get_sheet_of_light_result_object_model_3d",
+      "short": "Get the result of a calibrated measurement performed with the"
+    },
+    {
+      "name": "get_sheet_of_light_result",
+      "short": "Get the iconic results of a measurement performed with the sheet-of light"
+    },
+    {
+      "name": "apply_sheet_of_light_calibration",
+      "short": "Apply the calibration transformations to the input disparity image."
+    },
+    {
+      "name": "set_profile_sheet_of_light",
+      "short": "Set sheet of light profiles by measured disparities."
+    },
+    {
+      "name": "measure_profile_sheet_of_light",
+      "short": "Process the profile image provided as input and store the resulting"
+    },
+    {
+      "name": "set_sheet_of_light_param",
+      "short": "Set selected parameters of the sheet-of-light model."
+    },
+    {
+      "name": "get_sheet_of_light_param",
+      "short": "Get the value of a parameter, which has been set in a sheet-of-light model."
+    },
+    {
+      "name": "query_sheet_of_light_params",
+      "short": "For a given sheet-of-light model get the names of the generic iconic"
+    },
+    {
+      "name": "reset_sheet_of_light_model",
+      "short": "Reset a sheet-of-light model."
+    },
+    {
+      "name": "clear_sheet_of_light_model",
+      "short": "Delete a sheet-of-light model and free the allocated memory."
+    },
+    {
+      "name": "create_sheet_of_light_model",
+      "short": "Create a model to perform 3D-measurements using the sheet-of-light"
+    }
+  ]
+}

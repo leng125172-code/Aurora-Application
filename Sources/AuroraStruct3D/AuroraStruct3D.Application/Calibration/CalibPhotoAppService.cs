@@ -3,8 +3,11 @@ using System.Text.Json;
 using AuroraStruct3D.Calibration.Dtos;
 using AuroraStruct3D.Cameras;
 using AuroraStruct3D.Cameras.Dtos;
+using AuroraStruct3D.Motors;
 using AuroraStruct3D.Projectors;
 using AuroraStruct3D.Projectors.Dtos;
+using AuroraStruct3D.RS485;
+using AuroraStruct3D.RS485.Ktech;
 using AuroraStruct3D.Tucam;
 using Microsoft.Extensions.Logging;
 using OpenCvSharp;
@@ -30,6 +33,9 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
     private readonly IRepository<CameraDevice, Guid> _cameraDeviceRepository;
     private readonly ITucamCameraService _tucamService;
     private readonly IProjectorDeviceAppService _projectorService;
+    private readonly IMotorAxisRepository _motorAxisRepository;
+    private readonly IMotorControlService _motorControlService;
+    private readonly IRepository<CalibMotorParam, Guid> _motorParamRepo;
     private readonly ILogger<CalibPhotoAppService> _logger;
 
     /// <summary>构造注入</summary>
@@ -42,6 +48,9 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
         IRepository<CameraDevice, Guid> cameraDeviceRepository,
         ITucamCameraService tucamService,
         IProjectorDeviceAppService projectorService,
+        IMotorAxisRepository motorAxisRepository,
+        IMotorControlService motorControlService,
+        IRepository<CalibMotorParam, Guid> motorParamRepo,
         ILogger<CalibPhotoAppService> logger
     )
     {
@@ -53,6 +62,9 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
         _cameraDeviceRepository = cameraDeviceRepository;
         _tucamService = tucamService;
         _projectorService = projectorService;
+        _motorAxisRepository = motorAxisRepository;
+        _motorControlService = motorControlService;
+        _motorParamRepo = motorParamRepo;
         _logger = logger;
     }
 
@@ -448,6 +460,482 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
         );
 
         return invalidPhotos.Count;
+    }
+
+    /// <inheritdoc/>
+    public async Task<CalibComputeResultDto> ComputeIntrinsicAsync(
+        Guid calibProjectId,
+        Guid cameraDeviceId
+    )
+    {
+        _logger.LogInformation(
+            "[内参标定] 开始计算 — 项目 {ProjectId} 相机 {CameraId}",
+            calibProjectId,
+            cameraDeviceId
+        );
+
+        CalibProject project = await _projectRepo.GetAsync(calibProjectId);
+
+        if (
+            project.PhysicalCornerRows < 2
+            || project.PhysicalCornerCols < 2
+            || project.PhysicalSquareSizeMm <= 0
+        )
+        {
+            throw new UserFriendlyException("请先配置棋盘格参数（内角点行数、列数、方格边长）");
+        }
+
+        IQueryable<CalibPhotoRecord> query = await _photoRepo.GetQueryableAsync();
+        List<CalibPhotoRecord> intrinsicPhotos = await AsyncExecuter.ToListAsync(
+            query
+                .Where(x =>
+                    x.CalibProjectId == calibProjectId
+                    && x.CameraDeviceId == cameraDeviceId
+                    && x.PhotoType == CalibPhotoType.Intrinsic
+                    && x.IsValid
+                )
+                .OrderBy(x => x.CapturedAt)
+        );
+
+        if (intrinsicPhotos.Count < CalibConsts.MinValidPhotoCount)
+        {
+            throw new UserFriendlyException(
+                $"内参有效照片不足 {CalibConsts.MinValidPhotoCount} 张（当前 {intrinsicPhotos.Count} 张）"
+            );
+        }
+
+        int cornerCols = project.PhysicalCornerCols;
+        int cornerRows = project.PhysicalCornerRows;
+        float squareSizeMm = (float)project.PhysicalSquareSizeMm;
+        Size patternSize = new(cornerCols, cornerRows);
+        Point3f[] worldCorners = BuildWorldCorners(cornerCols, cornerRows, squareSizeMm);
+
+        List<Mat> objectMats = [];
+        List<Mat> imageMats = [];
+        Size imageSize = default;
+
+        for (int idx = 0; idx < intrinsicPhotos.Count; idx++)
+        {
+            CalibPhotoRecord photo = intrinsicPhotos[idx];
+            byte[] bytes = await _blobContainer.GetAllBytesAsync(photo.BlobKey);
+            using Mat mat = LoadGrayMat(bytes);
+            if (mat.Empty())
+                continue;
+            if (imageSize == default)
+                imageSize = new Size(mat.Cols, mat.Rows);
+            Point2f[]? corners = FindCornersSubpixGray(mat, patternSize);
+            if (corners == null)
+                continue;
+            objectMats.Add(Mat.FromArray(worldCorners));
+            imageMats.Add(Mat.FromArray(corners));
+        }
+
+        if (objectMats.Count < CalibConsts.MinValidPhotoCount)
+        {
+            foreach (Mat m in objectMats)
+                m.Dispose();
+            foreach (Mat m in imageMats)
+                m.Dispose();
+            throw new UserFriendlyException("重新加载后有效内参照片不足，请重新拍摄");
+        }
+
+        using Mat cameraMatrix = new();
+        using Mat distCoeffs = new();
+        double reprojError;
+        Mat[] rvecArray;
+        Mat[] tvecArray;
+        try
+        {
+            reprojError = Cv2.CalibrateCamera(
+                objectMats,
+                imageMats,
+                imageSize,
+                cameraMatrix,
+                distCoeffs,
+                out rvecArray,
+                out tvecArray,
+                CalibrationFlags.None
+            );
+        }
+        finally
+        {
+            foreach (Mat m in objectMats)
+                m.Dispose();
+            foreach (Mat m in imageMats)
+                m.Dispose();
+        }
+        foreach (Mat m in rvecArray)
+            m.Dispose();
+        foreach (Mat m in tvecArray)
+            m.Dispose();
+
+        if (reprojError > CalibConsts.MaxSingleCameraReprojectionError)
+        {
+            throw new UserFriendlyException(
+                $"内参重投影误差 {reprojError:F4} px，超过阈值 {CalibConsts.MaxSingleCameraReprojectionError:F2} px"
+            );
+        }
+
+        string intrinsicJson = SerializeMatToJson(cameraMatrix);
+        string distJson = SerializeVecToJson(distCoeffs);
+
+        // 持久化：仅保存内参，清除外参字段
+        IQueryable<CalibCameraParam> paramQuery = await _cameraParamRepo.GetQueryableAsync();
+        CalibCameraParam? camParam = await AsyncExecuter.FirstOrDefaultAsync(
+            paramQuery.Where(x =>
+                x.CalibProjectId == calibProjectId && x.CameraDeviceId == cameraDeviceId
+            )
+        );
+        if (camParam != null)
+        {
+            camParam.SetCalibResult(intrinsicJson, distJson, reprojError);
+            await _cameraParamRepo.UpdateAsync(camParam);
+        }
+        else
+        {
+            // 尚未手动配置相机参数记录，自动创建最小记录以持久化内参结果
+            CalibCameraParam newParam = new(
+                GuidGenerator.Create(),
+                calibProjectId,
+                cameraDeviceId,
+                "内参自动生成"
+            );
+            newParam.SetCalibResult(intrinsicJson, distJson, reprojError);
+            await _cameraParamRepo.InsertAsync(newParam);
+        }
+
+        _logger.LogInformation("[内参标定] 完成，重投影误差 {Error:F4} px", reprojError);
+
+        return new CalibComputeResultDto
+        {
+            IntrinsicMatrixJson = intrinsicJson,
+            DistCoeffsJson = distJson,
+            ReprojectionError = reprojError,
+        };
+    }
+
+    /// <inheritdoc/>
+    public async Task<CalibComputeResultDto> ComputeExtrinsicAsync(
+        Guid calibProjectId,
+        Guid cameraDeviceId
+    )
+    {
+        _logger.LogInformation(
+            "[外参标定] 开始计算 — 项目 {ProjectId} 相机 {CameraId}",
+            calibProjectId,
+            cameraDeviceId
+        );
+
+        CalibProject project = await _projectRepo.GetAsync(calibProjectId);
+
+        // 加载已保存的相机内参（外参计算依赖内参）
+        IQueryable<CalibCameraParam> paramQuery = await _cameraParamRepo.GetQueryableAsync();
+        CalibCameraParam? camParam = await AsyncExecuter.FirstOrDefaultAsync(
+            paramQuery.Where(x =>
+                x.CalibProjectId == calibProjectId && x.CameraDeviceId == cameraDeviceId
+            )
+        );
+
+        if (
+            camParam == null
+            || string.IsNullOrEmpty(camParam.IntrinsicMatrixJson)
+            || string.IsNullOrEmpty(camParam.DistCoeffsJson)
+        )
+        {
+            throw new UserFriendlyException("请先计算相机内参后再计算外参");
+        }
+
+        if (project.DeviceSeries != DeviceSeries.SingleLight)
+        {
+            throw new UserFriendlyException("无光系列不需要计算外参");
+        }
+
+        // 判断该相机是否需要计算外参（2目1光仅主相机计算外参）
+        bool shouldComputeExtrinsic =
+            project.DeviceType != CalibDeviceType.TwoCamera1Light
+            || !project.MainCameraDeviceId.HasValue
+            || project.MainCameraDeviceId.Value == cameraDeviceId;
+
+        if (!shouldComputeExtrinsic)
+        {
+            throw new UserFriendlyException("当前相机为从相机（2目1光配置），无需计算外参");
+        }
+
+        // 从 DB 反序列化内参
+        using Mat cameraMatrix = DeserializeMatrix(camParam.IntrinsicMatrixJson);
+        using Mat distCoeffs = DeserializeVector(camParam.DistCoeffsJson);
+
+        int cornerCols = project.PhysicalCornerCols;
+        int cornerRows = project.PhysicalCornerRows;
+        float squareSizeMm = (float)project.PhysicalSquareSizeMm;
+        Size patternSize = new(cornerCols, cornerRows);
+        Point3f[] worldCorners = BuildWorldCorners(cornerCols, cornerRows, squareSizeMm);
+
+        // 加载有效外参照片
+        IQueryable<CalibPhotoRecord> query = await _photoRepo.GetQueryableAsync();
+        List<CalibPhotoRecord> extrinsicPhotos = await AsyncExecuter.ToListAsync(
+            query
+                .Where(x =>
+                    x.CalibProjectId == calibProjectId
+                    && x.CameraDeviceId == cameraDeviceId
+                    && x.PhotoType == CalibPhotoType.Extrinsic
+                    && x.IsValid
+                )
+                .OrderBy(x => x.CapturedAt)
+        );
+
+        if (extrinsicPhotos.Count < CalibConsts.MinProjectorExtrinsicPhotoCount)
+        {
+            throw new UserFriendlyException(
+                $"外参有效照片不足 {CalibConsts.MinProjectorExtrinsicPhotoCount} 张（当前 {extrinsicPhotos.Count} 张）"
+            );
+        }
+
+        // SolvePnP：找最佳外参照片
+        CalibPhotoRecord? bestExtrinsic = await FindBestExtrinsicAsync(
+            extrinsicPhotos,
+            cameraMatrix,
+            distCoeffs,
+            patternSize,
+            worldCorners
+        );
+
+        string? rvecJson = null;
+        string? tvecJson = null;
+        double? projectorReprojectionError = null;
+
+        if (bestExtrinsic != null)
+        {
+            byte[] exBytes = await _blobContainer.GetAllBytesAsync(bestExtrinsic.BlobKey);
+            using Mat exMat = LoadGrayMat(exBytes);
+            Point2f[]? exCorners = FindCornersSubpixGray(exMat, patternSize);
+            if (exCorners != null)
+            {
+                using Mat rvec = new();
+                using Mat tvec = new();
+                Cv2.SolvePnP(
+                    InputArray.Create(worldCorners),
+                    InputArray.Create(exCorners),
+                    cameraMatrix,
+                    distCoeffs,
+                    rvec,
+                    tvec
+                );
+                using Mat projectedMat = new();
+                Cv2.ProjectPoints(
+                    InputArray.Create(worldCorners),
+                    rvec,
+                    tvec,
+                    cameraMatrix,
+                    distCoeffs,
+                    projectedMat
+                );
+                projectedMat.GetArray(out Point2f[] projected);
+                double err = 0;
+                for (int i = 0; i < exCorners.Length; i++)
+                {
+                    double dx = exCorners[i].X - projected[i].X;
+                    double dy = exCorners[i].Y - projected[i].Y;
+                    err += Math.Sqrt(dx * dx + dy * dy);
+                }
+                projectorReprojectionError = err / exCorners.Length;
+                rvecJson = SerializeVecToJson(rvec);
+                tvecJson = SerializeVecToJson(tvec);
+            }
+        }
+
+        if (
+            projectorReprojectionError.HasValue
+            && projectorReprojectionError.Value > CalibConsts.MaxSingleCameraReprojectionError
+        )
+        {
+            throw new UserFriendlyException(
+                $"外参重投影误差 {projectorReprojectionError.Value:F4} px，超过阈值，请补拍后重算"
+            );
+        }
+
+        // 计算投影仪内参与相机-投影仪外参
+        string? projIntrinsicJson = null;
+        string? projDistJson = null;
+        string? camToProjectorRJson = null;
+        string? camToProjectorTJson = null;
+        double? projCalibReprojError = null;
+
+        int projCols = project.ProjectedCornerCols;
+        int projRows = project.ProjectedCornerRows;
+        int projPx = Math.Max(project.ProjectedPixelSize, 1);
+        Size projPatternSize = new(projCols, projRows);
+        Point3f[] projWorldUnit = new Point3f[projCols * projRows];
+        for (int r = 0; r < projRows; r++)
+        for (int c = 0; c < projCols; c++)
+            projWorldUnit[r * projCols + c] = new Point3f(c, r, 0f);
+
+        Point2f[] projPixels = new Point2f[projCols * projRows];
+        for (int r = 0; r < projRows; r++)
+        for (int c = 0; c < projCols; c++)
+            projPixels[r * projCols + c] = new Point2f((c + 1) * projPx, (r + 1) * projPx);
+
+        Size projectorSize = new((projCols + 2) * projPx, (projRows + 2) * projPx);
+        List<Mat> projObjMats = [];
+        List<Mat> projImgMats = [];
+
+        for (int ei = 0; ei < extrinsicPhotos.Count; ei++)
+        {
+            CalibPhotoRecord photo = extrinsicPhotos[ei];
+            try
+            {
+                byte[] bytes = await _blobContainer.GetAllBytesAsync(photo.BlobKey);
+                using Mat exGray = LoadGrayMat(bytes);
+                if (exGray.Empty())
+                    continue;
+                Point2f[]? camCorners = FindCornersSubpixGray(exGray, projPatternSize);
+                if (camCorners == null)
+                    continue;
+
+                using Mat rvecCam = new();
+                using Mat tvecCam = new();
+                Cv2.SolvePnP(
+                    InputArray.Create(projWorldUnit),
+                    InputArray.Create(camCorners),
+                    cameraMatrix,
+                    distCoeffs,
+                    rvecCam,
+                    tvecCam
+                );
+                using Mat R_cam = new();
+                Cv2.Rodrigues(rvecCam, R_cam);
+
+                Point3f[] pts3D = new Point3f[projWorldUnit.Length];
+                for (int i = 0; i < projWorldUnit.Length; i++)
+                {
+                    float wx = projWorldUnit[i].X,
+                        wy = projWorldUnit[i].Y;
+                    double x3 =
+                        R_cam.At<double>(0, 0) * wx
+                        + R_cam.At<double>(0, 1) * wy
+                        + tvecCam.At<double>(0, 0);
+                    double y3 =
+                        R_cam.At<double>(1, 0) * wx
+                        + R_cam.At<double>(1, 1) * wy
+                        + tvecCam.At<double>(1, 0);
+                    double z3 =
+                        R_cam.At<double>(2, 0) * wx
+                        + R_cam.At<double>(2, 1) * wy
+                        + tvecCam.At<double>(2, 0);
+                    pts3D[i] = new Point3f((float)x3, (float)y3, (float)z3);
+                }
+                projObjMats.Add(Mat.FromArray(pts3D));
+                projImgMats.Add(Mat.FromArray(projPixels));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "[外参标定] 外参照片[{Idx}]预处理失败，跳过", ei);
+            }
+        }
+
+        if (projObjMats.Count >= CalibConsts.MinProjectorExtrinsicPhotoCount)
+        {
+            using Mat projKMat = new();
+            using Mat projDistMat = new();
+            Mat[] projRvecs = [];
+            Mat[] projTvecs = [];
+            try
+            {
+                projCalibReprojError = Cv2.CalibrateCamera(
+                    projObjMats,
+                    projImgMats,
+                    projectorSize,
+                    projKMat,
+                    projDistMat,
+                    out projRvecs,
+                    out projTvecs,
+                    CalibrationFlags.None
+                );
+                projIntrinsicJson = SerializeMatToJson(projKMat);
+                projDistJson = SerializeVecToJson(projDistMat);
+
+                int nPoses = projRvecs.Length;
+                double[] sumR = new double[9];
+                double[] sumT = new double[3];
+                for (int pi = 0; pi < nPoses; pi++)
+                {
+                    using Mat R_proj_i = new();
+                    Cv2.Rodrigues(projRvecs[pi], R_proj_i);
+                    for (int rr = 0; rr < 3; rr++)
+                    {
+                        for (int cc = 0; cc < 3; cc++)
+                            sumR[rr * 3 + cc] += R_proj_i.At<double>(rr, cc);
+                        sumT[rr] += projTvecs[pi].At<double>(rr, 0);
+                    }
+                }
+                using Mat R_cp_avg = new(3, 3, MatType.CV_64FC1);
+                for (int rr = 0; rr < 3; rr++)
+                for (int cc = 0; cc < 3; cc++)
+                    R_cp_avg.Set(rr, cc, sumR[rr * 3 + cc] / nPoses);
+                using Mat U_svd = new(),
+                    S_svd = new(),
+                    Vt_svd = new();
+                Cv2.SVDecomp(R_cp_avg, S_svd, U_svd, Vt_svd, SVD.Flags.FullUV);
+                using Mat R_cp_ortho = U_svd * Vt_svd;
+                using Mat t_cp_avg = new(3, 1, MatType.CV_64FC1);
+                for (int rr = 0; rr < 3; rr++)
+                    t_cp_avg.Set(rr, 0, sumT[rr] / nPoses);
+                camToProjectorRJson = SerializeMatToJson(R_cp_ortho);
+                camToProjectorTJson = SerializeVecToJson(t_cp_avg);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "[外参标定] 投影仪内参计算失败，跳过");
+            }
+            finally
+            {
+                foreach (Mat m in projRvecs)
+                    m.Dispose();
+                foreach (Mat m in projTvecs)
+                    m.Dispose();
+            }
+        }
+
+        foreach (Mat m in projObjMats)
+            m.Dispose();
+        foreach (Mat m in projImgMats)
+            m.Dispose();
+
+        // 持久化：保留已有内参，更新外参字段
+        camParam.SetCalibResult(
+            camParam.IntrinsicMatrixJson!,
+            camParam.DistCoeffsJson!,
+            camParam.ReprojectionError ?? 0,
+            rvecJson,
+            tvecJson,
+            projectorReprojectionError,
+            projIntrinsicJson,
+            projDistJson,
+            camToProjectorRJson,
+            camToProjectorTJson,
+            projCalibReprojError
+        );
+        await _cameraParamRepo.UpdateAsync(camParam);
+
+        _logger.LogInformation(
+            "[外参标定] 完成，外参误差 {Error}",
+            projectorReprojectionError?.ToString("F4") ?? "—"
+        );
+
+        return new CalibComputeResultDto
+        {
+            IntrinsicMatrixJson = camParam.IntrinsicMatrixJson,
+            DistCoeffsJson = camParam.DistCoeffsJson,
+            ReprojectionError = camParam.ReprojectionError ?? 0,
+            ExtrinsicRvecJson = rvecJson,
+            ExtrinsicTvecJson = tvecJson,
+            ProjectorReprojectionError = projectorReprojectionError,
+            ProjectorIntrinsicMatrixJson = projIntrinsicJson,
+            ProjectorDistCoeffsJson = projDistJson,
+            CameraToProjectorRJson = camToProjectorRJson,
+            CameraToProjectorTJson = camToProjectorTJson,
+            ProjectorCalibReprojectionError = projCalibReprojError,
+        };
     }
 
     /// <inheritdoc/>
@@ -2363,5 +2851,609 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
         }
 
         return true;
+    }
+
+    /// <inheritdoc/>
+    public async Task<AutoAlignCamerasResultDto> AutoAlignCamerasAsync(Guid id)
+    {
+        CalibProject project = await _projectRepo.GetAsync(id);
+
+        // 确保投影仪已绑定
+        Guid? projectorId = project.BoundProjectorDeviceId;
+
+        // 投影十字架（有投影仪时操作，无投影仪时仍拍照但不投影）
+        if (projectorId.HasValue)
+        {
+            try
+            {
+                // 开灯
+                await _projectorService.LedOnAsync(projectorId.Value);
+                // 切换为十字架显示模式
+                await _projectorService.SetDisplayModeAsync(
+                    new SetProjectorDisplayModeDto
+                    {
+                        ProjectorDeviceId = projectorId.Value,
+                        Mode = ProjectorDisplayMode.Cross,
+                    }
+                );
+                // 等待投影稳定
+                await Task.Delay(300);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "[AutoAlign] 投影十字架失败，跳过投影步骤");
+            }
+        }
+
+        // 执行主从相机对齐
+        CameraAlignCameraResult? mainResult = null;
+        CameraAlignCameraResult? secondaryResult = null;
+
+        if (project.MainCameraDeviceId.HasValue)
+        {
+            mainResult = await AlignOneCameraAsync(
+                project,
+                project.MainCameraDeviceId.Value,
+                project.MainCameraMotorAxisId,
+                "主相机"
+            );
+        }
+
+        if (project.SecondaryCameraDeviceId.HasValue)
+        {
+            secondaryResult = await AlignOneCameraAsync(
+                project,
+                project.SecondaryCameraDeviceId.Value,
+                project.SecondaryCameraMotorAxisId,
+                "从相机"
+            );
+        }
+
+        // 执行完毕后关灯（恢复投影仪状态）
+        if (projectorId.HasValue)
+        {
+            try
+            {
+                await _projectorService.LedOffAsync(projectorId.Value);
+            }
+            catch
+            { /* 关灯失败不影响结果 */
+            }
+        }
+
+        bool success =
+            (mainResult == null || mainResult.Skipped || mainResult.IsAligned)
+            && (secondaryResult == null || secondaryResult.Skipped || secondaryResult.IsAligned);
+
+        return new AutoAlignCamerasResultDto
+        {
+            MainCamera = mainResult,
+            SecondaryCamera = secondaryResult,
+            Success = success,
+            Message = success ? "相机对齐完成" : "部分相机未能完成对齐，请检查结果详情",
+        };
+    }
+
+    /// <summary>
+    /// 对单台相机执行十字架检测 + 电机调整：
+    ///   拍照 → OpenCV 检测十字架中心 → 计算偏差角度 → 移动电机。
+    ///
+    /// 运动方向规则（由 Step 4 伺服参数 PositiveSoftLimit / NegativeSoftLimit 决定）：
+    ///   情况A（configMin ≤ configMax）：从最小到最大为正向运动，十字从图像右侧向左侧移动。
+    ///     → 移到0点时反向（-），扫描时正向（+），微调偏移符号不变。
+    ///   情况B（configMin > configMax）：从最小到最大为反向运动，十字从图像左侧向右侧移动。
+    ///     → 移到0点时正向（+），扫描时反向（-），微调偏移符号取反。
+    ///
+    /// 注意：镜头朝正下方为 0°（单圈位置 0 LSB）。
+    /// </summary>
+    private async Task<CameraAlignCameraResult> AlignOneCameraAsync(
+        CalibProject project,
+        Guid cameraDeviceId,
+        Guid? motorAxisId,
+        string cameraRole
+    )
+    {
+        // 如果未绑定电机，跳过（无法调整）
+        if (!motorAxisId.HasValue)
+        {
+            return new CameraAlignCameraResult
+            {
+                CameraDeviceId = cameraDeviceId,
+                CameraRole = cameraRole,
+                Skipped = true,
+                Message = "未绑定角度控制电机，跳过",
+            };
+        }
+
+        // 优先读取电机轴配置
+        MotorAxis axis = await _motorAxisRepository.GetAsync(motorAxisId.Value);
+        if (axis.Brand != MotorBrand.KtechKtech)
+        {
+            return new CameraAlignCameraResult
+            {
+                CameraDeviceId = cameraDeviceId,
+                CameraRole = cameraRole,
+                Message = $"电机品牌 {axis.Brand} 暂不支持自动对齐，仅支持瓴控 KTECH",
+            };
+        }
+
+        KtechMotorDriver? driver = _motorControlService.GetKtechMotorDriver(axis.SlaveId);
+        if (driver == null)
+        {
+            return new CameraAlignCameraResult
+            {
+                CameraDeviceId = cameraDeviceId,
+                CameraRole = cameraRole,
+                Message = $"电机驱动未注册（SlaveId={axis.SlaveId}），请确认设备已连接",
+            };
+        }
+
+        // 读取焦距（用于角度计算）
+        double? focalLengthPx = await GetFocalLengthPixelsAsync(project.Id, cameraDeviceId);
+        if (!focalLengthPx.HasValue || focalLengthPx.Value <= 0)
+        {
+            return new CameraAlignCameraResult
+            {
+                CameraDeviceId = cameraDeviceId,
+                CameraRole = cameraRole,
+                Message = "未找到相机内参（焦距），无法计算目标角度，请先完成内参标定",
+            };
+        }
+
+        // ── 读取 Step 4 伺服参数配置的行程限位 ──
+        // PositiveSoftLimit = 电机行程最大位置，NegativeSoftLimit = 电机最小位置
+        // 单位：CalibMotorParam 存储角度（°），KTECH LSB = 0.01°，故乘以 100
+        IQueryable<CalibMotorParam> mpQ = await _motorParamRepo.GetQueryableAsync();
+        CalibMotorParam? motorParam = await AsyncExecuter.FirstOrDefaultAsync(
+            mpQ.Where(x => x.CalibProjectId == project.Id && x.MotorAxisId == motorAxisId.Value)
+        );
+        long configMinLsb = motorParam != null ? (long)(motorParam.NegativeSoftLimit * 100m) : 0;
+        long configMaxLsb =
+            motorParam != null ? (long)(motorParam.PositiveSoftLimit * 100m) : 35999;
+
+        // 情况A：configMin ≤ configMax → 正向运动范围，十字右→左
+        // 情况B：configMin > configMax → 反向运动范围，十字左→右
+        bool isCaseA = configMinLsb <= configMaxLsb;
+
+        // 扫描时边界（情况A为最大值，情况B为最小值）
+        long scanBoundaryLsb = isCaseA ? configMaxLsb : configMinLsb;
+
+        _logger.LogInformation(
+            "[AutoAlign] {Role} 行程参数：configMin={Min} LSB, configMax={Max} LSB, 情况{Case}",
+            cameraRole,
+            configMinLsb,
+            configMaxLsb,
+            isCaseA ? "A（正向范围）" : "B（反向范围）"
+        );
+
+        const uint MoveSpeedCentidps = 18000;
+        const long HalfCircleLsb = 18000; // 180° = 18000 LSB
+
+        // ── Step 1：读取调整前单圈角度 ──
+        uint singleBefore = await driver.ReadSingleAngleAsync();
+        double angleBefore = singleBefore / 100.0;
+        long currLsb = (long)singleBefore;
+
+        // ── Step 2：移动到单圈 0 点（镜头朝正下方） ──
+        // 策略：取圆周最短路径，避免电机多转
+        //   当前角度 ≤ 180°（≤ 18000 LSB）→ CCW 反向（dir=1）到 0° 最近
+        //   当前角度 > 180°（> 18000 LSB）→ CW 正向（dir=0）到 0° 最近
+        if (currLsb > 0)
+        {
+            byte dirToZero = currLsb <= HalfCircleLsb ? (byte)1 : (byte)0;
+            _logger.LogInformation(
+                "[AutoAlign] {Role} 移到0点：currLsb={Curr} LSB（{Deg:F2}°），dir={Dir}（{Desc}）",
+                cameraRole,
+                currLsb,
+                currLsb / 100.0,
+                dirToZero,
+                dirToZero == 1 ? "CCW 反向" : "CW 正向"
+            );
+            await driver.SingleAngleWithSpeedAsync(dirToZero, 0u, MoveSpeedCentidps);
+            bool reachedZero = await WaitUntilSingleAngleReachedAsync(driver, 0L, 30);
+            if (!reachedZero)
+            {
+                return new CameraAlignCameraResult
+                {
+                    CameraDeviceId = cameraDeviceId,
+                    CameraRole = cameraRole,
+                    AngleBeforeDeg = angleBefore,
+                    Message = "电机移到0点超时（30s），请检查机械状态或限位设置",
+                };
+            }
+            currLsb = 0;
+        }
+
+        // ── Step 3：从 0 点起扫描，最多 10 步（每步 5°） ──
+        // 情况A：相对 +运动（正向）直到 configMaxLsb
+        // 情况B：相对 -运动（反向）直到 configMinLsb（注意此时 configMinLsb > configMaxLsb）
+        const long ScanStepLsb = 500; // 5° = 500 × 0.01°
+        const int MaxScanSteps = 10;
+        byte[] imageBytes = null!;
+        Point2d? crossCenter = null;
+
+        for (int step = 0; step <= MaxScanSteps; step++)
+        {
+            try
+            {
+                imageBytes = await GrabCalibFrameRawAsync(cameraDeviceId, 0);
+            }
+            catch (Exception ex)
+            {
+                return new CameraAlignCameraResult
+                {
+                    CameraDeviceId = cameraDeviceId,
+                    CameraRole = cameraRole,
+                    AngleBeforeDeg = angleBefore,
+                    Message = $"拍照失败：{ex.Message}",
+                };
+            }
+
+            crossCenter = DetectCrossCenter(imageBytes);
+            if (crossCenter.HasValue)
+                break; // 已找到十字，退出扫描
+
+            if (step == MaxScanSteps)
+                break; // 达到最大步数
+
+            // 计算下一步绝对目标角度（使用单圈绝对定位命令，避免增量累计误差）
+            long nextTargetLsb;
+            byte scanDir;
+            bool exceedsBoundary;
+
+            if (isCaseA)
+            {
+                // 情况A：从 0° 正向扫描（角度递增），dir=0（CW）
+                nextTargetLsb = (long)(step + 1) * ScanStepLsb;
+                exceedsBoundary = nextTargetLsb > configMaxLsb;
+                scanDir = 0; // CW 正向
+            }
+            else
+            {
+                // 情况B：从 0° 反向扫描（角度递减，绕圈：35500、35000...），dir=1（CCW）
+                long offset = (long)(step + 1) * ScanStepLsb;
+                nextTargetLsb = (36000L - offset % 36000L) % 36000L;
+                exceedsBoundary = nextTargetLsb < configMinLsb;
+                scanDir = 1; // CCW 反向
+            }
+
+            if (exceedsBoundary)
+            {
+                // 超出行程边界 → 先归零，再返回未找到
+                byte dirBack = currLsb <= HalfCircleLsb ? (byte)1 : (byte)0;
+                _logger.LogInformation(
+                    "[AutoAlign] {Role} 超出行程边界，移回0点：currLsb={Curr} LSB，dir={Dir}",
+                    cameraRole,
+                    currLsb,
+                    dirBack
+                );
+                await driver.SingleAngleWithSpeedAsync(dirBack, 0u, MoveSpeedCentidps);
+                await WaitUntilSingleAngleReachedAsync(driver, 0L, 30);
+
+                return new CameraAlignCameraResult
+                {
+                    CameraDeviceId = cameraDeviceId,
+                    CameraRole = cameraRole,
+                    AngleBeforeDeg = angleBefore,
+                    Message =
+                        $"扫描至行程边界 {scanBoundaryLsb / 100.0:F2}°，未检测到十字架，电机已归零，请确认投影仪状态",
+                };
+            }
+
+            _logger.LogInformation(
+                "[AutoAlign] {Role} 扫描 step={Step}，目标 {Target} LSB（{Deg:F2}°），dir={Dir}",
+                cameraRole,
+                step + 1,
+                nextTargetLsb,
+                nextTargetLsb / 100.0,
+                scanDir
+            );
+            await driver.SingleAngleWithSpeedAsync(scanDir, (uint)nextTargetLsb, MoveSpeedCentidps);
+            bool scanMoved = await WaitUntilSingleAngleReachedAsync(driver, nextTargetLsb, 10);
+            if (!scanMoved)
+            {
+                return new CameraAlignCameraResult
+                {
+                    CameraDeviceId = cameraDeviceId,
+                    CameraRole = cameraRole,
+                    AngleBeforeDeg = angleBefore,
+                    Message =
+                        $"扫描步进超时（10s），目标 {nextTargetLsb / 100.0:F2}°，请检查机械状态",
+                };
+            }
+            currLsb = nextTargetLsb;
+        }
+
+        if (!crossCenter.HasValue)
+        {
+            // 扫描结束仍未找到十字 → 先归零，再返回未找到
+            byte dirBack = currLsb <= HalfCircleLsb ? (byte)1 : (byte)0;
+            _logger.LogInformation(
+                "[AutoAlign] {Role} 扫描结束未找到十字，移回0点：currLsb={Curr} LSB，dir={Dir}",
+                cameraRole,
+                currLsb,
+                dirBack
+            );
+            await driver.SingleAngleWithSpeedAsync(dirBack, 0u, MoveSpeedCentidps);
+            await WaitUntilSingleAngleReachedAsync(driver, 0L, 30);
+
+            return new CameraAlignCameraResult
+            {
+                CameraDeviceId = cameraDeviceId,
+                CameraRole = cameraRole,
+                AngleBeforeDeg = angleBefore,
+                Message =
+                    $"扫描 {MaxScanSteps} 步（{MaxScanSteps * 5}°）未检测到十字架，电机已归零，请确认投影仪状态",
+            };
+        }
+
+        // ── Step 4：视野内已有十字，闭环微调（最多 10 次迭代） ──
+        // 进入微调前，重新读取实际单圈角度（扫描阶段若 step=0 即找到十字，currLsb 仍为归零后的 0，
+        // 必须以硬件实际角度为基准，否则 Clamp 计算会产生巨大偏差）
+        currLsb = (long)await driver.ReadSingleAngleAsync();
+        _logger.LogInformation(
+            "[AutoAlign] {Role} 进入微调，实际单圈角度={Curr} LSB（{Deg:F2}°）",
+            cameraRole,
+            currLsb,
+            currLsb / 100.0
+        );
+        const int MaxIterations = 10;
+        const double AlignThresholdPixels = 10.0;
+
+        double totalAdjustDeg = 0;
+        double offsetXPixels = 0;
+        double offsetYPixels = 0;
+        int imgCols = 0;
+        int imgRows = 0;
+
+        for (int iter = 0; iter < MaxIterations; iter++)
+        {
+            using Mat iterImg = LoadGrayMat(imageBytes);
+            imgCols = iterImg.Cols;
+            imgRows = iterImg.Rows;
+            offsetXPixels = crossCenter!.Value.X - imgCols / 2.0;
+            offsetYPixels = crossCenter.Value.Y - imgRows / 2.0;
+
+            if (Math.Abs(offsetXPixels) <= AlignThresholdPixels)
+                break; // 已对齐，退出
+
+            // θ = arctan(offset_px / focal_px)
+            // 情况A：偏右(offsetX>0)→ 正向(CW)旋转使十字左移；偏左(offsetX<0)→ 反向(CCW)旋转
+            // 情况B：偏左(offsetX<0)→ 继续反向(CCW)旋转使十字右移；偏右(offsetX>0)→ 跳过了，正向(CW)旋转
+            // 两种情况下 adjustDeg 符号与 offsetX 相同，无需取反
+            double rawAdjustDeg = Math.Atan2(offsetXPixels, focalLengthPx.Value) * 180.0 / Math.PI;
+            double adjustDeg = rawAdjustDeg;
+
+            // 计算目标角度（单圈绝对位置），按行程范围 Clamp
+            // 情况A：Clamp 到 [configMinLsb, configMaxLsb]
+            // 情况B：当前位于 [configMinLsb, 35999] 区间，Clamp 到同一范围
+            long clampLo = configMinLsb;
+            long clampHi = isCaseA ? configMaxLsb : 35999L;
+            long targetLsb = Math.Clamp(
+                currLsb + (long)Math.Round(adjustDeg * 100),
+                clampLo,
+                clampHi
+            );
+            int deltaLsb = (int)(targetLsb - currLsb);
+            if (deltaLsb == 0)
+                break; // 已在边界，无法继续调整
+
+            // 方向由增量符号决定：正增量=CW（dir=0），负增量=CCW（dir=1）
+            byte dirAdjust = deltaLsb > 0 ? (byte)0 : (byte)1;
+            totalAdjustDeg += deltaLsb / 100.0;
+
+            _logger.LogInformation(
+                "[AutoAlign] {Role} 微调 iter={Iter}，offsetX={OffX:F1}px，delta={Delta} LSB（{Deg:F2}°），dir={Dir}",
+                cameraRole,
+                iter,
+                offsetXPixels,
+                deltaLsb,
+                deltaLsb / 100.0,
+                dirAdjust
+            );
+            await driver.SingleAngleWithSpeedAsync(dirAdjust, (uint)targetLsb, MoveSpeedCentidps);
+            await WaitUntilSingleAngleReachedAsync(driver, targetLsb, 30);
+            currLsb = targetLsb;
+
+            if (iter < MaxIterations - 1)
+            {
+                try
+                {
+                    imageBytes = await GrabCalibFrameRawAsync(cameraDeviceId, 0);
+                }
+                catch
+                {
+                    break;
+                }
+                crossCenter = DetectCrossCenter(imageBytes);
+                if (!crossCenter.HasValue)
+                    break;
+            }
+        }
+
+        uint singleAfter = await driver.ReadSingleAngleAsync();
+        bool isAligned = Math.Abs(offsetXPixels) <= AlignThresholdPixels;
+        string msg = isAligned
+            ? $"偏差 {offsetXPixels:F1} px，已对齐（总调整 {totalAdjustDeg:F2}°）"
+            : $"偏差 {offsetXPixels:F1} px，迭代 {MaxIterations} 次未完全对齐（总调整 {totalAdjustDeg:F2}°）";
+
+        return new CameraAlignCameraResult
+        {
+            CameraDeviceId = cameraDeviceId,
+            CameraRole = cameraRole,
+            CrossOffsetXPixels = offsetXPixels,
+            CrossOffsetYPixels = offsetYPixels,
+            AngleBeforeDeg = angleBefore,
+            AngleAfterDeg = singleAfter / 100.0,
+            AdjustedAngleDeg = totalAdjustDeg,
+            IsAligned = isAligned,
+            Message = msg,
+        };
+    }
+
+    /// <summary>
+    /// 检测投影仪十字图（白底暗线）的交叉中心坐标。
+    /// 策略：行/列投影均值 → 找亮度最低的列（垂直线）和行（水平线）→ 加权重心提升精度。
+    /// </summary>
+    private static Point2d? DetectCrossCenter(byte[] imageBytes)
+    {
+        try
+        {
+            using Mat gray = LoadGrayMat(imageBytes);
+            if (gray.Empty())
+                return null;
+
+            // 高斯模糊，削弱噪点对投影的影响
+            using Mat blurred = new();
+            Cv2.GaussianBlur(gray, blurred, new Size(9, 9), 2.0);
+
+            int rows = blurred.Rows;
+            int cols = blurred.Cols;
+
+            // 排除图像边缘 10%（摄像头暗角/遮挡物干扰）
+            int marginX = cols / 10;
+            int marginY = rows / 10;
+            OpenCvSharp.Range rowRange = new(marginY, rows - marginY);
+            OpenCvSharp.Range colRange = new(marginX, cols - marginX);
+            using Mat roi = blurred[rowRange, colRange];
+
+            // 列投影：沿行方向求均值，得到 1×roiCols 行向量，找垂直暗线
+            using Mat colMeans = new();
+            Cv2.Reduce(roi, colMeans, ReduceDimension.Row, ReduceTypes.Avg, MatType.CV_32F);
+
+            // 行投影：沿列方向求均值，得到 roiRows×1 列向量，找水平暗线
+            using Mat rowMeans = new();
+            Cv2.Reduce(roi, rowMeans, ReduceDimension.Column, ReduceTypes.Avg, MatType.CV_32F);
+
+            // 找亮度最小点
+            Cv2.MinMaxLoc(colMeans, out _, out _, out Point minColPt, out _);
+            Cv2.MinMaxLoc(rowMeans, out _, out _, out Point minRowPt, out _);
+
+            // 在最小值邻域内做加权重心（暗度越高权重越大），精度提升到亚像素
+            double crossX =
+                SubPixelCenter1D(colMeans, isRow: true, center: minColPt.X, halfWin: 30) + marginX;
+            double crossY =
+                SubPixelCenter1D(rowMeans, isRow: false, center: minRowPt.Y, halfWin: 30) + marginY;
+
+            return new Point2d(crossX, crossY);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// 在1D投影向量的指定邻域内，以亮度反转值为权重计算加权重心（亚像素精度）。
+    /// </summary>
+    /// <param name="vec">行向量（1×N）或列向量（N×1）</param>
+    /// <param name="isRow">true=行向量（按 X 索引）；false=列向量（按 Y 索引）</param>
+    /// <param name="center">邻域中心索引</param>
+    /// <param name="halfWin">邻域半径（像素）</param>
+    private static double SubPixelCenter1D(Mat vec, bool isRow, int center, int halfWin)
+    {
+        int len = isRow ? vec.Cols : vec.Rows;
+        int lo = Math.Max(0, center - halfWin);
+        int hi = Math.Min(len - 1, center + halfWin);
+
+        double weightSum = 0;
+        double posSum = 0;
+        for (int i = lo; i <= hi; i++)
+        {
+            float val = isRow ? vec.At<float>(0, i) : vec.At<float>(i, 0);
+            double weight = Math.Max(0.0, 255.0 - val); // 越暗权重越高
+            weightSum += weight;
+            posSum += weight * i;
+        }
+
+        return weightSum > 1e-6 ? posSum / weightSum : center;
+    }
+
+    /// <summary>
+    /// 提取相机 X 方向焦距（像素单位）。
+    /// 优先使用标定计算得到的内参矩阵 fx（精确值）；
+    /// 若尚未完成内参标定，则用镜头标称焦距和像素尺寸估算：
+    ///   fx = LensFocalLength(mm) × 1000 / PixelSizeUm(μm/pixel)
+    /// </summary>
+    private async Task<double?> GetFocalLengthPixelsAsync(Guid calibProjectId, Guid cameraDeviceId)
+    {
+        IQueryable<CalibCameraParam> q = await _cameraParamRepo.GetQueryableAsync();
+        CalibCameraParam? param = await AsyncExecuter.FirstOrDefaultAsync(
+            q.Where(x => x.CalibProjectId == calibProjectId && x.CameraDeviceId == cameraDeviceId)
+        );
+        if (param == null)
+            return null;
+
+        // 优先：标定内参 fx
+        if (!string.IsNullOrEmpty(param.IntrinsicMatrixJson))
+        {
+            try
+            {
+                double[][]? matrix = JsonSerializer.Deserialize<double[][]>(
+                    param.IntrinsicMatrixJson
+                );
+                double? fx = matrix?[0][0];
+                if (fx is > 0)
+                    return fx;
+            }
+            catch
+            { /* 解析失败则回退到估算 */
+            }
+        }
+
+        // 回退：用镜头焦距 + 像素物理尺寸估算
+        // fx = LensFocalLength(mm) * 1000(μm/mm) / PixelSizeUm(μm/pixel)
+        if (param.LensFocalLength > 0 && param.PixelSizeUm > 0)
+            return (double)param.LensFocalLength * 1000.0 / (double)param.PixelSizeUm;
+
+        return null;
+    }
+
+    /// <summary>将多圈累计位置归一化为单圈角度（0~35999 LSB）</summary>
+    private static long NormalizeToSingleCircleLsb(long absolutePositionLsb)
+    {
+        long mod = absolutePositionLsb % 36000;
+        return mod < 0 ? mod + 36000 : mod;
+    }
+
+    /// <summary>
+    /// 轮询等待瓴控电机单圈角度到达目标位置（允许 0.1° = 10 LSB 圆周距离波动），超时返回 false。
+    /// 使用圆周距离避免跨 0° 边界时误判（如目标 0 LSB，当前 35998 LSB，圆周距离仅 2 LSB）。
+    /// </summary>
+    private static async Task<bool> WaitUntilSingleAngleReachedAsync(
+        KtechMotorDriver driver,
+        long targetLsb,
+        int timeoutSeconds,
+        long toleranceLsb = 10
+    )
+    {
+        DateTime deadline = DateTime.UtcNow.AddSeconds(timeoutSeconds);
+        while (DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(200);
+            uint current = await driver.ReadSingleAngleAsync();
+            long dist = Math.Abs((long)current - targetLsb);
+            // 圆周距离：跨 0°/360° 边界时取另一方向的距离
+            dist = Math.Min(dist, 36000L - dist);
+            if (dist <= toleranceLsb)
+                return true;
+        }
+        return false;
+    }
+
+    /// <summary>轮询等待瓴控电机停止运动</summary>
+    private static async Task WaitForKtechMotorStopAsync(
+        KtechMotorDriver driver,
+        int timeoutSeconds
+    )
+    {
+        DateTime deadline = DateTime.UtcNow.AddSeconds(timeoutSeconds);
+        while (DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(200);
+            MotorStatus s = await driver.QueryStatusAsync();
+            if (!s.IsMoving)
+                return;
+        }
     }
 }

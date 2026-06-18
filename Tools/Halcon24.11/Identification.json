@@ -1,0 +1,180 @@
+{
+  "通用": [
+    {
+      "name": "clear_sample_identifier",
+      "short": "Free the memory of a sample identifier."
+    },
+    {
+      "name": "deserialize_sample_identifier",
+      "short": "Deserialize a serialized sample identifier."
+    },
+    {
+      "name": "read_sample_identifier",
+      "short": "Read a sample identifier from a file."
+    },
+    {
+      "name": "serialize_sample_identifier",
+      "short": "Serialize a sample identifier."
+    },
+    {
+      "name": "write_sample_identifier",
+      "short": "Write a sample identifier to a file."
+    },
+    {
+      "name": "apply_sample_identifier",
+      "short": "Identify objects with a sample identifier."
+    },
+    {
+      "name": "get_sample_identifier_param",
+      "short": "Get selected parameters of a sample identifier."
+    },
+    {
+      "name": "set_sample_identifier_param",
+      "short": "Set selected parameters of a sample identifier."
+    },
+    {
+      "name": "get_sample_identifier_object_info",
+      "short": "Retrieve information about an object of a sample identifier."
+    },
+    {
+      "name": "set_sample_identifier_object_info",
+      "short": "Define a name or a description for an object of a sample identifier."
+    },
+    {
+      "name": "remove_sample_identifier_training_data",
+      "short": "Remove training data from a sample identifier.  "
+    },
+    {
+      "name": "remove_sample_identifier_preparation_data",
+      "short": "Remove preparation data from a sample identifier.  "
+    },
+    {
+      "name": "train_sample_identifier",
+      "short": "Train a sample identifier.  "
+    },
+    {
+      "name": "add_sample_identifier_training_data",
+      "short": "Add training data to an existing sample identifier."
+    },
+    {
+      "name": "prepare_sample_identifier",
+      "short": "Adapt the internal data structure of a sample identifier to the objects to"
+    },
+    {
+      "name": "add_sample_identifier_preparation_data",
+      "short": "Add preparation data to an existing sample identifier."
+    },
+    {
+      "name": "create_sample_identifier",
+      "short": "Create a new sample identifier."
+    },
+    {
+      "name": "get_data_code_2d_objects",
+      "short": "Access iconic objects that were created during the search for"
+    },
+    {
+      "name": "get_data_code_2d_results",
+      "short": "Get the alphanumerical results that were accumulated during the"
+    },
+    {
+      "name": "find_data_code_2d",
+      "short": "Detect and read 2D data code symbols in an image or"
+    },
+    {
+      "name": "set_data_code_2d_param",
+      "short": "Set selected parameters of the 2D data code model."
+    },
+    {
+      "name": "get_data_code_2d_param",
+      "short": "Get one or several parameters that describe the 2D data code model."
+    },
+    {
+      "name": "query_data_code_2d_params",
+      "short": "Get for a given 2D data code model the names of the generic"
+    },
+    {
+      "name": "deserialize_data_code_2d_model",
+      "short": "Deserialize a serialized 2D data code model."
+    },
+    {
+      "name": "serialize_data_code_2d_model",
+      "short": "Serialize a 2D data code model."
+    },
+    {
+      "name": "read_data_code_2d_model",
+      "short": "Read a 2D data code model from a file and create a new model."
+    },
+    {
+      "name": "write_data_code_2d_model",
+      "short": "Writes a 2D data code model into a file."
+    },
+    {
+      "name": "clear_data_code_2d_model",
+      "short": "Delete a 2D data code model and free the allocated memory."
+    },
+    {
+      "name": "create_data_code_2d_model",
+      "short": "Create a model of a 2D data code class."
+    },
+    {
+      "name": "deserialize_bar_code_model",
+      "short": "Deserialize a bar code model."
+    },
+    {
+      "name": "serialize_bar_code_model",
+      "short": "Serialize a bar code model."
+    },
+    {
+      "name": "read_bar_code_model",
+      "short": "Read a bar code model from a file and create a new model."
+    },
+    {
+      "name": "write_bar_code_model",
+      "short": "Write a bar code model to a file."
+    },
+    {
+      "name": "get_bar_code_object",
+      "short": "Access iconic objects that were created during the search or decoding of"
+    },
+    {
+      "name": "get_bar_code_result",
+      "short": "Get the alphanumerical results that were accumulated during the"
+    },
+    {
+      "name": "decode_bar_code_rectangle2",
+      "short": "Decode bar code symbols within a rectangle."
+    },
+    {
+      "name": "find_bar_code",
+      "short": "Detect and read bar code symbols in an image."
+    },
+    {
+      "name": "query_bar_code_params",
+      "short": "Get the names of the parameters that can be used in set_bar_code* and"
+    },
+    {
+      "name": "get_bar_code_param_specific",
+      "short": "Get parameters that are used by the bar code reader when processing a"
+    },
+    {
+      "name": "get_bar_code_param",
+      "short": "Get one or several parameters that describe the bar code model."
+    },
+    {
+      "name": "set_bar_code_param_specific",
+      "short": "Set selected parameters of the bar code model for selected bar code types"
+    },
+    {
+      "name": "set_bar_code_param",
+      "short": "Set selected parameters of the bar code model."
+    },
+    {
+      "name": "clear_bar_code_model",
+      "short": "Delete a bar code model and free the allocated memory"
+    },
+    {
+      "name": "create_bar_code_model",
+      "short": "Create a model of a bar code reader."
+    }
+  ]
+}

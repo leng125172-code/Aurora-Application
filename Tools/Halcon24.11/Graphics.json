@@ -1,0 +1,764 @@
+{
+  "通用": [
+    {
+      "name": "disp_xld",
+      "short": "Display an XLD object."
+    },
+    {
+      "name": "get_disp_object_model_3d_info",
+      "short": "Get the depth or the index of a displayed 3D object model."
+    },
+    {
+      "name": "disp_object_model_3d",
+      "short": "Display 3D object models."
+    },
+    {
+      "name": "get_window_background_image",
+      "short": "Gets a copy of the background image of the HALCON window."
+    },
+    {
+      "name": "set_drawing_object_callback",
+      "short": "Add a callback function to a drawing object."
+    },
+    {
+      "name": "detach_background_from_window",
+      "short": "Detach the background image from a HALCON window."
+    },
+    {
+      "name": "attach_background_to_window",
+      "short": "Attach a background image to a HALCON window."
+    },
+    {
+      "name": "detach_drawing_object_from_window",
+      "short": "Detach an existing drawing object from a HALCON window."
+    },
+    {
+      "name": "attach_drawing_object_to_window",
+      "short": "Attach an existing drawing object to a HALCON window."
+    },
+    {
+      "name": "update_window_pose",
+      "short": "Modify the pose of a 3D plot."
+    },
+    {
+      "name": "unproject_coordinates",
+      "short": "Calculates image coordinates for a point in a 3D plot window."
+    },
+    {
+      "name": "get_os_window_handle",
+      "short": "Get the operating system window handle."
+    },
+    {
+      "name": "set_window_dc",
+      "short": "Set the device context of a virtual graphics window (Windows NT)."
+    },
+    {
+      "name": "new_extern_window",
+      "short": "Create a virtual graphics window under Windows."
+    },
+    {
+      "name": "slide_image",
+      "short": "Interactive output from two window buffers."
+    },
+    {
+      "name": "set_window_type",
+      "short": "Specify a window type."
+    },
+    {
+      "name": "set_window_extents",
+      "short": "Modify position and size of a window."
+    },
+    {
+      "name": "get_window_attr",
+      "short": "Get window characteristics."
+    },
+    {
+      "name": "set_window_attr",
+      "short": "Set window characteristics."
+    },
+    {
+      "name": "query_window_type",
+      "short": "Query all available window types."
+    },
+    {
+      "name": "open_window",
+      "short": "Open a graphics window."
+    },
+    {
+      "name": "open_textwindow",
+      "short": "Open a textual window."
+    },
+    {
+      "name": "move_rectangle",
+      "short": "Copy inside an output window."
+    },
+    {
+      "name": "get_window_type",
+      "short": "Get the window type."
+    },
+    {
+      "name": "get_window_pointer3",
+      "short": "Access to a window's pixel data."
+    },
+    {
+      "name": "get_window_extents",
+      "short": "Information about a window's size and position."
+    },
+    {
+      "name": "dump_window_image",
+      "short": "Write the window content in an image object."
+    },
+    {
+      "name": "dump_window",
+      "short": "Write the window content to a file."
+    },
+    {
+      "name": "copy_rectangle",
+      "short": "Copy all pixels within rectangles between output windows."
+    },
+    {
+      "name": "close_window",
+      "short": "Close an output window."
+    },
+    {
+      "name": "clear_window",
+      "short": "Delete the contents of an output window."
+    },
+    {
+      "name": "clear_rectangle",
+      "short": "Delete a rectangle on the output window."
+    },
+    {
+      "name": "write_string",
+      "short": "Print text in a window."
+    },
+    {
+      "name": "set_tshape",
+      "short": "Set the shape of the text cursor."
+    },
+    {
+      "name": "set_tposition",
+      "short": "Set the position of the text cursor."
+    },
+    {
+      "name": "read_string",
+      "short": "Read a string in a text window."
+    },
+    {
+      "name": "read_char",
+      "short": "Read a character from a window."
+    },
+    {
+      "name": "new_line",
+      "short": "Set the position of the text cursor to the beginning of the next line."
+    },
+    {
+      "name": "get_tshape",
+      "short": "Get the shape of the text cursor."
+    },
+    {
+      "name": "get_tposition",
+      "short": "Get cursor position."
+    },
+    {
+      "name": "get_font_extents",
+      "short": "Get the maximum size of all characters of a font."
+    },
+    {
+      "name": "get_string_extents",
+      "short": "Get the spatial size of a string."
+    },
+    {
+      "name": "query_font",
+      "short": "Query the available fonts."
+    },
+    {
+      "name": "query_tshape",
+      "short": "Query all shapes available for text cursors."
+    },
+    {
+      "name": "set_font",
+      "short": "Set the font used for text output."
+    },
+    {
+      "name": "get_font",
+      "short": "Get the current font."
+    },
+    {
+      "name": "get_display_scene_3d_info",
+      "short": "Get the depth or the index of instances in a displayed 3D scene."
+    },
+    {
+      "name": "set_scene_3d_to_world_pose",
+      "short": "Set the pose of a 3D scene."
+    },
+    {
+      "name": "set_scene_3d_param",
+      "short": "Set parameters of a 3D scene."
+    },
+    {
+      "name": "set_scene_3d_light_param",
+      "short": "Set parameters of a light in a 3D scene."
+    },
+    {
+      "name": "set_scene_3d_instance_pose",
+      "short": "Set the pose of an instance in a 3D scene."
+    },
+    {
+      "name": "set_scene_3d_instance_param",
+      "short": "Set parameters of an instance in a 3D scene."
+    },
+    {
+      "name": "set_scene_3d_camera_pose",
+      "short": "Set the pose of a camera in a 3D scene."
+    },
+    {
+      "name": "render_scene_3d",
+      "short": "Render an image of a 3D scene."
+    },
+    {
+      "name": "remove_scene_3d_light",
+      "short": "Remove a light from a 3D scene."
+    },
+    {
+      "name": "remove_scene_3d_instance",
+      "short": "Remove an object instance from a 3D scene."
+    },
+    {
+      "name": "remove_scene_3d_camera",
+      "short": "Remove a camera from a 3D scene."
+    },
+    {
+      "name": "display_scene_3d",
+      "short": "Display a 3D scene."
+    },
+    {
+      "name": "add_scene_3d_light",
+      "short": "Add a light source to a 3D scene."
+    },
+    {
+      "name": "add_scene_3d_instance",
+      "short": "Add an instance of a 3D object model to a 3D scene."
+    },
+    {
+      "name": "add_scene_3d_camera",
+      "short": "Add a camera to a 3D scene."
+    },
+    {
+      "name": "clear_scene_3d",
+      "short": "Delete a 3D scene and free all allocated memory."
+    },
+    {
+      "name": "create_scene_3d",
+      "short": "Create the data structure that is needed to visualize collections of"
+    },
+    {
+      "name": "get_window_param",
+      "short": "Get window parameters."
+    },
+    {
+      "name": "set_window_param",
+      "short": "Set window parameters."
+    },
+    {
+      "name": "set_shape",
+      "short": "Define the region output shape."
+    },
+    {
+      "name": "set_rgb",
+      "short": "Set the color definition via RGB values."
+    },
+    {
+      "name": "set_pixel",
+      "short": "Define a color lookup table index."
+    },
+    {
+      "name": "set_part_style",
+      "short": "Define an interpolation method for gray value output."
+    },
+    {
+      "name": "set_part",
+      "short": "Modify the displayed image part."
+    },
+    {
+      "name": "set_paint",
+      "short": "Define the gray value output mode."
+    },
+    {
+      "name": "set_line_width",
+      "short": "Define the line width for region contour output."
+    },
+    {
+      "name": "set_line_style",
+      "short": "Define a contour output pattern."
+    },
+    {
+      "name": "set_line_approx",
+      "short": "Define the approximation error for contour display."
+    },
+    {
+      "name": "set_insert",
+      "short": "Define the pixel output function."
+    },
+    {
+      "name": "set_hsi",
+      "short": "Define output colors (HSI-coded)."
+    },
+    {
+      "name": "set_gray",
+      "short": "Define gray values for region output."
+    },
+    {
+      "name": "set_draw",
+      "short": "Define the region fill mode."
+    },
+    {
+      "name": "set_comprise",
+      "short": "Define the image matrix output clipping."
+    },
+    {
+      "name": "set_colored",
+      "short": "Set multiple output colors."
+    },
+    {
+      "name": "set_color",
+      "short": "Set output color."
+    },
+    {
+      "name": "get_shape",
+      "short": "Get the current region output shape."
+    },
+    {
+      "name": "get_rgb",
+      "short": "Get the current color in RGB-coding."
+    },
+    {
+      "name": "get_pixel",
+      "short": "Get the current color lookup table index."
+    },
+    {
+      "name": "get_part_style",
+      "short": "Get the current interpolation mode for gray value display."
+    },
+    {
+      "name": "get_part",
+      "short": "Get the image part."
+    },
+    {
+      "name": "get_paint",
+      "short": "Get the current display mode for gray values."
+    },
+    {
+      "name": "get_line_width",
+      "short": "Get the current line width for contour display."
+    },
+    {
+      "name": "get_line_style",
+      "short": "Get the current graphic mode for contours."
+    },
+    {
+      "name": "get_line_approx",
+      "short": "Get the current approximation error for contour display."
+    },
+    {
+      "name": "get_insert",
+      "short": "Get the current display mode."
+    },
+    {
+      "name": "get_hsi",
+      "short": "Get the HSI coding of the current color."
+    },
+    {
+      "name": "get_draw",
+      "short": "Get the current region fill mode."
+    },
+    {
+      "name": "get_comprise",
+      "short": "Get the output treatment of an image matrix."
+    },
+    {
+      "name": "query_shape",
+      "short": "Query the region display modes."
+    },
+    {
+      "name": "query_paint",
+      "short": "Query the gray value display modes."
+    },
+    {
+      "name": "query_line_width",
+      "short": "Query the possible line widths."
+    },
+    {
+      "name": "query_insert",
+      "short": "Query the possible graphic modes."
+    },
+    {
+      "name": "query_gray",
+      "short": "Query the displayable gray values."
+    },
+    {
+      "name": "query_colored",
+      "short": "Query the number of colors for color output."
+    },
+    {
+      "name": "query_all_colors",
+      "short": "Query all color names."
+    },
+    {
+      "name": "query_color",
+      "short": "Query all color names displayable in the window."
+    },
+    {
+      "name": "get_icon",
+      "short": "Query the icon for region output"
+    },
+    {
+      "name": "set_icon",
+      "short": "Icon definition for region output."
+    },
+    {
+      "name": "disp_region",
+      "short": "Displays regions in a window."
+    },
+    {
+      "name": "disp_rectangle2",
+      "short": "Displays arbitrarily oriented rectangles."
+    },
+    {
+      "name": "disp_rectangle1",
+      "short": "Display of rectangles aligned to the coordinate axes."
+    },
+    {
+      "name": "disp_polygon",
+      "short": "Displays a polyline."
+    },
+    {
+      "name": "disp_line",
+      "short": "Draws lines in a window."
+    },
+    {
+      "name": "disp_cross",
+      "short": "Displays crosses in a window."
+    },
+    {
+      "name": "disp_image",
+      "short": "Displays gray value images."
+    },
+    {
+      "name": "disp_channel",
+      "short": "Displays images with several channels."
+    },
+    {
+      "name": "disp_color",
+      "short": "Displays a color (RGB) image"
+    },
+    {
+      "name": "disp_ellipse",
+      "short": "Displays ellipses."
+    },
+    {
+      "name": "disp_distribution",
+      "short": "Displays a noise distribution."
+    },
+    {
+      "name": "disp_circle",
+      "short": "Displays circles in a window."
+    },
+    {
+      "name": "disp_arrow",
+      "short": "Displays arrows in a window."
+    },
+    {
+      "name": "disp_arc",
+      "short": "Displays circular arcs in a window."
+    },
+    {
+      "name": "disp_obj",
+      "short": "Displays image objects (image, region, XLD)."
+    },
+    {
+      "name": "set_mshape",
+      "short": "Set the current mouse pointer shape."
+    },
+    {
+      "name": "get_mshape",
+      "short": "Query the current mouse pointer shape."
+    },
+    {
+      "name": "query_mshape",
+      "short": "Query all available mouse pointer shapes."
+    },
+    {
+      "name": "get_mposition_sub_pix",
+      "short": "Query the subpixel mouse position."
+    },
+    {
+      "name": "get_mposition",
+      "short": "Query the mouse position."
+    },
+    {
+      "name": "get_mbutton_sub_pix",
+      "short": "Wait until a mouse button is pressed and get the subpixel mouse position."
+    },
+    {
+      "name": "get_mbutton",
+      "short": "Wait until a mouse button is pressed."
+    },
+    {
+      "name": "write_lut",
+      "short": "Write look-up-table (lut) as file."
+    },
+    {
+      "name": "disp_lut",
+      "short": "Graphical view of the look-up-table (lut)."
+    },
+    {
+      "name": "query_lut",
+      "short": "Query all available look-up-tables (lut)."
+    },
+    {
+      "name": "get_lut_style",
+      "short": "Get modification parameters of look-up-table (lut)."
+    },
+    {
+      "name": "set_lut_style",
+      "short": "Changing the look-up-table (lut)."
+    },
+    {
+      "name": "get_lut",
+      "short": "Get current look-up-table (lut)."
+    },
+    {
+      "name": "set_lut",
+      "short": "Set \"look-up-table\" (lut)."
+    },
+    {
+      "name": "get_fix",
+      "short": "Get mode of fixing of current look-up-table (lut)."
+    },
+    {
+      "name": "set_fix",
+      "short": "Set fixing of \"look-up-table\" (lut)"
+    },
+    {
+      "name": "get_fixed_lut",
+      "short": "Get fixing of \"look-up-table\" (lut) for \"real color images\""
+    },
+    {
+      "name": "set_fixed_lut",
+      "short": "Fix \"look-up-table\" (lut) for \"real color images\"."
+    },
+    {
+      "name": "create_drawing_object_text",
+      "short": "Create a text object which can be moved interactively."
+    },
+    {
+      "name": "get_drawing_object_iconic",
+      "short": "Return the iconic object of a drawing object."
+    },
+    {
+      "name": "clear_drawing_object",
+      "short": "Delete drawing object."
+    },
+    {
+      "name": "set_drawing_object_params",
+      "short": "Set the parameters of a drawing object."
+    },
+    {
+      "name": "get_drawing_object_params",
+      "short": "Get the parameters of a drawing object."
+    },
+    {
+      "name": "set_drawing_object_xld",
+      "short": "Set the contour of an interactive draw XLD."
+    },
+    {
+      "name": "create_drawing_object_xld",
+      "short": "Create a XLD contour which can be modified interactively."
+    },
+    {
+      "name": "create_drawing_object_circle_sector",
+      "short": "Create a circle sector which can be modified interactively."
+    },
+    {
+      "name": "create_drawing_object_ellipse_sector",
+      "short": "Create an elliptic sector which can be modified interactively."
+    },
+    {
+      "name": "create_drawing_object_line",
+      "short": "Create a line which can be modified interactively."
+    },
+    {
+      "name": "create_drawing_object_circle",
+      "short": "Create a circle which can be modified interactively."
+    },
+    {
+      "name": "create_drawing_object_ellipse",
+      "short": "Create an ellipse which can be modified interactively."
+    },
+    {
+      "name": "create_drawing_object_rectangle2",
+      "short": "Create a rectangle of any orientation which can be modified interactively."
+    },
+    {
+      "name": "create_drawing_object_rectangle1",
+      "short": "Create a rectangle parallel to the coordinate axis which can be"
+    },
+    {
+      "name": "drag_region3",
+      "short": "Interactive movement of a region with restriction of positions."
+    },
+    {
+      "name": "drag_region2",
+      "short": "Interactive movement of a region with fixpoint specification."
+    },
+    {
+      "name": "drag_region1",
+      "short": "Interactive moving of a region."
+    },
+    {
+      "name": "draw_nurbs_interp_mod",
+      "short": "Interactive modification of a NURBS curve using interpolation."
+    },
+    {
+      "name": "draw_nurbs_interp",
+      "short": "Interactive drawing of a NURBS curve using interpolation."
+    },
+    {
+      "name": "draw_nurbs_mod",
+      "short": "Interactive modification of a NURBS curve."
+    },
+    {
+      "name": "draw_nurbs",
+      "short": "Interactive drawing of a NURBS curve."
+    },
+    {
+      "name": "draw_xld_mod",
+      "short": "Interactive modification of a contour."
+    },
+    {
+      "name": "draw_xld",
+      "short": "Interactive drawing of a contour."
+    },
+    {
+      "name": "draw_rectangle2_mod",
+      "short": "Interactive drawing of any orientated rectangle."
+    },
+    {
+      "name": "draw_rectangle2",
+      "short": "Interactive drawing of any orientated rectangle."
+    },
+    {
+      "name": "draw_rectangle1_mod",
+      "short": "Draw a rectangle parallel to the coordinate axis."
+    },
+    {
+      "name": "draw_rectangle1",
+      "short": "Draw a rectangle parallel to the coordinate axis."
+    },
+    {
+      "name": "draw_point_mod",
+      "short": "Draw a point."
+    },
+    {
+      "name": "draw_point",
+      "short": "Draw a point."
+    },
+    {
+      "name": "draw_line_mod",
+      "short": "Draw a line."
+    },
+    {
+      "name": "draw_line",
+      "short": "Draw a line."
+    },
+    {
+      "name": "draw_ellipse_mod",
+      "short": "Interactive drawing of an ellipse."
+    },
+    {
+      "name": "draw_ellipse",
+      "short": "Interactive drawing of an ellipse."
+    },
+    {
+      "name": "draw_circle_mod",
+      "short": "Interactive drawing of a circle."
+    },
+    {
+      "name": "draw_circle",
+      "short": "Interactive drawing of a circle."
+    },
+    {
+      "name": "draw_region",
+      "short": "Interactive drawing of a closed region."
+    },
+    {
+      "name": "draw_polygon",
+      "short": "Interactive drawing of a polygon row."
+    },
+    {
+      "name": "add_scene_3d_label",
+      "short": "Add a text label to a 3D scene."
+    },
+    {
+      "name": "remove_scene_3d_label",
+      "short": "Remove a text label from a 3D scene."
+    },
+    {
+      "name": "set_scene_3d_label_param",
+      "short": "Set parameters of a text label in a 3D scene."
+    },
+    {
+      "name": "convert_coordinates_image_to_window",
+      "short": "Convert image coordinates to window coordinates"
+    },
+    {
+      "name": "convert_coordinates_window_to_image",
+      "short": "Convert window coordinates to image coordinates"
+    },
+    {
+      "name": "disp_text",
+      "short": "Display text in a window."
+    },
+    {
+      "name": "flush_buffer",
+      "short": "Flush the contents of a window."
+    },
+    {
+      "name": "get_rgba",
+      "short": "Get the current color in RGBA-coding."
+    },
+    {
+      "name": "send_mouse_double_click_event",
+      "short": "Send an event to a buffer window signaling a mouse double click event."
+    },
+    {
+      "name": "send_mouse_down_event",
+      "short": "Send an event to a window buffer signaling a mouse down event."
+    },
+    {
+      "name": "send_mouse_drag_event",
+      "short": "Send an event to a buffer window signaling a mouse drag event."
+    },
+    {
+      "name": "send_mouse_up_event",
+      "short": "Send an event to a buffer window signaling a mouse up event."
+    },
+    {
+      "name": "set_content_update_callback",
+      "short": "Sets the callback for content updates in buffer window."
+    },
+    {
+      "name": "set_rgba",
+      "short": "Set the color definition via RGBA values."
+    },
+    {
+      "name": "get_contour_style",
+      "short": "Get the current contour display fill style."
+    },
+    {
+      "name": "set_contour_style",
+      "short": "Define the contour display fill style."
+    }
+  ]
+}

@@ -1,0 +1,568 @@
+{
+  "通用": [
+    {
+      "name": "get_system_time",
+      "short": "Read out the system time."
+    },
+    {
+      "name": "get_compute_device_param",
+      "short": "Query compute device parameters."
+    },
+    {
+      "name": "set_compute_device_param",
+      "short": "Set parameters of an compute device."
+    },
+    {
+      "name": "release_all_compute_devices",
+      "short": "Close all compute devices."
+    },
+    {
+      "name": "release_compute_device",
+      "short": "Close a compute_device."
+    },
+    {
+      "name": "deactivate_all_compute_devices",
+      "short": "Deactivate all compute devices."
+    },
+    {
+      "name": "deactivate_compute_device",
+      "short": "Deactivate a compute device."
+    },
+    {
+      "name": "activate_compute_device",
+      "short": "Activate a compute device."
+    },
+    {
+      "name": "init_compute_device",
+      "short": "Initialize a compute device."
+    },
+    {
+      "name": "open_compute_device",
+      "short": "Open a compute device."
+    },
+    {
+      "name": "get_compute_device_info",
+      "short": "Get information on a compute device."
+    },
+    {
+      "name": "query_available_compute_devices",
+      "short": "Get the list of available compute devices."
+    },
+    {
+      "name": "clear_serial",
+      "short": "Clear the buffer of a serial connection."
+    },
+    {
+      "name": "write_serial",
+      "short": "Write to a serial connection."
+    },
+    {
+      "name": "read_serial",
+      "short": "Read from a serial device."
+    },
+    {
+      "name": "get_serial_param",
+      "short": "Get the parameters of a serial device."
+    },
+    {
+      "name": "set_serial_param",
+      "short": "Set the parameters of a serial device."
+    },
+    {
+      "name": "close_serial",
+      "short": "Close a serial device."
+    },
+    {
+      "name": "open_serial",
+      "short": "Open a serial device."
+    },
+    {
+      "name": "wait_seconds",
+      "short": "Delaying the execution of the program."
+    },
+    {
+      "name": "system_call",
+      "short": "Execute a system command."
+    },
+    {
+      "name": "set_system",
+      "short": "Set HALCON system parameters."
+    },
+    {
+      "name": "set_check",
+      "short": "Activating and deactivating of HALCON control modes."
+    },
+    {
+      "name": "reset_obj_db",
+      "short": "Reset the HALCON system for iconic objects."
+    },
+    {
+      "name": "get_system",
+      "short": "Get current value of HALCON system parameters."
+    },
+    {
+      "name": "get_check",
+      "short": "State of the HALCON control modes."
+    },
+    {
+      "name": "get_error_text",
+      "short": "Inquiry after the error text of a HALCON error number."
+    },
+    {
+      "name": "count_seconds",
+      "short": "Passed Time."
+    },
+    {
+      "name": "count_relation",
+      "short": "Number of entries in the HALCON database."
+    },
+    {
+      "name": "receive_image",
+      "short": "Receive an image over a socket connection."
+    },
+    {
+      "name": "send_image",
+      "short": "Send an image over a socket connection."
+    },
+    {
+      "name": "receive_region",
+      "short": "Receive regions over a socket connection."
+    },
+    {
+      "name": "send_region",
+      "short": "Send regions over a socket connection."
+    },
+    {
+      "name": "receive_xld",
+      "short": "Receive an XLD object over a socket connection."
+    },
+    {
+      "name": "send_xld",
+      "short": "Send an XLD object over a socket connection."
+    },
+    {
+      "name": "receive_tuple",
+      "short": "Receive a tuple over a socket connection."
+    },
+    {
+      "name": "send_tuple",
+      "short": "Send a tuple over a socket connection."
+    },
+    {
+      "name": "receive_data",
+      "short": "Receive arbitrary data from external devices or applications using a"
+    },
+    {
+      "name": "send_data",
+      "short": "Send arbitrary data to external devices or applications using a"
+    },
+    {
+      "name": "get_socket_param",
+      "short": "Get the value of a socket parameter."
+    },
+    {
+      "name": "set_socket_param",
+      "short": "Set a socket parameter."
+    },
+    {
+      "name": "get_next_socket_data_type",
+      "short": "Determine the HALCON data type of the next socket data."
+    },
+    {
+      "name": "get_socket_descriptor",
+      "short": "Get the socket descriptor of a socket used by the operating system."
+    },
+    {
+      "name": "close_socket",
+      "short": "Close a socket."
+    },
+    {
+      "name": "socket_accept_connect",
+      "short": "Accept a connection request on a listening socket of the protocol type"
+    },
+    {
+      "name": "open_socket_connect",
+      "short": "Open a socket and connect it to an accepting socket."
+    },
+    {
+      "name": "open_socket_accept",
+      "short": "Open a socket that accepts connection requests."
+    },
+    {
+      "name": "get_extended_error_info",
+      "short": "Returns the extended error information for the calling thread's last"
+    },
+    {
+      "name": "get_modules",
+      "short": "Query of used modules and the module key."
+    },
+    {
+      "name": "query_spy",
+      "short": "Inquiring for possible settings of the HALCON debugging tool."
+    },
+    {
+      "name": "set_spy",
+      "short": "Control of the HALCON Debugging Tools."
+    },
+    {
+      "name": "get_spy",
+      "short": "Current configuration of the HALCON debugging-tool."
+    },
+    {
+      "name": "receive_serialized_item",
+      "short": "Receive a serialized item over a socket connection."
+    },
+    {
+      "name": "send_serialized_item",
+      "short": "Send a serialized item over a socket connection."
+    },
+    {
+      "name": "fwrite_serialized_item",
+      "short": "Write a serialized item to a file."
+    },
+    {
+      "name": "fread_serialized_item",
+      "short": "Read a serialized item from a file."
+    },
+    {
+      "name": "clear_serialized_item",
+      "short": "Delete a serialized item."
+    },
+    {
+      "name": "get_serialized_item_ptr",
+      "short": "Access the data pointer of a serialized item."
+    },
+    {
+      "name": "create_serialized_item_ptr",
+      "short": "Create a serialized item."
+    },
+    {
+      "name": "get_message_queue_param",
+      "short": "Query message queue parameters or information about the queue."
+    },
+    {
+      "name": "set_message_queue_param",
+      "short": "Set message queue parameters or invoke commands on the queue."
+    },
+    {
+      "name": "dequeue_message",
+      "short": "Receive one or more messages from the message queue."
+    },
+    {
+      "name": "enqueue_message",
+      "short": "Enqueue one or more messages to the message queue."
+    },
+    {
+      "name": "clear_message_queue",
+      "short": "Close a message queue handle and release all associated resources."
+    },
+    {
+      "name": "create_message_queue",
+      "short": "Create a new empty message queue."
+    },
+    {
+      "name": "get_message_param",
+      "short": "Query message parameters or information about the message."
+    },
+    {
+      "name": "set_message_param",
+      "short": "Set message parameter or invoke commands on the message."
+    },
+    {
+      "name": "get_message_obj",
+      "short": "Retrieve an object associated with the key from the message."
+    },
+    {
+      "name": "set_message_obj",
+      "short": "Add a key/object pair to the message."
+    },
+    {
+      "name": "get_message_tuple",
+      "short": "Retrieve a tuple associated with the key from the message."
+    },
+    {
+      "name": "set_message_tuple",
+      "short": "Add a key/tuple pair to the message."
+    },
+    {
+      "name": "clear_message",
+      "short": "Close a message handle and release all associated resources."
+    },
+    {
+      "name": "create_message",
+      "short": "Create a new empty message."
+    },
+    {
+      "name": "clear_condition",
+      "short": "Destroy a condition synchronization object."
+    },
+    {
+      "name": "broadcast_condition",
+      "short": "Signal a condition synchronization object."
+    },
+    {
+      "name": "signal_condition",
+      "short": "Signal a condition synchronization object."
+    },
+    {
+      "name": "timed_wait_condition",
+      "short": "Bounded wait on the signal of a condition synchronization object."
+    },
+    {
+      "name": "wait_condition",
+      "short": "wait on the signal of a condition synchronization object."
+    },
+    {
+      "name": "create_condition",
+      "short": "Create a condition variable synchronization object."
+    },
+    {
+      "name": "clear_barrier",
+      "short": "Destroy a barrier synchronization object."
+    },
+    {
+      "name": "wait_barrier",
+      "short": "Wait on the release of a barrier synchronization object."
+    },
+    {
+      "name": "create_barrier",
+      "short": "Create a barrier synchronization object."
+    },
+    {
+      "name": "clear_event",
+      "short": "Clear the event synchronization object."
+    },
+    {
+      "name": "signal_event",
+      "short": "Unlock an event synchronization object."
+    },
+    {
+      "name": "try_wait_event",
+      "short": "Lock an event synchronization object only if it is unlocked."
+    },
+    {
+      "name": "wait_event",
+      "short": "Lock an event synchronization object."
+    },
+    {
+      "name": "create_event",
+      "short": "Create an event synchronization object."
+    },
+    {
+      "name": "clear_mutex",
+      "short": "Clear the mutex synchronization object."
+    },
+    {
+      "name": "unlock_mutex",
+      "short": "Unlock a mutex synchronization object."
+    },
+    {
+      "name": "try_lock_mutex",
+      "short": "Lock a mutex synchronization object."
+    },
+    {
+      "name": "lock_mutex",
+      "short": "Lock a mutex synchronization object."
+    },
+    {
+      "name": "create_mutex",
+      "short": "Create a mutual exclusion synchronization object."
+    },
+    {
+      "name": "get_threading_attrib",
+      "short": "Query the attributes of a threading / synchronization object."
+    },
+    {
+      "name": "set_aop_info",
+      "short": "Set AOP information for operators."
+    },
+    {
+      "name": "get_aop_info",
+      "short": "Return AOP information for operators."
+    },
+    {
+      "name": "query_aop_info",
+      "short": "Query indexing structure of AOP information for operators."
+    },
+    {
+      "name": "optimize_aop",
+      "short": "Check hardware regarding its potential for automatic operator"
+    },
+    {
+      "name": "write_aop_knowledge",
+      "short": "Write knowledge about hardware dependent behavior of automatic operator"
+    },
+    {
+      "name": "read_aop_knowledge",
+      "short": "Load knowledge about hardware dependent behavior of automatic operator"
+    },
+    {
+      "name": "query_operator_info",
+      "short": "Query slots concerning information with relation to the operator get_operator_info."
+    },
+    {
+      "name": "query_param_info",
+      "short": "Query slots of the online-information concerning the operator get_param_info."
+    },
+    {
+      "name": "get_operator_name",
+      "short": "Get operators with the given string as a substring of their name."
+    },
+    {
+      "name": "get_param_types",
+      "short": "Get default data type for the control parameters of a HALCON-operator."
+    },
+    {
+      "name": "get_param_num",
+      "short": "Get number of the different parameter classes of a HALCON-operator."
+    },
+    {
+      "name": "get_param_names",
+      "short": "Get the names of the parameters of a HALCON-operator."
+    },
+    {
+      "name": "get_operator_info",
+      "short": "Get information concerning a HALCON-operator."
+    },
+    {
+      "name": "get_param_info",
+      "short": "Get information concerning the operator parameters."
+    },
+    {
+      "name": "search_operator",
+      "short": "Search names of all operators assigned to one keyword."
+    },
+    {
+      "name": "get_keywords",
+      "short": "Get keywords which are assigned to operators."
+    },
+    {
+      "name": "get_chapter_info",
+      "short": "Get information concerning the chapters on operators."
+    },
+    {
+      "name": "control_io_channel",
+      "short": "Perform an action on I/O channels."
+    },
+    {
+      "name": "write_io_channel",
+      "short": "Write a value to the specified I/O channels."
+    },
+    {
+      "name": "read_io_channel",
+      "short": "Read a value from the specified I/O channels."
+    },
+    {
+      "name": "set_io_channel_param",
+      "short": "Set specific parameters of I/O channels."
+    },
+    {
+      "name": "get_io_channel_param",
+      "short": "Query specific parameters of I/O channels."
+    },
+    {
+      "name": "close_io_channel",
+      "short": "Close I/O channels."
+    },
+    {
+      "name": "open_io_channel",
+      "short": "Open and configure I/O channels."
+    },
+    {
+      "name": "query_io_device",
+      "short": "Query information about channels of the specified I/O device."
+    },
+    {
+      "name": "control_io_device",
+      "short": "Perform an action on the I/O device."
+    },
+    {
+      "name": "set_io_device_param",
+      "short": "Configure a specific I/O device instance."
+    },
+    {
+      "name": "get_io_device_param",
+      "short": "Query settings of an I/O device instance."
+    },
+    {
+      "name": "close_io_device",
+      "short": "Close the specified I/O device."
+    },
+    {
+      "name": "open_io_device",
+      "short": "Open and configure an I/O device."
+    },
+    {
+      "name": "control_io_interface",
+      "short": "Perform an action on the I/O interface."
+    },
+    {
+      "name": "query_io_interface",
+      "short": "Query information about the specified I/O device interface."
+    },
+    {
+      "name": "set_operator_timeout",
+      "short": "Set a timeout for an operator."
+    },
+    {
+      "name": "get_current_hthread_id",
+      "short": "Return the HALCON thread ID of the current thread."
+    },
+    {
+      "name": "get_system_info",
+      "short": "Get current value of system information without requiring a license."
+    },
+    {
+      "name": "interrupt_operator",
+      "short": "Attempt to interrupt an operator running in a different thread."
+    },
+    {
+      "name": "read_message",
+      "short": "Read a message from a file."
+    },
+    {
+      "name": "write_message",
+      "short": "Write a message to a file."
+    },
+    {
+      "name": "compare_memory_block",
+      "short": "Compare contents of memory blocks regarding equality."
+    },
+    {
+      "name": "create_memory_block_extern",
+      "short": "Create a memory block from an external pointer."
+    },
+    {
+      "name": "create_memory_block_extern_copy",
+      "short": "Create a memory block from an external pointer by copying."
+    },
+    {
+      "name": "decrypt_serialized_item",
+      "short": "Decrypt an encrypted item."
+    },
+    {
+      "name": "encrypt_serialized_item",
+      "short": "Encrypt a serialized item."
+    },
+    {
+      "name": "get_memory_block_ptr",
+      "short": "Return the data pointer and size of a memory block."
+    },
+    {
+      "name": "read_encrypted_item",
+      "short": "Read an encrypted item from a file."
+    },
+    {
+      "name": "read_memory_block",
+      "short": "Read a memory block from a file."
+    },
+    {
+      "name": "write_encrypted_item",
+      "short": "Write an encrypted item to a file."
+    },
+    {
+      "name": "write_memory_block",
+      "short": "Write a memory block to a file."
+    }
+  ]
+}

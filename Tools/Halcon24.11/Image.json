@@ -1,0 +1,432 @@
+{
+  "通用": [
+    {
+      "name": "region_to_label",
+      "short": "Convert regions to a label image."
+    },
+    {
+      "name": "region_to_bin",
+      "short": "Convert a region into a binary byte-image."
+    },
+    {
+      "name": "set_grayval",
+      "short": "Set single gray values in an image."
+    },
+    {
+      "name": "paint_xld",
+      "short": "Paint XLD objects into an image."
+    },
+    {
+      "name": "paint_region",
+      "short": "Paint regions into an image."
+    },
+    {
+      "name": "overpaint_region",
+      "short": "Overpaint regions in an image."
+    },
+    {
+      "name": "gen_image_proto",
+      "short": "Create an image with a specified constant gray value."
+    },
+    {
+      "name": "paint_gray",
+      "short": "Paint the gray values of an image into another image."
+    },
+    {
+      "name": "overpaint_gray",
+      "short": "Overpaint the gray values of an image."
+    },
+    {
+      "name": "copy_image",
+      "short": "Copy an image and allocate new memory for it."
+    },
+    {
+      "name": "gen_image_interleaved",
+      "short": "Create a three-channel image from a pointer to the interleaved pixels."
+    },
+    {
+      "name": "gen_image3",
+      "short": "Create an image from three pointers to the pixels (red/green/blue)."
+    },
+    {
+      "name": "gen_image1",
+      "short": "Create an image from a pointer to the pixels."
+    },
+    {
+      "name": "gen_image_const",
+      "short": "Create an image with constant gray value."
+    },
+    {
+      "name": "gen_image_gray_ramp",
+      "short": "Create a gray value ramp."
+    },
+    {
+      "name": "gen_image3_extern",
+      "short": "Create a three-channel image from three pointers on the pixels with storage"
+    },
+    {
+      "name": "gen_image1_extern",
+      "short": "Create an image from a pointer on the pixels with storage management."
+    },
+    {
+      "name": "gen_image1_rect",
+      "short": "Create an image with a rectangular domain from a pointer on the pixels"
+    },
+    {
+      "name": "get_image_pointer1_rect",
+      "short": "Access to the image data pointer and the image data inside"
+    },
+    {
+      "name": "get_image_pointer3",
+      "short": "Access the pointers of a colored image."
+    },
+    {
+      "name": "get_image_pointer1",
+      "short": "Access the pointer of a channel."
+    },
+    {
+      "name": "get_image_type",
+      "short": "Return the type of an image."
+    },
+    {
+      "name": "get_image_size",
+      "short": "Return the size of an image."
+    },
+    {
+      "name": "get_image_time",
+      "short": "Request time at which the image was created."
+    },
+    {
+      "name": "get_grayval_interpolated",
+      "short": "Return gray values of an image at the positions given by tuples of"
+    },
+    {
+      "name": "get_grayval",
+      "short": "Access the gray values of an image object."
+    },
+    {
+      "name": "crop_domain_rel",
+      "short": "Cut out an image area relative to the domain."
+    },
+    {
+      "name": "channels_to_image",
+      "short": "Convert one-channel images into a multi-channel image"
+    },
+    {
+      "name": "image_to_channels",
+      "short": "Convert a multi-channel image into One-channel images"
+    },
+    {
+      "name": "compose7",
+      "short": "Convert 7 images into a seven-channel image."
+    },
+    {
+      "name": "compose6",
+      "short": "Convert 6 images into a six-channel image."
+    },
+    {
+      "name": "compose5",
+      "short": "Convert 5 images into a five-channel image."
+    },
+    {
+      "name": "compose4",
+      "short": "Convert 4 images into a four-channel image."
+    },
+    {
+      "name": "compose3",
+      "short": "Convert 3 images into a three-channel image."
+    },
+    {
+      "name": "compose2",
+      "short": "Convert two images into a two-channel image."
+    },
+    {
+      "name": "decompose7",
+      "short": "Convert a seven-channel image into seven images."
+    },
+    {
+      "name": "decompose6",
+      "short": "Convert a six-channel image into six images."
+    },
+    {
+      "name": "decompose5",
+      "short": "Convert a five-channel image into five images."
+    },
+    {
+      "name": "decompose4",
+      "short": "Convert a four-channel image into four images."
+    },
+    {
+      "name": "decompose3",
+      "short": "Convert a three-channel image into three images."
+    },
+    {
+      "name": "decompose2",
+      "short": "Convert a two-channel image into two images."
+    },
+    {
+      "name": "count_channels",
+      "short": "Count channels of image."
+    },
+    {
+      "name": "append_channel",
+      "short": "Append additional matrices (channels) to the image."
+    },
+    {
+      "name": "access_channel",
+      "short": "Access a channel of a multi-channel image."
+    },
+    {
+      "name": "tile_images_offset",
+      "short": "Tile multiple image objects into a large image with explicit"
+    },
+    {
+      "name": "tile_images",
+      "short": "Tile multiple image objects into a large image."
+    },
+    {
+      "name": "tile_channels",
+      "short": "Tile multiple images into a large image."
+    },
+    {
+      "name": "crop_domain",
+      "short": "Cut out of defined gray values."
+    },
+    {
+      "name": "crop_rectangle1",
+      "short": "Cut out one or more rectangular image areas."
+    },
+    {
+      "name": "crop_part",
+      "short": "Cut out one or more rectangular image areas."
+    },
+    {
+      "name": "change_format",
+      "short": "Change image size."
+    },
+    {
+      "name": "change_domain",
+      "short": "Change definition domain of an image."
+    },
+    {
+      "name": "add_channels",
+      "short": "Add gray values to regions."
+    },
+    {
+      "name": "rectangle1_domain",
+      "short": "Reduce the domain of an image to a rectangle."
+    },
+    {
+      "name": "reduce_domain",
+      "short": "Reduce the domain of an image."
+    },
+    {
+      "name": "full_domain",
+      "short": "Expand the domain of an image to maximum."
+    },
+    {
+      "name": "get_domain",
+      "short": "Get the domain of an image."
+    },
+    {
+      "name": "estimate_noise",
+      "short": "Estimate the image noise from a single image."
+    },
+    {
+      "name": "fuzzy_entropy",
+      "short": "Determine the fuzzy entropy of regions."
+    },
+    {
+      "name": "fuzzy_perimeter",
+      "short": "Calculate the fuzzy perimeter of a region."
+    },
+    {
+      "name": "convert_image_type",
+      "short": "Convert the type of an image."
+    },
+    {
+      "name": "real_to_vector_field",
+      "short": "Convert two real-valued images into a vector field image."
+    },
+    {
+      "name": "vector_field_to_real",
+      "short": "Convert a vector field image into two real-valued images."
+    },
+    {
+      "name": "real_to_complex",
+      "short": "Convert two real images into a complex image."
+    },
+    {
+      "name": "complex_to_real",
+      "short": "Convert a complex image into two real images."
+    },
+    {
+      "name": "region_to_mean",
+      "short": "Paint regions with their average gray value."
+    },
+    {
+      "name": "get_grayval_contour_xld",
+      "short": "Return gray values of an image at the positions of an XLD contour."
+    },
+    {
+      "name": "fit_surface_first_order",
+      "short": "Calculate gray value moments and approximation by a first order surface"
+    },
+    {
+      "name": "fit_surface_second_order",
+      "short": "Calculate gray value moments and approximation by a second order surface."
+    },
+    {
+      "name": "gen_image_surface_second_order",
+      "short": "Create a curved gray surface with second order polynomial."
+    },
+    {
+      "name": "gen_image_surface_first_order",
+      "short": "Create a tilted gray surface with first order polynomial."
+    },
+    {
+      "name": "shape_histo_point",
+      "short": "Determine a histogram of features along all threshold values."
+    },
+    {
+      "name": "shape_histo_all",
+      "short": "Determine a histogram of features along all threshold values."
+    },
+    {
+      "name": "gray_features",
+      "short": "Calculates gray value features for a set of regions."
+    },
+    {
+      "name": "select_gray",
+      "short": "Select regions based on gray value features."
+    },
+    {
+      "name": "min_max_gray",
+      "short": "Determine the minimum and maximum gray values within regions."
+    },
+    {
+      "name": "intensity",
+      "short": "Calculate the mean and deviation of gray values."
+    },
+    {
+      "name": "gray_histo_range",
+      "short": "Calculate the gray value distribution of a single channel image within a"
+    },
+    {
+      "name": "histo_2dim",
+      "short": "Calculate the histogram of two-channel gray value images."
+    },
+    {
+      "name": "gray_histo_abs",
+      "short": "Calculate the gray value distribution."
+    },
+    {
+      "name": "gray_histo",
+      "short": "Calculate the gray value distribution."
+    },
+    {
+      "name": "entropy_gray",
+      "short": "Determine the entropy and anisotropy of images."
+    },
+    {
+      "name": "cooc_feature_matrix",
+      "short": "Calculate gray value features from a co-occurrence matrix."
+    },
+    {
+      "name": "cooc_feature_image",
+      "short": "Calculate a co-occurrence matrix and derive gray value features thereof."
+    },
+    {
+      "name": "gen_cooc_matrix",
+      "short": "Calculate the co-occurrence matrix of a region in an image."
+    },
+    {
+      "name": "moments_gray_plane",
+      "short": "Calculate gray value moments and approximation by a plane."
+    },
+    {
+      "name": "plane_deviation",
+      "short": "Calculate the deviation of the gray values from the approximating"
+    },
+    {
+      "name": "elliptic_axis_gray",
+      "short": "Compute the orientation and major axes of a region in a gray value"
+    },
+    {
+      "name": "area_center_gray",
+      "short": "Compute the area and center of gravity of a region in a gray value"
+    },
+    {
+      "name": "gray_projections",
+      "short": "Calculate horizontal and vertical gray-value projections."
+    },
+    {
+      "name": "get_framegrabber_param",
+      "short": "Query specific parameters of an image acquisition device."
+    },
+    {
+      "name": "set_framegrabber_param",
+      "short": "Set specific parameters of an image acquisition device."
+    },
+    {
+      "name": "get_framegrabber_callback",
+      "short": "Query callback function of an image acquisition device."
+    },
+    {
+      "name": "set_framegrabber_callback",
+      "short": "Register a callback function for an image acquisition device."
+    },
+    {
+      "name": "grab_data_async",
+      "short": "Asynchronous grab of images and preprocessed image data from the specified"
+    },
+    {
+      "name": "grab_data",
+      "short": "Synchronous grab of images and preprocessed image data from the specified"
+    },
+    {
+      "name": "grab_image_async",
+      "short": "Asynchronous grab of an image from the specified image acquisition device."
+    },
+    {
+      "name": "grab_image_start",
+      "short": "Start an asynchronous grab from the specified image acquisition device."
+    },
+    {
+      "name": "grab_image",
+      "short": "Synchronous grab of an image from the specified image acquisition device."
+    },
+    {
+      "name": "info_framegrabber",
+      "short": "Query information about the specified image acquisition interface."
+    },
+    {
+      "name": "close_framegrabber",
+      "short": "Close specified image acquisition device."
+    },
+    {
+      "name": "open_framegrabber",
+      "short": "Open and configure an image acquisition device."
+    },
+    {
+      "name": "get_framegrabber_lut",
+      "short": "Query look-up table of the image acquisition device."
+    },
+    {
+      "name": "set_framegrabber_lut",
+      "short": "Set look-up table of the image acquisition device."
+    },
+    {
+      "name": "interleave_channels",
+      "short": "Create an interleaved image from a multichannel image."
+    },
+    {
+      "name": "crop_rectangle2",
+      "short": "Cut out one or more arbitrarily oriented rectangular image areas."
+    },
+    {
+      "name": "add_image_border",
+      "short": "Add a border to an image."
+    }
+  ]
+}

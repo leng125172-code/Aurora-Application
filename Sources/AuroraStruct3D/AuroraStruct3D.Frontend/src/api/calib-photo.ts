@@ -243,6 +243,40 @@ export async function deleteInvalidPhotos(
 }
 
 /**
+ * 仅计算相机内参（calibrateCamera），结果写入 CalibCameraParam。
+ * POST /api/app/calib-photo/compute-intrinsic
+ */
+export async function computeIntrinsic(
+    calibProjectId: string,
+    cameraDeviceId: string,
+    timeout = 120000,
+): Promise<CalibComputeResultDto> {
+    const res = await httpClient.post<CalibComputeResultDto>(
+        `${BASE}/compute-intrinsic`,
+        null,
+        { params: { calibProjectId, cameraDeviceId }, timeout },
+    )
+    return res.data
+}
+
+/**
+ * 仅计算外参（solvePnP + 投影仪内参），依赖已保存的相机内参。
+ * POST /api/app/calib-photo/compute-extrinsic
+ */
+export async function computeExtrinsic(
+    calibProjectId: string,
+    cameraDeviceId: string,
+    timeout = 120000,
+): Promise<CalibComputeResultDto> {
+    const res = await httpClient.post<CalibComputeResultDto>(
+        `${BASE}/compute-extrinsic`,
+        null,
+        { params: { calibProjectId, cameraDeviceId }, timeout },
+    )
+    return res.data
+}
+
+/**
  * 计算内外参（calibrateCamera + solvePnP），结果写入 CalibCameraParam
  */
 export async function computeCalibration(
@@ -305,5 +339,50 @@ export async function validateStep5(calibProjectId: string): Promise<boolean> {
     const res = await httpClient.get<boolean>(`${BASE}/validate-step5`, {
         params: { calibProjectId },
     })
+    return res.data
+}
+
+// ─── 相机自动对齐 ─────────────────────────────────────────────────────────────
+
+/** 单台相机的自动对齐结果 */
+export interface CameraAlignCameraResult {
+    readonly cameraDeviceId: string
+    readonly cameraRole: string
+    readonly skipped: boolean
+    /** 十字架中心相对图像中心的 X 偏差（像素） */
+    readonly crossOffsetXPixels: number | null
+    /** 十字架中心相对图像中心的 Y 偏差（像素） */
+    readonly crossOffsetYPixels: number | null
+    /** 对齐前角度（°） */
+    readonly angleBeforeDeg: number | null
+    /** 对齐后角度（°） */
+    readonly angleAfterDeg: number | null
+    /** 本次调整量（°） */
+    readonly adjustedAngleDeg: number | null
+    readonly isAligned: boolean
+    readonly message: string | null
+}
+
+/** 相机自动对齐整体结果 */
+export interface AutoAlignCamerasResultDto {
+    readonly mainCamera: CameraAlignCameraResult | null
+    readonly secondaryCamera: CameraAlignCameraResult | null
+    readonly success: boolean
+    readonly message: string
+}
+
+/**
+ * 相机自动对齐：投影十字架 → 左右相机拍照 → 检测偏差 → 调整电机。
+ * POST /api/app/calib-photo/auto-align-cameras?calibProjectId={id}
+ */
+export async function autoAlignCameras(
+    calibProjectId: string,
+    timeout = 60000,
+): Promise<AutoAlignCamerasResultDto> {
+    const res = await httpClient.post<AutoAlignCamerasResultDto>(
+        `${BASE}/${calibProjectId}/auto-align-cameras`,
+        null,
+        { timeout },
+    )
     return res.data
 }

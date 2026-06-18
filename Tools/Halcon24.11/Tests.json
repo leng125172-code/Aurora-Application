@@ -1,0 +1,20 @@
+{
+  "通用": [
+    {
+      "name": "test_subset_region",
+      "short": "Test whether a region is contained in another region."
+    },
+    {
+      "name": "test_equal_region",
+      "short": "Test whether the regions of two objects are identical."
+    },
+    {
+      "name": "test_region_point",
+      "short": "Test if the region contains a given point."
+    },
+    {
+      "name": "test_region_points",
+      "short": "Test if points are contained in regions."
+    }
+  ]
+}

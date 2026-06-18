@@ -1,0 +1,32 @@
+{
+  "通用": [
+    {
+      "name": "apply_deep_counting_model",
+      "short": "Apply a Deep Counting model on a set of images for inference."
+    },
+    {
+      "name": "create_deep_counting_model",
+      "short": "Create a Deep Counting model for counting objects."
+    },
+    {
+      "name": "get_deep_counting_model_param",
+      "short": "Return the parameters of a Deep Counting model."
+    },
+    {
+      "name": "prepare_deep_counting_model",
+      "short": "Set templates of a Deep Counting model."
+    },
+    {
+      "name": "read_deep_counting_model",
+      "short": "Read a Deep Counting model from a file."
+    },
+    {
+      "name": "set_deep_counting_model_param",
+      "short": "Set selected parameters of the Deep Counting model."
+    },
+    {
+      "name": "write_deep_counting_model",
+      "short": "Write a Deep Counting model in a file."
+    }
+  ]
+}

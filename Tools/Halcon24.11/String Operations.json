@@ -1,0 +1,72 @@
+{
+  "通用": [
+    {
+      "name": "tuple_regexp_select",
+      "short": "Select tuple elements matching a regular expression."
+    },
+    {
+      "name": "tuple_regexp_test",
+      "short": "Test if a string matches a regular expression."
+    },
+    {
+      "name": "tuple_regexp_replace",
+      "short": "Replace a substring using regular expressions."
+    },
+    {
+      "name": "tuple_regexp_match",
+      "short": "Extract substrings using regular expressions."
+    },
+    {
+      "name": "tuple_environment",
+      "short": "Read one or more environment variables."
+    },
+    {
+      "name": "tuple_split",
+      "short": "Split strings into substrings using predefined separator symbol(s)."
+    },
+    {
+      "name": "tuple_substr",
+      "short": "Cut characters from position \"n1\" through \"n2\" out of a string tuple."
+    },
+    {
+      "name": "tuple_str_last_n",
+      "short": "Cut all characters starting at position \"n\" out of a string tuple."
+    },
+    {
+      "name": "tuple_str_first_n",
+      "short": "Cut the first characters up to position \"n\" out of a string tuple."
+    },
+    {
+      "name": "tuple_strrchr",
+      "short": "Backward search for characters within a string tuple."
+    },
+    {
+      "name": "tuple_strchr",
+      "short": "Forward search for characters within a string tuple."
+    },
+    {
+      "name": "tuple_strrstr",
+      "short": "Backward search for strings within a string tuple."
+    },
+    {
+      "name": "tuple_strstr",
+      "short": "Forward search for strings within a string tuple."
+    },
+    {
+      "name": "tuple_strlen",
+      "short": "Determine the length of every string within a tuple of strings."
+    },
+    {
+      "name": "tuple_join",
+      "short": "Join strings using separator symbol(s)."
+    },
+    {
+      "name": "tuple_str_replace",
+      "short": "Replace all occurrences of a substring within a string."
+    },
+    {
+      "name": "tuple_str_distance",
+      "short": "Calculate the distance between strings."
+    }
+  ]
+}

@@ -1,0 +1,80 @@
+{
+  "通用": [
+    {
+      "name": "pose_average",
+      "short": "Compute the average of a set of poses."
+    },
+    {
+      "name": "quat_to_pose",
+      "short": "Convert a quaternion into the corresponding 3D pose."
+    },
+    {
+      "name": "pose_invert",
+      "short": "Invert each pose in a tuple of 3D poses."
+    },
+    {
+      "name": "pose_compose",
+      "short": "Combine 3D poses given in two tuples."
+    },
+    {
+      "name": "pose_to_quat",
+      "short": "Convert the rotational part of a 3D pose to a quaternion."
+    },
+    {
+      "name": "vector_to_pose",
+      "short": "Compute an absolute pose out of point correspondences between"
+    },
+    {
+      "name": "proj_hom_mat2d_to_pose",
+      "short": "Compute a pose out of a homography describing the relation between world"
+    },
+    {
+      "name": "get_rectangle_pose",
+      "short": "Determine the 3D pose of a rectangle from its perspective 2D"
+    },
+    {
+      "name": "get_circle_pose",
+      "short": "Determine the 3D pose of a circle from its perspective 2D projection."
+    },
+    {
+      "name": "set_origin_pose",
+      "short": "Translate the origin of a 3D pose."
+    },
+    {
+      "name": "get_pose_type",
+      "short": "Get the representation type of a 3D pose."
+    },
+    {
+      "name": "convert_pose_type",
+      "short": "Change the representation type of a 3D pose."
+    },
+    {
+      "name": "create_pose",
+      "short": "Create a 3D pose."
+    },
+    {
+      "name": "deserialize_pose",
+      "short": "  Deserialize a serialized pose."
+    },
+    {
+      "name": "serialize_pose",
+      "short": "Serialize a pose."
+    },
+    {
+      "name": "read_pose",
+      "short": "Read a 3D pose from a text file."
+    },
+    {
+      "name": "write_pose",
+      "short": "Write a 3D pose to a text file."
+    },
+    {
+      "name": "dual_quat_to_pose",
+      "short": "Convert a dual quaternion to a 3D pose."
+    },
+    {
+      "name": "pose_to_dual_quat",
+      "short": "Convert a 3D pose to a unit dual quaternion."
+    }
+  ]
+}

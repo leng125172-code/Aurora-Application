@@ -1,0 +1,36 @@
+{
+  "通用": [
+    {
+      "name": "do_ocv_simple",
+      "short": "Verification of a pattern using an OCV tool."
+    },
+    {
+      "name": "traind_ocv_proj",
+      "short": "Training of an OCV tool."
+    },
+    {
+      "name": "deserialize_ocv",
+      "short": "Deserialize a serialized OCV tool."
+    },
+    {
+      "name": "serialize_ocv",
+      "short": "Serialize an OCV tool."
+    },
+    {
+      "name": "read_ocv",
+      "short": "Reading an OCV tool from file."
+    },
+    {
+      "name": "write_ocv",
+      "short": "Saving an OCV tool to file."
+    },
+    {
+      "name": "close_ocv",
+      "short": "Clear an OCV tool."
+    },
+    {
+      "name": "create_ocv_proj",
+      "short": "Create a new OCV tool based on gray value projections."
+    }
+  ]
+}

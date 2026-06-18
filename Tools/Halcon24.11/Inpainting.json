@@ -1,0 +1,28 @@
+{
+  "通用": [
+    {
+      "name": "inpainting_texture",
+      "short": "Perform an inpainting by texture propagation."
+    },
+    {
+      "name": "inpainting_ct",
+      "short": "Perform an inpainting by coherence transport."
+    },
+    {
+      "name": "inpainting_mcf",
+      "short": "Perform an inpainting by smoothing of level lines."
+    },
+    {
+      "name": "inpainting_ced",
+      "short": "Perform an inpainting by coherence enhancing diffusion."
+    },
+    {
+      "name": "inpainting_aniso",
+      "short": "Perform an inpainting by anisotropic diffusion."
+    },
+    {
+      "name": "harmonic_interpolation",
+      "short": "Perform a harmonic interpolation on an image region."
+    }
+  ]
+}

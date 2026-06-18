@@ -1,0 +1,108 @@
+{
+  "通用": [
+    {
+      "name": "clear_camera_setup_model",
+      "short": "Free the memory of a calibration setup model."
+    },
+    {
+      "name": "serialize_camera_setup_model",
+      "short": "Serialize a camera setup model."
+    },
+    {
+      "name": "deserialize_camera_setup_model",
+      "short": "Deserialize a serialized camera setup model."
+    },
+    {
+      "name": "write_camera_setup_model",
+      "short": "Store a camera setup model into a file."
+    },
+    {
+      "name": "read_camera_setup_model",
+      "short": "Restore a camera setup model from a file."
+    },
+    {
+      "name": "get_camera_setup_param",
+      "short": "Get generic camera setup model parameters."
+    },
+    {
+      "name": "set_camera_setup_param",
+      "short": "Set generic camera setup model parameters."
+    },
+    {
+      "name": "set_camera_setup_cam_param",
+      "short": "Define type, parameters, and relative pose of a camera in a camera setup"
+    },
+    {
+      "name": "create_camera_setup_model",
+      "short": "Create a model for a setup of calibrated cameras."
+    },
+    {
+      "name": "clear_calib_data",
+      "short": "Free the memory of a calibration data model."
+    },
+    {
+      "name": "deserialize_calib_data",
+      "short": "Deserialize a serialized calibration data model."
+    },
+    {
+      "name": "serialize_calib_data",
+      "short": "Serialize a calibration data model."
+    },
+    {
+      "name": "read_calib_data",
+      "short": "Restore a calibration data model from a file."
+    },
+    {
+      "name": "write_calib_data",
+      "short": "Store a calibration data model into a file."
+    },
+    {
+      "name": "calibrate_cameras",
+      "short": "Determine all camera parameters by a simultaneous minimization"
+    },
+    {
+      "name": "remove_calib_data",
+      "short": "Remove a data set from a calibration data model."
+    },
+    {
+      "name": "set_calib_data",
+      "short": "Set data in a calibration data model."
+    },
+    {
+      "name": "remove_calib_data_observ",
+      "short": "Remove observation data from a calibration data model."
+    },
+    {
+      "name": "get_calib_data_observ_contours",
+      "short": "Get contour-based observation data from a calibration data model."
+    },
+    {
+      "name": "get_calib_data_observ_points",
+      "short": "Get point-based observation data from a calibration data model."
+    },
+    {
+      "name": "set_calib_data_observ_points",
+      "short": "Set point-based observation data in a calibration data model."
+    },
+    {
+      "name": "query_calib_data_observ_indices",
+      "short": "Query information about the relations between cameras, calibration objects,"
+    },
+    {
+      "name": "get_calib_data",
+      "short": "Query data stored or computed in a calibration data model."
+    },
+    {
+      "name": "set_calib_data_calib_object",
+      "short": "Define a calibration object in a calibration model."
+    },
+    {
+      "name": "set_calib_data_cam_param",
+      "short": "Set type and initial parameters of a camera in a calibration data"
+    },
+    {
+      "name": "create_calib_data",
+      "short": "Create a HALCON calibration data model."
+    }
+  ]
+}

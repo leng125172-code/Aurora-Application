@@ -1,0 +1,60 @@
+{
+  "通用": [
+    {
+      "name": "clear_ncc_model",
+      "short": "Free the memory of an NCC model."
+    },
+    {
+      "name": "deserialize_ncc_model",
+      "short": "Deserialize an NCC model."
+    },
+    {
+      "name": "serialize_ncc_model",
+      "short": "Serialize an NCC model."
+    },
+    {
+      "name": "read_ncc_model",
+      "short": "Read an NCC model from a file."
+    },
+    {
+      "name": "write_ncc_model",
+      "short": "Write an NCC model to a file."
+    },
+    {
+      "name": "determine_ncc_model_params",
+      "short": "Determine the parameters of an NCC model."
+    },
+    {
+      "name": "get_ncc_model_params",
+      "short": "Return the parameters of an NCC model."
+    },
+    {
+      "name": "get_ncc_model_origin",
+      "short": "Return the origin (reference point) of an NCC model."
+    },
+    {
+      "name": "set_ncc_model_origin",
+      "short": "Set the origin (reference point) of an NCC model."
+    },
+    {
+      "name": "find_ncc_model",
+      "short": "Find the best matches of an NCC model in an image."
+    },
+    {
+      "name": "set_ncc_model_param",
+      "short": "Set selected parameters of the NCC model."
+    },
+    {
+      "name": "create_ncc_model",
+      "short": "Prepare an NCC model for matching."
+    },
+    {
+      "name": "find_ncc_models",
+      "short": "Find the best matches of multiple NCC models."
+    },
+    {
+      "name": "get_ncc_model_region",
+      "short": "Return the region used to create an NCC model."
+    }
+  ]
+}

@@ -1,0 +1,104 @@
+{
+  "通用": [
+    {
+      "name": "isotropic_diffusion",
+      "short": "Perform an isotropic diffusion of an image."
+    },
+    {
+      "name": "anisotropic_diffusion",
+      "short": "Perform an anisotropic diffusion of an image."
+    },
+    {
+      "name": "smooth_image",
+      "short": "Smooth an image using various filters."
+    },
+    {
+      "name": "sigma_image",
+      "short": "Non-linear smoothing with the sigma filter."
+    },
+    {
+      "name": "midrange_image",
+      "short": "Calculate the average of maximum and minimum inside any mask."
+    },
+    {
+      "name": "trimmed_mean",
+      "short": "Smooth an image with an arbitrary rank mask."
+    },
+    {
+      "name": "median_separate",
+      "short": "Separated median filtering with rectangle masks."
+    },
+    {
+      "name": "median_rect",
+      "short": "Compute a median filter with rectangular masks."
+    },
+    {
+      "name": "median_image",
+      "short": "Compute a median filter with various masks."
+    },
+    {
+      "name": "median_weighted",
+      "short": "Weighted median filtering with different rank masks."
+    },
+    {
+      "name": "rank_rect",
+      "short": "Compute a rank filter with rectangular masks."
+    },
+    {
+      "name": "rank_image",
+      "short": "Compute a rank filter with arbitrary masks."
+    },
+    {
+      "name": "mean_image",
+      "short": "Smooth by averaging."
+    },
+    {
+      "name": "info_smooth",
+      "short": "Information on smoothing filter smooth_image."
+    },
+    {
+      "name": "binomial_filter",
+      "short": "Smooth an image using the binomial filter."
+    },
+    {
+      "name": "gauss_filter",
+      "short": "Smooth using discrete Gauss functions."
+    },
+    {
+      "name": "eliminate_min_max",
+      "short": "Smooth an image in the spatial domain to suppress noise."
+    },
+    {
+      "name": "fill_interlace",
+      "short": "Interpolate 2 video half images."
+    },
+    {
+      "name": "rank_n",
+      "short": "Return gray values with given rank from multiple channels."
+    },
+    {
+      "name": "mean_n",
+      "short": "Average gray values over several channels."
+    },
+    {
+      "name": "eliminate_sp",
+      "short": "Replace values outside of thresholds with average value."
+    },
+    {
+      "name": "mean_sp",
+      "short": "Suppress salt and pepper noise."
+    },
+    {
+      "name": "bilateral_filter",
+      "short": "bilateral filtering of an image."
+    },
+    {
+      "name": "guided_filter",
+      "short": "Guided filtering of an image."
+    },
+    {
+      "name": "mean_image_shape",
+      "short": "Smooth image using a mean filter with arbitrary mask."
+    }
+  ]
+}

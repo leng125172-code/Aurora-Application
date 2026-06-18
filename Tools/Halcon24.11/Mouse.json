@@ -1,0 +1,48 @@
+{
+  "通用": [
+    {
+      "name": "set_mshape",
+      "short": "Set the current mouse pointer shape."
+    },
+    {
+      "name": "get_mshape",
+      "short": "Query the current mouse pointer shape."
+    },
+    {
+      "name": "query_mshape",
+      "short": "Query all available mouse pointer shapes."
+    },
+    {
+      "name": "get_mposition_sub_pix",
+      "short": "Query the subpixel mouse position."
+    },
+    {
+      "name": "get_mposition",
+      "short": "Query the mouse position."
+    },
+    {
+      "name": "get_mbutton_sub_pix",
+      "short": "Wait until a mouse button is pressed and get the subpixel mouse position."
+    },
+    {
+      "name": "get_mbutton",
+      "short": "Wait until a mouse button is pressed."
+    },
+    {
+      "name": "send_mouse_double_click_event",
+      "short": "Send an event to a buffer window signaling a mouse double click event."
+    },
+    {
+      "name": "send_mouse_down_event",
+      "short": "Send an event to a window buffer signaling a mouse down event."
+    },
+    {
+      "name": "send_mouse_drag_event",
+      "short": "Send an event to a buffer window signaling a mouse drag event."
+    },
+    {
+      "name": "send_mouse_up_event",
+      "short": "Send an event to a buffer window signaling a mouse up event."
+    }
+  ]
+}

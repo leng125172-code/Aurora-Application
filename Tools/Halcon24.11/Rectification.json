@@ -1,0 +1,40 @@
+{
+  "通用": [
+    {
+      "name": "gen_radial_distortion_map",
+      "short": "Generate a projection map that describes the mapping of images corresponding"
+    },
+    {
+      "name": "gen_image_to_world_plane_map",
+      "short": "Generate a projection map that describes the mapping between the image"
+    },
+    {
+      "name": "image_to_world_plane",
+      "short": "Rectify an image by transforming it into the plane z=0 of a world"
+    },
+    {
+      "name": "contour_to_world_plane_xld",
+      "short": "Transform an XLD contour into the plane z=0 of a world coordinate system."
+    },
+    {
+      "name": "image_points_to_world_plane",
+      "short": "Transform image points into the plane z=0 of a world coordinate system."
+    },
+    {
+      "name": "change_radial_distortion_contours_xld",
+      "short": "Change the radial distortion of contours."
+    },
+    {
+      "name": "change_radial_distortion_points",
+      "short": "Change the radial distortion of pixel coordinates."
+    },
+    {
+      "name": "change_radial_distortion_image",
+      "short": "Change the radial distortion of an image."
+    },
+    {
+      "name": "change_radial_distortion_cam_par",
+      "short": "Determine new camera parameters in accordance to the specified"
+    }
+  ]
+}

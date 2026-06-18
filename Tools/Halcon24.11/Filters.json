@@ -1,0 +1,768 @@
+{
+  "通用": [
+    {
+      "name": "wiener_filter_ni",
+      "short": "Image restoration by Wiener filtering."
+    },
+    {
+      "name": "wiener_filter",
+      "short": "Image restoration by Wiener filtering."
+    },
+    {
+      "name": "gen_psf_motion",
+      "short": "Generate an impulse response of a (linearly) motion blurring."
+    },
+    {
+      "name": "simulate_motion",
+      "short": "Simulation of (linearly) motion blur."
+    },
+    {
+      "name": "gen_psf_defocus",
+      "short": "Generate an impulse response of an uniform out-of-focus blurring."
+    },
+    {
+      "name": "simulate_defocus",
+      "short": "Simulate an uniform out-of-focus blurring of an image."
+    },
+    {
+      "name": "texture_laws",
+      "short": "Filter an image using a Laws texture filter."
+    },
+    {
+      "name": "deviation_image",
+      "short": "Calculate the standard deviation of gray values within rectangular windows."
+    },
+    {
+      "name": "entropy_image",
+      "short": "Calculate the entropy of gray values within a rectangular window."
+    },
+    {
+      "name": "isotropic_diffusion",
+      "short": "Perform an isotropic diffusion of an image."
+    },
+    {
+      "name": "anisotropic_diffusion",
+      "short": "Perform an anisotropic diffusion of an image."
+    },
+    {
+      "name": "smooth_image",
+      "short": "Smooth an image using various filters."
+    },
+    {
+      "name": "sigma_image",
+      "short": "Non-linear smoothing with the sigma filter."
+    },
+    {
+      "name": "midrange_image",
+      "short": "Calculate the average of maximum and minimum inside any mask."
+    },
+    {
+      "name": "trimmed_mean",
+      "short": "Smooth an image with an arbitrary rank mask."
+    },
+    {
+      "name": "median_separate",
+      "short": "Separated median filtering with rectangle masks."
+    },
+    {
+      "name": "median_rect",
+      "short": "Compute a median filter with rectangular masks."
+    },
+    {
+      "name": "median_image",
+      "short": "Compute a median filter with various masks."
+    },
+    {
+      "name": "median_weighted",
+      "short": "Weighted median filtering with different rank masks."
+    },
+    {
+      "name": "rank_rect",
+      "short": "Compute a rank filter with rectangular masks."
+    },
+    {
+      "name": "rank_image",
+      "short": "Compute a rank filter with arbitrary masks."
+    },
+    {
+      "name": "mean_image",
+      "short": "Smooth by averaging."
+    },
+    {
+      "name": "info_smooth",
+      "short": "Information on smoothing filter smooth_image."
+    },
+    {
+      "name": "binomial_filter",
+      "short": "Smooth an image using the binomial filter."
+    },
+    {
+      "name": "gauss_image",
+      "short": "Smooth an image using discrete Gaussian functions."
+    },
+    {
+      "name": "gauss_filter",
+      "short": "Smooth using discrete Gauss functions."
+    },
+    {
+      "name": "eliminate_min_max",
+      "short": "Smooth an image in the spatial domain to suppress noise."
+    },
+    {
+      "name": "fill_interlace",
+      "short": "Interpolate 2 video half images."
+    },
+    {
+      "name": "rank_n",
+      "short": "Return gray values with given rank from multiple channels."
+    },
+    {
+      "name": "mean_n",
+      "short": "Average gray values over several channels."
+    },
+    {
+      "name": "eliminate_sp",
+      "short": "Replace values outside of thresholds with average value."
+    },
+    {
+      "name": "mean_sp",
+      "short": "Suppress salt and pepper noise."
+    },
+    {
+      "name": "points_sojka",
+      "short": "Find corners using the Sojka operator."
+    },
+    {
+      "name": "dots_image",
+      "short": "Enhance circular dots in an image."
+    },
+    {
+      "name": "points_harris",
+      "short": "Detect points of interest using the Harris operator."
+    },
+    {
+      "name": "points_harris_binomial",
+      "short": "Detect points of interest using the binomial approximation of the Harris"
+    },
+    {
+      "name": "points_lepetit",
+      "short": "Detect points of interest using the Lepetit operator."
+    },
+    {
+      "name": "points_foerstner",
+      "short": "Detect points of interest using the Förstner operator."
+    },
+    {
+      "name": "noise_distribution_mean",
+      "short": "Determine the noise distribution of an image."
+    },
+    {
+      "name": "add_noise_white",
+      "short": "Add noise to an image."
+    },
+    {
+      "name": "add_noise_distribution",
+      "short": "Add noise to an image."
+    },
+    {
+      "name": "gauss_distribution",
+      "short": "Generate a Gaussian noise distribution."
+    },
+    {
+      "name": "sp_distribution",
+      "short": "Generate a salt-and-pepper noise distribution."
+    },
+    {
+      "name": "deviation_n",
+      "short": "Calculate standard deviation over several channels."
+    },
+    {
+      "name": "inpainting_texture",
+      "short": "Perform an inpainting by texture propagation."
+    },
+    {
+      "name": "inpainting_ct",
+      "short": "Perform an inpainting by coherence transport."
+    },
+    {
+      "name": "inpainting_mcf",
+      "short": "Perform an inpainting by smoothing of level lines."
+    },
+    {
+      "name": "inpainting_ced",
+      "short": "Perform an inpainting by coherence enhancing diffusion."
+    },
+    {
+      "name": "inpainting_aniso",
+      "short": "Perform an inpainting by anisotropic diffusion."
+    },
+    {
+      "name": "harmonic_interpolation",
+      "short": "Perform a harmonic interpolation on an image region."
+    },
+    {
+      "name": "expand_domain_gray",
+      "short": "Expand the domain of an image and set the gray values in the"
+    },
+    {
+      "name": "topographic_sketch",
+      "short": "Compute the topographic primal sketch of an image."
+    },
+    {
+      "name": "linear_trans_color",
+      "short": "Compute an affine transformation of the color values of a"
+    },
+    {
+      "name": "gen_principal_comp_trans",
+      "short": "Compute the transformation matrix of the principal component"
+    },
+    {
+      "name": "principal_comp",
+      "short": "Compute the principal components of multichannel images."
+    },
+    {
+      "name": "gray_skeleton",
+      "short": "Thinning of gray value images."
+    },
+    {
+      "name": "lut_trans",
+      "short": "Transform an image with a gray-value look-up-table"
+    },
+    {
+      "name": "convol_image",
+      "short": "Calculate the correlation between an image and an arbitrary filter mask"
+    },
+    {
+      "name": "gray_inside",
+      "short": "Calculate the lowest possible gray value on an arbitrary path to the"
+    },
+    {
+      "name": "symmetry",
+      "short": "Symmetry of gray values along a row."
+    },
+    {
+      "name": "scene_flow_calib",
+      "short": "Compute the calibrated scene flow between two stereo image pairs."
+    },
+    {
+      "name": "scene_flow_uncalib",
+      "short": "Compute the uncalibrated scene flow between two stereo image pairs."
+    },
+    {
+      "name": "unwarp_image_vector_field",
+      "short": "Unwarp an image using a vector field."
+    },
+    {
+      "name": "derivate_vector_field",
+      "short": "Convolve a vector field with derivatives of the Gaussian."
+    },
+    {
+      "name": "vector_field_length",
+      "short": "Compute the length of the vectors of a vector field."
+    },
+    {
+      "name": "optical_flow_mg",
+      "short": "Compute the optical flow between two images."
+    },
+    {
+      "name": "exhaustive_match_mg",
+      "short": "Matching a template and an image in a resolution pyramid."
+    },
+    {
+      "name": "exhaustive_match",
+      "short": "Matching of a template and an image."
+    },
+    {
+      "name": "corner_response",
+      "short": "Searching corners in images."
+    },
+    {
+      "name": "gen_gauss_pyramid",
+      "short": "Calculating a Gauss pyramid."
+    },
+    {
+      "name": "monotony",
+      "short": "Calculating the monotony operation."
+    },
+    {
+      "name": "bandpass_image",
+      "short": "Edge extraction using bandpass filters."
+    },
+    {
+      "name": "lines_color",
+      "short": "Detect color lines and their width."
+    },
+    {
+      "name": "lines_gauss",
+      "short": "Detect lines and their width."
+    },
+    {
+      "name": "lines_facet",
+      "short": "Detection of lines using the facet model."
+    },
+    {
+      "name": "gen_filter_mask",
+      "short": "Store a filter mask in the spatial domain as a real-image."
+    },
+    {
+      "name": "gen_mean_filter",
+      "short": "Generate a mean filter in the frequency domain."
+    },
+    {
+      "name": "gen_gauss_filter",
+      "short": "Generate a Gaussian filter in the frequency domain."
+    },
+    {
+      "name": "gen_derivative_filter",
+      "short": "Generate a derivative filter in the frequency domain."
+    },
+    {
+      "name": "gen_std_bandpass",
+      "short": "Generate a bandpass filter with Gaussian or sinusoidal shape."
+    },
+    {
+      "name": "gen_sin_bandpass",
+      "short": "Generate a bandpass filter with sinusoidal shape."
+    },
+    {
+      "name": "gen_bandfilter",
+      "short": "Generate an ideal band filter."
+    },
+    {
+      "name": "gen_bandpass",
+      "short": "Generate an ideal bandpass filter."
+    },
+    {
+      "name": "gen_lowpass",
+      "short": "Generate an ideal lowpass filter."
+    },
+    {
+      "name": "gen_highpass",
+      "short": "Generate an ideal highpass filter."
+    },
+    {
+      "name": "power_ln",
+      "short": "Return the power spectrum of a complex image."
+    },
+    {
+      "name": "power_real",
+      "short": "Return the power spectrum of a complex image."
+    },
+    {
+      "name": "power_byte",
+      "short": "Return the power spectrum of a complex image."
+    },
+    {
+      "name": "phase_deg",
+      "short": "Return the phase of a complex image in degrees."
+    },
+    {
+      "name": "phase_rad",
+      "short": "Return the phase of a complex image in radians."
+    },
+    {
+      "name": "energy_gabor",
+      "short": "Calculate the energy of a two-channel image."
+    },
+    {
+      "name": "convol_gabor",
+      "short": "Convolve an image with a Gabor filter in the frequency domain."
+    },
+    {
+      "name": "gen_gabor",
+      "short": "Generate a Gabor filter."
+    },
+    {
+      "name": "phase_correlation_fft",
+      "short": "Compute the phase correlation of two images in the frequency domain."
+    },
+    {
+      "name": "correlation_fft",
+      "short": "Multiply one image with the complex conjugate of another image in the"
+    },
+    {
+      "name": "convol_fft",
+      "short": "Multiply an image with a filter image in the frequency domain."
+    },
+    {
+      "name": "deserialize_fft_optimization_data",
+      "short": "Deserialize FFT speed optimization data."
+    },
+    {
+      "name": "serialize_fft_optimization_data",
+      "short": "Serialize FFT speed optimization data."
+    },
+    {
+      "name": "read_fft_optimization_data",
+      "short": "Load FFT speed optimization data from a file."
+    },
+    {
+      "name": "write_fft_optimization_data",
+      "short": "Store FFT speed optimization data in a file."
+    },
+    {
+      "name": "optimize_rft_speed",
+      "short": "Optimize the runtime of the real-valued FFT."
+    },
+    {
+      "name": "optimize_fft_speed",
+      "short": "Optimize the runtime of the FFT."
+    },
+    {
+      "name": "rft_generic",
+      "short": "Compute the real-valued fast Fourier transform of an image."
+    },
+    {
+      "name": "fft_image_inv",
+      "short": "Compute the inverse fast Fourier transform of an image."
+    },
+    {
+      "name": "fft_image",
+      "short": "Compute the fast Fourier transform of an image."
+    },
+    {
+      "name": "fft_generic",
+      "short": "Compute the fast Fourier transform of an image."
+    },
+    {
+      "name": "shock_filter",
+      "short": "Apply a shock filter to an image."
+    },
+    {
+      "name": "mean_curvature_flow",
+      "short": "Apply the mean curvature flow to an image."
+    },
+    {
+      "name": "coherence_enhancing_diff",
+      "short": "Perform a coherence enhancing diffusion of an image."
+    },
+    {
+      "name": "equ_histo_image",
+      "short": "Histogram linearization of images"
+    },
+    {
+      "name": "illuminate",
+      "short": "Illuminate image."
+    },
+    {
+      "name": "emphasize",
+      "short": "Enhance contrast of the image."
+    },
+    {
+      "name": "scale_image_max",
+      "short": "Maximum gray value spreading in the value range"
+    },
+    {
+      "name": "robinson_dir",
+      "short": "Detect edges (amplitude and direction) using the Robinson operator."
+    },
+    {
+      "name": "robinson_amp",
+      "short": "Detect edges (amplitude) using the Robinson operator."
+    },
+    {
+      "name": "kirsch_dir",
+      "short": "Detect edges (amplitude and direction) using the Kirsch operator."
+    },
+    {
+      "name": "kirsch_amp",
+      "short": "Detect edges (amplitude) using the Kirsch operator."
+    },
+    {
+      "name": "frei_dir",
+      "short": "Detect edges (amplitude and direction) using the Frei-Chen operator."
+    },
+    {
+      "name": "frei_amp",
+      "short": "Detect edges (amplitude) using the Frei-Chen operator."
+    },
+    {
+      "name": "prewitt_dir",
+      "short": "Detect edges (amplitude and direction) using the Prewitt operator."
+    },
+    {
+      "name": "prewitt_amp",
+      "short": "Detect edges (amplitude) using the Prewitt operator."
+    },
+    {
+      "name": "sobel_amp",
+      "short": "Detect edges (amplitude) using the Sobel operator."
+    },
+    {
+      "name": "sobel_dir",
+      "short": "Detect edges (amplitude and direction) using the Sobel operator."
+    },
+    {
+      "name": "roberts",
+      "short": "Detect edges using the Roberts filter."
+    },
+    {
+      "name": "laplace",
+      "short": "Calculate the Laplace operator by using finite differences."
+    },
+    {
+      "name": "highpass_image",
+      "short": "Extract high frequency components from an image."
+    },
+    {
+      "name": "info_edges",
+      "short": "Return the filter coefficients of a filter in edges_image."
+    },
+    {
+      "name": "edges_color_sub_pix",
+      "short": "Extract subpixel precise color edges using Deriche, Shen, or Canny filters."
+    },
+    {
+      "name": "edges_color",
+      "short": "Extract color edges using Canny, Deriche, or Shen filters."
+    },
+    {
+      "name": "edges_sub_pix",
+      "short": "Extract sub-pixel precise edges using Deriche, Lanser, Shen, or Canny"
+    },
+    {
+      "name": "edges_image",
+      "short": "Extract edges using Deriche, Lanser, Shen, or Canny filters."
+    },
+    {
+      "name": "derivate_gauss",
+      "short": "Convolve an image with derivatives of the Gaussian."
+    },
+    {
+      "name": "laplace_of_gauss",
+      "short": "LoG-Operator (Laplace of Gaussian)."
+    },
+    {
+      "name": "diff_of_gauss",
+      "short": "Approximate the LoG operator (Laplace of Gaussian)."
+    },
+    {
+      "name": "close_edges_length",
+      "short": "Close edge gaps using the edge amplitude image."
+    },
+    {
+      "name": "close_edges",
+      "short": "Close edge gaps using the edge amplitude image."
+    },
+    {
+      "name": "clear_color_trans_lut",
+      "short": "Release the look-up-table needed for color space transformation."
+    },
+    {
+      "name": "apply_color_trans_lut",
+      "short": "Color space transformation using pre-generated look-up-table."
+    },
+    {
+      "name": "create_color_trans_lut",
+      "short": "Creates the look-up-table for transformation of an image from the"
+    },
+    {
+      "name": "cfa_to_rgb",
+      "short": "Convert a single-channel color filter array image into an RGB image."
+    },
+    {
+      "name": "rgb1_to_gray",
+      "short": "Transform an RGB image into a gray scale image."
+    },
+    {
+      "name": "rgb3_to_gray",
+      "short": "Transform an RGB image to a gray scale image."
+    },
+    {
+      "name": "trans_from_rgb",
+      "short": "Transform an image from the RGB color space to an arbitrary color space."
+    },
+    {
+      "name": "trans_to_rgb",
+      "short": "Transform an image from an arbitrary color space to the RGB color space."
+    },
+    {
+      "name": "bit_mask",
+      "short": "Logical \"AND\" of each pixel using a bit mask."
+    },
+    {
+      "name": "bit_slice",
+      "short": "Extract a bit from the pixels."
+    },
+    {
+      "name": "bit_rshift",
+      "short": "Right shift of all pixels of the image."
+    },
+    {
+      "name": "bit_lshift",
+      "short": "Left shift of all pixels of the image."
+    },
+    {
+      "name": "bit_not",
+      "short": "Complement all bits of the pixels."
+    },
+    {
+      "name": "bit_xor",
+      "short": "Bit-by-bit XOR of all pixels of the input images."
+    },
+    {
+      "name": "bit_or",
+      "short": "Bit-by-bit OR of all pixels of the input images."
+    },
+    {
+      "name": "bit_and",
+      "short": "Bit-by-bit AND of all pixels of the input images."
+    },
+    {
+      "name": "gamma_image",
+      "short": "Perform a gamma encoding or decoding of an image."
+    },
+    {
+      "name": "pow_image",
+      "short": "Raise an image to a power."
+    },
+    {
+      "name": "exp_image",
+      "short": "Calculate the exponentiation of an image."
+    },
+    {
+      "name": "log_image",
+      "short": "Calculate the logarithm of an image."
+    },
+    {
+      "name": "atan2_image",
+      "short": "Calculate the arctangent of two images."
+    },
+    {
+      "name": "atan_image",
+      "short": "Calculate the arctangent of an image."
+    },
+    {
+      "name": "acos_image",
+      "short": "Calculate the arccosine of an image."
+    },
+    {
+      "name": "asin_image",
+      "short": "Calculate the arcsine of an image."
+    },
+    {
+      "name": "tan_image",
+      "short": "Calculate the tangent of an image."
+    },
+    {
+      "name": "cos_image",
+      "short": "Calculate the cosine of an image."
+    },
+    {
+      "name": "sin_image",
+      "short": "Calculate the sine of an image."
+    },
+    {
+      "name": "abs_diff_image",
+      "short": "Calculate the absolute difference of two images."
+    },
+    {
+      "name": "sqrt_image",
+      "short": "Calculate the square root of an image."
+    },
+    {
+      "name": "sub_image",
+      "short": "Subtract two images."
+    },
+    {
+      "name": "scale_image",
+      "short": "Scale the gray values of an image."
+    },
+    {
+      "name": "div_image",
+      "short": "Divide two images."
+    },
+    {
+      "name": "mult_image",
+      "short": "Multiply two images."
+    },
+    {
+      "name": "add_image",
+      "short": "Add two images."
+    },
+    {
+      "name": "abs_image",
+      "short": "Calculate the absolute value (modulus) of an image."
+    },
+    {
+      "name": "min_image",
+      "short": "Calculate the minimum of two images pixel by pixel."
+    },
+    {
+      "name": "max_image",
+      "short": "Calculate the maximum of two images pixel by pixel."
+    },
+    {
+      "name": "invert_image",
+      "short": "Invert an image."
+    },
+    {
+      "name": "projective_trans_image_size",
+      "short": "Apply a projective transformation to an image and specify the output"
+    },
+    {
+      "name": "projective_trans_image",
+      "short": "Apply a projective transformation to an image."
+    },
+    {
+      "name": "affine_trans_image_size",
+      "short": "Apply an arbitrary affine 2D transformation to an image and specify"
+    },
+    {
+      "name": "affine_trans_image",
+      "short": "Apply an arbitrary affine 2D transformation to images."
+    },
+    {
+      "name": "zoom_image_factor",
+      "short": "Zoom an image by a given factor."
+    },
+    {
+      "name": "zoom_image_size",
+      "short": "Zoom an image to a given size."
+    },
+    {
+      "name": "mirror_image",
+      "short": "Mirror an image."
+    },
+    {
+      "name": "rotate_image",
+      "short": "Rotate an image about its center."
+    },
+    {
+      "name": "polar_trans_image_inv",
+      "short": "Transform an image in polar coordinates back to Cartesian coordinates"
+    },
+    {
+      "name": "polar_trans_image_ext",
+      "short": "Transform an annular arc in an image to polar coordinates."
+    },
+    {
+      "name": "polar_trans_image",
+      "short": "Transform an image to polar coordinates"
+    },
+    {
+      "name": "convert_map_type",
+      "short": "Convert image maps into other map types."
+    },
+    {
+      "name": "map_image",
+      "short": "Apply a general transformation to an image."
+    },
+    {
+      "name": "bilateral_filter",
+      "short": "bilateral filtering of an image."
+    },
+    {
+      "name": "guided_filter",
+      "short": "Guided filtering of an image."
+    },
+    {
+      "name": "equ_histo_image_rect",
+      "short": "Histogram linearization within a rectangluar mask."
+    },
+    {
+      "name": "mean_image_shape",
+      "short": "Smooth image using a mean filter with arbitrary mask."
+    }
+  ]
+}

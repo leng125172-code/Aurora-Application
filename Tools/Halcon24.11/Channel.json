@@ -1,0 +1,72 @@
+{
+  "通用": [
+    {
+      "name": "channels_to_image",
+      "short": "Convert one-channel images into a multi-channel image"
+    },
+    {
+      "name": "image_to_channels",
+      "short": "Convert a multi-channel image into One-channel images"
+    },
+    {
+      "name": "compose7",
+      "short": "Convert 7 images into a seven-channel image."
+    },
+    {
+      "name": "compose6",
+      "short": "Convert 6 images into a six-channel image."
+    },
+    {
+      "name": "compose5",
+      "short": "Convert 5 images into a five-channel image."
+    },
+    {
+      "name": "compose4",
+      "short": "Convert 4 images into a four-channel image."
+    },
+    {
+      "name": "compose3",
+      "short": "Convert 3 images into a three-channel image."
+    },
+    {
+      "name": "compose2",
+      "short": "Convert two images into a two-channel image."
+    },
+    {
+      "name": "decompose7",
+      "short": "Convert a seven-channel image into seven images."
+    },
+    {
+      "name": "decompose6",
+      "short": "Convert a six-channel image into six images."
+    },
+    {
+      "name": "decompose5",
+      "short": "Convert a five-channel image into five images."
+    },
+    {
+      "name": "decompose4",
+      "short": "Convert a four-channel image into four images."
+    },
+    {
+      "name": "decompose3",
+      "short": "Convert a three-channel image into three images."
+    },
+    {
+      "name": "decompose2",
+      "short": "Convert a two-channel image into two images."
+    },
+    {
+      "name": "count_channels",
+      "short": "Count channels of image."
+    },
+    {
+      "name": "append_channel",
+      "short": "Append additional matrices (channels) to the image."
+    },
+    {
+      "name": "access_channel",
+      "short": "Access a channel of a multi-channel image."
+    }
+  ]
+}

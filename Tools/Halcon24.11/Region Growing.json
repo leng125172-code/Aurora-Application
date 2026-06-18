@@ -1,0 +1,24 @@
+{
+  "通用": [
+    {
+      "name": "regiongrowing_n",
+      "short": "Segment an image using regiongrowing for multi-channel images."
+    },
+    {
+      "name": "regiongrowing",
+      "short": "Segment an image using regiongrowing."
+    },
+    {
+      "name": "regiongrowing_mean",
+      "short": "Perform a regiongrowing using mean gray values."
+    },
+    {
+      "name": "expand_gray",
+      "short": "Fill gaps between regions (depending on gray value or color) or split"
+    },
+    {
+      "name": "expand_gray_ref",
+      "short": "Fill gaps between regions (depending on gray value or color) or split"
+    }
+  ]
+}

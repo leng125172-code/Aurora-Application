@@ -1,0 +1,24 @@
+{
+  "通用": [
+    {
+      "name": "find_rectification_grid",
+      "short": "Segment the rectification grid region in the image."
+    },
+    {
+      "name": "create_rectification_grid",
+      "short": "Generate a PostScript file, which describes the rectification grid."
+    },
+    {
+      "name": "connect_grid_points",
+      "short": "Establish connections between the grid points of the rectification grid."
+    },
+    {
+      "name": "gen_grid_rectification_map",
+      "short": "Compute the mapping between the distorted image and the rectified image"
+    },
+    {
+      "name": "gen_arbitrary_distortion_map",
+      "short": "Generate a projection map that describes the mapping between an arbitrarily"
+    }
+  ]
+}

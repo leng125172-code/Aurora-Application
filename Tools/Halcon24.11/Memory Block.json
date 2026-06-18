@@ -1,0 +1,28 @@
+{
+  "通用": [
+    {
+      "name": "compare_memory_block",
+      "short": "Compare contents of memory blocks regarding equality."
+    },
+    {
+      "name": "create_memory_block_extern",
+      "short": "Create a memory block from an external pointer."
+    },
+    {
+      "name": "create_memory_block_extern_copy",
+      "short": "Create a memory block from an external pointer by copying."
+    },
+    {
+      "name": "get_memory_block_ptr",
+      "short": "Return the data pointer and size of a memory block."
+    },
+    {
+      "name": "read_memory_block",
+      "short": "Read a memory block from a file."
+    },
+    {
+      "name": "write_memory_block",
+      "short": "Write a memory block to a file."
+    }
+  ]
+}

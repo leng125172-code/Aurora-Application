@@ -1,0 +1,68 @@
+{
+  "通用": [
+    {
+      "name": "disp_xld",
+      "short": "Display an XLD object."
+    },
+    {
+      "name": "disp_object_model_3d",
+      "short": "Display 3D object models."
+    },
+    {
+      "name": "disp_region",
+      "short": "Displays regions in a window."
+    },
+    {
+      "name": "disp_rectangle2",
+      "short": "Displays arbitrarily oriented rectangles."
+    },
+    {
+      "name": "disp_rectangle1",
+      "short": "Display of rectangles aligned to the coordinate axes."
+    },
+    {
+      "name": "disp_polygon",
+      "short": "Displays a polyline."
+    },
+    {
+      "name": "disp_line",
+      "short": "Draws lines in a window."
+    },
+    {
+      "name": "disp_cross",
+      "short": "Displays crosses in a window."
+    },
+    {
+      "name": "disp_image",
+      "short": "Displays gray value images."
+    },
+    {
+      "name": "disp_channel",
+      "short": "Displays images with several channels."
+    },
+    {
+      "name": "disp_color",
+      "short": "Displays a color (RGB) image"
+    },
+    {
+      "name": "disp_ellipse",
+      "short": "Displays ellipses."
+    },
+    {
+      "name": "disp_circle",
+      "short": "Displays circles in a window."
+    },
+    {
+      "name": "disp_arrow",
+      "short": "Displays arrows in a window."
+    },
+    {
+      "name": "disp_arc",
+      "short": "Displays circular arcs in a window."
+    },
+    {
+      "name": "disp_obj",
+      "short": "Displays image objects (image, region, XLD)."
+    }
+  ]
+}

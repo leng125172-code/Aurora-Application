@@ -1,0 +1,96 @@
+{
+  "通用": [
+    {
+      "name": "drag_region3",
+      "short": "Interactive movement of a region with restriction of positions."
+    },
+    {
+      "name": "drag_region2",
+      "short": "Interactive movement of a region with fixpoint specification."
+    },
+    {
+      "name": "drag_region1",
+      "short": "Interactive moving of a region."
+    },
+    {
+      "name": "draw_nurbs_interp_mod",
+      "short": "Interactive modification of a NURBS curve using interpolation."
+    },
+    {
+      "name": "draw_nurbs_interp",
+      "short": "Interactive drawing of a NURBS curve using interpolation."
+    },
+    {
+      "name": "draw_nurbs_mod",
+      "short": "Interactive modification of a NURBS curve."
+    },
+    {
+      "name": "draw_nurbs",
+      "short": "Interactive drawing of a NURBS curve."
+    },
+    {
+      "name": "draw_xld_mod",
+      "short": "Interactive modification of a contour."
+    },
+    {
+      "name": "draw_xld",
+      "short": "Interactive drawing of a contour."
+    },
+    {
+      "name": "draw_rectangle2_mod",
+      "short": "Interactive drawing of any orientated rectangle."
+    },
+    {
+      "name": "draw_rectangle2",
+      "short": "Interactive drawing of any orientated rectangle."
+    },
+    {
+      "name": "draw_rectangle1_mod",
+      "short": "Draw a rectangle parallel to the coordinate axis."
+    },
+    {
+      "name": "draw_rectangle1",
+      "short": "Draw a rectangle parallel to the coordinate axis."
+    },
+    {
+      "name": "draw_point_mod",
+      "short": "Draw a point."
+    },
+    {
+      "name": "draw_point",
+      "short": "Draw a point."
+    },
+    {
+      "name": "draw_line_mod",
+      "short": "Draw a line."
+    },
+    {
+      "name": "draw_line",
+      "short": "Draw a line."
+    },
+    {
+      "name": "draw_ellipse_mod",
+      "short": "Interactive drawing of an ellipse."
+    },
+    {
+      "name": "draw_ellipse",
+      "short": "Interactive drawing of an ellipse."
+    },
+    {
+      "name": "draw_circle_mod",
+      "short": "Interactive drawing of a circle."
+    },
+    {
+      "name": "draw_circle",
+      "short": "Interactive drawing of a circle."
+    },
+    {
+      "name": "draw_region",
+      "short": "Interactive drawing of a closed region."
+    },
+    {
+      "name": "draw_polygon",
+      "short": "Interactive drawing of a polygon row."
+    }
+  ]
+}

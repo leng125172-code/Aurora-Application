@@ -1,0 +1,28 @@
+{
+  "通用": [
+    {
+      "name": "set_aop_info",
+      "short": "Set AOP information for operators."
+    },
+    {
+      "name": "get_aop_info",
+      "short": "Return AOP information for operators."
+    },
+    {
+      "name": "query_aop_info",
+      "short": "Query indexing structure of AOP information for operators."
+    },
+    {
+      "name": "optimize_aop",
+      "short": "Check hardware regarding its potential for automatic operator"
+    },
+    {
+      "name": "write_aop_knowledge",
+      "short": "Write knowledge about hardware dependent behavior of automatic operator"
+    },
+    {
+      "name": "read_aop_knowledge",
+      "short": "Load knowledge about hardware dependent behavior of automatic operator"
+    }
+  ]
+}

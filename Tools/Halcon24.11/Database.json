@@ -1,0 +1,16 @@
+{
+  "通用": [
+    {
+      "name": "reset_obj_db",
+      "short": "Reset the HALCON system for iconic objects."
+    },
+    {
+      "name": "count_relation",
+      "short": "Number of entries in the HALCON database."
+    },
+    {
+      "name": "get_modules",
+      "short": "Query of used modules and the module key."
+    }
+  ]
+}

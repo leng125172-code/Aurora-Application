@@ -1,0 +1,60 @@
+{
+  "通用": [
+    {
+      "name": "get_surface_matching_result",
+      "short": "Get details of a result from surface based matching."
+    },
+    {
+      "name": "clear_surface_matching_result",
+      "short": "Free the memory of a surface matching result."
+    },
+    {
+      "name": "clear_surface_model",
+      "short": "Free the memory of a surface model."
+    },
+    {
+      "name": "deserialize_surface_model",
+      "short": "Deserialize a surface model."
+    },
+    {
+      "name": "serialize_surface_model",
+      "short": "Serialize a surface_model."
+    },
+    {
+      "name": "read_surface_model",
+      "short": "Read a surface model from a file."
+    },
+    {
+      "name": "write_surface_model",
+      "short": "Write a surface model to a file."
+    },
+    {
+      "name": "refine_surface_model_pose",
+      "short": "Refine the pose of a surface model in a 3D scene."
+    },
+    {
+      "name": "find_surface_model",
+      "short": "Find the best matches of a surface model in a 3D scene."
+    },
+    {
+      "name": "get_surface_model_param",
+      "short": "Return the parameters and properties of a surface model."
+    },
+    {
+      "name": "create_surface_model",
+      "short": "Create the data structure needed to perform surface-based matching."
+    },
+    {
+      "name": "find_surface_model_image",
+      "short": "Find the best matches of a surface model in a 3D scene and images."
+    },
+    {
+      "name": "refine_surface_model_pose_image",
+      "short": "Refine the pose of a surface model in a 3D scene and in images."
+    },
+    {
+      "name": "set_surface_model_param",
+      "short": "Set parameters and properties of a surface model."
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "通用": [
+    {
+      "name": "tuple_sort_index",
+      "short": "Sort the elements of a tuple and return the indices of the sorted tuple."
+    },
+    {
+      "name": "tuple_sort",
+      "short": "Sort the elements of a tuple in ascending order."
+    },
+    {
+      "name": "tuple_inverse",
+      "short": "Invert a tuple."
+    }
+  ]
+}

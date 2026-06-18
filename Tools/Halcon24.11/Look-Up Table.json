@@ -1,0 +1,24 @@
+{
+  "通用": [
+    {
+      "name": "clear_class_lut",
+      "short": "Clear a look-up table classifier."
+    },
+    {
+      "name": "create_class_lut_knn",
+      "short": "Create a look-up table using a k-nearest neighbors"
+    },
+    {
+      "name": "create_class_lut_gmm",
+      "short": "Create a look-up table using a gaussian mixture model to classify byte"
+    },
+    {
+      "name": "create_class_lut_svm",
+      "short": "Create a look-up table using a Support-Vector-Machine to classify byte"
+    },
+    {
+      "name": "create_class_lut_mlp",
+      "short": "Create a look-up table using a multi-layer perceptron to classify byte"
+    }
+  ]
+}

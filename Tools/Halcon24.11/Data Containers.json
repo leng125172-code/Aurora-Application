@@ -1,0 +1,56 @@
+{
+  "通用": [
+    {
+      "name": "copy_dict",
+      "short": "Copy a dictionary."
+    },
+    {
+      "name": "create_dict",
+      "short": "Create a new empty dictionary."
+    },
+    {
+      "name": "get_dict_object",
+      "short": "Retrieve an object associated with the key from the dictionary."
+    },
+    {
+      "name": "get_dict_param",
+      "short": "Query dictionary parameters or information about a dictionary."
+    },
+    {
+      "name": "get_dict_tuple",
+      "short": "Retrieve a tuple associated with the key from the dictionary."
+    },
+    {
+      "name": "read_dict",
+      "short": "Read a dictionary from a file."
+    },
+    {
+      "name": "remove_dict_key",
+      "short": "Remove keys from a dictionary."
+    },
+    {
+      "name": "set_dict_object",
+      "short": "Add a key/object pair to the dictionary."
+    },
+    {
+      "name": "set_dict_tuple",
+      "short": "Add a key/tuple pair to the dictionary."
+    },
+    {
+      "name": "write_dict",
+      "short": "Write a dictionary to a file."
+    },
+    {
+      "name": "dict_to_json",
+      "short": "Transform a dictionary into a JSON string."
+    },
+    {
+      "name": "json_to_dict",
+      "short": "Transform a JSON string into a dictionary."
+    },
+    {
+      "name": "set_dict_tuple_at",
+      "short": "Assignment of one or several values to one or several tuple elements"
+    }
+  ]
+}

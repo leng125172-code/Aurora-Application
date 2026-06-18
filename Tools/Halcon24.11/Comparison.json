@@ -1,0 +1,52 @@
+{
+  "通用": [
+    {
+      "name": "tuple_less_equal_elem",
+      "short": "Test, whether a tuple is elementwise less or equal to another tuple."
+    },
+    {
+      "name": "tuple_less_elem",
+      "short": "Test, whether a tuple is elementwise less than another tuple."
+    },
+    {
+      "name": "tuple_greater_equal_elem",
+      "short": "Test, whether a tuple is elementwise greater or equal to another tuple."
+    },
+    {
+      "name": "tuple_greater_elem",
+      "short": "Test, whether a tuple is elementwise greater than another tuple."
+    },
+    {
+      "name": "tuple_not_equal_elem",
+      "short": "Test, whether two tuples are elementwise not equal."
+    },
+    {
+      "name": "tuple_equal_elem",
+      "short": "Test, whether two tuples are elementwise equal."
+    },
+    {
+      "name": "tuple_less_equal",
+      "short": "Test whether a tuple is less or equal to another tuple."
+    },
+    {
+      "name": "tuple_less",
+      "short": "Test whether a tuple is less than another tuple."
+    },
+    {
+      "name": "tuple_greater_equal",
+      "short": "Test whether a tuple is greater or equal to another tuple."
+    },
+    {
+      "name": "tuple_greater",
+      "short": "Test whether a tuple is greater than another tuple."
+    },
+    {
+      "name": "tuple_not_equal",
+      "short": "Test whether two tuples are not equal."
+    },
+    {
+      "name": "tuple_equal",
+      "short": "Test whether two tuples are equal."
+    }
+  ]
+}

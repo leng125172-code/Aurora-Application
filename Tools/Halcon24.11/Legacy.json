@@ -1,0 +1,876 @@
+{
+  "通用": [
+    {
+      "name": "union_straight_contours_histo_xld",
+      "short": "Compute the union of neighboring straight contours that have a similar"
+    },
+    {
+      "name": "clear_all_variation_models",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "clear_all_scattered_data_interpolators",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "close_all_serials",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "close_all_sockets",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "clear_all_sheet_of_light_models",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "clear_all_serialized_items",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "clear_all_text_results",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "clear_all_text_models",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "create_text_model",
+      "short": "Create a text model."
+    },
+    {
+      "name": "learn_ndim_box",
+      "short": "Train a classificator using a multi-channel image."
+    },
+    {
+      "name": "class_ndim_box",
+      "short": "Classify pixels using hyper-cuboids."
+    },
+    {
+      "name": "expand_line",
+      "short": "Expand a region starting at a given line."
+    },
+    {
+      "name": "bin_threshold",
+      "short": "Segment an image using an automatically determined"
+    },
+    {
+      "name": "interjacent",
+      "short": "Partition the image plane using given regions."
+    },
+    {
+      "name": "hamming_change_region",
+      "short": "Generate a region having a given Hamming distance."
+    },
+    {
+      "name": "clear_all_stereo_models",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "clear_all_conditions",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "clear_all_barriers",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "clear_all_events",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "clear_all_mutexes",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "get_region_chain",
+      "short": "Contour of an object as chain code."
+    },
+    {
+      "name": "close_all_ocvs",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "clear_all_ocr_class_knn",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "clear_all_lexica",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "clear_all_ocr_class_svm",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "clear_all_ocr_class_mlp",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "serialize_ocr",
+      "short": "Serialize an OCR classifier."
+    },
+    {
+      "name": "deserialize_ocr",
+      "short": "Deserialize a serialized OCR classifier."
+    },
+    {
+      "name": "write_ocr",
+      "short": "Writing an OCR classifier into a file."
+    },
+    {
+      "name": "read_ocr",
+      "short": "Read an OCR classifier from a file."
+    },
+    {
+      "name": "do_ocr_single",
+      "short": "Classify one character."
+    },
+    {
+      "name": "do_ocr_multi",
+      "short": "Classify characters."
+    },
+    {
+      "name": "info_ocr_class_box",
+      "short": "Get information about an OCR classifier."
+    },
+    {
+      "name": "create_ocr_class_box",
+      "short": "Create a new OCR-classifier."
+    },
+    {
+      "name": "traind_ocr_class_box",
+      "short": "Train an OCR classifier by the input of regions."
+    },
+    {
+      "name": "trainf_ocr_class_box",
+      "short": "Train an OCR classifier with the help of a training file."
+    },
+    {
+      "name": "ocr_change_char",
+      "short": "Define a new conversion table for the characters."
+    },
+    {
+      "name": "close_ocr",
+      "short": "Deallocation of the memory of an OCR classifier."
+    },
+    {
+      "name": "close_all_ocrs",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "testd_ocr_class_box",
+      "short": "Test an OCR classifier."
+    },
+    {
+      "name": "ocr_get_features",
+      "short": "Access the features which correspond to a character."
+    },
+    {
+      "name": "fitting",
+      "short": "Perform a closing after an opening with multiple structuring elements."
+    },
+    {
+      "name": "gen_struct_elements",
+      "short": "Generate standard structuring elements."
+    },
+    {
+      "name": "thinning_seq",
+      "short": "Remove the result of a hit-or-miss operation from a region (sequential)."
+    },
+    {
+      "name": "thinning_golay",
+      "short": "Remove the result of a hit-or-miss operation from a region (using a"
+    },
+    {
+      "name": "thinning",
+      "short": "Remove the result of a hit-or-miss operation from a region."
+    },
+    {
+      "name": "thickening_seq",
+      "short": "Add the result of a hit-or-miss operation to a region (sequential)."
+    },
+    {
+      "name": "thickening_golay",
+      "short": "Add the result of a hit-or-miss operation to a region (using a Golay"
+    },
+    {
+      "name": "thickening",
+      "short": "Add the result of a hit-or-miss operation to a region."
+    },
+    {
+      "name": "hit_or_miss_seq",
+      "short": "Hit-or-miss operation for regions using the Golay alphabet (sequential)."
+    },
+    {
+      "name": "hit_or_miss_golay",
+      "short": "Hit-or-miss operation for regions using the Golay alphabet."
+    },
+    {
+      "name": "golay_elements",
+      "short": "Generate the structuring elements of the Golay alphabet."
+    },
+    {
+      "name": "morph_skiz",
+      "short": "Thinning of a region."
+    },
+    {
+      "name": "morph_skeleton",
+      "short": "Compute the morphological skeleton of a region."
+    },
+    {
+      "name": "morph_hat",
+      "short": "Compute the union of bottom_hat and top_hat."
+    },
+    {
+      "name": "closing_golay",
+      "short": "Close a region with an element from the Golay alphabet."
+    },
+    {
+      "name": "opening_seg",
+      "short": "Separate overlapping regions."
+    },
+    {
+      "name": "opening_golay",
+      "short": "Open a region with an element from the Golay alphabet."
+    },
+    {
+      "name": "erosion_seq",
+      "short": "Erode a region sequentially."
+    },
+    {
+      "name": "erosion_golay",
+      "short": "Erode a region with an element from the Golay alphabet."
+    },
+    {
+      "name": "dilation_seq",
+      "short": "Dilate a region sequentially."
+    },
+    {
+      "name": "dilation_golay",
+      "short": "Dilate a region with an element from the Golay alphabet."
+    },
+    {
+      "name": "transform_metrology_object",
+      "short": "Transform metrology objects of a metrology model, e.g., for alignment."
+    },
+    {
+      "name": "copy_metrology_object",
+      "short": "Copy metrology metrology objects of a metrology model."
+    },
+    {
+      "name": "clear_all_metrology_models",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "close_all_measures",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "clear_all_matrices",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "clear_all_sample_identifiers",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "clear_sample_identifier",
+      "short": "Free the memory of a sample identifier."
+    },
+    {
+      "name": "deserialize_sample_identifier",
+      "short": "Deserialize a serialized sample identifier."
+    },
+    {
+      "name": "read_sample_identifier",
+      "short": "Read a sample identifier from a file."
+    },
+    {
+      "name": "serialize_sample_identifier",
+      "short": "Serialize a sample identifier."
+    },
+    {
+      "name": "write_sample_identifier",
+      "short": "Write a sample identifier to a file."
+    },
+    {
+      "name": "apply_sample_identifier",
+      "short": "Identify objects with a sample identifier."
+    },
+    {
+      "name": "get_sample_identifier_param",
+      "short": "Get selected parameters of a sample identifier."
+    },
+    {
+      "name": "set_sample_identifier_param",
+      "short": "Set selected parameters of a sample identifier."
+    },
+    {
+      "name": "get_sample_identifier_object_info",
+      "short": "Retrieve information about an object of a sample identifier."
+    },
+    {
+      "name": "set_sample_identifier_object_info",
+      "short": "Define a name or a description for an object of a sample identifier."
+    },
+    {
+      "name": "remove_sample_identifier_training_data",
+      "short": "Remove training data from a sample identifier.  "
+    },
+    {
+      "name": "remove_sample_identifier_preparation_data",
+      "short": "Remove preparation data from a sample identifier.  "
+    },
+    {
+      "name": "train_sample_identifier",
+      "short": "Train a sample identifier.  "
+    },
+    {
+      "name": "add_sample_identifier_training_data",
+      "short": "Add training data to an existing sample identifier."
+    },
+    {
+      "name": "prepare_sample_identifier",
+      "short": "Adapt the internal data structure of a sample identifier to the objects to"
+    },
+    {
+      "name": "add_sample_identifier_preparation_data",
+      "short": "Add preparation data to an existing sample identifier."
+    },
+    {
+      "name": "create_sample_identifier",
+      "short": "Create a new sample identifier."
+    },
+    {
+      "name": "clear_all_shape_models",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "clear_all_descriptor_models",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "clear_all_deformable_models",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "clear_all_ncc_models",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "get_found_component_model",
+      "short": "Return the components of a found instance of a component model."
+    },
+    {
+      "name": "find_component_model",
+      "short": "Find the best matches of a component model in an image."
+    },
+    {
+      "name": "clear_all_component_models",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "clear_component_model",
+      "short": "Free the memory of a component model."
+    },
+    {
+      "name": "get_component_model_tree",
+      "short": "Return the search tree of a component model."
+    },
+    {
+      "name": "get_component_model_params",
+      "short": "Return the parameters of a component model."
+    },
+    {
+      "name": "deserialize_component_model",
+      "short": "Deserialize a serialized component model."
+    },
+    {
+      "name": "serialize_component_model",
+      "short": "Serialize a component model."
+    },
+    {
+      "name": "read_component_model",
+      "short": "Read a component model from a file."
+    },
+    {
+      "name": "write_component_model",
+      "short": "Write a component model to a file."
+    },
+    {
+      "name": "create_component_model",
+      "short": "Prepare a component model for matching based on explicitly specified"
+    },
+    {
+      "name": "create_trained_component_model",
+      "short": "Prepare a component model for matching based on trained components."
+    },
+    {
+      "name": "clear_all_training_components",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "clear_training_components",
+      "short": "Free the memory of a component training result."
+    },
+    {
+      "name": "get_component_relations",
+      "short": "Return the relations between the model components that are contained in"
+    },
+    {
+      "name": "get_training_components",
+      "short": "Return the initial or model components in a certain image."
+    },
+    {
+      "name": "modify_component_relations",
+      "short": "Modify the relations within a training result."
+    },
+    {
+      "name": "deserialize_training_components",
+      "short": "Deserialize a component training result."
+    },
+    {
+      "name": "serialize_training_components",
+      "short": "Serialize a component training result."
+    },
+    {
+      "name": "read_training_components",
+      "short": "Read a component training result from a file."
+    },
+    {
+      "name": "write_training_components",
+      "short": "Write a component training result to a file."
+    },
+    {
+      "name": "cluster_model_components",
+      "short": "Adopt new parameters that are used to create the model components into the"
+    },
+    {
+      "name": "inspect_clustered_components",
+      "short": "Inspect the rigid model components obtained from the training."
+    },
+    {
+      "name": "train_model_components",
+      "short": "Train components and relations for the component-based matching."
+    },
+    {
+      "name": "gen_initial_components",
+      "short": "Extract the initial components of a component model."
+    },
+    {
+      "name": "clear_all_surface_matching_results",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "clear_all_surface_models",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "clear_all_shape_model_3d",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "clear_all_object_model_3d",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "read_kalman",
+      "short": "Read the description file of a Kalman filter."
+    },
+    {
+      "name": "update_kalman",
+      "short": "Read an update file of a Kalman filter."
+    },
+    {
+      "name": "filter_kalman",
+      "short": "Estimate the current state of a system with the help of the"
+    },
+    {
+      "name": "slide_image",
+      "short": "Interactive output from two window buffers."
+    },
+    {
+      "name": "open_textwindow",
+      "short": "Open a textual window."
+    },
+    {
+      "name": "move_rectangle",
+      "short": "Copy inside an output window."
+    },
+    {
+      "name": "clear_rectangle",
+      "short": "Delete a rectangle on the output window."
+    },
+    {
+      "name": "set_tshape",
+      "short": "Set the shape of the text cursor."
+    },
+    {
+      "name": "get_tshape",
+      "short": "Get the shape of the text cursor."
+    },
+    {
+      "name": "query_tshape",
+      "short": "Query all shapes available for text cursors."
+    },
+    {
+      "name": "set_pixel",
+      "short": "Define a color lookup table index."
+    },
+    {
+      "name": "set_line_approx",
+      "short": "Define the approximation error for contour display."
+    },
+    {
+      "name": "set_insert",
+      "short": "Define the pixel output function."
+    },
+    {
+      "name": "set_comprise",
+      "short": "Define the image matrix output clipping."
+    },
+    {
+      "name": "get_pixel",
+      "short": "Get the current color lookup table index."
+    },
+    {
+      "name": "get_line_approx",
+      "short": "Get the current approximation error for contour display."
+    },
+    {
+      "name": "get_insert",
+      "short": "Get the current display mode."
+    },
+    {
+      "name": "get_comprise",
+      "short": "Get the output treatment of an image matrix."
+    },
+    {
+      "name": "query_insert",
+      "short": "Query the possible graphic modes."
+    },
+    {
+      "name": "disp_distribution",
+      "short": "Displays a noise distribution."
+    },
+    {
+      "name": "write_lut",
+      "short": "Write look-up-table (lut) as file."
+    },
+    {
+      "name": "disp_lut",
+      "short": "Graphical view of the look-up-table (lut)."
+    },
+    {
+      "name": "get_lut_style",
+      "short": "Get modification parameters of look-up-table (lut)."
+    },
+    {
+      "name": "set_lut_style",
+      "short": "Changing the look-up-table (lut)."
+    },
+    {
+      "name": "get_fix",
+      "short": "Get mode of fixing of current look-up-table (lut)."
+    },
+    {
+      "name": "set_fix",
+      "short": "Set fixing of \"look-up-table\" (lut)"
+    },
+    {
+      "name": "get_fixed_lut",
+      "short": "Get fixing of \"look-up-table\" (lut) for \"real color images\""
+    },
+    {
+      "name": "set_fixed_lut",
+      "short": "Fix \"look-up-table\" (lut) for \"real color images\"."
+    },
+    {
+      "name": "intersection_ll",
+      "short": "Calculate the intersection point of two lines."
+    },
+    {
+      "name": "distance_funct_1d",
+      "short": "Compute the distance of two functions."
+    },
+    {
+      "name": "gauss_image",
+      "short": "Smooth an image using discrete Gaussian functions."
+    },
+    {
+      "name": "create_template_rot",
+      "short": "Preparing a pattern for template matching with rotation."
+    },
+    {
+      "name": "create_template",
+      "short": "Preparing a pattern for template matching."
+    },
+    {
+      "name": "serialize_template",
+      "short": "Serialize a template."
+    },
+    {
+      "name": "deserialize_template",
+      "short": "Deserialize a serialized template."
+    },
+    {
+      "name": "write_template",
+      "short": "Writing a template to file."
+    },
+    {
+      "name": "read_template",
+      "short": "Reading a template from file."
+    },
+    {
+      "name": "clear_all_templates",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "clear_template",
+      "short": "Deallocation of the memory of a template."
+    },
+    {
+      "name": "set_offset_template",
+      "short": "Gray value offset for template."
+    },
+    {
+      "name": "set_reference_template",
+      "short": "Define reference position for a matching template."
+    },
+    {
+      "name": "adapt_template",
+      "short": "Adapting a template to the size of an image."
+    },
+    {
+      "name": "fast_match_mg",
+      "short": "Searching all good gray value matches in a pyramid."
+    },
+    {
+      "name": "best_match_pre_mg",
+      "short": "Searching the best gray value matches in a pre generated pyramid."
+    },
+    {
+      "name": "best_match_mg",
+      "short": "Searching the best gray value matches in a pyramid."
+    },
+    {
+      "name": "fast_match",
+      "short": "Searching all good matches of a template and an image."
+    },
+    {
+      "name": "best_match_rot_mg",
+      "short": "Searching the best matching of a template and a pyramid with rotation."
+    },
+    {
+      "name": "best_match_rot",
+      "short": "Searching the best matching of a template and an image with rotation."
+    },
+    {
+      "name": "best_match",
+      "short": "Searching the best matching of a template and an image."
+    },
+    {
+      "name": "clear_all_color_trans_luts",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "polar_trans_image",
+      "short": "Transform an image to polar coordinates"
+    },
+    {
+      "name": "close_all_files",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "select_lines_longest",
+      "short": "Select the longest input lines."
+    },
+    {
+      "name": "partition_lines",
+      "short": "Partition lines according to various criteria."
+    },
+    {
+      "name": "select_lines",
+      "short": "Select lines according to various criteria."
+    },
+    {
+      "name": "approx_chain_simple",
+      "short": "Approximate a contour by arcs and lines."
+    },
+    {
+      "name": "approx_chain",
+      "short": "Approximate a contour by arcs and lines."
+    },
+    {
+      "name": "clear_all_data_code_2d_models",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "clear_all_class_train_data",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "clear_all_class_knn",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "clear_all_class_lut",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "clear_all_class_gmm",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "clear_all_class_svm",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "clear_all_class_mlp",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "deserialize_class_box",
+      "short": "Deserialize a serialized classifier."
+    },
+    {
+      "name": "serialize_class_box",
+      "short": "Serialize a classifier."
+    },
+    {
+      "name": "write_class_box",
+      "short": "Save a classifier in a file."
+    },
+    {
+      "name": "set_class_box_param",
+      "short": "Set system parameters for classification."
+    },
+    {
+      "name": "read_sampset",
+      "short": "Read a training data set from a file."
+    },
+    {
+      "name": "read_class_box",
+      "short": "Read a classifier from a file."
+    },
+    {
+      "name": "learn_sampset_box",
+      "short": "Train the classifier with one data set."
+    },
+    {
+      "name": "learn_class_box",
+      "short": "Train the classifier."
+    },
+    {
+      "name": "get_class_box_param",
+      "short": "Get information about the current parameter."
+    },
+    {
+      "name": "clear_sampset",
+      "short": "Free memory of a data set."
+    },
+    {
+      "name": "close_class_box",
+      "short": "Destroy the classifier."
+    },
+    {
+      "name": "create_class_box",
+      "short": "Create a new classifier."
+    },
+    {
+      "name": "descript_class_box",
+      "short": "Describe the classes of a box classifier."
+    },
+    {
+      "name": "test_sampset_box",
+      "short": "Classify a set of arrays."
+    },
+    {
+      "name": "enquire_reject_class_box",
+      "short": "Classify a tuple of attributes with rejection class."
+    },
+    {
+      "name": "enquire_class_box",
+      "short": "Classify a tuple of attributes."
+    },
+    {
+      "name": "close_all_class_box",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "clear_all_camera_setup_models",
+      "short": "Free the memory of all camera setup models."
+    },
+    {
+      "name": "clear_all_calib_data",
+      "short": "Free the memory of all calibration data models."
+    },
+    {
+      "name": "clear_all_bar_code_models",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "close_all_bg_esti",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "close_all_framegrabbers",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "apply_dl_classifier",
+      "short": "Infer the class affiliations for a set of images using a"
+    },
+    {
+      "name": "clear_dl_classifier",
+      "short": "Clear a deep-learning-based classifier."
+    },
+    {
+      "name": "clear_dl_classifier_result",
+      "short": "Clear a handle containing the results of the deep-learning-based"
+    },
+    {
+      "name": "clear_dl_classifier_train_result",
+      "short": "Clear the handle of a deep-learning-based classifier training result."
+    },
+    {
+      "name": "deserialize_dl_classifier",
+      "short": "Deserialize a deep-learning-based classifier."
+    },
+    {
+      "name": "get_dl_classifier_param",
+      "short": "Return the parameters of a deep-learning-based classifier."
+    },
+    {
+      "name": "get_dl_classifier_result",
+      "short": "Retrieve classification results inferred by a deep-learning-based"
+    },
+    {
+      "name": "get_dl_classifier_train_result",
+      "short": "Return the results for the single training step of a deep-learning-based"
+    },
+    {
+      "name": "read_dl_classifier",
+      "short": "Read a deep-learning-based classifier from a file."
+    },
+    {
+      "name": "serialize_dl_classifier",
+      "short": "Serialize a deep-learning-based classifier."
+    },
+    {
+      "name": "set_dl_classifier_param",
+      "short": "Set the parameters of a deep-learning-based classifier."
+    },
+    {
+      "name": "train_dl_classifier_batch",
+      "short": "Perform a training step of a deep-learning-based classifier on a batch of"
+    },
+    {
+      "name": "write_dl_classifier",
+      "short": "Write a deep-learning-based classifier in a file."
+    }
+  ]
+}

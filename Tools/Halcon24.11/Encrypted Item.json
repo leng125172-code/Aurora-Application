@@ -1,0 +1,12 @@
+{
+  "通用": [
+    {
+      "name": "read_encrypted_item",
+      "short": "Read an encrypted item from a file."
+    },
+    {
+      "name": "write_encrypted_item",
+      "short": "Write an encrypted item to a file."
+    }
+  ]
+}

@@ -1,0 +1,40 @@
+{
+  "通用": [
+    {
+      "name": "deserialize_image",
+      "short": "Deserialize a serialized image object."
+    },
+    {
+      "name": "serialize_image",
+      "short": "Serialize an image object."
+    },
+    {
+      "name": "write_image",
+      "short": "Write images in graphic formats."
+    },
+    {
+      "name": "read_sequence",
+      "short": "Read images."
+    },
+    {
+      "name": "read_image",
+      "short": "Read an image with different file formats."
+    },
+    {
+      "name": "read_image_metadata",
+      "short": "Read metadata from image files."
+    },
+    {
+      "name": "write_image_metadata",
+      "short": "Write metadata of image files."
+    },
+    {
+      "name": "image_to_memory_block",
+      "short": "Write an image to a memory block in various graphic formats."
+    },
+    {
+      "name": "memory_block_to_image",
+      "short": "Read an image from a memory block with different file formats."
+    }
+  ]
+}

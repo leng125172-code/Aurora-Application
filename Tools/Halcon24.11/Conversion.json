@@ -1,0 +1,48 @@
+{
+  "通用": [
+    {
+      "name": "tuple_chrt",
+      "short": "Convert a tuple of integer numbers into strings."
+    },
+    {
+      "name": "tuple_ords",
+      "short": "Convert a tuple of strings into a tuple of integer numbers."
+    },
+    {
+      "name": "tuple_chr",
+      "short": "Convert a tuple of integer numbers into strings."
+    },
+    {
+      "name": "tuple_ord",
+      "short": "Convert a tuple of strings of length 1 into a tuple of integer numbers."
+    },
+    {
+      "name": "tuple_string",
+      "short": "Convert a tuple into a tuple of strings."
+    },
+    {
+      "name": "tuple_number",
+      "short": "Convert a tuple (of strings) into a tuple of numbers."
+    },
+    {
+      "name": "tuple_round",
+      "short": "Convert a tuple into a tuple of integer numbers."
+    },
+    {
+      "name": "tuple_int",
+      "short": "Convert a tuple into a tuple of integer numbers."
+    },
+    {
+      "name": "tuple_real",
+      "short": "Convert a tuple into a tuple of floating point numbers."
+    },
+    {
+      "name": "handle_to_integer",
+      "short": "Convert a handle into an integer."
+    },
+    {
+      "name": "integer_to_handle",
+      "short": "Convert an integer into a handle."
+    }
+  ]
+}

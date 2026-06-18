@@ -1,0 +1,84 @@
+{
+  "通用": [
+    {
+      "name": "get_display_scene_3d_info",
+      "short": "Get the depth or the index of instances in a displayed 3D scene."
+    },
+    {
+      "name": "set_scene_3d_to_world_pose",
+      "short": "Set the pose of a 3D scene."
+    },
+    {
+      "name": "set_scene_3d_param",
+      "short": "Set parameters of a 3D scene."
+    },
+    {
+      "name": "set_scene_3d_light_param",
+      "short": "Set parameters of a light in a 3D scene."
+    },
+    {
+      "name": "set_scene_3d_instance_pose",
+      "short": "Set the pose of an instance in a 3D scene."
+    },
+    {
+      "name": "set_scene_3d_instance_param",
+      "short": "Set parameters of an instance in a 3D scene."
+    },
+    {
+      "name": "set_scene_3d_camera_pose",
+      "short": "Set the pose of a camera in a 3D scene."
+    },
+    {
+      "name": "render_scene_3d",
+      "short": "Render an image of a 3D scene."
+    },
+    {
+      "name": "remove_scene_3d_light",
+      "short": "Remove a light from a 3D scene."
+    },
+    {
+      "name": "remove_scene_3d_instance",
+      "short": "Remove an object instance from a 3D scene."
+    },
+    {
+      "name": "remove_scene_3d_camera",
+      "short": "Remove a camera from a 3D scene."
+    },
+    {
+      "name": "display_scene_3d",
+      "short": "Display a 3D scene."
+    },
+    {
+      "name": "add_scene_3d_light",
+      "short": "Add a light source to a 3D scene."
+    },
+    {
+      "name": "add_scene_3d_instance",
+      "short": "Add an instance of a 3D object model to a 3D scene."
+    },
+    {
+      "name": "add_scene_3d_camera",
+      "short": "Add a camera to a 3D scene."
+    },
+    {
+      "name": "clear_scene_3d",
+      "short": "Delete a 3D scene and free all allocated memory."
+    },
+    {
+      "name": "create_scene_3d",
+      "short": "Create the data structure that is needed to visualize collections of"
+    },
+    {
+      "name": "add_scene_3d_label",
+      "short": "Add a text label to a 3D scene."
+    },
+    {
+      "name": "remove_scene_3d_label",
+      "short": "Remove a text label from a 3D scene."
+    },
+    {
+      "name": "set_scene_3d_label_param",
+      "short": "Set parameters of a text label in a 3D scene."
+    }
+  ]
+}

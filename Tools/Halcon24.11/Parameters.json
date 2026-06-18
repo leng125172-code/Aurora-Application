@@ -1,0 +1,172 @@
+{
+  "通用": [
+    {
+      "name": "set_system",
+      "short": "Set HALCON system parameters."
+    },
+    {
+      "name": "get_system",
+      "short": "Get current value of HALCON system parameters."
+    },
+    {
+      "name": "get_window_param",
+      "short": "Get window parameters."
+    },
+    {
+      "name": "set_window_param",
+      "short": "Set window parameters."
+    },
+    {
+      "name": "set_shape",
+      "short": "Define the region output shape."
+    },
+    {
+      "name": "set_rgb",
+      "short": "Set the color definition via RGB values."
+    },
+    {
+      "name": "set_part_style",
+      "short": "Define an interpolation method for gray value output."
+    },
+    {
+      "name": "set_part",
+      "short": "Modify the displayed image part."
+    },
+    {
+      "name": "set_paint",
+      "short": "Define the gray value output mode."
+    },
+    {
+      "name": "set_line_width",
+      "short": "Define the line width for region contour output."
+    },
+    {
+      "name": "set_line_style",
+      "short": "Define a contour output pattern."
+    },
+    {
+      "name": "set_hsi",
+      "short": "Define output colors (HSI-coded)."
+    },
+    {
+      "name": "set_gray",
+      "short": "Define gray values for region output."
+    },
+    {
+      "name": "set_draw",
+      "short": "Define the region fill mode."
+    },
+    {
+      "name": "set_colored",
+      "short": "Set multiple output colors."
+    },
+    {
+      "name": "set_color",
+      "short": "Set output color."
+    },
+    {
+      "name": "get_shape",
+      "short": "Get the current region output shape."
+    },
+    {
+      "name": "get_rgb",
+      "short": "Get the current color in RGB-coding."
+    },
+    {
+      "name": "get_part_style",
+      "short": "Get the current interpolation mode for gray value display."
+    },
+    {
+      "name": "get_part",
+      "short": "Get the image part."
+    },
+    {
+      "name": "get_paint",
+      "short": "Get the current display mode for gray values."
+    },
+    {
+      "name": "get_line_width",
+      "short": "Get the current line width for contour display."
+    },
+    {
+      "name": "get_line_style",
+      "short": "Get the current graphic mode for contours."
+    },
+    {
+      "name": "get_hsi",
+      "short": "Get the HSI coding of the current color."
+    },
+    {
+      "name": "get_draw",
+      "short": "Get the current region fill mode."
+    },
+    {
+      "name": "query_shape",
+      "short": "Query the region display modes."
+    },
+    {
+      "name": "query_paint",
+      "short": "Query the gray value display modes."
+    },
+    {
+      "name": "query_line_width",
+      "short": "Query the possible line widths."
+    },
+    {
+      "name": "query_gray",
+      "short": "Query the displayable gray values."
+    },
+    {
+      "name": "query_colored",
+      "short": "Query the number of colors for color output."
+    },
+    {
+      "name": "query_all_colors",
+      "short": "Query all color names."
+    },
+    {
+      "name": "query_color",
+      "short": "Query all color names displayable in the window."
+    },
+    {
+      "name": "get_icon",
+      "short": "Query the icon for region output"
+    },
+    {
+      "name": "set_icon",
+      "short": "Icon definition for region output."
+    },
+    {
+      "name": "convert_coordinates_image_to_window",
+      "short": "Convert image coordinates to window coordinates"
+    },
+    {
+      "name": "convert_coordinates_window_to_image",
+      "short": "Convert window coordinates to image coordinates"
+    },
+    {
+      "name": "get_rgba",
+      "short": "Get the current color in RGBA-coding."
+    },
+    {
+      "name": "set_rgba",
+      "short": "Set the color definition via RGBA values."
+    },
+    {
+      "name": "set_operator_timeout",
+      "short": "Set a timeout for an operator."
+    },
+    {
+      "name": "get_system_info",
+      "short": "Get current value of system information without requiring a license."
+    },
+    {
+      "name": "get_contour_style",
+      "short": "Get the current contour display fill style."
+    },
+    {
+      "name": "set_contour_style",
+      "short": "Define the contour display fill style."
+    }
+  ]
+}

@@ -1,0 +1,440 @@
+{
+  "通用": [
+    {
+      "name": "label_to_region",
+      "short": "Extract regions with equal gray values from an image."
+    },
+    {
+      "name": "polar_trans_region_inv",
+      "short": "Transform a region in polar coordinates back to Cartesian"
+    },
+    {
+      "name": "polar_trans_region",
+      "short": "Transform a region within an annular arc to polar coordinates."
+    },
+    {
+      "name": "merge_regions_line_scan",
+      "short": "Merge regions from line scan images."
+    },
+    {
+      "name": "partition_rectangle",
+      "short": "Partition a region into rectangles of approximately equal size."
+    },
+    {
+      "name": "partition_dynamic",
+      "short": "Partition a region horizontally at positions of small vertical extent."
+    },
+    {
+      "name": "union2",
+      "short": "Return the union of two regions."
+    },
+    {
+      "name": "union1",
+      "short": "Return the union of all input regions."
+    },
+    {
+      "name": "closest_point_transform",
+      "short": "Compute the closest-point transformation of a region."
+    },
+    {
+      "name": "distance_transform",
+      "short": "Compute the distance transformation of a region."
+    },
+    {
+      "name": "skeleton",
+      "short": "Compute the skeleton of a region."
+    },
+    {
+      "name": "projective_trans_region",
+      "short": "Apply a projective transformation to a region."
+    },
+    {
+      "name": "affine_trans_region",
+      "short": "Apply an arbitrary affine 2D transformation to regions."
+    },
+    {
+      "name": "mirror_region",
+      "short": "Reflect a region about an axis."
+    },
+    {
+      "name": "zoom_region",
+      "short": "Zoom a region."
+    },
+    {
+      "name": "move_region",
+      "short": "Translate a region."
+    },
+    {
+      "name": "junctions_skeleton",
+      "short": "Find junctions and end points in a skeleton."
+    },
+    {
+      "name": "intersection",
+      "short": "Calculate the intersection of two regions."
+    },
+    {
+      "name": "interjacent",
+      "short": "Partition the image plane using given regions."
+    },
+    {
+      "name": "fill_up",
+      "short": "Fill up holes in regions."
+    },
+    {
+      "name": "fill_up_shape",
+      "short": "Fill up holes in regions having given shape features."
+    },
+    {
+      "name": "expand_region",
+      "short": "Fill gaps between regions or split overlapping regions."
+    },
+    {
+      "name": "clip_region_rel",
+      "short": "Clip a region relative to its smallest surrounding rectangle."
+    },
+    {
+      "name": "clip_region",
+      "short": "Clip a region to a rectangle."
+    },
+    {
+      "name": "rank_region",
+      "short": "Rank operator for regions."
+    },
+    {
+      "name": "connection",
+      "short": "Compute connected components of a region."
+    },
+    {
+      "name": "symm_difference",
+      "short": "Calculate the symmetric difference of two regions."
+    },
+    {
+      "name": "difference",
+      "short": "Calculate the difference of two regions."
+    },
+    {
+      "name": "complement",
+      "short": "Return the complement of a region."
+    },
+    {
+      "name": "background_seg",
+      "short": "Determine the connected components of the background of given regions."
+    },
+    {
+      "name": "hamming_change_region",
+      "short": "Generate a region having a given Hamming distance."
+    },
+    {
+      "name": "remove_noise_region",
+      "short": "Remove noise from a region."
+    },
+    {
+      "name": "shape_trans",
+      "short": "Transform the shape of a region."
+    },
+    {
+      "name": "split_skeleton_lines",
+      "short": "Split lines represented by one pixel wide, non-branching lines."
+    },
+    {
+      "name": "split_skeleton_region",
+      "short": "Split lines represented by one pixel wide, non-branching regions."
+    },
+    {
+      "name": "gen_region_histo",
+      "short": "Convert a histogram into a region."
+    },
+    {
+      "name": "eliminate_runs",
+      "short": "Eliminate runs of a given length."
+    },
+    {
+      "name": "test_subset_region",
+      "short": "Test whether a region is contained in another region."
+    },
+    {
+      "name": "test_equal_region",
+      "short": "Test whether the regions of two objects are identical."
+    },
+    {
+      "name": "gen_region_polygon_xld",
+      "short": "Create a region from an XLD polygon."
+    },
+    {
+      "name": "gen_region_contour_xld",
+      "short": "Create a region from an XLD contour."
+    },
+    {
+      "name": "gen_region_polygon_filled",
+      "short": "Store a polygon as a \"filled\" region."
+    },
+    {
+      "name": "gen_region_polygon",
+      "short": "Store a polygon as a region."
+    },
+    {
+      "name": "gen_region_points",
+      "short": "Store individual pixels as image region."
+    },
+    {
+      "name": "gen_region_runs",
+      "short": "Create a region from a runlength coding."
+    },
+    {
+      "name": "gen_rectangle2",
+      "short": "Create a rectangle of any orientation."
+    },
+    {
+      "name": "gen_rectangle1",
+      "short": "Create a rectangle parallel to the coordinate axes."
+    },
+    {
+      "name": "gen_random_region",
+      "short": "Create a random region."
+    },
+    {
+      "name": "gen_ellipse_sector",
+      "short": "Create an ellipse sector."
+    },
+    {
+      "name": "gen_ellipse",
+      "short": "Create an ellipse."
+    },
+    {
+      "name": "gen_circle_sector",
+      "short": "Create a circle sector."
+    },
+    {
+      "name": "gen_circle",
+      "short": "Create a circle."
+    },
+    {
+      "name": "gen_checker_region",
+      "short": "Create a checkered region."
+    },
+    {
+      "name": "gen_grid_region",
+      "short": "Create a region from lines or pixels."
+    },
+    {
+      "name": "gen_random_regions",
+      "short": "Create random regions like circles, rectangles and ellipses."
+    },
+    {
+      "name": "gen_region_hline",
+      "short": "Store input lines described in Hesse normal form as regions."
+    },
+    {
+      "name": "gen_region_line",
+      "short": "Store input lines as regions."
+    },
+    {
+      "name": "gen_empty_region",
+      "short": "Create an empty region."
+    },
+    {
+      "name": "get_region_thickness",
+      "short": "Access the thickness of a region along the main axis."
+    },
+    {
+      "name": "get_region_polygon",
+      "short": "Polygon approximation of a region."
+    },
+    {
+      "name": "get_region_points",
+      "short": "Access the pixels of a region."
+    },
+    {
+      "name": "get_region_contour",
+      "short": "Access the contour of an object."
+    },
+    {
+      "name": "get_region_runs",
+      "short": "Access the runlength coding of a region."
+    },
+    {
+      "name": "get_region_chain",
+      "short": "Contour of an object as chain code."
+    },
+    {
+      "name": "get_region_convex",
+      "short": "Access convex hull as contour."
+    },
+    {
+      "name": "sort_region",
+      "short": "Sorting of regions with respect to their relative position."
+    },
+    {
+      "name": "transpose_region",
+      "short": "Reflect a region about a point."
+    },
+    {
+      "name": "moments_region_central_invar",
+      "short": "Geometric moments of regions."
+    },
+    {
+      "name": "moments_region_central",
+      "short": "Geometric moments of regions."
+    },
+    {
+      "name": "moments_region_3rd_invar",
+      "short": "Geometric moments of regions."
+    },
+    {
+      "name": "moments_region_3rd",
+      "short": "Geometric moments of regions."
+    },
+    {
+      "name": "smallest_rectangle2",
+      "short": "Smallest surrounding rectangle with any orientation."
+    },
+    {
+      "name": "smallest_rectangle1",
+      "short": "Surrounding rectangle parallel to the coordinate axes."
+    },
+    {
+      "name": "smallest_circle",
+      "short": "Smallest surrounding circle of a region."
+    },
+    {
+      "name": "select_shape_proto",
+      "short": "Choose regions having a certain relation to each other."
+    },
+    {
+      "name": "region_features",
+      "short": "Calculate shape features of regions."
+    },
+    {
+      "name": "select_shape",
+      "short": "Choose regions with the aid of shape features."
+    },
+    {
+      "name": "runlength_features",
+      "short": "Characteristic values for runlength coding of regions."
+    },
+    {
+      "name": "find_neighbors",
+      "short": "Search direct neighbors."
+    },
+    {
+      "name": "moments_region_2nd_rel_invar",
+      "short": "Geometric moments of regions."
+    },
+    {
+      "name": "moments_region_2nd_invar",
+      "short": "Geometric moments of regions."
+    },
+    {
+      "name": "moments_region_2nd",
+      "short": "Calculate the geometric moments of regions."
+    },
+    {
+      "name": "diameter_region",
+      "short": "Maximal distance between two boundary points of a region."
+    },
+    {
+      "name": "test_region_point",
+      "short": "Test if the region contains a given point."
+    },
+    {
+      "name": "get_region_index",
+      "short": "Index of all regions containing a given pixel."
+    },
+    {
+      "name": "select_region_point",
+      "short": "Choose all regions containing a given pixel."
+    },
+    {
+      "name": "select_shape_std",
+      "short": "Select regions of a given shape."
+    },
+    {
+      "name": "hamming_distance_norm",
+      "short": "Hamming distance between two regions using normalization."
+    },
+    {
+      "name": "hamming_distance",
+      "short": "Hamming distance between two regions."
+    },
+    {
+      "name": "eccentricity",
+      "short": "Shape features derived from the ellipse parameters."
+    },
+    {
+      "name": "euler_number",
+      "short": "Calculate the Euler number."
+    },
+    {
+      "name": "orientation_region",
+      "short": "Orientation of a region."
+    },
+    {
+      "name": "elliptic_axis",
+      "short": "Calculate the parameters of the equivalent ellipse."
+    },
+    {
+      "name": "select_region_spatial",
+      "short": "Pose relation of regions."
+    },
+    {
+      "name": "spatial_relation",
+      "short": "Pose relation of regions with regard to  the coordinate axes."
+    },
+    {
+      "name": "convexity",
+      "short": "Shape factor for the convexity of a region."
+    },
+    {
+      "name": "contlength",
+      "short": "Contour length of a region."
+    },
+    {
+      "name": "connect_and_holes",
+      "short": "Number of connection components and holes"
+    },
+    {
+      "name": "rectangularity",
+      "short": "Shape factor for the rectangularity of a region."
+    },
+    {
+      "name": "compactness",
+      "short": "Shape factor for the compactness of a region."
+    },
+    {
+      "name": "circularity",
+      "short": "Shape factor for the circularity (similarity to a circle) of a region."
+    },
+    {
+      "name": "area_holes",
+      "short": "Compute the area of holes of regions."
+    },
+    {
+      "name": "area_center",
+      "short": "Area and center of regions."
+    },
+    {
+      "name": "runlength_distribution",
+      "short": "Distribution of runs needed for runlength encoding of a region."
+    },
+    {
+      "name": "roundness",
+      "short": "Shape factors from contour."
+    },
+    {
+      "name": "inner_rectangle1",
+      "short": "Largest inner rectangle of a region."
+    },
+    {
+      "name": "inner_circle",
+      "short": "Largest inner circle of a region."
+    },
+    {
+      "name": "height_width_ratio",
+      "short": "Compute the width, height, and aspect ratio of the surrounding"
+    },
+    {
+      "name": "test_region_points",
+      "short": "Test if points are contained in regions."
+    }
+  ]
+}

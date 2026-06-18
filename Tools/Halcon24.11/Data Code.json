@@ -1,0 +1,52 @@
+{
+  "通用": [
+    {
+      "name": "get_data_code_2d_objects",
+      "short": "Access iconic objects that were created during the search for"
+    },
+    {
+      "name": "get_data_code_2d_results",
+      "short": "Get the alphanumerical results that were accumulated during the"
+    },
+    {
+      "name": "find_data_code_2d",
+      "short": "Detect and read 2D data code symbols in an image or"
+    },
+    {
+      "name": "set_data_code_2d_param",
+      "short": "Set selected parameters of the 2D data code model."
+    },
+    {
+      "name": "get_data_code_2d_param",
+      "short": "Get one or several parameters that describe the 2D data code model."
+    },
+    {
+      "name": "query_data_code_2d_params",
+      "short": "Get for a given 2D data code model the names of the generic"
+    },
+    {
+      "name": "deserialize_data_code_2d_model",
+      "short": "Deserialize a serialized 2D data code model."
+    },
+    {
+      "name": "serialize_data_code_2d_model",
+      "short": "Serialize a 2D data code model."
+    },
+    {
+      "name": "read_data_code_2d_model",
+      "short": "Read a 2D data code model from a file and create a new model."
+    },
+    {
+      "name": "write_data_code_2d_model",
+      "short": "Writes a 2D data code model into a file."
+    },
+    {
+      "name": "clear_data_code_2d_model",
+      "short": "Delete a 2D data code model and free the allocated memory."
+    },
+    {
+      "name": "create_data_code_2d_model",
+      "short": "Create a model of a 2D data code class."
+    }
+  ]
+}

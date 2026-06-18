@@ -1,0 +1,84 @@
+{
+  "通用": [
+    {
+      "name": "receive_image",
+      "short": "Receive an image over a socket connection."
+    },
+    {
+      "name": "send_image",
+      "short": "Send an image over a socket connection."
+    },
+    {
+      "name": "receive_region",
+      "short": "Receive regions over a socket connection."
+    },
+    {
+      "name": "send_region",
+      "short": "Send regions over a socket connection."
+    },
+    {
+      "name": "receive_xld",
+      "short": "Receive an XLD object over a socket connection."
+    },
+    {
+      "name": "send_xld",
+      "short": "Send an XLD object over a socket connection."
+    },
+    {
+      "name": "receive_tuple",
+      "short": "Receive a tuple over a socket connection."
+    },
+    {
+      "name": "send_tuple",
+      "short": "Send a tuple over a socket connection."
+    },
+    {
+      "name": "receive_data",
+      "short": "Receive arbitrary data from external devices or applications using a"
+    },
+    {
+      "name": "send_data",
+      "short": "Send arbitrary data to external devices or applications using a"
+    },
+    {
+      "name": "get_socket_param",
+      "short": "Get the value of a socket parameter."
+    },
+    {
+      "name": "set_socket_param",
+      "short": "Set a socket parameter."
+    },
+    {
+      "name": "get_next_socket_data_type",
+      "short": "Determine the HALCON data type of the next socket data."
+    },
+    {
+      "name": "get_socket_descriptor",
+      "short": "Get the socket descriptor of a socket used by the operating system."
+    },
+    {
+      "name": "close_socket",
+      "short": "Close a socket."
+    },
+    {
+      "name": "socket_accept_connect",
+      "short": "Accept a connection request on a listening socket of the protocol type"
+    },
+    {
+      "name": "open_socket_connect",
+      "short": "Open a socket and connect it to an accepting socket."
+    },
+    {
+      "name": "open_socket_accept",
+      "short": "Open a socket that accepts connection requests."
+    },
+    {
+      "name": "receive_serialized_item",
+      "short": "Receive a serialized item over a socket connection."
+    },
+    {
+      "name": "send_serialized_item",
+      "short": "Send a serialized item over a socket connection."
+    }
+  ]
+}

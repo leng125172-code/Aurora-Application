@@ -1,0 +1,28 @@
+{
+  "通用": [
+    {
+      "name": "tuple_bnot",
+      "short": "Compute the bitwise not of a tuple."
+    },
+    {
+      "name": "tuple_bxor",
+      "short": "Compute the bitwise exclusive or of two tuples."
+    },
+    {
+      "name": "tuple_bor",
+      "short": "Compute the bitwise or of two tuples."
+    },
+    {
+      "name": "tuple_band",
+      "short": "Compute the bitwise and of two tuples."
+    },
+    {
+      "name": "tuple_rsh",
+      "short": "Shift a tuple bitwise to the right."
+    },
+    {
+      "name": "tuple_lsh",
+      "short": "Shift a tuple bitwise to the left."
+    }
+  ]
+}

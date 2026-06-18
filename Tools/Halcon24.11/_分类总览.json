@@ -1,0 +1,611 @@
+{
+  "version": "24.11",
+  "total_operators": 2312,
+  "total_primary": 151,
+  "categories": {
+    "XLD": {
+      "secondary_count": 1,
+      "operator_count": 108
+    },
+    "Transformations": {
+      "secondary_count": 1,
+      "operator_count": 155
+    },
+    "Geometric Transformations": {
+      "secondary_count": 1,
+      "operator_count": 26
+    },
+    "Creation": {
+      "secondary_count": 1,
+      "operator_count": 80
+    },
+    "Sets": {
+      "secondary_count": 1,
+      "operator_count": 19
+    },
+    "File": {
+      "secondary_count": 1,
+      "operator_count": 57
+    },
+    "Misc": {
+      "secondary_count": 1,
+      "operator_count": 30
+    },
+    "Features": {
+      "secondary_count": 1,
+      "operator_count": 137
+    },
+    "Access": {
+      "secondary_count": 1,
+      "operator_count": 35
+    },
+    "Legacy": {
+      "secondary_count": 1,
+      "operator_count": 218
+    },
+    "Graphics": {
+      "secondary_count": 1,
+      "operator_count": 190
+    },
+    "Output": {
+      "secondary_count": 1,
+      "operator_count": 16
+    },
+    "Filters": {
+      "secondary_count": 1,
+      "operator_count": 191
+    },
+    "Wiener Filter": {
+      "secondary_count": 1,
+      "operator_count": 6
+    },
+    "Inspection": {
+      "secondary_count": 1,
+      "operator_count": 54
+    },
+    "Variation Model": {
+      "secondary_count": 1,
+      "operator_count": 14
+    },
+    "Tools": {
+      "secondary_count": 1,
+      "operator_count": 165
+    },
+    "Tuple": {
+      "secondary_count": 1,
+      "operator_count": 172
+    },
+    "Type": {
+      "secondary_count": 1,
+      "operator_count": 16
+    },
+    "String Operations": {
+      "secondary_count": 1,
+      "operator_count": 17
+    },
+    "Arithmetic": {
+      "secondary_count": 1,
+      "operator_count": 94
+    },
+    "Selection": {
+      "secondary_count": 1,
+      "operator_count": 11
+    },
+    "Element Order": {
+      "secondary_count": 1,
+      "operator_count": 3
+    },
+    "Manipulation": {
+      "secondary_count": 1,
+      "operator_count": 20
+    },
+    "Comparison": {
+      "secondary_count": 1,
+      "operator_count": 12
+    },
+    "Logical Operations": {
+      "secondary_count": 1,
+      "operator_count": 4
+    },
+    "Bit Operations": {
+      "secondary_count": 1,
+      "operator_count": 6
+    },
+    "Conversion": {
+      "secondary_count": 1,
+      "operator_count": 11
+    },
+    "Poses": {
+      "secondary_count": 1,
+      "operator_count": 19
+    },
+    "Quaternions": {
+      "secondary_count": 1,
+      "operator_count": 9
+    },
+    "3D Transformations": {
+      "secondary_count": 1,
+      "operator_count": 20
+    },
+    "2D Transformations": {
+      "secondary_count": 1,
+      "operator_count": 33
+    },
+    "Mosaicking": {
+      "secondary_count": 1,
+      "operator_count": 10
+    },
+    "Interpolation": {
+      "secondary_count": 1,
+      "operator_count": 5
+    },
+    "System": {
+      "secondary_count": 1,
+      "operator_count": 141
+    },
+    "Operating System": {
+      "secondary_count": 1,
+      "operator_count": 4
+    },
+    "Compute Devices": {
+      "secondary_count": 1,
+      "operator_count": 11
+    },
+    "Serial": {
+      "secondary_count": 1,
+      "operator_count": 7
+    },
+    "Parameters": {
+      "secondary_count": 1,
+      "operator_count": 42
+    },
+    "Error Handling": {
+      "secondary_count": 1,
+      "operator_count": 7
+    },
+    "Database": {
+      "secondary_count": 1,
+      "operator_count": 3
+    },
+    "Sockets": {
+      "secondary_count": 1,
+      "operator_count": 20
+    },
+    "3D Reconstruction": {
+      "secondary_count": 1,
+      "operator_count": 65
+    },
+    "Binocular Stereo": {
+      "secondary_count": 1,
+      "operator_count": 24
+    },
+    "Calibration": {
+      "secondary_count": 1,
+      "operator_count": 63
+    },
+    "Binocular": {
+      "secondary_count": 1,
+      "operator_count": 1
+    },
+    "Sheet of Light": {
+      "secondary_count": 1,
+      "operator_count": 17
+    },
+    "Photometric Stereo": {
+      "secondary_count": 1,
+      "operator_count": 12
+    },
+    "Serialized Item": {
+      "secondary_count": 1,
+      "operator_count": 7
+    },
+    "3D Object Model": {
+      "secondary_count": 1,
+      "operator_count": 51
+    },
+    "Segmentation": {
+      "secondary_count": 1,
+      "operator_count": 71
+    },
+    "OCR": {
+      "secondary_count": 1,
+      "operator_count": 109
+    },
+    "Classification": {
+      "secondary_count": 1,
+      "operator_count": 129
+    },
+    "Threshold": {
+      "secondary_count": 1,
+      "operator_count": 14
+    },
+    "Regions": {
+      "secondary_count": 1,
+      "operator_count": 109
+    },
+    "Edges": {
+      "secondary_count": 1,
+      "operator_count": 27
+    },
+    "Region Growing": {
+      "secondary_count": 1,
+      "operator_count": 5
+    },
+    "Topography": {
+      "secondary_count": 1,
+      "operator_count": 14
+    },
+    "Image": {
+      "secondary_count": 1,
+      "operator_count": 107
+    },
+    "Multi-View Stereo": {
+      "secondary_count": 1,
+      "operator_count": 10
+    },
+    "Multithreading": {
+      "secondary_count": 1,
+      "operator_count": 38
+    },
+    "Parallelization": {
+      "secondary_count": 1,
+      "operator_count": 6
+    },
+    "Object": {
+      "secondary_count": 1,
+      "operator_count": 41
+    },
+    "Information": {
+      "secondary_count": 1,
+      "operator_count": 16
+    },
+    "Tests": {
+      "secondary_count": 1,
+      "operator_count": 4
+    },
+    "OCV": {
+      "secondary_count": 1,
+      "operator_count": 8
+    },
+    "K-Nearest Neighbors": {
+      "secondary_count": 1,
+      "operator_count": 29
+    },
+    "Neural Nets": {
+      "secondary_count": 1,
+      "operator_count": 44
+    },
+    "Support Vector Machines": {
+      "secondary_count": 1,
+      "operator_count": 42
+    },
+    "Lexica": {
+      "secondary_count": 1,
+      "operator_count": 6
+    },
+    "Training Files": {
+      "secondary_count": 1,
+      "operator_count": 9
+    },
+    "Format": {
+      "secondary_count": 1,
+      "operator_count": 10
+    },
+    "Morphology": {
+      "secondary_count": 1,
+      "operator_count": 62
+    },
+    "Region": {
+      "secondary_count": 1,
+      "operator_count": 27
+    },
+    "Gray Values": {
+      "secondary_count": 1,
+      "operator_count": 18
+    },
+    "2D Metrology": {
+      "secondary_count": 1,
+      "operator_count": 32
+    },
+    "1D Measuring": {
+      "secondary_count": 1,
+      "operator_count": 19
+    },
+    "Matrix": {
+      "secondary_count": 1,
+      "operator_count": 57
+    },
+    "Decomposition": {
+      "secondary_count": 1,
+      "operator_count": 3
+    },
+    "Eigenvalues": {
+      "secondary_count": 1,
+      "operator_count": 4
+    },
+    "Identification": {
+      "secondary_count": 1,
+      "operator_count": 44
+    },
+    "Matching": {
+      "secondary_count": 1,
+      "operator_count": 137
+    },
+    "Shape-Based": {
+      "secondary_count": 1,
+      "operator_count": 49
+    },
+    "Descriptor-Based": {
+      "secondary_count": 1,
+      "operator_count": 14
+    },
+    "Deformable": {
+      "secondary_count": 1,
+      "operator_count": 23
+    },
+    "Correlation-Based": {
+      "secondary_count": 1,
+      "operator_count": 14
+    },
+    "3D Matching": {
+      "secondary_count": 1,
+      "operator_count": 45
+    },
+    "Deformable Surface-Based": {
+      "secondary_count": 1,
+      "operator_count": 13
+    },
+    "Surface-Based": {
+      "secondary_count": 1,
+      "operator_count": 14
+    },
+    "Window": {
+      "secondary_count": 1,
+      "operator_count": 21
+    },
+    "Channel": {
+      "secondary_count": 1,
+      "operator_count": 17
+    },
+    "Domain": {
+      "secondary_count": 1,
+      "operator_count": 6
+    },
+    "Hough": {
+      "secondary_count": 1,
+      "operator_count": 7
+    },
+    "Grid Rectification": {
+      "secondary_count": 1,
+      "operator_count": 5
+    },
+    "Text": {
+      "secondary_count": 1,
+      "operator_count": 12
+    },
+    "3D Scene": {
+      "secondary_count": 1,
+      "operator_count": 20
+    },
+    "Mouse": {
+      "secondary_count": 1,
+      "operator_count": 11
+    },
+    "LUT": {
+      "secondary_count": 1,
+      "operator_count": 3
+    },
+    "Drawing": {
+      "secondary_count": 1,
+      "operator_count": 23
+    },
+    "Geometry": {
+      "secondary_count": 1,
+      "operator_count": 48
+    },
+    "Function": {
+      "secondary_count": 1,
+      "operator_count": 24
+    },
+    "Texture Inspection": {
+      "secondary_count": 1,
+      "operator_count": 18
+    },
+    "Smoothing": {
+      "secondary_count": 1,
+      "operator_count": 25
+    },
+    "Points": {
+      "secondary_count": 1,
+      "operator_count": 7
+    },
+    "Noise": {
+      "secondary_count": 1,
+      "operator_count": 5
+    },
+    "Inpainting": {
+      "secondary_count": 1,
+      "operator_count": 6
+    },
+    "Color": {
+      "secondary_count": 1,
+      "operator_count": 11
+    },
+    "Type Conversion": {
+      "secondary_count": 1,
+      "operator_count": 5
+    },
+    "Depth From Focus": {
+      "secondary_count": 1,
+      "operator_count": 2
+    },
+    "Scene Flow": {
+      "secondary_count": 1,
+      "operator_count": 2
+    },
+    "Optical Flow": {
+      "secondary_count": 1,
+      "operator_count": 4
+    },
+    "Match": {
+      "secondary_count": 1,
+      "operator_count": 4
+    },
+    "Lines": {
+      "secondary_count": 1,
+      "operator_count": 6
+    },
+    "FFT": {
+      "secondary_count": 1,
+      "operator_count": 31
+    },
+    "Enhancement": {
+      "secondary_count": 1,
+      "operator_count": 8
+    },
+    "Bit": {
+      "secondary_count": 1,
+      "operator_count": 8
+    },
+    "Images": {
+      "secondary_count": 1,
+      "operator_count": 9
+    },
+    "Data Code": {
+      "secondary_count": 1,
+      "operator_count": 12
+    },
+    "Gaussian Mixture Models": {
+      "secondary_count": 1,
+      "operator_count": 20
+    },
+    "Look-Up Table": {
+      "secondary_count": 1,
+      "operator_count": 5
+    },
+    "Self-Calibration": {
+      "secondary_count": 1,
+      "operator_count": 3
+    },
+    "Camera Parameters": {
+      "secondary_count": 1,
+      "operator_count": 6
+    },
+    "Rectification": {
+      "secondary_count": 1,
+      "operator_count": 9
+    },
+    "Hand-Eye": {
+      "secondary_count": 1,
+      "operator_count": 4
+    },
+    "Calibration Object": {
+      "secondary_count": 1,
+      "operator_count": 8
+    },
+    "Inverse Projection": {
+      "secondary_count": 1,
+      "operator_count": 1
+    },
+    "Projection": {
+      "secondary_count": 1,
+      "operator_count": 4
+    },
+    "Monocular": {
+      "secondary_count": 1,
+      "operator_count": 1
+    },
+    "Multi-View": {
+      "secondary_count": 1,
+      "operator_count": 26
+    },
+    "Bead Inspection": {
+      "secondary_count": 1,
+      "operator_count": 5
+    },
+    "Bar Code": {
+      "secondary_count": 1,
+      "operator_count": 15
+    },
+    "Background Estimator": {
+      "secondary_count": 1,
+      "operator_count": 7
+    },
+    "I/O Devices": {
+      "secondary_count": 1,
+      "operator_count": 15
+    },
+    "Acquisition": {
+      "secondary_count": 1,
+      "operator_count": 14
+    },
+    "Convolutional Neural Networks": {
+      "secondary_count": 1,
+      "operator_count": 9
+    },
+    "Dual Quaternions": {
+      "secondary_count": 1,
+      "operator_count": 11
+    },
+    "Maximally Stable Extremal Regions": {
+      "secondary_count": 1,
+      "operator_count": 1
+    },
+    "DL Classification": {
+      "secondary_count": 1,
+      "operator_count": 13
+    },
+    "Structured Light": {
+      "secondary_count": 1,
+      "operator_count": 12
+    },
+    "Deep Learning": {
+      "secondary_count": 1,
+      "operator_count": 60
+    },
+    "Model": {
+      "secondary_count": 1,
+      "operator_count": 15
+    },
+    "Data Containers": {
+      "secondary_count": 1,
+      "operator_count": 13
+    },
+    "Object Detection and Instance Segmentation": {
+      "secondary_count": 1,
+      "operator_count": 1
+    },
+    "3D Box": {
+      "secondary_count": 1,
+      "operator_count": 1
+    },
+    "Anomaly Detection and Global Context Anomaly Detection": {
+      "secondary_count": 1,
+      "operator_count": 1
+    },
+    "Deep OCR": {
+      "secondary_count": 1,
+      "operator_count": 6
+    },
+    "Framework": {
+      "secondary_count": 1,
+      "operator_count": 38
+    },
+    "Memory Block": {
+      "secondary_count": 1,
+      "operator_count": 6
+    },
+    "Encrypted Item": {
+      "secondary_count": 1,
+      "operator_count": 2
+    },
+    "Deep Counting": {
+      "secondary_count": 1,
+      "operator_count": 7
+    },
+    "Deep 3D Matching": {
+      "secondary_count": 1,
+      "operator_count": 5
+    }
+  }
+}

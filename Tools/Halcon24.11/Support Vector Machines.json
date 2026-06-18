@@ -1,0 +1,172 @@
+{
+  "通用": [
+    {
+      "name": "select_feature_set_trainf_svm_protected",
+      "short": "Select an optimal combination of features to classify OCR data"
+    },
+    {
+      "name": "select_feature_set_trainf_svm",
+      "short": "Selects an optimal combination of features to classify OCR  data."
+    },
+    {
+      "name": "clear_ocr_class_svm",
+      "short": "Clear an SVM-based OCR classifier."
+    },
+    {
+      "name": "deserialize_ocr_class_svm",
+      "short": "Deserialize a serialized SVM-based OCR classifier."
+    },
+    {
+      "name": "serialize_ocr_class_svm",
+      "short": "Serialize a SVM-based OCR classifier"
+    },
+    {
+      "name": "read_ocr_class_svm",
+      "short": "Read a SVM-based OCR classifier from a file."
+    },
+    {
+      "name": "write_ocr_class_svm",
+      "short": "Write an OCR classifier to a file."
+    },
+    {
+      "name": "get_features_ocr_class_svm",
+      "short": "Compute the features of a character."
+    },
+    {
+      "name": "do_ocr_word_svm",
+      "short": "Classify a related group of characters with an OCR classifier."
+    },
+    {
+      "name": "do_ocr_multi_class_svm",
+      "short": "Classify multiple characters with an SVM-based OCR classifier."
+    },
+    {
+      "name": "do_ocr_single_class_svm",
+      "short": "Classify a single character with an SVM-based OCR classifier."
+    },
+    {
+      "name": "reduce_ocr_class_svm",
+      "short": "Approximate a trained SVM-based OCR classifier by a reduced SVM."
+    },
+    {
+      "name": "trainf_ocr_class_svm_protected",
+      "short": "Train an OCR classifier with data from a (protected) training file."
+    },
+    {
+      "name": "trainf_ocr_class_svm",
+      "short": "Train an OCR classifier."
+    },
+    {
+      "name": "get_prep_info_ocr_class_svm",
+      "short": "Compute the information content of the preprocessed feature vectors"
+    },
+    {
+      "name": "get_support_vector_num_ocr_class_svm",
+      "short": "Return the number of support vectors of an OCR classifier."
+    },
+    {
+      "name": "get_support_vector_ocr_class_svm",
+      "short": "Return the index of a support vector from a trained OCR classifier that is"
+    },
+    {
+      "name": "get_params_ocr_class_svm",
+      "short": "Return the parameters of an OCR classifier."
+    },
+    {
+      "name": "create_ocr_class_svm",
+      "short": "Create an OCR classifier using a support vector machine."
+    },
+    {
+      "name": "get_class_train_data_svm",
+      "short": "Get the training data of a support vector machine (SVM)."
+    },
+    {
+      "name": "add_class_train_data_svm",
+      "short": "Add training data to a support vector machine (SVM)."
+    },
+    {
+      "name": "select_feature_set_svm",
+      "short": "Selects an optimal combination of features to classify the provided data."
+    },
+    {
+      "name": "clear_class_svm",
+      "short": "Clear a support vector machine."
+    },
+    {
+      "name": "clear_samples_class_svm",
+      "short": "Clear the training data of a support vector machine."
+    },
+    {
+      "name": "deserialize_class_svm",
+      "short": "Deserialize a serialized support vector machine (SVM)."
+    },
+    {
+      "name": "serialize_class_svm",
+      "short": "Serialize a support vector machine (SVM)."
+    },
+    {
+      "name": "read_class_svm",
+      "short": "Read a support vector machine from a file."
+    },
+    {
+      "name": "write_class_svm",
+      "short": "Write a support vector machine to a file."
+    },
+    {
+      "name": "read_samples_class_svm",
+      "short": "Read the training data of a support vector machine from a file."
+    },
+    {
+      "name": "write_samples_class_svm",
+      "short": "Write the training data of a support vector machine to a file."
+    },
+    {
+      "name": "evaluate_class_svm",
+      "short": "Evaluate a feature vector by a support vector machine."
+    },
+    {
+      "name": "classify_class_svm",
+      "short": "Classify a feature vector by a support vector machine."
+    },
+    {
+      "name": "reduce_class_svm",
+      "short": "Approximate a trained support vector machine by a reduced support"
+    },
+    {
+      "name": "train_class_svm",
+      "short": "Train a support vector machine."
+    },
+    {
+      "name": "get_prep_info_class_svm",
+      "short": "Compute the information content of the preprocessed feature vectors"
+    },
+    {
+      "name": "get_support_vector_num_class_svm",
+      "short": "Return the number of support vectors of a support vector machine."
+    },
+    {
+      "name": "get_support_vector_class_svm",
+      "short": "Return the index of a support vector from a trained support vector"
+    },
+    {
+      "name": "get_sample_num_class_svm",
+      "short": "Return the number of training samples stored in the training data of"
+    },
+    {
+      "name": "get_sample_class_svm",
+      "short": "Return a training sample from the training data of a support vector"
+    },
+    {
+      "name": "add_sample_class_svm",
+      "short": "Add a training sample to the training data of a support vector"
+    },
+    {
+      "name": "get_params_class_svm",
+      "short": "Return the parameters of a support vector machine."
+    },
+    {
+      "name": "create_class_svm",
+      "short": "Create a support vector machine for pattern classification."
+    }
+  ]
+}

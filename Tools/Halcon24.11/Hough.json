@@ -1,0 +1,32 @@
+{
+  "通用": [
+    {
+      "name": "hough_circles",
+      "short": "Detect centers of circles for a specific radius using the Hough transform."
+    },
+    {
+      "name": "hough_circle_trans",
+      "short": "Return the Hough-Transform for circles with a given radius."
+    },
+    {
+      "name": "hough_lines_dir",
+      "short": "Detect lines in edge images with the help of the Hough transform"
+    },
+    {
+      "name": "hough_line_trans_dir",
+      "short": "Compute the Hough transform for lines using local gradient direction."
+    },
+    {
+      "name": "hough_lines",
+      "short": "Detect lines in edge images with the help of the Hough transform and"
+    },
+    {
+      "name": "hough_line_trans",
+      "short": "Produce the Hough transform for lines within regions."
+    },
+    {
+      "name": "select_matching_lines",
+      "short": "Select those lines from a set of lines (in HNF) which"
+    }
+  ]
+}

@@ -1,0 +1,256 @@
+{
+  "通用": [
+    {
+      "name": "binocular_calibration",
+      "short": "Determine all camera parameters of a binocular stereo system."
+    },
+    {
+      "name": "radial_distortion_self_calibration",
+      "short": "Calibrate the radial distortion."
+    },
+    {
+      "name": "cam_par_to_cam_mat",
+      "short": "Compute a camera matrix from internal camera parameters."
+    },
+    {
+      "name": "cam_mat_to_cam_par",
+      "short": "Compute the internal camera parameters from a camera matrix."
+    },
+    {
+      "name": "stationary_camera_self_calibration",
+      "short": "Perform a self-calibration of a stationary projective camera."
+    },
+    {
+      "name": "radiometric_self_calibration",
+      "short": "Perform a radiometric self-calibration of a camera."
+    },
+    {
+      "name": "gen_radial_distortion_map",
+      "short": "Generate a projection map that describes the mapping of images corresponding"
+    },
+    {
+      "name": "gen_image_to_world_plane_map",
+      "short": "Generate a projection map that describes the mapping between the image"
+    },
+    {
+      "name": "image_to_world_plane",
+      "short": "Rectify an image by transforming it into the plane z=0 of a world"
+    },
+    {
+      "name": "contour_to_world_plane_xld",
+      "short": "Transform an XLD contour into the plane z=0 of a world coordinate system."
+    },
+    {
+      "name": "image_points_to_world_plane",
+      "short": "Transform image points into the plane z=0 of a world coordinate system."
+    },
+    {
+      "name": "hand_eye_calibration",
+      "short": "Perform a hand-eye calibration."
+    },
+    {
+      "name": "change_radial_distortion_contours_xld",
+      "short": "Change the radial distortion of contours."
+    },
+    {
+      "name": "change_radial_distortion_points",
+      "short": "Change the radial distortion of pixel coordinates."
+    },
+    {
+      "name": "change_radial_distortion_image",
+      "short": "Change the radial distortion of an image."
+    },
+    {
+      "name": "change_radial_distortion_cam_par",
+      "short": "Determine new camera parameters in accordance to the specified"
+    },
+    {
+      "name": "gen_caltab",
+      "short": "Generate a calibration plate description file and a corresponding"
+    },
+    {
+      "name": "create_caltab",
+      "short": "Generate a calibration plate description file and a corresponding"
+    },
+    {
+      "name": "caltab_points",
+      "short": "Read the mark center points from the calibration plate description file."
+    },
+    {
+      "name": "get_line_of_sight",
+      "short": "Compute the line of sight corresponding to a point in the image."
+    },
+    {
+      "name": "project_hom_point_hom_mat3d",
+      "short": "Project a homogeneous 3D point using a 3×4 projection matrix."
+    },
+    {
+      "name": "project_point_hom_mat3d",
+      "short": "Project a 3D point using a 3×4 projection matrix."
+    },
+    {
+      "name": "project_3d_point",
+      "short": "Project 3D points into (sub-)pixel image coordinates."
+    },
+    {
+      "name": "cam_par_pose_to_hom_mat3d",
+      "short": "Convert internal camera parameters and a 3D pose into a 3×4"
+    },
+    {
+      "name": "deserialize_cam_par",
+      "short": "  Deserialize the serialized internal camera parameters."
+    },
+    {
+      "name": "serialize_cam_par",
+      "short": "Serialize the internal camera parameters."
+    },
+    {
+      "name": "read_cam_par",
+      "short": "Read internal camera parameters from a file."
+    },
+    {
+      "name": "write_cam_par",
+      "short": "Write internal camera parameters into a file."
+    },
+    {
+      "name": "sim_caltab",
+      "short": "Simulate an image with calibration plate."
+    },
+    {
+      "name": "disp_caltab",
+      "short": "Project and visualize the 3D model of the calibration plate in the image."
+    },
+    {
+      "name": "camera_calibration",
+      "short": "Determine all camera parameters by a simultaneous minimization"
+    },
+    {
+      "name": "find_marks_and_pose",
+      "short": "Extract rectangularly arranged 2D calibration marks from the image and"
+    },
+    {
+      "name": "find_caltab",
+      "short": "Segment the region of a standard calibration plate with rectangularly"
+    },
+    {
+      "name": "clear_camera_setup_model",
+      "short": "Free the memory of a calibration setup model."
+    },
+    {
+      "name": "serialize_camera_setup_model",
+      "short": "Serialize a camera setup model."
+    },
+    {
+      "name": "deserialize_camera_setup_model",
+      "short": "Deserialize a serialized camera setup model."
+    },
+    {
+      "name": "write_camera_setup_model",
+      "short": "Store a camera setup model into a file."
+    },
+    {
+      "name": "read_camera_setup_model",
+      "short": "Restore a camera setup model from a file."
+    },
+    {
+      "name": "get_camera_setup_param",
+      "short": "Get generic camera setup model parameters."
+    },
+    {
+      "name": "set_camera_setup_param",
+      "short": "Set generic camera setup model parameters."
+    },
+    {
+      "name": "set_camera_setup_cam_param",
+      "short": "Define type, parameters, and relative pose of a camera in a camera setup"
+    },
+    {
+      "name": "create_camera_setup_model",
+      "short": "Create a model for a setup of calibrated cameras."
+    },
+    {
+      "name": "clear_calib_data",
+      "short": "Free the memory of a calibration data model."
+    },
+    {
+      "name": "deserialize_calib_data",
+      "short": "Deserialize a serialized calibration data model."
+    },
+    {
+      "name": "serialize_calib_data",
+      "short": "Serialize a calibration data model."
+    },
+    {
+      "name": "read_calib_data",
+      "short": "Restore a calibration data model from a file."
+    },
+    {
+      "name": "write_calib_data",
+      "short": "Store a calibration data model into a file."
+    },
+    {
+      "name": "calibrate_hand_eye",
+      "short": "Perform a hand-eye calibration."
+    },
+    {
+      "name": "calibrate_cameras",
+      "short": "Determine all camera parameters by a simultaneous minimization"
+    },
+    {
+      "name": "remove_calib_data",
+      "short": "Remove a data set from a calibration data model."
+    },
+    {
+      "name": "set_calib_data",
+      "short": "Set data in a calibration data model."
+    },
+    {
+      "name": "find_calib_object",
+      "short": "Find the HALCON calibration plate and set the extracted points and"
+    },
+    {
+      "name": "remove_calib_data_observ",
+      "short": "Remove observation data from a calibration data model."
+    },
+    {
+      "name": "get_calib_data_observ_contours",
+      "short": "Get contour-based observation data from a calibration data model."
+    },
+    {
+      "name": "get_calib_data_observ_pose",
+      "short": "Get observed calibration object poses from a calibration data model."
+    },
+    {
+      "name": "set_calib_data_observ_pose",
+      "short": "Set observed calibration object poses in a calibration data model."
+    },
+    {
+      "name": "get_calib_data_observ_points",
+      "short": "Get point-based observation data from a calibration data model."
+    },
+    {
+      "name": "set_calib_data_observ_points",
+      "short": "Set point-based observation data in a calibration data model."
+    },
+    {
+      "name": "query_calib_data_observ_indices",
+      "short": "Query information about the relations between cameras, calibration objects,"
+    },
+    {
+      "name": "get_calib_data",
+      "short": "Query data stored or computed in a calibration data model."
+    },
+    {
+      "name": "set_calib_data_calib_object",
+      "short": "Define a calibration object in a calibration model."
+    },
+    {
+      "name": "set_calib_data_cam_param",
+      "short": "Set type and initial parameters of a camera in a calibration data"
+    },
+    {
+      "name": "create_calib_data",
+      "short": "Create a HALCON calibration data model."
+    }
+  ]
+}

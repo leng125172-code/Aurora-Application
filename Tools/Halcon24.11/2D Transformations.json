@@ -1,0 +1,136 @@
+{
+  "通用": [
+    {
+      "name": "deserialize_hom_mat2d",
+      "short": "Deserialize a serialized homogeneous 2D transformation matrix."
+    },
+    {
+      "name": "serialize_hom_mat2d",
+      "short": "Serialize a homogeneous 2D transformation matrix."
+    },
+    {
+      "name": "hom_mat3d_project",
+      "short": "Project an affine 3D transformation matrix to a 2D projective"
+    },
+    {
+      "name": "vector_to_proj_hom_mat2d_distortion",
+      "short": "Compute a projective transformation matrix and the radial distortion"
+    },
+    {
+      "name": "hom_vector_to_proj_hom_mat2d",
+      "short": "Compute a homogeneous transformation matrix using given point"
+    },
+    {
+      "name": "vector_to_proj_hom_mat2d",
+      "short": "Compute a projective transformation matrix using given point"
+    },
+    {
+      "name": "hom_mat2d_to_affine_par",
+      "short": "Compute the affine transformation parameters from a homogeneous 2D"
+    },
+    {
+      "name": "vector_angle_to_rigid",
+      "short": "Compute a rigid affine transformation from points and angles."
+    },
+    {
+      "name": "point_line_to_hom_mat2d",
+      "short": "Approximate an affine transformation from point-to-line correspondences."
+    },
+    {
+      "name": "vector_to_rigid",
+      "short": "Approximate a rigid affine transformation from point correspondences."
+    },
+    {
+      "name": "vector_to_similarity",
+      "short": "Approximate an similarity transformation from point correspondences."
+    },
+    {
+      "name": "vector_to_aniso",
+      "short": "Approximate an anisotropic similarity transformation from point"
+    },
+    {
+      "name": "vector_to_hom_mat2d",
+      "short": "Approximate an affine transformation from point correspondences."
+    },
+    {
+      "name": "projective_trans_pixel",
+      "short": "Project pixel coordinates using a homogeneous projective"
+    },
+    {
+      "name": "projective_trans_point_2d",
+      "short": "Project a homogeneous 2D point using a projective transformation"
+    },
+    {
+      "name": "affine_trans_pixel",
+      "short": "Apply an arbitrary affine 2D transformation to pixel coordinates."
+    },
+    {
+      "name": "affine_trans_point_2d",
+      "short": "Apply an arbitrary affine 2D transformation to points."
+    },
+    {
+      "name": "hom_mat2d_determinant",
+      "short": "Compute the determinant of a homogeneous 2D transformation matrix."
+    },
+    {
+      "name": "hom_mat2d_transpose",
+      "short": "Transpose a homogeneous 2D transformation matrix."
+    },
+    {
+      "name": "hom_mat2d_invert",
+      "short": "Invert a homogeneous 2D transformation matrix."
+    },
+    {
+      "name": "hom_mat2d_compose",
+      "short": "Multiply two homogeneous 2D transformation matrices."
+    },
+    {
+      "name": "hom_mat2d_reflect_local",
+      "short": "Add a reflection to a homogeneous 2D transformation matrix."
+    },
+    {
+      "name": "hom_mat2d_reflect",
+      "short": "Add a reflection to a homogeneous 2D transformation matrix."
+    },
+    {
+      "name": "hom_mat2d_slant_local",
+      "short": "Add a slant to a homogeneous 2D transformation matrix."
+    },
+    {
+      "name": "hom_mat2d_slant",
+      "short": "Add a slant to a homogeneous 2D transformation matrix."
+    },
+    {
+      "name": "hom_mat2d_rotate_local",
+      "short": "Add a rotation to a homogeneous 2D transformation matrix."
+    },
+    {
+      "name": "hom_mat2d_rotate",
+      "short": "Add a rotation to a homogeneous 2D transformation matrix."
+    },
+    {
+      "name": "hom_mat2d_scale_local",
+      "short": "Add a scaling to a homogeneous 2D transformation matrix."
+    },
+    {
+      "name": "hom_mat2d_scale",
+      "short": "Add a scaling to a homogeneous 2D transformation matrix."
+    },
+    {
+      "name": "hom_mat2d_translate_local",
+      "short": "Add a translation to a homogeneous 2D transformation matrix."
+    },
+    {
+      "name": "hom_mat2d_translate",
+      "short": "Add a translation to a homogeneous 2D transformation matrix."
+    },
+    {
+      "name": "hom_mat2d_identity",
+      "short": "Generate the homogeneous transformation matrix of the identical 2D"
+    },
+    {
+      "name": "vector_field_to_hom_mat2d",
+      "short": "Approximate an affine map from a displacement vector field."
+    }
+  ]
+}

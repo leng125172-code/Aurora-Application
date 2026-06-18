@@ -1,0 +1,52 @@
+{
+  "通用": [
+    {
+      "name": "shade_height_field",
+      "short": "Shade a height field."
+    },
+    {
+      "name": "estimate_al_am",
+      "short": "Estimate the albedo of a surface and the amount of ambient light."
+    },
+    {
+      "name": "estimate_sl_al_zc",
+      "short": "Estimate the slant of a light source and the albedo of a surface."
+    },
+    {
+      "name": "estimate_sl_al_lr",
+      "short": "Estimate the slant of a light source and the albedo of a surface."
+    },
+    {
+      "name": "estimate_tilt_zc",
+      "short": "Estimate the tilt of a light source."
+    },
+    {
+      "name": "estimate_tilt_lr",
+      "short": "Estimate the tilt of a light source."
+    },
+    {
+      "name": "reconstruct_height_field_from_gradient",
+      "short": "Reconstruct a surface from surface gradients."
+    },
+    {
+      "name": "photometric_stereo",
+      "short": "Reconstruct a surface according to the photometric stereo technique."
+    },
+    {
+      "name": "sfs_pentland",
+      "short": "Reconstruct a surface from a gray value image."
+    },
+    {
+      "name": "sfs_orig_lr",
+      "short": "Reconstruct a surface from a gray value image."
+    },
+    {
+      "name": "sfs_mod_lr",
+      "short": "Reconstruct a surface from a gray value image."
+    },
+    {
+      "name": "uncalibrated_photometric_stereo",
+      "short": "Reconstruct a surface from several, differently illuminated images."
+    }
+  ]
+}

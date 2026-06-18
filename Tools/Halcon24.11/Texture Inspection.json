@@ -1,0 +1,76 @@
+{
+  "通用": [
+    {
+      "name": "texture_laws",
+      "short": "Filter an image using a Laws texture filter."
+    },
+    {
+      "name": "deviation_image",
+      "short": "Calculate the standard deviation of gray values within rectangular windows."
+    },
+    {
+      "name": "entropy_image",
+      "short": "Calculate the entropy of gray values within a rectangular window."
+    },
+    {
+      "name": "add_texture_inspection_model_image",
+      "short": "Add training images to the texture inspection model."
+    },
+    {
+      "name": "apply_texture_inspection_model",
+      "short": "Inspection of the texture within an image."
+    },
+    {
+      "name": "clear_texture_inspection_model",
+      "short": "Clear a texture inspection model and free the allocated memory."
+    },
+    {
+      "name": "clear_texture_inspection_result",
+      "short": "Clear a texture inspection result handle and free the allocated memory."
+    },
+    {
+      "name": "create_texture_inspection_model",
+      "short": "Create a texture inspection model."
+    },
+    {
+      "name": "deserialize_texture_inspection_model",
+      "short": "Deserialize a serialized texture inspection model."
+    },
+    {
+      "name": "get_texture_inspection_model_image",
+      "short": "Get the training images contained in a texture inspection model."
+    },
+    {
+      "name": "get_texture_inspection_model_param",
+      "short": "Query parameters of a texture inspection model."
+    },
+    {
+      "name": "get_texture_inspection_result_object",
+      "short": "Query iconic results of a texture inspection."
+    },
+    {
+      "name": "read_texture_inspection_model",
+      "short": "Read a texture inspection model from a file."
+    },
+    {
+      "name": "remove_texture_inspection_model_image",
+      "short": "Clear all or a user-defined subset of the images of a"
+    },
+    {
+      "name": "serialize_texture_inspection_model",
+      "short": "Serialize a texture inspection model."
+    },
+    {
+      "name": "set_texture_inspection_model_param",
+      "short": "Set parameters of a texture inspection model."
+    },
+    {
+      "name": "train_texture_inspection_model",
+      "short": "Train a texture inspection model."
+    },
+    {
+      "name": "write_texture_inspection_model",
+      "short": "Write a texture inspection model to a file."
+    }
+  ]
+}

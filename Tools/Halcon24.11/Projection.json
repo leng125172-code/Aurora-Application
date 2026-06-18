@@ -1,0 +1,20 @@
+{
+  "通用": [
+    {
+      "name": "project_hom_point_hom_mat3d",
+      "short": "Project a homogeneous 3D point using a 3×4 projection matrix."
+    },
+    {
+      "name": "project_point_hom_mat3d",
+      "short": "Project a 3D point using a 3×4 projection matrix."
+    },
+    {
+      "name": "project_3d_point",
+      "short": "Project 3D points into (sub-)pixel image coordinates."
+    },
+    {
+      "name": "cam_par_pose_to_hom_mat3d",
+      "short": "Convert internal camera parameters and a 3D pose into a 3×4"
+    }
+  ]
+}

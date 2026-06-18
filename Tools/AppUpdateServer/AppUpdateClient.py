@@ -189,7 +189,7 @@ def publish_project(project_name: str, index: int, total: int) -> None:
         "publish",
         str(csproj),
         "-c",
-        "Release",
+        "Debug",
         "-r",
         RUNTIME,
         "--self-contained",
@@ -626,7 +626,7 @@ def main() -> None:
         print("  模式       : 仅同步（跳过 dotnet publish）")
     else:
         print(f"  发布项目   : {', '.join(projects)}")
-        print(f"  运行时     : {RUNTIME} / {FRAMEWORK} / Release / self-contained")
+        print(f"  运行时     : {RUNTIME} / {FRAMEWORK} / Debug / self-contained")
     print(f"  上传线程   : {args.workers}  分块大小: {args.chunk_mb} MB")
     print("=" * 60)
 

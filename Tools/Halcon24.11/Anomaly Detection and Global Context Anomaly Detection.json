@@ -1,0 +1,8 @@
+{
+  "通用": [
+    {
+      "name": "train_dl_model_anomaly_dataset",
+      "short": "Train a deep learning model for anomaly detection."
+    }
+  ]
+}

@@ -1,0 +1,68 @@
+{
+  "通用": [
+    {
+      "name": "compare_obj",
+      "short": "Compare iconic objects regarding equality."
+    },
+    {
+      "name": "test_equal_obj",
+      "short": "Compare image objects regarding equality."
+    },
+    {
+      "name": "count_obj",
+      "short": "Number of objects in a tuple."
+    },
+    {
+      "name": "get_channel_info",
+      "short": "Information about the components of an image object."
+    },
+    {
+      "name": "get_obj_class",
+      "short": "Name of the class of an image object."
+    },
+    {
+      "name": "query_operator_info",
+      "short": "Query slots concerning information with relation to the operator get_operator_info."
+    },
+    {
+      "name": "query_param_info",
+      "short": "Query slots of the online-information concerning the operator get_param_info."
+    },
+    {
+      "name": "get_operator_name",
+      "short": "Get operators with the given string as a substring of their name."
+    },
+    {
+      "name": "get_param_types",
+      "short": "Get default data type for the control parameters of a HALCON-operator."
+    },
+    {
+      "name": "get_param_num",
+      "short": "Get number of the different parameter classes of a HALCON-operator."
+    },
+    {
+      "name": "get_param_names",
+      "short": "Get the names of the parameters of a HALCON-operator."
+    },
+    {
+      "name": "get_operator_info",
+      "short": "Get information concerning a HALCON-operator."
+    },
+    {
+      "name": "get_param_info",
+      "short": "Get information concerning the operator parameters."
+    },
+    {
+      "name": "search_operator",
+      "short": "Search names of all operators assigned to one keyword."
+    },
+    {
+      "name": "get_keywords",
+      "short": "Get keywords which are assigned to operators."
+    },
+    {
+      "name": "get_chapter_info",
+      "short": "Get information concerning the chapters on operators."
+    }
+  ]
+}

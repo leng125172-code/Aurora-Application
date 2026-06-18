@@ -1,0 +1,12 @@
+{
+  "通用": [
+    {
+      "name": "select_grayvalues_from_channels",
+      "short": "Selection of gray values of a multi-channel image using an index image."
+    },
+    {
+      "name": "depth_from_focus",
+      "short": "Extract depth using multiple focus levels."
+    }
+  ]
+}

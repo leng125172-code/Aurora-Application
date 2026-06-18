@@ -1,0 +1,692 @@
+{
+  "通用": [
+    {
+      "name": "tuple_union",
+      "short": "Compute the union set of two input tuples."
+    },
+    {
+      "name": "tuple_intersection",
+      "short": "Compute the intersection set of two input tuples."
+    },
+    {
+      "name": "tuple_difference",
+      "short": "Compute the difference set of two input tuples."
+    },
+    {
+      "name": "tuple_symmdiff",
+      "short": "Compute the symmetric difference set of two input tuples."
+    },
+    {
+      "name": "tuple_is_string_elem",
+      "short": "Test whether the types of the elements of a tuple are of type"
+    },
+    {
+      "name": "tuple_is_real_elem",
+      "short": "Test whether the types of the elements of a tuple are of type real."
+    },
+    {
+      "name": "tuple_is_int_elem",
+      "short": "Test whether the types of the elements of a tuple are of type"
+    },
+    {
+      "name": "tuple_type_elem",
+      "short": "Return the types of the elements of a tuple."
+    },
+    {
+      "name": "tuple_is_mixed",
+      "short": "Test whether a tuple is of type mixed."
+    },
+    {
+      "name": "tuple_is_string",
+      "short": "Test if the internal representation of a tuple is of type string."
+    },
+    {
+      "name": "tuple_is_real",
+      "short": "Test if the internal representation of a tuple is of type real."
+    },
+    {
+      "name": "tuple_is_int",
+      "short": "Test if the internal representation of a tuple is of type integer."
+    },
+    {
+      "name": "tuple_type",
+      "short": "Return the type of a tuple."
+    },
+    {
+      "name": "tuple_histo_range",
+      "short": "Calculate the value distribution of a tuple within a certain value range."
+    },
+    {
+      "name": "tuple_regexp_select",
+      "short": "Select tuple elements matching a regular expression."
+    },
+    {
+      "name": "tuple_regexp_test",
+      "short": "Test if a string matches a regular expression."
+    },
+    {
+      "name": "tuple_regexp_replace",
+      "short": "Replace a substring using regular expressions."
+    },
+    {
+      "name": "tuple_regexp_match",
+      "short": "Extract substrings using regular expressions."
+    },
+    {
+      "name": "tuple_rand",
+      "short": "Return a tuple of random numbers between 0 and 1."
+    },
+    {
+      "name": "tuple_length",
+      "short": "Return the number of elements of a tuple."
+    },
+    {
+      "name": "tuple_sgn",
+      "short": "Calculate the sign of a tuple."
+    },
+    {
+      "name": "tuple_max2",
+      "short": "Calculate the elementwise maximum of two tuples."
+    },
+    {
+      "name": "tuple_min2",
+      "short": "Calculate the elementwise minimum of two tuples."
+    },
+    {
+      "name": "tuple_max",
+      "short": "Return the maximal element of a tuple."
+    },
+    {
+      "name": "tuple_min",
+      "short": "Return the minimal element of a tuple."
+    },
+    {
+      "name": "tuple_cumul",
+      "short": "Calculate the cumulative sums of a tuple."
+    },
+    {
+      "name": "tuple_select_rank",
+      "short": "Select the element of rank n of a tuple."
+    },
+    {
+      "name": "tuple_median",
+      "short": "Return the median of the elements of a tuple."
+    },
+    {
+      "name": "tuple_sum",
+      "short": "Return the sum of all elements of a tuple."
+    },
+    {
+      "name": "tuple_mean",
+      "short": "Return the mean value of a tuple of numbers."
+    },
+    {
+      "name": "tuple_deviation",
+      "short": "Return the standard deviation of the elements of a tuple."
+    },
+    {
+      "name": "tuple_uniq",
+      "short": "Discard all but one of successive identical elements of a tuple."
+    },
+    {
+      "name": "tuple_find_last",
+      "short": "Return the index of the last occurrence of a tuple within another tuple."
+    },
+    {
+      "name": "tuple_find_first",
+      "short": "Return the index of the first occurrence of a tuple within another tuple."
+    },
+    {
+      "name": "tuple_find",
+      "short": "Return the indices of all occurrences of a tuple within another tuple."
+    },
+    {
+      "name": "tuple_sort_index",
+      "short": "Sort the elements of a tuple and return the indices of the sorted tuple."
+    },
+    {
+      "name": "tuple_sort",
+      "short": "Sort the elements of a tuple in ascending order."
+    },
+    {
+      "name": "tuple_inverse",
+      "short": "Invert a tuple."
+    },
+    {
+      "name": "tuple_concat",
+      "short": "Concatenate two tuples to a new one."
+    },
+    {
+      "name": "tuple_select_range",
+      "short": "Select several elements of a tuple."
+    },
+    {
+      "name": "tuple_last_n",
+      "short": "Select all elements from index \"n\" to the end of a tuple."
+    },
+    {
+      "name": "tuple_first_n",
+      "short": "Select the first elements of a tuple up to the index \"n\"."
+    },
+    {
+      "name": "tuple_insert",
+      "short": "Inserts one or more elements into a tuple at index."
+    },
+    {
+      "name": "tuple_replace",
+      "short": "Replaces one or more elements of a tuple."
+    },
+    {
+      "name": "tuple_remove",
+      "short": "Remove elements from a tuple."
+    },
+    {
+      "name": "tuple_select_mask",
+      "short": "Select in mask specified elements of a tuple."
+    },
+    {
+      "name": "tuple_select",
+      "short": "Select single elements of a tuple."
+    },
+    {
+      "name": "tuple_str_bit_select",
+      "short": "Select single character or bit from a tuple."
+    },
+    {
+      "name": "tuple_gen_sequence",
+      "short": "Generate a tuple with a sequence of equidistant values."
+    },
+    {
+      "name": "tuple_gen_const",
+      "short": "Generate a tuple of a specific length and initialize its elements."
+    },
+    {
+      "name": "tuple_environment",
+      "short": "Read one or more environment variables."
+    },
+    {
+      "name": "tuple_split",
+      "short": "Split strings into substrings using predefined separator symbol(s)."
+    },
+    {
+      "name": "tuple_substr",
+      "short": "Cut characters from position \"n1\" through \"n2\" out of a string tuple."
+    },
+    {
+      "name": "tuple_str_last_n",
+      "short": "Cut all characters starting at position \"n\" out of a string tuple."
+    },
+    {
+      "name": "tuple_str_first_n",
+      "short": "Cut the first characters up to position \"n\" out of a string tuple."
+    },
+    {
+      "name": "tuple_strrchr",
+      "short": "Backward search for characters within a string tuple."
+    },
+    {
+      "name": "tuple_strchr",
+      "short": "Forward search for characters within a string tuple."
+    },
+    {
+      "name": "tuple_strrstr",
+      "short": "Backward search for strings within a string tuple."
+    },
+    {
+      "name": "tuple_strstr",
+      "short": "Forward search for strings within a string tuple."
+    },
+    {
+      "name": "tuple_strlen",
+      "short": "Determine the length of every string within a tuple of strings."
+    },
+    {
+      "name": "tuple_less_equal_elem",
+      "short": "Test, whether a tuple is elementwise less or equal to another tuple."
+    },
+    {
+      "name": "tuple_less_elem",
+      "short": "Test, whether a tuple is elementwise less than another tuple."
+    },
+    {
+      "name": "tuple_greater_equal_elem",
+      "short": "Test, whether a tuple is elementwise greater or equal to another tuple."
+    },
+    {
+      "name": "tuple_greater_elem",
+      "short": "Test, whether a tuple is elementwise greater than another tuple."
+    },
+    {
+      "name": "tuple_not_equal_elem",
+      "short": "Test, whether two tuples are elementwise not equal."
+    },
+    {
+      "name": "tuple_equal_elem",
+      "short": "Test, whether two tuples are elementwise equal."
+    },
+    {
+      "name": "tuple_less_equal",
+      "short": "Test whether a tuple is less or equal to another tuple."
+    },
+    {
+      "name": "tuple_less",
+      "short": "Test whether a tuple is less than another tuple."
+    },
+    {
+      "name": "tuple_greater_equal",
+      "short": "Test whether a tuple is greater or equal to another tuple."
+    },
+    {
+      "name": "tuple_greater",
+      "short": "Test whether a tuple is greater than another tuple."
+    },
+    {
+      "name": "tuple_not_equal",
+      "short": "Test whether two tuples are not equal."
+    },
+    {
+      "name": "tuple_equal",
+      "short": "Test whether two tuples are equal."
+    },
+    {
+      "name": "tuple_not",
+      "short": "Compute the logical not of a tuple."
+    },
+    {
+      "name": "tuple_xor",
+      "short": "Compute the logical exclusive or of two tuples."
+    },
+    {
+      "name": "tuple_or",
+      "short": "Compute the logical or of two tuples."
+    },
+    {
+      "name": "tuple_and",
+      "short": "Compute the logical and of two tuples."
+    },
+    {
+      "name": "tuple_bnot",
+      "short": "Compute the bitwise not of a tuple."
+    },
+    {
+      "name": "tuple_bxor",
+      "short": "Compute the bitwise exclusive or of two tuples."
+    },
+    {
+      "name": "tuple_bor",
+      "short": "Compute the bitwise or of two tuples."
+    },
+    {
+      "name": "tuple_band",
+      "short": "Compute the bitwise and of two tuples."
+    },
+    {
+      "name": "tuple_rsh",
+      "short": "Shift a tuple bitwise to the right."
+    },
+    {
+      "name": "tuple_lsh",
+      "short": "Shift a tuple bitwise to the left."
+    },
+    {
+      "name": "tuple_chrt",
+      "short": "Convert a tuple of integer numbers into strings."
+    },
+    {
+      "name": "tuple_ords",
+      "short": "Convert a tuple of strings into a tuple of integer numbers."
+    },
+    {
+      "name": "tuple_chr",
+      "short": "Convert a tuple of integer numbers into strings."
+    },
+    {
+      "name": "tuple_ord",
+      "short": "Convert a tuple of strings of length 1 into a tuple of integer numbers."
+    },
+    {
+      "name": "tuple_string",
+      "short": "Convert a tuple into a tuple of strings."
+    },
+    {
+      "name": "tuple_is_number",
+      "short": "Check a tuple (of strings) whether it represents numbers."
+    },
+    {
+      "name": "tuple_number",
+      "short": "Convert a tuple (of strings) into a tuple of numbers."
+    },
+    {
+      "name": "tuple_round",
+      "short": "Convert a tuple into a tuple of integer numbers."
+    },
+    {
+      "name": "tuple_int",
+      "short": "Convert a tuple into a tuple of integer numbers."
+    },
+    {
+      "name": "tuple_real",
+      "short": "Convert a tuple into a tuple of floating point numbers."
+    },
+    {
+      "name": "tuple_ldexp",
+      "short": "Calculate the ldexp function of two tuples."
+    },
+    {
+      "name": "tuple_fmod",
+      "short": "Calculate the remainder of the floating point division of two tuples."
+    },
+    {
+      "name": "tuple_mod",
+      "short": "Calculate the remainder of the integer division of two tuples."
+    },
+    {
+      "name": "tuple_ceil",
+      "short": "Compute the ceiling function of a tuple."
+    },
+    {
+      "name": "tuple_floor",
+      "short": "Compute the floor function of a tuple."
+    },
+    {
+      "name": "tuple_pow",
+      "short": "Calculate the power function of two tuples."
+    },
+    {
+      "name": "tuple_log10",
+      "short": "Compute the base 10 logarithm of a tuple."
+    },
+    {
+      "name": "tuple_log",
+      "short": "Compute the natural logarithm of a tuple."
+    },
+    {
+      "name": "tuple_exp",
+      "short": "Compute the exponential of a tuple."
+    },
+    {
+      "name": "tuple_tanh",
+      "short": "Compute the hyperbolic tangent of a tuple."
+    },
+    {
+      "name": "tuple_cosh",
+      "short": "Compute the hyperbolic cosine of a tuple."
+    },
+    {
+      "name": "tuple_sinh",
+      "short": "Compute the hyperbolic sine of a tuple."
+    },
+    {
+      "name": "tuple_rad",
+      "short": "Convert a tuple from degrees to radians."
+    },
+    {
+      "name": "tuple_deg",
+      "short": "Convert a tuple from radians to degrees."
+    },
+    {
+      "name": "tuple_atan2",
+      "short": "Compute the arctangent of a tuple for all four quadrants."
+    },
+    {
+      "name": "tuple_atan",
+      "short": "Compute the arctangent of a tuple."
+    },
+    {
+      "name": "tuple_acos",
+      "short": "Compute the arccosine of a tuple."
+    },
+    {
+      "name": "tuple_asin",
+      "short": "Compute the arcsine of a tuple."
+    },
+    {
+      "name": "tuple_tan",
+      "short": "Compute the tangent of a tuple."
+    },
+    {
+      "name": "tuple_cos",
+      "short": "Compute the cosine of a tuple."
+    },
+    {
+      "name": "tuple_sin",
+      "short": "Compute the sine of a tuple."
+    },
+    {
+      "name": "tuple_fabs",
+      "short": "Compute the absolute value of a tuple (as floating point numbers)."
+    },
+    {
+      "name": "tuple_sqrt",
+      "short": "Compute the square root of a tuple."
+    },
+    {
+      "name": "tuple_abs",
+      "short": "Compute the absolute value of a tuple."
+    },
+    {
+      "name": "tuple_neg",
+      "short": "Negate a tuple."
+    },
+    {
+      "name": "tuple_div",
+      "short": "Divide two tuples."
+    },
+    {
+      "name": "tuple_mult",
+      "short": "Multiply two tuples."
+    },
+    {
+      "name": "tuple_sub",
+      "short": "Subtract two tuples."
+    },
+    {
+      "name": "tuple_add",
+      "short": "Add two tuples."
+    },
+    {
+      "name": "deserialize_tuple",
+      "short": "  Deserialize a serialized tuple."
+    },
+    {
+      "name": "serialize_tuple",
+      "short": "Serialize a tuple."
+    },
+    {
+      "name": "write_tuple",
+      "short": "Write a tuple to a file."
+    },
+    {
+      "name": "read_tuple",
+      "short": "Read a tuple from a file."
+    },
+    {
+      "name": "clear_handle",
+      "short": "Clear the content of a handle."
+    },
+    {
+      "name": "deserialize_handle",
+      "short": "Deserialize a serialized item."
+    },
+    {
+      "name": "handle_to_integer",
+      "short": "Convert a handle into an integer."
+    },
+    {
+      "name": "integer_to_handle",
+      "short": "Convert an integer into a handle."
+    },
+    {
+      "name": "serialize_handle",
+      "short": "Serialize the content of a handle."
+    },
+    {
+      "name": "tuple_is_handle",
+      "short": "Test if the internal representation of a tuple is of type handle."
+    },
+    {
+      "name": "tuple_is_handle_elem",
+      "short": "Test whether the elements of a tuple are of type handle."
+    },
+    {
+      "name": "tuple_is_serializable",
+      "short": "Test if a tuple is serializable."
+    },
+    {
+      "name": "tuple_is_serializable_elem",
+      "short": "Test if the elements of a tuple are serializable."
+    },
+    {
+      "name": "tuple_is_valid_handle",
+      "short": "Check if a handle is valid."
+    },
+    {
+      "name": "tuple_sem_type",
+      "short": "Return the semantic type of a tuple."
+    },
+    {
+      "name": "tuple_sem_type_elem",
+      "short": "Return the semantic type of the elements of a tuple."
+    },
+    {
+      "name": "copy_dict",
+      "short": "Copy a dictionary."
+    },
+    {
+      "name": "create_dict",
+      "short": "Create a new empty dictionary."
+    },
+    {
+      "name": "get_dict_object",
+      "short": "Retrieve an object associated with the key from the dictionary."
+    },
+    {
+      "name": "get_dict_param",
+      "short": "Query dictionary parameters or information about a dictionary."
+    },
+    {
+      "name": "get_dict_tuple",
+      "short": "Retrieve a tuple associated with the key from the dictionary."
+    },
+    {
+      "name": "get_handle_object",
+      "short": "Retrieve an object associated with a key from a handle."
+    },
+    {
+      "name": "get_handle_param",
+      "short": "Return information about a handle."
+    },
+    {
+      "name": "get_handle_tuple",
+      "short": "Retrieve a tuple associated with a key from a handle."
+    },
+    {
+      "name": "read_dict",
+      "short": "Read a dictionary from a file."
+    },
+    {
+      "name": "remove_dict_key",
+      "short": "Remove keys from a dictionary."
+    },
+    {
+      "name": "set_dict_object",
+      "short": "Add a key/object pair to the dictionary."
+    },
+    {
+      "name": "set_dict_tuple",
+      "short": "Add a key/tuple pair to the dictionary."
+    },
+    {
+      "name": "write_dict",
+      "short": "Write a dictionary to a file."
+    },
+    {
+      "name": "tuple_acosh",
+      "short": "Compute the inverse hyperbolic cosine of a tuple."
+    },
+    {
+      "name": "tuple_asinh",
+      "short": "Compute the inverse hyperbolic sine of a tuple."
+    },
+    {
+      "name": "tuple_atanh",
+      "short": "Compute the inverse hyperbolic tangent of a tuple."
+    },
+    {
+      "name": "tuple_cbrt",
+      "short": "Compute the cube root of a tuple."
+    },
+    {
+      "name": "tuple_erf",
+      "short": "Compute the error function of a tuple."
+    },
+    {
+      "name": "tuple_erfc",
+      "short": "Compute the complementary error function of a tuple."
+    },
+    {
+      "name": "tuple_exp10",
+      "short": "Compute the base 10 exponential of a tuple."
+    },
+    {
+      "name": "tuple_exp2",
+      "short": "Compute the base 2 exponential of a tuple."
+    },
+    {
+      "name": "tuple_hypot",
+      "short": "Calculate the hypotenuse of two tuples."
+    },
+    {
+      "name": "tuple_lgamma",
+      "short": "Compute the logarithm of the absolute value of the gamma function of"
+    },
+    {
+      "name": "tuple_log2",
+      "short": "Compute the base 2 logarithm of a tuple."
+    },
+    {
+      "name": "tuple_tgamma",
+      "short": "Compute the gamma function of a tuple."
+    },
+    {
+      "name": "dict_to_json",
+      "short": "Transform a dictionary into a JSON string."
+    },
+    {
+      "name": "json_to_dict",
+      "short": "Transform a JSON string into a dictionary."
+    },
+    {
+      "name": "set_dict_tuple_at",
+      "short": "Assignment of one or several values to one or several tuple elements"
+    },
+    {
+      "name": "tuple_join",
+      "short": "Join strings using separator symbol(s)."
+    },
+    {
+      "name": "tuple_constant",
+      "short": "Generate a tuple with the value of a HDevelop language constant."
+    },
+    {
+      "name": "tuple_is_nan_elem",
+      "short": "Check a tuple whether it represents NaNs (Not-a-number)."
+    },
+    {
+      "name": "tuple_repeat",
+      "short": "Repeat a tuple."
+    },
+    {
+      "name": "tuple_repeat_elem",
+      "short": "Repeat the elements of a tuple."
+    },
+    {
+      "name": "tuple_str_replace",
+      "short": "Replace all occurrences of a substring within a string."
+    },
+    {
+      "name": "tuple_str_distance",
+      "short": "Calculate the distance between strings."
+    }
+  ]
+}

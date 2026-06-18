@@ -1,0 +1,156 @@
+{
+  "通用": [
+    {
+      "name": "get_message_queue_param",
+      "short": "Query message queue parameters or information about the queue."
+    },
+    {
+      "name": "set_message_queue_param",
+      "short": "Set message queue parameters or invoke commands on the queue."
+    },
+    {
+      "name": "dequeue_message",
+      "short": "Receive one or more messages from the message queue."
+    },
+    {
+      "name": "enqueue_message",
+      "short": "Enqueue one or more messages to the message queue."
+    },
+    {
+      "name": "clear_message_queue",
+      "short": "Close a message queue handle and release all associated resources."
+    },
+    {
+      "name": "create_message_queue",
+      "short": "Create a new empty message queue."
+    },
+    {
+      "name": "get_message_param",
+      "short": "Query message parameters or information about the message."
+    },
+    {
+      "name": "set_message_param",
+      "short": "Set message parameter or invoke commands on the message."
+    },
+    {
+      "name": "get_message_obj",
+      "short": "Retrieve an object associated with the key from the message."
+    },
+    {
+      "name": "set_message_obj",
+      "short": "Add a key/object pair to the message."
+    },
+    {
+      "name": "get_message_tuple",
+      "short": "Retrieve a tuple associated with the key from the message."
+    },
+    {
+      "name": "set_message_tuple",
+      "short": "Add a key/tuple pair to the message."
+    },
+    {
+      "name": "clear_message",
+      "short": "Close a message handle and release all associated resources."
+    },
+    {
+      "name": "create_message",
+      "short": "Create a new empty message."
+    },
+    {
+      "name": "clear_condition",
+      "short": "Destroy a condition synchronization object."
+    },
+    {
+      "name": "broadcast_condition",
+      "short": "Signal a condition synchronization object."
+    },
+    {
+      "name": "signal_condition",
+      "short": "Signal a condition synchronization object."
+    },
+    {
+      "name": "timed_wait_condition",
+      "short": "Bounded wait on the signal of a condition synchronization object."
+    },
+    {
+      "name": "wait_condition",
+      "short": "wait on the signal of a condition synchronization object."
+    },
+    {
+      "name": "create_condition",
+      "short": "Create a condition variable synchronization object."
+    },
+    {
+      "name": "clear_barrier",
+      "short": "Destroy a barrier synchronization object."
+    },
+    {
+      "name": "wait_barrier",
+      "short": "Wait on the release of a barrier synchronization object."
+    },
+    {
+      "name": "create_barrier",
+      "short": "Create a barrier synchronization object."
+    },
+    {
+      "name": "clear_event",
+      "short": "Clear the event synchronization object."
+    },
+    {
+      "name": "signal_event",
+      "short": "Unlock an event synchronization object."
+    },
+    {
+      "name": "try_wait_event",
+      "short": "Lock an event synchronization object only if it is unlocked."
+    },
+    {
+      "name": "wait_event",
+      "short": "Lock an event synchronization object."
+    },
+    {
+      "name": "create_event",
+      "short": "Create an event synchronization object."
+    },
+    {
+      "name": "clear_mutex",
+      "short": "Clear the mutex synchronization object."
+    },
+    {
+      "name": "unlock_mutex",
+      "short": "Unlock a mutex synchronization object."
+    },
+    {
+      "name": "try_lock_mutex",
+      "short": "Lock a mutex synchronization object."
+    },
+    {
+      "name": "lock_mutex",
+      "short": "Lock a mutex synchronization object."
+    },
+    {
+      "name": "create_mutex",
+      "short": "Create a mutual exclusion synchronization object."
+    },
+    {
+      "name": "get_threading_attrib",
+      "short": "Query the attributes of a threading / synchronization object."
+    },
+    {
+      "name": "get_current_hthread_id",
+      "short": "Return the HALCON thread ID of the current thread."
+    },
+    {
+      "name": "interrupt_operator",
+      "short": "Attempt to interrupt an operator running in a different thread."
+    },
+    {
+      "name": "read_message",
+      "short": "Read a message from a file."
+    },
+    {
+      "name": "write_message",
+      "short": "Write a message to a file."
+    }
+  ]
+}

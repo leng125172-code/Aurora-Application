@@ -1,0 +1,120 @@
+{
+  "通用": [
+    {
+      "name": "do_ocr_word_knn",
+      "short": "Classify a related group of characters with an OCR classifier."
+    },
+    {
+      "name": "deserialize_ocr_class_knn",
+      "short": "Deserialize a serialized k-NN-based OCR classifier."
+    },
+    {
+      "name": "serialize_ocr_class_knn",
+      "short": "Serialize a k-NN-based OCR classifier."
+    },
+    {
+      "name": "read_ocr_class_knn",
+      "short": "Read an OCR classifier from a file."
+    },
+    {
+      "name": "write_ocr_class_knn",
+      "short": "Write a k-NN classifier for an OCR task to a file."
+    },
+    {
+      "name": "clear_ocr_class_knn",
+      "short": "Clear an OCR classifier."
+    },
+    {
+      "name": "create_ocr_class_knn",
+      "short": "Create an OCR classifier using a k-Nearest Neighbor (k-NN) classifier."
+    },
+    {
+      "name": "trainf_ocr_class_knn",
+      "short": "Trains an k-NN classifier for an OCR task."
+    },
+    {
+      "name": "get_features_ocr_class_knn",
+      "short": "Compute the features of a character."
+    },
+    {
+      "name": "get_params_ocr_class_knn",
+      "short": "Return the parameters of an OCR classifier."
+    },
+    {
+      "name": "do_ocr_multi_class_knn",
+      "short": "Classify multiple characters with an k-NN classifier."
+    },
+    {
+      "name": "do_ocr_single_class_knn",
+      "short": "Classify a single character with an OCR classifier."
+    },
+    {
+      "name": "select_feature_set_trainf_knn",
+      "short": "Select an optimal combination of features to classify OCR data."
+    },
+    {
+      "name": "get_class_train_data_knn",
+      "short": "Get the training data of a k-nearest neighbors (k-NN) classifier."
+    },
+    {
+      "name": "add_class_train_data_knn",
+      "short": "Add training data to a k-nearest neighbors (k-NN) classifier."
+    },
+    {
+      "name": "select_feature_set_knn",
+      "short": "Selects an optimal subset from a set of features to solve a certain"
+    },
+    {
+      "name": "clear_class_knn",
+      "short": "Clear a k-NN classifier."
+    },
+    {
+      "name": "get_sample_num_class_knn",
+      "short": "Return the number of training samples stored in the training data of"
+    },
+    {
+      "name": "get_sample_class_knn",
+      "short": "Return a training sample from the training data of a k-nearest neighbors"
+    },
+    {
+      "name": "deserialize_class_knn",
+      "short": "Deserialize a serialized k-NN classifier."
+    },
+    {
+      "name": "serialize_class_knn",
+      "short": "Serialize a k-NN classifier."
+    },
+    {
+      "name": "read_class_knn",
+      "short": "Read the k-NN classifier from a file."
+    },
+    {
+      "name": "write_class_knn",
+      "short": "Save the k-NN classifier in a file."
+    },
+    {
+      "name": "get_params_class_knn",
+      "short": "Get parameters of a k-NN classification."
+    },
+    {
+      "name": "set_params_class_knn",
+      "short": "Set parameters for k-NN classification."
+    },
+    {
+      "name": "classify_class_knn",
+      "short": "Search for the next neighbors for a given feature vector."
+    },
+    {
+      "name": "train_class_knn",
+      "short": "Creates the search trees for a k-NN classifier."
+    },
+    {
+      "name": "add_sample_class_knn",
+      "short": "Add a sample to a  k-nearest neighbors (k-NN) classifier."
+    },
+    {
+      "name": "create_class_knn",
+      "short": "Create a k-nearest neighbors (k-NN) classifier."
+    }
+  ]
+}

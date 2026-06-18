@@ -1,0 +1,60 @@
+{
+  "通用": [
+    {
+      "name": "pouring",
+      "short": "Segment an image by \"pouring water\" over it."
+    },
+    {
+      "name": "watersheds_threshold",
+      "short": "Extract watershed basins from an image using a threshold."
+    },
+    {
+      "name": "watersheds",
+      "short": "Extract watersheds and basins from an image."
+    },
+    {
+      "name": "local_min",
+      "short": "Detect all local minima in an image."
+    },
+    {
+      "name": "lowlands",
+      "short": "Detect all gray value lowlands."
+    },
+    {
+      "name": "lowlands_center",
+      "short": "Detect the centers of all gray value lowlands."
+    },
+    {
+      "name": "local_max",
+      "short": "Detect all local maxima in an image."
+    },
+    {
+      "name": "plateaus",
+      "short": "Detect all gray value plateaus."
+    },
+    {
+      "name": "plateaus_center",
+      "short": "Detect the centers of all gray value plateaus."
+    },
+    {
+      "name": "local_min_sub_pix",
+      "short": "Subpixel precise detection of local minima in an image."
+    },
+    {
+      "name": "local_max_sub_pix",
+      "short": "Subpixel precise detection of local maxima in an image."
+    },
+    {
+      "name": "saddle_points_sub_pix",
+      "short": "Subpixel precise detection of saddle points in an image."
+    },
+    {
+      "name": "critical_points_sub_pix",
+      "short": "Subpixel precise detection of critical points in an image."
+    },
+    {
+      "name": "watersheds_marker",
+      "short": "Extract watersheds and combine basins based on markers."
+    }
+  ]
+}

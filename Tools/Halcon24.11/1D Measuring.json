@@ -1,0 +1,80 @@
+{
+  "通用": [
+    {
+      "name": "serialize_measure",
+      "short": "Serialize a measure object."
+    },
+    {
+      "name": "deserialize_measure",
+      "short": "Deserialize a serialized measure object."
+    },
+    {
+      "name": "write_measure",
+      "short": "Write a measure object to a file."
+    },
+    {
+      "name": "read_measure",
+      "short": "Read a measure object from a file."
+    },
+    {
+      "name": "measure_thresh",
+      "short": "Extracting points with a particular gray value along a rectangle or an"
+    },
+    {
+      "name": "close_measure",
+      "short": "Delete a measure object."
+    },
+    {
+      "name": "measure_projection",
+      "short": "Extract a gray value profile perpendicular to a rectangle or annular arc."
+    },
+    {
+      "name": "reset_fuzzy_measure",
+      "short": "Reset a fuzzy function."
+    },
+    {
+      "name": "set_fuzzy_measure_norm_pair",
+      "short": "Specify a normalized fuzzy function for edge pairs."
+    },
+    {
+      "name": "set_fuzzy_measure",
+      "short": "Specify a fuzzy function."
+    },
+    {
+      "name": "fuzzy_measure_pairing",
+      "short": "Extract straight edge pairs perpendicular to a rectangle or an"
+    },
+    {
+      "name": "fuzzy_measure_pairs",
+      "short": "Extract straight edge pairs perpendicular to a rectangle or an annular arc."
+    },
+    {
+      "name": "fuzzy_measure_pos",
+      "short": "Extract straight edges perpendicular to a rectangle or an annular arc."
+    },
+    {
+      "name": "measure_pairs",
+      "short": "Extract straight edge pairs perpendicular to a rectangle or annular arc."
+    },
+    {
+      "name": "measure_pos",
+      "short": "Extract straight edges perpendicular to a rectangle or annular arc."
+    },
+    {
+      "name": "translate_measure",
+      "short": "Translate a measure object."
+    },
+    {
+      "name": "gen_measure_arc",
+      "short": "Prepare the extraction of straight edges perpendicular to an annular arc."
+    },
+    {
+      "name": "gen_measure_rectangle2",
+      "short": "Prepare the extraction of straight edges perpendicular to a rectangle."
+    },
+    {
+      "name": "get_measure_param",
+      "short": "Return the parameters and properties of a measure object."
+    }
+  ]
+}

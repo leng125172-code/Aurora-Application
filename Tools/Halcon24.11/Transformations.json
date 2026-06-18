@@ -1,0 +1,624 @@
+{
+  "通用": [
+    {
+      "name": "union_cotangential_contours_xld",
+      "short": "Compute the union of cotangential contours."
+    },
+    {
+      "name": "union_cocircular_contours_xld",
+      "short": "Compute the union of contours that belong to the same circle."
+    },
+    {
+      "name": "crop_contours_xld",
+      "short": "Crop an XLD contour."
+    },
+    {
+      "name": "sort_contours_xld",
+      "short": "Sort contours with respect to their relative position."
+    },
+    {
+      "name": "merge_cont_line_scan_xld",
+      "short": "Merge XLD contours from successive line scan images."
+    },
+    {
+      "name": "segment_contour_attrib_xld",
+      "short": "Segment XLD contour parts whose local attributes fulfill given"
+    },
+    {
+      "name": "segment_contours_xld",
+      "short": "Segment XLD contours into line segments and circular or elliptic arcs."
+    },
+    {
+      "name": "add_noise_white_contour_xld",
+      "short": "Add noise to XLD contours."
+    },
+    {
+      "name": "combine_roads_xld",
+      "short": "Combine road hypotheses from two resolution levels."
+    },
+    {
+      "name": "split_contours_xld",
+      "short": "Split XLD contours at dominant points."
+    },
+    {
+      "name": "close_contours_xld",
+      "short": "Close an XLD contour."
+    },
+    {
+      "name": "clip_end_points_contours_xld",
+      "short": "Clip the end points of an XLD contour."
+    },
+    {
+      "name": "clip_contours_xld",
+      "short": "Clip an XLD contour."
+    },
+    {
+      "name": "union_straight_contours_xld",
+      "short": "Compute the union of neighboring straight contours that have a similar"
+    },
+    {
+      "name": "union_collinear_contours_ext_xld",
+      "short": "Compute the union of collinear contours"
+    },
+    {
+      "name": "union_collinear_contours_xld",
+      "short": "Unite approximately collinear contours."
+    },
+    {
+      "name": "union_adjacent_contours_xld",
+      "short": "Compute the union of contours whose end points are close together."
+    },
+    {
+      "name": "regress_contours_xld",
+      "short": "Calculate the parameters of a regression line to an XLD contour."
+    },
+    {
+      "name": "smooth_contours_xld",
+      "short": "Smooth an XLD contour."
+    },
+    {
+      "name": "pose_average",
+      "short": "Compute the average of a set of poses."
+    },
+    {
+      "name": "quat_rotate_point_3d",
+      "short": "Perform a rotation by a unit quaternion."
+    },
+    {
+      "name": "quat_conjugate",
+      "short": "Generate the conjugation of a quaternion."
+    },
+    {
+      "name": "quat_normalize",
+      "short": "Normalize a quaternion."
+    },
+    {
+      "name": "axis_angle_to_quat",
+      "short": "Create a rotation quaternion."
+    },
+    {
+      "name": "quat_to_pose",
+      "short": "Convert a quaternion into the corresponding 3D pose."
+    },
+    {
+      "name": "pose_invert",
+      "short": "Invert each pose in a tuple of 3D poses."
+    },
+    {
+      "name": "pose_compose",
+      "short": "Combine 3D poses given in two tuples."
+    },
+    {
+      "name": "quat_to_hom_mat3d",
+      "short": "Convert a quaternion into the corresponding rotation matrix."
+    },
+    {
+      "name": "pose_to_quat",
+      "short": "Convert the rotational part of a 3D pose to a quaternion."
+    },
+    {
+      "name": "quat_interpolate",
+      "short": "Interpolation of two quaternions."
+    },
+    {
+      "name": "quat_compose",
+      "short": "Multiply two quaternions."
+    },
+    {
+      "name": "deserialize_hom_mat3d",
+      "short": "Deserialize a serialized homogeneous 3D transformation matrix."
+    },
+    {
+      "name": "serialize_hom_mat3d",
+      "short": "Serialize a homogeneous 3D transformation matrix."
+    },
+    {
+      "name": "deserialize_hom_mat2d",
+      "short": "Deserialize a serialized homogeneous 2D transformation matrix."
+    },
+    {
+      "name": "serialize_hom_mat2d",
+      "short": "Serialize a homogeneous 2D transformation matrix."
+    },
+    {
+      "name": "deserialize_quat",
+      "short": "Deserialize a serialized quaternion."
+    },
+    {
+      "name": "serialize_quat",
+      "short": "Serialize a quaternion."
+    },
+    {
+      "name": "projective_trans_hom_point_3d",
+      "short": "Project a homogeneous 3D point using a projective transformation"
+    },
+    {
+      "name": "projective_trans_point_3d",
+      "short": "Project a 3D point using a projective transformation matrix."
+    },
+    {
+      "name": "affine_trans_point_3d",
+      "short": "Apply an arbitrary affine 3D transformation to points."
+    },
+    {
+      "name": "vector_to_hom_mat3d",
+      "short": "Approximate a 3D transformation from point correspondences."
+    },
+    {
+      "name": "hom_mat3d_determinant",
+      "short": "Compute the determinant of a homogeneous 3D transformation matrix."
+    },
+    {
+      "name": "hom_mat3d_transpose",
+      "short": "Transpose a homogeneous 3D transformation matrix."
+    },
+    {
+      "name": "hom_mat3d_invert",
+      "short": "Invert a homogeneous 3D transformation matrix."
+    },
+    {
+      "name": "hom_mat3d_compose",
+      "short": "Multiply two homogeneous 3D transformation matrices."
+    },
+    {
+      "name": "hom_mat3d_rotate_local",
+      "short": "Add a rotation to a homogeneous 3D transformation matrix."
+    },
+    {
+      "name": "hom_mat3d_rotate",
+      "short": "Add a rotation to a homogeneous 3D transformation matrix."
+    },
+    {
+      "name": "hom_mat3d_scale_local",
+      "short": "Add a scaling to a homogeneous 3D transformation matrix."
+    },
+    {
+      "name": "hom_mat3d_scale",
+      "short": "Add a scaling to a homogeneous 3D transformation matrix."
+    },
+    {
+      "name": "hom_mat3d_translate_local",
+      "short": "Add a translation to a homogeneous 3D transformation matrix."
+    },
+    {
+      "name": "hom_mat3d_translate",
+      "short": "Add a translation to a homogeneous 3D transformation matrix."
+    },
+    {
+      "name": "hom_mat3d_identity",
+      "short": "Generate the homogeneous transformation matrix of the identical 3D"
+    },
+    {
+      "name": "hom_mat3d_project",
+      "short": "Project an affine 3D transformation matrix to a 2D projective"
+    },
+    {
+      "name": "vector_to_proj_hom_mat2d_distortion",
+      "short": "Compute a projective transformation matrix and the radial distortion"
+    },
+    {
+      "name": "hom_vector_to_proj_hom_mat2d",
+      "short": "Compute a homogeneous transformation matrix using given point"
+    },
+    {
+      "name": "vector_to_proj_hom_mat2d",
+      "short": "Compute a projective transformation matrix using given point"
+    },
+    {
+      "name": "hom_mat2d_to_affine_par",
+      "short": "Compute the affine transformation parameters from a homogeneous 2D"
+    },
+    {
+      "name": "vector_angle_to_rigid",
+      "short": "Compute a rigid affine transformation from points and angles."
+    },
+    {
+      "name": "point_line_to_hom_mat2d",
+      "short": "Approximate an affine transformation from point-to-line correspondences."
+    },
+    {
+      "name": "vector_to_rigid",
+      "short": "Approximate a rigid affine transformation from point correspondences."
+    },
+    {
+      "name": "vector_to_similarity",
+      "short": "Approximate an similarity transformation from point correspondences."
+    },
+    {
+      "name": "vector_to_aniso",
+      "short": "Approximate an anisotropic similarity transformation from point"
+    },
+    {
+      "name": "vector_to_hom_mat2d",
+      "short": "Approximate an affine transformation from point correspondences."
+    },
+    {
+      "name": "projective_trans_pixel",
+      "short": "Project pixel coordinates using a homogeneous projective"
+    },
+    {
+      "name": "projective_trans_point_2d",
+      "short": "Project a homogeneous 2D point using a projective transformation"
+    },
+    {
+      "name": "affine_trans_pixel",
+      "short": "Apply an arbitrary affine 2D transformation to pixel coordinates."
+    },
+    {
+      "name": "affine_trans_point_2d",
+      "short": "Apply an arbitrary affine 2D transformation to points."
+    },
+    {
+      "name": "hom_mat2d_determinant",
+      "short": "Compute the determinant of a homogeneous 2D transformation matrix."
+    },
+    {
+      "name": "hom_mat2d_transpose",
+      "short": "Transpose a homogeneous 2D transformation matrix."
+    },
+    {
+      "name": "hom_mat2d_invert",
+      "short": "Invert a homogeneous 2D transformation matrix."
+    },
+    {
+      "name": "hom_mat2d_compose",
+      "short": "Multiply two homogeneous 2D transformation matrices."
+    },
+    {
+      "name": "hom_mat2d_reflect_local",
+      "short": "Add a reflection to a homogeneous 2D transformation matrix."
+    },
+    {
+      "name": "hom_mat2d_reflect",
+      "short": "Add a reflection to a homogeneous 2D transformation matrix."
+    },
+    {
+      "name": "hom_mat2d_slant_local",
+      "short": "Add a slant to a homogeneous 2D transformation matrix."
+    },
+    {
+      "name": "hom_mat2d_slant",
+      "short": "Add a slant to a homogeneous 2D transformation matrix."
+    },
+    {
+      "name": "hom_mat2d_rotate_local",
+      "short": "Add a rotation to a homogeneous 2D transformation matrix."
+    },
+    {
+      "name": "hom_mat2d_rotate",
+      "short": "Add a rotation to a homogeneous 2D transformation matrix."
+    },
+    {
+      "name": "hom_mat2d_scale_local",
+      "short": "Add a scaling to a homogeneous 2D transformation matrix."
+    },
+    {
+      "name": "hom_mat2d_scale",
+      "short": "Add a scaling to a homogeneous 2D transformation matrix."
+    },
+    {
+      "name": "hom_mat2d_translate_local",
+      "short": "Add a translation to a homogeneous 2D transformation matrix."
+    },
+    {
+      "name": "hom_mat2d_translate",
+      "short": "Add a translation to a homogeneous 2D transformation matrix."
+    },
+    {
+      "name": "hom_mat2d_identity",
+      "short": "Generate the homogeneous transformation matrix of the identical 2D"
+    },
+    {
+      "name": "merge_regions_line_scan",
+      "short": "Merge regions from line scan images."
+    },
+    {
+      "name": "partition_rectangle",
+      "short": "Partition a region into rectangles of approximately equal size."
+    },
+    {
+      "name": "partition_dynamic",
+      "short": "Partition a region horizontally at positions of small vertical extent."
+    },
+    {
+      "name": "closest_point_transform",
+      "short": "Compute the closest-point transformation of a region."
+    },
+    {
+      "name": "distance_transform",
+      "short": "Compute the distance transformation of a region."
+    },
+    {
+      "name": "skeleton",
+      "short": "Compute the skeleton of a region."
+    },
+    {
+      "name": "junctions_skeleton",
+      "short": "Find junctions and end points in a skeleton."
+    },
+    {
+      "name": "fill_up",
+      "short": "Fill up holes in regions."
+    },
+    {
+      "name": "fill_up_shape",
+      "short": "Fill up holes in regions having given shape features."
+    },
+    {
+      "name": "expand_region",
+      "short": "Fill gaps between regions or split overlapping regions."
+    },
+    {
+      "name": "clip_region_rel",
+      "short": "Clip a region relative to its smallest surrounding rectangle."
+    },
+    {
+      "name": "clip_region",
+      "short": "Clip a region to a rectangle."
+    },
+    {
+      "name": "rank_region",
+      "short": "Rank operator for regions."
+    },
+    {
+      "name": "connection",
+      "short": "Compute connected components of a region."
+    },
+    {
+      "name": "background_seg",
+      "short": "Determine the connected components of the background of given regions."
+    },
+    {
+      "name": "remove_noise_region",
+      "short": "Remove noise from a region."
+    },
+    {
+      "name": "shape_trans",
+      "short": "Transform the shape of a region."
+    },
+    {
+      "name": "split_skeleton_lines",
+      "short": "Split lines represented by one pixel wide, non-branching lines."
+    },
+    {
+      "name": "split_skeleton_region",
+      "short": "Split lines represented by one pixel wide, non-branching regions."
+    },
+    {
+      "name": "eliminate_runs",
+      "short": "Eliminate runs of a given length."
+    },
+    {
+      "name": "surface_normals_object_model_3d",
+      "short": "Calculate the 3D surface normals of a 3D object model."
+    },
+    {
+      "name": "smooth_object_model_3d",
+      "short": "Smooth the 3D points of a 3D object model."
+    },
+    {
+      "name": "triangulate_object_model_3d",
+      "short": "Create a surface triangulation for a 3D object model."
+    },
+    {
+      "name": "sort_region",
+      "short": "Sorting of regions with respect to their relative position."
+    },
+    {
+      "name": "convert_point_3d_spher_to_cart",
+      "short": "Convert spherical coordinates of a 3D point to Cartesian"
+    },
+    {
+      "name": "convert_point_3d_cart_to_spher",
+      "short": "Convert Cartesian coordinates of a 3D point to spherical"
+    },
+    {
+      "name": "simplify_object_model_3d",
+      "short": "Simplify a triangulated 3D object model."
+    },
+    {
+      "name": "sample_object_model_3d",
+      "short": "Sample a 3D object model."
+    },
+    {
+      "name": "register_object_model_3d_global",
+      "short": "Improve the relative transformations between 3D object models based on"
+    },
+    {
+      "name": "register_object_model_3d_pair",
+      "short": "Search for a transformation between two 3D object models."
+    },
+    {
+      "name": "intersect_plane_object_model_3d",
+      "short": "Intersect a 3D object model with a plane."
+    },
+    {
+      "name": "convex_hull_object_model_3d",
+      "short": "Calculate the convex hull of a 3D object model. "
+    },
+    {
+      "name": "connection_object_model_3d",
+      "short": "Determine the connected components of the"
+    },
+    {
+      "name": "render_object_model_3d",
+      "short": "Render 3D object models to get an image."
+    },
+    {
+      "name": "prepare_object_model_3d",
+      "short": "Prepare a 3D object model for a certain operation."
+    },
+    {
+      "name": "object_model_3d_to_xyz",
+      "short": "Transform 3D points from a 3D object model to images."
+    },
+    {
+      "name": "xyz_to_object_model_3d",
+      "short": "Transform 3D points from images to a 3D object model."
+    },
+    {
+      "name": "project_object_model_3d",
+      "short": "Project a 3D object model into image coordinates."
+    },
+    {
+      "name": "rigid_trans_object_model_3d",
+      "short": "Apply a rigid 3D transformation to 3D object models."
+    },
+    {
+      "name": "projective_trans_object_model_3d",
+      "short": "Apply an arbitrary projective 3D transformation to 3D object models."
+    },
+    {
+      "name": "affine_trans_object_model_3d",
+      "short": "Apply an arbitrary affine 3D transformation to 3D object models."
+    },
+    {
+      "name": "vector_field_to_hom_mat2d",
+      "short": "Approximate an affine map from a displacement vector field."
+    },
+    {
+      "name": "shape_trans_xld",
+      "short": "Transform the shape of contours or polygons."
+    },
+    {
+      "name": "vector_to_pose",
+      "short": "Compute an absolute pose out of point correspondences between"
+    },
+    {
+      "name": "proj_hom_mat2d_to_pose",
+      "short": "Compute a pose out of a homography describing the relation between world"
+    },
+    {
+      "name": "get_rectangle_pose",
+      "short": "Determine the 3D pose of a rectangle from its perspective 2D"
+    },
+    {
+      "name": "get_circle_pose",
+      "short": "Determine the 3D pose of a circle from its perspective 2D projection."
+    },
+    {
+      "name": "set_origin_pose",
+      "short": "Translate the origin of a 3D pose."
+    },
+    {
+      "name": "get_pose_type",
+      "short": "Get the representation type of a 3D pose."
+    },
+    {
+      "name": "convert_pose_type",
+      "short": "Change the representation type of a 3D pose."
+    },
+    {
+      "name": "create_pose",
+      "short": "Create a 3D pose."
+    },
+    {
+      "name": "hom_mat3d_to_pose",
+      "short": "Convert a homogeneous transformation matrix into a 3D pose."
+    },
+    {
+      "name": "pose_to_hom_mat3d",
+      "short": "Convert a 3D pose into a homogeneous transformation matrix."
+    },
+    {
+      "name": "deserialize_pose",
+      "short": "  Deserialize a serialized pose."
+    },
+    {
+      "name": "serialize_pose",
+      "short": "Serialize a pose."
+    },
+    {
+      "name": "read_pose",
+      "short": "Read a 3D pose from a text file."
+    },
+    {
+      "name": "write_pose",
+      "short": "Write a 3D pose to a text file."
+    },
+    {
+      "name": "deserialize_dual_quat",
+      "short": "Deserialize a serialized dual quaternion."
+    },
+    {
+      "name": "dual_quat_compose",
+      "short": "Multiply two dual quaternions."
+    },
+    {
+      "name": "dual_quat_conjugate",
+      "short": "Conjugate a dual quaternion."
+    },
+    {
+      "name": "dual_quat_interpolate",
+      "short": "Interpolate two dual quaternions."
+    },
+    {
+      "name": "dual_quat_normalize",
+      "short": "Normalize a dual quaternion."
+    },
+    {
+      "name": "dual_quat_to_hom_mat3d",
+      "short": "Convert a unit dual quaternion into a homogeneous transformation matrix."
+    },
+    {
+      "name": "dual_quat_to_pose",
+      "short": "Convert a dual quaternion to a 3D pose."
+    },
+    {
+      "name": "dual_quat_to_screw",
+      "short": "Convert a unit dual quaternion into a screw."
+    },
+    {
+      "name": "dual_quat_trans_line_3d",
+      "short": "Transform a 3D line with a unit dual quaternion."
+    },
+    {
+      "name": "edges_object_model_3d",
+      "short": "Find edges in a 3D object model."
+    },
+    {
+      "name": "pose_to_dual_quat",
+      "short": "Convert a 3D pose to a unit dual quaternion."
+    },
+    {
+      "name": "screw_to_dual_quat",
+      "short": "Convert a screw into a dual quaternion."
+    },
+    {
+      "name": "serialize_dual_quat",
+      "short": "Serialize a dual quaternion."
+    },
+    {
+      "name": "fuse_object_model_3d",
+      "short": "Fuse 3D object models into a surface."
+    },
+    {
+      "name": "point_pluecker_line_to_hom_mat3d",
+      "short": "Approximate a 3D affine transformation from 3D point-to-line"
+    },
+    {
+      "name": "dual_quat_trans_point_3d",
+      "short": "Transform a 3D point with a unit dual quaternion."
+    }
+  ]
+}

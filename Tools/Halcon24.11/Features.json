@@ -1,0 +1,552 @@
+{
+  "通用": [
+    {
+      "name": "dist_rectangle2_contour_points_xld",
+      "short": "Compute the distances of all contour points to a rectangle."
+    },
+    {
+      "name": "fit_rectangle2_contour_xld",
+      "short": "Fit rectangles to XLD contours."
+    },
+    {
+      "name": "fit_circle_contour_xld",
+      "short": "Approximate XLD contours by circles."
+    },
+    {
+      "name": "fit_line_contour_xld",
+      "short": "Approximate XLD contours by line segments."
+    },
+    {
+      "name": "dist_ellipse_contour_points_xld",
+      "short": "Compute the distances of all contour points to an ellipse."
+    },
+    {
+      "name": "dist_ellipse_contour_xld",
+      "short": "Compute the distance of contours to an ellipse."
+    },
+    {
+      "name": "fit_ellipse_contour_xld",
+      "short": "Approximate XLD contours by ellipses or elliptic arcs."
+    },
+    {
+      "name": "max_parallels_xld",
+      "short": "Join modified XLD parallels lying on the same polygon."
+    },
+    {
+      "name": "info_parallels_xld",
+      "short": "Return information about the gray values of the area enclosed by XLD"
+    },
+    {
+      "name": "local_max_contours_xld",
+      "short": "Select XLD contours with a local maximum of gray values."
+    },
+    {
+      "name": "select_contours_xld",
+      "short": "Select XLD contours according to several features."
+    },
+    {
+      "name": "get_regress_params_xld",
+      "short": "Return XLD contour parameters."
+    },
+    {
+      "name": "get_contour_angle_xld",
+      "short": "Calculate the direction of an XLD contour for each contour point."
+    },
+    {
+      "name": "contour_point_num_xld",
+      "short": "Return the number of points in an XLD contour."
+    },
+    {
+      "name": "query_contour_global_attribs_xld",
+      "short": "Return the names of the defined global attributes of an XLD contour."
+    },
+    {
+      "name": "get_contour_global_attrib_xld",
+      "short": "Return global attributes values of an XLD contour."
+    },
+    {
+      "name": "query_contour_attribs_xld",
+      "short": "Return the names of the defined attributes of an XLD contour."
+    },
+    {
+      "name": "get_contour_attrib_xld",
+      "short": "Return point attribute values of an XLD contour."
+    },
+    {
+      "name": "tuple_histo_range",
+      "short": "Calculate the value distribution of a tuple within a certain value range."
+    },
+    {
+      "name": "tuple_length",
+      "short": "Return the number of elements of a tuple."
+    },
+    {
+      "name": "tuple_max",
+      "short": "Return the maximal element of a tuple."
+    },
+    {
+      "name": "tuple_min",
+      "short": "Return the minimal element of a tuple."
+    },
+    {
+      "name": "tuple_median",
+      "short": "Return the median of the elements of a tuple."
+    },
+    {
+      "name": "tuple_sum",
+      "short": "Return the sum of all elements of a tuple."
+    },
+    {
+      "name": "tuple_mean",
+      "short": "Return the mean value of a tuple of numbers."
+    },
+    {
+      "name": "tuple_deviation",
+      "short": "Return the standard deviation of the elements of a tuple."
+    },
+    {
+      "name": "get_region_thickness",
+      "short": "Access the thickness of a region along the main axis."
+    },
+    {
+      "name": "determinant_matrix",
+      "short": "Compute the determinant of a matrix."
+    },
+    {
+      "name": "max_matrix",
+      "short": "Returns the elementwise maximum of a matrix."
+    },
+    {
+      "name": "min_matrix",
+      "short": "Returns the elementwise minimum of a matrix."
+    },
+    {
+      "name": "norm_matrix",
+      "short": "Norm of a matrix."
+    },
+    {
+      "name": "mean_matrix",
+      "short": "Returns the elementwise mean of a matrix."
+    },
+    {
+      "name": "sum_matrix",
+      "short": "Returns the elementwise sum of a matrix."
+    },
+    {
+      "name": "get_size_matrix",
+      "short": "Get the size of a matrix."
+    },
+    {
+      "name": "distance_object_model_3d",
+      "short": "Compute the distances of the points of one 3D object model to another"
+    },
+    {
+      "name": "smallest_bounding_box_object_model_3d",
+      "short": " Calculate the smallest bounding box around the points of a"
+    },
+    {
+      "name": "smallest_sphere_object_model_3d",
+      "short": "Calculate the smallest sphere around the points of a 3D object model."
+    },
+    {
+      "name": "select_object_model_3d",
+      "short": "Select 3D object models from an array of 3D object models according"
+    },
+    {
+      "name": "area_object_model_3d",
+      "short": "Calculate the area of all faces of a 3D object model."
+    },
+    {
+      "name": "max_diameter_object_model_3d",
+      "short": "Calculate the maximal diameter of a 3D object model."
+    },
+    {
+      "name": "moments_object_model_3d",
+      "short": "Calculates the mean or the central moment of second order for a 3D object"
+    },
+    {
+      "name": "volume_object_model_3d_relative_to_plane",
+      "short": "Calculate the volume of a 3D object model."
+    },
+    {
+      "name": "get_object_model_3d_params",
+      "short": "Return attributes of 3D object models."
+    },
+    {
+      "name": "estimate_noise",
+      "short": "Estimate the image noise from a single image."
+    },
+    {
+      "name": "fuzzy_entropy",
+      "short": "Determine the fuzzy entropy of regions."
+    },
+    {
+      "name": "fuzzy_perimeter",
+      "short": "Calculate the fuzzy perimeter of a region."
+    },
+    {
+      "name": "test_closed_xld",
+      "short": "Test whether contours or polygons are closed."
+    },
+    {
+      "name": "moments_any_points_xld",
+      "short": "Arbitrary geometric moments of contours or polygons treated as point"
+    },
+    {
+      "name": "eccentricity_points_xld",
+      "short": "Anisometry of contours or polygons treated as point clouds."
+    },
+    {
+      "name": "elliptic_axis_points_xld",
+      "short": "Parameters of the equivalent ellipse of contours or polygons treated as"
+    },
+    {
+      "name": "orientation_points_xld",
+      "short": "Calculate the orientation of contours or polygons treated as point clouds."
+    },
+    {
+      "name": "moments_points_xld",
+      "short": "Geometric moments M20, M02, and M11"
+    },
+    {
+      "name": "area_center_points_xld",
+      "short": "Area and center of gravity (centroid) of contours and polygons"
+    },
+    {
+      "name": "test_self_intersection_xld",
+      "short": "Test XLD contours or polygons for self intersection."
+    },
+    {
+      "name": "select_xld_point",
+      "short": "Choose all contours or polygons containing a given point."
+    },
+    {
+      "name": "test_xld_point",
+      "short": "Test whether one or more contours or polygons enclose the given point(s)."
+    },
+    {
+      "name": "select_shape_xld",
+      "short": "Select contours or polygons using shape features."
+    },
+    {
+      "name": "orientation_xld",
+      "short": "Calculate the orientation of contours or polygons."
+    },
+    {
+      "name": "eccentricity_xld",
+      "short": "Shape features derived from the ellipse parameters of contours or polygons."
+    },
+    {
+      "name": "compactness_xld",
+      "short": "Shape factor for the compactness of contours or polygons."
+    },
+    {
+      "name": "diameter_xld",
+      "short": "Maximum distance between two contour or polygon points."
+    },
+    {
+      "name": "convexity_xld",
+      "short": "Shape factor for the convexity of contours or polygons."
+    },
+    {
+      "name": "circularity_xld",
+      "short": "Shape factor for the circularity (similarity to a circle) of contours or"
+    },
+    {
+      "name": "elliptic_axis_xld",
+      "short": "Parameters of the equivalent ellipse of contours or polygons."
+    },
+    {
+      "name": "smallest_rectangle2_xld",
+      "short": "Smallest enclosing rectangle with arbitrary orientation of contours or"
+    },
+    {
+      "name": "smallest_rectangle1_xld",
+      "short": "Enclosing rectangle parallel to the coordinate axes of contours or polygons."
+    },
+    {
+      "name": "smallest_circle_xld",
+      "short": "Smallest enclosing circle of contours or polygons."
+    },
+    {
+      "name": "length_xld",
+      "short": "Length of contours or polygons."
+    },
+    {
+      "name": "moments_any_xld",
+      "short": "Arbitrary geometric moments of contours or polygons."
+    },
+    {
+      "name": "moments_xld",
+      "short": "Geometric moments M20, M02, and"
+    },
+    {
+      "name": "area_center_xld",
+      "short": "Area and center of gravity (centroid) of contours and polygons."
+    },
+    {
+      "name": "moments_region_central_invar",
+      "short": "Geometric moments of regions."
+    },
+    {
+      "name": "moments_region_central",
+      "short": "Geometric moments of regions."
+    },
+    {
+      "name": "moments_region_3rd_invar",
+      "short": "Geometric moments of regions."
+    },
+    {
+      "name": "moments_region_3rd",
+      "short": "Geometric moments of regions."
+    },
+    {
+      "name": "smallest_rectangle2",
+      "short": "Smallest surrounding rectangle with any orientation."
+    },
+    {
+      "name": "smallest_rectangle1",
+      "short": "Surrounding rectangle parallel to the coordinate axes."
+    },
+    {
+      "name": "smallest_circle",
+      "short": "Smallest surrounding circle of a region."
+    },
+    {
+      "name": "select_shape_proto",
+      "short": "Choose regions having a certain relation to each other."
+    },
+    {
+      "name": "region_features",
+      "short": "Calculate shape features of regions."
+    },
+    {
+      "name": "select_shape",
+      "short": "Choose regions with the aid of shape features."
+    },
+    {
+      "name": "runlength_features",
+      "short": "Characteristic values for runlength coding of regions."
+    },
+    {
+      "name": "find_neighbors",
+      "short": "Search direct neighbors."
+    },
+    {
+      "name": "moments_region_2nd_rel_invar",
+      "short": "Geometric moments of regions."
+    },
+    {
+      "name": "moments_region_2nd_invar",
+      "short": "Geometric moments of regions."
+    },
+    {
+      "name": "moments_region_2nd",
+      "short": "Calculate the geometric moments of regions."
+    },
+    {
+      "name": "diameter_region",
+      "short": "Maximal distance between two boundary points of a region."
+    },
+    {
+      "name": "get_region_index",
+      "short": "Index of all regions containing a given pixel."
+    },
+    {
+      "name": "select_region_point",
+      "short": "Choose all regions containing a given pixel."
+    },
+    {
+      "name": "select_shape_std",
+      "short": "Select regions of a given shape."
+    },
+    {
+      "name": "hamming_distance_norm",
+      "short": "Hamming distance between two regions using normalization."
+    },
+    {
+      "name": "hamming_distance",
+      "short": "Hamming distance between two regions."
+    },
+    {
+      "name": "eccentricity",
+      "short": "Shape features derived from the ellipse parameters."
+    },
+    {
+      "name": "euler_number",
+      "short": "Calculate the Euler number."
+    },
+    {
+      "name": "orientation_region",
+      "short": "Orientation of a region."
+    },
+    {
+      "name": "elliptic_axis",
+      "short": "Calculate the parameters of the equivalent ellipse."
+    },
+    {
+      "name": "select_region_spatial",
+      "short": "Pose relation of regions."
+    },
+    {
+      "name": "spatial_relation",
+      "short": "Pose relation of regions with regard to  the coordinate axes."
+    },
+    {
+      "name": "convexity",
+      "short": "Shape factor for the convexity of a region."
+    },
+    {
+      "name": "contlength",
+      "short": "Contour length of a region."
+    },
+    {
+      "name": "connect_and_holes",
+      "short": "Number of connection components and holes"
+    },
+    {
+      "name": "rectangularity",
+      "short": "Shape factor for the rectangularity of a region."
+    },
+    {
+      "name": "compactness",
+      "short": "Shape factor for the compactness of a region."
+    },
+    {
+      "name": "circularity",
+      "short": "Shape factor for the circularity (similarity to a circle) of a region."
+    },
+    {
+      "name": "area_holes",
+      "short": "Compute the area of holes of regions."
+    },
+    {
+      "name": "area_center",
+      "short": "Area and center of regions."
+    },
+    {
+      "name": "runlength_distribution",
+      "short": "Distribution of runs needed for runlength encoding of a region."
+    },
+    {
+      "name": "roundness",
+      "short": "Shape factors from contour."
+    },
+    {
+      "name": "inner_rectangle1",
+      "short": "Largest inner rectangle of a region."
+    },
+    {
+      "name": "inner_circle",
+      "short": "Largest inner circle of a region."
+    },
+    {
+      "name": "fit_surface_first_order",
+      "short": "Calculate gray value moments and approximation by a first order surface"
+    },
+    {
+      "name": "fit_surface_second_order",
+      "short": "Calculate gray value moments and approximation by a second order surface."
+    },
+    {
+      "name": "shape_histo_point",
+      "short": "Determine a histogram of features along all threshold values."
+    },
+    {
+      "name": "shape_histo_all",
+      "short": "Determine a histogram of features along all threshold values."
+    },
+    {
+      "name": "gray_features",
+      "short": "Calculates gray value features for a set of regions."
+    },
+    {
+      "name": "select_gray",
+      "short": "Select regions based on gray value features."
+    },
+    {
+      "name": "min_max_gray",
+      "short": "Determine the minimum and maximum gray values within regions."
+    },
+    {
+      "name": "intensity",
+      "short": "Calculate the mean and deviation of gray values."
+    },
+    {
+      "name": "gray_histo_range",
+      "short": "Calculate the gray value distribution of a single channel image within a"
+    },
+    {
+      "name": "histo_2dim",
+      "short": "Calculate the histogram of two-channel gray value images."
+    },
+    {
+      "name": "gray_histo_abs",
+      "short": "Calculate the gray value distribution."
+    },
+    {
+      "name": "gray_histo",
+      "short": "Calculate the gray value distribution."
+    },
+    {
+      "name": "entropy_gray",
+      "short": "Determine the entropy and anisotropy of images."
+    },
+    {
+      "name": "cooc_feature_matrix",
+      "short": "Calculate gray value features from a co-occurrence matrix."
+    },
+    {
+      "name": "cooc_feature_image",
+      "short": "Calculate a co-occurrence matrix and derive gray value features thereof."
+    },
+    {
+      "name": "gen_cooc_matrix",
+      "short": "Calculate the co-occurrence matrix of a region in an image."
+    },
+    {
+      "name": "moments_gray_plane",
+      "short": "Calculate gray value moments and approximation by a plane."
+    },
+    {
+      "name": "plane_deviation",
+      "short": "Calculate the deviation of the gray values from the approximating"
+    },
+    {
+      "name": "elliptic_axis_gray",
+      "short": "Compute the orientation and major axes of a region in a gray value"
+    },
+    {
+      "name": "area_center_gray",
+      "short": "Compute the area and center of gravity of a region in a gray value"
+    },
+    {
+      "name": "gray_projections",
+      "short": "Calculate horizontal and vertical gray-value projections."
+    },
+    {
+      "name": "height_width_ratio",
+      "short": "Compute the width, height, and aspect ratio of the surrounding"
+    },
+    {
+      "name": "height_width_ratio_xld",
+      "short": "Compute the width, height, and aspect ratio of the enclosing"
+    },
+    {
+      "name": "get_handle_object",
+      "short": "Retrieve an object associated with a key from a handle."
+    },
+    {
+      "name": "get_handle_param",
+      "short": "Return information about a handle."
+    },
+    {
+      "name": "get_handle_tuple",
+      "short": "Retrieve a tuple associated with a key from a handle."
+    },
+    {
+      "name": "rectangularity_xld",
+      "short": "Shape factor for the rectangularity of contours or polygons."
+    }
+  ]
+}

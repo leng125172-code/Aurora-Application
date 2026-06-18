@@ -1,0 +1,36 @@
+{
+  "通用": [
+    {
+      "name": "shock_filter",
+      "short": "Apply a shock filter to an image."
+    },
+    {
+      "name": "mean_curvature_flow",
+      "short": "Apply the mean curvature flow to an image."
+    },
+    {
+      "name": "coherence_enhancing_diff",
+      "short": "Perform a coherence enhancing diffusion of an image."
+    },
+    {
+      "name": "equ_histo_image",
+      "short": "Histogram linearization of images"
+    },
+    {
+      "name": "illuminate",
+      "short": "Illuminate image."
+    },
+    {
+      "name": "emphasize",
+      "short": "Enhance contrast of the image."
+    },
+    {
+      "name": "scale_image_max",
+      "short": "Maximum gray value spreading in the value range"
+    },
+    {
+      "name": "equ_histo_image_rect",
+      "short": "Histogram linearization within a rectangluar mask."
+    }
+  ]
+}

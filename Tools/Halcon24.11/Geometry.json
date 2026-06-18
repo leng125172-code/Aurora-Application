@@ -1,0 +1,196 @@
+{
+  "通用": [
+    {
+      "name": "projection_pl",
+      "short": "Calculate the projection of a point onto a line."
+    },
+    {
+      "name": "get_points_ellipse",
+      "short": "Calculate points on the perimeter of an ellipse."
+    },
+    {
+      "name": "intersection_contours_xld",
+      "short": "Calculate the intersection points of two XLD contours"
+    },
+    {
+      "name": "intersection_circle_contour_xld",
+      "short": "Calculate the intersection points of a circle or circular arc and an"
+    },
+    {
+      "name": "intersection_circles",
+      "short": "Calculate the intersection points of two circles or circular arcs"
+    },
+    {
+      "name": "intersection_line_contour_xld",
+      "short": "Calculate the intersection points of a line and an XLD contour"
+    },
+    {
+      "name": "intersection_line_circle",
+      "short": "Calculate the intersection points of a line and a circle or circular arc"
+    },
+    {
+      "name": "intersection_lines",
+      "short": "Calculate the intersection point of two lines"
+    },
+    {
+      "name": "intersection_segment_contour_xld",
+      "short": "Calculate the intersection points of a segment and an XLD contour"
+    },
+    {
+      "name": "intersection_segment_circle",
+      "short": "Calculate the intersection points of a segment and a circle or circular arc"
+    },
+    {
+      "name": "intersection_segment_line",
+      "short": "Calculate the intersection point of a segment and a line"
+    },
+    {
+      "name": "intersection_segments",
+      "short": "Calculate the intersection point of two line segments"
+    },
+    {
+      "name": "clear_distance_transform_xld",
+      "short": "Clear a XLD distance transform."
+    },
+    {
+      "name": "apply_distance_transform_xld",
+      "short": "Determine the pointwise distance of two contours using an XLD distance"
+    },
+    {
+      "name": "read_distance_transform_xld",
+      "short": "Read an XLD distance transform from a file."
+    },
+    {
+      "name": "deserialize_distance_transform_xld",
+      "short": "Deserialize an XLD distance transform."
+    },
+    {
+      "name": "serialize_distance_transform_xld",
+      "short": "Serialize an XLD distance transform."
+    },
+    {
+      "name": "write_distance_transform_xld",
+      "short": "Write an XLD distance transform into a file."
+    },
+    {
+      "name": "set_distance_transform_xld_param",
+      "short": "Set new parameters for an XLD distance transform."
+    },
+    {
+      "name": "get_distance_transform_xld_param",
+      "short": "Get the parameters used to build an XLD distance transform."
+    },
+    {
+      "name": "get_distance_transform_xld_contour",
+      "short": "Get the reference contour used to build the XLD distance transform."
+    },
+    {
+      "name": "create_distance_transform_xld",
+      "short": "Create the XLD distance transform."
+    },
+    {
+      "name": "distance_contours_xld",
+      "short": "Calculate the pointwise distance from one contour to another."
+    },
+    {
+      "name": "distance_cc_min",
+      "short": "Calculate the minimum distance between two contours."
+    },
+    {
+      "name": "distance_cc",
+      "short": "Calculate the distance between two contours."
+    },
+    {
+      "name": "distance_sc",
+      "short": "Calculate the distance between a line segment and one contour."
+    },
+    {
+      "name": "distance_lc",
+      "short": "Calculate the distance between a line and one contour."
+    },
+    {
+      "name": "distance_pc",
+      "short": "Calculate the distance between a point and one contour."
+    },
+    {
+      "name": "distance_sr",
+      "short": "Calculate the distance between a line segment and one region."
+    },
+    {
+      "name": "distance_lr",
+      "short": "Calculate the distance between a line and a region."
+    },
+    {
+      "name": "distance_pr",
+      "short": "Calculate the distance between a point and a region."
+    },
+    {
+      "name": "angle_lx",
+      "short": "Calculate the angle between one line and the horizontal axis."
+    },
+    {
+      "name": "angle_ll",
+      "short": "Calculate the angle between two lines."
+    },
+    {
+      "name": "distance_sl",
+      "short": "Calculate the distances between a line segment and a line."
+    },
+    {
+      "name": "distance_ss",
+      "short": "Calculate the distances between two line segments."
+    },
+    {
+      "name": "distance_ps",
+      "short": "Calculate the distances between a point and a line segment."
+    },
+    {
+      "name": "distance_pl",
+      "short": "Calculate the distance between one point and one line."
+    },
+    {
+      "name": "distance_pp",
+      "short": "Calculate the distance between two points."
+    },
+    {
+      "name": "distance_rr_min",
+      "short": "Minimum distance between the contour pixels of two regions each."
+    },
+    {
+      "name": "distance_rr_min_dil",
+      "short": "Minimum distance between two regions with the help of dilation."
+    },
+    {
+      "name": "distance_cc_min_points",
+      "short": "Calculate the minimum distance between two contours and the points used for"
+    },
+    {
+      "name": "area_intersection_rectangle2",
+      "short": "Calculate the intersection area of oriented rectangles."
+    },
+    {
+      "name": "distance_point_line",
+      "short": "Calculate the distance between a 3D point and a 3D line given by two"
+    },
+    {
+      "name": "distance_point_pluecker_line",
+      "short": "Calculate the distance between a 3D point and a 3D line given by"
+    },
+    {
+      "name": "pluecker_line_to_point_direction",
+      "short": "Convert a 3D line given by Plücker coordinates to a 3D line given by"
+    },
+    {
+      "name": "pluecker_line_to_points",
+      "short": "Convert a 3D line given by Plücker coordinates to a 3D line given by"
+    },
+    {
+      "name": "point_direction_to_pluecker_line",
+      "short": "Convert a 3D line given by a point and a direction to Plücker"
+    },
+    {
+      "name": "points_to_pluecker_line",
+      "short": "Convert a 3D line given by two points to Plücker coordinates."
+    }
+  ]
+}

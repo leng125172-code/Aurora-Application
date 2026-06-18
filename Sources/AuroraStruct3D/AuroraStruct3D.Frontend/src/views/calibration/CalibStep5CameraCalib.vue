@@ -33,8 +33,11 @@ import {
     type CalibPhotoDto,
     type CalibStereoComputeResultDto,
     type CalibStereoStatusDto,
+    type AutoAlignCamerasResultDto,
     CalibPhotoType,
-    computeCalibration,
+    autoAlignCameras,
+    computeIntrinsic,
+    computeExtrinsic,
     computeStereoCalibration,
     deletePhoto,
     deleteInvalidPhotos,
@@ -324,7 +327,6 @@ const MIN_VALID = 15
 const MIN_STEREO_PAIR_VALID = 15
 const MAX_SINGLE_REPROJ_ERROR = 0.08
 const MAX_STEREO_REPROJ_ERROR = 0.1
-const computingIds = ref<Set<string>>(new Set())
 const calibResultMap = ref<Record<string, CalibComputeResultDto | null>>({})
 const stereoStatus = ref<CalibStereoStatusDto | null>(null)
 const stereoComputing = ref(false)
@@ -355,18 +357,44 @@ function canCompute(cameraId: string): boolean {
     return !!s && s.intrinsicValid >= MIN_VALID
 }
 
-async function doCompute(cam: CameraDeviceDto): Promise<void> {
-    if (!canCompute(cam.id) || computingIds.value.has(cam.id)) return
-    computingIds.value.add(cam.id)
+/** 判断是否可计算外参：已有内参 + 有足够外参照片 */
+function canComputeExtrinsic(cameraId: string): boolean {
+    if (!canUseProjectorExtrinsic(cameraId)) return false
+    const s = cameraStatusMap.value[cameraId]
+    const result = calibResultMap.value[cameraId]
+    return !!s && s.extrinsicValid >= 1 && (!!result?.intrinsicMatrixJson || !!s.intrinsicValid)
+}
+
+const intrinsicComputingIds = ref(new Set<string>())
+const extrinsicComputingIds = ref(new Set<string>())
+
+async function doComputeIntrinsic(cam: CameraDeviceDto): Promise<void> {
+    if (!canCompute(cam.id) || intrinsicComputingIds.value.has(cam.id)) return
+    intrinsicComputingIds.value.add(cam.id)
     try {
-        const result = await computeCalibration(props.project.id, cam.id)
+        const result = await computeIntrinsic(props.project.id, cam.id)
         calibResultMap.value[cam.id] = result
         await loadCameraStatus(cam.id)
-        toast.success(t('calib.step5ComputeSuccess', { error: result.reprojectionError.toFixed(3) }))
+        toast.success(t('calib.step5ComputeIntrinsicSuccess', { error: result.reprojectionError.toFixed(3) }))
     } catch (e: unknown) {
         toast.error(e instanceof Error ? e.message : String(e))
     } finally {
-        computingIds.value.delete(cam.id)
+        intrinsicComputingIds.value.delete(cam.id)
+    }
+}
+
+async function doComputeExtrinsic(cam: CameraDeviceDto): Promise<void> {
+    if (!canComputeExtrinsic(cam.id) || extrinsicComputingIds.value.has(cam.id)) return
+    extrinsicComputingIds.value.add(cam.id)
+    try {
+        const result = await computeExtrinsic(props.project.id, cam.id)
+        calibResultMap.value[cam.id] = result
+        await loadCameraStatus(cam.id)
+        toast.success(t('calib.step5ComputeExtrinsicSuccess'))
+    } catch (e: unknown) {
+        toast.error(e instanceof Error ? e.message : String(e))
+    } finally {
+        extrinsicComputingIds.value.delete(cam.id)
     }
 }
 
@@ -483,6 +511,34 @@ async function doDeleteInvalidPhotos(cameraId: string): Promise<void> {
             }
         },
     })
+}
+
+// ─── 相机自动对齐 ─────────────────────────────────────────────────────────────
+
+/** 是否显示自动对齐按钮：双目项目 + 已绑定主相机电机轴 + 已绑定投影仪 */
+const showAutoAlign = computed<boolean>(() => {
+    return isStereoProject.value && !!props.project.mainCameraMotorAxisId && !!props.project.boundProjectorDeviceId
+})
+
+const aligningCameras = ref(false)
+const alignResult = ref<AutoAlignCamerasResultDto | null>(null)
+
+async function doAutoAlignCameras(): Promise<void> {
+    aligningCameras.value = true
+    alignResult.value = null
+    try {
+        const result = await autoAlignCameras(props.project.id)
+        alignResult.value = result
+        if (result.success) {
+            toast.success(t('calib.step5AlignSuccess'))
+        } else {
+            toast.warn(t('calib.step5AlignPartialFailed'))
+        }
+    } catch (e: unknown) {
+        toast.error(e instanceof Error ? e.message : String(e))
+    } finally {
+        aligningCameras.value = false
+    }
 }
 
 // ─── 解析内参矩阵为可读字符串 ─────────────────────────────────────────────────
@@ -636,7 +692,22 @@ onMounted(async () => {
                 </div>
             </div>
 
-            <div class="mt-3 flex justify-end">
+            <div class="mt-3 flex items-center justify-between gap-2">
+                <!-- 相机自动对齐按钮（双目+已绑定电机+投影仪时显示） -->
+                <Button
+                    v-if="showAutoAlign"
+                    size="small"
+                    severity="secondary"
+                    outlined
+                    class="!text-xs"
+                    :loading="aligningCameras"
+                    @click="doAutoAlignCameras"
+                >
+                    <Loader2 v-if="aligningCameras" class="mr-1.5 size-3 animate-spin" />
+                    {{ aligningCameras ? t('calib.step5AutoAligning') : t('calib.step5AutoAlignBtn') }}
+                </Button>
+                <span v-else />
+
                 <Button size="small" class="!text-xs" :loading="boardConfigSaving" @click="saveBoardConfig">
                     {{ t('calib.step5SaveBoardConfig') }}
                 </Button>
@@ -644,6 +715,40 @@ onMounted(async () => {
         </div>
 
         <!-- ── 相机列表 ────────────────────────────────────────────────── -->
+
+        <!-- 自动对齐结果展示区 -->
+        <div
+            v-if="alignResult"
+            :class="[
+                'rounded-lg border px-3 py-2 text-xs',
+                alignResult.success
+                    ? 'border-green-500/40 bg-green-500/5 text-green-200'
+                    : 'border-yellow-500/40 bg-yellow-500/5 text-yellow-200',
+            ]"
+        >
+            <p class="mb-1 font-semibold">{{ alignResult.message }}</p>
+            <div v-if="alignResult.mainCamera" class="mb-0.5">
+                <span class="text-muted-foreground">{{ alignResult.mainCamera.cameraRole }}：</span>
+                <span v-if="alignResult.mainCamera.skipped">{{ t('calib.step5AlignSkipped') }}</span>
+                <span v-else-if="alignResult.mainCamera.isAligned">
+                    {{ alignResult.mainCamera.message }}
+                    （{{ t('calib.step5AlignBefore') }} {{ alignResult.mainCamera.angleBeforeDeg?.toFixed(2) }}° →
+                    {{ t('calib.step5AlignAfter') }} {{ alignResult.mainCamera.angleAfterDeg?.toFixed(2) }}°）
+                </span>
+                <span v-else class="text-red-300">{{ alignResult.mainCamera.message }}</span>
+            </div>
+            <div v-if="alignResult.secondaryCamera">
+                <span class="text-muted-foreground">{{ alignResult.secondaryCamera.cameraRole }}：</span>
+                <span v-if="alignResult.secondaryCamera.skipped">{{ t('calib.step5AlignSkipped') }}</span>
+                <span v-else-if="alignResult.secondaryCamera.isAligned">
+                    {{ alignResult.secondaryCamera.message }}
+                    （{{ t('calib.step5AlignBefore') }} {{ alignResult.secondaryCamera.angleBeforeDeg?.toFixed(2) }}° →
+                    {{ t('calib.step5AlignAfter') }} {{ alignResult.secondaryCamera.angleAfterDeg?.toFixed(2) }}°）
+                </span>
+                <span v-else class="text-red-300">{{ alignResult.secondaryCamera.message }}</span>
+            </div>
+        </div>
+
         <div class="flex items-center justify-between gap-2">
             <span class="text-sm font-medium text-foreground">{{ t('calib.step5CameraList') }}</span>
             <Button severity="secondary" outlined size="small" :loading="loading" class="!text-xs" @click="loadCameras">
@@ -793,7 +898,7 @@ onMounted(async () => {
                                 <Button
                                     size="small"
                                     class="w-full !text-xs"
-                                    :loading="computingIds.has(cam.id)"
+                                    :loading="intrinsicComputingIds.has(cam.id)"
                                     :disabled="!canCompute(cam.id)"
                                     :title="
                                         !canCompute(cam.id)
@@ -803,9 +908,30 @@ onMounted(async () => {
                                               })
                                             : ''
                                     "
-                                    @click="doCompute(cam)"
+                                    @click="doComputeIntrinsic(cam)"
                                 >
-                                    {{ computingIds.has(cam.id) ? t('calib.step5Computing') : t('calib.step5Compute') }}
+                                    {{
+                                        intrinsicComputingIds.has(cam.id)
+                                            ? t('calib.step5Computing')
+                                            : t('calib.step5ComputeIntrinsic')
+                                    }}
+                                </Button>
+
+                                <Button
+                                    v-if="canUseProjectorExtrinsic(cam.id)"
+                                    size="small"
+                                    severity="secondary"
+                                    class="w-full !text-xs"
+                                    :loading="extrinsicComputingIds.has(cam.id)"
+                                    :disabled="!canComputeExtrinsic(cam.id)"
+                                    :title="!canComputeExtrinsic(cam.id) ? t('calib.step5ExtrinsicInsufficient') : ''"
+                                    @click="doComputeExtrinsic(cam)"
+                                >
+                                    {{
+                                        extrinsicComputingIds.has(cam.id)
+                                            ? t('calib.step5Computing')
+                                            : t('calib.step5ComputeExtrinsic')
+                                    }}
                                 </Button>
                             </div>
 

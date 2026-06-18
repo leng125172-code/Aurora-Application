@@ -1,0 +1,84 @@
+{
+  "通用": [
+    {
+      "name": "tuple_insert",
+      "short": "Inserts one or more elements into a tuple at index."
+    },
+    {
+      "name": "tuple_replace",
+      "short": "Replaces one or more elements of a tuple."
+    },
+    {
+      "name": "tuple_remove",
+      "short": "Remove elements from a tuple."
+    },
+    {
+      "name": "obj_diff",
+      "short": "Calculate the difference of two object tuples."
+    },
+    {
+      "name": "set_grayval",
+      "short": "Set single gray values in an image."
+    },
+    {
+      "name": "paint_xld",
+      "short": "Paint XLD objects into an image."
+    },
+    {
+      "name": "paint_region",
+      "short": "Paint regions into an image."
+    },
+    {
+      "name": "overpaint_region",
+      "short": "Overpaint regions in an image."
+    },
+    {
+      "name": "paint_gray",
+      "short": "Paint the gray values of an image into another image."
+    },
+    {
+      "name": "overpaint_gray",
+      "short": "Overpaint the gray values of an image."
+    },
+    {
+      "name": "integer_to_obj",
+      "short": "Convert an \"integer number\" into an iconic object."
+    },
+    {
+      "name": "obj_to_integer",
+      "short": "Convert an iconic object into an \"integer number.\""
+    },
+    {
+      "name": "copy_obj",
+      "short": "Copy an iconic object in the HALCON database."
+    },
+    {
+      "name": "concat_obj",
+      "short": "Concatenate two iconic object tuples."
+    },
+    {
+      "name": "clear_obj",
+      "short": "Delete an iconic object from the HALCON database."
+    },
+    {
+      "name": "select_obj",
+      "short": "Select objects from an object tuple."
+    },
+    {
+      "name": "gen_empty_obj",
+      "short": "Create an empty object tuple."
+    },
+    {
+      "name": "insert_obj",
+      "short": "Insert objects into an iconic object tuple."
+    },
+    {
+      "name": "remove_obj",
+      "short": "Remove objects from an iconic object tuple."
+    },
+    {
+      "name": "replace_obj",
+      "short": "Replaces one or more elements of an iconic object tuple."
+    }
+  ]
+}

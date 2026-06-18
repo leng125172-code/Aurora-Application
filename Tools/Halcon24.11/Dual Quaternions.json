@@ -1,0 +1,48 @@
+{
+  "通用": [
+    {
+      "name": "deserialize_dual_quat",
+      "short": "Deserialize a serialized dual quaternion."
+    },
+    {
+      "name": "dual_quat_compose",
+      "short": "Multiply two dual quaternions."
+    },
+    {
+      "name": "dual_quat_conjugate",
+      "short": "Conjugate a dual quaternion."
+    },
+    {
+      "name": "dual_quat_interpolate",
+      "short": "Interpolate two dual quaternions."
+    },
+    {
+      "name": "dual_quat_normalize",
+      "short": "Normalize a dual quaternion."
+    },
+    {
+      "name": "dual_quat_to_hom_mat3d",
+      "short": "Convert a unit dual quaternion into a homogeneous transformation matrix."
+    },
+    {
+      "name": "dual_quat_to_screw",
+      "short": "Convert a unit dual quaternion into a screw."
+    },
+    {
+      "name": "dual_quat_trans_line_3d",
+      "short": "Transform a 3D line with a unit dual quaternion."
+    },
+    {
+      "name": "screw_to_dual_quat",
+      "short": "Convert a screw into a dual quaternion."
+    },
+    {
+      "name": "serialize_dual_quat",
+      "short": "Serialize a dual quaternion."
+    },
+    {
+      "name": "dual_quat_trans_point_3d",
+      "short": "Transform a 3D point with a unit dual quaternion."
+    }
+  ]
+}

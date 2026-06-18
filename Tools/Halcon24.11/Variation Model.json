@@ -1,0 +1,60 @@
+{
+  "通用": [
+    {
+      "name": "deserialize_variation_model",
+      "short": "Deserialize a variation model."
+    },
+    {
+      "name": "serialize_variation_model",
+      "short": "Serialize a variation model."
+    },
+    {
+      "name": "read_variation_model",
+      "short": "Read a variation model from a file."
+    },
+    {
+      "name": "write_variation_model",
+      "short": "Write a variation model to a file."
+    },
+    {
+      "name": "get_thresh_images_variation_model",
+      "short": "Return the threshold images used for image comparison by a variation"
+    },
+    {
+      "name": "get_variation_model",
+      "short": "Return the images used for image comparison by a variation model."
+    },
+    {
+      "name": "compare_ext_variation_model",
+      "short": "Compare an image to a variation model."
+    },
+    {
+      "name": "compare_variation_model",
+      "short": "Compare an image to a variation model."
+    },
+    {
+      "name": "prepare_direct_variation_model",
+      "short": "Prepare a variation model for comparison with an image."
+    },
+    {
+      "name": "prepare_variation_model",
+      "short": "Prepare a variation model for comparison with an image."
+    },
+    {
+      "name": "train_variation_model",
+      "short": "Train a variation model."
+    },
+    {
+      "name": "clear_variation_model",
+      "short": "Free the memory of a variation model."
+    },
+    {
+      "name": "clear_train_data_variation_model",
+      "short": "Free the memory of the training data of a variation model."
+    },
+    {
+      "name": "create_variation_model",
+      "short": "Create a variation model for image comparison."
+    }
+  ]
+}

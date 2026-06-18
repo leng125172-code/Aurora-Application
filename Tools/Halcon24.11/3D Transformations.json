@@ -1,0 +1,84 @@
+{
+  "通用": [
+    {
+      "name": "deserialize_hom_mat3d",
+      "short": "Deserialize a serialized homogeneous 3D transformation matrix."
+    },
+    {
+      "name": "serialize_hom_mat3d",
+      "short": "Serialize a homogeneous 3D transformation matrix."
+    },
+    {
+      "name": "projective_trans_hom_point_3d",
+      "short": "Project a homogeneous 3D point using a projective transformation"
+    },
+    {
+      "name": "projective_trans_point_3d",
+      "short": "Project a 3D point using a projective transformation matrix."
+    },
+    {
+      "name": "affine_trans_point_3d",
+      "short": "Apply an arbitrary affine 3D transformation to points."
+    },
+    {
+      "name": "vector_to_hom_mat3d",
+      "short": "Approximate a 3D transformation from point correspondences."
+    },
+    {
+      "name": "hom_mat3d_determinant",
+      "short": "Compute the determinant of a homogeneous 3D transformation matrix."
+    },
+    {
+      "name": "hom_mat3d_transpose",
+      "short": "Transpose a homogeneous 3D transformation matrix."
+    },
+    {
+      "name": "hom_mat3d_invert",
+      "short": "Invert a homogeneous 3D transformation matrix."
+    },
+    {
+      "name": "hom_mat3d_compose",
+      "short": "Multiply two homogeneous 3D transformation matrices."
+    },
+    {
+      "name": "hom_mat3d_rotate_local",
+      "short": "Add a rotation to a homogeneous 3D transformation matrix."
+    },
+    {
+      "name": "hom_mat3d_rotate",
+      "short": "Add a rotation to a homogeneous 3D transformation matrix."
+    },
+    {
+      "name": "hom_mat3d_scale_local",
+      "short": "Add a scaling to a homogeneous 3D transformation matrix."
+    },
+    {
+      "name": "hom_mat3d_scale",
+      "short": "Add a scaling to a homogeneous 3D transformation matrix."
+    },
+    {
+      "name": "hom_mat3d_translate_local",
+      "short": "Add a translation to a homogeneous 3D transformation matrix."
+    },
+    {
+      "name": "hom_mat3d_translate",
+      "short": "Add a translation to a homogeneous 3D transformation matrix."
+    },
+    {
+      "name": "hom_mat3d_identity",
+      "short": "Generate the homogeneous transformation matrix of the identical 3D"
+    },
+    {
+      "name": "hom_mat3d_to_pose",
+      "short": "Convert a homogeneous transformation matrix into a 3D pose."
+    },
+    {
+      "name": "pose_to_hom_mat3d",
+      "short": "Convert a 3D pose into a homogeneous transformation matrix."
+    },
+    {
+      "name": "point_pluecker_line_to_hom_mat3d",
+      "short": "Approximate a 3D affine transformation from 3D point-to-line"
+    }
+  ]
+}

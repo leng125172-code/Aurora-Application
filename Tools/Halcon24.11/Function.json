@@ -1,0 +1,100 @@
+{
+  "通用": [
+    {
+      "name": "compose_funct_1d",
+      "short": "Compose two functions."
+    },
+    {
+      "name": "invert_funct_1d",
+      "short": "Calculate the inverse of a function."
+    },
+    {
+      "name": "derivate_funct_1d",
+      "short": "Calculate the derivatives of a function."
+    },
+    {
+      "name": "local_min_max_funct_1d",
+      "short": "Calculate the local minimum and maximum points of a function."
+    },
+    {
+      "name": "zero_crossings_funct_1d",
+      "short": "Calculate the zero crossings of a function."
+    },
+    {
+      "name": "scale_y_funct_1d",
+      "short": "Multiplication and addition of the y values."
+    },
+    {
+      "name": "negate_funct_1d",
+      "short": "Negation of the y values."
+    },
+    {
+      "name": "abs_funct_1d",
+      "short": "Absolute value of the y values."
+    },
+    {
+      "name": "get_y_value_funct_1d",
+      "short": "Return the value of a function at an arbitrary position."
+    },
+    {
+      "name": "get_pair_funct_1d",
+      "short": "Access a function value using the index of the control points."
+    },
+    {
+      "name": "num_points_funct_1d",
+      "short": "Number of control points of the function."
+    },
+    {
+      "name": "y_range_funct_1d",
+      "short": "Smallest and largest y value of the function."
+    },
+    {
+      "name": "x_range_funct_1d",
+      "short": "Smallest and largest x value of the function."
+    },
+    {
+      "name": "funct_1d_to_pairs",
+      "short": "Access to the x/y values of a function."
+    },
+    {
+      "name": "sample_funct_1d",
+      "short": "Sample a function equidistantly in an interval."
+    },
+    {
+      "name": "transform_funct_1d",
+      "short": "Transform a function using given transformation parameters."
+    },
+    {
+      "name": "match_funct_1d_trans",
+      "short": "Calculate transformation parameters between two functions."
+    },
+    {
+      "name": "smooth_funct_1d_gauss",
+      "short": "Smooth an equidistant 1D function with a Gaussian function."
+    },
+    {
+      "name": "integrate_funct_1d",
+      "short": "Compute the positive and negative areas of a function."
+    },
+    {
+      "name": "read_funct_1d",
+      "short": "Read a function from a file."
+    },
+    {
+      "name": "write_funct_1d",
+      "short": "Write a function to a file."
+    },
+    {
+      "name": "create_funct_1d_array",
+      "short": "Create a function from a sequence of y values."
+    },
+    {
+      "name": "create_funct_1d_pairs",
+      "short": "Create a function from a set of (x,y) pairs."
+    },
+    {
+      "name": "smooth_funct_1d_mean",
+      "short": "Smooth an equidistant 1D function by averaging its values."
+    }
+  ]
+}

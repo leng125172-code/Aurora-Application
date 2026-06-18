@@ -1,0 +1,664 @@
+{
+  "通用": [
+    {
+      "name": "clear_all_variation_models",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "bundle_adjust_mosaic",
+      "short": "Perform a bundle adjustment of an image mosaic."
+    },
+    {
+      "name": "proj_match_points_distortion_ransac_guided",
+      "short": "Compute a projective transformation matrix and the radial distortion"
+    },
+    {
+      "name": "proj_match_points_distortion_ransac",
+      "short": "Compute a projective transformation matrix between two images and"
+    },
+    {
+      "name": "proj_match_points_ransac_guided",
+      "short": "Compute a projective transformation matrix between two images by"
+    },
+    {
+      "name": "proj_match_points_ransac",
+      "short": "Compute a projective transformation matrix between two images by"
+    },
+    {
+      "name": "clear_all_scattered_data_interpolators",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "clear_scattered_data_interpolator",
+      "short": "Clear a scattered data interpolator."
+    },
+    {
+      "name": "interpolate_scattered_data",
+      "short": "Interpolation of scattered data using a scattered data interpolator."
+    },
+    {
+      "name": "create_scattered_data_interpolator",
+      "short": "Creates an interpolator for the interpolation of scattered data."
+    },
+    {
+      "name": "interpolate_scattered_data_points_to_image",
+      "short": "Creating an image from the interpolation of scattered data."
+    },
+    {
+      "name": "interpolate_scattered_data_image",
+      "short": "Interpolation of an image."
+    },
+    {
+      "name": "close_all_serials",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "close_all_sockets",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "clear_all_sheet_of_light_models",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "clear_all_serialized_items",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "clear_all_text_results",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "clear_all_text_models",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "clear_all_stereo_models",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "clear_all_conditions",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "clear_all_barriers",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "clear_all_events",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "clear_all_mutexes",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "close_all_ocvs",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "clear_all_ocr_class_knn",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "clear_all_lexica",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "clear_all_ocr_class_svm",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "clear_all_ocr_class_mlp",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "close_all_ocrs",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "clear_all_metrology_models",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "close_all_measures",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "clear_all_matrices",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "clear_all_sample_identifiers",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "clear_all_shape_models",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "clear_all_descriptor_models",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "clear_all_deformable_models",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "clear_all_ncc_models",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "clear_all_surface_matching_results",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "clear_all_surface_models",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "clear_all_shape_model_3d",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "clear_all_object_model_3d",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "read_kalman",
+      "short": "Read the description file of a Kalman filter."
+    },
+    {
+      "name": "update_kalman",
+      "short": "Read an update file of a Kalman filter."
+    },
+    {
+      "name": "filter_kalman",
+      "short": "Estimate the current state of a system with the help of the"
+    },
+    {
+      "name": "hough_circles",
+      "short": "Detect centers of circles for a specific radius using the Hough transform."
+    },
+    {
+      "name": "hough_circle_trans",
+      "short": "Return the Hough-Transform for circles with a given radius."
+    },
+    {
+      "name": "hough_lines_dir",
+      "short": "Detect lines in edge images with the help of the Hough transform"
+    },
+    {
+      "name": "hough_line_trans_dir",
+      "short": "Compute the Hough transform for lines using local gradient direction."
+    },
+    {
+      "name": "hough_lines",
+      "short": "Detect lines in edge images with the help of the Hough transform and"
+    },
+    {
+      "name": "hough_line_trans",
+      "short": "Produce the Hough transform for lines within regions."
+    },
+    {
+      "name": "select_matching_lines",
+      "short": "Select those lines from a set of lines (in HNF) which"
+    },
+    {
+      "name": "find_rectification_grid",
+      "short": "Segment the rectification grid region in the image."
+    },
+    {
+      "name": "create_rectification_grid",
+      "short": "Generate a PostScript file, which describes the rectification grid."
+    },
+    {
+      "name": "connect_grid_points",
+      "short": "Establish connections between the grid points of the rectification grid."
+    },
+    {
+      "name": "gen_grid_rectification_map",
+      "short": "Compute the mapping between the distorted image and the rectified image"
+    },
+    {
+      "name": "gen_arbitrary_distortion_map",
+      "short": "Generate a projection map that describes the mapping between an arbitrarily"
+    },
+    {
+      "name": "projection_pl",
+      "short": "Calculate the projection of a point onto a line."
+    },
+    {
+      "name": "get_points_ellipse",
+      "short": "Calculate points on the perimeter of an ellipse."
+    },
+    {
+      "name": "intersection_ll",
+      "short": "Calculate the intersection point of two lines."
+    },
+    {
+      "name": "intersection_contours_xld",
+      "short": "Calculate the intersection points of two XLD contours"
+    },
+    {
+      "name": "intersection_circle_contour_xld",
+      "short": "Calculate the intersection points of a circle or circular arc and an"
+    },
+    {
+      "name": "intersection_circles",
+      "short": "Calculate the intersection points of two circles or circular arcs"
+    },
+    {
+      "name": "intersection_line_contour_xld",
+      "short": "Calculate the intersection points of a line and an XLD contour"
+    },
+    {
+      "name": "intersection_line_circle",
+      "short": "Calculate the intersection points of a line and a circle or circular arc"
+    },
+    {
+      "name": "intersection_lines",
+      "short": "Calculate the intersection point of two lines"
+    },
+    {
+      "name": "intersection_segment_contour_xld",
+      "short": "Calculate the intersection points of a segment and an XLD contour"
+    },
+    {
+      "name": "intersection_segment_circle",
+      "short": "Calculate the intersection points of a segment and a circle or circular arc"
+    },
+    {
+      "name": "intersection_segment_line",
+      "short": "Calculate the intersection point of a segment and a line"
+    },
+    {
+      "name": "intersection_segments",
+      "short": "Calculate the intersection point of two line segments"
+    },
+    {
+      "name": "clear_distance_transform_xld",
+      "short": "Clear a XLD distance transform."
+    },
+    {
+      "name": "apply_distance_transform_xld",
+      "short": "Determine the pointwise distance of two contours using an XLD distance"
+    },
+    {
+      "name": "read_distance_transform_xld",
+      "short": "Read an XLD distance transform from a file."
+    },
+    {
+      "name": "deserialize_distance_transform_xld",
+      "short": "Deserialize an XLD distance transform."
+    },
+    {
+      "name": "serialize_distance_transform_xld",
+      "short": "Serialize an XLD distance transform."
+    },
+    {
+      "name": "write_distance_transform_xld",
+      "short": "Write an XLD distance transform into a file."
+    },
+    {
+      "name": "set_distance_transform_xld_param",
+      "short": "Set new parameters for an XLD distance transform."
+    },
+    {
+      "name": "get_distance_transform_xld_param",
+      "short": "Get the parameters used to build an XLD distance transform."
+    },
+    {
+      "name": "get_distance_transform_xld_contour",
+      "short": "Get the reference contour used to build the XLD distance transform."
+    },
+    {
+      "name": "create_distance_transform_xld",
+      "short": "Create the XLD distance transform."
+    },
+    {
+      "name": "distance_contours_xld",
+      "short": "Calculate the pointwise distance from one contour to another."
+    },
+    {
+      "name": "distance_cc_min",
+      "short": "Calculate the minimum distance between two contours."
+    },
+    {
+      "name": "distance_cc",
+      "short": "Calculate the distance between two contours."
+    },
+    {
+      "name": "distance_sc",
+      "short": "Calculate the distance between a line segment and one contour."
+    },
+    {
+      "name": "distance_lc",
+      "short": "Calculate the distance between a line and one contour."
+    },
+    {
+      "name": "distance_pc",
+      "short": "Calculate the distance between a point and one contour."
+    },
+    {
+      "name": "distance_sr",
+      "short": "Calculate the distance between a line segment and one region."
+    },
+    {
+      "name": "distance_lr",
+      "short": "Calculate the distance between a line and a region."
+    },
+    {
+      "name": "distance_pr",
+      "short": "Calculate the distance between a point and a region."
+    },
+    {
+      "name": "angle_lx",
+      "short": "Calculate the angle between one line and the horizontal axis."
+    },
+    {
+      "name": "angle_ll",
+      "short": "Calculate the angle between two lines."
+    },
+    {
+      "name": "distance_sl",
+      "short": "Calculate the distances between a line segment and a line."
+    },
+    {
+      "name": "distance_ss",
+      "short": "Calculate the distances between two line segments."
+    },
+    {
+      "name": "distance_ps",
+      "short": "Calculate the distances between a point and a line segment."
+    },
+    {
+      "name": "distance_pl",
+      "short": "Calculate the distance between one point and one line."
+    },
+    {
+      "name": "distance_pp",
+      "short": "Calculate the distance between two points."
+    },
+    {
+      "name": "compose_funct_1d",
+      "short": "Compose two functions."
+    },
+    {
+      "name": "invert_funct_1d",
+      "short": "Calculate the inverse of a function."
+    },
+    {
+      "name": "derivate_funct_1d",
+      "short": "Calculate the derivatives of a function."
+    },
+    {
+      "name": "local_min_max_funct_1d",
+      "short": "Calculate the local minimum and maximum points of a function."
+    },
+    {
+      "name": "zero_crossings_funct_1d",
+      "short": "Calculate the zero crossings of a function."
+    },
+    {
+      "name": "scale_y_funct_1d",
+      "short": "Multiplication and addition of the y values."
+    },
+    {
+      "name": "negate_funct_1d",
+      "short": "Negation of the y values."
+    },
+    {
+      "name": "abs_funct_1d",
+      "short": "Absolute value of the y values."
+    },
+    {
+      "name": "get_y_value_funct_1d",
+      "short": "Return the value of a function at an arbitrary position."
+    },
+    {
+      "name": "get_pair_funct_1d",
+      "short": "Access a function value using the index of the control points."
+    },
+    {
+      "name": "num_points_funct_1d",
+      "short": "Number of control points of the function."
+    },
+    {
+      "name": "y_range_funct_1d",
+      "short": "Smallest and largest y value of the function."
+    },
+    {
+      "name": "x_range_funct_1d",
+      "short": "Smallest and largest x value of the function."
+    },
+    {
+      "name": "funct_1d_to_pairs",
+      "short": "Access to the x/y values of a function."
+    },
+    {
+      "name": "sample_funct_1d",
+      "short": "Sample a function equidistantly in an interval."
+    },
+    {
+      "name": "transform_funct_1d",
+      "short": "Transform a function using given transformation parameters."
+    },
+    {
+      "name": "match_funct_1d_trans",
+      "short": "Calculate transformation parameters between two functions."
+    },
+    {
+      "name": "distance_funct_1d",
+      "short": "Compute the distance of two functions."
+    },
+    {
+      "name": "smooth_funct_1d_gauss",
+      "short": "Smooth an equidistant 1D function with a Gaussian function."
+    },
+    {
+      "name": "integrate_funct_1d",
+      "short": "Compute the positive and negative areas of a function."
+    },
+    {
+      "name": "read_funct_1d",
+      "short": "Read a function from a file."
+    },
+    {
+      "name": "write_funct_1d",
+      "short": "Write a function to a file."
+    },
+    {
+      "name": "create_funct_1d_array",
+      "short": "Create a function from a sequence of y values."
+    },
+    {
+      "name": "create_funct_1d_pairs",
+      "short": "Create a function from a set of (x,y) pairs."
+    },
+    {
+      "name": "smooth_funct_1d_mean",
+      "short": "Smooth an equidistant 1D function by averaging its values."
+    },
+    {
+      "name": "clear_all_templates",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "clear_all_color_trans_luts",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "adjust_mosaic_images",
+      "short": "Apply an automatic color correction to panorama images."
+    },
+    {
+      "name": "gen_cube_map_mosaic",
+      "short": "Create 6 cube map images of a spherical mosaic."
+    },
+    {
+      "name": "gen_spherical_mosaic",
+      "short": "Create a spherical mosaic image."
+    },
+    {
+      "name": "gen_bundle_adjusted_mosaic",
+      "short": "Combine multiple images into a mosaic image."
+    },
+    {
+      "name": "gen_projective_mosaic",
+      "short": "Combine multiple images into a mosaic image."
+    },
+    {
+      "name": "close_all_files",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "distance_rr_min",
+      "short": "Minimum distance between the contour pixels of two regions each."
+    },
+    {
+      "name": "distance_rr_min_dil",
+      "short": "Minimum distance between two regions with the help of dilation."
+    },
+    {
+      "name": "select_lines_longest",
+      "short": "Select the longest input lines."
+    },
+    {
+      "name": "partition_lines",
+      "short": "Partition lines according to various criteria."
+    },
+    {
+      "name": "select_lines",
+      "short": "Select lines according to various criteria."
+    },
+    {
+      "name": "line_position",
+      "short": "Calculate the center of gravity, length, and orientation of a line."
+    },
+    {
+      "name": "line_orientation",
+      "short": "Calculate the orientation of lines."
+    },
+    {
+      "name": "approx_chain_simple",
+      "short": "Approximate a contour by arcs and lines."
+    },
+    {
+      "name": "approx_chain",
+      "short": "Approximate a contour by arcs and lines."
+    },
+    {
+      "name": "clear_all_data_code_2d_models",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "clear_all_class_train_data",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "clear_all_class_knn",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "clear_all_class_lut",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "clear_all_class_gmm",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "clear_all_class_svm",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "clear_all_class_mlp",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "close_all_class_box",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "clear_all_camera_setup_models",
+      "short": "Free the memory of all camera setup models."
+    },
+    {
+      "name": "clear_all_calib_data",
+      "short": "Free the memory of all calibration data models."
+    },
+    {
+      "name": "clear_all_bar_code_models",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "close_bg_esti",
+      "short": "Delete the background estimation data set."
+    },
+    {
+      "name": "give_bg_esti",
+      "short": "Return the estimated background image."
+    },
+    {
+      "name": "update_bg_esti",
+      "short": "Change the estimated background image."
+    },
+    {
+      "name": "run_bg_esti",
+      "short": "Estimate the background and return the foreground region."
+    },
+    {
+      "name": "get_bg_esti_params",
+      "short": "Return the parameters of the data set."
+    },
+    {
+      "name": "set_bg_esti_params",
+      "short": "Change the parameters of the data set."
+    },
+    {
+      "name": "create_bg_esti",
+      "short": "Generate and initialize a data set for the background estimation."
+    },
+    {
+      "name": "close_all_bg_esti",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "close_all_framegrabbers",
+      "short": "This operator is inoperable. It had the following function:"
+    },
+    {
+      "name": "distance_cc_min_points",
+      "short": "Calculate the minimum distance between two contours and the points used for"
+    },
+    {
+      "name": "area_intersection_rectangle2",
+      "short": "Calculate the intersection area of oriented rectangles."
+    },
+    {
+      "name": "distance_point_line",
+      "short": "Calculate the distance between a 3D point and a 3D line given by two"
+    },
+    {
+      "name": "distance_point_pluecker_line",
+      "short": "Calculate the distance between a 3D point and a 3D line given by"
+    },
+    {
+      "name": "pluecker_line_to_point_direction",
+      "short": "Convert a 3D line given by Plücker coordinates to a 3D line given by"
+    },
+    {
+      "name": "pluecker_line_to_points",
+      "short": "Convert a 3D line given by Plücker coordinates to a 3D line given by"
+    },
+    {
+      "name": "point_direction_to_pluecker_line",
+      "short": "Convert a 3D line given by a point and a direction to Plücker"
+    },
+    {
+      "name": "points_to_pluecker_line",
+      "short": "Convert a 3D line given by two points to Plücker coordinates."
+    }
+  ]
+}

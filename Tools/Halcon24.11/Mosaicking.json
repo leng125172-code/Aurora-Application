@@ -1,0 +1,44 @@
+{
+  "通用": [
+    {
+      "name": "bundle_adjust_mosaic",
+      "short": "Perform a bundle adjustment of an image mosaic."
+    },
+    {
+      "name": "proj_match_points_distortion_ransac_guided",
+      "short": "Compute a projective transformation matrix and the radial distortion"
+    },
+    {
+      "name": "proj_match_points_distortion_ransac",
+      "short": "Compute a projective transformation matrix between two images and"
+    },
+    {
+      "name": "proj_match_points_ransac_guided",
+      "short": "Compute a projective transformation matrix between two images by"
+    },
+    {
+      "name": "proj_match_points_ransac",
+      "short": "Compute a projective transformation matrix between two images by"
+    },
+    {
+      "name": "adjust_mosaic_images",
+      "short": "Apply an automatic color correction to panorama images."
+    },
+    {
+      "name": "gen_cube_map_mosaic",
+      "short": "Create 6 cube map images of a spherical mosaic."
+    },
+    {
+      "name": "gen_spherical_mosaic",
+      "short": "Create a spherical mosaic image."
+    },
+    {
+      "name": "gen_bundle_adjusted_mosaic",
+      "short": "Combine multiple images into a mosaic image."
+    },
+    {
+      "name": "gen_projective_mosaic",
+      "short": "Combine multiple images into a mosaic image."
+    }
+  ]
+}

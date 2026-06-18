@@ -1,0 +1,44 @@
+{
+  "通用": [
+    {
+      "name": "clear_stereo_model",
+      "short": "Free the memory of a stereo model."
+    },
+    {
+      "name": "reconstruct_points_stereo",
+      "short": "Reconstruct 3D points from calibrated multi-view stereo images."
+    },
+    {
+      "name": "reconstruct_surface_stereo",
+      "short": "Reconstruct surface from calibrated multi-view stereo images."
+    },
+    {
+      "name": "get_stereo_model_object",
+      "short": "Get intermediate iconic results of a stereo reconstruction."
+    },
+    {
+      "name": "get_stereo_model_image_pairs",
+      "short": "Return the list of image pairs set in a stereo model."
+    },
+    {
+      "name": "set_stereo_model_image_pairs",
+      "short": "Specify image pairs to be used for surface stereo reconstruction."
+    },
+    {
+      "name": "get_stereo_model_param",
+      "short": "Get stereo model parameters."
+    },
+    {
+      "name": "set_stereo_model_param",
+      "short": "Set stereo model parameters."
+    },
+    {
+      "name": "create_stereo_model",
+      "short": "Create a HALCON stereo model."
+    },
+    {
+      "name": "get_stereo_model_object_model_3d",
+      "short": "Get intermediate 3D object model of a stereo reconstruction"
+    }
+  ]
+}

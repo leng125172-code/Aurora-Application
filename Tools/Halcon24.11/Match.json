@@ -1,0 +1,20 @@
+{
+  "通用": [
+    {
+      "name": "exhaustive_match_mg",
+      "short": "Matching a template and an image in a resolution pyramid."
+    },
+    {
+      "name": "exhaustive_match",
+      "short": "Matching of a template and an image."
+    },
+    {
+      "name": "gen_gauss_pyramid",
+      "short": "Calculating a Gauss pyramid."
+    },
+    {
+      "name": "monotony",
+      "short": "Calculating the monotony operation."
+    }
+  ]
+}

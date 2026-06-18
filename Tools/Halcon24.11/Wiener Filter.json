@@ -1,0 +1,28 @@
+{
+  "通用": [
+    {
+      "name": "wiener_filter_ni",
+      "short": "Image restoration by Wiener filtering."
+    },
+    {
+      "name": "wiener_filter",
+      "short": "Image restoration by Wiener filtering."
+    },
+    {
+      "name": "gen_psf_motion",
+      "short": "Generate an impulse response of a (linearly) motion blurring."
+    },
+    {
+      "name": "simulate_motion",
+      "short": "Simulation of (linearly) motion blur."
+    },
+    {
+      "name": "gen_psf_defocus",
+      "short": "Generate an impulse response of an uniform out-of-focus blurring."
+    },
+    {
+      "name": "simulate_defocus",
+      "short": "Simulate an uniform out-of-focus blurring of an image."
+    }
+  ]
+}

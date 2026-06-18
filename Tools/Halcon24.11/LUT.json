@@ -1,0 +1,16 @@
+{
+  "通用": [
+    {
+      "name": "query_lut",
+      "short": "Query all available look-up-tables (lut)."
+    },
+    {
+      "name": "get_lut",
+      "short": "Get current look-up-table (lut)."
+    },
+    {
+      "name": "set_lut",
+      "short": "Set \"look-up-table\" (lut)."
+    }
+  ]
+}

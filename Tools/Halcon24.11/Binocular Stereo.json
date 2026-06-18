@@ -1,0 +1,100 @@
+{
+  "通用": [
+    {
+      "name": "binocular_distance_ms",
+      "short": "Compute the distance values for a rectified stereo image pair using"
+    },
+    {
+      "name": "binocular_disparity_ms",
+      "short": "Compute the disparities of a rectified stereo image pair using"
+    },
+    {
+      "name": "binocular_distance_mg",
+      "short": "Compute the distance values for a rectified stereo image pair using"
+    },
+    {
+      "name": "binocular_disparity_mg",
+      "short": "Compute the disparities of a rectified stereo image pair using multigrid"
+    },
+    {
+      "name": "reconst3d_from_fundamental_matrix",
+      "short": "Compute the projective 3d reconstruction of points based on the fundamental"
+    },
+    {
+      "name": "gen_binocular_proj_rectification",
+      "short": "Compute the projective rectification of weakly calibrated binocular"
+    },
+    {
+      "name": "vector_to_fundamental_matrix_distortion",
+      "short": "Compute the fundamental matrix and the radial distortion coefficient"
+    },
+    {
+      "name": "rel_pose_to_fundamental_matrix",
+      "short": "Compute the fundamental matrix from the relative orientation of two"
+    },
+    {
+      "name": "essential_to_fundamental_matrix",
+      "short": "Compute the fundamental matrix from an essential matrix."
+    },
+    {
+      "name": "vector_to_rel_pose",
+      "short": "Compute the relative orientation between two cameras given image point"
+    },
+    {
+      "name": "vector_to_essential_matrix",
+      "short": "Compute the essential matrix given image point correspondences"
+    },
+    {
+      "name": "vector_to_fundamental_matrix",
+      "short": "Compute the fundamental matrix given a set of image point"
+    },
+    {
+      "name": "match_fundamental_matrix_distortion_ransac",
+      "short": "Compute the fundamental matrix and the radial distortion coefficient"
+    },
+    {
+      "name": "match_rel_pose_ransac",
+      "short": "Compute the relative orientation between two cameras by automatically"
+    },
+    {
+      "name": "match_essential_matrix_ransac",
+      "short": "Compute the essential matrix for a pair of stereo images by automatically"
+    },
+    {
+      "name": "match_fundamental_matrix_ransac",
+      "short": "Compute the fundamental matrix for a pair of stereo images by"
+    },
+    {
+      "name": "binocular_distance",
+      "short": "Compute the distance values for a rectified stereo image pair using"
+    },
+    {
+      "name": "binocular_disparity",
+      "short": "Compute the disparities of a rectified image pair using correlation"
+    },
+    {
+      "name": "intersect_lines_of_sight",
+      "short": "Get a 3D point from the intersection of two lines of sight"
+    },
+    {
+      "name": "disparity_image_to_xyz",
+      "short": "Transform a disparity image into 3D points in a rectified stereo"
+    },
+    {
+      "name": "disparity_to_point_3d",
+      "short": "Transform an image point and its disparity into a 3D point in a"
+    },
+    {
+      "name": "disparity_to_distance",
+      "short": "Transform a disparity value into a distance value in a rectified"
+    },
+    {
+      "name": "distance_to_disparity",
+      "short": "Transform a distance value into a disparity in a rectified stereo"
+    },
+    {
+      "name": "gen_binocular_rectification_map",
+      "short": "Generate transformation maps that describe the mapping of the images"
+    }
+  ]
+}

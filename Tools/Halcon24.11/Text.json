@@ -1,0 +1,52 @@
+{
+  "通用": [
+    {
+      "name": "write_string",
+      "short": "Print text in a window."
+    },
+    {
+      "name": "set_tposition",
+      "short": "Set the position of the text cursor."
+    },
+    {
+      "name": "read_string",
+      "short": "Read a string in a text window."
+    },
+    {
+      "name": "read_char",
+      "short": "Read a character from a window."
+    },
+    {
+      "name": "new_line",
+      "short": "Set the position of the text cursor to the beginning of the next line."
+    },
+    {
+      "name": "get_tposition",
+      "short": "Get cursor position."
+    },
+    {
+      "name": "get_font_extents",
+      "short": "Get the maximum size of all characters of a font."
+    },
+    {
+      "name": "get_string_extents",
+      "short": "Get the spatial size of a string."
+    },
+    {
+      "name": "query_font",
+      "short": "Query the available fonts."
+    },
+    {
+      "name": "set_font",
+      "short": "Set the font used for text output."
+    },
+    {
+      "name": "get_font",
+      "short": "Get the current font."
+    },
+    {
+      "name": "disp_text",
+      "short": "Display text in a window."
+    }
+  ]
+}

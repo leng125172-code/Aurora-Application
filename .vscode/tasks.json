@@ -1,0 +1,96 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "rk3588-install-vsdbg",
+            "type": "process",
+            "command": "ssh",
+            "args": [
+                "${input:rk3588SshTarget}",
+                "bash -lc 'mkdir -p \"${input:rk3588VsdbgDir}\" && if [ ! -x \"${input:rk3588VsdbgDir}/vsdbg\" ]; then curl -fsSL https://aka.ms/getvsdbgsh | bash /dev/stdin -v latest -l \"${input:rk3588VsdbgDir}\"; fi'"
+            ],
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared",
+                "clear": true
+            }
+        },
+        {
+            "label": "rk3588-publish-httpapi-host",
+            "type": "process",
+            "command": "python",
+            "args": [
+                "D:\\GitRepos\\Aurora Application\\Tools\\AppUpdateServer\\AppUpdateClient.py",
+                "--host",
+                "${input:rk3588SshHost}",
+                "--projects",
+                "AuroraStruct3D.HttpApi.Host"
+            ],
+            "group": "build",
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared",
+                "clear": true
+            }
+        },
+        {
+            "label": "rk3588-publish-dbmigrator",
+            "type": "process",
+            "command": "python",
+            "args": [
+                "D:\\GitRepos\\Aurora Application\\Tools\\AppUpdateServer\\AppUpdateClient.py",
+                "--host",
+                "${input:rk3588SshHost}",
+                "--projects",
+                "AuroraStruct3D.DbMigrator"
+            ],
+            "group": "build",
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared",
+                "clear": true
+            }
+        },
+        {
+            "label": "rk3588-prepare-httpapi-host",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "rk3588-install-vsdbg",
+                "rk3588-publish-httpapi-host"
+            ],
+            "problemMatcher": []
+        },
+        {
+            "label": "rk3588-prepare-dbmigrator",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "rk3588-install-vsdbg",
+                "rk3588-publish-dbmigrator"
+            ],
+            "problemMatcher": []
+        }
+    ],
+    "inputs": [
+        {
+            "id": "rk3588SshTarget",
+            "type": "promptString",
+            "description": "远程 SSH 目标（user@host）",
+            "default": "linaro@10.180.199.143"
+        },
+        {
+            "id": "rk3588SshHost",
+            "type": "promptString",
+            "description": "远程主机 IP 或域名",
+            "default": "10.180.199.143"
+        },
+        {
+            "id": "rk3588VsdbgDir",
+            "type": "promptString",
+            "description": "远程 vsdbg 安装目录",
+            "default": "/home/linaro/.vsdbg"
+        }
+    ]
+}

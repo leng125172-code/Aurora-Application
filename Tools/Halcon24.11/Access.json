@@ -1,0 +1,144 @@
+{
+  "通用": [
+    {
+      "name": "get_parallels_xld",
+      "short": "Return an XLD parallel's data (as lines)."
+    },
+    {
+      "name": "get_lines_xld",
+      "short": "Return an XLD polygon's data (as lines)."
+    },
+    {
+      "name": "get_polygon_xld",
+      "short": "Return an XLD polygon's data."
+    },
+    {
+      "name": "get_contour_xld",
+      "short": "Return the coordinates of an XLD contour."
+    },
+    {
+      "name": "get_image_pointer1_rect",
+      "short": "Access to the image data pointer and the image data inside"
+    },
+    {
+      "name": "get_image_pointer3",
+      "short": "Access the pointers of a colored image."
+    },
+    {
+      "name": "get_image_pointer1",
+      "short": "Access the pointer of a channel."
+    },
+    {
+      "name": "get_image_type",
+      "short": "Return the type of an image."
+    },
+    {
+      "name": "get_image_size",
+      "short": "Return the size of an image."
+    },
+    {
+      "name": "get_image_time",
+      "short": "Request time at which the image was created."
+    },
+    {
+      "name": "get_grayval_interpolated",
+      "short": "Return gray values of an image at the positions given by tuples of"
+    },
+    {
+      "name": "get_grayval",
+      "short": "Access the gray values of an image object."
+    },
+    {
+      "name": "get_region_polygon",
+      "short": "Polygon approximation of a region."
+    },
+    {
+      "name": "get_region_points",
+      "short": "Access the pixels of a region."
+    },
+    {
+      "name": "get_region_contour",
+      "short": "Access the contour of an object."
+    },
+    {
+      "name": "get_region_runs",
+      "short": "Access the runlength coding of a region."
+    },
+    {
+      "name": "get_region_convex",
+      "short": "Access convex hull as contour."
+    },
+    {
+      "name": "set_diagonal_matrix",
+      "short": "Set the diagonal elements of a matrix."
+    },
+    {
+      "name": "get_diagonal_matrix",
+      "short": "Get the diagonal elements of a matrix."
+    },
+    {
+      "name": "set_sub_matrix",
+      "short": "Set a sub-matrix of a matrix."
+    },
+    {
+      "name": "get_sub_matrix",
+      "short": "Get a sub-matrix of a matrix."
+    },
+    {
+      "name": "set_full_matrix",
+      "short": "Set all values of a matrix."
+    },
+    {
+      "name": "get_full_matrix",
+      "short": "Return all values of a matrix."
+    },
+    {
+      "name": "set_value_matrix",
+      "short": "Set one or more elements of a matrix."
+    },
+    {
+      "name": "get_value_matrix",
+      "short": "Return one ore more elements of a matrix."
+    },
+    {
+      "name": "open_file",
+      "short": "Open a file in text or binary format."
+    },
+    {
+      "name": "fwrite_string",
+      "short": "Write strings and numbers into a text file."
+    },
+    {
+      "name": "fread_line",
+      "short": "Read a character line from a text file."
+    },
+    {
+      "name": "fread_string",
+      "short": "Read a string from a text file."
+    },
+    {
+      "name": "fread_char",
+      "short": "Read one character from a text file."
+    },
+    {
+      "name": "fnew_line",
+      "short": "Write a line break and clear the output buffer."
+    },
+    {
+      "name": "close_file",
+      "short": "Closing a text file."
+    },
+    {
+      "name": "get_grayval_contour_xld",
+      "short": "Return gray values of an image at the positions of an XLD contour."
+    },
+    {
+      "name": "fread_bytes",
+      "short": "Read bytes from a binary file."
+    },
+    {
+      "name": "fwrite_bytes",
+      "short": "Write bytes to a binary file."
+    }
+  ]
+}

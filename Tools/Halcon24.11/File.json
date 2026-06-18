@@ -1,0 +1,232 @@
+{
+  "通用": [
+    {
+      "name": "read_polygon_xld_arc_info",
+      "short": "Read XLD polygons from a file in ARC/INFO generate format."
+    },
+    {
+      "name": "write_polygon_xld_arc_info",
+      "short": "Write XLD polygons to a file in ARC/INFO generate format."
+    },
+    {
+      "name": "read_contour_xld_arc_info",
+      "short": "Read XLD contours to a file in ARC/INFO generate format."
+    },
+    {
+      "name": "write_contour_xld_arc_info",
+      "short": "Write XLD contours to a file in ARC/INFO generate format."
+    },
+    {
+      "name": "read_world_file",
+      "short": "Read the geo coding from an ARC/INFO world file."
+    },
+    {
+      "name": "deserialize_tuple",
+      "short": "  Deserialize a serialized tuple."
+    },
+    {
+      "name": "serialize_tuple",
+      "short": "Serialize a tuple."
+    },
+    {
+      "name": "write_tuple",
+      "short": "Write a tuple to a file."
+    },
+    {
+      "name": "read_tuple",
+      "short": "Read a tuple from a file."
+    },
+    {
+      "name": "deserialize_matrix",
+      "short": "  Deserialize a serialized matrix."
+    },
+    {
+      "name": "serialize_matrix",
+      "short": "Serialize a matrix."
+    },
+    {
+      "name": "read_matrix",
+      "short": "Read a matrix from a file."
+    },
+    {
+      "name": "write_matrix",
+      "short": "Write a matrix to a file."
+    },
+    {
+      "name": "deserialize_xld",
+      "short": "Deserialize a serialized XLD object."
+    },
+    {
+      "name": "serialize_xld",
+      "short": "Serialize an XLD object."
+    },
+    {
+      "name": "read_polygon_xld_dxf",
+      "short": "Read XLD polygons from a DXF file."
+    },
+    {
+      "name": "write_polygon_xld_dxf",
+      "short": "Write XLD polygons to a file in DXF format."
+    },
+    {
+      "name": "read_contour_xld_dxf",
+      "short": "Read XLD contours from a DXF file."
+    },
+    {
+      "name": "write_contour_xld_dxf",
+      "short": "Write XLD contours to a file in DXF format."
+    },
+    {
+      "name": "copy_file",
+      "short": "Copy a file to a new location."
+    },
+    {
+      "name": "set_current_dir",
+      "short": "Set the current working directory."
+    },
+    {
+      "name": "get_current_dir",
+      "short": "Get the current working directory."
+    },
+    {
+      "name": "remove_dir",
+      "short": "Delete an empty directory."
+    },
+    {
+      "name": "make_dir",
+      "short": "Make a directory."
+    },
+    {
+      "name": "list_files",
+      "short": "List all files in a directory."
+    },
+    {
+      "name": "delete_file",
+      "short": "Delete a file."
+    },
+    {
+      "name": "file_exists",
+      "short": "Check whether file exists."
+    },
+    {
+      "name": "read_object",
+      "short": "Read an iconic object."
+    },
+    {
+      "name": "write_object",
+      "short": "Write an iconic object."
+    },
+    {
+      "name": "deserialize_object",
+      "short": "Deserialize a serialized iconic object."
+    },
+    {
+      "name": "serialize_object",
+      "short": "Serialize an iconic object."
+    },
+    {
+      "name": "deserialize_image",
+      "short": "Deserialize a serialized image object."
+    },
+    {
+      "name": "serialize_image",
+      "short": "Serialize an image object."
+    },
+    {
+      "name": "deserialize_region",
+      "short": "Deserialize a serialized region."
+    },
+    {
+      "name": "serialize_region",
+      "short": "Serialize a region."
+    },
+    {
+      "name": "write_region",
+      "short": "Write regions to a file."
+    },
+    {
+      "name": "write_image",
+      "short": "Write images in graphic formats."
+    },
+    {
+      "name": "read_sequence",
+      "short": "Read images."
+    },
+    {
+      "name": "read_region",
+      "short": "Read binary images or HALCON regions."
+    },
+    {
+      "name": "read_image",
+      "short": "Read an image with different file formats."
+    },
+    {
+      "name": "open_file",
+      "short": "Open a file in text or binary format."
+    },
+    {
+      "name": "fwrite_string",
+      "short": "Write strings and numbers into a text file."
+    },
+    {
+      "name": "fread_line",
+      "short": "Read a character line from a text file."
+    },
+    {
+      "name": "fread_string",
+      "short": "Read a string from a text file."
+    },
+    {
+      "name": "fread_char",
+      "short": "Read one character from a text file."
+    },
+    {
+      "name": "fnew_line",
+      "short": "Write a line break and clear the output buffer."
+    },
+    {
+      "name": "close_file",
+      "short": "Closing a text file."
+    },
+    {
+      "name": "deserialize_handle",
+      "short": "Deserialize a serialized item."
+    },
+    {
+      "name": "serialize_handle",
+      "short": "Serialize the content of a handle."
+    },
+    {
+      "name": "tuple_is_serializable",
+      "short": "Test if a tuple is serializable."
+    },
+    {
+      "name": "tuple_is_serializable_elem",
+      "short": "Test if the elements of a tuple are serializable."
+    },
+    {
+      "name": "fread_bytes",
+      "short": "Read bytes from a binary file."
+    },
+    {
+      "name": "fwrite_bytes",
+      "short": "Write bytes to a binary file."
+    },
+    {
+      "name": "read_image_metadata",
+      "short": "Read metadata from image files."
+    },
+    {
+      "name": "write_image_metadata",
+      "short": "Write metadata of image files."
+    },
+    {
+      "name": "image_to_memory_block",
+      "short": "Write an image to a memory block in various graphic formats."
+    },
+    {
+      "name": "memory_block_to_image",
+      "short": "Read an image from a memory block with different file formats."
+    }
+  ]
+}
