@@ -156,6 +156,12 @@ public static class ServiceCollectionExtensions
             "files",
             "calib-photos"
         );
+        var operatorFilesBasePath = ResolveBlobBasePath(
+            configuration,
+            "BlobStoring:OperatorFiles:BasePath",
+            "files",
+            "operator-files"
+        );
 
         service.Configure<AbpBlobStoringOptions>(options =>
         {
@@ -193,6 +199,17 @@ public static class ServiceCollectionExtensions
                     container.UseFileSystem(fileSystem =>
                     {
                         fileSystem.BasePath = calibPhotosBasePath;
+                    });
+                }
+            );
+
+            // 算子文件上传容器，使用本地文件系统存储
+            options.Containers.Configure<AuroraStruct3D.OperatorFile.OperatorFileBlobContainer>(
+                container =>
+                {
+                    container.UseFileSystem(fileSystem =>
+                    {
+                        fileSystem.BasePath = operatorFilesBasePath;
                     });
                 }
             );

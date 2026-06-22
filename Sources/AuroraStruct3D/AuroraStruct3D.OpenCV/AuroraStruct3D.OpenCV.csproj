@@ -25,6 +25,11 @@
             Version="$(OpenCvSharp4Version)"
             Condition="'$(RuntimeIdentifier)' == 'linux-arm64'"
         /> -->
+
+        <!-- 算子注册表：分布式缓存抽象（宿主项目注入 Redis 实现） -->
+        <PackageReference Include="Microsoft.Extensions.Caching.Abstractions" Version="10.0.2" />
+        <!-- 算子注册表：启动初始化器 IHostedService -->
+        <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.2" />
     </ItemGroup>
 
     <!--

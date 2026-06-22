@@ -5,15 +5,19 @@ namespace AuroraStruct3D.OpenCV.VisionParameters;
 /// 用于在工作流节点之间传递图像数据。
 /// </summary>
 [DisplayName("图像矩阵")]
+[MatTypeAttribute(PortMatType.Image2D)]
 public class MatImg : IVisionParameter
 {
     private Mat? _mat;
 
-    /// <summary>参数名称，由工作流引擎或算子在绑定时赋值。</summary>
+    /// <summary>参数变量名，工作流连线唯一标识符。</summary>
     public string? ParameterName { get; set; }
 
-    /// <summary>参数类型全名，用于工作流引擎进行类型匹配校验。</summary>
-    public string ParameterType => typeof(Mat).FullName ?? nameof(Mat);
+    /// <summary>端口 UI 显示名（实例级），为 null 时回退到类型上的 [DisplayName] 特性。</summary>
+    public string? DisplayName { get; set; }
+
+    /// <summary>参数实际数据类型：<see cref="Mat"/>。</summary>
+    public Type ParameterType => typeof(Mat);
 
     /// <summary>
     /// 获取或设置参数值（<see cref="Mat"/> 实例）。
@@ -28,7 +32,7 @@ public class MatImg : IVisionParameter
         get => _mat;
         set
         {
-            if (ErrorCheck && value is not null and not Mat)
+            if (ErrorCheck && value != null && !(value is Mat))
             {
                 throw new ArgumentException(
                     $"参数 {ParameterName} 的值必须是 {nameof(Mat)} 类型，"
@@ -47,6 +51,14 @@ public class MatImg : IVisionParameter
 
     /// <summary>是否在赋值时进行类型校验。</summary>
     public bool ErrorCheck { get; set; }
+
+    public PortControlType ControlType => PortControlType.Variable;
+
+    /// <summary>
+    /// 判断图像是否为彩色图像（通道数 >= 3）。
+    /// 灰度图像返回 false，彩色图像返回 true。
+    /// </summary>
+    public bool IsColor => _mat != null && _mat.Channels() >= 3;
 
     /// <summary>
     /// 初始化 <see cref="MatImg"/> 实例。

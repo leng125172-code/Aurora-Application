@@ -2,6 +2,7 @@ using AuroraStruct3D.AI;
 using AuroraStruct3D.DeviceState;
 using AuroraStruct3D.Ktech;
 using AuroraStruct3D.Leisai;
+using AuroraStruct3D.OpenCV;
 using AuroraStruct3D.Projectors;
 using AuroraStruct3D.RS485;
 using AuroraStruct3D.Tucam;
@@ -36,6 +37,10 @@ namespace AuroraStruct3D
     {
         public override void ConfigureServices(ServiceConfigurationContext context)
         {
+            // 注册 OpenCV 算子注册表服务（IOperatorRegistry + Redis 缓存 + 启动时自动扫描算子）
+            // 依赖：IDistributedCache（Redis）须已在 HttpApi.Host 完成注册
+            context.Services.AddOpenCVServices();
+
             // 注册 AI 模型运行时服务为单例
             context.Services.AddAiServices();
 

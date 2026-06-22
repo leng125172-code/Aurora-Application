@@ -1,7 +1,20 @@
 namespace AuroraStruct3D.OpenCV.VisionParameters;
 
-[DisplayName("图片路径")]
-public class ImgFilePath : IVisionParameter
+/// <summary>
+/// 点云文件路径参数，用于验证点云文件路径的合法性。
+/// <para>
+/// 支持的点云文件格式：
+/// <list type="bullet">
+///   <item><description>PLY - Polygon File Format</description></item>
+///   <item><description>PCD - Point Cloud Data</description></item>
+///   <item><description>XYZ - 简单文本格式</description></item>
+///   <item><description>TXT - 文本格式</description></item>
+///   <item><description>PTS - Leica点云格式</description></item>
+/// </list>
+/// </para>
+/// </summary>
+[DisplayName("点云文件路径")]
+public class PointCloudFilePath : IVisionParameter
 {
     /// <summary>参数变量名，工作流连线唯一标识符。</summary>
     public string? ParameterName { get; set; }
@@ -9,7 +22,7 @@ public class ImgFilePath : IVisionParameter
     /// <summary>端口 UI 显示名（实例级），为 null 时回退到类型上的 [DisplayName] 特性。</summary>
     public string? DisplayName { get; set; }
 
-    /// <summary>参数实际数据类型：图片路径的值为 <see cref="string"/>。</summary>
+    /// <summary>参数实际数据类型：点云文件路径的值为 <see cref="string"/>。</summary>
     public Type ParameterType => typeof(string);
 
     private object? _value;
@@ -25,7 +38,9 @@ public class ImgFilePath : IVisionParameter
                 _value = value;
             }
             else
+            {
                 _value = value;
+            }
         }
     }
 
@@ -35,27 +50,12 @@ public class ImgFilePath : IVisionParameter
 
     public bool ErrorCheck { get; set; }
 
-    public PortControlType ControlType => PortControlType.ImageUpload;
+    public PortControlType ControlType => PortControlType.PointCloudUpload;
 
-    public ImgFilePath(bool errorCheck)
+    public PointCloudFilePath(bool errorCheck)
     {
         ErrorCheck = errorCheck;
-        ValueLimit = new string[]
-        {
-            ".jpg",
-            ".jpeg",
-            ".png",
-            ".jpe",
-            ".bmp",
-            ".tif",
-            ".tiff",
-            ".ppm",
-            ".pgm",
-            ".pbm",
-            ".webp",
-            ".sr",
-            ".ras",
-        };
+        ValueLimit = new string[] { ".ply", ".pcd", ".xyz", ".txt", ".pts", ".asc" };
     }
 
     private bool CheckValue(object? value)
@@ -72,14 +72,16 @@ public class ImgFilePath : IVisionParameter
         }
 
         string filePath = value as string ?? string.Empty;
-        if (filePath == null)
+        if (string.IsNullOrEmpty(filePath))
         {
             throw new ArgumentException("文件路径不能为空");
         }
+
         if (!System.IO.File.Exists(filePath))
         {
             throw new ArgumentException($"文件路径 {filePath} 不存在");
         }
+
         string fileExtension = System.IO.Path.GetExtension(filePath).ToLower();
         string[] allowedExtensions = ValueLimit as string[] ?? Array.Empty<string>();
         if (!allowedExtensions.Contains(fileExtension))
@@ -89,14 +91,7 @@ public class ImgFilePath : IVisionParameter
             );
         }
 
-        if (!System.IO.File.Exists(filePath))
-        {
-            throw new ArgumentException($"文件路径 {filePath} 不存在");
-        }
-        else
-        {
-            // 文件路径合法且文件类型受支持
-            return true;
-        }
+        // 文件路径合法且文件类型受支持
+        return true;
     }
 }
