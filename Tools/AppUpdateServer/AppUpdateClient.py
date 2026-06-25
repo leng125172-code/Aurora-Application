@@ -198,6 +198,8 @@ def publish_project(project_name: str, index: int, total: int) -> None:
         FRAMEWORK,
         "-v",
         "minimal",
+        "-p:BuildInParallel=false",
+        "-p:UseSharedCompilation=false",
     ]
     print(f">>> {' '.join(cmd)}\n")
 

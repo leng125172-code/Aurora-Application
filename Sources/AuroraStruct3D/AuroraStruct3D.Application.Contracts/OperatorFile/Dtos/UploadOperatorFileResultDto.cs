@@ -2,11 +2,22 @@ namespace AuroraStruct3D.OperatorFile.Dtos;
 
 /// <summary>
 /// 上传算子文件结果 DTO。
+/// <para>
+/// 图片上传：<see cref="PreviewImages"/> 包含 1 个灰度预览图下载 URL。
+/// 点云上传：<see cref="PreviewImages"/> 包含 3 个三视图灰度预览图下载 URL（俯视、正视、侧视）。
+/// </para>
+/// <para>
+/// 文件有效期：上传后若未在 <see cref="ExpiresAt"/> 之前通过 <c>ConfirmAsync</c> 确认使用，
+/// 文件将被定时清理任务自动删除。
+/// </para>
 /// </summary>
 public class UploadOperatorFileResultDto
 {
     /// <summary>上传是否成功。</summary>
     public bool Success { get; set; }
+
+    /// <summary>所属项目唯一标识。</summary>
+    public Guid ProjectId { get; set; }
 
     /// <summary>算子唯一标识。</summary>
     public Guid OperatorId { get; set; }
@@ -25,4 +36,31 @@ public class UploadOperatorFileResultDto
 
     /// <summary>文件 MD5 校验值。</summary>
     public string Md5 { get; set; } = string.Empty;
+
+    /// <summary>文件过期时间。超过此时间未被确认使用，将被自动清理。</summary>
+    public DateTime? ExpiresAt { get; set; }
+
+    /// <summary>是否已被确认使用。</summary>
+    public bool IsUsed { get; set; }
+
+    /// <summary>
+    /// 预览图下载 URL 列表。
+    /// <list type="bullet">
+    ///   <item>图片：1 个灰度预览图 URL</item>
+    ///   <item>点云：3 个三视图灰度预览图 URL（俯视、正视、侧视）</item>
+    /// </list>
+    /// </summary>
+    public List<PreviewImageDto> PreviewImages { get; set; } = new();
+}
+
+/// <summary>
+/// 预览图信息 DTO。
+/// </summary>
+public class PreviewImageDto
+{
+    /// <summary>预览图名称标识，如 "灰度图"、"俯视图"、"正视图"、"侧视图"。</summary>
+    public string Label { get; set; } = string.Empty;
+
+    /// <summary>预览图下载 URL（完整路径，含 scheme + host + port）。</summary>
+    public string DownloadUrl { get; set; } = string.Empty;
 }

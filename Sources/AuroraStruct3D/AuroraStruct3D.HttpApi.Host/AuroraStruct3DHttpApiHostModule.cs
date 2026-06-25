@@ -12,6 +12,7 @@ using AuroraStruct3D.Services;
 using AuroraStruct3D.Sessions;
 using AuroraStruct3D.Streaming;
 using AuroraStruct3D.Tucam;
+using Hangfire;
 using Lion.AbpPro.CAP;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
@@ -290,6 +291,15 @@ namespace AuroraStruct3D
 
             // 触发投影机扫描 Job
             await jobManager.EnqueueAsync(new ProjectorInitScanJobArgs());
+
+            // 注册定时清理过期算子文件 Job（每小时执行一次）
+            IRecurringJobManager recurringJobManager =
+                context.ServiceProvider.GetRequiredService<IRecurringJobManager>();
+            recurringJobManager.AddOrUpdate<CleanupExpiredOperatorFilesJob>(
+                "cleanup-expired-operator-files",
+                job => job.ExecuteAsync(new CleanupExpiredOperatorFilesJobArgs()),
+                Cron.Hourly
+            );
         }
     }
 }

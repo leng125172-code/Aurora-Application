@@ -3,6 +3,7 @@ using AuroraStruct3D.Calibration;
 using AuroraStruct3D.Cameras;
 using AuroraStruct3D.DeviceState;
 using AuroraStruct3D.Motors;
+using AuroraStruct3D.OperatorFile;
 using AuroraStruct3D.ProductModels;
 using AuroraStruct3D.Projectors;
 using AuroraStruct3D.Projects;
@@ -142,6 +143,9 @@ namespace AuroraStruct3D.EntityFrameworkCore
         // ── 项目管理模块 ─────────────────────────────────────────────────────────
         public DbSet<ProjectInfo> ProjectInfos { get; set; }
 
+        // ── 算子文件模块 ─────────────────────────────────────────────────────────
+        public DbSet<OperatorFileRecord> OperatorFileRecords { get; set; }
+
         public AuroraStruct3DDbContext(DbContextOptions<AuroraStruct3DDbContext> options)
             : base(options) { }
 
@@ -204,6 +208,9 @@ namespace AuroraStruct3D.EntityFrameworkCore
 
             // 项目管理模块
             builder.ConfigureProjectInfo();
+
+            // 算子文件模块
+            builder.ConfigureOperatorFileRecord();
         }
     }
 }
