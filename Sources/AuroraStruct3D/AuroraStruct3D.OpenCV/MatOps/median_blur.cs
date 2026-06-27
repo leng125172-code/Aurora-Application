@@ -15,16 +15,22 @@ namespace AuroraStruct3D.OpenCV.MatOps;
 /// </para>
 /// </summary>
 [Guid("3b2c4d5e-6f70-8901-bcde-f12345678902")]
-[Category("2D降噪滤波")]
-[DisplayName("2D 中值滤波")]
-[Description("使用中值滤波去除椒盐噪声，保留边缘信息。")]
+[Category("2D预处理")]
+[DisplayName("中值滤波")]
+[Description("专门干掉椒盐噪声那种孤立亮点暗点，边缘还能基本保住。")]
 public class median_blur : IOperator
 {
     public static List<IVisionParameter>? InputVisionParameters =>
-        new() { new MatImg() { ParameterName = "input_mat" } };
+        new()
+        {
+            new MatImg() { ParameterName = "input_mat", DisplayName = "输入图像" },
+        };
 
     public static List<IVisionParameter>? OutputVisionParameters =>
-        new() { new MatImg() { ParameterName = "output_mat" } };
+        new()
+        {
+            new MatImg() { ParameterName = "output_mat", DisplayName = "输出图像" },
+        };
 
     public static List<IConfigParameter>? ConfigParameters =>
         new()

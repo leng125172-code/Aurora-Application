@@ -15,8 +15,9 @@ namespace AuroraStruct3D.OpenCV.Workflow.Statements;
 /// </code>
 /// </para>
 /// <para>
-/// 循环变量写入<b>子作用域</b>，不污染父作用域；
-/// 子作用域可读取父作用域的所有变量（只读）。
+/// 循环变量与循环体内的写入都作用在<b>当前作用域</b>（与 Halcon 一致）：
+/// 循环体产生的变量（算子输出、累加器等）跨迭代保留，循环结束后在外层依然可见。
+/// 循环结束后循环变量保留最后一次迭代的值。
 /// </para>
 /// </summary>
 public sealed class ForLoopStatement : IWorkflowStatement
@@ -63,8 +64,8 @@ public sealed class ForLoopStatement : IWorkflowStatement
     }
 
     /// <summary>
-    /// 执行 for 循环：为每次迭代创建子作用域，将循环变量写入子作用域，
-    /// 然后依次执行循环体语句。
+    /// 执行 for 循环：在当前作用域内逐次将循环变量赋值并执行循环体。
+    /// 循环体的写入保留在当前作用域，跨迭代可累加、循环后可见（与 Halcon 一致）。
     /// </summary>
     public void Execute(IWorkflowContext context)
     {
@@ -73,13 +74,11 @@ public sealed class ForLoopStatement : IWorkflowStatement
 
         for (double i = From; isAscending ? i <= To : i >= To; i += Step)
         {
-            // 每次迭代创建独立子作用域，隔离父作用域写入
-            IWorkflowContext loopScope = context.CreateChildScope();
-            loopScope.Set(VariableName, i);
+            context.Set(VariableName, i);
 
             foreach (IWorkflowStatement statement in Body)
             {
-                statement.Execute(loopScope);
+                statement.Execute(context);
             }
         }
     }

@@ -20,23 +20,23 @@ namespace AuroraStruct3D.OpenCV.MatOps;
 /// </para>
 /// </summary>
 [Guid("e8f90123-4567-89ab-cdef-0123456789ab")]
-[Category("矩阵操作")]
+[Category("2D预处理")]
 [DisplayName("彩色转灰度")]
-[Description("将彩色图像或点云颜色数据转换为灰度。")]
+[Description("彩图转灰度图，很多检测算子只认灰度图，先转一道。")]
 public class color_to_grayscale : IOperator
 {
     public static List<IVisionParameter>? InputVisionParameters =>
         new()
         {
-            new MatImg() { ParameterName = "input_mat" },
-            new PointCloudData() { ParameterName = "input_point_cloud" },
+            new MatImg() { ParameterName = "input_mat", DisplayName = "输入图像" },
+            new PointCloudData() { ParameterName = "input_point_cloud", DisplayName = "输入点云" },
         };
 
     public static List<IVisionParameter>? OutputVisionParameters =>
         new()
         {
-            new MatImg() { ParameterName = "gray_mat" },
-            new PointCloudData() { ParameterName = "output_point_cloud" },
+            new MatImg() { ParameterName = "gray_mat", DisplayName = "灰度图像" },
+            new PointCloudData() { ParameterName = "output_point_cloud", DisplayName = "输出点云" },
         };
 
     public static List<IConfigParameter>? ConfigParameters => null;

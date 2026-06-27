@@ -24,21 +24,25 @@ namespace AuroraStruct3D.OpenCV.ThresholdOps;
 /// </para>
 /// </summary>
 [Guid("a1b2c3d4-0002-4000-8000-000000000010")]
-[Category("阈值分割")]
-[DisplayName("2D 阈值分割")]
-[Description("将灰度图转换为二值图像，支持固定阈值、Otsu 自动阈值和自适应阈值三种模式。")]
+[Category("2D检测定位")]
+[DisplayName("阈值分割")]
+[Description("按灰度卡个阈值，把目标和背景分开（手动设阈值）。")]
 public class threshold : IOperator
 {
     public static List<IVisionParameter>? InputVisionParameters =>
-        new() { new MatImg() { ParameterName = "input_mat" } };
+        new()
+        {
+            new MatImg() { ParameterName = "input_mat", DisplayName = "输入图像" },
+        };
 
     public static List<IVisionParameter>? OutputVisionParameters =>
         new()
         {
-            new MatImg() { ParameterName = "output_mat" },
+            new MatImg() { ParameterName = "output_mat", DisplayName = "二值图像" },
             new VisionParameter<double>
             {
                 ParameterName = "threshold_value",
+                DisplayName = "阈值",
                 ParameterType = typeof(double),
                 ControlType = PortControlType.Download,
             },

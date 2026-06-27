@@ -140,12 +140,9 @@ public class RoiPartitionMetadata
 /// </para>
 /// </summary>
 [Guid("a1b2c3d4-0001-4000-8000-000000000001")]
-[Category("ROI 分区")]
+[Category("2D预处理")]
 [DisplayName("ROI 分区掩膜")]
-[Description(
-    "根据结构化 ROI 参数生成每个 ROI 的独立掩膜，"
-    + "支持矩形/多边形/路径/圆形/扇形五种类型，合并由前端处理。"
-)]
+[Description("圈出感兴趣区域做掩膜，只处理框里那块，支持矩形/多边形/路径/圆形/扇形。")]
 public class roi_partition : IOperator
 {
     public static List<IVisionParameter>? InputVisionParameters =>
@@ -158,12 +155,14 @@ public class roi_partition : IOperator
             {
                 ParameterName = "output_masks",
                 ParameterType = typeof(List<Mat>),
+                DisplayName = "输出掩膜",
             },
             new VisionParameter<string>
             {
                 ParameterName = "roi_metadata",
                 ParameterType = typeof(string),
                 ControlType = PortControlType.Download,
+                DisplayName = "ROI元数据",
             },
         };
 

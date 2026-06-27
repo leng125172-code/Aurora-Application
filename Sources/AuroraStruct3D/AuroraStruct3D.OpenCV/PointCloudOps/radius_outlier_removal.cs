@@ -16,16 +16,16 @@ namespace AuroraStruct3D.OpenCV.PointCloudOps;
 /// </para>
 /// </summary>
 [Guid("9b809123-4567-8901-2345-678901234508")]
-[Category("3D降噪滤波")]
-[DisplayName("3D 半径滤波")]
-[Description("基于半径范围邻域点数去除孤立噪点。")]
+[Category("3D点云预处理")]
+[DisplayName("半径滤波")]
+[Description("半径范围内邻居太少的点当噪点删掉，清飞点。")]
 public class radius_outlier_removal : IOperator
 {
     public static List<IVisionParameter>? InputVisionParameters =>
-        new() { new PointCloudData() { ParameterName = "input_point_cloud" } };
+        new() { new PointCloudData() { ParameterName = "input_point_cloud", DisplayName = "输入点云" } };
 
     public static List<IVisionParameter>? OutputVisionParameters =>
-        new() { new PointCloudData() { ParameterName = "output_point_cloud" } };
+        new() { new PointCloudData() { ParameterName = "output_point_cloud", DisplayName = "输出点云" } };
 
     public static List<IConfigParameter>? ConfigParameters =>
         new()

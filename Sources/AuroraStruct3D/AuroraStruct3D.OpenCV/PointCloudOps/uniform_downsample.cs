@@ -15,16 +15,16 @@ namespace AuroraStruct3D.OpenCV.PointCloudOps;
 /// </para>
 /// </summary>
 [Guid("c2e12345-6789-0123-4567-89012345670b")]
-[Category("3D降噪滤波")]
-[DisplayName("3D 均匀采样")]
-[Description("按固定步长等间隔保留点云，保留原始点精确位置。")]
+[Category("3D点云预处理")]
+[DisplayName("均匀采样")]
+[Description("按固定间隔均匀抽稀点云，简单快速地减量。")]
 public class uniform_downsample : IOperator
 {
     public static List<IVisionParameter>? InputVisionParameters =>
-        new() { new PointCloudData() { ParameterName = "input_point_cloud" } };
+        new() { new PointCloudData() { ParameterName = "input_point_cloud", DisplayName = "输入点云" } };
 
     public static List<IVisionParameter>? OutputVisionParameters =>
-        new() { new PointCloudData() { ParameterName = "output_point_cloud" } };
+        new() { new PointCloudData() { ParameterName = "output_point_cloud", DisplayName = "输出点云" } };
 
     public static List<IConfigParameter>? ConfigParameters =>
         new()

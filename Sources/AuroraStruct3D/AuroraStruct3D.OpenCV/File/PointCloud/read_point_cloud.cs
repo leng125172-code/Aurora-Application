@@ -28,24 +28,22 @@ namespace AuroraStruct3D.OpenCV.File.PointCloud;
 /// </para>
 /// </summary>
 [Guid("a1b2c3d4-e5f6-7890-abcd-ef1234567890")]
-[Category("文件操作")]
+[Category("数据读取")]
 [DisplayName("读取点云")]
-[Description(
-    "从文件系统读取点云文件，支持 PLY、PCD、XYZ 等多种格式。输出点云坐标矩阵和颜色矩阵供后续节点使用。"
-)]
+[Description("从文件把点云读进来，支持 PLY/PCD/XYZ 等格式，3D 流程的起点。")]
 public class read_point_cloud : IOperator
 {
     /// <summary>
     /// 输入端口定义（工作流引擎反射用）。
     /// </summary>
     public static List<IVisionParameter>? InputVisionParameters =>
-        new() { new PointCloudFilePath(errorCheck: true) { ParameterName = "point_cloud_path" } };
+        new() { new PointCloudFilePath(errorCheck: true) { ParameterName = "point_cloud_path", DisplayName = "点云路径" } };
 
     /// <summary>
     /// 输出端口定义（工作流引擎反射用）。
     /// </summary>
     public static List<IVisionParameter>? OutputVisionParameters =>
-        new() { new PointCloudData() { ParameterName = "output_point_cloud" } };
+        new() { new PointCloudData() { ParameterName = "output_point_cloud", DisplayName = "输出点云" } };
 
     /// <summary>
     /// 构造函数配置参数定义（工作流引擎反射用）。

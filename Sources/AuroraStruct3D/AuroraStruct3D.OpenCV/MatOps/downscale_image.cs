@@ -15,16 +15,22 @@ namespace AuroraStruct3D.OpenCV.MatOps;
 /// </para>
 /// </summary>
 [Guid("7f607089-1234-5678-f012-123456789006")]
-[Category("2D降噪滤波")]
-[DisplayName("2D 降分辨率")]
-[Description("使用高斯金字塔降低图像分辨率，每次迭代缩小一半。")]
+[Category("2D预处理")]
+[DisplayName("降分辨率")]
+[Description("图太大跑得慢，先缩小一圈提提速，调试看效果够用。")]
 public class downscale_image : IOperator
 {
     public static List<IVisionParameter>? InputVisionParameters =>
-        new() { new MatImg() { ParameterName = "input_mat" } };
+        new()
+        {
+            new MatImg() { ParameterName = "input_mat", DisplayName = "输入图像" },
+        };
 
     public static List<IVisionParameter>? OutputVisionParameters =>
-        new() { new MatImg() { ParameterName = "output_mat" } };
+        new()
+        {
+            new MatImg() { ParameterName = "output_mat", DisplayName = "输出图像" },
+        };
 
     public static List<IConfigParameter>? ConfigParameters =>
         new()

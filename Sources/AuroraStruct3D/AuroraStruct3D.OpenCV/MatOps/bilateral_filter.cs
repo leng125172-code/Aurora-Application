@@ -15,16 +15,22 @@ namespace AuroraStruct3D.OpenCV.MatOps;
 /// </para>
 /// </summary>
 [Guid("4c3d5e6f-7089-0123-cdef-123456789003")]
-[Category("2D降噪滤波")]
-[DisplayName("2D 双边滤波")]
-[Description("保留边缘的降噪滤波，同时考虑空间邻近度和像素相似度。")]
+[Category("2D预处理")]
+[DisplayName("双边滤波")]
+[Description("既能磨平噪声又不糊边，想保留边缘又降噪时用它。")]
 public class bilateral_filter : IOperator
 {
     public static List<IVisionParameter>? InputVisionParameters =>
-        new() { new MatImg() { ParameterName = "input_mat" } };
+        new()
+        {
+            new MatImg() { ParameterName = "input_mat", DisplayName = "输入图像" },
+        };
 
     public static List<IVisionParameter>? OutputVisionParameters =>
-        new() { new MatImg() { ParameterName = "output_mat" } };
+        new()
+        {
+            new MatImg() { ParameterName = "output_mat", DisplayName = "输出图像" },
+        };
 
     public static List<IConfigParameter>? ConfigParameters =>
         new()

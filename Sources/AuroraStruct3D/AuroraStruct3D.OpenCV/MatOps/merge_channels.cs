@@ -19,21 +19,24 @@ namespace AuroraStruct3D.OpenCV.MatOps;
 /// </para>
 /// </summary>
 [Guid("d7e8f901-2345-6789-abcd-ef0123456789")]
-[Category("矩阵操作")]
+[Category("2D预处理")]
 [DisplayName("合并通道")]
-[Description("合并通道为多通道矩阵，支持 XY/XZ/YZ/XYZ 四种模式。")]
+[Description("把几张单通道图拼回一张多通道彩图。")]
 public class merge_channels : IOperator
 {
     public static List<IVisionParameter>? InputVisionParameters =>
         new()
         {
-            new MatImg() { ParameterName = "channel_x" },
-            new MatImg() { ParameterName = "channel_y" },
-            new MatImg() { ParameterName = "channel_z" },
+            new MatImg() { ParameterName = "channel_x", DisplayName = "通道X" },
+            new MatImg() { ParameterName = "channel_y", DisplayName = "通道Y" },
+            new MatImg() { ParameterName = "channel_z", DisplayName = "通道Z" },
         };
 
     public static List<IVisionParameter>? OutputVisionParameters =>
-        new() { new MatImg() { ParameterName = "merged_mat" } };
+        new()
+        {
+            new MatImg() { ParameterName = "merged_mat", DisplayName = "合并矩阵" },
+        };
 
     public static List<IConfigParameter>? ConfigParameters =>
         new()

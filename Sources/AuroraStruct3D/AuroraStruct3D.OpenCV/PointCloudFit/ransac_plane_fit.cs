@@ -1,3 +1,5 @@
+using AuroraStruct3D.OpenCV.Common;
+
 namespace AuroraStruct3D.OpenCV.PointCloudFit;
 
 /// <summary>
@@ -16,20 +18,23 @@ namespace AuroraStruct3D.OpenCV.PointCloudFit;
 /// </para>
 /// </summary>
 [Guid("d3f12345-6789-0123-4567-89012345670c")]
-[Category("平面拟合")]
-[DisplayName("RANSAC 平面拟合")]
-[Description("使用 RANSAC 算法从点云中鲁棒拟合平面，自动分离内点和外点。")]
+[Category("3D拟合测量")]
+[DisplayName("RANSAC拟合")]
+[Description("有离群点也能稳稳拟合平面，自动把内点外点分开。")]
 public class ransac_plane_fit : IOperator
 {
     public static List<IVisionParameter>? InputVisionParameters =>
-        new() { new PointCloudData() { ParameterName = "input_point_cloud" } };
+        new()
+        {
+            new PointCloudData() { ParameterName = "input_point_cloud", DisplayName = "输入点云" },
+        };
 
     public static List<IVisionParameter>? OutputVisionParameters =>
         new()
         {
-            new MatImg() { ParameterName = "plane_params" },
-            new PointCloudData() { ParameterName = "inlier_points" },
-            new PointCloudData() { ParameterName = "outlier_points" },
+            new MatImg() { ParameterName = "plane_params", DisplayName = "平面参数" },
+            new PointCloudData() { ParameterName = "inlier_points", DisplayName = "内点点云" },
+            new PointCloudData() { ParameterName = "outlier_points", DisplayName = "外点点云" },
         };
 
     public static List<IConfigParameter>? ConfigParameters =>
@@ -109,9 +114,9 @@ public class ransac_plane_fit : IOperator
         );
 
         // 拆分内点和外点
-        (var inlierPoints, var inlierColors) = ExtractPoints(input, bestInliers, pointCloud);
+        (var inlierPoints, var inlierColors) = PointCloudUtils.ExtractSubset(input,bestInliers, pointCloud);
         var outlierIndices = Enumerable.Range(0, pointCount).Except(bestInliers).ToList();
-        (var outlierPoints, var outlierColors) = ExtractPoints(input, outlierIndices, pointCloud);
+        (var outlierPoints, var outlierColors) = PointCloudUtils.ExtractSubset(input,outlierIndices, pointCloud);
 
         // 保存平面参数
         Mat planeParams = new Mat(4, 1, MatType.CV_64FC1);
@@ -242,42 +247,10 @@ public class ransac_plane_fit : IOperator
         return new[] { a, b, c, d };
     }
 
-    private static (Mat, Mat?) ExtractPoints(
-        PointCloudData input,
-        List<int> indices,
-        Mat pointCloud
-    )
-    {
-        if (indices.Count == 0)
-            return (new Mat(), null);
-
-        int colCount = pointCloud.Cols;
-        Mat result = new Mat(indices.Count, colCount, MatType.CV_32FC1);
-        for (int i = 0; i < indices.Count; i++)
-        {
-            int srcIdx = indices[i];
-            for (int c = 0; c < colCount; c++)
-                result.Set(i, c, pointCloud.Get<float>(srcIdx, c));
-        }
-
-        Mat? colors = null;
-        if (input.HasColors && input.Colors != null)
-        {
-            colors = new Mat(indices.Count, 3, MatType.CV_8UC3);
-            for (int i = 0; i < indices.Count; i++)
-            {
-                int srcIdx = indices[i];
-                for (int c = 0; c < 3; c++)
-                    colors.Set<byte>(i, c, input.Colors.Get<byte>(srcIdx, c));
-            }
-        }
-
-        return (result, colors);
-    }
-
     public void Dispose()
     {
-        if (_disposed) return;
+        if (_disposed)
+            return;
         _disposed = true;
         GC.SuppressFinalize(this);
     }

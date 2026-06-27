@@ -15,16 +15,22 @@ namespace AuroraStruct3D.OpenCV.MatOps;
 /// </para>
 /// </summary>
 [Guid("2a1b3c4d-5e6f-7890-abcd-ef1234567801")]
-[Category("2D降噪滤波")]
-[DisplayName("2D 高斯滤波")]
-[Description("使用高斯核对图像进行平滑降噪，适用于去除高斯噪声。")]
+[Category("2D预处理")]
+[DisplayName("高斯滤波")]
+[Description("图像太毛躁就用它磨一下，专治高斯噪声；核越大越平滑，但细节也丢得越多。")]
 public class gaussian_blur : IOperator
 {
     public static List<IVisionParameter>? InputVisionParameters =>
-        new() { new MatImg() { ParameterName = "input_mat" } };
+        new()
+        {
+            new MatImg() { ParameterName = "input_mat", DisplayName = "输入图像" },
+        };
 
     public static List<IVisionParameter>? OutputVisionParameters =>
-        new() { new MatImg() { ParameterName = "output_mat" } };
+        new()
+        {
+            new MatImg() { ParameterName = "output_mat", DisplayName = "输出图像" },
+        };
 
     public static List<IConfigParameter>? ConfigParameters =>
         new()

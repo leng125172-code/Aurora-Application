@@ -15,16 +15,22 @@ namespace AuroraStruct3D.OpenCV.MatOps;
 /// </para>
 /// </summary>
 [Guid("6e5f7089-0123-4567-ef01-123456789005")]
-[Category("2D降噪滤波")]
-[DisplayName("2D 图像缩放")]
-[Description("将图像缩放到指定尺寸，支持多种插值算法。")]
+[Category("2D预处理")]
+[DisplayName("图像缩放")]
+[Description("把图缩放到你要的尺寸大小。")]
 public class resize_image : IOperator
 {
     public static List<IVisionParameter>? InputVisionParameters =>
-        new() { new MatImg() { ParameterName = "input_mat" } };
+        new()
+        {
+            new MatImg() { ParameterName = "input_mat", DisplayName = "输入图像" },
+        };
 
     public static List<IVisionParameter>? OutputVisionParameters =>
-        new() { new MatImg() { ParameterName = "output_mat" } };
+        new()
+        {
+            new MatImg() { ParameterName = "output_mat", DisplayName = "输出图像" },
+        };
 
     public static List<IConfigParameter>? ConfigParameters =>
         new()

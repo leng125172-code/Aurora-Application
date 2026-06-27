@@ -1,0 +1,319 @@
+using AuroraStruct3D.OpenCV.Common;
+
+namespace AuroraStruct3D.OpenCV.PointCloudFit;
+
+/// <summary>
+/// 工作流算子：球面拟合。
+/// <para>
+/// 使用 RANSAC 鲁棒拟合球面：每次随机取 4 个点解唯一外接球，统计落在球面距离阈值内的内点；
+/// 取最优内点集后再对全部内点做代数最小二乘精拟合，得到球心与半径。
+/// 适用于球形标定物、半球工件检测等场景。
+/// </para>
+/// <para>
+/// 球面采用代数形式 x²+y²+z² + Dx + Ey + Fz + G = 0，
+/// 球心 = (-D/2, -E/2, -F/2)，半径 = √(球心² - G)。
+/// </para>
+/// <para>
+/// 输出：
+/// <list type="bullet">
+///   <item><c>sphere_params</c>（Mat）— 球面参数 [cx, cy, cz, r]，形状 (4, 1)，CV_64FC1</item>
+///   <item><c>inlier_points</c>（PointCloudData）— 内点点云</item>
+///   <item><c>outlier_points</c>（PointCloudData）— 外点点云</item>
+///   <item><c>fitting_error</c>（Mat）— 内点到球面距离的 RMSE，形状 (1, 1)，CV_64FC1</item>
+/// </list>
+/// </para>
+/// </summary>
+[Guid("b1a10001-0001-4000-8000-000000000031")]
+[Category("3D拟合测量")]
+[DisplayName("球面拟合")]
+[Description("拟合出球心和半径，标定球、球面工件检测常用。")]
+public class sphere_fit : IOperator
+{
+    public static List<IVisionParameter>? InputVisionParameters =>
+        new()
+        {
+            new PointCloudData() { ParameterName = "input_point_cloud", DisplayName = "输入点云" },
+        };
+
+    public static List<IVisionParameter>? OutputVisionParameters =>
+        new()
+        {
+            new MatImg() { ParameterName = "sphere_params", DisplayName = "球面参数" },
+            new PointCloudData() { ParameterName = "inlier_points", DisplayName = "内点点云" },
+            new PointCloudData() { ParameterName = "outlier_points", DisplayName = "外点点云" },
+            new MatImg() { ParameterName = "fitting_error", DisplayName = "拟合误差" },
+        };
+
+    public static List<IConfigParameter>? ConfigParameters =>
+        new()
+        {
+            new ConfigParameter
+            {
+                Name = "distanceThreshold",
+                DisplayName = "距离阈值",
+                ParameterType = typeof(double),
+                DefaultValue = "0.01",
+                Required = false,
+                ControlType = PortControlType.Input,
+            },
+            new ConfigParameter
+            {
+                Name = "maxIterations",
+                DisplayName = "最大迭代次数",
+                ParameterType = typeof(int),
+                DefaultValue = "1000",
+                ValueLimit = new[] { "100", "500", "1000", "2000", "5000" },
+                Required = false,
+                ControlType = PortControlType.Select,
+            },
+            new ConfigParameter
+            {
+                Name = "probability",
+                DisplayName = "置信概率",
+                ParameterType = typeof(double),
+                DefaultValue = "0.99",
+                Required = false,
+                ControlType = PortControlType.Input,
+            },
+        };
+
+    private readonly double _distanceThreshold;
+    private readonly int _maxIterations;
+    private readonly double _probability;
+    private bool _disposed;
+
+    public sphere_fit(
+        double distanceThreshold = 0.01,
+        int maxIterations = 1000,
+        double probability = 0.99
+    )
+    {
+        _distanceThreshold = distanceThreshold;
+        _maxIterations = maxIterations;
+        _probability = probability;
+    }
+
+    public void Execute(IWorkflowContext context)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
+        PointCloudData input =
+            context.Get<PointCloudData>("input_point_cloud")
+            ?? throw new InvalidOperationException(
+                "上下文变量 'input_point_cloud' 为空，请确认输入绑定已正确设置。"
+            );
+
+        Mat cloud = input.PointCloud!;
+        if (cloud is null || cloud.Empty())
+            throw new InvalidOperationException("输入点云为空，无法执行球面拟合。");
+
+        int n = cloud.Rows;
+        if (n < 4)
+            throw new InvalidOperationException("点云点数少于 4，不足以拟合球面。");
+
+        double[] xs = new double[n],
+            ys = new double[n],
+            zs = new double[n];
+        for (int i = 0; i < n; i++)
+        {
+            xs[i] = cloud.Get<float>(i, 0);
+            ys[i] = cloud.Get<float>(i, 1);
+            zs[i] = cloud.Get<float>(i, 2);
+        }
+
+        // ① RANSAC
+        Random rng = new Random();
+        int bestCount = 0;
+        double[]? bestSphere = null;
+
+        for (int iter = 0; iter < _maxIterations; iter++)
+        {
+            int[] s = SampleDistinct(n, 4, rng);
+            double[]? sphere = SolveSphere4(s, xs, ys, zs);
+            if (sphere is null)
+                continue;
+
+            int count = CountInliers(sphere, xs, ys, zs, n, out _);
+            if (count > bestCount)
+            {
+                bestCount = count;
+                bestSphere = sphere;
+
+                double ratio = (double)count / n;
+                if (ratio > 0)
+                {
+                    double pNoOutliers = 1 - Math.Pow(1 - Math.Pow(ratio, 4), iter + 1);
+                    if (pNoOutliers >= _probability)
+                        break;
+                }
+            }
+        }
+
+        if (bestSphere is null)
+            throw new InvalidOperationException("RANSAC 未能拟合出有效球面，请检查输入点云或调整参数。");
+
+        // ② 取内点做代数最小二乘精拟合
+        CountInliers(bestSphere, xs, ys, zs, n, out List<int> inlierIdx);
+        double[] refined = inlierIdx.Count >= 4 ? FitSphereLsq(inlierIdx, xs, ys, zs) : bestSphere;
+
+        // ③ 用精拟合结果重新分类并统计 RMSE
+        var finalInliers = new List<int>();
+        var finalOutliers = new List<int>();
+        double cx = refined[0],
+            cy = refined[1],
+            cz = refined[2],
+            r = refined[3];
+        double sumSq = 0;
+        for (int i = 0; i < n; i++)
+        {
+            double d = Math.Abs(
+                Math.Sqrt(
+                    (xs[i] - cx) * (xs[i] - cx)
+                        + (ys[i] - cy) * (ys[i] - cy)
+                        + (zs[i] - cz) * (zs[i] - cz)
+                ) - r
+            );
+            if (d <= _distanceThreshold)
+            {
+                finalInliers.Add(i);
+                sumSq += d * d;
+            }
+            else
+            {
+                finalOutliers.Add(i);
+            }
+        }
+
+        double rmse = finalInliers.Count > 0 ? Math.Sqrt(sumSq / finalInliers.Count) : 0;
+
+        // ④ 输出
+        Mat sphereParams = new Mat(4, 1, MatType.CV_64FC1);
+        for (int i = 0; i < 4; i++)
+            sphereParams.Set(i, 0, refined[i]);
+
+        Mat errorMat = new Mat(1, 1, MatType.CV_64FC1);
+        errorMat.Set(0, 0, rmse);
+
+        var (inPts, inColors) = PointCloudUtils.ExtractSubset(input, finalInliers, cloud);
+        var (outPts, outColors) = PointCloudUtils.ExtractSubset(input, finalOutliers, cloud);
+
+        context.Set("sphere_params", sphereParams);
+        context.Set("inlier_points", PointCloudUtils.BuildCloud(inPts, inColors));
+        context.Set("outlier_points", PointCloudUtils.BuildCloud(outPts, outColors));
+        context.Set("fitting_error", errorMat);
+    }
+
+    private static int[] SampleDistinct(int n, int k, Random rng)
+    {
+        var set = new HashSet<int>();
+        while (set.Count < k)
+            set.Add(rng.Next(n));
+        return set.ToArray();
+    }
+
+    /// <summary>由 4 个点解外接球，返回 [cx, cy, cz, r]；退化（共面）时返回 null。</summary>
+    private static double[]? SolveSphere4(int[] idx, double[] xs, double[] ys, double[] zs)
+    {
+        // 线性系统 A·[D,E,F,G]ᵀ = b，其中每行: [x, y, z, 1]·[D,E,F,G] = -(x²+y²+z²)
+        using Mat A = new Mat(4, 4, MatType.CV_64FC1);
+        using Mat b = new Mat(4, 1, MatType.CV_64FC1);
+        for (int i = 0; i < 4; i++)
+        {
+            double x = xs[idx[i]],
+                y = ys[idx[i]],
+                z = zs[idx[i]];
+            A.Set(i, 0, x);
+            A.Set(i, 1, y);
+            A.Set(i, 2, z);
+            A.Set(i, 3, 1.0);
+            b.Set(i, 0, -(x * x + y * y + z * z));
+        }
+
+        using Mat sol = new Mat();
+        if (!Cv2.Solve(A, b, sol, DecompTypes.LU))
+            return null;
+
+        return CoefToSphere(sol.Get<double>(0, 0), sol.Get<double>(1, 0), sol.Get<double>(2, 0), sol.Get<double>(3, 0));
+    }
+
+    /// <summary>对内点做超定代数最小二乘精拟合球面。</summary>
+    private static double[] FitSphereLsq(List<int> idx, double[] xs, double[] ys, double[] zs)
+    {
+        int m = idx.Count;
+        using Mat A = new Mat(m, 4, MatType.CV_64FC1);
+        using Mat b = new Mat(m, 1, MatType.CV_64FC1);
+        for (int i = 0; i < m; i++)
+        {
+            double x = xs[idx[i]],
+                y = ys[idx[i]],
+                z = zs[idx[i]];
+            A.Set(i, 0, x);
+            A.Set(i, 1, y);
+            A.Set(i, 2, z);
+            A.Set(i, 3, 1.0);
+            b.Set(i, 0, -(x * x + y * y + z * z));
+        }
+
+        using Mat sol = new Mat();
+        // 超定系统用 SVD 求最小二乘解
+        if (!Cv2.Solve(A, b, sol, DecompTypes.SVD))
+            throw new InvalidOperationException("球面最小二乘求解失败。");
+
+        double[]? sphere = CoefToSphere(
+            sol.Get<double>(0, 0),
+            sol.Get<double>(1, 0),
+            sol.Get<double>(2, 0),
+            sol.Get<double>(3, 0)
+        );
+        return sphere ?? throw new InvalidOperationException("球面参数无效（半径非正）。");
+    }
+
+    /// <summary>代数系数 [D,E,F,G] → [cx,cy,cz,r]；半径平方非正时返回 null。</summary>
+    private static double[]? CoefToSphere(double D, double E, double F, double G)
+    {
+        double cx = -D / 2.0;
+        double cy = -E / 2.0;
+        double cz = -F / 2.0;
+        double r2 = cx * cx + cy * cy + cz * cz - G;
+        if (r2 <= 0 || double.IsNaN(r2))
+            return null;
+        return new[] { cx, cy, cz, Math.Sqrt(r2) };
+    }
+
+    private int CountInliers(
+        double[] sphere,
+        double[] xs,
+        double[] ys,
+        double[] zs,
+        int n,
+        out List<int> inliers
+    )
+    {
+        inliers = new List<int>();
+        double cx = sphere[0],
+            cy = sphere[1],
+            cz = sphere[2],
+            r = sphere[3];
+        for (int i = 0; i < n; i++)
+        {
+            double d = Math.Abs(
+                Math.Sqrt(
+                    (xs[i] - cx) * (xs[i] - cx)
+                        + (ys[i] - cy) * (ys[i] - cy)
+                        + (zs[i] - cz) * (zs[i] - cz)
+                ) - r
+            );
+            if (d <= _distanceThreshold)
+                inliers.Add(i);
+        }
+        return inliers.Count;
+    }
+
+    public void Dispose()
+    {
+        if (_disposed)
+            return;
+        _disposed = true;
+        GC.SuppressFinalize(this);
+    }
+}

@@ -1,3 +1,5 @@
+using AuroraStruct3D.OpenCV.Common;
+
 namespace AuroraStruct3D.OpenCV.PointCloudFit;
 
 /// <summary>
@@ -26,20 +28,27 @@ namespace AuroraStruct3D.OpenCV.PointCloudFit;
 /// </para>
 /// </summary>
 [Guid("e4f23456-7890-1234-5678-90123456780d")]
-[Category("平面拟合")]
-[DisplayName("SVD 最小二乘拟合")]
-[Description("使用 SVD 奇异值分解对点云做最小二乘平面拟合，最小化距离平方和。")]
+[Category("3D拟合测量")]
+[DisplayName("SVD拟合")]
+[Description("最小二乘把一片点云拟合成平面，噪声均匀时最准。")]
 public class svd_plane_fit : IOperator
 {
     public static List<IVisionParameter>? InputVisionParameters =>
-        new() { new PointCloudData() { ParameterName = "input_point_cloud" } };
+        new()
+        {
+            new PointCloudData() { ParameterName = "input_point_cloud", DisplayName = "输入点云" },
+        };
 
     public static List<IVisionParameter>? OutputVisionParameters =>
         new()
         {
-            new MatImg() { ParameterName = "plane_params" },
-            new PointCloudData() { ParameterName = "fitted_plane_points" },
-            new MatImg() { ParameterName = "fitting_error" },
+            new MatImg() { ParameterName = "plane_params", DisplayName = "平面参数" },
+            new PointCloudData()
+            {
+                ParameterName = "fitted_plane_points",
+                DisplayName = "投影点云",
+            },
+            new MatImg() { ParameterName = "fitting_error", DisplayName = "拟合误差" },
         };
 
     public static List<IConfigParameter>? ConfigParameters => null;
@@ -67,7 +76,9 @@ public class svd_plane_fit : IOperator
             throw new InvalidOperationException("点云点数少于 3，不足以拟合平面。");
 
         // ① 计算质心
-        double cx = 0, cy = 0, cz = 0;
+        double cx = 0,
+            cy = 0,
+            cz = 0;
         for (int i = 0; i < pointCount; i++)
         {
             cx += pointCloud.Get<float>(i, 0);
@@ -79,8 +90,11 @@ public class svd_plane_fit : IOperator
         cz /= pointCount;
 
         // ② 构建中心化协方差矩阵 (3×3)
-        double c00 = 0, c01 = 0, c02 = 0;
-        double c11 = 0, c12 = 0;
+        double c00 = 0,
+            c01 = 0,
+            c02 = 0;
+        double c11 = 0,
+            c12 = 0;
         double c22 = 0;
 
         for (int i = 0; i < pointCount; i++)
@@ -98,7 +112,7 @@ public class svd_plane_fit : IOperator
         }
 
         // ③ SVD 拟合平面法向量（最小奇异值对应的右奇异向量）
-        double[] plane = SolvePlaneBySVD(
+        double[] plane = Math3D.SolvePlaneByCovariance(
             c00 / pointCount,
             c01 / pointCount,
             c02 / pointCount,
@@ -158,117 +172,10 @@ public class svd_plane_fit : IOperator
         context.Set("fitting_error", errorMat);
     }
 
-    /// <summary>
-    /// 使用 Jacobi 特征值分解法求解 3×3 协方差矩阵的最小特征值对应的特征向量。
-    /// 返回平面参数 [a, b, c, d]。
-    /// </summary>
-    private static double[] SolvePlaneBySVD(
-        double s00,
-        double s01,
-        double s02,
-        double s11,
-        double s12,
-        double s22,
-        double cx,
-        double cy,
-        double cz
-    )
-    {
-        // 构建对称矩阵
-        double[,] M = new double[3, 3]
-        {
-            { s00, s01, s02 },
-            { s01, s11, s12 },
-            { s02, s12, s22 },
-        };
-
-        // Jacobi 特征值分解求最小特征值对应的特征向量
-        double[] eigenvalues = new double[3];
-        double[,] eigenvectors = new double[3, 3];
-
-        // 初始化特征向量为单位矩阵
-        for (int i = 0; i < 3; i++)
-            eigenvectors[i, i] = 1.0;
-
-        for (int iter = 0; iter < 100; iter++)
-        {
-            // 找最大非对角元素
-            int p = 0, q = 1;
-            double maxOffDiag = Math.Abs(M[0, 1]);
-            if (Math.Abs(M[0, 2]) > maxOffDiag) { maxOffDiag = Math.Abs(M[0, 2]); p = 0; q = 2; }
-            if (Math.Abs(M[1, 2]) > maxOffDiag) { maxOffDiag = Math.Abs(M[1, 2]); p = 1; q = 2; }
-
-            if (maxOffDiag < 1e-15)
-                break;
-
-            // 计算旋转角度
-            double theta = (M[q, q] - M[p, p]) / (2 * M[p, q]);
-            double t = theta >= 0
-                ? 1.0 / (theta + Math.Sqrt(theta * theta + 1))
-                : 1.0 / (theta - Math.Sqrt(theta * theta + 1));
-            double cosA = 1.0 / Math.Sqrt(t * t + 1);
-            double sinA = t * cosA;
-
-            // 旋转矩阵
-            double mpp = M[p, p];
-            double mqq = M[q, q];
-            double mpq = M[p, q];
-
-            M[p, p] = cosA * cosA * mpp + sinA * sinA * mqq - 2 * sinA * cosA * mpq;
-            M[q, q] = sinA * sinA * mpp + cosA * cosA * mqq + 2 * sinA * cosA * mpq;
-            M[p, q] = M[q, p] = (cosA * cosA - sinA * sinA) * mpq + sinA * cosA * (mpp - mqq);
-
-            for (int r = 0; r < 3; r++)
-            {
-                if (r == p || r == q)
-                    continue;
-                double mrp = M[r, p];
-                double mrq = M[r, q];
-                M[r, p] = M[p, r] = cosA * mrp - sinA * mrq;
-                M[r, q] = M[q, r] = sinA * mrp + cosA * mrq;
-            }
-
-            // 更新特征向量
-            for (int r = 0; r < 3; r++)
-            {
-                double vrp = eigenvectors[r, p];
-                double vrq = eigenvectors[r, q];
-                eigenvectors[r, p] = cosA * vrp - sinA * vrq;
-                eigenvectors[r, q] = sinA * vrp + cosA * vrq;
-            }
-        }
-
-        // 提取特征值
-        eigenvalues[0] = M[0, 0];
-        eigenvalues[1] = M[1, 1];
-        eigenvalues[2] = M[2, 2];
-
-        // 找最小特征值的索引
-        int minIdx = 0;
-        if (eigenvalues[1] < eigenvalues[minIdx]) minIdx = 1;
-        if (eigenvalues[2] < eigenvalues[minIdx]) minIdx = 2;
-
-        // 取最小特征值对应的特征向量作为法向量
-        double a = eigenvectors[0, minIdx];
-        double b = eigenvectors[1, minIdx];
-        double c = eigenvectors[2, minIdx];
-
-        // 确保法向量方向一致（向上为正）
-        double norm = Math.Sqrt(a * a + b * b + c * c);
-        a /= norm;
-        b /= norm;
-        c /= norm;
-
-        if (c < 0) { a = -a; b = -b; c = -c; }
-
-        double d = -(a * cx + b * cy + c * cz);
-
-        return new[] { a, b, c, d };
-    }
-
     public void Dispose()
     {
-        if (_disposed) return;
+        if (_disposed)
+            return;
         _disposed = true;
         GC.SuppressFinalize(this);
     }

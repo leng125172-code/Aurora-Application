@@ -100,19 +100,41 @@ public sealed class OperatorCallStatement : IWorkflowStatement
             op.Execute(context);
 
             // ④ 按输出绑定：将算子写入的端口变量重命名为工作流变量
+            //    先以工作流变量名建立引用，再移除端口别名，避免中途被上下文回收。
             //    例：算子写 "output_mat"，OutputBinding 映射为 "ImageTexture1"
             foreach ((string portName, OutputBinding binding) in OutputBindings)
             {
                 object? value = context.Get(portName);
-                context.Remove(portName);
                 context.Set(binding.VariableName, value);
+                if (!string.Equals(binding.VariableName, portName, StringComparison.Ordinal))
+                    context.Remove(portName);
             }
         }
         finally
         {
-            // ⑤ 释放非托管资源（Mat 等）
+            // ⑤ 释放算子实例（Mat 等非托管资源）
             op.Dispose();
+
+            // ⑥ 清理输入端口的临时变量，避免污染上下文与跨算子串味。
+            //    跳过被输出绑定占用为结果变量的名字，避免误删结果。
+            foreach (string portName in InputBindings.Keys)
+            {
+                if (IsOutputTarget(portName))
+                    continue;
+                context.Remove(portName);
+            }
         }
+    }
+
+    /// <summary>判断某端口名是否被某个输出绑定用作结果变量名（避免清理时误删结果）。</summary>
+    private bool IsOutputTarget(string portName)
+    {
+        foreach (OutputBinding binding in OutputBindings.Values)
+        {
+            if (string.Equals(binding.VariableName, portName, StringComparison.Ordinal))
+                return true;
+        }
+        return false;
     }
 
     private IOperator CreateOperatorInstance()

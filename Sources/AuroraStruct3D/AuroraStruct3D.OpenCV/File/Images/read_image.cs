@@ -26,9 +26,9 @@ namespace AuroraStruct3D.OpenCV.File.Images;
 /// </para>
 /// </summary>
 [Guid("7544f3f3-040d-4571-b0f2-741c8f17ab41")]
-[Category("文件操作")]
+[Category("数据读取")]
 [DisplayName("读取图片")]
-[Description("从文件系统读取图片，支持彩色、灰度等多种读取模式。输出 Mat 图像矩阵供后续节点使用。")]
+[Description("从本地读一张图进来，后面所有处理都从这一步开始。")]
 public class read_image : IOperator
 {
     /// <summary>
@@ -36,14 +36,14 @@ public class read_image : IOperator
     /// <c>img_path</c> 对应 Halcon 的 <c>FileName</c> 参数。
     /// </summary>
     public static List<IVisionParameter>? InputVisionParameters =>
-        new() { new ImgFilePath(errorCheck: true) { ParameterName = "img_path" } };
+        new() { new ImgFilePath(errorCheck: true) { ParameterName = "img_path", DisplayName = "图片路径" } };
 
     /// <summary>
     /// 输出端口定义（工作流引擎反射用）。
     /// <c>output_mat</c> 对应 Halcon 的 <c>Image</c> 输出变量。
     /// </summary>
     public static List<IVisionParameter>? OutputVisionParameters =>
-        new() { new MatImg() { ParameterName = "output_mat" } };
+        new() { new MatImg() { ParameterName = "output_mat", DisplayName = "输出图像" } };
 
     /// <summary>
     /// 构造函数配置参数定义（工作流引擎反射用）。

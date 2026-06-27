@@ -15,16 +15,22 @@ namespace AuroraStruct3D.OpenCV.PointCloudOps;
 /// </para>
 /// </summary>
 [Guid("b1d01234-5678-9012-4567-89012345670a")]
-[Category("3D降噪滤波")]
-[DisplayName("3D 体素下采样")]
-[Description("基于体素网格对点云进行下采样，以质心替代体素内所有点。")]
+[Category("3D点云预处理")]
+[DisplayName("体素下采样")]
+[Description("用体素格子抽稀点云，点太多先减量提速，密度也更均匀。")]
 public class voxel_downsample : IOperator
 {
     public static List<IVisionParameter>? InputVisionParameters =>
-        new() { new PointCloudData() { ParameterName = "input_point_cloud" } };
+        new()
+        {
+            new PointCloudData() { ParameterName = "input_point_cloud", DisplayName = "输入点云" },
+        };
 
     public static List<IVisionParameter>? OutputVisionParameters =>
-        new() { new PointCloudData() { ParameterName = "output_point_cloud" } };
+        new()
+        {
+            new PointCloudData() { ParameterName = "output_point_cloud", DisplayName = "输出点云" },
+        };
 
     public static List<IConfigParameter>? ConfigParameters =>
         new()

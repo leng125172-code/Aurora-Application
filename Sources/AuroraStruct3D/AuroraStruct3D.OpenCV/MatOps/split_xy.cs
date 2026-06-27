@@ -12,19 +12,19 @@ namespace AuroraStruct3D.OpenCV.MatOps;
 /// </para>
 /// </summary>
 [Guid("c6d7e8f9-0123-4567-89ab-cdef01234567")]
-[Category("矩阵操作")]
-[DisplayName("拆分XY通道")]
-[Description("拆分 2D 图像的 XY 通道，输出两个独立的通道矩阵。")]
+[Category("2D预处理")]
+[DisplayName("拆分XY")]
+[Description("把双通道数据拆成 X、Y 两张图，分开看分开处理。")]
 public class split_xy : IOperator
 {
     public static List<IVisionParameter>? InputVisionParameters =>
-        new() { new MatImg() { ParameterName = "input_mat" } };
+        new() { new MatImg() { ParameterName = "input_mat", DisplayName = "输入图像" } };
 
     public static List<IVisionParameter>? OutputVisionParameters =>
         new()
         {
-            new MatImg() { ParameterName = "channel_x" },
-            new MatImg() { ParameterName = "channel_y" },
+            new MatImg() { ParameterName = "channel_x", DisplayName = "通道X" },
+            new MatImg() { ParameterName = "channel_y", DisplayName = "通道Y" },
         };
 
     public static List<IConfigParameter>? ConfigParameters => null;

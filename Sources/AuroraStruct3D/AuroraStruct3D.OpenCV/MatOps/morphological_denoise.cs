@@ -15,16 +15,22 @@ namespace AuroraStruct3D.OpenCV.MatOps;
 /// </para>
 /// </summary>
 [Guid("5d4e6f70-8901-2345-def0-123456789004")]
-[Category("2D降噪滤波")]
-[DisplayName("2D 形态学去噪")]
-[Description("使用形态学开/闭运算去除图像中的小噪点。")]
+[Category("2D预处理")]
+[DisplayName("形态学去噪")]
+[Description("用开闭运算清掉零碎噪点和小毛刺，把图弄干净点。")]
 public class morphological_denoise : IOperator
 {
     public static List<IVisionParameter>? InputVisionParameters =>
-        new() { new MatImg() { ParameterName = "input_mat" } };
+        new()
+        {
+            new MatImg() { ParameterName = "input_mat", DisplayName = "输入图像" },
+        };
 
     public static List<IVisionParameter>? OutputVisionParameters =>
-        new() { new MatImg() { ParameterName = "output_mat" } };
+        new()
+        {
+            new MatImg() { ParameterName = "output_mat", DisplayName = "输出图像" },
+        };
 
     public static List<IConfigParameter>? ConfigParameters =>
         new()

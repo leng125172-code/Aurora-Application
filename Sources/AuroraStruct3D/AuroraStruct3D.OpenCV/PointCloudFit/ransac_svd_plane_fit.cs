@@ -1,3 +1,5 @@
+using AuroraStruct3D.OpenCV.Common;
+
 namespace AuroraStruct3D.OpenCV.PointCloudFit;
 
 /// <summary>
@@ -23,22 +25,25 @@ namespace AuroraStruct3D.OpenCV.PointCloudFit;
 /// </para>
 /// </summary>
 [Guid("f5a34567-8901-2345-6789-01234567890e")]
-[Category("平面拟合")]
-[DisplayName("RANSAC + SVD 复合拟合")]
-[Description("先用 RANSAC 粗筛内点，再对所有内点做最小二乘 SVD 精拟合，兼顾鲁棒性和精度。")]
+[Category("3D拟合测量")]
+[DisplayName("RANSAC+SVD拟合")]
+[Description("先 RANSAC 挑出干净点，再最小二乘精拟合，又稳又准。")]
 public class ransac_svd_plane_fit : IOperator
 {
     public static List<IVisionParameter>? InputVisionParameters =>
-        new() { new PointCloudData() { ParameterName = "input_point_cloud" } };
+        new()
+        {
+            new PointCloudData() { ParameterName = "input_point_cloud", DisplayName = "输入点云" },
+        };
 
     public static List<IVisionParameter>? OutputVisionParameters =>
         new()
         {
-            new MatImg() { ParameterName = "plane_params" },
-            new MatImg() { ParameterName = "ransac_plane_params" },
-            new PointCloudData() { ParameterName = "inlier_points" },
-            new PointCloudData() { ParameterName = "outlier_points" },
-            new MatImg() { ParameterName = "fitting_error" },
+            new MatImg() { ParameterName = "plane_params", DisplayName = "平面参数" },
+            new MatImg() { ParameterName = "ransac_plane_params", DisplayName = "粗拟合参数" },
+            new PointCloudData() { ParameterName = "inlier_points", DisplayName = "内点点云" },
+            new PointCloudData() { ParameterName = "outlier_points", DisplayName = "外点点云" },
+            new MatImg() { ParameterName = "fitting_error", DisplayName = "拟合误差" },
         };
 
     public static List<IConfigParameter>? ConfigParameters =>
@@ -125,13 +130,13 @@ public class ransac_svd_plane_fit : IOperator
             );
 
         // 拆分内点和外点
-        (Mat inlierCloud, Mat? inlierColors) = ExtractPointsByIndices(
+        (Mat inlierCloud, Mat? inlierColors) = PointCloudUtils.ExtractSubset(
             input,
             inlierIndices,
             pointCloud
         );
         var outlierIndices = Enumerable.Range(0, pointCount).Except(inlierIndices).ToList();
-        (Mat outlierCloud, Mat? outlierColors) = ExtractPointsByIndices(
+        (Mat outlierCloud, Mat? outlierColors) = PointCloudUtils.ExtractSubset(
             input,
             outlierIndices,
             pointCloud
@@ -327,7 +332,7 @@ public class ransac_svd_plane_fit : IOperator
             c22 += dz * dz;
         }
 
-        double[] plane = JacobiSolvePlane(
+        double[] plane = Math3D.SolvePlaneByCovariance(
             c00 / inlierCount,
             c01 / inlierCount,
             c02 / inlierCount,
@@ -340,148 +345,6 @@ public class ransac_svd_plane_fit : IOperator
         );
 
         return plane;
-    }
-
-    /// <summary>
-    /// Jacobi 特征值分解求 3×3 协方差矩阵最小特征值对应的特征向量（法向量）。
-    /// </summary>
-    private static double[] JacobiSolvePlane(
-        double s00,
-        double s01,
-        double s02,
-        double s11,
-        double s12,
-        double s22,
-        double cx,
-        double cy,
-        double cz
-    )
-    {
-        double[,] M = new double[3, 3]
-        {
-            { s00, s01, s02 },
-            { s01, s11, s12 },
-            { s02, s12, s22 },
-        };
-
-        double[,] V = new double[3, 3];
-        for (int i = 0; i < 3; i++)
-            V[i, i] = 1.0;
-
-        for (int iter = 0; iter < 100; iter++)
-        {
-            int p = 0,
-                q = 1;
-            double maxOff = Math.Abs(M[0, 1]);
-            if (Math.Abs(M[0, 2]) > maxOff)
-            {
-                maxOff = Math.Abs(M[0, 2]);
-                p = 0;
-                q = 2;
-            }
-            if (Math.Abs(M[1, 2]) > maxOff)
-            {
-                maxOff = Math.Abs(M[1, 2]);
-                p = 1;
-                q = 2;
-            }
-
-            if (maxOff < 1e-15)
-                break;
-
-            double theta = (M[q, q] - M[p, p]) / (2 * M[p, q]);
-            double t =
-                theta >= 0
-                    ? 1.0 / (theta + Math.Sqrt(theta * theta + 1))
-                    : 1.0 / (theta - Math.Sqrt(theta * theta + 1));
-            double cosA = 1.0 / Math.Sqrt(t * t + 1);
-            double sinA = t * cosA;
-
-            double mpp = M[p, p],
-                mqq = M[q, q],
-                mpq = M[p, q];
-            M[p, p] = cosA * cosA * mpp + sinA * sinA * mqq - 2 * sinA * cosA * mpq;
-            M[q, q] = sinA * sinA * mpp + cosA * cosA * mqq + 2 * sinA * cosA * mpq;
-            M[p, q] = M[q, p] = (cosA * cosA - sinA * sinA) * mpq + sinA * cosA * (mpp - mqq);
-
-            for (int r = 0; r < 3; r++)
-            {
-                if (r == p || r == q)
-                    continue;
-                double mrp = M[r, p],
-                    mrq = M[r, q];
-                M[r, p] = M[p, r] = cosA * mrp - sinA * mrq;
-                M[r, q] = M[q, r] = sinA * mrp + cosA * mrq;
-            }
-
-            for (int r = 0; r < 3; r++)
-            {
-                double vrp = V[r, p],
-                    vrq = V[r, q];
-                V[r, p] = cosA * vrp - sinA * vrq;
-                V[r, q] = sinA * vrp + cosA * vrq;
-            }
-        }
-
-        double[] eigenvalues = { M[0, 0], M[1, 1], M[2, 2] };
-        int minIdx = 0;
-        if (eigenvalues[1] < eigenvalues[minIdx])
-            minIdx = 1;
-        if (eigenvalues[2] < eigenvalues[minIdx])
-            minIdx = 2;
-
-        double a = V[0, minIdx];
-        double b = V[1, minIdx];
-        double c = V[2, minIdx];
-
-        double norm = Math.Sqrt(a * a + b * b + c * c);
-        a /= norm;
-        b /= norm;
-        c /= norm;
-
-        if (c < 0)
-        {
-            a = -a;
-            b = -b;
-            c = -c;
-        }
-
-        double d = -(a * cx + b * cy + c * cz);
-
-        return new[] { a, b, c, d };
-    }
-
-    private static (Mat, Mat?) ExtractPointsByIndices(
-        PointCloudData input,
-        List<int> indices,
-        Mat pointCloud
-    )
-    {
-        if (indices.Count == 0)
-            return (new Mat(), null);
-
-        int colCount = pointCloud.Cols;
-        Mat result = new Mat(indices.Count, colCount, MatType.CV_32FC1);
-        for (int i = 0; i < indices.Count; i++)
-        {
-            int srcIdx = indices[i];
-            for (int c = 0; c < colCount; c++)
-                result.Set(i, c, pointCloud.Get<float>(srcIdx, c));
-        }
-
-        Mat? colors = null;
-        if (input.HasColors && input.Colors != null)
-        {
-            colors = new Mat(indices.Count, 3, MatType.CV_8UC3);
-            for (int i = 0; i < indices.Count; i++)
-            {
-                int srcIdx = indices[i];
-                for (int c = 0; c < 3; c++)
-                    colors.Set<byte>(i, c, input.Colors.Get<byte>(srcIdx, c));
-            }
-        }
-
-        return (result, colors);
     }
 
     public void Dispose()
