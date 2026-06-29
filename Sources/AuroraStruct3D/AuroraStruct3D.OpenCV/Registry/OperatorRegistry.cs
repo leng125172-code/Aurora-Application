@@ -29,6 +29,10 @@ internal sealed class OperatorRegistry : IOperatorRegistry
     private readonly ILogger<OperatorRegistry> _logger;
     private readonly IReadOnlyList<Assembly> _assemblies;
 
+    // Guid → 算子 CLR 类型映射，首次使用时扫描程序集惰性构建（不依赖 Redis）。
+    private readonly object _typeMapLock = new();
+    private Dictionary<Guid, Type>? _typeMap;
+
     public OperatorRegistry(
         IDistributedCache cache,
         ILogger<OperatorRegistry> logger,
@@ -91,6 +95,67 @@ internal sealed class OperatorRegistry : IOperatorRegistry
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// 根据算子 GUID 解析 CLR 类型。首次调用时扫描程序集惰性构建映射，后续直接命中内存缓存。
+    /// </summary>
+    public Task<Type?> GetOperatorTypeAsync(
+        Guid operatorId,
+        CancellationToken cancellationToken = default
+    )
+    {
+        Dictionary<Guid, Type> map = EnsureTypeMap();
+        return Task.FromResult(map.GetValueOrDefault(operatorId));
+    }
+
+    /// <summary>
+    /// 惰性构建并缓存 Guid → 算子类型映射（线程安全，双重检查）。
+    /// 扫描逻辑与 <see cref="ScanAndCacheAllAsync"/> 一致：仅收录实现 <see cref="IOperator"/>
+    /// 且带合法 <see cref="GuidAttribute"/> 的具体类。
+    /// </summary>
+    private Dictionary<Guid, Type> EnsureTypeMap()
+    {
+        if (_typeMap is not null)
+            return _typeMap;
+
+        lock (_typeMapLock)
+        {
+            if (_typeMap is not null)
+                return _typeMap;
+
+            var map = new Dictionary<Guid, Type>();
+
+            foreach (Assembly assembly in _assemblies)
+            {
+                IEnumerable<Type> types;
+                try
+                {
+                    types = assembly.GetTypes();
+                }
+                catch (ReflectionTypeLoadException ex)
+                {
+                    types = ex.Types.OfType<Type>();
+                }
+
+                foreach (Type type in types)
+                {
+                    if (!type.IsClass || type.IsAbstract)
+                        continue;
+                    if (!typeof(IOperator).IsAssignableFrom(type))
+                        continue;
+
+                    var guidAttr = type.GetCustomAttribute<GuidAttribute>();
+                    if (guidAttr is null || !Guid.TryParse(guidAttr.Value, out Guid id))
+                        continue;
+
+                    map[id] = type;
+                }
+            }
+
+            _typeMap = map;
+            return _typeMap;
+        }
     }
 
     /// <summary>

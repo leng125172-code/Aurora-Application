@@ -46,6 +46,15 @@ public class WorkflowNodePaletteAppService
         [
             new NodeCategoryDto
             {
+                Name = "流程边界",
+                Nodes = new List<NodeDefinitionDto>
+                {
+                    BuildStartNode(),
+                    BuildEndNode(),
+                }.AsReadOnly(),
+            },
+            new NodeCategoryDto
+            {
                 Name = "流程控制",
                 Nodes = new List<NodeDefinitionDto>
                 {
@@ -60,6 +69,34 @@ public class WorkflowNodePaletteAppService
             },
         ];
     }
+
+    private static NodeDefinitionDto BuildStartNode() =>
+        new()
+        {
+            Id = "start-node",
+            NodeType = "StartNode",
+            DisplayName = "开始",
+            Description = "工作流流程起点。全图唯一，自动放置，不可删除。其 outputBindings 声明工作流对外输入变量。",
+            HasBody = false,
+            IsBoundary = true,
+            InputPorts = Array.Empty<NodePortDto>(),
+            OutputPorts = Array.Empty<NodePortDto>(),
+            ConfigFields = Array.Empty<NodeConfigFieldDto>(),
+        };
+
+    private static NodeDefinitionDto BuildEndNode() =>
+        new()
+        {
+            Id = "end-node",
+            NodeType = "EndNode",
+            DisplayName = "结束",
+            Description = "工作流流程终点。全图唯一，自动放置，不可删除。其 inputBindings 声明工作流对外输出变量。",
+            HasBody = false,
+            IsBoundary = true,
+            InputPorts = Array.Empty<NodePortDto>(),
+            OutputPorts = Array.Empty<NodePortDto>(),
+            ConfigFields = Array.Empty<NodeConfigFieldDto>(),
+        };
 
     private static NodeDefinitionDto BuildForLoopNode() =>
         new()

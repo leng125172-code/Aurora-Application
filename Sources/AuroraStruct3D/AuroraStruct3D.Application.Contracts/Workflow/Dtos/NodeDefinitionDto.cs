@@ -38,6 +38,13 @@ public sealed class NodeDefinitionDto
     /// </summary>
     public bool HasBody { get; init; }
 
+    /// <summary>
+    /// 是否为流程边界节点（start-node / end-node）。
+    /// <c>true</c>：单例边界节点，编辑器应自动放置、不可重复添加、不可删除，且不作为普通可拖项；
+    /// <c>false</c>：普通可拖拽节点。
+    /// </summary>
+    public bool IsBoundary { get; init; }
+
     /// <summary>输入端口列表，顺序与算子 InputVisionParameters 定义一致。</summary>
     public required IReadOnlyList<NodePortDto> InputPorts { get; init; }
 

@@ -32,4 +32,15 @@ public interface IOperatorRegistry
         Guid operatorId,
         CancellationToken cancellationToken = default
     );
+
+    /// <summary>
+    /// 根据算子 GUID 解析其 CLR 类型，供工作流编译器反射实例化算子。
+    /// </summary>
+    /// <param name="operatorId">算子唯一标识（来自 [Guid] 特性）。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>算子 CLR 类型；若未注册该 GUID 则返回 null。</returns>
+    Task<Type?> GetOperatorTypeAsync(
+        Guid operatorId,
+        CancellationToken cancellationToken = default
+    );
 }

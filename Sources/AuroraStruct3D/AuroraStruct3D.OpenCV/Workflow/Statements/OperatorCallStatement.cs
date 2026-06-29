@@ -35,10 +35,18 @@ public sealed class OperatorCallStatement : IWorkflowStatement
     public Type OperatorType { get; }
 
     /// <summary>
-    /// 算子构造函数参数（<b>仅算法配置参数</b>，不含工作流变量）。
-    /// 按构造函数参数顺序排列，类型必须与构造函数签名一致。
+    /// 算子构造函数参数绑定（<b>仅算法配置参数</b>），按构造函数参数顺序排列。
+    /// <para>
+    /// 每个元素为 <see cref="InputBinding"/>：
+    /// <list type="bullet">
+    ///   <item><see cref="ConstantBinding"/> — 编译期固定的字面量配置；</item>
+    ///   <item><see cref="VariableRefBinding"/> / <see cref="ComputedBinding"/> —
+    ///   引用工作流变量（<c>{ "$var": ... }</c>），在节点执行时从上下文解析后再实例化算子。</item>
+    /// </list>
+    /// 解析结果的类型必须与构造函数签名一致（强转由编译器在绑定内完成）。
+    /// </para>
     /// </summary>
-    public IReadOnlyList<object?> ConstructorArgs { get; }
+    public IReadOnlyList<InputBinding> ConfigArgBindings { get; }
 
     /// <summary>
     /// 输入端口绑定字典，Key 为算子端口变量名（<c>ParameterName</c>）。
@@ -53,7 +61,11 @@ public sealed class OperatorCallStatement : IWorkflowStatement
     public IReadOnlyDictionary<string, OutputBinding> OutputBindings { get; }
 
     /// <param name="operatorType">算子 CLR 类型。</param>
-    /// <param name="constructorArgs">算法配置参数列表，可为空。</param>
+    /// <param name="constructorArgs">
+    /// 算法配置参数列表，按构造函数顺序排列，可为空。每个元素可以是：
+    /// 已构造的 <see cref="InputBinding"/>（直接使用，支持 <c>$var</c> 运行期取值），
+    /// 或任意字面量值（自动包装为 <see cref="ConstantBinding"/>）。
+    /// </param>
     /// <param name="inputBindings">输入端口绑定，可为 null（无输入端口时）。</param>
     /// <param name="outputBindings">输出端口绑定，可为 null（无输出端口时）。</param>
     public OperatorCallStatement(
@@ -74,8 +86,12 @@ public sealed class OperatorCallStatement : IWorkflowStatement
         }
 
         OperatorType = operatorType;
-        ConstructorArgs =
-            constructorArgs?.ToList().AsReadOnly() ?? Array.Empty<object?>().AsReadOnly();
+        // 字面量参数包装为 ConstantBinding；已是 InputBinding 的（如编译器产出的
+        // ComputedBinding/$var 引用）直接保留，留待执行期解析。
+        ConfigArgBindings = (constructorArgs ?? Array.Empty<object?>())
+            .Select(static a => a as InputBinding ?? new ConstantBinding(a))
+            .ToList()
+            .AsReadOnly();
         InputBindings = inputBindings ?? new Dictionary<string, InputBinding>().AsReadOnly();
         OutputBindings = outputBindings ?? new Dictionary<string, OutputBinding>().AsReadOnly();
     }
@@ -91,15 +107,21 @@ public sealed class OperatorCallStatement : IWorkflowStatement
             context.Set(portName, binding.Resolve(context));
         }
 
-        // ② 反射实例化算子（构造函数参数为算法配置，不含端口变量）
-        IOperator op = CreateOperatorInstance();
+        // ② 解析配置参数：字面量直接取值，$var 绑定此刻从上下文读取上游变量
+        //    （上游节点已执行并写入变量，故可读）。然后按顺序作为构造函数实参。
+        object?[] configArgs = ConfigArgBindings.Count > 0
+            ? ConfigArgBindings.Select(b => b.Resolve(context)).ToArray()
+            : Array.Empty<object?>();
+
+        // ③ 反射实例化算子（构造函数参数为算法配置，不含端口变量）
+        IOperator op = CreateOperatorInstance(configArgs);
 
         try
         {
-            // ③ 执行算子（算子内部从 context 读取端口变量，写入结果到端口变量）
+            // ④ 执行算子（算子内部从 context 读取端口变量，写入结果到端口变量）
             op.Execute(context);
 
-            // ④ 按输出绑定：将算子写入的端口变量重命名为工作流变量
+            // ⑤ 按输出绑定：将算子写入的端口变量重命名为工作流变量
             //    先以工作流变量名建立引用，再移除端口别名，避免中途被上下文回收。
             //    例：算子写 "output_mat"，OutputBinding 映射为 "ImageTexture1"
             foreach ((string portName, OutputBinding binding) in OutputBindings)
@@ -112,10 +134,10 @@ public sealed class OperatorCallStatement : IWorkflowStatement
         }
         finally
         {
-            // ⑤ 释放算子实例（Mat 等非托管资源）
+            // ⑥ 释放算子实例（Mat 等非托管资源）
             op.Dispose();
 
-            // ⑥ 清理输入端口的临时变量，避免污染上下文与跨算子串味。
+            // ⑦ 清理输入端口的临时变量，避免污染上下文与跨算子串味。
             //    跳过被输出绑定占用为结果变量的名字，避免误删结果。
             foreach (string portName in InputBindings.Keys)
             {
@@ -137,13 +159,13 @@ public sealed class OperatorCallStatement : IWorkflowStatement
         return false;
     }
 
-    private IOperator CreateOperatorInstance()
+    private IOperator CreateOperatorInstance(object?[] configArgs)
     {
         try
         {
             object? instance =
-                ConstructorArgs.Count > 0
-                    ? Activator.CreateInstance(OperatorType, ConstructorArgs.ToArray())
+                configArgs.Length > 0
+                    ? Activator.CreateInstance(OperatorType, configArgs)
                     : Activator.CreateInstance(OperatorType);
 
             return instance as IOperator

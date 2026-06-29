@@ -8,6 +8,7 @@ using AuroraStruct3D.ProductModels;
 using AuroraStruct3D.Projectors;
 using AuroraStruct3D.Projects;
 using AuroraStruct3D.SerialPorts;
+using AuroraStruct3D.Workflow;
 using Lion.AbpPro.BasicManagement.UserRefreshTokens;
 using Lion.AbpPro.CodeManagement.DataTypes.Aggregates;
 using Lion.AbpPro.CodeManagement.EntityFrameworkCore;
@@ -146,6 +147,9 @@ namespace AuroraStruct3D.EntityFrameworkCore
         // ── 算子文件模块 ─────────────────────────────────────────────────────────
         public DbSet<OperatorFileRecord> OperatorFileRecords { get; set; }
 
+        // ── 工作流模块 ─────────────────────────────────────────────────────────
+        public DbSet<WorkflowDefinition> WorkflowDefinitions { get; set; }
+
         public AuroraStruct3DDbContext(DbContextOptions<AuroraStruct3DDbContext> options)
             : base(options) { }
 
@@ -211,6 +215,9 @@ namespace AuroraStruct3D.EntityFrameworkCore
 
             // 算子文件模块
             builder.ConfigureOperatorFileRecord();
+
+            // 工作流模块
+            builder.ConfigureWorkflowDefinition();
         }
     }
 }
