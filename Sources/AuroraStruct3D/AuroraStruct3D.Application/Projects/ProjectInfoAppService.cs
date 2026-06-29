@@ -1,5 +1,6 @@
 using AuroraStruct3D.Permissions;
 using AuroraStruct3D.Projects.Dtos;
+using AuroraStruct3D.Workflow;
 using Microsoft.AspNetCore.Authorization;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
@@ -18,17 +19,20 @@ public class ProjectInfoAppService : AuroraStruct3DAppService, IProjectInfoAppSe
 {
     private readonly IProjectInfoRepository _projectInfoRepository;
     private readonly IIdentityUserRepository _identityUserRepository;
+    private readonly IRepository<WorkflowDefinition, Guid> _workflowRepository;
 
     /// <summary>
     /// 初始化 ProjectInfoAppService 实例
     /// </summary>
     public ProjectInfoAppService(
         IProjectInfoRepository projectInfoRepository,
-        IIdentityUserRepository identityUserRepository
+        IIdentityUserRepository identityUserRepository,
+        IRepository<WorkflowDefinition, Guid> workflowRepository
     )
     {
         _projectInfoRepository = projectInfoRepository;
         _identityUserRepository = identityUserRepository;
+        _workflowRepository = workflowRepository;
     }
 
     // ─────────────────────────── 查询 ───────────────────────────
@@ -60,8 +64,29 @@ public class ProjectInfoAppService : AuroraStruct3DAppService, IProjectInfoAppSe
             userNameMap = users.ToDictionary(u => u.Id, u => u.UserName);
         }
 
+        // 关联查询：批量获取每个项目下的工作流数量
+        Guid[] projectIds = items.Select(p => p.Id).ToArray();
+        IQueryable<WorkflowDefinition> workflowQueryable =
+            await _workflowRepository.GetQueryableAsync();
+        List<WorkflowCountResult> countResults = await AsyncExecuter.ToListAsync(
+            workflowQueryable
+                .Where(w => projectIds.Contains(w.ProjectId))
+                .GroupBy(w => w.ProjectId)
+                .Select(g => new WorkflowCountResult { ProjectId = g.Key, Count = g.Count() })
+        );
+        Dictionary<Guid, int> workflowCountMap = countResults.ToDictionary(
+            r => r.ProjectId,
+            r => r.Count
+        );
+
         List<ProjectInfoDto> dtos = items
-            .Select(p => MapToDto(p, userNameMap.GetValueOrDefault(p.CreatorId ?? Guid.Empty)))
+            .Select(p =>
+                MapToDto(
+                    p,
+                    userNameMap.GetValueOrDefault(p.CreatorId ?? Guid.Empty),
+                    workflowCountMap.GetValueOrDefault(p.Id, 0)
+                )
+            )
             .ToList();
 
         return new PagedResultDto<ProjectInfoDto>(totalCount, dtos);
@@ -79,7 +104,15 @@ public class ProjectInfoAppService : AuroraStruct3DAppService, IProjectInfoAppSe
             creatorUserName = user?.UserName;
         }
 
-        return MapToDto(project, creatorUserName);
+        // 关联查询工作流数量
+        IQueryable<WorkflowDefinition> workflowQueryable =
+            await _workflowRepository.GetQueryableAsync();
+        int workflowCount = await AsyncExecuter.CountAsync(
+            workflowQueryable,
+            w => w.ProjectId == id
+        );
+
+        return MapToDto(project, creatorUserName, workflowCount);
     }
 
     // ─────────────────────────── 创建 ───────────────────────────
@@ -107,7 +140,7 @@ public class ProjectInfoAppService : AuroraStruct3DAppService, IProjectInfoAppSe
 
         await _projectInfoRepository.InsertAsync(project, autoSave: true);
 
-        return MapToDto(project, null);
+        return MapToDto(project, null, 0);
     }
 
     // ─────────────────────────── 修改 ───────────────────────────
@@ -122,7 +155,7 @@ public class ProjectInfoAppService : AuroraStruct3DAppService, IProjectInfoAppSe
 
         await _projectInfoRepository.UpdateAsync(project, autoSave: true);
 
-        return MapToDto(project, null);
+        return MapToDto(project, null, 0);
     }
 
     /// <inheritdoc/>
@@ -135,7 +168,7 @@ public class ProjectInfoAppService : AuroraStruct3DAppService, IProjectInfoAppSe
 
         await _projectInfoRepository.UpdateAsync(project, autoSave: true);
 
-        return MapToDto(project, null);
+        return MapToDto(project, null, 0);
     }
 
     // ─────────────────────────── 删除 ───────────────────────────
@@ -152,7 +185,11 @@ public class ProjectInfoAppService : AuroraStruct3DAppService, IProjectInfoAppSe
     /// <summary>
     /// 将实体映射为输出 DTO
     /// </summary>
-    private static ProjectInfoDto MapToDto(ProjectInfo project, string? creatorUserName)
+    private static ProjectInfoDto MapToDto(
+        ProjectInfo project,
+        string? creatorUserName,
+        int workflowCount
+    )
     {
         return new ProjectInfoDto
         {
@@ -171,6 +208,7 @@ public class ProjectInfoAppService : AuroraStruct3DAppService, IProjectInfoAppSe
             Status = project.Status,
             StatusDisplay = GetStatusDisplay(project.Status),
             CreatorUserName = creatorUserName,
+            WorkflowCount = workflowCount,
         };
     }
 
@@ -187,5 +225,12 @@ public class ProjectInfoAppService : AuroraStruct3DAppService, IProjectInfoAppSe
             ProjectStatus.Archived => "已归档",
             _ => status.ToString(),
         };
+    }
+
+    /// <summary>工作流数量关联查询结果，用于 GroupBy 投影。</summary>
+    private class WorkflowCountResult
+    {
+        public Guid ProjectId { get; set; }
+        public int Count { get; set; }
     }
 }

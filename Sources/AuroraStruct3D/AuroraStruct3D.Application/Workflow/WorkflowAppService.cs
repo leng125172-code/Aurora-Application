@@ -23,6 +23,28 @@ public class WorkflowAppService : AuroraStruct3DAppService, IWorkflowAppService
     }
 
     /// <inheritdoc/>
+    public async Task<List<WorkflowBriefDto>> GetListByProjectIdAsync(Guid projectId)
+    {
+        IQueryable<WorkflowDefinition> queryable = await _repository.GetQueryableAsync();
+
+        return await AsyncExecuter.ToListAsync(
+            queryable
+                .Where(w => w.ProjectId == projectId)
+                .OrderByDescending(w => w.LastModificationTime)
+                .Select(w => new WorkflowBriefDto
+                {
+                    Id = w.Id,
+                    ProjectId = w.ProjectId,
+                    Name = w.Name,
+                    CreationTime = w.CreationTime,
+                    CreatorId = w.CreatorId,
+                    LastModificationTime = w.LastModificationTime,
+                    LastModifierId = w.LastModifierId,
+                })
+        );
+    }
+
+    /// <inheritdoc/>
     public async Task<WorkflowDto> CreateAsync([FromBody] JsonElement payload)
     {
         (Guid projectId, string name, string content) = ReadPayload(payload);

@@ -16,6 +16,14 @@ namespace AuroraStruct3D.Workflow;
 public interface IWorkflowAppService : IApplicationService
 {
     /// <summary>
+    /// 获取指定项目下的所有工作流列表（轻量，不含 Content 全文）。
+    /// <c>GET /api/app/workflow/by-project/{projectId}</c>
+    /// </summary>
+    /// <param name="projectId">所属项目 ID</param>
+    /// <returns>工作流简要列表</returns>
+    Task<List<WorkflowBriefDto>> GetListByProjectIdAsync(Guid projectId);
+
+    /// <summary>
     /// 新建工作流。请求体为完整 WorkflowPayload，后端从中读取 projectId / name。
     /// <c>POST /api/app/workflow</c>
     /// </summary>

@@ -44,10 +44,12 @@ public class RoiDefinition
     // ── rect 专属字段 ──
     /// <summary>旋转前矩形左上角 X 坐标。</summary>
     public double X { get; set; }
+
     /// <summary>旋转前矩形左上角 Y 坐标。</summary>
     public double Y { get; set; }
     public double Width { get; set; }
     public double Height { get; set; }
+
     /// <summary>绕矩形中心顺时针旋转角度（度）。</summary>
     public double Rotation { get; set; }
 
@@ -251,11 +253,7 @@ public class roi_partition : IOperator
         // ④ 计算总面积并组装元数据
         double totalArea = roiMasks.Sum(m => Cv2.CountNonZero(m));
 
-        var metadata = new RoiPartitionMetadata
-        {
-            Rois = metadataList,
-            TotalArea = totalArea,
-        };
+        var metadata = new RoiPartitionMetadata { Rois = metadataList, TotalArea = totalArea };
 
         string metadataJson = JsonSerializer.Serialize(metadata, JsonOptions);
 
@@ -329,10 +327,7 @@ public class roi_partition : IOperator
         {
             // 有旋转：以矩形中心为轴构建 RotatedRect → FillPoly
             var rotatedRect = new RotatedRect(
-                new Point2f(
-                    (float)(roi.X + roi.Width / 2),
-                    (float)(roi.Y + roi.Height / 2)
-                ),
+                new Point2f((float)(roi.X + roi.Width / 2), (float)(roi.Y + roi.Height / 2)),
                 new Size2f((float)roi.Width, (float)roi.Height),
                 (float)roi.Rotation
             );
@@ -488,12 +483,7 @@ public class roi_partition : IOperator
     /// <summary>
     /// 提取单个 ROI 掩膜的几何元数据：外接矩形、面积、简化轮廓。
     /// </summary>
-    private static RoiMetadata ExtractRoiMetadata(
-        Mat mask,
-        string name,
-        string typeName,
-        int index
-    )
+    private static RoiMetadata ExtractRoiMetadata(Mat mask, string name, string typeName, int index)
     {
         using Mat nonZeroMat = new Mat();
         Cv2.FindNonZero(mask, nonZeroMat);
@@ -652,15 +642,7 @@ public class roi_partition : IOperator
 
         if (args.Count > 0 && currentCommand != ' ')
         {
-            ApplyCommand(
-                currentCommand,
-                args,
-                ref curX,
-                ref curY,
-                ref startX,
-                ref startY,
-                points
-            );
+            ApplyCommand(currentCommand, args, ref curX, ref curY, ref startX, ref startY, points);
         }
 
         return points;

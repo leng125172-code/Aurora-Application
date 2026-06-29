@@ -28,4 +28,7 @@ public class ProjectInfoDto : FullAuditedEntityDto<Guid>
 
     /// <summary>创建人用户名</summary>
     public string? CreatorUserName { get; set; }
+
+    /// <summary>工作流数量</summary>
+    public int WorkflowCount { get; set; }
 }
