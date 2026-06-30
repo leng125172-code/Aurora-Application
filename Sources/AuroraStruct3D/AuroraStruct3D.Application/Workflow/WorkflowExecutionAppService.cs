@@ -52,7 +52,7 @@ public class WorkflowExecutionAppService
         try
         {
             string name;
-            (name, graph) = WorkflowGraphCompiler.ParseContent(entity.Content);
+            (name, graph) = WorkflowGraphCompiler.ParseContent(entity.GraphData);
             compiled = await new WorkflowGraphCompiler(_registry).CompileAsync(graph, name);
         }
         catch (WorkflowCompilationException ex)

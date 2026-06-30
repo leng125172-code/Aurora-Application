@@ -27,8 +27,8 @@ public static class WorkflowDefinitionDbContextModelCreatingExtensions
                 .IsRequired()
                 .HasMaxLength(WorkflowDefinitionConsts.MaxNameLength);
 
-            // 完整 WorkflowPayload JSON，长度不限（PostgreSQL text）。
-            b.Property(x => x.Content).IsRequired();
+            // 工作流画布数据 JSON，长度不限（PostgreSQL text）。
+            b.Property(x => x.GraphData).IsRequired();
 
             b.HasIndex(x => x.ProjectId);
             b.HasIndex(x => new { x.ProjectId, x.Name });

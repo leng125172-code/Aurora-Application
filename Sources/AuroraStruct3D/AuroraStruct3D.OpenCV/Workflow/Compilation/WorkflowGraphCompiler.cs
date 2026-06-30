@@ -6,7 +6,7 @@ using AuroraStruct3D.OpenCV.Workflow.Statements;
 namespace AuroraStruct3D.OpenCV.Workflow.Compilation;
 
 /// <summary>
-/// 工作流图编译器：把持久化的 <c>WorkflowPayload</c> / <c>graphData</c> JSON 编译为可执行的
+/// 工作流图编译器：把持久化的 graphData JSON 编译为可执行的
 /// 运行时 <see cref="WorkflowDefinition"/>（<see cref="IWorkflowStatement"/> 列表）。
 /// <para>
 /// 流程：反序列化 → 静态校验（错误即抛 <see cref="WorkflowCompilationException"/>）→
@@ -25,7 +25,7 @@ public sealed class WorkflowGraphCompiler
     }
 
     /// <summary>
-    /// 编译完整的持久化内容（<c>WorkflowPayload</c> 字符串，含 <c>name</c> 与 <c>graphData</c>）。
+    /// 编译完整的持久化内容（graphData JSON 字符串）。
     /// </summary>
     public async Task<WorkflowDefinition> CompileAsync(
         string contentJson,
@@ -50,8 +50,9 @@ public sealed class WorkflowGraphCompiler
         ArgumentNullException.ThrowIfNull(graph);
 
         // ① 静态校验：有错误即中止。
-        WorkflowValidationResult validation = await new WorkflowGraphValidator(_registry)
-            .ValidateAsync(graph, cancellationToken);
+        WorkflowValidationResult validation = await new WorkflowGraphValidator(
+            _registry
+        ).ValidateAsync(graph, cancellationToken);
         if (validation.HasErrors)
             throw new WorkflowCompilationException(validation);
 
@@ -76,9 +77,10 @@ public sealed class WorkflowGraphCompiler
         using JsonDocument doc = JsonDocument.Parse(contentJson);
         JsonElement root = doc.RootElement;
 
-        string name = root.TryGetProperty("name", out JsonElement n) && n.ValueKind == JsonValueKind.String
-            ? n.GetString() ?? "workflow"
-            : "workflow";
+        string name =
+            root.TryGetProperty("name", out JsonElement n) && n.ValueKind == JsonValueKind.String
+                ? n.GetString() ?? "workflow"
+                : "workflow";
 
         // 兼容两种入参：完整 WorkflowPayload（含 graphData）或裸 graphData（含 nodes）。
         JsonElement graphElement = root.TryGetProperty("graphData", out JsonElement g) ? g : root;
@@ -139,7 +141,8 @@ public sealed class WorkflowGraphCompiler
         Dictionary<string, JsonElement> p = node.Properties?.Params ?? new();
 
         string? variableName =
-            p.TryGetValue("variableName", out JsonElement vn) && vn.ValueKind == JsonValueKind.String
+            p.TryGetValue("variableName", out JsonElement vn)
+            && vn.ValueKind == JsonValueKind.String
                 ? vn.GetString()
                 : null;
 
@@ -261,11 +264,7 @@ public sealed class WorkflowGraphCompiler
 
         IReadOnlyDictionary<string, OutputBinding> outputBindings = (
             props.OutputBindings ?? new()
-        ).ToDictionary(
-            kv => kv.Key,
-            kv => new OutputBinding(kv.Value),
-            StringComparer.Ordinal
-        );
+        ).ToDictionary(kv => kv.Key, kv => new OutputBinding(kv.Value), StringComparer.Ordinal);
 
         return new OperatorCallStatement(operatorType, configArgs, inputBindings, outputBindings);
     }
@@ -280,7 +279,9 @@ public sealed class WorkflowGraphCompiler
         {
             return targetTypeName is null
                 ? new VariableRefBinding(refName)
-                : new ComputedBinding(ctx => ValueCoercion.Coerce(ctx.Get(refName), targetTypeName));
+                : new ComputedBinding(ctx =>
+                    ValueCoercion.Coerce(ctx.Get(refName), targetTypeName)
+                );
         }
 
         return new ConstantBinding(ValueCoercion.Coerce(value, targetTypeName));

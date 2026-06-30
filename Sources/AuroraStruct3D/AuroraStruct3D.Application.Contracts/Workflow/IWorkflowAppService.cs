@@ -16,7 +16,7 @@ namespace AuroraStruct3D.Workflow;
 public interface IWorkflowAppService : IApplicationService
 {
     /// <summary>
-    /// 获取指定项目下的所有工作流列表（轻量，不含 Content 全文）。
+    /// 获取指定项目下的所有工作流列表（轻量，不含 GraphData 全文）。
     /// <c>GET /api/app/workflow/by-project/{projectId}</c>
     /// </summary>
     /// <param name="projectId">所属项目 ID</param>
@@ -47,4 +47,29 @@ public interface IWorkflowAppService : IApplicationService
     /// <param name="id">工作流 ID</param>
     /// <param name="payload">完整 WorkflowPayload</param>
     Task<WorkflowDto> UpdateAsync(Guid id, JsonElement payload);
+
+    /// <summary>
+    /// 删除工作流。先校验归属，再软删除。
+    /// <c>DELETE /api/app/workflow/{id}?projectId={projectId}</c>
+    /// </summary>
+    /// <param name="projectId">所属项目 ID（用于归属校验）</param>
+    /// <param name="id">工作流 ID</param>
+    Task DeleteAsync(Guid projectId, Guid id);
+
+    /// <summary>
+    /// 静态校验工作流图：根据项目 ID 和工作流 ID 加载已持久化的工作流，返回诊断结果。
+    /// <c>GET /api/app/workflow/{id}/validate?projectId={projectId}</c>
+    /// </summary>
+    /// <param name="projectId">所属项目 ID（用于归属校验）。</param>
+    /// <param name="id">工作流 ID。</param>
+    Task<WorkflowValidateResultDto> ValidateAsync(Guid projectId, Guid id);
+
+    /// <summary>
+    /// 数据流仿真：根据项目 ID 和工作流 ID 加载已持久化的工作流，不执行算子，
+    /// 仅模拟变量绑定与流动路径，返回仿真报告。
+    /// <c>GET /api/app/workflow/{id}/simulate?projectId={projectId}</c>
+    /// </summary>
+    /// <param name="projectId">所属项目 ID（用于归属校验）。</param>
+    /// <param name="id">工作流 ID。</param>
+    Task<WorkflowDataFlowReportDto> SimulateAsync(Guid projectId, Guid id);
 }

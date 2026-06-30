@@ -5,9 +5,10 @@ namespace AuroraStruct3D.Workflow;
 
 /// <summary>
 /// 工作流定义聚合根。
-/// 由前端工作流编辑器离线编辑完成后整体提交，<see cref="Content"/> 保存完整的
-/// WorkflowPayload JSON（含 graphData、容器嵌套、ROI/标注等），后端按原文存储不做解析。
-/// 审计信息（创建人/时间、修改人/时间，即 updatedAt）由 FullAuditedAggregateRoot 自动记录。
+/// 由前端工作流编辑器离线编辑完成后整体提交，
+/// <see cref="GraphData"/> 保存前端 payload 中的 <c>graphData</c> 属性（即 graphData 画布数据），
+/// <see cref="ProjectId"/> 和 <see cref="Name"/> 单独落库，避免冗余嵌套。
+/// 审计信息（创建人/时间、修改人/时间）由 FullAuditedAggregateRoot 自动记录。
 /// <para>数据库表：AbpProWorkflowDefinitions</para>
 /// </summary>
 public class WorkflowDefinition : FullAuditedAggregateRoot<Guid>
@@ -18,8 +19,8 @@ public class WorkflowDefinition : FullAuditedAggregateRoot<Guid>
     /// <summary>工作流名称。</summary>
     public string Name { get; private set; } = null!;
 
-    /// <summary>完整的 WorkflowPayload JSON 文本（按原文存储）。</summary>
-    public string Content { get; private set; } = null!;
+    /// <summary>工作流画布数据 JSON（graphData），按原文存储。</summary>
+    public string GraphData { get; private set; } = null!;
 
     /// <summary>EF Core 所需的无参构造函数（不得直接使用）。</summary>
     protected WorkflowDefinition() { }
@@ -30,32 +31,32 @@ public class WorkflowDefinition : FullAuditedAggregateRoot<Guid>
     /// <param name="id">工作流唯一标识</param>
     /// <param name="projectId">所属项目 ID</param>
     /// <param name="name">工作流名称</param>
-    /// <param name="content">完整 WorkflowPayload JSON 文本</param>
-    public static WorkflowDefinition Create(Guid id, Guid projectId, string name, string content)
+    /// <param name="graphData">工作流画布数据 JSON（graphData）</param>
+    public static WorkflowDefinition Create(Guid id, Guid projectId, string name, string graphData)
     {
         Check.NotNullOrWhiteSpace(name, nameof(name), WorkflowDefinitionConsts.MaxNameLength);
-        Check.NotNullOrWhiteSpace(content, nameof(content));
+        Check.NotNullOrWhiteSpace(graphData, nameof(graphData));
 
         return new WorkflowDefinition
         {
             Id = id,
             ProjectId = projectId,
             Name = name,
-            Content = content,
+            GraphData = graphData,
         };
     }
 
     /// <summary>
-    /// 修改保存：更新工作流名称与内容。
+    /// 修改保存：更新工作流名称与画布数据。
     /// </summary>
     /// <param name="name">工作流名称</param>
-    /// <param name="content">完整 WorkflowPayload JSON 文本</param>
-    public void Update(string name, string content)
+    /// <param name="graphData">工作流画布数据 JSON（graphData）</param>
+    public void Update(string name, string graphData)
     {
         Check.NotNullOrWhiteSpace(name, nameof(name), WorkflowDefinitionConsts.MaxNameLength);
-        Check.NotNullOrWhiteSpace(content, nameof(content));
+        Check.NotNullOrWhiteSpace(graphData, nameof(graphData));
 
         Name = name;
-        Content = content;
+        GraphData = graphData;
     }
 }

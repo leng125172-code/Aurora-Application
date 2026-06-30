@@ -6,7 +6,8 @@ using AuroraStruct3D.OpenCV.Workflow.Compilation.Model;
 namespace AuroraStruct3D.OpenCV.Workflow.Compilation;
 
 /// <summary>
-/// 工作流图静态校验器：按拓扑序推导变量符号表，检查写前读、类型兼容、命名规则。
+/// 工作流图静态校验器：按拓扑序推导变量符号表，检查写前读、类型兼容、命名规则、
+/// 不可达节点、未使用变量、重复变量名、循环变量保护、分支数据流完整性。
 /// <para>
 /// 当前运行时为<b>扁平作用域</b>（ForLoop/IfElse 在当前作用域执行 body），故符号表
 /// 跨容器单层共享：容器内层节点沿用并贡献同一张表。类型不兼容仅产出 <c>Warning</c>，
@@ -15,10 +16,7 @@ namespace AuroraStruct3D.OpenCV.Workflow.Compilation;
 /// </summary>
 public sealed class WorkflowGraphValidator
 {
-    private static readonly Regex NameRule = new(
-        "^[A-Za-z_][A-Za-z0-9_]*$",
-        RegexOptions.Compiled
-    );
+    private static readonly Regex NameRule = new("^[A-Za-z_][A-Za-z0-9_]*$", RegexOptions.Compiled);
 
     private static readonly HashSet<string> NumericTypeNames = new(StringComparer.Ordinal)
     {
@@ -37,6 +35,15 @@ public sealed class WorkflowGraphValidator
 
     private readonly IOperatorRegistry _registry;
 
+    /// <summary>变量消费记录：变量名 → 消费它的节点 ID 列表（用于未使用变量检测）。</summary>
+    private readonly Dictionary<string, HashSet<string>> _consumers = new(StringComparer.Ordinal);
+
+    /// <summary>变量定义记录：变量名 → 定义它的节点 ID（用于重复定义检测）。</summary>
+    private readonly Dictionary<string, string> _definers = new(StringComparer.Ordinal);
+
+    /// <summary>ForLoop 循环体内受保护的变量名集合。</summary>
+    private readonly Stack<HashSet<string>> _protectedVars = new();
+
     public WorkflowGraphValidator(IOperatorRegistry registry)
     {
         _registry = registry;
@@ -50,14 +57,23 @@ public sealed class WorkflowGraphValidator
     {
         ArgumentNullException.ThrowIfNull(graph);
 
+        _consumers.Clear();
+        _definers.Clear();
+        _protectedVars.Clear();
+
         var diagnostics = new List<WorkflowDiagnostic>();
-        // 变量名 → 类型全名（null 表示类型未知，跳过类型校验）。
         var symbols = new Dictionary<string, string?>(StringComparer.Ordinal);
 
         // 顶层流程边界检查（start/end 唯一性、空工作流）。
         ValidateFlowBoundaries(graph, diagnostics);
 
         await ValidateScopeAsync(graph, symbols, diagnostics, cancellationToken);
+
+        // 拓扑后检查：不可达节点。
+        ValidateUnreachableNodes(graph, diagnostics);
+
+        // 扫描结束后检查：未使用变量。
+        ValidateUnusedVariables(diagnostics);
 
         return new WorkflowValidationResult(diagnostics);
     }
@@ -75,12 +91,24 @@ public sealed class WorkflowGraphValidator
 
         // 多个起止 → 入口/出口歧义，阻断；缺失 → 可运行但异常，告警。
         if (startCount > 1)
-            diagnostics.Add(ErrorDiag("(graph)", "start-node", $"工作流顶层只能有一个 start-node，当前 {startCount} 个。"));
+            diagnostics.Add(
+                ErrorDiag(
+                    "(graph)",
+                    "start-node",
+                    $"工作流顶层只能有一个 start-node，当前 {startCount} 个。"
+                )
+            );
         else if (startCount == 0)
             diagnostics.Add(WarnDiag("(graph)", "start-node", "工作流缺少 start-node。"));
 
         if (endCount > 1)
-            diagnostics.Add(ErrorDiag("(graph)", "end-node", $"工作流顶层只能有一个 end-node，当前 {endCount} 个。"));
+            diagnostics.Add(
+                ErrorDiag(
+                    "(graph)",
+                    "end-node",
+                    $"工作流顶层只能有一个 end-node，当前 {endCount} 个。"
+                )
+            );
         else if (endCount == 0)
             diagnostics.Add(WarnDiag("(graph)", "end-node", "工作流缺少 end-node。"));
 
@@ -91,7 +119,9 @@ public sealed class WorkflowGraphValidator
             || Guid.TryParse(n.Type, out _)
         );
         if (!hasExecutable)
-            diagnostics.Add(WarnDiag("(graph)", null, "工作流为空（仅含起止节点，无任何算子/赋值/容器）。"));
+            diagnostics.Add(
+                WarnDiag("(graph)", null, "工作流为空（仅含起止节点，无任何算子/赋值/容器）。")
+            );
     }
 
     private async Task ValidateScopeAsync(
@@ -204,7 +234,9 @@ public sealed class WorkflowGraphValidator
         string? variableName = GetString(p, "variableName");
         if (string.IsNullOrWhiteSpace(variableName))
         {
-            diagnostics.Add(ErrorDiag(node.Id, "variableName", "赋值节点缺少 params.variableName。"));
+            diagnostics.Add(
+                ErrorDiag(node.Id, "variableName", "赋值节点缺少 params.variableName。")
+            );
             return;
         }
 
@@ -225,8 +257,8 @@ public sealed class WorkflowGraphValidator
             }
         }
 
-        // 声明（upsert）。
-        symbols[variableName!] = sourceType;
+        // 声明变量（含重复定义、循环变量保护检查）。
+        DeclareVariable(node.Id, variableName!, sourceType, symbols, diagnostics);
     }
 
     private async Task ValidateContainerAsync(
@@ -243,10 +275,19 @@ public sealed class WorkflowGraphValidator
         {
             string loopVar = GetString(p, "variableName") ?? "i";
             CheckName(node.Id, loopVar, diagnostics);
-            symbols[loopVar] = "System.Double"; // 循环变量为数值
+
+            // 声明循环变量并保护（防止循环体内被重新定义）。
+            DeclareVariable(node.Id, loopVar, "System.Double", symbols, diagnostics);
+            var protectedSet = new HashSet<string>(StringComparer.Ordinal) { loopVar };
+            _protectedVars.Push(protectedSet);
 
             GraphDataModel inner = node.Properties?.InnerGraphData ?? new();
             await ValidateScopeAsync(inner, symbols, diagnostics, cancellationToken);
+
+            _protectedVars.Pop();
+            // 循环结束后移除循环变量，防止外部节点仍可访问该变量
+            symbols.Remove(loopVar);
+            _definers.Remove(loopVar);
         }
         else if (kind == NodeTypeTokens.IfElse)
         {
@@ -258,22 +299,71 @@ public sealed class WorkflowGraphValidator
             }
             else
             {
-                diagnostics.Add(ErrorDiag(node.Id, "condition", "if/else 容器缺少 params.condition。"));
+                diagnostics.Add(
+                    ErrorDiag(node.Id, "condition", "if/else 容器缺少 params.condition。")
+                );
             }
 
-            // then / else 各为独立子图，递归校验（扁平作用域，共享符号表）。
+            // 分支数据流完整性：快照当前符号表，分别校验两个分支，比较新增变量。
+            var preSymbols = new Dictionary<string, string?>(symbols, StringComparer.Ordinal);
+
+            // then 分支。
+            var thenSymbols = new Dictionary<string, string?>(symbols, StringComparer.Ordinal);
             await ValidateScopeAsync(
                 GraphJson.ReadSubGraph(p, "thenGraphData"),
-                symbols,
+                thenSymbols,
                 diagnostics,
                 cancellationToken
             );
+
+            // else 分支。
+            var elseSymbols = new Dictionary<string, string?>(symbols, StringComparer.Ordinal);
             await ValidateScopeAsync(
                 GraphJson.ReadSubGraph(p, "elseGraphData"),
-                symbols,
+                elseSymbols,
                 diagnostics,
                 cancellationToken
             );
+
+            // 检查两个分支产生的新变量是否一致。
+            var thenNew = new HashSet<string>(
+                thenSymbols.Keys.Where(k => !preSymbols.ContainsKey(k)),
+                StringComparer.Ordinal
+            );
+            var elseNew = new HashSet<string>(
+                elseSymbols.Keys.Where(k => !preSymbols.ContainsKey(k)),
+                StringComparer.Ordinal
+            );
+
+            if (!thenNew.SetEquals(elseNew))
+            {
+                var onlyThen = thenNew.Except(elseNew).ToList();
+                var onlyElse = elseNew.Except(thenNew).ToList();
+
+                if (onlyThen.Count > 0)
+                    diagnostics.Add(
+                        WarnDiag(
+                            node.Id,
+                            "thenGraphData",
+                            $"then 分支独有变量 {string.Join("、", onlyThen)}，else 分支未产出，可能导致下游读未定义。"
+                        )
+                    );
+                if (onlyElse.Count > 0)
+                    diagnostics.Add(
+                        WarnDiag(
+                            node.Id,
+                            "elseGraphData",
+                            $"else 分支独有变量 {string.Join("、", onlyElse)}，then 分支未产出，可能导致下游读未定义。"
+                        )
+                    );
+            }
+
+            // 合并两个分支的符号表（取并集，类型未知时用 null）。
+            foreach (string key in thenNew.Union(elseNew))
+            {
+                symbols[key] =
+                    thenSymbols.GetValueOrDefault(key) ?? elseSymbols.GetValueOrDefault(key);
+            }
         }
         else
         {
@@ -288,7 +378,7 @@ public sealed class WorkflowGraphValidator
             foreach (string varName in outs.Values)
             {
                 CheckName(node.Id, varName, diagnostics);
-                symbols[varName] = null; // 类型未知
+                DeclareVariable(node.Id, varName, null, symbols, diagnostics);
             }
         }
     }
@@ -368,14 +458,14 @@ public sealed class WorkflowGraphValidator
                 string? portType = descriptor
                     ?.Outputs.FirstOrDefault(o => o.ParameterName == portName)
                     ?.ParameterTypeName;
-                symbols[varName] = portType;
+                DeclareVariable(node.Id, varName, portType, symbols, diagnostics);
             }
         }
     }
 
     // ── 校验小工具 ────────────────────────────────────────────────────────────
 
-    private static void CheckRead(
+    private void CheckRead(
         string nodeId,
         string target,
         string variableName,
@@ -398,7 +488,16 @@ public sealed class WorkflowGraphValidator
                     $"引用了未定义或上游尚未产出的变量 '{variableName}'（写前读）。"
                 )
             );
+            return;
         }
+
+        // 记录消费关系（用于后续未使用变量检测）。
+        if (!_consumers.TryGetValue(variableName, out HashSet<string>? consumerSet))
+        {
+            consumerSet = new HashSet<string>(StringComparer.Ordinal);
+            _consumers[variableName] = consumerSet;
+        }
+        consumerSet.Add(nodeId);
     }
 
     private static void CheckTypeCompat(
@@ -436,13 +535,55 @@ public sealed class WorkflowGraphValidator
         if (!NameRule.IsMatch(variableName))
         {
             diagnostics.Add(
-                ErrorDiag(
+                ErrorDiag(nodeId, variableName, "非法变量名（需匹配 [A-Za-z_][A-Za-z0-9_]*）。")
+            );
+        }
+    }
+
+    /// <summary>
+    /// 声明变量：检查重复定义、循环变量保护，并记录定义节点。
+    /// </summary>
+    private void DeclareVariable(
+        string nodeId,
+        string variableName,
+        string? typeName,
+        Dictionary<string, string?> symbols,
+        List<WorkflowDiagnostic> diagnostics
+    )
+    {
+        // 检查是否与受保护的循环变量冲突。
+        foreach (HashSet<string> protectedSet in _protectedVars)
+        {
+            if (protectedSet.Contains(variableName))
+            {
+                diagnostics.Add(
+                    ErrorDiag(
+                        nodeId,
+                        variableName,
+                        $"循环体内不允许重新定义受保护的循环变量 '{variableName}'。"
+                    )
+                );
+                return;
+            }
+        }
+
+        // 检查重复定义（同一变量被多个节点声明）。
+        if (_definers.TryGetValue(variableName, out string? previousNode))
+        {
+            diagnostics.Add(
+                WarnDiag(
                     nodeId,
                     variableName,
-                    "非法变量名（需匹配 [A-Za-z_][A-Za-z0-9_]*）。"
+                    $"变量 '{variableName}' 已被节点 {previousNode} 定义，此处覆盖可能导致数据流歧义。"
                 )
             );
         }
+        else
+        {
+            _definers[variableName] = nodeId;
+        }
+
+        symbols[variableName] = typeName;
     }
 
     private static string? GetString(Dictionary<string, JsonElement> p, string key) =>
@@ -458,6 +599,64 @@ public sealed class WorkflowGraphValidator
             JsonValueKind.True or JsonValueKind.False => "System.Boolean",
             _ => null,
         };
+
+    // ── 拓扑后校验 ────────────────────────────────────────────────────────────
+
+    /// <summary>检测未被任何边连通的孤立节点。</summary>
+    private static void ValidateUnreachableNodes(
+        GraphDataModel graph,
+        List<WorkflowDiagnostic> diagnostics
+    )
+    {
+        if (graph.Nodes.Count == 0)
+            return;
+
+        // 收集所有被边引用的节点 ID（作为源或目标）。
+        var reachable = new HashSet<string>(StringComparer.Ordinal);
+        foreach (EdgeModel edge in graph.Edges)
+        {
+            if (edge.SourceNodeId is not null)
+                reachable.Add(edge.SourceNodeId);
+            if (edge.TargetNodeId is not null)
+                reachable.Add(edge.TargetNodeId);
+        }
+
+        // 排除起止节点（它们可能没有边连接，但属于合法边界）。
+        foreach (NodeModel node in graph.Nodes)
+        {
+            if (node.Type is NodeTypeTokens.StartNode or NodeTypeTokens.EndNode)
+                continue;
+            if (reachable.Contains(node.Id))
+                continue;
+            if (
+                Guid.TryParse(node.Type, out _)
+                || node.Type is NodeTypeTokens.Assign or NodeTypeTokens.FlowContainer
+            )
+            {
+                diagnostics.Add(
+                    WarnDiag(node.Id, null, "该节点未连接到工作流图中（不可达），将不会被执行。")
+                );
+            }
+        }
+    }
+
+    /// <summary>检测已定义但从未被任何节点消费的变量。</summary>
+    private void ValidateUnusedVariables(List<WorkflowDiagnostic> diagnostics)
+    {
+        foreach ((string varName, string definerNodeId) in _definers)
+        {
+            if (!_consumers.ContainsKey(varName))
+            {
+                diagnostics.Add(
+                    WarnDiag(
+                        definerNodeId,
+                        varName,
+                        $"变量 '{varName}' 已定义但从未被任何节点消费。"
+                    )
+                );
+            }
+        }
+    }
 
     private static WorkflowDiagnostic ErrorDiag(string nodeId, string? target, string message) =>
         new()
