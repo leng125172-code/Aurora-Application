@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Reflection;
 using System.Text.Json;
 using AuroraStruct3D.OpenCV.Registry;
 using AuroraStruct3D.OpenCV.Workflow;
@@ -7,6 +8,7 @@ using AuroraStruct3D.OpenCV.Workflow.Compilation.Model;
 using AuroraStruct3D.OpenCV.Workflow.Values;
 using AuroraStruct3D.Workflow.Dtos;
 using Volo.Abp;
+using Volo.Abp.BlobStoring;
 using Volo.Abp.Domain.Repositories;
 using RuntimeWorkflow = AuroraStruct3D.OpenCV.Workflow.WorkflowDefinition;
 
@@ -17,25 +19,28 @@ namespace AuroraStruct3D.Workflow;
 /// 串联：加载持久化定义 → 编译为可执行语句 → 从 Redis 暂存注入初始变量 → 执行 →
 /// 写回指定结果变量 → 返回变量摘要。编译 / 执行异常转为 <see cref="UserFriendlyException"/>。
 /// </summary>
-public class WorkflowExecutionAppService
-    : AuroraStruct3DAppService,
-        IWorkflowExecutionAppService
+public class WorkflowExecutionAppService : AuroraStruct3DAppService, IWorkflowExecutionAppService
 {
+    private const string SamplePointCloudBlobName = "SizectorS_MeshExport_Rendered.ply";
+
     // 注意：此处 WorkflowDefinition 为 Domain 持久化实体（当前命名空间），
     // 运行时模型用别名 RuntimeWorkflow 区分。
     private readonly IRepository<WorkflowDefinition, Guid> _repository;
     private readonly IOperatorRegistry _registry;
     private readonly IWorkflowVariableBridge _bridge;
+    private readonly IBlobContainer<SamplePointCloudBlobContainer> _sampleBlobContainer;
 
     public WorkflowExecutionAppService(
         IRepository<WorkflowDefinition, Guid> repository,
         IOperatorRegistry registry,
-        IWorkflowVariableBridge bridge
+        IWorkflowVariableBridge bridge,
+        IBlobContainer<SamplePointCloudBlobContainer> sampleBlobContainer
     )
     {
         _repository = repository;
         _registry = registry;
         _bridge = bridge;
+        _sampleBlobContainer = sampleBlobContainer;
     }
 
     /// <inheritdoc/>
@@ -69,7 +74,8 @@ public class WorkflowExecutionAppService
         IReadOnlyList<string> inputKeys = input.InputVariableKeys is { Count: > 0 } explicitIn
             ? explicitIn
             : signature.Inputs;
-        IReadOnlyList<string> outputVarNames = input.OutputVariableNames is { Count: > 0 } explicitOut
+        IReadOnlyList<string> outputVarNames = input.OutputVariableNames
+            is { Count: > 0 } explicitOut
             ? explicitOut
             : signature.Outputs;
 
@@ -132,5 +138,73 @@ public class WorkflowExecutionAppService
         {
             context.Dispose();
         }
+    }
+
+    /// <inheritdoc/>
+    public async Task<MockExecuteResultDto> MockExecuteAsync()
+    {
+        await EnsureSamplePointCloudInitializedAsync();
+
+        Stream? stream = await _sampleBlobContainer.GetAsync(SamplePointCloudBlobName);
+        long fileSizeBytes = stream?.Length ?? 0;
+        stream?.Dispose();
+
+        return new MockExecuteResultDto
+        {
+            PointCloud = new SamplePointCloudInfoDto
+            {
+                FileName = SamplePointCloudBlobName,
+                FileSizeBytes = fileSizeBytes,
+                ResolutionWidth = 2472,
+                ResolutionHeight = 2064,
+                ZMax = 6.35,
+                ZMin = -11.343,
+                MainPlaneHeight = 0.539,
+                RivetPointHeight = 1.617,
+                ColumnHeight = 2.780,
+            },
+        };
+    }
+
+    private async Task EnsureSamplePointCloudInitializedAsync()
+    {
+        if (await _sampleBlobContainer.ExistsAsync(SamplePointCloudBlobName))
+            return;
+
+        Assembly domainAssembly = typeof(WorkflowDefinition).Assembly;
+        string resourceName =
+            $"{domainAssembly.GetName().Name}.Workflow.SampleData.{SamplePointCloudBlobName}";
+
+        Stream? resourceStream = domainAssembly.GetManifestResourceStream(resourceName);
+        if (resourceStream is null)
+        {
+            throw new UserFriendlyException("示例点云嵌入式资源不存在：" + resourceName);
+        }
+
+        await _sampleBlobContainer.SaveAsync(
+            SamplePointCloudBlobName,
+            resourceStream,
+            overrideExisting: false
+        );
+    }
+
+    /// <inheritdoc/>
+    public async Task<Volo.Abp.Content.IRemoteStreamContent> DownloadSampleAsync(string blobName)
+    {
+        Check.NotNullOrWhiteSpace(blobName, nameof(blobName));
+
+        await EnsureSamplePointCloudInitializedAsync();
+
+        Stream? stream = await _sampleBlobContainer.GetAsync(blobName);
+        if (stream is null)
+        {
+            throw new UserFriendlyException($"示例点云文件不存在：{blobName}");
+        }
+
+        return new Volo.Abp.Content.RemoteStreamContent(
+            stream,
+            blobName,
+            "application/octet-stream"
+        );
     }
 }

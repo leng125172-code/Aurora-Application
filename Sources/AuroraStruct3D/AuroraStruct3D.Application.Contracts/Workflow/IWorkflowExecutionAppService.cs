@@ -15,4 +15,17 @@ public interface IWorkflowExecutionAppService : IApplicationService
     /// </summary>
     /// <param name="input">执行参数（项目 / 工作流 ID + 变量进出约定）。</param>
     Task<WorkflowRunResultDto> RunAsync(RunWorkflowInput input);
+
+    /// <summary>
+    /// 模拟执行：返回示例点云的下载链接和统计信息，用于开发调试和前端演示。
+    /// <c>GET /api/app/workflow-execution/mock-execute</c>
+    /// </summary>
+    Task<MockExecuteResultDto> MockExecuteAsync();
+
+    /// <summary>
+    /// 下载示例点云文件。
+    /// <c>GET /api/app/workflow-execution/download-sample?blobName=xxx</c>
+    /// </summary>
+    /// <param name="blobName">BLOB 名称。</param>
+    Task<Volo.Abp.Content.IRemoteStreamContent> DownloadSampleAsync(string blobName);
 }

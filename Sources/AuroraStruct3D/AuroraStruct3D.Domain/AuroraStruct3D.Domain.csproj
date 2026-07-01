@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project Sdk="Microsoft.NET.Sdk">
     <Import Project="..\..\..\common.props" />
     <PropertyGroup>
@@ -7,6 +7,10 @@
 
     <ItemGroup>
         <ProjectReference Include="..\AuroraStruct3D.Domain.Shared\AuroraStruct3D.Domain.Shared.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <EmbeddedResource Include="Workflow\SampleData\*.ply" />
     </ItemGroup>
 
     <ItemGroup>
