@@ -5,6 +5,8 @@ using AuroraStruct3D.OpenCV.Workflow;
 using AuroraStruct3D.OpenCV.Workflow.Compilation;
 using AuroraStruct3D.OpenCV.Workflow.Compilation.Model;
 using AuroraStruct3D.OpenCV.Workflow.Values;
+using AuroraStruct3D.Variables;
+using AuroraStruct3D.Variables.Dtos;
 using AuroraStruct3D.Workflow.Dtos;
 using Volo.Abp;
 using Volo.Abp.Domain.Repositories;
@@ -17,25 +19,26 @@ namespace AuroraStruct3D.Workflow;
 /// 串联：加载持久化定义 → 编译为可执行语句 → 从 Redis 暂存注入初始变量 → 执行 →
 /// 写回指定结果变量 → 返回变量摘要。编译 / 执行异常转为 <see cref="UserFriendlyException"/>。
 /// </summary>
-public class WorkflowExecutionAppService
-    : AuroraStruct3DAppService,
-        IWorkflowExecutionAppService
+public class WorkflowExecutionAppService : AuroraStruct3DAppService, IWorkflowExecutionAppService
 {
     // 注意：此处 WorkflowDefinition 为 Domain 持久化实体（当前命名空间），
     // 运行时模型用别名 RuntimeWorkflow 区分。
     private readonly IRepository<WorkflowDefinition, Guid> _repository;
     private readonly IOperatorRegistry _registry;
     private readonly IWorkflowVariableBridge _bridge;
+    private readonly IOnlineVariablePoolAppService _onlineVariablePool;
 
     public WorkflowExecutionAppService(
         IRepository<WorkflowDefinition, Guid> repository,
         IOperatorRegistry registry,
-        IWorkflowVariableBridge bridge
+        IWorkflowVariableBridge bridge,
+        IOnlineVariablePoolAppService onlineVariablePool
     )
     {
         _repository = repository;
         _registry = registry;
         _bridge = bridge;
+        _onlineVariablePool = onlineVariablePool;
     }
 
     /// <inheritdoc/>
@@ -69,12 +72,35 @@ public class WorkflowExecutionAppService
         IReadOnlyList<string> inputKeys = input.InputVariableKeys is { Count: > 0 } explicitIn
             ? explicitIn
             : signature.Inputs;
-        IReadOnlyList<string> outputVarNames = input.OutputVariableNames is { Count: > 0 } explicitOut
+        IReadOnlyList<string> outputVarNames = input.OutputVariableNames
+            is { Count: > 0 } explicitOut
             ? explicitOut
             : signature.Outputs;
 
-        // ④ 从 Redis 暂存加载初始变量。
-        Dictionary<string, object?> initialVariables = await _bridge.LoadAsync(inputKeys);
+        List<WorkflowVariableBindingKeyDto> inputBindings = BuildBindingKeys(
+            input.InputVariableBindings,
+            inputKeys,
+            input.WorkflowId
+        );
+        List<WorkflowVariableBindingKeyDto> outputBindings = BuildBindingKeys(
+            input.OutputVariableBindings,
+            outputVarNames,
+            input.WorkflowId
+        );
+
+        ValidateBindingKeys(inputBindings, "input");
+        ValidateBindingKeys(outputBindings, "output", uniqueByVariableName: true);
+
+        bool useOnlineVariablePool =
+            input.UseOnlineVariablePool || input.RuntimeInstanceId.HasValue;
+        Guid? runtimeInstanceId = useOnlineVariablePool
+            ? (input.RuntimeInstanceId ?? GuidGenerator.Create())
+            : null;
+
+        // ④ 加载初始变量（在线变量池 / Redis 暂存二选一）。
+        Dictionary<string, object?> initialVariables = useOnlineVariablePool
+            ? await LoadFromOnlineVariablePoolAsync(input, runtimeInstanceId!.Value, inputBindings)
+            : await _bridge.LoadAsync(inputKeys);
 
         // ④ 执行。
         var stopwatch = Stopwatch.StartNew();
@@ -93,6 +119,9 @@ public class WorkflowExecutionAppService
         {
             // ⑤ 写回结果变量 + 汇总（序列化在 context.Dispose 之前完成）。
             var outputNames = new HashSet<string>(outputVarNames, StringComparer.Ordinal);
+            Dictionary<string, WorkflowVariableBindingKeyDto> outputBindingMap = outputBindings
+                .GroupBy(x => x.VariableName, StringComparer.Ordinal)
+                .ToDictionary(x => x.Key, x => x.First(), StringComparer.Ordinal);
 
             var variables = new List<WorkflowVariableResultDto>();
             foreach (string name in context.VariableNames)
@@ -104,9 +133,20 @@ public class WorkflowExecutionAppService
                     ? WorkflowValueSerializer.ScalarToString(value)
                     : null;
 
-                string? stagedKey = outputNames.Contains(name)
-                    ? await _bridge.SaveAsync(name, value)
-                    : null;
+                string? stagedKey = null;
+                if (outputNames.Contains(name))
+                {
+                    stagedKey = useOnlineVariablePool
+                        ? await SaveToOnlineVariablePoolAsync(
+                            input,
+                            runtimeInstanceId!.Value,
+                            ResolveOwnerWorkflowId(name, outputBindingMap, input.WorkflowId),
+                            name,
+                            value,
+                            valueType
+                        )
+                        : await _bridge.SaveAsync(name, value);
+                }
 
                 variables.Add(
                     new WorkflowVariableResultDto
@@ -122,9 +162,10 @@ public class WorkflowExecutionAppService
             return new WorkflowRunResultDto
             {
                 WorkflowId = input.WorkflowId,
-                Name = compiled.Name,
+                Name = ResolveResponseWorkflowName(entity.Name, compiled.Name),
                 VariableCount = variables.Count,
                 DurationMs = stopwatch.ElapsedMilliseconds,
+                RuntimeInstanceId = runtimeInstanceId,
                 Variables = variables,
             };
         }
@@ -132,5 +173,171 @@ public class WorkflowExecutionAppService
         {
             context.Dispose();
         }
+    }
+
+    /// <summary>
+    /// 从在线变量池读取工作流初始变量并反序列化为执行上下文字典。
+    /// </summary>
+    private async Task<Dictionary<string, object?>> LoadFromOnlineVariablePoolAsync(
+        RunWorkflowInput input,
+        Guid runtimeInstanceId,
+        IReadOnlyList<WorkflowVariableBindingKeyDto> inputBindings
+    )
+    {
+        await _onlineVariablePool.InitializeAsync(
+            new InitializeVariablePoolInput
+            {
+                ProjectId = input.ProjectId,
+                InstanceId = runtimeInstanceId,
+                SnapshotVersion = 0,
+            }
+        );
+
+        var result = new Dictionary<string, object?>(StringComparer.Ordinal);
+        foreach (
+            WorkflowVariableBindingKeyDto binding in inputBindings.DistinctBy(x =>
+                (x.OwnerWorkflowId, x.VariableName)
+            )
+        )
+        {
+            ReadVariableResultDto read = await _onlineVariablePool.ReadAsync(
+                new ReadVariableInput
+                {
+                    ProjectId = input.ProjectId,
+                    InstanceId = runtimeInstanceId,
+                    ReaderWorkflowId = input.WorkflowId,
+                    OwnerWorkflowId = binding.OwnerWorkflowId,
+                    VariableName = binding.VariableName,
+                    WaitPolicy = VariableWaitPolicy.WaitOrDefault,
+                    TimeoutMs = Math.Max(input.VariableReadTimeoutMs, 0),
+                }
+            );
+
+            if (string.IsNullOrWhiteSpace(read.ValueJson))
+            {
+                result[binding.VariableName] = null;
+                continue;
+            }
+
+            byte[] bytes = Convert.FromBase64String(read.ValueJson);
+            result[binding.VariableName] = WorkflowValueSerializer.Deserialize(
+                bytes,
+                read.TypeName
+            );
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// 将执行结果写回在线变量池。
+    /// </summary>
+    private async Task<string> SaveToOnlineVariablePoolAsync(
+        RunWorkflowInput input,
+        Guid runtimeInstanceId,
+        Guid ownerWorkflowId,
+        string variableName,
+        object? value,
+        string valueType
+    )
+    {
+        byte[] bytes = WorkflowValueSerializer.Serialize(value, valueType);
+        string valueJson = Convert.ToBase64String(bytes);
+
+        await _onlineVariablePool.WriteAsync(
+            new WriteVariableInput
+            {
+                ProjectId = input.ProjectId,
+                InstanceId = runtimeInstanceId,
+                WriterWorkflowId = input.WorkflowId,
+                OwnerWorkflowId = ownerWorkflowId,
+                VariableName = variableName,
+                TypeName = valueType,
+                ValueJson = valueJson,
+            }
+        );
+
+        return $"pool:{runtimeInstanceId:N}:{ownerWorkflowId:N}:{variableName}";
+    }
+
+    private static List<WorkflowVariableBindingKeyDto> BuildBindingKeys(
+        List<WorkflowVariableBindingKeyDto>? explicitBindings,
+        IReadOnlyList<string> fallbackVariableNames,
+        Guid fallbackOwnerWorkflowId
+    )
+    {
+        if (explicitBindings is { Count: > 0 })
+        {
+            return explicitBindings
+                .Where(x =>
+                    x.OwnerWorkflowId != Guid.Empty && !string.IsNullOrWhiteSpace(x.VariableName)
+                )
+                .ToList();
+        }
+
+        return fallbackVariableNames
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Select(x => new WorkflowVariableBindingKeyDto
+            {
+                OwnerWorkflowId = fallbackOwnerWorkflowId,
+                VariableName = x,
+            })
+            .ToList();
+    }
+
+    private static void ValidateBindingKeys(
+        List<WorkflowVariableBindingKeyDto> bindings,
+        string direction,
+        bool uniqueByVariableName = false
+    )
+    {
+        if (bindings.Count == 0)
+        {
+            return;
+        }
+
+        IEnumerable<WorkflowVariableBindingKeyDto> invalid = bindings.Where(x =>
+            x.OwnerWorkflowId == Guid.Empty || string.IsNullOrWhiteSpace(x.VariableName)
+        );
+        if (invalid.Any())
+        {
+            throw new UserFriendlyException(
+                $"变量绑定无效：{direction} 绑定存在空 OwnerWorkflowId 或 VariableName。"
+            );
+        }
+
+        bool hasDuplicate = uniqueByVariableName
+            ? bindings.GroupBy(x => x.VariableName, StringComparer.Ordinal).Any(x => x.Count() > 1)
+            : bindings.GroupBy(x => (x.OwnerWorkflowId, x.VariableName)).Any(x => x.Count() > 1);
+
+        if (hasDuplicate)
+        {
+            string rule = uniqueByVariableName ? "变量名唯一" : "归属+变量名唯一";
+            throw new UserFriendlyException($"变量绑定重复：{direction} 绑定需满足 {rule}。 ");
+        }
+    }
+
+    private static Guid ResolveOwnerWorkflowId(
+        string variableName,
+        Dictionary<string, WorkflowVariableBindingKeyDto> outputBindingMap,
+        Guid fallbackOwnerWorkflowId
+    )
+    {
+        if (outputBindingMap.TryGetValue(variableName, out WorkflowVariableBindingKeyDto? binding))
+        {
+            return binding.OwnerWorkflowId;
+        }
+
+        return fallbackOwnerWorkflowId;
+    }
+
+    private static string ResolveResponseWorkflowName(string persistedWorkflowName, string fallback)
+    {
+        if (!string.IsNullOrWhiteSpace(persistedWorkflowName))
+        {
+            return persistedWorkflowName;
+        }
+
+        return fallback;
     }
 }

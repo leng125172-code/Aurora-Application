@@ -951,16 +951,17 @@
         </Project>
     </Folder>
     <Folder Name="/Sources/AuroraStruct3D/">
-        <Project
-            Path="Sources/AuroraStruct3D/Aurora.RK3588NPU/Aurora.RK3588NPU.pyproj"
-            Type="888888a0-9f3d-457c-b088-3a5042f75d52"
-            Id="744aa81b-42c2-4fac-bf64-f75ba96a1156"
-        >
+        <Project Path="Sources/AuroraStruct3D/Aurora.RK3588NPU/Aurora.RK3588NPU.pyproj" Type="888888a0-9f3d-457c-b088-3a5042f75d52" Id="744aa81b-42c2-4fac-bf64-f75ba96a1156">
             <Platform Project="AnyCPU" />
             <Build Project="false" />
         </Project>
         <Project Path="Sources/AuroraStruct3D/AuroraStruct3D.Application.Contracts/AuroraStruct3D.Application.Contracts.csproj">
             <Platform Solution="*|Any CPU" Project="x64" />
+            <Platform Solution="*|arm64" Project="arm64" />
+            <Platform Solution="*|x64" Project="x64" />
+            <Platform Solution="*|x86" Project="x86" />
+        </Project>
+        <Project Path="Sources/AuroraStruct3D/AuroraStruct3D.Application.Tests/AuroraStruct3D.Application.Tests.csproj">
             <Platform Solution="*|arm64" Project="arm64" />
             <Platform Solution="*|x64" Project="x64" />
             <Platform Solution="*|x86" Project="x86" />

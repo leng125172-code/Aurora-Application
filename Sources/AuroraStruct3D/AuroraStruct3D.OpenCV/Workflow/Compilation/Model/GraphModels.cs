@@ -53,11 +53,26 @@ public sealed class NodePropertiesModel
     /// </summary>
     public Dictionary<string, JsonElement>? Params { get; set; }
 
+    /// <summary>
+    /// 配置参数来源标记：参数名 → <c>literal</c> / <c>variable</c>。
+    /// </summary>
+    public Dictionary<string, string>? ParamSources { get; set; }
+
     /// <summary>输入端口绑定：端口名 → 上游变量名。</summary>
     public Dictionary<string, string>? InputBindings { get; set; }
 
+    /// <summary>
+    /// 输入端口绑定来源标记：端口名 → <c>literal</c> / <c>variable</c>。
+    /// </summary>
+    public Dictionary<string, string>? InputBindingSources { get; set; }
+
     /// <summary>输出端口绑定：端口名 → 本节点产出变量名。</summary>
     public Dictionary<string, string>? OutputBindings { get; set; }
+
+    /// <summary>
+    /// 输出端口绑定来源标记：端口名 → <c>literal</c> / <c>variable</c>。
+    /// </summary>
+    public Dictionary<string, string>? OutputBindingSources { get; set; }
 
     /// <summary>容器子画布（仅 <c>flow_container</c> 携带）。</summary>
     public GraphDataModel? InnerGraphData { get; set; }
@@ -107,7 +122,10 @@ public static class GraphJson
     };
 
     /// <summary>从 params 中按键读取一个子图（用于 if/else 的 then/else 分支体）；缺失则返回空图。</summary>
-    public static GraphDataModel ReadSubGraph(IReadOnlyDictionary<string, JsonElement> p, string key)
+    public static GraphDataModel ReadSubGraph(
+        IReadOnlyDictionary<string, JsonElement> p,
+        string key
+    )
     {
         if (p.TryGetValue(key, out JsonElement el) && el.ValueKind == JsonValueKind.Object)
             return el.Deserialize<GraphDataModel>(Options) ?? new GraphDataModel();

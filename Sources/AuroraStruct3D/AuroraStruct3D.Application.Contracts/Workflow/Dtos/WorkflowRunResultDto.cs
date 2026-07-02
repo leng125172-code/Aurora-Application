@@ -31,6 +31,11 @@ public class WorkflowRunResultDto
     /// <summary>执行耗时（毫秒）。</summary>
     public long DurationMs { get; set; }
 
+    /// <summary>
+    /// 运行时实例 ID（在线变量池模式下返回）。
+    /// </summary>
+    public Guid? RuntimeInstanceId { get; set; }
+
     /// <summary>所有顶层变量的摘要。</summary>
     public List<WorkflowVariableResultDto> Variables { get; set; } = new();
 }

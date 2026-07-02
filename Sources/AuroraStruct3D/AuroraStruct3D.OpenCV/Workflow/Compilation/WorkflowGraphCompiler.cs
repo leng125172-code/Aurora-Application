@@ -154,7 +154,14 @@ public sealed class WorkflowGraphCompiler
         }
 
         InputBinding source = p.TryGetValue("value", out JsonElement value)
-            ? BuildValueBinding(value, targetTypeName: null)
+            ? BuildValueBinding(
+                value,
+                targetTypeName: null,
+                sourceMap: node.Properties?.ParamSources,
+                sourceKey: "value",
+                nodeId: node.Id,
+                sectionName: "params"
+            )
             : new ConstantBinding(null);
 
         return new AssignStatement(variableName!, source);
@@ -246,7 +253,14 @@ public sealed class WorkflowGraphCompiler
             {
                 configArgs.Add(
                     p.TryGetValue(cfg.Name, out JsonElement value)
-                        ? BuildValueBinding(value, cfg.ParameterTypeName)
+                        ? BuildValueBinding(
+                            value,
+                            cfg.ParameterTypeName,
+                            props.ParamSources,
+                            cfg.Name,
+                            node.Id,
+                            "params"
+                        )
                         : new ConstantBinding(
                             ValueCoercion.Coerce(cfg.DefaultValue, cfg.ParameterTypeName)
                         )
@@ -254,17 +268,62 @@ public sealed class WorkflowGraphCompiler
             }
         }
 
-        IReadOnlyDictionary<string, InputBinding> inputBindings = (
-            props.InputBindings ?? new()
-        ).ToDictionary(
-            kv => kv.Key,
-            kv => (InputBinding)new VariableRefBinding(kv.Value),
-            StringComparer.Ordinal
-        );
+        Dictionary<string, InputBinding> inputBindingMap = new(StringComparer.Ordinal);
+        foreach ((string portName, string bindingValue) in props.InputBindings ?? new())
+        {
+            string? portType = descriptor
+                ?.Inputs.FirstOrDefault(i => i.ParameterName == portName)
+                ?.ParameterTypeName;
 
-        IReadOnlyDictionary<string, OutputBinding> outputBindings = (
-            props.OutputBindings ?? new()
-        ).ToDictionary(kv => kv.Key, kv => new OutputBinding(kv.Value), StringComparer.Ordinal);
+            if (
+                !BindingSource.TryResolveSource(
+                    props.InputBindingSources,
+                    portName,
+                    out bool isVariable,
+                    out string sourceError
+                )
+            )
+            {
+                throw new WorkflowCompilationException(
+                    $"节点 {node.Id} 的 inputBindings['{portName}'] source 无效：{sourceError}。"
+                );
+            }
+
+            inputBindingMap[portName] = isVariable
+                ? new VariableRefBinding(bindingValue)
+                : new ConstantBinding(ValueCoercion.Coerce(bindingValue, portType));
+        }
+
+        IReadOnlyDictionary<string, InputBinding> inputBindings = inputBindingMap;
+
+        Dictionary<string, OutputBinding> outputBindingMap = new(StringComparer.Ordinal);
+        foreach ((string portName, string variableName) in props.OutputBindings ?? new())
+        {
+            if (
+                !BindingSource.TryResolveSource(
+                    props.OutputBindingSources,
+                    portName,
+                    out bool isVariable,
+                    out string sourceError
+                )
+            )
+            {
+                throw new WorkflowCompilationException(
+                    $"节点 {node.Id} 的 outputBindings['{portName}'] source 无效：{sourceError}。"
+                );
+            }
+
+            if (!isVariable)
+            {
+                throw new WorkflowCompilationException(
+                    $"节点 {node.Id} 的输出绑定 '{portName}' 必须为变量引用，不能为字面量。"
+                );
+            }
+
+            outputBindingMap[portName] = new OutputBinding(variableName);
+        }
+
+        IReadOnlyDictionary<string, OutputBinding> outputBindings = outputBindingMap;
 
         return new OperatorCallStatement(operatorType, configArgs, inputBindings, outputBindings);
     }
@@ -273,10 +332,46 @@ public sealed class WorkflowGraphCompiler
     /// 把一个 params 值编译为输入绑定：<c>{ "$var": n }</c> → 运行期解析（含强转，
     /// 当 <paramref name="targetTypeName"/> 非空时）；否则编译期字面量常量。
     /// </summary>
-    private static InputBinding BuildValueBinding(JsonElement value, string? targetTypeName)
+    private static InputBinding BuildValueBinding(
+        JsonElement value,
+        string? targetTypeName,
+        Dictionary<string, string>? sourceMap,
+        string sourceKey,
+        string nodeId,
+        string sectionName
+    )
     {
-        if (VarRef.TryGet(value, out string refName))
+        if (
+            !BindingSource.TryResolveSource(
+                sourceMap,
+                sourceKey,
+                out bool isVariable,
+                out string sourceError
+            )
+        )
         {
+            throw new WorkflowCompilationException(
+                $"节点 {nodeId} 的 {sectionName}['{sourceKey}'] source 无效：{sourceError}。"
+            );
+        }
+
+        if (isVariable)
+        {
+            if (
+                !BindingSource.TryGetParamVariableNameStrict(
+                    sourceMap,
+                    sourceKey,
+                    value,
+                    out string refName,
+                    out string variableError
+                )
+            )
+            {
+                throw new WorkflowCompilationException(
+                    $"节点 {nodeId} 的 {sectionName}['{sourceKey}'] 变量引用无效：{variableError}。"
+                );
+            }
+
             return targetTypeName is null
                 ? new VariableRefBinding(refName)
                 : new ComputedBinding(ctx =>

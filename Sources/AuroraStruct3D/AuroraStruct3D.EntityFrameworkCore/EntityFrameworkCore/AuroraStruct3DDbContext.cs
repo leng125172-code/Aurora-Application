@@ -8,6 +8,7 @@ using AuroraStruct3D.ProductModels;
 using AuroraStruct3D.Projectors;
 using AuroraStruct3D.Projects;
 using AuroraStruct3D.SerialPorts;
+using AuroraStruct3D.Variables;
 using AuroraStruct3D.Workflow;
 using Lion.AbpPro.BasicManagement.UserRefreshTokens;
 using Lion.AbpPro.CodeManagement.DataTypes.Aggregates;
@@ -150,6 +151,10 @@ namespace AuroraStruct3D.EntityFrameworkCore
         // ── 工作流模块 ─────────────────────────────────────────────────────────
         public DbSet<WorkflowDefinition> WorkflowDefinitions { get; set; }
 
+        // ── 变量模块（离线变量库 + 在线变量池）────────────────────────────────────
+        public DbSet<VariableDefinition> VariableDefinitions { get; set; }
+        public DbSet<VariableInstanceValue> VariableInstanceValues { get; set; }
+
         public AuroraStruct3DDbContext(DbContextOptions<AuroraStruct3DDbContext> options)
             : base(options) { }
 
@@ -218,6 +223,9 @@ namespace AuroraStruct3D.EntityFrameworkCore
 
             // 工作流模块
             builder.ConfigureWorkflowDefinition();
+
+            // 变量模块
+            builder.ConfigureVariables();
         }
     }
 }

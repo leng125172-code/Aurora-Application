@@ -246,8 +246,34 @@ public sealed class WorkflowGraphValidator
         string? sourceType = null;
         if (p.TryGetValue("value", out JsonElement value))
         {
-            if (VarRef.TryGet(value, out string refName))
+            if (
+                !BindingSource.TryResolveSource(
+                    node.Properties?.ParamSources,
+                    "value",
+                    out bool isVariable,
+                    out string sourceError
+                )
+            )
             {
+                diagnostics.Add(ErrorDiag(node.Id, "value", $"source 无效：{sourceError}"));
+            }
+            else if (isVariable)
+            {
+                if (
+                    !BindingSource.TryGetParamVariableNameStrict(
+                        node.Properties?.ParamSources,
+                        "value",
+                        value,
+                        out string refName,
+                        out string variableError
+                    )
+                )
+                {
+                    diagnostics.Add(ErrorDiag(node.Id, "value", $"变量引用无效：{variableError}"));
+                    sourceType = null;
+                    goto SourceDone;
+                }
+
                 CheckRead(node.Id, "value", refName, symbols, diagnostics);
                 sourceType = symbols.GetValueOrDefault(refName);
             }
@@ -255,6 +281,9 @@ public sealed class WorkflowGraphValidator
             {
                 sourceType = LiteralTypeName(value);
             }
+
+            SourceDone:
+            ;
         }
 
         // 声明变量（含重复定义、循环变量保护检查）。
@@ -375,8 +404,31 @@ public sealed class WorkflowGraphValidator
         // 容器输出绑定：把内层结果导出为父作用域变量。
         if (node.Properties?.OutputBindings is { } outs)
         {
-            foreach (string varName in outs.Values)
+            foreach ((string portName, string varName) in outs)
             {
+                if (
+                    !BindingSource.TryResolveSource(
+                        node.Properties.OutputBindingSources,
+                        portName,
+                        out bool isVariable,
+                        out string sourceError
+                    )
+                )
+                {
+                    diagnostics.Add(
+                        ErrorDiag(node.Id, portName, $"output source 无效：{sourceError}")
+                    );
+                    continue;
+                }
+
+                if (!isVariable)
+                {
+                    diagnostics.Add(
+                        ErrorDiag(node.Id, portName, "输出绑定必须为变量引用，不能标记为字面量。")
+                    );
+                    continue;
+                }
+
                 CheckName(node.Id, varName, diagnostics);
                 DeclareVariable(node.Id, varName, null, symbols, diagnostics);
             }
@@ -412,6 +464,26 @@ public sealed class WorkflowGraphValidator
         {
             foreach ((string portName, string varName) in inputs)
             {
+                if (
+                    !BindingSource.TryResolveSource(
+                        props.InputBindingSources,
+                        portName,
+                        out bool isVariable,
+                        out string sourceError
+                    )
+                )
+                {
+                    diagnostics.Add(
+                        ErrorDiag(node.Id, portName, $"input source 无效：{sourceError}")
+                    );
+                    continue;
+                }
+
+                if (!isVariable)
+                {
+                    continue;
+                }
+
                 CheckRead(node.Id, portName, varName, symbols, diagnostics);
 
                 string? portType = descriptor
@@ -434,8 +506,39 @@ public sealed class WorkflowGraphValidator
             {
                 if (!prms.TryGetValue(cfg.Name, out JsonElement value))
                     continue;
-                if (!VarRef.TryGet(value, out string refName))
+                if (
+                    !BindingSource.TryResolveSource(
+                        props.ParamSources,
+                        cfg.Name,
+                        out bool isVariable,
+                        out string sourceError
+                    )
+                )
+                {
+                    diagnostics.Add(
+                        ErrorDiag(node.Id, cfg.Name, $"param source 无效：{sourceError}")
+                    );
                     continue;
+                }
+
+                if (!isVariable)
+                {
+                    continue;
+                }
+
+                if (
+                    !BindingSource.TryGetParamVariableNameStrict(
+                        props.ParamSources,
+                        cfg.Name,
+                        value,
+                        out string refName,
+                        out string variableError
+                    )
+                )
+                {
+                    diagnostics.Add(ErrorDiag(node.Id, cfg.Name, $"变量引用无效：{variableError}"));
+                    continue;
+                }
 
                 CheckRead(node.Id, cfg.Name, refName, symbols, diagnostics);
                 CheckTypeCompat(
@@ -453,6 +556,29 @@ public sealed class WorkflowGraphValidator
         {
             foreach ((string portName, string varName) in outputs)
             {
+                if (
+                    !BindingSource.TryResolveSource(
+                        props.OutputBindingSources,
+                        portName,
+                        out bool isVariable,
+                        out string sourceError
+                    )
+                )
+                {
+                    diagnostics.Add(
+                        ErrorDiag(node.Id, portName, $"output source 无效：{sourceError}")
+                    );
+                    continue;
+                }
+
+                if (!isVariable)
+                {
+                    diagnostics.Add(
+                        ErrorDiag(node.Id, portName, "输出绑定必须为变量引用，不能标记为字面量。")
+                    );
+                    continue;
+                }
+
                 CheckName(node.Id, varName, diagnostics);
 
                 string? portType = descriptor

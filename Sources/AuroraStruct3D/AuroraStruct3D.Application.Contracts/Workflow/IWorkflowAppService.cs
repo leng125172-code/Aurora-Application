@@ -1,5 +1,5 @@
-using System.Text.Json;
 using AuroraStruct3D.Workflow.Dtos;
+using Microsoft.AspNetCore.Mvc;
 using Volo.Abp.Application.Services;
 
 namespace AuroraStruct3D.Workflow;
@@ -17,59 +17,61 @@ public interface IWorkflowAppService : IApplicationService
 {
     /// <summary>
     /// 获取指定项目下的所有工作流列表（轻量，不含 GraphData 全文）。
-    /// <c>GET /api/app/workflow/by-project/{projectId}</c>
+    /// Route: GET projects/{projectId}/workflows
     /// </summary>
     /// <param name="projectId">所属项目 ID</param>
     /// <returns>工作流简要列表</returns>
-    Task<List<WorkflowBriefDto>> GetListByProjectIdAsync(Guid projectId);
+    [HttpGet("projects/{projectId}/workflows")]
+    Task<List<WorkflowBriefDto>> GetListByProjectIdAsync([FromRoute] Guid projectId);
 
     /// <summary>
-    /// 新建工作流。请求体为完整 WorkflowPayload，后端从中读取 projectId / name。
-    /// <c>POST /api/app/workflow</c>
+    /// 新建工作流。
+    /// Route: POST
     /// </summary>
-    /// <param name="payload">完整 WorkflowPayload</param>
+    /// <param name="input">新建请求。</param>
     /// <returns>新建后的工作流（含后端生成的工作流 ID）</returns>
-    Task<WorkflowDto> CreateAsync(JsonElement payload);
+    [HttpPost]
+    Task<WorkflowDto> CreateAsync([FromBody] CreateWorkflowInput input);
 
     /// <summary>
-    /// 回显工作流：通过所属项目 ID + 工作流 ID 获取完整内容。
-    /// <c>GET /api/app/workflow/{id}?projectId={projectId}</c>
-    /// </summary>
-    /// <param name="projectId">所属项目 ID（用于归属校验）</param>
-    /// <param name="id">工作流 ID</param>
-    Task<WorkflowDto> GetAsync(Guid projectId, Guid id);
-
-    /// <summary>
-    /// 修改保存工作流：路由指定工作流 ID，请求体为完整 WorkflowPayload，
-    /// 后端从中读取 projectId（归属校验）/ name，覆盖内容。
-    /// <c>PUT /api/app/workflow/{id}</c>
+    /// 获取工作流详情。
+    /// Route: GET {id}
     /// </summary>
     /// <param name="id">工作流 ID</param>
-    /// <param name="payload">完整 WorkflowPayload</param>
-    Task<WorkflowDto> UpdateAsync(Guid id, JsonElement payload);
+    [HttpGet("{id}")]
+    Task<WorkflowDto> GetAsync([FromRoute] Guid id);
 
     /// <summary>
-    /// 删除工作流。先校验归属，再软删除。
-    /// <c>DELETE /api/app/workflow/{id}?projectId={projectId}</c>
+    /// 修改保存工作流。
+    /// Route: PUT {id}
     /// </summary>
-    /// <param name="projectId">所属项目 ID（用于归属校验）</param>
     /// <param name="id">工作流 ID</param>
-    Task DeleteAsync(Guid projectId, Guid id);
+    /// <param name="input">修改请求。</param>
+    [HttpPut("{id}")]
+    Task<WorkflowDto> UpdateAsync([FromRoute] Guid id, [FromBody] UpdateWorkflowInput input);
 
     /// <summary>
-    /// 静态校验工作流图：根据项目 ID 和工作流 ID 加载已持久化的工作流，返回诊断结果。
-    /// <c>GET /api/app/workflow/{id}/validate?projectId={projectId}</c>
+    /// 删除工作流。
+    /// Route: DELETE {id}
     /// </summary>
-    /// <param name="projectId">所属项目 ID（用于归属校验）。</param>
+    /// <param name="id">工作流 ID</param>
+    [HttpDelete("{id}")]
+    Task DeleteAsync([FromRoute] Guid id);
+
+    /// <summary>
+    /// 静态校验工作流图。
+    /// Route: POST {id}/validate
+    /// </summary>
     /// <param name="id">工作流 ID。</param>
-    Task<WorkflowValidateResultDto> ValidateAsync(Guid projectId, Guid id);
+    [HttpPost("{id}/validate")]
+    Task<WorkflowValidateResultDto> ValidateAsync([FromRoute] Guid id);
 
     /// <summary>
     /// 数据流仿真：根据项目 ID 和工作流 ID 加载已持久化的工作流，不执行算子，
     /// 仅模拟变量绑定与流动路径，返回仿真报告。
-    /// <c>GET /api/app/workflow/{id}/simulate?projectId={projectId}</c>
+    /// Route: POST {id}/simulate
     /// </summary>
-    /// <param name="projectId">所属项目 ID（用于归属校验）。</param>
     /// <param name="id">工作流 ID。</param>
-    Task<WorkflowDataFlowReportDto> SimulateAsync(Guid projectId, Guid id);
+    [HttpPost("{id}/simulate")]
+    Task<WorkflowDataFlowReportDto> SimulateAsync([FromRoute] Guid id);
 }

@@ -52,7 +52,35 @@ public static class WorkflowSignatureExtractor
                 Dictionary<string, string>? bindings = output
                     ? n.Properties?.OutputBindings
                     : n.Properties?.InputBindings;
-                return bindings?.Values ?? Enumerable.Empty<string>();
+                Dictionary<string, string>? sourceMap = output
+                    ? n.Properties?.OutputBindingSources
+                    : n.Properties?.InputBindingSources;
+
+                if (bindings is null)
+                {
+                    return Enumerable.Empty<string>();
+                }
+
+                return bindings
+                    .Where(kv =>
+                    {
+                        if (
+                            !BindingSource.TryResolveSource(
+                                sourceMap,
+                                kv.Key,
+                                out bool isVariable,
+                                out string sourceError
+                            )
+                        )
+                        {
+                            throw new InvalidOperationException(
+                                $"节点类型 {nodeType} 的签名绑定 '{kv.Key}' source 无效：{sourceError}。"
+                            );
+                        }
+
+                        return isVariable;
+                    })
+                    .Select(kv => kv.Value);
             })
             .Where(v => !string.IsNullOrWhiteSpace(v))
             .Distinct(StringComparer.Ordinal)

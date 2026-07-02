@@ -3,6 +3,7 @@ using System;
 using AuroraStruct3D.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Volo.Abp.EntityFrameworkCore;
@@ -12,9 +13,11 @@ using Volo.Abp.EntityFrameworkCore;
 namespace AuroraStruct3D.EntityFrameworkCore.Migrations
 {
     [DbContext(typeof(AuroraStruct3DDbContext))]
-    partial class AuroraStruct3DDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260702052013_AddVariableSubsystem")]
+    partial class AddVariableSubsystem
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

@@ -16,7 +16,9 @@ public sealed class WorkflowDataFlowSimulator
     private readonly IOperatorRegistry _registry;
 
     /// <summary>变量定义记录：变量名 → (定义节点 ID, 类型)。</summary>
-    private readonly Dictionary<string, (string NodeId, string? TypeName)> _definers = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, (string NodeId, string? TypeName)> _definers = new(
+        StringComparer.Ordinal
+    );
 
     /// <summary>变量消费记录：变量名 → 消费它的节点 ID 列表。</summary>
     private readonly Dictionary<string, List<string>> _consumers = new(StringComparer.Ordinal);
@@ -44,10 +46,9 @@ public sealed class WorkflowDataFlowSimulator
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(graphDataJson);
 
-        GraphDataModel graph = JsonSerializer.Deserialize<GraphDataModel>(
-            graphDataJson,
-            GraphJson.Options
-        ) ?? new GraphDataModel();
+        GraphDataModel graph =
+            JsonSerializer.Deserialize<GraphDataModel>(graphDataJson, GraphJson.Options)
+            ?? new GraphDataModel();
 
         return await SimulateAsync(graph, workflowName, cancellationToken);
     }
@@ -105,15 +106,20 @@ public sealed class WorkflowDataFlowSimulator
         var variables = new List<VariableLifecycle>();
         foreach ((string varName, (string nodeId, string? typeName)) in _definers)
         {
-            variables.Add(new VariableLifecycle
-            {
-                VariableName = varName,
-                TypeName = typeName,
-                DefinedByNodeId = nodeId,
-                ConsumedByNodeIds = _consumers.TryGetValue(varName, out List<string>? consumerList)
-                    ? consumerList.AsReadOnly()
-                    : Array.Empty<string>(),
-            });
+            variables.Add(
+                new VariableLifecycle
+                {
+                    VariableName = varName,
+                    TypeName = typeName,
+                    DefinedByNodeId = nodeId,
+                    ConsumedByNodeIds = _consumers.TryGetValue(
+                        varName,
+                        out List<string>? consumerList
+                    )
+                        ? consumerList.AsReadOnly()
+                        : Array.Empty<string>(),
+                }
+            );
         }
 
         int operatorCount = ordered.Count(n =>
@@ -188,15 +194,17 @@ public sealed class WorkflowDataFlowSimulator
         {
             case NodeTypeTokens.StartNode:
             case NodeTypeTokens.EndNode:
-                _nodeInfos.Add(new NodeDataFlowInfo
-                {
-                    NodeId = node.Id,
-                    NodeType = node.Type,
-                    DisplayName = node.Text?.Value,
-                    TopologyLayer = layer,
-                    Consumes = Array.Empty<VariablePortRef>(),
-                    Produces = Array.Empty<VariablePortRef>(),
-                });
+                _nodeInfos.Add(
+                    new NodeDataFlowInfo
+                    {
+                        NodeId = node.Id,
+                        NodeType = node.Type,
+                        DisplayName = node.Text?.Value,
+                        TopologyLayer = layer,
+                        Consumes = Array.Empty<VariablePortRef>(),
+                        Produces = Array.Empty<VariablePortRef>(),
+                    }
+                );
                 return;
 
             case NodeTypeTokens.Assign:
@@ -211,15 +219,17 @@ public sealed class WorkflowDataFlowSimulator
                 if (Guid.TryParse(node.Type, out Guid operatorId))
                     await CollectOperatorFlowAsync(node, operatorId, layer, cancellationToken);
                 else
-                    _nodeInfos.Add(new NodeDataFlowInfo
-                    {
-                        NodeId = node.Id,
-                        NodeType = node.Type,
-                        DisplayName = node.Text?.Value,
-                        TopologyLayer = layer,
-                        Consumes = Array.Empty<VariablePortRef>(),
-                        Produces = Array.Empty<VariablePortRef>(),
-                    });
+                    _nodeInfos.Add(
+                        new NodeDataFlowInfo
+                        {
+                            NodeId = node.Id,
+                            NodeType = node.Type,
+                            DisplayName = node.Text?.Value,
+                            TopologyLayer = layer,
+                            Consumes = Array.Empty<VariablePortRef>(),
+                            Produces = Array.Empty<VariablePortRef>(),
+                        }
+                    );
                 return;
         }
     }
@@ -231,39 +241,77 @@ public sealed class WorkflowDataFlowSimulator
 
         // 消费：value 中的变量引用。
         var consumes = new List<VariablePortRef>();
-        if (p.TryGetValue("value", out JsonElement value) && VarRef.TryGet(value, out string refName))
+        if (p.TryGetValue("value", out JsonElement value))
         {
-            consumes.Add(new VariablePortRef
+            if (
+                !BindingSource.TryResolveSource(
+                    node.Properties?.ParamSources,
+                    "value",
+                    out bool isVariable,
+                    out string sourceError
+                )
+            )
             {
-                VariableName = refName,
-                PortName = "value",
-                TypeName = null,
-            });
-            RecordConsumer(refName, node.Id);
+                throw new InvalidOperationException(
+                    $"节点 {node.Id} 的 params['value'] source 无效：{sourceError}。"
+                );
+            }
+
+            if (isVariable)
+            {
+                if (
+                    !BindingSource.TryGetParamVariableNameStrict(
+                        node.Properties?.ParamSources,
+                        "value",
+                        value,
+                        out string refName,
+                        out string variableError
+                    )
+                )
+                {
+                    throw new InvalidOperationException(
+                        $"节点 {node.Id} 的 params['value'] 变量引用无效：{variableError}。"
+                    );
+                }
+
+                consumes.Add(
+                    new VariablePortRef
+                    {
+                        VariableName = refName,
+                        PortName = "value",
+                        TypeName = null,
+                    }
+                );
+                RecordConsumer(refName, node.Id);
+            }
         }
 
         // 产出。
         var produces = new List<VariablePortRef>();
         if (!string.IsNullOrWhiteSpace(variableName))
         {
-            produces.Add(new VariablePortRef
-            {
-                VariableName = variableName!,
-                PortName = "out",
-                TypeName = null,
-            });
+            produces.Add(
+                new VariablePortRef
+                {
+                    VariableName = variableName!,
+                    PortName = "out",
+                    TypeName = null,
+                }
+            );
             RecordDefiner(variableName!, node.Id, null);
         }
 
-        _nodeInfos.Add(new NodeDataFlowInfo
-        {
-            NodeId = node.Id,
-            NodeType = node.Type,
-            DisplayName = node.Text?.Value,
-            TopologyLayer = layer,
-            Consumes = consumes.AsReadOnly(),
-            Produces = produces.AsReadOnly(),
-        });
+        _nodeInfos.Add(
+            new NodeDataFlowInfo
+            {
+                NodeId = node.Id,
+                NodeType = node.Type,
+                DisplayName = node.Text?.Value,
+                TopologyLayer = layer,
+                Consumes = consumes.AsReadOnly(),
+                Produces = produces.AsReadOnly(),
+            }
+        );
     }
 
     private async Task CollectContainerFlowAsync(
@@ -304,25 +352,48 @@ public sealed class WorkflowDataFlowSimulator
         {
             foreach ((string portName, string varName) in outputs)
             {
-                produces.Add(new VariablePortRef
+                if (
+                    !BindingSource.TryResolveSource(
+                        node.Properties.OutputBindingSources,
+                        portName,
+                        out bool isVariable,
+                        out string sourceError
+                    )
+                )
                 {
-                    VariableName = varName,
-                    PortName = portName,
-                    TypeName = null,
-                });
+                    throw new InvalidOperationException(
+                        $"节点 {node.Id} 的 outputBindings['{portName}'] source 无效：{sourceError}。"
+                    );
+                }
+
+                if (!isVariable)
+                {
+                    continue;
+                }
+
+                produces.Add(
+                    new VariablePortRef
+                    {
+                        VariableName = varName,
+                        PortName = portName,
+                        TypeName = null,
+                    }
+                );
                 RecordDefiner(varName, node.Id, null);
             }
         }
 
-        _nodeInfos.Add(new NodeDataFlowInfo
-        {
-            NodeId = node.Id,
-            NodeType = node.Type,
-            DisplayName = node.Text?.Value,
-            TopologyLayer = layer,
-            Consumes = consumes.AsReadOnly(),
-            Produces = produces.AsReadOnly(),
-        });
+        _nodeInfos.Add(
+            new NodeDataFlowInfo
+            {
+                NodeId = node.Id,
+                NodeType = node.Type,
+                DisplayName = node.Text?.Value,
+                TopologyLayer = layer,
+                Consumes = consumes.AsReadOnly(),
+                Produces = produces.AsReadOnly(),
+            }
+        );
     }
 
     private async Task CollectOperatorFlowAsync(
@@ -345,15 +416,36 @@ public sealed class WorkflowDataFlowSimulator
         {
             foreach ((string portName, string varName) in inputs)
             {
+                if (
+                    !BindingSource.TryResolveSource(
+                        props.InputBindingSources,
+                        portName,
+                        out bool isVariable,
+                        out string sourceError
+                    )
+                )
+                {
+                    throw new InvalidOperationException(
+                        $"节点 {node.Id} 的 inputBindings['{portName}'] source 无效：{sourceError}。"
+                    );
+                }
+
+                if (!isVariable)
+                {
+                    continue;
+                }
+
                 string? portType = descriptor
                     ?.Inputs.FirstOrDefault(i => i.ParameterName == portName)
                     ?.ParameterTypeName;
-                consumes.Add(new VariablePortRef
-                {
-                    VariableName = varName,
-                    PortName = portName,
-                    TypeName = portType,
-                });
+                consumes.Add(
+                    new VariablePortRef
+                    {
+                        VariableName = varName,
+                        PortName = portName,
+                        TypeName = portType,
+                    }
+                );
                 RecordConsumer(varName, node.Id);
             }
         }
@@ -365,14 +457,47 @@ public sealed class WorkflowDataFlowSimulator
             {
                 if (!prms.TryGetValue(cfg.Name, out JsonElement val))
                     continue;
-                if (!VarRef.TryGet(val, out string refName))
-                    continue;
-                consumes.Add(new VariablePortRef
+                if (
+                    !BindingSource.TryResolveSource(
+                        props.ParamSources,
+                        cfg.Name,
+                        out bool isVariable,
+                        out string sourceError
+                    )
+                )
                 {
-                    VariableName = refName,
-                    PortName = cfg.Name,
-                    TypeName = cfg.ParameterTypeName,
-                });
+                    throw new InvalidOperationException(
+                        $"节点 {node.Id} 的 params['{cfg.Name}'] source 无效：{sourceError}。"
+                    );
+                }
+
+                if (!isVariable)
+                {
+                    continue;
+                }
+
+                if (
+                    !BindingSource.TryGetParamVariableNameStrict(
+                        props.ParamSources,
+                        cfg.Name,
+                        val,
+                        out string refName,
+                        out string variableError
+                    )
+                )
+                {
+                    throw new InvalidOperationException(
+                        $"节点 {node.Id} 的 params['{cfg.Name}'] 变量引用无效：{variableError}。"
+                    );
+                }
+                consumes.Add(
+                    new VariablePortRef
+                    {
+                        VariableName = refName,
+                        PortName = cfg.Name,
+                        TypeName = cfg.ParameterTypeName,
+                    }
+                );
                 RecordConsumer(refName, node.Id);
             }
         }
@@ -383,28 +508,51 @@ public sealed class WorkflowDataFlowSimulator
         {
             foreach ((string portName, string varName) in outputs)
             {
+                if (
+                    !BindingSource.TryResolveSource(
+                        props.OutputBindingSources,
+                        portName,
+                        out bool isVariable,
+                        out string sourceError
+                    )
+                )
+                {
+                    throw new InvalidOperationException(
+                        $"节点 {node.Id} 的 outputBindings['{portName}'] source 无效：{sourceError}。"
+                    );
+                }
+
+                if (!isVariable)
+                {
+                    continue;
+                }
+
                 string? portType = descriptor
                     ?.Outputs.FirstOrDefault(o => o.ParameterName == portName)
                     ?.ParameterTypeName;
-                produces.Add(new VariablePortRef
-                {
-                    VariableName = varName,
-                    PortName = portName,
-                    TypeName = portType,
-                });
+                produces.Add(
+                    new VariablePortRef
+                    {
+                        VariableName = varName,
+                        PortName = portName,
+                        TypeName = portType,
+                    }
+                );
                 RecordDefiner(varName, node.Id, portType);
             }
         }
 
-        _nodeInfos.Add(new NodeDataFlowInfo
-        {
-            NodeId = node.Id,
-            NodeType = node.Type,
-            DisplayName = node.Text?.Value,
-            TopologyLayer = layer,
-            Consumes = consumes.AsReadOnly(),
-            Produces = produces.AsReadOnly(),
-        });
+        _nodeInfos.Add(
+            new NodeDataFlowInfo
+            {
+                NodeId = node.Id,
+                NodeType = node.Type,
+                DisplayName = node.Text?.Value,
+                TopologyLayer = layer,
+                Consumes = consumes.AsReadOnly(),
+                Produces = produces.AsReadOnly(),
+            }
+        );
     }
 
     private void RecordDefiner(string varName, string nodeId, string? typeName)
