@@ -3,6 +3,7 @@ using AuroraStruct3D.OpenCV.Registry;
 using AuroraStruct3D.OpenCV.Workflow.Compilation;
 using AuroraStruct3D.OpenCV.Workflow.Compilation.Model;
 using AuroraStruct3D.Workflow.Dtos;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Volo.Abp;
 using Volo.Abp.Domain.Repositories;
@@ -15,6 +16,7 @@ namespace AuroraStruct3D.Workflow;
 /// 并将 graphData 严格校验后落库。审计信息由 ABP 自动记录。
 /// 端点使用显式 HTTP 特性定义，避免约定式推断歧义。
 /// </summary>
+[Authorize]
 public class WorkflowAppService : AuroraStruct3DAppService, IWorkflowAppService
 {
     private readonly IRepository<WorkflowDefinition, Guid> _repository;
@@ -30,8 +32,8 @@ public class WorkflowAppService : AuroraStruct3DAppService, IWorkflowAppService
     }
 
     /// <inheritdoc/>
-    [HttpGet("projects/{projectId}/workflows")]
-    public async Task<List<WorkflowBriefDto>> GetListByProjectIdAsync([FromRoute] Guid projectId)
+    [HttpGet]
+    public async Task<List<WorkflowBriefDto>> GetListAsync([FromQuery] Guid projectId)
     {
         IQueryable<WorkflowDefinition> queryable = await _repository.GetQueryableAsync();
 

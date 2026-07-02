@@ -8,6 +8,7 @@ using AuroraStruct3D.OpenCV.Workflow.Values;
 using AuroraStruct3D.Variables;
 using AuroraStruct3D.Variables.Dtos;
 using AuroraStruct3D.Workflow.Dtos;
+using Microsoft.AspNetCore.Authorization;
 using Volo.Abp;
 using Volo.Abp.Domain.Repositories;
 using RuntimeWorkflow = AuroraStruct3D.OpenCV.Workflow.WorkflowDefinition;
@@ -19,6 +20,7 @@ namespace AuroraStruct3D.Workflow;
 /// 串联：加载持久化定义 → 编译为可执行语句 → 从 Redis 暂存注入初始变量 → 执行 →
 /// 写回指定结果变量 → 返回变量摘要。编译 / 执行异常转为 <see cref="UserFriendlyException"/>。
 /// </summary>
+[Authorize]
 public class WorkflowExecutionAppService : AuroraStruct3DAppService, IWorkflowExecutionAppService
 {
     // 注意：此处 WorkflowDefinition 为 Domain 持久化实体（当前命名空间），

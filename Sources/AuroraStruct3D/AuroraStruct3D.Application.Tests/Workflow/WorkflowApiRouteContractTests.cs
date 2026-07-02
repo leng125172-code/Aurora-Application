@@ -1,5 +1,6 @@
 using System.Reflection;
 using AuroraStruct3D.Workflow;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Xunit;
 
@@ -8,11 +9,7 @@ namespace AuroraStruct3D.Application.Tests.Workflow;
 public class WorkflowApiRouteContractTests
 {
     [Theory]
-    [InlineData(
-        nameof(IWorkflowAppService.GetListByProjectIdAsync),
-        typeof(HttpGetAttribute),
-        "projects/{projectId}/workflows"
-    )]
+    [InlineData(nameof(IWorkflowAppService.GetListAsync), typeof(HttpGetAttribute), null)]
     [InlineData(nameof(IWorkflowAppService.CreateAsync), typeof(HttpPostAttribute), null)]
     [InlineData(nameof(IWorkflowAppService.GetAsync), typeof(HttpGetAttribute), "{id}")]
     [InlineData(nameof(IWorkflowAppService.UpdateAsync), typeof(HttpPutAttribute), "{id}")]
@@ -47,11 +44,7 @@ public class WorkflowApiRouteContractTests
     }
 
     [Theory]
-    [InlineData(
-        nameof(WorkflowAppService.GetListByProjectIdAsync),
-        typeof(HttpGetAttribute),
-        "projects/{projectId}/workflows"
-    )]
+    [InlineData(nameof(WorkflowAppService.GetListAsync), typeof(HttpGetAttribute), null)]
     [InlineData(nameof(WorkflowAppService.CreateAsync), typeof(HttpPostAttribute), null)]
     [InlineData(nameof(WorkflowAppService.GetAsync), typeof(HttpGetAttribute), "{id}")]
     [InlineData(nameof(WorkflowAppService.UpdateAsync), typeof(HttpPutAttribute), "{id}")]
@@ -90,18 +83,27 @@ public class WorkflowApiRouteContractTests
     public void ListByProject_Should_Use_FromRoute_On_ProjectId()
     {
         MethodInfo interfaceMethod = typeof(IWorkflowAppService).GetMethod(
-            nameof(IWorkflowAppService.GetListByProjectIdAsync)
+            nameof(IWorkflowAppService.GetListAsync)
         )!;
         MethodInfo implementationMethod = typeof(WorkflowAppService).GetMethod(
-            nameof(WorkflowAppService.GetListByProjectIdAsync)
+            nameof(WorkflowAppService.GetListAsync)
         )!;
 
         Assert.Single(interfaceMethod.GetParameters());
         Assert.Single(implementationMethod.GetParameters());
 
-        Assert.NotNull(interfaceMethod.GetParameters()[0].GetCustomAttribute<FromRouteAttribute>());
+        Assert.NotNull(interfaceMethod.GetParameters()[0].GetCustomAttribute<FromQueryAttribute>());
         Assert.NotNull(
-            implementationMethod.GetParameters()[0].GetCustomAttribute<FromRouteAttribute>()
+            implementationMethod.GetParameters()[0].GetCustomAttribute<FromQueryAttribute>()
+        );
+    }
+
+    [Fact]
+    public void Workflow_App_Service_Should_Be_Authorized()
+    {
+        Assert.NotNull(typeof(WorkflowAppService).GetCustomAttribute<AuthorizeAttribute>());
+        Assert.NotNull(
+            typeof(WorkflowExecutionAppService).GetCustomAttribute<AuthorizeAttribute>()
         );
     }
 

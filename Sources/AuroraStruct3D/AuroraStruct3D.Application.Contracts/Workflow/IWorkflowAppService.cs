@@ -17,12 +17,12 @@ public interface IWorkflowAppService : IApplicationService
 {
     /// <summary>
     /// 获取指定项目下的所有工作流列表（轻量，不含 GraphData 全文）。
-    /// Route: GET projects/{projectId}/workflows
+    /// Route: GET /api/app/workflow?projectId={projectId}
     /// </summary>
     /// <param name="projectId">所属项目 ID</param>
     /// <returns>工作流简要列表</returns>
-    [HttpGet("projects/{projectId}/workflows")]
-    Task<List<WorkflowBriefDto>> GetListByProjectIdAsync([FromRoute] Guid projectId);
+    [HttpGet]
+    Task<List<WorkflowBriefDto>> GetListAsync([FromQuery] Guid projectId);
 
     /// <summary>
     /// 新建工作流。
