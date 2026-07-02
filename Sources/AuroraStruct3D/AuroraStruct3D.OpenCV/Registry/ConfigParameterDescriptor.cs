@@ -28,4 +28,9 @@ public sealed class ConfigParameterDescriptor
 
     /// <summary>是否为必填参数。</summary>
     public bool Required { get; init; }
+
+    /// <summary>
+    /// 前端控件类型，用于决定渲染何种 UI 控件。
+    /// </summary>
+    public PortControlType ControlType { get; init; }
 }
