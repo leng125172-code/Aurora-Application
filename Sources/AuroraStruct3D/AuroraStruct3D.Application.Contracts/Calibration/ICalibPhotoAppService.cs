@@ -1,5 +1,6 @@
 using AuroraStruct3D.Calibration.Dtos;
 using Volo.Abp.Application.Services;
+using Volo.Abp.Content;
 
 namespace AuroraStruct3D.Calibration;
 
@@ -20,16 +21,29 @@ public interface ICalibPhotoAppService : IApplicationService
     Task<CalibBoardConfigDto> GetBoardConfigAsync(Guid calibProjectId);
 
     /// <summary>
+    /// 导出标定板参数配置（JSON）。
+    /// </summary>
+    Task<IRemoteStreamContent> ExportBoardConfigAsync(Guid calibProjectId);
+
+    /// <summary>
+    /// 导入标定板参数配置（JSON），并写入指定项目。
+    /// </summary>
+    Task<CalibBoardConfigDto> ImportBoardConfigAsync(
+        Guid calibProjectId,
+        IRemoteStreamContent file
+    );
+
+    /// <summary>
     /// 内参拍照：后端自动关闭投影仪 LED → 触发相机拍照 → OpenCV 棋盘格角点检测 → 存 BLOB → 写 DB
     /// </summary>
     /// <returns>新建的照片记录（含缩略图 Base64）</returns>
     Task<CalibPhotoDto> TakeIntrinsicPhotoAsync(TakeIntrinsicPhotoInput input);
 
     /// <summary>
-    /// 外参拍照：后端自动开灯 → 投影棋盘图 → 触发相机拍照 → 角点检测 → 存 BLOB → 写 DB
+    /// 外参拍照：后端先关灯拍实体标定板，再开灯拍投影标定图案，并将两张照片按同一分组样本写入 DB。
     /// </summary>
-    /// <returns>新建的照片记录（含缩略图 Base64）</returns>
-    Task<CalibPhotoDto> TakeExtrinsicPhotoAsync(TakeExtrinsicPhotoInput input);
+    /// <returns>新建的投影外参双拍样本（含关灯/开灯两张缩略图）</returns>
+    Task<CalibExtrinsicSampleDto> TakeExtrinsicPhotoAsync(TakeExtrinsicPhotoInput input);
 
     /// <summary>
     /// 双目联合外参成对拍照：一次采集主/从相机两张实体棋盘格照片，并以同组 ID 关联

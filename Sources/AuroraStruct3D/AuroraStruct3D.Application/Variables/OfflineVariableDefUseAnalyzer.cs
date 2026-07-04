@@ -303,6 +303,7 @@ public static class OfflineVariableDefUseAnalyzer
         string entryNodeId = "__ENTRY__";
         nodes.TryAdd(entryNodeId, new GraphNode(entryNodeId));
 
+        // MOD: 禁止线性回退，强制提供完整 CFG 边。
         List<(string From, string To)> edges = input
             .ControlFlowEdges.Where(x =>
                 !string.IsNullOrWhiteSpace(x.FromNodeId) && !string.IsNullOrWhiteSpace(x.ToNodeId)
@@ -312,57 +313,34 @@ public static class OfflineVariableDefUseAnalyzer
 
         if (edges.Count == 0)
         {
-            List<string> linearNodeIds = nodes
-                .Values.Where(x => x.NodeId != entryNodeId)
-                .OrderBy(x =>
-                    x.Operations.Select(op => op.Sequence)
-                        .Where(seq => seq.HasValue)
-                        .Select(seq => seq!.Value)
-                        .DefaultIfEmpty(long.MaxValue)
-                        .Min()
-                )
-                .ThenBy(x => x.NodeId, StringComparer.Ordinal)
-                .Select(x => x.NodeId)
-                .ToList();
-
-            for (int i = 0; i < linearNodeIds.Count - 1; i++)
-            {
-                edges.Add((linearNodeIds[i], linearNodeIds[i + 1]));
-            }
-
-            if (linearNodeIds.Count > 0)
-            {
-                edges.Add((entryNodeId, linearNodeIds[0]));
-            }
+            throw new InvalidOperationException(
+                "Def-Use 分析要求提供 ControlFlowEdges，已禁用线性回退模式。"
+            );
         }
-        else
+
+        // MOD: 强制提供入口节点并校验合法性。
+        if (string.IsNullOrWhiteSpace(input.EntryNodeId))
         {
-            foreach ((string from, string to) in edges)
-            {
-                nodes.TryAdd(from, new GraphNode(from));
-                nodes.TryAdd(to, new GraphNode(to));
-            }
-
-            HashSet<string> targets = edges.Select(x => x.To).ToHashSet(StringComparer.Ordinal);
-            List<string> entryCandidates = nodes
-                .Keys.Where(x => x != entryNodeId && !targets.Contains(x))
-                .ToList();
-
-            if (
-                !string.IsNullOrWhiteSpace(input.EntryNodeId)
-                && nodes.ContainsKey(input.EntryNodeId)
-            )
-            {
-                edges.Add((entryNodeId, input.EntryNodeId));
-            }
-            else
-            {
-                foreach (string candidate in entryCandidates)
-                {
-                    edges.Add((entryNodeId, candidate));
-                }
-            }
+            throw new InvalidOperationException(
+                "Def-Use 分析要求提供 EntryNodeId，已禁用自动入口推断。"
+            );
         }
+
+        foreach ((string from, string to) in edges)
+        {
+            nodes.TryAdd(from, new GraphNode(from));
+            nodes.TryAdd(to, new GraphNode(to));
+        }
+
+        string requestedEntryNodeId = input.EntryNodeId.Trim();
+        if (!nodes.ContainsKey(requestedEntryNodeId))
+        {
+            throw new InvalidOperationException(
+                $"EntryNodeId '{requestedEntryNodeId}' 不存在于 ControlFlowEdges 或引用节点中。"
+            );
+        }
+
+        edges.Add((entryNodeId, requestedEntryNodeId));
 
         Dictionary<string, List<string>> predecessors = new(StringComparer.Ordinal);
         foreach (GraphNode node in nodes.Values)

@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import { computed, ref, reactive, onMounted } from 'vue'
+import { computed, ref, reactive, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Button from 'primevue/button'
 import InputNumber from 'primevue/inputnumber'
+import Select from 'primevue/select'
+import Checkbox from 'primevue/checkbox'
 import Tabs from 'primevue/tabs'
 import TabList from 'primevue/tablist'
 import Tab from 'primevue/tab'
@@ -15,11 +17,13 @@ import {
     Camera,
     ChevronDown,
     ChevronRight,
+    Download,
     Lightbulb,
     LightbulbOff,
     Loader2,
     RefreshCcw,
     Trash2,
+    Upload,
     Zap,
 } from '@lucide/vue'
 import { useAppToast } from '@/composables/useAppToast'
@@ -27,23 +31,28 @@ import { CalibDeviceType, DeviceSeries, type CalibProjectDto } from '@/api/calib
 import { CameraStatus, type CameraDeviceDto, getCameraList } from '@/api/cameras'
 import { projectorLedOn as ledOn, projectorLedOff as ledOff } from '@/api/projectors'
 import {
+    CalibrationBoardType,
     type CalibBoardConfigDto,
     type CalibCameraStatusDto,
     type CalibComputeResultDto,
+    type CalibExtrinsicSampleDto,
     type CalibPhotoDto,
     type CalibStereoComputeResultDto,
     type CalibStereoStatusDto,
     type AutoAlignCamerasResultDto,
     CalibPhotoType,
+    ExtrinsicPhotoPhase,
     autoAlignCameras,
     computeIntrinsic,
     computeExtrinsic,
     computeStereoCalibration,
     deletePhoto,
     deleteInvalidPhotos,
+    exportBoardConfig,
     getBoardConfig,
     getCameraStatus,
     getPhotoList,
+    importBoardConfig,
     getStereoStatus,
     takeStereoExtrinsicPairPhoto,
     takeExtrinsicPhoto,
@@ -114,26 +123,170 @@ function cameraRoleLabel(cameraId: string): string {
 // ─── 棋盘格参数 ───────────────────────────────────────────────────────────────
 
 const boardConfig = reactive<CalibBoardConfigDto>({
+    boardType: CalibrationBoardType.Chessboard,
     physicalCornerRows: 9,
     physicalCornerCols: 6,
     physicalSquareSizeMm: 30,
     projectedCornerRows: 9,
     projectedCornerCols: 6,
     projectedPixelSize: 20,
+    circleBoardConfig: {
+        patternSize: { width: 27, height: 27 },
+        circleSpacing: 10,
+        circleDiameter: 3,
+        hasCenterMarker: true,
+        hasCornerLocators: false,
+        markerPosition: { row: 13, col: 13 },
+        detector: {
+            minThreshold: 10,
+            maxThreshold: 220,
+            minArea: 25,
+            maxArea: 10000,
+            minCircularity: 0.6,
+            minConvexity: 0.8,
+        },
+    },
 })
 
+const showDetectorPanel = ref(false)
+
+const boardTypeOptions = computed(() => [
+    { label: t('calib.step5BoardTypeChessboard'), value: CalibrationBoardType.Chessboard },
+    { label: t('calib.step5BoardTypeSymmetricCircleGrid'), value: CalibrationBoardType.SymmetricCircleGrid },
+    { label: t('calib.step5BoardTypeAsymmetricCircleGrid'), value: CalibrationBoardType.AsymmetricCircleGrid },
+    {
+        label: t('calib.step5BoardTypeMarkedSymmetricCircleGrid'),
+        value: CalibrationBoardType.MarkedSymmetricCircleGrid,
+    },
+])
+
+const isCircleBoard = computed(() => boardConfig.boardType !== CalibrationBoardType.Chessboard)
+const isMarkedCircleBoard = computed(() => boardConfig.boardType === CalibrationBoardType.MarkedSymmetricCircleGrid)
+
+function applyCirclePreset2727(): void {
+    boardConfig.boardType = CalibrationBoardType.MarkedSymmetricCircleGrid
+    boardConfig.circleBoardConfig = {
+        patternSize: { width: 27, height: 27 },
+        circleSpacing: 10,
+        circleDiameter: 3,
+        hasCenterMarker: true,
+        hasCornerLocators: false,
+        markerPosition: { row: 13, col: 13 },
+        detector: {
+            minThreshold: 10,
+            maxThreshold: 220,
+            minArea: 25,
+            maxArea: 10000,
+            minCircularity: 0.6,
+            minConvexity: 0.8,
+        },
+    }
+}
+
+function resetCircleDetectorConfig(): void {
+    if (!boardConfig.circleBoardConfig) return
+    boardConfig.circleBoardConfig.detector = {
+        minThreshold: 10,
+        maxThreshold: 220,
+        minArea: 25,
+        maxArea: 10000,
+        minCircularity: 0.6,
+        minConvexity: 0.8,
+    }
+}
+
 const boardConfigSaving = ref(false)
+const boardConfigExporting = ref(false)
+const boardConfigImporting = ref(false)
+const boardConfigImportRef = ref<HTMLInputElement | null>(null)
 
 async function loadBoardConfig(): Promise<void> {
     try {
         const cfg = await getBoardConfig(props.project.id)
         Object.assign(boardConfig, cfg)
+        if (boardConfig.boardType !== CalibrationBoardType.Chessboard && !boardConfig.circleBoardConfig) {
+            applyCirclePreset2727()
+        }
     } catch {
         // 未配置时忽略错误，使用默认值
     }
 }
 
+watch(
+    () => boardConfig.boardType,
+    (nextType) => {
+        if (nextType !== CalibrationBoardType.Chessboard && !boardConfig.circleBoardConfig) {
+            applyCirclePreset2727()
+        }
+
+        // 标记型圆点板必须启用中心标记，切换类型时强制约束到合法状态。
+        if (nextType === CalibrationBoardType.MarkedSymmetricCircleGrid) {
+            if (!boardConfig.circleBoardConfig) {
+                applyCirclePreset2727()
+            } else {
+                boardConfig.circleBoardConfig.hasCenterMarker = true
+            }
+        }
+    }
+)
+
+function validateBoardConfigBeforeSave(): string | null {
+    if (boardConfig.boardType === CalibrationBoardType.Chessboard) {
+        return null
+    }
+
+    const circle = boardConfig.circleBoardConfig
+    if (!circle) {
+        return t('calib.step5CircleValidationConfigMissing')
+    }
+
+    if (circle.patternSize.width < 2 || circle.patternSize.height < 2) {
+        return t('calib.step5CircleValidationPatternSize')
+    }
+    if (circle.circleSpacing <= 0) {
+        return t('calib.step5CircleValidationSpacing')
+    }
+    if (circle.circleDiameter !== null && circle.circleDiameter !== undefined && circle.circleDiameter <= 0) {
+        return t('calib.step5CircleValidationDiameter')
+    }
+
+    const markerRequired = boardConfig.boardType === CalibrationBoardType.MarkedSymmetricCircleGrid
+    if (markerRequired && !circle.hasCenterMarker) {
+        return t('calib.step5CircleValidationMarkerRequired')
+    }
+
+    if (circle.hasCenterMarker) {
+        const row = circle.markerPosition.row
+        const col = circle.markerPosition.col
+        if (row < 0 || row >= circle.patternSize.height || col < 0 || col >= circle.patternSize.width) {
+            return t('calib.step5CircleValidationMarkerRange')
+        }
+    }
+
+    const detector = circle.detector
+    if (detector.minThreshold >= detector.maxThreshold) {
+        return t('calib.step5CircleValidationThresholdRange')
+    }
+    if (detector.minArea <= 0 || detector.maxArea <= 0 || detector.minArea >= detector.maxArea) {
+        return t('calib.step5CircleValidationAreaRange')
+    }
+    if (detector.minCircularity < 0 || detector.minCircularity > 1) {
+        return t('calib.step5CircleValidationMinCircularity')
+    }
+    if (detector.minConvexity < 0 || detector.minConvexity > 1) {
+        return t('calib.step5CircleValidationMinConvexity')
+    }
+
+    return null
+}
+
 async function saveBoardConfig(): Promise<void> {
+    const validationError = validateBoardConfigBeforeSave()
+    if (validationError) {
+        toast.error(validationError)
+        return
+    }
+
     boardConfigSaving.value = true
     try {
         await updateBoardConfig({ calibProjectId: props.project.id, ...boardConfig })
@@ -142,6 +295,53 @@ async function saveBoardConfig(): Promise<void> {
         toast.error(e instanceof Error ? e.message : String(e))
     } finally {
         boardConfigSaving.value = false
+    }
+}
+
+function triggerBoardConfigImport(): void {
+    boardConfigImportRef.value?.click()
+}
+
+async function onBoardConfigFileSelected(event: Event): Promise<void> {
+    const input = event.target as HTMLInputElement
+    const file = input.files?.[0]
+    if (!file) {
+        return
+    }
+
+    boardConfigImporting.value = true
+    try {
+        const cfg = await importBoardConfig(props.project.id, file)
+        Object.assign(boardConfig, cfg)
+        if (boardConfig.boardType !== CalibrationBoardType.Chessboard && !boardConfig.circleBoardConfig) {
+            applyCirclePreset2727()
+        }
+        toast.success(t('calib.step5ImportBoardConfigSuccess'))
+    } catch (e: unknown) {
+        toast.error(e instanceof Error ? e.message : String(e))
+    } finally {
+        boardConfigImporting.value = false
+        input.value = ''
+    }
+}
+
+async function exportCurrentBoardConfig(): Promise<void> {
+    boardConfigExporting.value = true
+    try {
+        const blob = await exportBoardConfig(props.project.id)
+        const downloadUrl = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = downloadUrl
+        a.download = `calib-board-config-${props.project.id}.json`
+        document.body.appendChild(a)
+        a.click()
+        a.remove()
+        URL.revokeObjectURL(downloadUrl)
+        toast.success(t('calib.step5ExportBoardConfigSuccess'))
+    } catch (e: unknown) {
+        toast.error(e instanceof Error ? e.message : String(e))
+    } finally {
+        boardConfigExporting.value = false
     }
 }
 
@@ -222,6 +422,36 @@ async function loadCameraStatus(cameraId: string): Promise<void> {
 const intrinsicPhotosMap = ref<Record<string, CalibPhotoDto[]>>({})
 const extrinsicPhotosMap = ref<Record<string, CalibPhotoDto[]>>({})
 const stereoPairPhotosMap = ref<Record<string, CalibPhotoDto[]>>({})
+
+function getExtrinsicSamples(cameraId: string): CalibExtrinsicSampleDto[] {
+    const photos = extrinsicPhotosMap.value[cameraId] ?? []
+    const groups = new Map<string, Partial<CalibExtrinsicSampleDto>>()
+
+    for (const photo of photos) {
+        if (!photo.pairGroupId || photo.extrinsicPhase === null) {
+            continue
+        }
+
+        const current = groups.get(photo.pairGroupId) ?? { pairGroupId: photo.pairGroupId }
+        if (photo.extrinsicPhase === ExtrinsicPhotoPhase.ProjectorOff) {
+            current.projectorOffPhoto = photo
+        } else if (photo.extrinsicPhase === ExtrinsicPhotoPhase.ProjectorOn) {
+            current.projectorOnPhoto = photo
+        }
+        groups.set(photo.pairGroupId, current)
+    }
+
+    return Array.from(groups.values())
+        .filter((sample): sample is CalibExtrinsicSampleDto => !!sample.projectorOffPhoto && !!sample.projectorOnPhoto)
+        .map((sample) => ({
+            ...sample,
+            isValid: sample.projectorOffPhoto.isValid && sample.projectorOnPhoto.isValid,
+        }))
+        .sort(
+            (a, b) =>
+                new Date(b.projectorOffPhoto.capturedAt).getTime() - new Date(a.projectorOffPhoto.capturedAt).getTime()
+        )
+}
 
 async function loadPhotos(cameraId: string, type: CalibPhotoType): Promise<void> {
     try {
@@ -304,15 +534,15 @@ async function doTakeExtrinsic(cam: CameraDeviceDto): Promise<void> {
     if (takingExtrinsicIds.value.has(cam.id)) return
     takingExtrinsicIds.value.add(cam.id)
     try {
-        const photo = await takeExtrinsicPhoto({
+        const sample = await takeExtrinsicPhoto({
             calibProjectId: props.project.id,
             cameraDeviceId: cam.id,
         })
         const list = extrinsicPhotosMap.value[cam.id] ?? []
-        extrinsicPhotosMap.value[cam.id] = [photo, ...list]
+        extrinsicPhotosMap.value[cam.id] = [sample.projectorOnPhoto, sample.projectorOffPhoto, ...list]
         await loadCameraStatus(cam.id)
-        if (!photo.isValid) {
-            toast.warn(`${cam.name}: 未检测到棋盘格角点，该照片标记为无效`)
+        if (!sample.isValid) {
+            toast.warn(t('calib.step5ExtrinsicGroupInvalid', { camera: cam.name }))
         }
     } catch (e: unknown) {
         toast.error(e instanceof Error ? e.message : String(e))
@@ -453,9 +683,12 @@ async function doDeletePhoto(photo: CalibPhotoDto, cameraId: string): Promise<vo
                         (p) => p.id !== photo.id
                     )
                 } else if (photo.photoType === CalibPhotoType.Extrinsic) {
-                    extrinsicPhotosMap.value[cameraId] = (extrinsicPhotosMap.value[cameraId] ?? []).filter(
-                        (p) => p.id !== photo.id
-                    )
+                    extrinsicPhotosMap.value[cameraId] = (extrinsicPhotosMap.value[cameraId] ?? []).filter((p) => {
+                        if (photo.pairGroupId) {
+                            return p.pairGroupId !== photo.pairGroupId
+                        }
+                        return p.id !== photo.id
+                    })
                 } else {
                     stereoPairPhotosMap.value[cameraId] = (stereoPairPhotosMap.value[cameraId] ?? []).filter(
                         (p) => p.id !== photo.id
@@ -495,9 +728,7 @@ async function doDeleteInvalidPhotos(cameraId: string): Promise<void> {
                 if (intrinsicPhotosMap.value[cameraId]) {
                     intrinsicPhotosMap.value[cameraId] = intrinsicPhotosMap.value[cameraId].filter((p) => p.isValid)
                 }
-                if (extrinsicPhotosMap.value[cameraId]) {
-                    extrinsicPhotosMap.value[cameraId] = extrinsicPhotosMap.value[cameraId].filter((p) => p.isValid)
-                }
+                await loadPhotos(cameraId, CalibPhotoType.Extrinsic)
                 if (stereoPairPhotosMap.value[cameraId]) {
                     stereoPairPhotosMap.value[cameraId] = stereoPairPhotosMap.value[cameraId].filter((p) => p.isValid)
                 }
@@ -572,6 +803,13 @@ onMounted(async () => {
 
 <template>
     <ConfirmDialog />
+    <input
+        ref="boardConfigImportRef"
+        type="file"
+        accept=".json,application/json"
+        class="hidden"
+        @change="onBoardConfigFileSelected"
+    />
 
     <div class="flex flex-1 min-h-0 flex-col gap-3 overflow-y-auto p-4">
         <!-- ── 顶部：标定板参数配置 ───────────────────────────────────── -->
@@ -588,9 +826,28 @@ onMounted(async () => {
                 />
             </div>
 
+            <div class="mb-3 grid grid-cols-1 gap-3 md:grid-cols-3">
+                <div class="md:col-span-2">
+                    <label class="mb-1 block text-xs text-muted-foreground">{{ t('calib.step5BoardTypeLabel') }}</label>
+                    <Select
+                        v-model="boardConfig.boardType"
+                        :options="boardTypeOptions"
+                        option-label="label"
+                        option-value="value"
+                        size="small"
+                        class="w-full"
+                    />
+                </div>
+                <div class="flex items-end">
+                    <Button size="small" severity="secondary" outlined class="!text-xs" @click="applyCirclePreset2727">
+                        {{ t('calib.step5PresetMarked2727') }}
+                    </Button>
+                </div>
+            </div>
+
             <div class="grid grid-cols-1 gap-8 xl:grid-cols-2">
                 <!-- 实体棋盘格 -->
-                <div>
+                <div v-if="!isCircleBoard">
                     <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                         {{ t('calib.step5PhysicalBoard') }}
                     </p>
@@ -641,7 +898,7 @@ onMounted(async () => {
                 </div>
 
                 <!-- 投影棋盘格 -->
-                <div>
+                <div v-if="!isCircleBoard">
                     <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                         {{ t('calib.step5ProjectedBoard') }}
                     </p>
@@ -690,6 +947,224 @@ onMounted(async () => {
                         </div>
                     </div>
                 </div>
+
+                <!-- 圆点标定板 -->
+                <div v-if="isCircleBoard" class="xl:col-span-2">
+                    <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        {{ t('calib.step5CircleBoardSectionTitle') }}
+                    </p>
+                    <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 2xl:grid-cols-4">
+                        <div class="min-w-0">
+                            <label class="mb-1 block text-xs text-muted-foreground">
+                                {{ t('calib.step5CirclePatternWidth') }}
+                            </label>
+                            <InputNumber
+                                v-model="boardConfig.circleBoardConfig!.patternSize.width"
+                                size="small"
+                                :use-grouping="false"
+                                :min="2"
+                                :max="200"
+                                class="w-full"
+                                :input-class="'!text-xs !h-7 !py-0'"
+                            />
+                        </div>
+                        <div class="min-w-0">
+                            <label class="mb-1 block text-xs text-muted-foreground">
+                                {{ t('calib.step5CirclePatternHeight') }}
+                            </label>
+                            <InputNumber
+                                v-model="boardConfig.circleBoardConfig!.patternSize.height"
+                                size="small"
+                                :use-grouping="false"
+                                :min="2"
+                                :max="200"
+                                class="w-full"
+                                :input-class="'!text-xs !h-7 !py-0'"
+                            />
+                        </div>
+                        <div class="min-w-0">
+                            <label class="mb-1 block text-xs text-muted-foreground">
+                                {{ t('calib.step5CircleSpacingMm') }}
+                            </label>
+                            <InputNumber
+                                v-model="boardConfig.circleBoardConfig!.circleSpacing"
+                                size="small"
+                                :use-grouping="false"
+                                :min="0.01"
+                                :max-fraction-digits="3"
+                                class="w-full"
+                                :input-class="'!text-xs !h-7 !py-0'"
+                            />
+                        </div>
+                        <div class="min-w-0">
+                            <label class="mb-1 block text-xs text-muted-foreground">
+                                {{ t('calib.step5CircleDiameterMm') }}
+                            </label>
+                            <InputNumber
+                                v-model="boardConfig.circleBoardConfig!.circleDiameter"
+                                size="small"
+                                :use-grouping="false"
+                                :min="0"
+                                :max-fraction-digits="3"
+                                class="w-full"
+                                :input-class="'!text-xs !h-7 !py-0'"
+                            />
+                        </div>
+                    </div>
+
+                    <div class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                        <div class="flex items-center gap-2 text-xs text-muted-foreground">
+                            <Checkbox v-model="boardConfig.circleBoardConfig!.hasCenterMarker" binary />
+                            <span>{{ t('calib.step5CircleCenterMarker') }}</span>
+                        </div>
+                        <div class="flex items-center gap-2 text-xs text-muted-foreground">
+                            <Checkbox v-model="boardConfig.circleBoardConfig!.hasCornerLocators" binary />
+                            <span>{{ t('calib.step5CircleCornerLocators') }}</span>
+                        </div>
+                        <div
+                            class="min-w-0"
+                            v-if="isMarkedCircleBoard || boardConfig.circleBoardConfig!.hasCenterMarker"
+                        >
+                            <label class="mb-1 block text-xs text-muted-foreground">
+                                {{ t('calib.step5CircleMarkerRow') }}
+                            </label>
+                            <InputNumber
+                                v-model="boardConfig.circleBoardConfig!.markerPosition.row"
+                                size="small"
+                                :use-grouping="false"
+                                :min="0"
+                                :max="boardConfig.circleBoardConfig!.patternSize.height - 1"
+                                class="w-full"
+                                :input-class="'!text-xs !h-7 !py-0'"
+                            />
+                        </div>
+                        <div
+                            class="min-w-0"
+                            v-if="isMarkedCircleBoard || boardConfig.circleBoardConfig!.hasCenterMarker"
+                        >
+                            <label class="mb-1 block text-xs text-muted-foreground">
+                                {{ t('calib.step5CircleMarkerCol') }}
+                            </label>
+                            <InputNumber
+                                v-model="boardConfig.circleBoardConfig!.markerPosition.col"
+                                size="small"
+                                :use-grouping="false"
+                                :min="0"
+                                :max="boardConfig.circleBoardConfig!.patternSize.width - 1"
+                                class="w-full"
+                                :input-class="'!text-xs !h-7 !py-0'"
+                            />
+                        </div>
+                    </div>
+
+                    <div class="mt-3 rounded-lg border border-border/40 bg-muted/10 p-3">
+                        <div class="mb-2 flex items-center justify-between">
+                            <p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                {{ t('calib.step5CircleDetectorTitle') }}
+                            </p>
+                            <div class="flex items-center gap-2">
+                                <Button
+                                    size="small"
+                                    text
+                                    class="!text-xs"
+                                    @click="showDetectorPanel = !showDetectorPanel"
+                                >
+                                    {{ showDetectorPanel ? t('calib.step5Collapse') : t('calib.step5Expand') }}
+                                </Button>
+                                <Button
+                                    size="small"
+                                    severity="secondary"
+                                    outlined
+                                    class="!text-xs"
+                                    @click="resetCircleDetectorConfig"
+                                >
+                                    {{ t('calib.step5ResetDefaults') }}
+                                </Button>
+                            </div>
+                        </div>
+
+                        <div v-if="showDetectorPanel" class="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                            <div class="min-w-0">
+                                <label class="mb-1 block text-xs text-muted-foreground">
+                                    {{ t('calib.step5DetectorMinThreshold') }}
+                                </label>
+                                <InputNumber
+                                    v-model="boardConfig.circleBoardConfig!.detector.minThreshold"
+                                    size="small"
+                                    :use-grouping="false"
+                                    class="w-full"
+                                    :input-class="'!text-xs !h-7 !py-0'"
+                                />
+                            </div>
+                            <div class="min-w-0">
+                                <label class="mb-1 block text-xs text-muted-foreground">
+                                    {{ t('calib.step5DetectorMaxThreshold') }}
+                                </label>
+                                <InputNumber
+                                    v-model="boardConfig.circleBoardConfig!.detector.maxThreshold"
+                                    size="small"
+                                    :use-grouping="false"
+                                    class="w-full"
+                                    :input-class="'!text-xs !h-7 !py-0'"
+                                />
+                            </div>
+                            <div class="min-w-0">
+                                <label class="mb-1 block text-xs text-muted-foreground">
+                                    {{ t('calib.step5DetectorMinArea') }}
+                                </label>
+                                <InputNumber
+                                    v-model="boardConfig.circleBoardConfig!.detector.minArea"
+                                    size="small"
+                                    :use-grouping="false"
+                                    class="w-full"
+                                    :input-class="'!text-xs !h-7 !py-0'"
+                                />
+                            </div>
+                            <div class="min-w-0">
+                                <label class="mb-1 block text-xs text-muted-foreground">
+                                    {{ t('calib.step5DetectorMaxArea') }}
+                                </label>
+                                <InputNumber
+                                    v-model="boardConfig.circleBoardConfig!.detector.maxArea"
+                                    size="small"
+                                    :use-grouping="false"
+                                    class="w-full"
+                                    :input-class="'!text-xs !h-7 !py-0'"
+                                />
+                            </div>
+                            <div class="min-w-0">
+                                <label class="mb-1 block text-xs text-muted-foreground">
+                                    {{ t('calib.step5DetectorMinCircularity') }}
+                                </label>
+                                <InputNumber
+                                    v-model="boardConfig.circleBoardConfig!.detector.minCircularity"
+                                    size="small"
+                                    :use-grouping="false"
+                                    :min="0"
+                                    :max="1"
+                                    :max-fraction-digits="3"
+                                    class="w-full"
+                                    :input-class="'!text-xs !h-7 !py-0'"
+                                />
+                            </div>
+                            <div class="min-w-0">
+                                <label class="mb-1 block text-xs text-muted-foreground">
+                                    {{ t('calib.step5DetectorMinConvexity') }}
+                                </label>
+                                <InputNumber
+                                    v-model="boardConfig.circleBoardConfig!.detector.minConvexity"
+                                    size="small"
+                                    :use-grouping="false"
+                                    :min="0"
+                                    :max="1"
+                                    :max-fraction-digits="3"
+                                    class="w-full"
+                                    :input-class="'!text-xs !h-7 !py-0'"
+                                />
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <div class="mt-3 flex items-center justify-between gap-2">
@@ -708,9 +1183,33 @@ onMounted(async () => {
                 </Button>
                 <span v-else />
 
-                <Button size="small" class="!text-xs" :loading="boardConfigSaving" @click="saveBoardConfig">
-                    {{ t('calib.step5SaveBoardConfig') }}
-                </Button>
+                <div class="flex items-center gap-2">
+                    <Button
+                        size="small"
+                        severity="secondary"
+                        outlined
+                        class="!text-xs"
+                        :loading="boardConfigExporting"
+                        @click="exportCurrentBoardConfig"
+                    >
+                        <Download class="mr-1.5 size-3" />
+                        {{ t('calib.step5ExportBoardConfig') }}
+                    </Button>
+                    <Button
+                        size="small"
+                        severity="secondary"
+                        outlined
+                        class="!text-xs"
+                        :loading="boardConfigImporting"
+                        @click="triggerBoardConfigImport"
+                    >
+                        <Upload class="mr-1.5 size-3" />
+                        {{ t('calib.step5ImportBoardConfig') }}
+                    </Button>
+                    <Button size="small" class="!text-xs" :loading="boardConfigSaving" @click="saveBoardConfig">
+                        {{ t('calib.step5SaveBoardConfig') }}
+                    </Button>
+                </div>
             </div>
         </div>
 
@@ -1291,34 +1790,64 @@ onMounted(async () => {
                                             </div>
                                             <div v-else class="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5">
                                                 <div
-                                                    v-for="photo in extrinsicPhotosMap[cam.id]"
-                                                    :key="photo.id"
-                                                    class="group relative overflow-hidden rounded-lg border"
-                                                    :class="photo.isValid ? 'border-green-500/40' : 'border-red-500/40'"
+                                                    v-for="sample in getExtrinsicSamples(cam.id)"
+                                                    :key="sample.pairGroupId"
+                                                    class="group relative overflow-hidden rounded-lg border p-2"
+                                                    :class="
+                                                        sample.isValid ? 'border-green-500/40' : 'border-red-500/40'
+                                                    "
                                                 >
-                                                    <img
-                                                        v-if="photo.thumbnailBase64"
-                                                        :src="photo.thumbnailBase64"
-                                                        class="aspect-square w-full object-cover"
-                                                        :alt="photo.capturedAt"
-                                                    />
-                                                    <div
-                                                        v-else
-                                                        class="flex aspect-square items-center justify-center bg-muted/20"
-                                                    >
-                                                        <Zap class="size-6 text-muted-foreground/30" />
+                                                    <div class="grid grid-cols-2 gap-2">
+                                                        <div>
+                                                            <div
+                                                                class="mb-1 text-[10px] font-medium text-muted-foreground"
+                                                            >
+                                                                {{ t('calib.step5ExtrinsicLedOffFrame') }}
+                                                            </div>
+                                                            <img
+                                                                v-if="sample.projectorOffPhoto.thumbnailBase64"
+                                                                :src="sample.projectorOffPhoto.thumbnailBase64"
+                                                                class="aspect-square w-full rounded object-cover"
+                                                                :alt="sample.projectorOffPhoto.capturedAt"
+                                                            />
+                                                            <div
+                                                                v-else
+                                                                class="flex aspect-square items-center justify-center rounded bg-muted/20"
+                                                            >
+                                                                <Camera class="size-6 text-muted-foreground/30" />
+                                                            </div>
+                                                        </div>
+                                                        <div>
+                                                            <div
+                                                                class="mb-1 text-[10px] font-medium text-muted-foreground"
+                                                            >
+                                                                {{ t('calib.step5ExtrinsicLedOnFrame') }}
+                                                            </div>
+                                                            <img
+                                                                v-if="sample.projectorOnPhoto.thumbnailBase64"
+                                                                :src="sample.projectorOnPhoto.thumbnailBase64"
+                                                                class="aspect-square w-full rounded object-cover"
+                                                                :alt="sample.projectorOnPhoto.capturedAt"
+                                                            />
+                                                            <div
+                                                                v-else
+                                                                class="flex aspect-square items-center justify-center rounded bg-muted/20"
+                                                            >
+                                                                <Zap class="size-6 text-muted-foreground/30" />
+                                                            </div>
+                                                        </div>
                                                     </div>
 
                                                     <div
                                                         class="absolute left-1 top-1 rounded px-1 py-0.5 text-[9px] font-semibold"
                                                         :class="
-                                                            photo.isValid
+                                                            sample.isValid
                                                                 ? 'bg-green-600/80 text-white'
                                                                 : 'bg-red-600/80 text-white'
                                                         "
                                                     >
                                                         {{
-                                                            photo.isValid
+                                                            sample.isValid
                                                                 ? t('calib.step5ValidPhoto')
                                                                 : t('calib.step5InvalidPhoto').slice(0, 2)
                                                         }}
@@ -1326,7 +1855,7 @@ onMounted(async () => {
 
                                                     <button
                                                         class="absolute right-1 top-1 rounded bg-black/60 p-0.5 opacity-0 transition-opacity group-hover:opacity-100"
-                                                        @click.stop="doDeletePhoto(photo, cam.id)"
+                                                        @click.stop="doDeletePhoto(sample.projectorOffPhoto, cam.id)"
                                                     >
                                                         <Trash2 class="size-3 text-white" />
                                                     </button>

@@ -53,6 +53,36 @@ public class CalibProject : FullAuditedAggregateRoot<Guid>
     /// <summary>投影棋盘格单个方格像素尺寸（px）</summary>
     public int ProjectedPixelSize { get; private set; }
 
+    /// <summary>标定板类型（默认棋盘格）。</summary>
+    public CalibrationBoardType BoardType { get; private set; } = CalibrationBoardType.Chessboard;
+
+    /// <summary>圆点板列数（可空，圆点类型时必填）。</summary>
+    public int? CirclePatternCols { get; private set; }
+
+    /// <summary>圆点板行数（可空，圆点类型时必填）。</summary>
+    public int? CirclePatternRows { get; private set; }
+
+    /// <summary>圆点中心间距（mm，可空，圆点类型时必填）。</summary>
+    public decimal? CircleSpacingMm { get; private set; }
+
+    /// <summary>圆点直径（mm，可空）。</summary>
+    public decimal? CircleDiameterMm { get; private set; }
+
+    /// <summary>是否存在中心标记（缺孔）。</summary>
+    public bool? HasCenterMarker { get; private set; }
+
+    /// <summary>是否启用四角定位点（配置元数据）。</summary>
+    public bool? HasCornerLocators { get; private set; }
+
+    /// <summary>中心标记行坐标（0-based，可空）。</summary>
+    public int? MarkerRow { get; private set; }
+
+    /// <summary>中心标记列坐标（0-based，可空）。</summary>
+    public int? MarkerCol { get; private set; }
+
+    /// <summary>圆点检测器参数 JSON（可空）。</summary>
+    public string? CircleDetectorConfigJson { get; private set; }
+
     /// <summary>绑定的结构光投影仪设备ID（单光系列在 Step 3 选定后持久化）</summary>
     public Guid? BoundProjectorDeviceId { get; private set; }
 
@@ -174,6 +204,17 @@ public class CalibProject : FullAuditedAggregateRoot<Guid>
         int projectedPixelSize
     )
     {
+        BoardType = CalibrationBoardType.Chessboard;
+        CirclePatternCols = null;
+        CirclePatternRows = null;
+        CircleSpacingMm = null;
+        CircleDiameterMm = null;
+        HasCenterMarker = null;
+        HasCornerLocators = null;
+        MarkerRow = null;
+        MarkerCol = null;
+        CircleDetectorConfigJson = null;
+
         if (physicalCornerRows < 2)
             throw new ArgumentOutOfRangeException(nameof(physicalCornerRows), "内角点行数至少为 2");
         if (physicalCornerCols < 2)
@@ -205,6 +246,89 @@ public class CalibProject : FullAuditedAggregateRoot<Guid>
         ProjectedCornerRows = projectedCornerRows;
         ProjectedCornerCols = projectedCornerCols;
         ProjectedPixelSize = projectedPixelSize;
+        return this;
+    }
+
+    /// <summary>
+    /// 设置标定板参数（支持棋盘格与圆点板）。
+    /// </summary>
+    public CalibProject SetBoardConfig(
+        CalibrationBoardType boardType,
+        int physicalCornerRows,
+        int physicalCornerCols,
+        decimal physicalSquareSizeMm,
+        int projectedCornerRows,
+        int projectedCornerCols,
+        int projectedPixelSize,
+        int? circlePatternCols,
+        int? circlePatternRows,
+        decimal? circleSpacingMm,
+        decimal? circleDiameterMm,
+        bool? hasCenterMarker,
+        bool? hasCornerLocators,
+        int? markerRow,
+        int? markerCol,
+        string? circleDetectorConfigJson
+    )
+    {
+        // 保留原有棋盘格字段，确保历史数据和旧接口兼容。
+        SetBoardConfig(
+            physicalCornerRows,
+            physicalCornerCols,
+            physicalSquareSizeMm,
+            projectedCornerRows,
+            projectedCornerCols,
+            projectedPixelSize
+        );
+
+        BoardType = boardType;
+        if (boardType == CalibrationBoardType.Chessboard)
+        {
+            return this;
+        }
+
+        if (!circlePatternCols.HasValue || circlePatternCols.Value < 2)
+            throw new ArgumentOutOfRangeException(nameof(circlePatternCols), "圆点板列数至少为 2");
+        if (!circlePatternRows.HasValue || circlePatternRows.Value < 2)
+            throw new ArgumentOutOfRangeException(nameof(circlePatternRows), "圆点板行数至少为 2");
+        if (!circleSpacingMm.HasValue || circleSpacingMm.Value <= 0)
+            throw new ArgumentOutOfRangeException(
+                nameof(circleSpacingMm),
+                "圆点中心间距必须大于 0"
+            );
+        if (circleDiameterMm.HasValue && circleDiameterMm.Value <= 0)
+            throw new ArgumentOutOfRangeException(nameof(circleDiameterMm), "圆点直径必须大于 0");
+
+        bool markerRequired = boardType == CalibrationBoardType.MarkedSymmetricCircleGrid;
+        bool markerEnabled = hasCenterMarker ?? markerRequired;
+        if (markerRequired && !markerEnabled)
+            throw new ArgumentOutOfRangeException(
+                nameof(hasCenterMarker),
+                "中心标记圆点板必须启用标记点"
+            );
+
+        int rows = circlePatternRows.Value;
+        int cols = circlePatternCols.Value;
+        int resolvedMarkerRow = markerRow ?? (rows - 1) / 2;
+        int resolvedMarkerCol = markerCol ?? (cols - 1) / 2;
+
+        if (markerEnabled)
+        {
+            if (resolvedMarkerRow < 0 || resolvedMarkerRow >= rows)
+                throw new ArgumentOutOfRangeException(nameof(markerRow), "标记点行坐标超出范围");
+            if (resolvedMarkerCol < 0 || resolvedMarkerCol >= cols)
+                throw new ArgumentOutOfRangeException(nameof(markerCol), "标记点列坐标超出范围");
+        }
+
+        CirclePatternCols = cols;
+        CirclePatternRows = rows;
+        CircleSpacingMm = circleSpacingMm;
+        CircleDiameterMm = circleDiameterMm;
+        HasCenterMarker = markerEnabled;
+        HasCornerLocators = hasCornerLocators ?? false;
+        MarkerRow = markerEnabled ? resolvedMarkerRow : null;
+        MarkerCol = markerEnabled ? resolvedMarkerCol : null;
+        CircleDetectorConfigJson = circleDetectorConfigJson;
         return this;
     }
 }

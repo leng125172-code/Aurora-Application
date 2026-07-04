@@ -57,6 +57,11 @@ public class OfflineVariableDefUseAnalyzerTests
                 Location = "node-2",
             }
         );
+        input.ControlFlowEdges.AddRange([
+            new VariableControlFlowEdgeDto { FromNodeId = "start", ToNodeId = "node-1" },
+            new VariableControlFlowEdgeDto { FromNodeId = "node-1", ToNodeId = "node-2" },
+        ]);
+        input.EntryNodeId = "start";
 
         Dictionary<string, VariableDeclarationDto> declarationMap = CreateRequiredDeclarationMap();
 
@@ -78,7 +83,12 @@ public class OfflineVariableDefUseAnalyzerTests
             VariableDefUseAnalysisMode.Strict
         );
         input.Reads.Add(
-            new VariableReferenceDto { OwnerWorkflowId = workflowId, VariableName = "temperature" }
+            new VariableReferenceDto
+            {
+                OwnerWorkflowId = workflowId,
+                VariableName = "temperature",
+                Location = "read-node",
+            }
         );
         input.Writes.Add(
             new VariableReferenceDto
@@ -89,6 +99,11 @@ public class OfflineVariableDefUseAnalyzerTests
                 Location = "write-node",
             }
         );
+        input.ControlFlowEdges.AddRange([
+            new VariableControlFlowEdgeDto { FromNodeId = "start", ToNodeId = "read-node" },
+            new VariableControlFlowEdgeDto { FromNodeId = "read-node", ToNodeId = "write-node" },
+        ]);
+        input.EntryNodeId = "start";
 
         Dictionary<string, VariableDeclarationDto> declarationMap = CreateRequiredDeclarationMap();
 
@@ -135,6 +150,12 @@ public class OfflineVariableDefUseAnalyzerTests
                 Location = "write-unknown",
             }
         );
+        input.ControlFlowEdges.AddRange([
+            new VariableControlFlowEdgeDto { FromNodeId = "start", ToNodeId = "write-node" },
+            new VariableControlFlowEdgeDto { FromNodeId = "write-node", ToNodeId = "read-node" },
+            new VariableControlFlowEdgeDto { FromNodeId = "start", ToNodeId = "write-unknown" },
+        ]);
+        input.EntryNodeId = "start";
 
         Dictionary<string, VariableDeclarationDto> declarationMap = CreateRequiredDeclarationMap();
 
@@ -235,6 +256,42 @@ public class OfflineVariableDefUseAnalyzerTests
             diagnostics,
             x => x.Code == AuroraStruct3DDomainErrorCodes.VariableUninitializedRead
         );
+    }
+
+    [Fact]
+    public void Conservative_Mode_Should_Throw_When_ControlFlow_Is_Missing()
+    {
+        Guid workflowId = Guid.NewGuid();
+        VariableCompileRequestDto input = CreateBaseInput(
+            workflowId,
+            VariableDefUseAnalysisMode.Conservative
+        );
+        input.Reads.Add(
+            new VariableReferenceDto
+            {
+                OwnerWorkflowId = workflowId,
+                VariableName = "temperature",
+                Sequence = 1,
+                Location = "node-1",
+            }
+        );
+        input.Writes.Add(
+            new VariableReferenceDto
+            {
+                OwnerWorkflowId = workflowId,
+                VariableName = "temperature",
+                Sequence = 2,
+                Location = "node-2",
+            }
+        );
+
+        Dictionary<string, VariableDeclarationDto> declarationMap = CreateRequiredDeclarationMap();
+
+        InvalidOperationException ex = Assert.Throws<InvalidOperationException>(() =>
+            OfflineVariableDefUseAnalyzer.AnalyzePotentialUninitializedReads(input, declarationMap)
+        );
+
+        Assert.Contains("ControlFlowEdges", ex.Message, StringComparison.Ordinal);
     }
 
     private static VariableCompileRequestDto CreateBaseInput(

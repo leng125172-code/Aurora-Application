@@ -33,7 +33,17 @@ public sealed class WorkflowGraphValidator
         "System.Decimal",
     };
 
+    // MOD: 精度敏感端口白名单（operatorGuid:portName），启用严格数值类型匹配。
+    private static readonly HashSet<string> PrecisionSensitivePorts = new(
+        StringComparer.OrdinalIgnoreCase
+    )
+    {
+        "d3f12345-6789-0123-4567-89012345670c:distanceThreshold",
+        "d3f12345-6789-0123-4567-89012345670c:probability",
+    };
+
     private readonly IOperatorRegistry _registry;
+    private readonly WorkflowValidationOptions _options;
 
     /// <summary>变量消费记录：变量名 → 消费它的节点 ID 列表（用于未使用变量检测）。</summary>
     private readonly Dictionary<string, HashSet<string>> _consumers = new(StringComparer.Ordinal);
@@ -45,8 +55,12 @@ public sealed class WorkflowGraphValidator
     private readonly Stack<HashSet<string>> _protectedVars = new();
 
     public WorkflowGraphValidator(IOperatorRegistry registry)
+        : this(registry, null) { }
+
+    public WorkflowGraphValidator(IOperatorRegistry registry, WorkflowValidationOptions? options)
     {
         _registry = registry;
+        _options = options ?? new WorkflowValidationOptions();
     }
 
     /// <summary>校验整张图，返回诊断汇总。</summary>
@@ -287,7 +301,14 @@ public sealed class WorkflowGraphValidator
         }
 
         // 声明变量（含重复定义、循环变量保护检查）。
-        DeclareVariable(node.Id, variableName!, sourceType, symbols, diagnostics);
+        DeclareVariable(
+            node.Id,
+            variableName!,
+            sourceType,
+            symbols,
+            diagnostics,
+            IsShadowAllowed(node, variableName!)
+        );
     }
 
     private async Task ValidateContainerAsync(
@@ -430,7 +451,14 @@ public sealed class WorkflowGraphValidator
                 }
 
                 CheckName(node.Id, varName, diagnostics);
-                DeclareVariable(node.Id, varName, null, symbols, diagnostics);
+                DeclareVariable(
+                    node.Id,
+                    varName,
+                    null,
+                    symbols,
+                    diagnostics,
+                    IsShadowAllowed(node, varName)
+                );
             }
         }
     }
@@ -494,7 +522,9 @@ public sealed class WorkflowGraphValidator
                     portName,
                     symbols.GetValueOrDefault(varName),
                     portType,
-                    diagnostics
+                    diagnostics,
+                    operatorId,
+                    portName
                 );
             }
         }
@@ -546,7 +576,9 @@ public sealed class WorkflowGraphValidator
                     cfg.Name,
                     symbols.GetValueOrDefault(refName),
                     cfg.ParameterTypeName,
-                    diagnostics
+                    diagnostics,
+                    operatorId,
+                    cfg.Name
                 );
             }
         }
@@ -584,7 +616,14 @@ public sealed class WorkflowGraphValidator
                 string? portType = descriptor
                     ?.Outputs.FirstOrDefault(o => o.ParameterName == portName)
                     ?.ParameterTypeName;
-                DeclareVariable(node.Id, varName, portType, symbols, diagnostics);
+                DeclareVariable(
+                    node.Id,
+                    varName,
+                    portType,
+                    symbols,
+                    diagnostics,
+                    IsShadowAllowed(node, varName)
+                );
             }
         }
     }
@@ -626,20 +665,40 @@ public sealed class WorkflowGraphValidator
         consumerSet.Add(nodeId);
     }
 
-    private static void CheckTypeCompat(
+    private void CheckTypeCompat(
         string nodeId,
         string target,
         string? haveType,
         string? needType,
-        List<WorkflowDiagnostic> diagnostics
+        List<WorkflowDiagnostic> diagnostics,
+        Guid operatorId,
+        string portName
     )
     {
         if (haveType is null || needType is null)
             return; // 任一类型未知，跳过。
         if (string.Equals(haveType, needType, StringComparison.Ordinal))
             return;
-        if (NumericTypeNames.Contains(haveType) && NumericTypeNames.Contains(needType))
-            return; // 数值之间允许（强转放宽）。
+
+        bool numericMismatch =
+            NumericTypeNames.Contains(haveType) && NumericTypeNames.Contains(needType);
+        if (numericMismatch)
+        {
+            // MOD: 白名单端口启用严格数值匹配，阻止静默精度丢失。
+            string preciseKey = $"{operatorId:D}:{portName}";
+            if (PrecisionSensitivePorts.Contains(preciseKey))
+            {
+                diagnostics.Add(
+                    ErrorDiag(
+                        nodeId,
+                        target,
+                        $"精度敏感端口 '{portName}' 要求严格类型一致：变量类型 '{haveType}'，期望 '{needType}'。"
+                    )
+                );
+            }
+
+            return;
+        }
 
         diagnostics.Add(
             new WorkflowDiagnostic
@@ -674,7 +733,8 @@ public sealed class WorkflowGraphValidator
         string variableName,
         string? typeName,
         Dictionary<string, string?> symbols,
-        List<WorkflowDiagnostic> diagnostics
+        List<WorkflowDiagnostic> diagnostics,
+        bool allowShadow = false
     )
     {
         // 检查是否与受保护的循环变量冲突。
@@ -696,13 +756,29 @@ public sealed class WorkflowGraphValidator
         // 检查重复定义（同一变量被多个节点声明）。
         if (_definers.TryGetValue(variableName, out string? previousNode))
         {
-            diagnostics.Add(
-                WarnDiag(
-                    nodeId,
-                    variableName,
-                    $"变量 '{variableName}' 已被节点 {previousNode} 定义，此处覆盖可能导致数据流歧义。"
-                )
-            );
+            // MOD: 严格模式下重复定义升级为 Error，除非显式标记允许 shadow。
+            if (!allowShadow && _options.StrictVariableDefinition)
+            {
+                diagnostics.Add(
+                    ErrorDiag(
+                        nodeId,
+                        variableName,
+                        $"变量 '{variableName}' 已被节点 {previousNode} 定义；严格模式禁止重复定义。"
+                    )
+                );
+                return;
+            }
+
+            if (!allowShadow)
+            {
+                diagnostics.Add(
+                    WarnDiag(
+                        nodeId,
+                        variableName,
+                        $"变量 '{variableName}' 已被节点 {previousNode} 定义，此处覆盖可能导致数据流歧义。"
+                    )
+                );
+            }
         }
         else
         {
@@ -728,7 +804,7 @@ public sealed class WorkflowGraphValidator
 
     // ── 拓扑后校验 ────────────────────────────────────────────────────────────
 
-    /// <summary>检测未被任何边连通的孤立节点。</summary>
+    /// <summary>MOD: 基于 start-node 的全局可达性检查（BFS）。</summary>
     private static void ValidateUnreachableNodes(
         GraphDataModel graph,
         List<WorkflowDiagnostic> diagnostics
@@ -737,17 +813,56 @@ public sealed class WorkflowGraphValidator
         if (graph.Nodes.Count == 0)
             return;
 
-        // 收集所有被边引用的节点 ID（作为源或目标）。
-        var reachable = new HashSet<string>(StringComparer.Ordinal);
-        foreach (EdgeModel edge in graph.Edges)
+        Dictionary<string, NodeModel> nodeMap = graph.Nodes.ToDictionary(x => x.Id, x => x);
+        List<string> startNodeIds = graph
+            .Nodes.Where(x => x.Type == NodeTypeTokens.StartNode)
+            .Select(x => x.Id)
+            .ToList();
+        if (startNodeIds.Count == 0)
         {
-            if (edge.SourceNodeId is not null)
-                reachable.Add(edge.SourceNodeId);
-            if (edge.TargetNodeId is not null)
-                reachable.Add(edge.TargetNodeId);
+            return;
         }
 
-        // 排除起止节点（它们可能没有边连接，但属于合法边界）。
+        Dictionary<string, List<string>> adjacency = new(StringComparer.Ordinal);
+        foreach (string nodeId in nodeMap.Keys)
+        {
+            adjacency[nodeId] = [];
+        }
+
+        foreach (EdgeModel edge in graph.Edges)
+        {
+            if (
+                edge.SourceNodeId is null
+                || edge.TargetNodeId is null
+                || !nodeMap.ContainsKey(edge.SourceNodeId)
+                || !nodeMap.ContainsKey(edge.TargetNodeId)
+            )
+            {
+                continue;
+            }
+
+            adjacency[edge.SourceNodeId].Add(edge.TargetNodeId);
+        }
+
+        HashSet<string> reachable = new(StringComparer.Ordinal);
+        Queue<string> queue = new(startNodeIds);
+        while (queue.Count > 0)
+        {
+            string current = queue.Dequeue();
+            if (!reachable.Add(current))
+            {
+                continue;
+            }
+
+            foreach (string next in adjacency[current])
+            {
+                if (!reachable.Contains(next))
+                {
+                    queue.Enqueue(next);
+                }
+            }
+        }
+
         foreach (NodeModel node in graph.Nodes)
         {
             if (node.Type is NodeTypeTokens.StartNode or NodeTypeTokens.EndNode)
@@ -760,10 +875,49 @@ public sealed class WorkflowGraphValidator
             )
             {
                 diagnostics.Add(
-                    WarnDiag(node.Id, null, "该节点未连接到工作流图中（不可达），将不会被执行。")
+                    WarnDiag(node.Id, null, "该节点从 start-node 不可达，将不会被执行。")
                 );
             }
         }
+    }
+
+    // MOD: 显式 shadow 标记读取，支持 params.allowShadow 或 params.shadowVariables。
+    private static bool IsShadowAllowed(NodeModel node, string variableName)
+    {
+        Dictionary<string, JsonElement>? parameters = node.Properties?.Params;
+        if (parameters is null)
+        {
+            return false;
+        }
+
+        if (
+            parameters.TryGetValue("allowShadow", out JsonElement allowShadow)
+            && (allowShadow.ValueKind == JsonValueKind.True)
+        )
+        {
+            return true;
+        }
+
+        if (
+            !parameters.TryGetValue("shadowVariables", out JsonElement shadowVariables)
+            || shadowVariables.ValueKind != JsonValueKind.Array
+        )
+        {
+            return false;
+        }
+
+        foreach (JsonElement item in shadowVariables.EnumerateArray())
+        {
+            if (
+                item.ValueKind == JsonValueKind.String
+                && string.Equals(item.GetString(), variableName, StringComparison.Ordinal)
+            )
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>检测已定义但从未被任何节点消费的变量。</summary>

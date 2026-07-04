@@ -108,6 +108,21 @@ public class OfflineVariableLibraryAppService
                 $"{AuroraStruct3DDomainErrorCodes.VariableBadRequest}: WorkflowId 不能为空。"
             );
         }
+
+        // MOD: 强制路径敏感 Def-Use 输入，禁止线性回退模式。
+        if (string.IsNullOrWhiteSpace(input.EntryNodeId))
+        {
+            throw new UserFriendlyException(
+                $"{AuroraStruct3DDomainErrorCodes.VariableBadRequest}: EntryNodeId 不能为空。"
+            );
+        }
+
+        if (input.ControlFlowEdges.Count == 0)
+        {
+            throw new UserFriendlyException(
+                $"{AuroraStruct3DDomainErrorCodes.VariableBadRequest}: ControlFlowEdges 不能为空。"
+            );
+        }
     }
 
     private static Dictionary<string, VariableDeclarationDto> BuildDeclarationMap(
@@ -309,7 +324,10 @@ public class OfflineVariableLibraryAppService
     {
         foreach (VariableReferenceDto read in input.Reads)
         {
-            if (read.OwnerWorkflowId == input.WorkflowId)
+            bool isLocalReference =
+                read.OwnerWorkflowId == input.WorkflowId || read.OwnerWorkflowId == Guid.Empty;
+
+            if (isLocalReference)
             {
                 if (
                     !declarationMap.TryGetValue(
@@ -372,16 +390,7 @@ public class OfflineVariableLibraryAppService
         {
             if (reference.OwnerWorkflowId == Guid.Empty)
             {
-                diagnostics.Add(
-                    CreateDiagnostic(
-                        VariableDiagnosticSeverity.Error,
-                        AuroraStruct3DDomainErrorCodes.VariableBadRequest,
-                        $"{(isWrite ? "写入" : "读取")}引用缺少 OwnerWorkflowId。",
-                        null,
-                        reference.VariableName,
-                        reference.Location
-                    )
-                );
+                continue;
             }
 
             if (string.IsNullOrWhiteSpace(reference.VariableName))
@@ -423,7 +432,10 @@ public class OfflineVariableLibraryAppService
     {
         foreach (VariableReferenceDto write in input.Writes)
         {
-            if (write.OwnerWorkflowId != input.WorkflowId)
+            bool isLocalWrite =
+                write.OwnerWorkflowId == input.WorkflowId || write.OwnerWorkflowId == Guid.Empty;
+
+            if (!isLocalWrite)
             {
                 if (
                     externalMap.TryGetValue(

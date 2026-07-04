@@ -38,8 +38,15 @@ public static class CalibConsts
     /// <summary>单光系列投影外参最小有效照片数量</summary>
     public const int MinProjectorExtrinsicPhotoCount = 18;
 
-    /// <summary>单目标定允许的最大重投影误差（像素）</summary>
+    /// <summary>单目标定允许的最大重投影误差（像素，棋盘格）</summary>
     public const double MaxSingleCameraReprojectionError = 0.08d;
+
+    /// <summary>
+    /// 圆点标定板单目内参允许的最大重投影误差（像素）。
+    /// 圆点检测基于 SimpleBlobDetector 质心，精度低于棋盘格亚像素角点，
+    /// 故阈值需高于棋盘格；用于避免对圆点板套用不现实的棋盘格阈值。
+    /// </summary>
+    public const double MaxCircleBoardReprojectionError = 2.0d;
 
     /// <summary>双目标定允许的最大重投影误差（像素）</summary>
     public const double MaxStereoReprojectionError = 0.1d;
@@ -73,6 +80,24 @@ public enum CalibDeviceType
 
     /// <summary>2目1光：主相机(左) + 从相机(右) + 主结构光</summary>
     TwoCamera1Light = 3,
+}
+
+/// <summary>
+/// 标定板类型。
+/// </summary>
+public enum CalibrationBoardType
+{
+    /// <summary>棋盘格。</summary>
+    Chessboard = 0,
+
+    /// <summary>对称圆点网格。</summary>
+    SymmetricCircleGrid = 1,
+
+    /// <summary>非对称圆点网格。</summary>
+    AsymmetricCircleGrid = 2,
+
+    /// <summary>中心标记对称圆点网格（例如 27x27 中心缺孔）。</summary>
+    MarkedSymmetricCircleGrid = 3,
 }
 
 /// <summary>
@@ -250,4 +275,16 @@ public enum StereoPhotoRole
 
     /// <summary>从相机（右）</summary>
     Secondary = 1,
+}
+
+/// <summary>
+/// 投影外参双拍阶段。
+/// </summary>
+public enum ExtrinsicPhotoPhase
+{
+    /// <summary>关灯拍实体标定板。</summary>
+    ProjectorOff = 0,
+
+    /// <summary>开灯拍投影标定图案。</summary>
+    ProjectorOn = 1,
 }

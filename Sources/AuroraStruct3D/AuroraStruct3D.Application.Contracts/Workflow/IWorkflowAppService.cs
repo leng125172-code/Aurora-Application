@@ -1,5 +1,4 @@
 using AuroraStruct3D.Workflow.Dtos;
-using Microsoft.AspNetCore.Mvc;
 using Volo.Abp.Application.Services;
 
 namespace AuroraStruct3D.Workflow;
@@ -21,8 +20,7 @@ public interface IWorkflowAppService : IApplicationService
     /// </summary>
     /// <param name="projectId">所属项目 ID</param>
     /// <returns>工作流简要列表</returns>
-    [HttpGet]
-    Task<List<WorkflowBriefDto>> GetListAsync([FromQuery] Guid projectId);
+    Task<List<WorkflowBriefDto>> GetListAsync(Guid projectId);
 
     /// <summary>
     /// 新建工作流。
@@ -30,16 +28,14 @@ public interface IWorkflowAppService : IApplicationService
     /// </summary>
     /// <param name="input">新建请求。</param>
     /// <returns>新建后的工作流（含后端生成的工作流 ID）</returns>
-    [HttpPost]
-    Task<WorkflowDto> CreateAsync([FromBody] CreateWorkflowInput input);
+    Task<WorkflowDto> CreateAsync(CreateWorkflowInput input);
 
     /// <summary>
     /// 获取工作流详情。
     /// Route: GET {id}
     /// </summary>
     /// <param name="id">工作流 ID</param>
-    [HttpGet("{id}")]
-    Task<WorkflowDto> GetAsync([FromRoute] Guid id);
+    Task<WorkflowDto> GetAsync(Guid id);
 
     /// <summary>
     /// 修改保存工作流。
@@ -47,24 +43,21 @@ public interface IWorkflowAppService : IApplicationService
     /// </summary>
     /// <param name="id">工作流 ID</param>
     /// <param name="input">修改请求。</param>
-    [HttpPut("{id}")]
-    Task<WorkflowDto> UpdateAsync([FromRoute] Guid id, [FromBody] UpdateWorkflowInput input);
+    Task<WorkflowDto> UpdateAsync(Guid id, UpdateWorkflowInput input);
 
     /// <summary>
     /// 删除工作流。
     /// Route: DELETE {id}
     /// </summary>
     /// <param name="id">工作流 ID</param>
-    [HttpDelete("{id}")]
-    Task DeleteAsync([FromRoute] Guid id);
+    Task DeleteAsync(Guid id);
 
     /// <summary>
     /// 静态校验工作流图。
     /// Route: POST {id}/validate
     /// </summary>
     /// <param name="id">工作流 ID。</param>
-    [HttpPost("{id}/validate")]
-    Task<WorkflowValidateResultDto> ValidateAsync([FromRoute] Guid id);
+    Task<WorkflowValidateResultDto> ValidateAsync(Guid id);
 
     /// <summary>
     /// 数据流仿真：根据项目 ID 和工作流 ID 加载已持久化的工作流，不执行算子，
@@ -72,6 +65,5 @@ public interface IWorkflowAppService : IApplicationService
     /// Route: POST {id}/simulate
     /// </summary>
     /// <param name="id">工作流 ID。</param>
-    [HttpPost("{id}/simulate")]
-    Task<WorkflowDataFlowReportDto> SimulateAsync([FromRoute] Guid id);
+    Task<WorkflowDataFlowReportDto> SimulateAsync(Guid id);
 }

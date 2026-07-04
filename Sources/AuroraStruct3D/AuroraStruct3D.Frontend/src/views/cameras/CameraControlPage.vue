@@ -119,7 +119,7 @@ async function refreshCategory(categoryName: string) {
     try {
         // 递归收集分类及所有后代子分类的节点名，确保刷新覆盖嵌套节点
         const nodeNames: string[] = []
-        function collectNodeNames(c: typeof cat) {
+        function collectNodeNames(c: NonNullable<typeof cat>) {
             for (const n of c.nodes) nodeNames.push(n.nodeName)
             for (const child of c.children) collectNodeNames(child)
         }

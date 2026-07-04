@@ -65,4 +65,22 @@ public interface IMotorDeviceAppService : IApplicationService
 
     /// <summary>分页查询电机操作日志</summary>
     Task<PagedResultDto<MotorOperationLogDto>> GetLogsAsync(GetMotorLogListDto input);
+
+    /// <summary>
+    /// 一键设置所有启用中的伺服电机实时采样开关（覆盖 KTECH 与 Leisai）。
+    /// 对应路由：POST /api/app/motor-device/set-sampling-all?enabled=true|false
+    /// </summary>
+    Task SetSamplingAllAsync(bool enabled);
+
+    /// <summary>
+    /// 获取所有启用中的伺服电机实时采样是否全部开启。
+    /// 对应路由：GET /api/app/motor-device/sampling-all-enabled
+    /// </summary>
+    Task<bool> GetSamplingAllEnabledAsync();
+
+    /// <summary>
+    /// 获取指定伺服电机实时采样开关（统一替代 ktech 的 sampling-enabled 与 leisai 的 sampling-state）。
+    /// 对应路由：GET /api/app/motor-device/{id}/sampling-enabled
+    /// </summary>
+    Task<bool> GetSamplingEnabledAsync(Guid id);
 }

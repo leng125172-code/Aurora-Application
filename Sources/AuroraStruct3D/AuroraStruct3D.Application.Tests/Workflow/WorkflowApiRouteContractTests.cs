@@ -2,6 +2,7 @@ using System.Reflection;
 using AuroraStruct3D.Workflow;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Routing;
 using Xunit;
 
 namespace AuroraStruct3D.Application.Tests.Workflow;
@@ -9,78 +10,40 @@ namespace AuroraStruct3D.Application.Tests.Workflow;
 public class WorkflowApiRouteContractTests
 {
     [Theory]
-    [InlineData(nameof(IWorkflowAppService.GetListAsync), typeof(HttpGetAttribute), null)]
-    [InlineData(nameof(IWorkflowAppService.CreateAsync), typeof(HttpPostAttribute), null)]
-    [InlineData(nameof(IWorkflowAppService.GetAsync), typeof(HttpGetAttribute), "{id}")]
-    [InlineData(nameof(IWorkflowAppService.UpdateAsync), typeof(HttpPutAttribute), "{id}")]
-    [InlineData(nameof(IWorkflowAppService.DeleteAsync), typeof(HttpDeleteAttribute), "{id}")]
-    [InlineData(
-        nameof(IWorkflowAppService.ValidateAsync),
-        typeof(HttpPostAttribute),
-        "{id}/validate"
-    )]
-    [InlineData(
-        nameof(IWorkflowAppService.SimulateAsync),
-        typeof(HttpPostAttribute),
-        "{id}/simulate"
-    )]
-    public void Interface_Method_Should_Define_Explicit_Http_Contract(
-        string methodName,
-        Type httpAttributeType,
-        string? template
-    )
+    [InlineData(nameof(IWorkflowAppService.GetListAsync))]
+    [InlineData(nameof(IWorkflowAppService.CreateAsync))]
+    [InlineData(nameof(IWorkflowAppService.GetAsync))]
+    [InlineData(nameof(IWorkflowAppService.UpdateAsync))]
+    [InlineData(nameof(IWorkflowAppService.DeleteAsync))]
+    [InlineData(nameof(IWorkflowAppService.ValidateAsync))]
+    [InlineData(nameof(IWorkflowAppService.SimulateAsync))]
+    public void Interface_Method_Should_Not_Define_Explicit_Http_Contract(string methodName)
     {
         MethodInfo method = typeof(IWorkflowAppService).GetMethod(methodName)!;
 
         Assert.NotNull(method);
-        Attribute? attribute = method
-            .GetCustomAttributes(httpAttributeType, inherit: false)
-            .Cast<Attribute>()
-            .SingleOrDefault();
-        Assert.NotNull(attribute);
-
-        string? actualTemplate = GetTemplate(attribute!);
-        Assert.Equal(template, actualTemplate);
+        Assert.Null(GetHttpMethodAttribute(method));
     }
 
     [Theory]
-    [InlineData(nameof(WorkflowAppService.GetListAsync), typeof(HttpGetAttribute), null)]
-    [InlineData(nameof(WorkflowAppService.CreateAsync), typeof(HttpPostAttribute), null)]
-    [InlineData(nameof(WorkflowAppService.GetAsync), typeof(HttpGetAttribute), "{id}")]
-    [InlineData(nameof(WorkflowAppService.UpdateAsync), typeof(HttpPutAttribute), "{id}")]
-    [InlineData(nameof(WorkflowAppService.DeleteAsync), typeof(HttpDeleteAttribute), "{id}")]
-    [InlineData(
-        nameof(WorkflowAppService.ValidateAsync),
-        typeof(HttpPostAttribute),
-        "{id}/validate"
-    )]
-    [InlineData(
-        nameof(WorkflowAppService.SimulateAsync),
-        typeof(HttpPostAttribute),
-        "{id}/simulate"
-    )]
-    public void Implementation_Method_Should_Define_Explicit_Http_Contract(
-        string methodName,
-        Type httpAttributeType,
-        string? template
-    )
+    [InlineData(nameof(WorkflowAppService.GetListAsync))]
+    [InlineData(nameof(WorkflowAppService.CreateAsync))]
+    [InlineData(nameof(WorkflowAppService.GetAsync))]
+    [InlineData(nameof(WorkflowAppService.UpdateAsync))]
+    [InlineData(nameof(WorkflowAppService.DeleteAsync))]
+    [InlineData(nameof(WorkflowAppService.ValidateAsync))]
+    [InlineData(nameof(WorkflowAppService.SimulateAsync))]
+    public void Implementation_Method_Should_Not_Define_Explicit_Http_Contract(string methodName)
     {
         MethodInfo method = typeof(WorkflowAppService)
             .GetMethods(BindingFlags.Public | BindingFlags.Instance)
             .Single(x => x.Name == methodName);
 
-        Attribute? attribute = method
-            .GetCustomAttributes(httpAttributeType, inherit: false)
-            .Cast<Attribute>()
-            .SingleOrDefault();
-        Assert.NotNull(attribute);
-
-        string? actualTemplate = GetTemplate(attribute!);
-        Assert.Equal(template, actualTemplate);
+        Assert.Null(GetHttpMethodAttribute(method));
     }
 
     [Fact]
-    public void ListByProject_Should_Use_FromRoute_On_ProjectId()
+    public void ListByProject_Should_Not_Define_FromQuery_Or_FromRoute_On_ProjectId()
     {
         MethodInfo interfaceMethod = typeof(IWorkflowAppService).GetMethod(
             nameof(IWorkflowAppService.GetListAsync)
@@ -92,9 +55,13 @@ public class WorkflowApiRouteContractTests
         Assert.Single(interfaceMethod.GetParameters());
         Assert.Single(implementationMethod.GetParameters());
 
-        Assert.NotNull(interfaceMethod.GetParameters()[0].GetCustomAttribute<FromQueryAttribute>());
-        Assert.NotNull(
+        Assert.Null(interfaceMethod.GetParameters()[0].GetCustomAttribute<FromQueryAttribute>());
+        Assert.Null(interfaceMethod.GetParameters()[0].GetCustomAttribute<FromRouteAttribute>());
+        Assert.Null(
             implementationMethod.GetParameters()[0].GetCustomAttribute<FromQueryAttribute>()
+        );
+        Assert.Null(
+            implementationMethod.GetParameters()[0].GetCustomAttribute<FromRouteAttribute>()
         );
     }
 
@@ -107,15 +74,11 @@ public class WorkflowApiRouteContractTests
         );
     }
 
-    private static string? GetTemplate(Attribute attribute)
+    private static Attribute? GetHttpMethodAttribute(MemberInfo memberInfo)
     {
-        return attribute switch
-        {
-            HttpGetAttribute x => x.Template,
-            HttpPostAttribute x => x.Template,
-            HttpPutAttribute x => x.Template,
-            HttpDeleteAttribute x => x.Template,
-            _ => null,
-        };
+        return memberInfo
+            .GetCustomAttributes(inherit: false)
+            .OfType<HttpMethodAttribute>()
+            .SingleOrDefault();
     }
 }

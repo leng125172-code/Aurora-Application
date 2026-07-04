@@ -27,8 +27,19 @@ public static class CalibrationDbContextModelCreatingExtensions
             b.Property(x => x.DeviceSeries).HasConversion<int>();
             b.Property(x => x.DeviceType).HasConversion<int>();
             b.Property(x => x.CalibStatus).HasConversion<int>();
+            b.Property(x => x.BoardType).HasConversion<int>();
             // 棋盘格标定板参数
             b.Property(x => x.PhysicalSquareSizeMm).HasPrecision(10, 4);
+            // 圆点标定板参数（可空，保证历史棋盘格数据兼容）
+            b.Property(x => x.CircleSpacingMm).HasPrecision(10, 4).IsRequired(false);
+            b.Property(x => x.CircleDiameterMm).HasPrecision(10, 4).IsRequired(false);
+            b.Property(x => x.CirclePatternCols).IsRequired(false);
+            b.Property(x => x.CirclePatternRows).IsRequired(false);
+            b.Property(x => x.HasCenterMarker).IsRequired(false);
+            b.Property(x => x.HasCornerLocators).IsRequired(false);
+            b.Property(x => x.MarkerRow).IsRequired(false);
+            b.Property(x => x.MarkerCol).IsRequired(false);
+            b.Property(x => x.CircleDetectorConfigJson).HasMaxLength(4000).IsRequired(false);
             b.Property(x => x.BoundProjectorDeviceId).IsRequired(false);
             b.Property(x => x.MainCameraDeviceId).IsRequired(false);
             b.Property(x => x.SecondaryCameraDeviceId).IsRequired(false);
@@ -156,6 +167,7 @@ public static class CalibrationDbContextModelCreatingExtensions
             b.Property(x => x.BlobKey).IsRequired().HasMaxLength(CalibConsts.MaxBlobKeyLength);
             b.Property(x => x.PhotoType).HasConversion<int>();
             b.Property(x => x.StereoRole).HasConversion<int>().IsRequired(false);
+            b.Property(x => x.ExtrinsicPhase).HasConversion<int>().IsRequired(false);
             // ThumbnailBase64 为 nvarchar(max)，不限制长度
 
             b.HasIndex(x => x.CalibProjectId);

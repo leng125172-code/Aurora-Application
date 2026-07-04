@@ -11,6 +11,9 @@ public class UpdateBoardConfigInput
     [Required]
     public Guid CalibProjectId { get; set; }
 
+    /// <summary>标定板类型（默认棋盘格）。</summary>
+    public CalibrationBoardType BoardType { get; set; } = CalibrationBoardType.Chessboard;
+
     /// <summary>实体棋盘格内角点行数（≥ 2）</summary>
     [Range(2, 100)]
     public int PhysicalCornerRows { get; set; } = 9;
@@ -34,6 +37,91 @@ public class UpdateBoardConfigInput
     /// <summary>投影棋盘格单个方格像素尺寸（px，≥ 1）</summary>
     [Range(1, 4096)]
     public int ProjectedPixelSize { get; set; } = 20;
+
+    /// <summary>圆点标定板配置（圆点类型必填）。</summary>
+    public CircleBoardConfigDto? CircleBoardConfig { get; set; }
+}
+
+/// <summary>
+/// 圆点标定板配置。
+/// </summary>
+public class CircleBoardConfigDto
+{
+    /// <summary>行列数（Width=列数，Height=行数）。</summary>
+    public CirclePatternSizeDto PatternSize { get; set; } = new();
+
+    /// <summary>圆点中心间距（mm）。</summary>
+    public decimal CircleSpacing { get; set; } = 10m;
+
+    /// <summary>圆点直径（mm，可选）。</summary>
+    public decimal? CircleDiameter { get; set; }
+
+    /// <summary>是否存在中心标记（缺孔）。</summary>
+    public bool HasCenterMarker { get; set; }
+
+    /// <summary>是否启用四角定位点（元数据，仅用于配置记录与导入导出）。</summary>
+    public bool HasCornerLocators { get; set; }
+
+    /// <summary>标记点行列坐标（默认 27x27 的中心 [13,13]）。</summary>
+    public CircleMarkerPositionDto MarkerPosition { get; set; } = new() { Row = 13, Col = 13 };
+
+    /// <summary>SimpleBlobDetector 参数（支持覆盖默认模板）。</summary>
+    public CircleBlobDetectorConfigDto Detector { get; set; } =
+        CircleBlobDetectorConfigDto.CreateDefault();
+}
+
+/// <summary>
+/// 圆点网格尺寸。
+/// </summary>
+public class CirclePatternSizeDto
+{
+    /// <summary>列数。</summary>
+    public int Width { get; set; } = 27;
+
+    /// <summary>行数。</summary>
+    public int Height { get; set; } = 27;
+}
+
+/// <summary>
+/// 圆点标记坐标。
+/// </summary>
+public class CircleMarkerPositionDto
+{
+    /// <summary>行索引（从 0 开始）。</summary>
+    public int Row { get; set; }
+
+    /// <summary>列索引（从 0 开始）。</summary>
+    public int Col { get; set; }
+}
+
+/// <summary>
+/// 圆点检测器参数（SimpleBlobDetector）。
+/// </summary>
+public class CircleBlobDetectorConfigDto
+{
+    /// <summary>最小阈值。</summary>
+    public double MinThreshold { get; set; } = 10;
+
+    /// <summary>最大阈值。</summary>
+    public double MaxThreshold { get; set; } = 220;
+
+    /// <summary>最小面积（像素）。</summary>
+    public double MinArea { get; set; } = 25;
+
+    /// <summary>最大面积（像素）。</summary>
+    public double MaxArea { get; set; } = 10000;
+
+    /// <summary>最小圆度（0~1）。</summary>
+    public double MinCircularity { get; set; } = 0.6;
+
+    /// <summary>最小凸度（0~1）。</summary>
+    public double MinConvexity { get; set; } = 0.8;
+
+    /// <summary>创建默认参数。</summary>
+    public static CircleBlobDetectorConfigDto CreateDefault()
+    {
+        return new CircleBlobDetectorConfigDto();
+    }
 }
 
 /// <summary>
@@ -65,6 +153,18 @@ public class TakeExtrinsicPhotoInput
     /// <summary>相机设备ID</summary>
     [Required]
     public Guid CameraDeviceId { get; set; }
+}
+
+/// <summary>
+/// 投影外参双拍阶段。
+/// </summary>
+public enum ExtrinsicPhotoPhaseDto
+{
+    /// <summary>关灯拍实体标定板。</summary>
+    ProjectorOff = 0,
+
+    /// <summary>开灯拍投影标定图案。</summary>
+    ProjectorOn = 1,
 }
 
 /// <summary>
@@ -105,6 +205,27 @@ public class CalibPhotoDto
 
     /// <summary>双目成对拍照角色（仅 StereoExtrinsicPair 有值）</summary>
     public StereoPhotoRole? StereoRole { get; set; }
+
+    /// <summary>投影外参双拍阶段（仅 Extrinsic 有值）。</summary>
+    public ExtrinsicPhotoPhaseDto? ExtrinsicPhase { get; set; }
+}
+
+/// <summary>
+/// 单组投影外参双拍样本 DTO。
+/// </summary>
+public class CalibExtrinsicSampleDto
+{
+    /// <summary>外参样本分组ID。</summary>
+    public Guid PairGroupId { get; set; }
+
+    /// <summary>关灯照片。</summary>
+    public CalibPhotoDto ProjectorOffPhoto { get; set; } = null!;
+
+    /// <summary>开灯照片。</summary>
+    public CalibPhotoDto ProjectorOnPhoto { get; set; } = null!;
+
+    /// <summary>该样本组是否有效（两张都有效）。</summary>
+    public bool IsValid => ProjectorOffPhoto.IsValid && ProjectorOnPhoto.IsValid;
 }
 
 /// <summary>
@@ -276,6 +397,9 @@ public class CalibStereoComputeResultDto
 /// </summary>
 public class CalibBoardConfigDto
 {
+    /// <summary>标定板类型。</summary>
+    public CalibrationBoardType BoardType { get; set; }
+
     /// <summary>实体棋盘格内角点行数</summary>
     public int PhysicalCornerRows { get; set; }
 
@@ -293,6 +417,9 @@ public class CalibBoardConfigDto
 
     /// <summary>投影棋盘格单个方格像素尺寸（px）</summary>
     public int ProjectedPixelSize { get; set; }
+
+    /// <summary>圆点标定板配置（非圆点类型时为 null）。</summary>
+    public CircleBoardConfigDto? CircleBoardConfig { get; set; }
 }
 
 /// <summary>

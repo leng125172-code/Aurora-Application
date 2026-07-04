@@ -132,6 +132,66 @@ public class CameraDeviceAppService : AuroraStruct3DAppService, ICameraDeviceApp
         EnsureManualOrMaintenanceMode();
         int count = await _tucamService.InitializeAsync();
 
+        List<CameraDevice> existingCameras = await _cameraDeviceRepository.GetListAsync();
+        var byIndex = existingCameras
+            .GroupBy(x => x.DeviceIndex)
+            .ToDictionary(
+                g => g.Key,
+                g => g.OrderByDescending(x => x.LastModificationTime ?? x.CreationTime).First()
+            );
+        var bySerial = existingCameras
+            .Where(x => !string.IsNullOrWhiteSpace(x.DeviceSerialNumber))
+            .GroupBy(x => x.DeviceSerialNumber!, StringComparer.Ordinal)
+            .ToDictionary(
+                g => g.Key,
+                g => g.OrderByDescending(x => x.LastModificationTime ?? x.CreationTime).First(),
+                StringComparer.Ordinal
+            );
+
+        int nextSpareIndex =
+            Math.Max(
+                count,
+                existingCameras.Count == 0 ? 0 : existingCameras.Max(x => x.DeviceIndex) + 1
+            ) + 1;
+
+        int AllocateSpareIndex()
+        {
+            while (byIndex.ContainsKey(nextSpareIndex))
+            {
+                nextSpareIndex++;
+            }
+
+            return nextSpareIndex++;
+        }
+
+        async Task EnsureIndexAvailableAsync(int targetIndex, Guid keepCameraId)
+        {
+            if (!byIndex.TryGetValue(targetIndex, out CameraDevice? occupant))
+            {
+                return;
+            }
+
+            if (occupant.Id == keepCameraId)
+            {
+                return;
+            }
+
+            int spareIndex = AllocateSpareIndex();
+            int oldIndex = occupant.DeviceIndex;
+            occupant.SetDeviceIndex(spareIndex);
+            await _cameraDeviceRepository.UpdateAsync(occupant);
+
+            byIndex.Remove(oldIndex);
+            byIndex[spareIndex] = occupant;
+
+            Logger.LogInformation(
+                "相机索引冲突处理：将记录 {CameraId} 从索引 {OldIndex} 暂移到备用索引 {SpareIndex}",
+                occupant.Id,
+                oldIndex,
+                spareIndex
+            );
+        }
+
         // 扫描过程中同步构建索引→设备ID映射，供操作日志使用
         var deviceIdMap = new Dictionary<int, Guid>();
 
@@ -146,23 +206,34 @@ public class CameraDeviceAppService : AuroraStruct3DAppService, ICameraDeviceApp
             CameraDevice? matchedCamera = null;
             if (!string.IsNullOrWhiteSpace(serialNumber))
             {
-                matchedCamera = await _cameraDeviceRepository.FindByDeviceSerialNumberAsync(
-                    serialNumber
-                );
+                bySerial.TryGetValue(serialNumber, out matchedCamera);
             }
 
-            // 回退策略：序列号缺失时按索引匹配老记录
-            if (matchedCamera == null)
+            // 回退策略：仅在“索引位上的旧记录也没有序列号”时按索引匹配。
+            // 这样可以避免热插拔后索引漂移把 A 设备误绑定到 B 的历史记录。
+            if (
+                matchedCamera == null
+                && byIndex.TryGetValue(i, out CameraDevice? indexCamera)
+                && CanUseIndexFallback(matchedCamera, indexCamera)
+            )
             {
-                matchedCamera = await _cameraDeviceRepository.FindByDeviceIndexAsync(i);
+                matchedCamera = indexCamera;
             }
 
             if (matchedCamera == null)
             {
+                await EnsureIndexAvailableAsync(i, Guid.Empty);
+
                 var newCamera = new CameraDevice(GuidGenerator.Create(), $"相机 #{i}", i);
                 newCamera.UpdateHardwareInfo(model);
                 newCamera.UpdateDeviceSerialNumber(serialNumber);
                 await _cameraDeviceRepository.InsertAsync(newCamera);
+
+                byIndex[i] = newCamera;
+                if (!string.IsNullOrWhiteSpace(newCamera.DeviceSerialNumber))
+                {
+                    bySerial[newCamera.DeviceSerialNumber] = newCamera;
+                }
 
                 Logger.LogInformation(
                     "自动注册相机设备，索引: {Index}，型号: {Model}，序列号: {SerialNumber}",
@@ -175,8 +246,12 @@ public class CameraDeviceAppService : AuroraStruct3DAppService, ICameraDeviceApp
             }
 
             bool updated = false;
+            int oldMatchedIndex = matchedCamera.DeviceIndex;
+            string? oldMatchedSerial = matchedCamera.DeviceSerialNumber;
+
             if (matchedCamera.DeviceIndex != i)
             {
+                await EnsureIndexAvailableAsync(i, matchedCamera.Id);
                 matchedCamera.SetDeviceIndex(i);
                 updated = true;
             }
@@ -202,6 +277,30 @@ public class CameraDeviceAppService : AuroraStruct3DAppService, ICameraDeviceApp
             if (updated)
             {
                 await _cameraDeviceRepository.UpdateAsync(matchedCamera);
+
+                if (oldMatchedIndex != matchedCamera.DeviceIndex)
+                {
+                    byIndex.Remove(oldMatchedIndex);
+                    byIndex[matchedCamera.DeviceIndex] = matchedCamera;
+                }
+
+                if (
+                    !string.IsNullOrWhiteSpace(oldMatchedSerial)
+                    && !string.Equals(
+                        oldMatchedSerial,
+                        matchedCamera.DeviceSerialNumber,
+                        StringComparison.Ordinal
+                    )
+                )
+                {
+                    bySerial.Remove(oldMatchedSerial);
+                }
+
+                if (!string.IsNullOrWhiteSpace(matchedCamera.DeviceSerialNumber))
+                {
+                    bySerial[matchedCamera.DeviceSerialNumber] = matchedCamera;
+                }
+
                 Logger.LogInformation(
                     "更新相机记录，ID: {CameraId}，索引: {Index}，型号: {Model}，序列号: {SerialNumber}",
                     matchedCamera.Id,
@@ -218,6 +317,19 @@ public class CameraDeviceAppService : AuroraStruct3DAppService, ICameraDeviceApp
         _tucamService.SetCameraDeviceIdMapping(deviceIdMap);
 
         return count;
+    }
+
+    private static bool CanUseIndexFallback(
+        CameraDevice? matchedBySerial,
+        CameraDevice? indexCamera
+    )
+    {
+        if (matchedBySerial != null || indexCamera == null)
+        {
+            return false;
+        }
+
+        return string.IsNullOrWhiteSpace(indexCamera.DeviceSerialNumber);
     }
 
     /// <inheritdoc/>

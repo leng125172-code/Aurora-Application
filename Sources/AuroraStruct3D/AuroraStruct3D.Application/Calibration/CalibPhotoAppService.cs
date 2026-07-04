@@ -1,5 +1,7 @@
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using AuroraStruct3D.Calibration.Dtos;
 using AuroraStruct3D.Cameras;
 using AuroraStruct3D.Cameras.Dtos;
@@ -14,6 +16,7 @@ using OpenCvSharp;
 using SkiaSharp;
 using Volo.Abp;
 using Volo.Abp.BlobStoring;
+using Volo.Abp.Content;
 using Volo.Abp.Domain.Repositories;
 
 namespace AuroraStruct3D.Calibration;
@@ -25,6 +28,15 @@ namespace AuroraStruct3D.Calibration;
 [Authorize]
 public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppService
 {
+    private sealed class ProjectorExtrinsicSampleGroup
+    {
+        public required Guid PairGroupId { get; init; }
+        public required CalibPhotoRecord ProjectorOffPhoto { get; init; }
+        public required CalibPhotoRecord ProjectorOnPhoto { get; init; }
+
+        public bool IsValid => ProjectorOffPhoto.IsValid && ProjectorOnPhoto.IsValid;
+    }
+
     private readonly IRepository<CalibProject, Guid> _projectRepo;
     private readonly IRepository<CalibCameraParam, Guid> _cameraParamRepo;
     private readonly IRepository<CalibPhotoRecord, Guid> _photoRepo;
@@ -73,17 +85,52 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
     {
         CalibProject project = await _projectRepo.GetAsync(input.CalibProjectId);
 
+        CircleBoardConfigDto? circle = input.CircleBoardConfig;
+        if (input.BoardType != CalibrationBoardType.Chessboard && circle == null)
+        {
+            circle = BuildDefaultCircleBoardConfig(input.BoardType);
+        }
+        CirclePatternSizeDto? circlePattern = circle?.PatternSize;
+        CircleMarkerPositionDto? marker = circle?.MarkerPosition;
+
         project.SetBoardConfig(
+            input.BoardType,
             input.PhysicalCornerRows,
             input.PhysicalCornerCols,
             input.PhysicalSquareSizeMm,
             input.ProjectedCornerRows,
             input.ProjectedCornerCols,
-            input.ProjectedPixelSize
+            input.ProjectedPixelSize,
+            circlePattern?.Width,
+            circlePattern?.Height,
+            circle?.CircleSpacing,
+            circle?.CircleDiameter,
+            circle?.HasCenterMarker,
+            circle?.HasCornerLocators,
+            marker?.Row,
+            marker?.Col,
+            circle?.Detector is null ? null : JsonSerializer.Serialize(circle.Detector)
         );
 
         await _projectRepo.UpdateAsync(project);
         return ToBoardConfigDto(project);
+    }
+
+    private static CircleBoardConfigDto BuildDefaultCircleBoardConfig(
+        CalibrationBoardType boardType
+    )
+    {
+        bool marked = boardType == CalibrationBoardType.MarkedSymmetricCircleGrid;
+        return new CircleBoardConfigDto
+        {
+            PatternSize = new CirclePatternSizeDto { Width = 27, Height = 27 },
+            CircleSpacing = 10m,
+            CircleDiameter = 3m,
+            HasCenterMarker = marked,
+            HasCornerLocators = false,
+            MarkerPosition = new CircleMarkerPositionDto { Row = 13, Col = 13 },
+            Detector = CircleBlobDetectorConfigDto.CreateDefault(),
+        };
     }
 
     /// <inheritdoc/>
@@ -91,6 +138,83 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
     {
         CalibProject project = await _projectRepo.GetAsync(calibProjectId);
         return ToBoardConfigDto(project);
+    }
+
+    /// <inheritdoc/>
+    public async Task<IRemoteStreamContent> ExportBoardConfigAsync(Guid calibProjectId)
+    {
+        CalibProject project = await _projectRepo.GetAsync(calibProjectId);
+        CalibBoardConfigDto dto = ToBoardConfigDto(project);
+        string json = JsonSerializer.Serialize(
+            dto,
+            new JsonSerializerOptions
+            {
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                WriteIndented = true,
+            }
+        );
+
+        byte[] bytes = Encoding.UTF8.GetBytes(json);
+        MemoryStream stream = new(bytes);
+        string fileName = $"calib-board-config-{calibProjectId:N}.json";
+        return new RemoteStreamContent(stream, fileName, "application/json");
+    }
+
+    /// <inheritdoc/>
+    public async Task<CalibBoardConfigDto> ImportBoardConfigAsync(
+        Guid calibProjectId,
+        IRemoteStreamContent file
+    )
+    {
+        Check.NotNull(file, nameof(file));
+
+        await using Stream stream = file.GetStream();
+        using StreamReader reader = new(
+            stream,
+            Encoding.UTF8,
+            detectEncodingFromByteOrderMarks: true
+        );
+        string json = await reader.ReadToEndAsync();
+        if (string.IsNullOrWhiteSpace(json))
+            throw new UserFriendlyException("导入失败：配置文件为空");
+
+        CalibBoardConfigDto? dto;
+        try
+        {
+            dto = JsonSerializer.Deserialize<CalibBoardConfigDto>(
+                json,
+                new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true,
+                    NumberHandling = JsonNumberHandling.AllowReadingFromString,
+                }
+            );
+        }
+        catch (JsonException ex)
+        {
+            throw new UserFriendlyException(
+                "导入失败：配置文件不是有效的 JSON",
+                innerException: ex
+            );
+        }
+
+        if (dto is null)
+            throw new UserFriendlyException("导入失败：无法解析标定板配置");
+
+        UpdateBoardConfigInput input = new()
+        {
+            CalibProjectId = calibProjectId,
+            BoardType = dto.BoardType,
+            PhysicalCornerRows = dto.PhysicalCornerRows,
+            PhysicalCornerCols = dto.PhysicalCornerCols,
+            PhysicalSquareSizeMm = dto.PhysicalSquareSizeMm,
+            ProjectedCornerRows = dto.ProjectedCornerRows,
+            ProjectedCornerCols = dto.ProjectedCornerCols,
+            ProjectedPixelSize = dto.ProjectedPixelSize,
+            CircleBoardConfig = dto.CircleBoardConfig,
+        };
+
+        return await UpdateBoardConfigAsync(input);
     }
 
     /// <inheritdoc/>
@@ -143,10 +267,10 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
         }
 
         // OpenCV 棋盘格角点检测
-        (bool isValid, int cornerCount) = DetectChessboardCorners(
+        (bool isValid, int cornerCount) = DetectBoardFeaturePoints(
             jpegBytes,
-            project.PhysicalCornerCols,
-            project.PhysicalCornerRows
+            project,
+            isProjectedBoard: false
         );
 
         // 生成缩略图
@@ -177,7 +301,9 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
     }
 
     /// <inheritdoc/>
-    public async Task<CalibPhotoDto> TakeExtrinsicPhotoAsync(TakeExtrinsicPhotoInput input)
+    public async Task<CalibExtrinsicSampleDto> TakeExtrinsicPhotoAsync(
+        TakeExtrinsicPhotoInput input
+    )
     {
         CalibProject project = await _projectRepo.GetAsync(input.CalibProjectId);
 
@@ -203,72 +329,120 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
         }
 
         Guid projectorDeviceId = project.BoundProjectorDeviceId.Value;
+        Guid pairGroupId = GuidGenerator.Create();
 
-        // 1. 开灯
-        await _projectorService.LedOnAsync(projectorDeviceId);
-
-        // 2. 设置显示模式为棋盘格
-        await _projectorService.SetDisplayModeAsync(
-            new SetProjectorDisplayModeDto
-            {
-                ProjectorDeviceId = projectorDeviceId,
-                Mode = ProjectorDisplayMode.Checkerboard,
-            }
-        );
-
-        // 3. 设置棋盘格像素尺寸（使用项目配置的 ProjectedPixelSize）
-        await _projectorService.SetCheckerboardPixelSizeAsync(
-            new SetProjectorCheckerboardDto
-            {
-                ProjectorDeviceId = projectorDeviceId,
-                PixelSize = project.ProjectedPixelSize > 0 ? project.ProjectedPixelSize : 30,
-            }
-        );
-
-        // 4. 短暂延迟，等待投影仪稳定（约 200ms）
-        await Task.Delay(200);
-
-        // 5. 外参拍照：切换到软件触发模式（TriggerSoftwarePulse），投影仪已稳定输出棋盘格
-        byte[] jpegBytes;
+        byte[] projectorOffBytes;
+        byte[] projectorOnBytes;
         try
         {
-            jpegBytes = await GrabCalibFrameRawAsync(input.CameraDeviceId, targetTriggerMode: 2);
+            await _projectorService.LedOnAsync(projectorDeviceId);
+            await _projectorService.SetDisplayModeAsync(
+                new SetProjectorDisplayModeDto
+                {
+                    ProjectorDeviceId = projectorDeviceId,
+                    Mode = ProjectorDisplayMode.White,
+                }
+            );
+            await Task.Delay(200);
+
+            projectorOffBytes = await GrabCalibFrameRawAsync(
+                input.CameraDeviceId,
+                targetTriggerMode: 2
+            );
+
+            await _projectorService.SetDisplayModeAsync(
+                new SetProjectorDisplayModeDto
+                {
+                    ProjectorDeviceId = projectorDeviceId,
+                    Mode = ProjectorDisplayMode.Checkerboard,
+                }
+            );
+            await _projectorService.SetCheckerboardPixelSizeAsync(
+                new SetProjectorCheckerboardDto
+                {
+                    ProjectorDeviceId = projectorDeviceId,
+                    PixelSize = project.ProjectedPixelSize > 0 ? project.ProjectedPixelSize : 30,
+                }
+            );
+            await Task.Delay(200);
+
+            projectorOnBytes = await GrabCalibFrameRawAsync(
+                input.CameraDeviceId,
+                targetTriggerMode: 2
+            );
         }
         finally
         {
-            // 6. 关灯（拍完立即关，无论拍照是否成功）
             await _projectorService.LedOffAsync(projectorDeviceId);
         }
 
-        // 外参照片检测：使用投影棋盘格内角点配置
-        (bool isValid, int cornerCount) = DetectChessboardCorners(
-            jpegBytes,
-            project.ProjectedCornerCols,
-            project.ProjectedCornerRows
+        (bool projectorOffValid, int projectorOffCornerCount) = DetectBoardFeaturePoints(
+            projectorOffBytes,
+            project,
+            isProjectedBoard: false
         );
 
-        string? thumbBase64 = GenerateThumbnailBase64(jpegBytes);
+        (bool projectorOnValid, int projectorOnCornerCount) = DetectBoardFeaturePoints(
+            projectorOnBytes,
+            project,
+            isProjectedBoard: true
+        );
 
-        string blobKey = BuildBlobKey(
+        string projectorOffBlobKey = BuildBlobKey(
             input.CalibProjectId,
             input.CameraDeviceId,
-            CalibPhotoType.Extrinsic
+            CalibPhotoType.Extrinsic,
+            ExtrinsicPhotoPhase.ProjectorOff
         );
-        await _blobContainer.SaveAsync(blobKey, jpegBytes, overrideExisting: false);
+        string projectorOnBlobKey = BuildBlobKey(
+            input.CalibProjectId,
+            input.CameraDeviceId,
+            CalibPhotoType.Extrinsic,
+            ExtrinsicPhotoPhase.ProjectorOn
+        );
 
-        CalibPhotoRecord record = new(
+        await _blobContainer.SaveAsync(
+            projectorOffBlobKey,
+            projectorOffBytes,
+            overrideExisting: false
+        );
+        await _blobContainer.SaveAsync(
+            projectorOnBlobKey,
+            projectorOnBytes,
+            overrideExisting: false
+        );
+
+        CalibPhotoRecord projectorOffRecord = new(
             GuidGenerator.Create(),
             input.CalibProjectId,
             input.CameraDeviceId,
             CalibPhotoType.Extrinsic,
-            blobKey,
-            isValid,
-            cornerCount,
-            thumbBase64
+            projectorOffBlobKey,
+            projectorOffValid,
+            projectorOffCornerCount,
+            GenerateThumbnailBase64(projectorOffBytes),
+            pairGroupId,
+            stereoRole: null,
+            extrinsicPhase: ExtrinsicPhotoPhase.ProjectorOff
         );
-        await _photoRepo.InsertAsync(record);
+        CalibPhotoRecord projectorOnRecord = new(
+            GuidGenerator.Create(),
+            input.CalibProjectId,
+            input.CameraDeviceId,
+            CalibPhotoType.Extrinsic,
+            projectorOnBlobKey,
+            projectorOnValid,
+            projectorOnCornerCount,
+            GenerateThumbnailBase64(projectorOnBytes),
+            pairGroupId,
+            stereoRole: null,
+            extrinsicPhase: ExtrinsicPhotoPhase.ProjectorOn
+        );
 
-        return ToPhotoDto(record);
+        await _photoRepo.InsertAsync(projectorOffRecord);
+        await _photoRepo.InsertAsync(projectorOnRecord);
+
+        return ToExtrinsicSampleDto(pairGroupId, projectorOffRecord, projectorOnRecord);
     }
 
     /// <inheritdoc/>
@@ -319,15 +493,15 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
             }
         }
 
-        (bool mainValid, int mainCornerCount) = DetectChessboardCorners(
+        (bool mainValid, int mainCornerCount) = DetectBoardFeaturePoints(
             mainBytes,
-            project.PhysicalCornerCols,
-            project.PhysicalCornerRows
+            project,
+            isProjectedBoard: false
         );
-        (bool secondaryValid, int secondaryCornerCount) = DetectChessboardCorners(
+        (bool secondaryValid, int secondaryCornerCount) = DetectBoardFeaturePoints(
             secondaryBytes,
-            project.PhysicalCornerCols,
-            project.PhysicalCornerRows
+            project,
+            isProjectedBoard: false
         );
 
         Guid pairGroupId = GuidGenerator.Create();
@@ -409,48 +583,58 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
     public async Task DeleteAsync(Guid id)
     {
         CalibPhotoRecord record = await _photoRepo.GetAsync(id);
-
-        // 删除 BLOB 文件（忽略不存在的情况）
-        try
+        if (record.PhotoType == CalibPhotoType.Extrinsic && record.PairGroupId.HasValue)
         {
-            await _blobContainer.DeleteAsync(record.BlobKey);
-        }
-        catch
-        {
-            // BLOB 不存在时忽略
+            IQueryable<CalibPhotoRecord> query = await _photoRepo.GetQueryableAsync();
+            List<CalibPhotoRecord> groupedPhotos = await AsyncExecuter.ToListAsync(
+                query.Where(x =>
+                    x.CalibProjectId == record.CalibProjectId
+                    && x.CameraDeviceId == record.CameraDeviceId
+                    && x.PhotoType == CalibPhotoType.Extrinsic
+                    && x.PairGroupId == record.PairGroupId
+                )
+            );
+
+            await DeletePhotoRecordsAsync(groupedPhotos);
+            return;
         }
 
-        await _photoRepo.DeleteAsync(id);
+        await DeletePhotoRecordsAsync(new[] { record });
     }
 
     /// <inheritdoc/>
     public async Task<int> DeleteInvalidPhotosAsync(Guid calibProjectId, Guid cameraDeviceId)
     {
         IQueryable<CalibPhotoRecord> query = await _photoRepo.GetQueryableAsync();
-        List<CalibPhotoRecord> invalidPhotos = await AsyncExecuter.ToListAsync(
+        List<CalibPhotoRecord> allPhotos = await AsyncExecuter.ToListAsync(
             query.Where(x =>
-                x.CalibProjectId == calibProjectId
-                && x.CameraDeviceId == cameraDeviceId
-                && !x.IsValid
+                x.CalibProjectId == calibProjectId && x.CameraDeviceId == cameraDeviceId
+            )
+        );
+
+        List<CalibPhotoRecord> invalidPhotos = allPhotos
+            .Where(x => x.PhotoType != CalibPhotoType.Extrinsic && !x.IsValid)
+            .ToList();
+
+        List<CalibPhotoRecord> extrinsicPhotos = allPhotos
+            .Where(x => x.PhotoType == CalibPhotoType.Extrinsic)
+            .ToList();
+        HashSet<Guid> invalidExtrinsicGroupIds = BuildExtrinsicSampleGroups(extrinsicPhotos)
+            .Where(x => !x.IsValid)
+            .Select(x => x.PairGroupId)
+            .ToHashSet();
+
+        invalidPhotos.AddRange(
+            extrinsicPhotos.Where(x =>
+                (x.PairGroupId.HasValue && invalidExtrinsicGroupIds.Contains(x.PairGroupId.Value))
+                || (!x.PairGroupId.HasValue && !x.IsValid)
             )
         );
 
         if (invalidPhotos.Count == 0)
             return 0;
 
-        foreach (CalibPhotoRecord record in invalidPhotos)
-        {
-            try
-            {
-                await _blobContainer.DeleteAsync(record.BlobKey);
-            }
-            catch
-            {
-                // BLOB 不存在时忽略
-            }
-        }
-
-        await _photoRepo.DeleteManyAsync(invalidPhotos.Select(x => x.Id));
+        await DeletePhotoRecordsAsync(invalidPhotos.DistinctBy(x => x.Id).ToList());
 
         _logger.LogInformation(
             "删除无效照片: 项目 {ProjectId} 相机 {CameraId} 共删除 {Count} 张",
@@ -476,14 +660,7 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
 
         CalibProject project = await _projectRepo.GetAsync(calibProjectId);
 
-        if (
-            project.PhysicalCornerRows < 2
-            || project.PhysicalCornerCols < 2
-            || project.PhysicalSquareSizeMm <= 0
-        )
-        {
-            throw new UserFriendlyException("请先配置棋盘格参数（内角点行数、列数、方格边长）");
-        }
+        EnsureBoardConfigValid(project, isProjectedBoard: false);
 
         IQueryable<CalibPhotoRecord> query = await _photoRepo.GetQueryableAsync();
         List<CalibPhotoRecord> intrinsicPhotos = await AsyncExecuter.ToListAsync(
@@ -504,11 +681,9 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
             );
         }
 
-        int cornerCols = project.PhysicalCornerCols;
-        int cornerRows = project.PhysicalCornerRows;
-        float squareSizeMm = (float)project.PhysicalSquareSizeMm;
-        Size patternSize = new(cornerCols, cornerRows);
-        Point3f[] worldCorners = BuildWorldCorners(cornerCols, cornerRows, squareSizeMm);
+        Size patternSize = GetBoardPatternSize(project, isProjectedBoard: false);
+        float spacingMm = GetBoardSpacingMm(project);
+        Point3f[] worldCorners = BuildBoardWorldPoints(project, patternSize, spacingMm);
 
         List<Mat> objectMats = [];
         List<Mat> imageMats = [];
@@ -523,7 +698,12 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
                 continue;
             if (imageSize == default)
                 imageSize = new Size(mat.Cols, mat.Rows);
-            Point2f[]? corners = FindCornersSubpixGray(mat, patternSize);
+            Point2f[]? corners = FindBoardPointsSubpixGray(
+                mat,
+                patternSize,
+                project.BoardType,
+                project
+            );
             if (corners == null)
                 continue;
             objectMats.Add(Mat.FromArray(worldCorners));
@@ -569,10 +749,11 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
         foreach (Mat m in tvecArray)
             m.Dispose();
 
-        if (reprojError > CalibConsts.MaxSingleCameraReprojectionError)
+        double maxReprojError = GetMaxSingleCameraReprojectionError(project);
+        if (reprojError > maxReprojError)
         {
             throw new UserFriendlyException(
-                $"内参重投影误差 {reprojError:F4} px，超过阈值 {CalibConsts.MaxSingleCameraReprojectionError:F2} px"
+                $"内参重投影误差 {reprojError:F4} px，超过阈值 {maxReprojError:F2} px"
             );
         }
 
@@ -665,39 +846,44 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
         using Mat cameraMatrix = DeserializeMatrix(camParam.IntrinsicMatrixJson);
         using Mat distCoeffs = DeserializeVector(camParam.DistCoeffsJson);
 
-        int cornerCols = project.PhysicalCornerCols;
-        int cornerRows = project.PhysicalCornerRows;
-        float squareSizeMm = (float)project.PhysicalSquareSizeMm;
-        Size patternSize = new(cornerCols, cornerRows);
-        Point3f[] worldCorners = BuildWorldCorners(cornerCols, cornerRows, squareSizeMm);
+        EnsureBoardConfigValid(project, isProjectedBoard: false);
+        Size patternSize = GetBoardPatternSize(project, isProjectedBoard: false);
+        float spacingMm = GetBoardSpacingMm(project);
+        Point3f[] worldCorners = BuildBoardWorldPoints(project, patternSize, spacingMm);
 
         // 加载有效外参照片
         IQueryable<CalibPhotoRecord> query = await _photoRepo.GetQueryableAsync();
-        List<CalibPhotoRecord> extrinsicPhotos = await AsyncExecuter.ToListAsync(
+        List<CalibPhotoRecord> extrinsicPhotoRecords = await AsyncExecuter.ToListAsync(
             query
                 .Where(x =>
                     x.CalibProjectId == calibProjectId
                     && x.CameraDeviceId == cameraDeviceId
                     && x.PhotoType == CalibPhotoType.Extrinsic
-                    && x.IsValid
                 )
                 .OrderBy(x => x.CapturedAt)
         );
 
+        List<ProjectorExtrinsicSampleGroup> extrinsicPhotos = BuildExtrinsicSampleGroups(
+                extrinsicPhotoRecords
+            )
+            .Where(x => x.IsValid)
+            .ToList();
+
         if (extrinsicPhotos.Count < CalibConsts.MinProjectorExtrinsicPhotoCount)
         {
             throw new UserFriendlyException(
-                $"外参有效照片不足 {CalibConsts.MinProjectorExtrinsicPhotoCount} 张（当前 {extrinsicPhotos.Count} 张）"
+                $"外参有效样本不足 {CalibConsts.MinProjectorExtrinsicPhotoCount} 组（当前 {extrinsicPhotos.Count} 组）"
             );
         }
 
         // SolvePnP：找最佳外参照片
-        CalibPhotoRecord? bestExtrinsic = await FindBestExtrinsicAsync(
+        ProjectorExtrinsicSampleGroup? bestExtrinsic = await FindBestExtrinsicAsync(
             extrinsicPhotos,
             cameraMatrix,
             distCoeffs,
             patternSize,
-            worldCorners
+            worldCorners,
+            project
         );
 
         string? rvecJson = null;
@@ -706,9 +892,16 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
 
         if (bestExtrinsic != null)
         {
-            byte[] exBytes = await _blobContainer.GetAllBytesAsync(bestExtrinsic.BlobKey);
+            byte[] exBytes = await _blobContainer.GetAllBytesAsync(
+                bestExtrinsic.ProjectorOffPhoto.BlobKey
+            );
             using Mat exMat = LoadGrayMat(exBytes);
-            Point2f[]? exCorners = FindCornersSubpixGray(exMat, patternSize);
+            Point2f[]? exCorners = FindBoardPointsSubpixGray(
+                exMat,
+                patternSize,
+                GetDetectionBoardType(project, isProjectedBoard: false),
+                project
+            );
             if (exCorners != null)
             {
                 using Mat rvec = new();
@@ -761,14 +954,11 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
         string? camToProjectorTJson = null;
         double? projCalibReprojError = null;
 
-        int projCols = project.ProjectedCornerCols;
-        int projRows = project.ProjectedCornerRows;
+        EnsureBoardConfigValid(project, isProjectedBoard: true);
+        Size projPatternSize = GetBoardPatternSize(project, isProjectedBoard: true);
+        int projCols = projPatternSize.Width;
+        int projRows = projPatternSize.Height;
         int projPx = Math.Max(project.ProjectedPixelSize, 1);
-        Size projPatternSize = new(projCols, projRows);
-        Point3f[] projWorldUnit = new Point3f[projCols * projRows];
-        for (int r = 0; r < projRows; r++)
-        for (int c = 0; c < projCols; c++)
-            projWorldUnit[r * projCols + c] = new Point3f(c, r, 0f);
 
         Point2f[] projPixels = new Point2f[projCols * projRows];
         for (int r = 0; r < projRows; r++)
@@ -781,50 +971,22 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
 
         for (int ei = 0; ei < extrinsicPhotos.Count; ei++)
         {
-            CalibPhotoRecord photo = extrinsicPhotos[ei];
+            ProjectorExtrinsicSampleGroup sample = extrinsicPhotos[ei];
             try
             {
-                byte[] bytes = await _blobContainer.GetAllBytesAsync(photo.BlobKey);
-                using Mat exGray = LoadGrayMat(bytes);
-                if (exGray.Empty())
-                    continue;
-                Point2f[]? camCorners = FindCornersSubpixGray(exGray, projPatternSize);
-                if (camCorners == null)
-                    continue;
-
-                using Mat rvecCam = new();
-                using Mat tvecCam = new();
-                Cv2.SolvePnP(
-                    InputArray.Create(projWorldUnit),
-                    InputArray.Create(camCorners),
+                Point3f[]? objPts = await BuildProjectorObjectPointsCamAsync(
+                    sample,
                     cameraMatrix,
                     distCoeffs,
-                    rvecCam,
-                    tvecCam
+                    project,
+                    patternSize,
+                    worldCorners,
+                    projPatternSize,
+                    projPixels.Length
                 );
-                using Mat R_cam = new();
-                Cv2.Rodrigues(rvecCam, R_cam);
-
-                Point3f[] pts3D = new Point3f[projWorldUnit.Length];
-                for (int i = 0; i < projWorldUnit.Length; i++)
-                {
-                    float wx = projWorldUnit[i].X,
-                        wy = projWorldUnit[i].Y;
-                    double x3 =
-                        R_cam.At<double>(0, 0) * wx
-                        + R_cam.At<double>(0, 1) * wy
-                        + tvecCam.At<double>(0, 0);
-                    double y3 =
-                        R_cam.At<double>(1, 0) * wx
-                        + R_cam.At<double>(1, 1) * wy
-                        + tvecCam.At<double>(1, 0);
-                    double z3 =
-                        R_cam.At<double>(2, 0) * wx
-                        + R_cam.At<double>(2, 1) * wy
-                        + tvecCam.At<double>(2, 0);
-                    pts3D[i] = new Point3f((float)x3, (float)y3, (float)z3);
-                }
-                projObjMats.Add(Mat.FromArray(pts3D));
+                if (objPts == null)
+                    continue;
+                projObjMats.Add(Mat.FromArray(objPts));
                 projImgMats.Add(Mat.FromArray(projPixels));
             }
             catch (Exception ex)
@@ -953,14 +1115,7 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
 
         CalibProject project = await _projectRepo.GetAsync(calibProjectId);
 
-        if (
-            project.PhysicalCornerRows < 2
-            || project.PhysicalCornerCols < 2
-            || project.PhysicalSquareSizeMm <= 0
-        )
-        {
-            throw new UserFriendlyException("请先配置棋盘格参数（内角点行数、列数、方格边长）");
-        }
+        EnsureBoardConfigValid(project, isProjectedBoard: false);
 
         // 查询有效内参照片
         IQueryable<CalibPhotoRecord> query = await _photoRepo.GetQueryableAsync();
@@ -976,11 +1131,11 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
         );
 
         _logger.LogInformation(
-            "[单目标定] 有效内参照片 {Count} 张，棋盘格 {Cols}x{Rows} 方格 {Size}mm",
+            "[单目标定] 有效内参照片 {Count} 张，标定板 {Cols}x{Rows} 间距 {Size}mm",
             intrinsicPhotos.Count,
-            project.PhysicalCornerCols,
-            project.PhysicalCornerRows,
-            project.PhysicalSquareSizeMm
+            GetBoardPatternSize(project, isProjectedBoard: false).Width,
+            GetBoardPatternSize(project, isProjectedBoard: false).Height,
+            GetBoardSpacingMm(project)
         );
 
         if (intrinsicPhotos.Count < CalibConsts.MinValidPhotoCount)
@@ -991,29 +1146,30 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
         }
 
         // 查询有效外参照片（无光系列不做外参计算）
-        List<CalibPhotoRecord> extrinsicPhotos = [];
+        List<ProjectorExtrinsicSampleGroup> extrinsicPhotos = new();
         if (project.DeviceSeries == DeviceSeries.SingleLight)
         {
-            extrinsicPhotos = await AsyncExecuter.ToListAsync(
+            List<CalibPhotoRecord> extrinsicPhotoRecords = await AsyncExecuter.ToListAsync(
                 query
                     .Where(x =>
                         x.CalibProjectId == calibProjectId
                         && x.CameraDeviceId == cameraDeviceId
                         && x.PhotoType == CalibPhotoType.Extrinsic
-                        && x.IsValid
                     )
                     .OrderBy(x => x.CapturedAt)
             );
+
+            extrinsicPhotos = BuildExtrinsicSampleGroups(extrinsicPhotoRecords)
+                .Where(x => x.IsValid)
+                .ToList();
         }
 
         // ── 计算内参 ─────────────────────────────────────────────────────────────
-        int cornerCols = project.PhysicalCornerCols;
-        int cornerRows = project.PhysicalCornerRows;
-        float squareSizeMm = (float)project.PhysicalSquareSizeMm;
-        Size patternSize = new(cornerCols, cornerRows);
+        Size patternSize = GetBoardPatternSize(project, isProjectedBoard: false);
+        float spacingMm = GetBoardSpacingMm(project);
 
-        // 构建世界坐标（棋盘格平面，Z=0）
-        Point3f[] worldCorners = BuildWorldCorners(cornerCols, cornerRows, squareSizeMm);
+        // 构建世界坐标（标定板平面，Z=0）
+        Point3f[] worldCorners = BuildBoardWorldPoints(project, patternSize, spacingMm);
 
         // OpenCvSharp4 CalibrateCamera 需要 IEnumerable<Mat>，将 Point 数组转换为 Mat
         List<Mat> objectMats = [];
@@ -1051,7 +1207,12 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
 
             phaseSw.Restart();
             // 使用半分辨率加速版：在 50% 缩放图检测，还原至全分辨率精化
-            Point2f[]? corners = FindCornersSubpixGray(mat, patternSize);
+            Point2f[]? corners = FindBoardPointsSubpixGray(
+                mat,
+                patternSize,
+                project.BoardType,
+                project
+            );
             long cornerMs = phaseSw.ElapsedMilliseconds;
 
             _logger.LogInformation(
@@ -1146,23 +1307,24 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
         )
         {
             throw new UserFriendlyException(
-                $"投影外参有效照片不足 {CalibConsts.MinProjectorExtrinsicPhotoCount} 张（当前 {extrinsicPhotos.Count} 张），无法计算外参"
+                $"投影外参有效样本不足 {CalibConsts.MinProjectorExtrinsicPhotoCount} 组（当前 {extrinsicPhotos.Count} 组），无法计算外参"
             );
         }
 
         if (shouldComputeProjectorExtrinsic && extrinsicPhotos.Count > 0)
         {
             _logger.LogInformation(
-                "[单目标定] 开始 FindBestExtrinsic — {Count} 张外参照片",
+                "[单目标定] 开始 FindBestExtrinsic — {Count} 组外参样本",
                 extrinsicPhotos.Count
             );
             phaseSw.Restart();
-            CalibPhotoRecord? bestExtrinsic = await FindBestExtrinsicAsync(
+            ProjectorExtrinsicSampleGroup? bestExtrinsic = await FindBestExtrinsicAsync(
                 extrinsicPhotos,
                 cameraMatrix,
                 distCoeffs,
                 patternSize,
-                worldCorners
+                worldCorners,
+                project
             );
             _logger.LogInformation(
                 "[单目标定] FindBestExtrinsic 耗时 {Ms}ms",
@@ -1171,9 +1333,16 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
 
             if (bestExtrinsic != null)
             {
-                byte[] exBytes = await _blobContainer.GetAllBytesAsync(bestExtrinsic.BlobKey);
+                byte[] exBytes = await _blobContainer.GetAllBytesAsync(
+                    bestExtrinsic.ProjectorOffPhoto.BlobKey
+                );
                 using Mat exMat = LoadGrayMat(exBytes);
-                Point2f[]? exCorners = FindCornersSubpixGray(exMat, patternSize);
+                Point2f[]? exCorners = FindBoardPointsSubpixGray(
+                    exMat,
+                    patternSize,
+                    GetDetectionBoardType(project, isProjectedBoard: false),
+                    project
+                );
                 if (exCorners != null)
                 {
                     using Mat rvec = new();
@@ -1230,23 +1399,18 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
             && extrinsicPhotos.Count >= CalibConsts.MinProjectorExtrinsicPhotoCount
         )
         {
-            int projCols = project.ProjectedCornerCols;
-            int projRows = project.ProjectedCornerRows;
+            EnsureBoardConfigValid(project, isProjectedBoard: true);
+            Size projPatternSize = GetBoardPatternSize(project, isProjectedBoard: true);
+            int projCols = projPatternSize.Width;
+            int projRows = projPatternSize.Height;
             int projPx = Math.Max(project.ProjectedPixelSize, 1);
-            Size projPatternSize = new(projCols, projRows);
 
             // 投影仪待标定的对应关系：
-            //   对象点（Object Points）：投影棋盘格角点在相机坐标系中的 3D 坐标，
-            //     通过 SolvePnP（单位网格 → 相机坐标系）得到。
-            //   图像点（Image Points）：投影仪小个内角点在投影仪像素坐标中的已知位置。
+            //   对象点（Object Points）：投影图案角点在相机坐标系中的度量 3D 坐标，
+            //     由白屏帧解算的实体标定板平面与图案帧相机光线求交得到（见 BuildProjectorObjectPointsCamAsync）。
+            //   图像点（Image Points）：投影图案内角点在投影仪像素坐标中的已知位置。
             //   采用 calibrateCamera 拟合投影仪内参；由于对象点已在相机坐标系中，
             //   输出的 rvec/tvec 就是相机→投影仪的外参变换。
-
-            // 单位网格坐标（与 SolvePnP 一致，用于推算 3D 位置）
-            Point3f[] projWorldUnit = new Point3f[projCols * projRows];
-            for (int r = 0; r < projRows; r++)
-            for (int c = 0; c < projCols; c++)
-                projWorldUnit[r * projCols + c] = new Point3f(c, r, 0f);
 
             // 投影仪像素坐标（已知，由投影图案决定）
             // 内角点布局：第 (c,r) 个角点在投影仪中为 ((c+1)*px, (r+1)*px)。
@@ -1263,68 +1427,36 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
 
             phaseSw.Restart();
             _logger.LogInformation(
-                "[单目标定] 开始计算投影仪内参 — {Count} 张外参照片",
+                "[单目标定] 开始计算投影仪内参 — {Count} 组外参样本",
                 extrinsicPhotos.Count
             );
 
             for (int ei = 0; ei < extrinsicPhotos.Count; ei++)
             {
-                CalibPhotoRecord photo = extrinsicPhotos[ei];
+                ProjectorExtrinsicSampleGroup sample = extrinsicPhotos[ei];
                 try
                 {
-                    byte[] bytes = await _blobContainer.GetAllBytesAsync(photo.BlobKey);
-                    using Mat exGray = LoadGrayMat(bytes);
-                    if (exGray.Empty())
-                        continue;
-
-                    Point2f[]? camCorners = FindCornersSubpixGray(exGray, projPatternSize);
-                    if (camCorners == null)
-                        continue;
-
-                    // SolvePnP：将单位网格坐标变换到相机坐标系
-                    using Mat rvecCam = new();
-                    using Mat tvecCam = new();
-                    Cv2.SolvePnP(
-                        InputArray.Create(projWorldUnit),
-                        InputArray.Create(camCorners),
+                    Point3f[]? objPts = await BuildProjectorObjectPointsCamAsync(
+                        sample,
                         cameraMatrix,
                         distCoeffs,
-                        rvecCam,
-                        tvecCam
+                        project,
+                        patternSize,
+                        worldCorners,
+                        projPatternSize,
+                        projPixels.Length
                     );
+                    if (objPts == null)
+                        continue;
 
-                    // 将单位网格角点变换到相机 3D 坐标
-                    using Mat R_cam = new();
-                    Cv2.Rodrigues(rvecCam, R_cam);
-
-                    Point3f[] pts3D = new Point3f[projWorldUnit.Length];
-                    for (int i = 0; i < projWorldUnit.Length; i++)
-                    {
-                        float wx = projWorldUnit[i].X;
-                        float wy = projWorldUnit[i].Y;
-                        double x3 =
-                            R_cam.At<double>(0, 0) * wx
-                            + R_cam.At<double>(0, 1) * wy
-                            + tvecCam.At<double>(0, 0);
-                        double y3 =
-                            R_cam.At<double>(1, 0) * wx
-                            + R_cam.At<double>(1, 1) * wy
-                            + tvecCam.At<double>(1, 0);
-                        double z3 =
-                            R_cam.At<double>(2, 0) * wx
-                            + R_cam.At<double>(2, 1) * wy
-                            + tvecCam.At<double>(2, 0);
-                        pts3D[i] = new Point3f((float)x3, (float)y3, (float)z3);
-                    }
-
-                    projObjMats.Add(Mat.FromArray(pts3D));
+                    projObjMats.Add(Mat.FromArray(objPts));
                     projImgMats.Add(Mat.FromArray(projPixels));
 
-                    _logger.LogDebug("[单目标定] 投影仪标定 外参照片[{Idx}] SolvePnP 完成", ei);
+                    _logger.LogDebug("[单目标定] 投影仪标定 外参样本[{Idx}] 光线-平面求交完成", ei);
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogWarning(ex, "[单目标定] 外参照片[{Idx}]投影仪预处理失败，跳过", ei);
+                    _logger.LogWarning(ex, "[单目标定] 外参样本[{Idx}]投影仪预处理失败，跳过", ei);
                 }
             }
 
@@ -1426,10 +1558,11 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
                 m.Dispose();
         }
 
-        if (reprojError > CalibConsts.MaxSingleCameraReprojectionError)
+        double maxSingleReprojError = GetMaxSingleCameraReprojectionError(project);
+        if (reprojError > maxSingleReprojError)
         {
             throw new UserFriendlyException(
-                $"相机内参重投影误差为 {reprojError:F4} px，超过阈值 {CalibConsts.MaxSingleCameraReprojectionError:F2} px，请补拍后重算"
+                $"相机内参重投影误差为 {reprojError:F4} px，超过阈值 {maxSingleReprojError:F2} px，请补拍后重算"
             );
         }
 
@@ -1507,8 +1640,11 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
 
         int intrinsicTotal = all.Count(x => x.PhotoType == CalibPhotoType.Intrinsic);
         int intrinsicValid = all.Count(x => x.PhotoType == CalibPhotoType.Intrinsic && x.IsValid);
-        int extrinsicTotal = all.Count(x => x.PhotoType == CalibPhotoType.Extrinsic);
-        int extrinsicValid = all.Count(x => x.PhotoType == CalibPhotoType.Extrinsic && x.IsValid);
+        List<ProjectorExtrinsicSampleGroup> extrinsicGroups = BuildExtrinsicSampleGroups(
+            all.Where(x => x.PhotoType == CalibPhotoType.Extrinsic).ToList()
+        );
+        int extrinsicTotal = extrinsicGroups.Count;
+        int extrinsicValid = extrinsicGroups.Count(x => x.IsValid);
 
         // 读取最新标定结果
         IQueryable<CalibCameraParam> paramQuery = await _cameraParamRepo.GetQueryableAsync();
@@ -1624,13 +1760,10 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
             );
         }
 
-        Size patternSize = new(project.PhysicalCornerCols, project.PhysicalCornerRows);
-        float squareSizeMm = (float)project.PhysicalSquareSizeMm;
-        Point3f[] worldCorners = BuildWorldCorners(
-            project.PhysicalCornerCols,
-            project.PhysicalCornerRows,
-            squareSizeMm
-        );
+        EnsureBoardConfigValid(project, isProjectedBoard: false);
+        Size patternSize = GetBoardPatternSize(project, isProjectedBoard: false);
+        float spacingMm = GetBoardSpacingMm(project);
+        Point3f[] worldCorners = BuildBoardWorldPoints(project, patternSize, spacingMm);
 
         List<Mat> objectPoints = [];
         List<Mat> imagePointsMain = [];
@@ -1674,8 +1807,18 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
 
             phaseSwS.Restart();
             // 使用半分辨率加速版：50% 缩放图检测，坐标还原至全分辨率精化
-            Point2f[]? mainCorners = FindCornersSubpixGray(mainMat, patternSize);
-            Point2f[]? secondaryCorners = FindCornersSubpixGray(secondaryMat, patternSize);
+            Point2f[]? mainCorners = FindBoardPointsSubpixGray(
+                mainMat,
+                patternSize,
+                project.BoardType,
+                project
+            );
+            Point2f[]? secondaryCorners = FindBoardPointsSubpixGray(
+                secondaryMat,
+                patternSize,
+                project.BoardType,
+                project
+            );
             long cornerMs = phaseSwS.ElapsedMilliseconds;
 
             _logger.LogInformation(
@@ -2088,7 +2231,12 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
     }
 
     /// <summary>构建标定照片的 BLOB Key</summary>
-    private static string BuildBlobKey(Guid projectId, Guid cameraId, CalibPhotoType type)
+    private static string BuildBlobKey(
+        Guid projectId,
+        Guid cameraId,
+        CalibPhotoType type,
+        ExtrinsicPhotoPhase? extrinsicPhase = null
+    )
     {
         string typeStr = type switch
         {
@@ -2098,10 +2246,679 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
             _ => "unknown",
         };
         string ts = DateTime.UtcNow.ToString("yyyyMMddHHmmss_fff");
-        return $"{projectId}/{cameraId}/{typeStr}/{ts}.jpg";
+        string phaseSuffix = extrinsicPhase switch
+        {
+            ExtrinsicPhotoPhase.ProjectorOff => "_off",
+            ExtrinsicPhotoPhase.ProjectorOn => "_on",
+            _ => string.Empty,
+        };
+        return $"{projectId}/{cameraId}/{typeStr}/{ts}{phaseSuffix}.jpg";
     }
 
-    /// <summary>OpenCV 棋盘格角点检测（使用亚像素精化）</summary>
+    private async Task DeletePhotoRecordsAsync(IEnumerable<CalibPhotoRecord> records)
+    {
+        List<CalibPhotoRecord> recordList = records.DistinctBy(x => x.Id).ToList();
+        foreach (CalibPhotoRecord record in recordList)
+        {
+            try
+            {
+                await _blobContainer.DeleteAsync(record.BlobKey);
+            }
+            catch
+            {
+                // BLOB 不存在时忽略
+            }
+        }
+
+        await _photoRepo.DeleteManyAsync(recordList.Select(x => x.Id));
+    }
+
+    private static List<ProjectorExtrinsicSampleGroup> BuildExtrinsicSampleGroups(
+        IEnumerable<CalibPhotoRecord> photos
+    )
+    {
+        return photos
+            .Where(x => x.PairGroupId.HasValue)
+            .GroupBy(x => x.PairGroupId!.Value)
+            .Select(group =>
+            {
+                CalibPhotoRecord? projectorOff = group.FirstOrDefault(x =>
+                    x.ExtrinsicPhase == ExtrinsicPhotoPhase.ProjectorOff
+                );
+                CalibPhotoRecord? projectorOn = group.FirstOrDefault(x =>
+                    x.ExtrinsicPhase == ExtrinsicPhotoPhase.ProjectorOn
+                );
+
+                return projectorOff == null || projectorOn == null
+                    ? null
+                    : new ProjectorExtrinsicSampleGroup
+                    {
+                        PairGroupId = group.Key,
+                        ProjectorOffPhoto = projectorOff,
+                        ProjectorOnPhoto = projectorOn,
+                    };
+            })
+            .Where(x => x != null)
+            .Select(x => x!)
+            .OrderBy(x => x.ProjectorOffPhoto.CapturedAt)
+            .ToList();
+    }
+
+    private static CalibExtrinsicSampleDto ToExtrinsicSampleDto(
+        Guid pairGroupId,
+        CalibPhotoRecord projectorOffRecord,
+        CalibPhotoRecord projectorOnRecord
+    )
+    {
+        return new CalibExtrinsicSampleDto
+        {
+            PairGroupId = pairGroupId,
+            ProjectorOffPhoto = ToPhotoDto(projectorOffRecord),
+            ProjectorOnPhoto = ToPhotoDto(projectorOnRecord),
+        };
+    }
+
+    private static CalibrationBoardType GetDetectionBoardType(
+        CalibProject project,
+        bool isProjectedBoard
+    )
+    {
+        return isProjectedBoard ? CalibrationBoardType.Chessboard : project.BoardType;
+    }
+
+    /// <summary>标定板特征点检测入口（棋盘格/圆点板）。</summary>
+    private (bool isValid, int cornerCount) DetectBoardFeaturePoints(
+        byte[] imageBytes,
+        CalibProject project,
+        bool isProjectedBoard
+    )
+    {
+        CalibrationBoardType detectionBoardType = GetDetectionBoardType(project, isProjectedBoard);
+        if (detectionBoardType == CalibrationBoardType.Chessboard)
+        {
+            Size chess = GetBoardPatternSize(project, isProjectedBoard);
+
+            // 投影棋盘格叠加在圆点物理板上时，暗色圆点会干扰棋盘格角点检测，
+            // 先做形态学去点预处理再检测。
+            if (isProjectedBoard && project.BoardType != CalibrationBoardType.Chessboard)
+            {
+                using Mat projGray = LoadGrayMat(imageBytes);
+                if (projGray.Empty())
+                    return (false, 0);
+                using Mat cleaned = SuppressDotsForProjectedChessboard(projGray);
+                Point2f[]? projCorners = FindCornersSubpixGray(cleaned, chess);
+                if (projCorners == null)
+                {
+                    _logger.LogWarning(
+                        "投影棋盘格检测失败(去点后): Pattern={Cols}x{Rows}, Image={W}x{H}",
+                        chess.Width,
+                        chess.Height,
+                        projGray.Cols,
+                        projGray.Rows
+                    );
+                }
+                return projCorners == null ? (false, 0) : (true, projCorners.Length);
+            }
+
+            return DetectChessboardCorners(imageBytes, chess.Width, chess.Height);
+        }
+
+        try
+        {
+            Size patternSize = GetBoardPatternSize(project, isProjectedBoard);
+            using Mat gray = LoadGrayMat(imageBytes);
+            if (gray.Empty())
+                return (false, 0);
+
+            Point2f[]? points = FindBoardPointsSubpixGray(
+                gray,
+                patternSize,
+                detectionBoardType,
+                project
+            );
+            if (points == null)
+            {
+                _logger.LogWarning(
+                    "圆点板检测失败: BoardType={BoardType}, Pattern={Cols}x{Rows}, Projected={Projected}, Image={W}x{H}",
+                    detectionBoardType,
+                    patternSize.Width,
+                    patternSize.Height,
+                    isProjectedBoard,
+                    gray.Cols,
+                    gray.Rows
+                );
+            }
+            return points == null ? (false, 0) : (true, points.Length);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "圆点板检测异常");
+            return (false, 0);
+        }
+    }
+
+    /// <summary>校验标定板参数是否合法。</summary>
+    private static void EnsureBoardConfigValid(CalibProject project, bool isProjectedBoard)
+    {
+        if (isProjectedBoard)
+        {
+            if (project.ProjectedCornerRows < 2 || project.ProjectedCornerCols < 2)
+            {
+                throw new UserFriendlyException("请先配置投影棋盘格参数（内角点行数、列数）");
+            }
+
+            if (project.ProjectedPixelSize <= 0)
+            {
+                throw new UserFriendlyException("请先配置投影棋盘格像素尺寸");
+            }
+
+            return;
+        }
+
+        if (project.BoardType == CalibrationBoardType.Chessboard)
+        {
+            int rows = project.PhysicalCornerRows;
+            int cols = project.PhysicalCornerCols;
+            if (rows < 2 || cols < 2 || project.PhysicalSquareSizeMm <= 0)
+            {
+                throw new UserFriendlyException("请先配置棋盘格参数（内角点行数、列数、方格边长）");
+            }
+
+            return;
+        }
+
+        if (!project.CirclePatternRows.HasValue || !project.CirclePatternCols.HasValue)
+            throw new UserFriendlyException("圆点板参数缺失：请设置行列数");
+        if (!project.CircleSpacingMm.HasValue || project.CircleSpacingMm.Value <= 0)
+            throw new UserFriendlyException("圆点板参数缺失：请设置圆点中心间距");
+        if (project.CirclePatternRows.Value < 2 || project.CirclePatternCols.Value < 2)
+            throw new UserFriendlyException("圆点板行列数至少为 2");
+
+        if (project.BoardType == CalibrationBoardType.MarkedSymmetricCircleGrid)
+        {
+            if (project.MarkerRow is null || project.MarkerCol is null)
+                throw new UserFriendlyException("中心标记圆点板缺少标记点坐标");
+
+            if (
+                project.MarkerRow.Value < 0
+                || project.MarkerRow.Value >= project.CirclePatternRows.Value
+                || project.MarkerCol.Value < 0
+                || project.MarkerCol.Value >= project.CirclePatternCols.Value
+            )
+            {
+                throw new UserFriendlyException("中心标记点坐标超出圆点板范围");
+            }
+        }
+    }
+
+    /// <summary>获取当前标定板模式下用于检测的行列尺寸。</summary>
+    private static Size GetBoardPatternSize(CalibProject project, bool isProjectedBoard)
+    {
+        if (isProjectedBoard)
+        {
+            return new Size(project.ProjectedCornerCols, project.ProjectedCornerRows);
+        }
+
+        if (project.BoardType == CalibrationBoardType.Chessboard)
+        {
+            return new Size(project.PhysicalCornerCols, project.PhysicalCornerRows);
+        }
+
+        int cols = project.CirclePatternCols ?? 0;
+        int rows = project.CirclePatternRows ?? 0;
+        return new Size(cols, rows);
+    }
+
+    /// <summary>获取当前标定板物理间距（mm）。</summary>
+    private static float GetBoardSpacingMm(CalibProject project)
+    {
+        return project.BoardType == CalibrationBoardType.Chessboard
+            ? (float)project.PhysicalSquareSizeMm
+            : (float)(project.CircleSpacingMm ?? 0m);
+    }
+
+    /// <summary>获取当前标定板类型对应的单目内参最大允许重投影误差（像素）。</summary>
+    private static double GetMaxSingleCameraReprojectionError(CalibProject project)
+    {
+        return project.BoardType == CalibrationBoardType.Chessboard
+            ? CalibConsts.MaxSingleCameraReprojectionError
+            : CalibConsts.MaxCircleBoardReprojectionError;
+    }
+
+    /// <summary>构建标定板世界点。</summary>
+    private static Point3f[] BuildBoardWorldPoints(
+        CalibProject project,
+        Size patternSize,
+        float spacingMm
+    )
+    {
+        bool asymmetric = project.BoardType == CalibrationBoardType.AsymmetricCircleGrid;
+        bool marked = project.BoardType == CalibrationBoardType.MarkedSymmetricCircleGrid;
+        int markerRow = project.MarkerRow ?? ((patternSize.Height - 1) / 2);
+        int markerCol = project.MarkerCol ?? ((patternSize.Width - 1) / 2);
+
+        // 中心标记圆点板按“缺孔板”处理：世界点中跳过缺失点，
+        // 其余圆点保持标准 row-major 顺序。
+        List<Point3f> points = new(patternSize.Width * patternSize.Height);
+        for (int r = 0; r < patternSize.Height; r++)
+        {
+            for (int c = 0; c < patternSize.Width; c++)
+            {
+                if (marked && r == markerRow && c == markerCol)
+                    continue;
+
+                float x = asymmetric ? (2 * c + (r % 2)) * spacingMm : c * spacingMm;
+                float y = r * spacingMm;
+                points.Add(new Point3f(x, y, 0f));
+            }
+        }
+
+        return points.ToArray();
+    }
+
+    /// <summary>根据标定板类型查找并返回有序特征点。</summary>
+    private Point2f[]? FindBoardPointsSubpixGray(
+        Mat grayFull,
+        Size patternSize,
+        CalibrationBoardType boardType,
+        CalibProject? project = null
+    )
+    {
+        if (boardType == CalibrationBoardType.Chessboard)
+            return FindCornersSubpixGray(grayFull, patternSize);
+
+        CircleBlobDetectorConfigDto detectorConfig = LoadCircleDetectorConfig(project);
+        return FindCircleGridPoints(grayFull, patternSize, boardType, detectorConfig, project);
+    }
+
+    private static CircleBlobDetectorConfigDto LoadCircleDetectorConfig(CalibProject? project)
+    {
+        if (project == null || string.IsNullOrWhiteSpace(project.CircleDetectorConfigJson))
+            return CircleBlobDetectorConfigDto.CreateDefault();
+
+        try
+        {
+            return JsonSerializer.Deserialize<CircleBlobDetectorConfigDto>(
+                    project.CircleDetectorConfigJson
+                ) ?? CircleBlobDetectorConfigDto.CreateDefault();
+        }
+        catch
+        {
+            return CircleBlobDetectorConfigDto.CreateDefault();
+        }
+    }
+
+    private Point2f[]? FindCircleGridPoints(
+        Mat gray,
+        Size patternSize,
+        CalibrationBoardType boardType,
+        CircleBlobDetectorConfigDto detectorConfig,
+        CalibProject? project
+    )
+    {
+        using Feature2D detector = CreateCircleBlobDetector(detectorConfig);
+
+        if (boardType == CalibrationBoardType.MarkedSymmetricCircleGrid)
+        {
+            KeyPoint[] markedKeypoints = detector.Detect(gray);
+            if (markedKeypoints.Length == 0)
+            {
+                _logger.LogWarning(
+                    "中心缺孔圆点板检测失败: 未检测到任何 blob, Pattern={Cols}x{Rows}, Image={W}x{H}",
+                    patternSize.Width,
+                    patternSize.Height,
+                    gray.Cols,
+                    gray.Rows
+                );
+                return null;
+            }
+
+            Point2f[] markedCenters = markedKeypoints
+                .Select(x => new Point2f(x.Pt.X, x.Pt.Y))
+                .ToArray();
+
+            int markerRow = project?.MarkerRow ?? ((patternSize.Height - 1) / 2);
+            int markerCol = project?.MarkerCol ?? ((patternSize.Width - 1) / 2);
+
+            bool markedOk = TryBuildOrderedCircleGrid(
+                markedCenters,
+                patternSize.Width,
+                patternSize.Height,
+                hasMarkerHole: true,
+                markerRow,
+                markerCol,
+                out Point2f[]? orderedMarked,
+                out string? markedFailureReason
+            );
+            if (!markedOk)
+            {
+                _logger.LogWarning(
+                    "中心缺孔圆点板排序失败: BlobCount={BlobCount}, Expected={Expected}, Marker=({MarkerRow},{MarkerCol}), Reason={Reason}",
+                    markedCenters.Length,
+                    patternSize.Width * patternSize.Height - 1,
+                    markerRow,
+                    markerCol,
+                    markedFailureReason ?? "unknown"
+                );
+            }
+
+            return markedOk ? orderedMarked : null;
+        }
+
+        // 非缺孔板优先用 OpenCV 网格识别，它内部有成熟的网格拓扑排序，
+        // 对完整规则网格最可靠，且能统一处理多角度倾斜拍摄。
+        FindCirclesGridFlags flags =
+            boardType == CalibrationBoardType.AsymmetricCircleGrid
+                ? FindCirclesGridFlags.AsymmetricGrid | FindCirclesGridFlags.Clustering
+                : FindCirclesGridFlags.SymmetricGrid | FindCirclesGridFlags.Clustering;
+
+        if (Cv2.FindCirclesGrid(gray, patternSize, out Point2f[] centers, flags, detector))
+            return centers;
+
+        _logger.LogInformation(
+            "OpenCV FindCirclesGrid 未识别成功，转入自定义排序兜底: BoardType={BoardType}, Pattern={Cols}x{Rows}, Flags={Flags}",
+            boardType,
+            patternSize.Width,
+            patternSize.Height,
+            flags
+        );
+
+        // OpenCV 网格识别失败时的兜底：用健壮的自定义排序（完整网格，不缺孔）。
+        KeyPoint[] keypoints = detector.Detect(gray);
+        if (keypoints.Length == 0)
+        {
+            _logger.LogWarning(
+                "完整圆点板兜底检测失败: 未检测到任何 blob, BoardType={BoardType}, Pattern={Cols}x{Rows}",
+                boardType,
+                patternSize.Width,
+                patternSize.Height
+            );
+            return null;
+        }
+
+        Point2f[] blobCenters = keypoints.Select(x => new Point2f(x.Pt.X, x.Pt.Y)).ToArray();
+
+        bool orderedOk = TryBuildOrderedCircleGrid(
+            blobCenters,
+            patternSize.Width,
+            patternSize.Height,
+            hasMarkerHole: false,
+            markerRow: 0,
+            markerCol: 0,
+            out Point2f[]? ordered,
+            out string? failureReason
+        );
+        if (!orderedOk)
+        {
+            int fullExpected = patternSize.Width * patternSize.Height;
+            if (blobCenters.Length == fullExpected - 1)
+            {
+                _logger.LogWarning(
+                    "完整圆点板检测失败: 检测到 {BlobCount} 个圆点，恰好比完整网格 {Expected} 少 1 个，"
+                        + "疑似为“中心缺孔板”。请将标定板类型改为“中心标记对称圆点网格”，"
+                        + "并设置缺孔位置（{Cols}x{Rows} 板通常为 ({MarkerRow},{MarkerCol})）后重拍。",
+                    blobCenters.Length,
+                    fullExpected,
+                    patternSize.Width,
+                    patternSize.Height,
+                    (patternSize.Height - 1) / 2,
+                    (patternSize.Width - 1) / 2
+                );
+            }
+            else
+            {
+                _logger.LogWarning(
+                    "完整圆点板兜底排序失败: BlobCount={BlobCount}, Expected={Expected}, Reason={Reason}",
+                    blobCenters.Length,
+                    fullExpected,
+                    failureReason ?? "unknown"
+                );
+            }
+        }
+
+        return orderedOk ? ordered : null;
+    }
+
+    private static Feature2D CreateCircleBlobDetector(CircleBlobDetectorConfigDto cfg)
+    {
+        var p = new SimpleBlobDetector.Params
+        {
+            MinThreshold = (float)cfg.MinThreshold,
+            MaxThreshold = (float)cfg.MaxThreshold,
+            FilterByArea = true,
+            MinArea = (float)cfg.MinArea,
+            MaxArea = (float)cfg.MaxArea,
+            FilterByCircularity = true,
+            MinCircularity = (float)cfg.MinCircularity,
+            FilterByConvexity = true,
+            MinConvexity = (float)cfg.MinConvexity,
+            FilterByInertia = false,
+        };
+        return SimpleBlobDetector.Create(p);
+    }
+
+    private static bool TryBuildOrderedCircleGrid(
+        Point2f[] points,
+        int cols,
+        int rows,
+        bool hasMarkerHole,
+        int markerRow,
+        int markerCol,
+        out Point2f[]? orderedPoints,
+        out string? failureReason
+    )
+    {
+        orderedPoints = null;
+        failureReason = null;
+        int expected = rows * cols - (hasMarkerHole ? 1 : 0);
+        if (cols < 2 || rows < 2)
+        {
+            failureReason = $"invalid-grid:{cols}x{rows}";
+            return false;
+        }
+        if (points.Length < expected)
+        {
+            failureReason = $"insufficient-points:{points.Length}<{expected}";
+            return false;
+        }
+
+        // 平面标定板在透视投影下严格满足单应变换。用“四角单应 + 逐栅格最近点匹配”
+        // 代替脆弱的全局 Y 间隙分行：后者在倾斜拍摄时远近行 Y 间距差异极大，会把大量点
+        // 错分到同一行。单应方法对透视倾斜数学精确，并天然容忍缺孔与少量离群噪点。
+
+        // 1. 用最近邻距离剔除离群噪点（安装孔、丝印等）：栅格点最近邻≈栅距，
+        //    离群点最近邻远大于栅距。
+        int n = points.Length;
+        double[] nnDist = new double[n];
+        for (int i = 0; i < n; i++)
+        {
+            double best = double.MaxValue;
+            for (int j = 0; j < n; j++)
+            {
+                if (i == j)
+                    continue;
+                double dxi = points[i].X - points[j].X;
+                double dyi = points[i].Y - points[j].Y;
+                double d2 = (dxi * dxi) + (dyi * dyi);
+                if (d2 < best)
+                    best = d2;
+            }
+            nnDist[i] = Math.Sqrt(best);
+        }
+        double[] sortedNn = (double[])nnDist.Clone();
+        Array.Sort(sortedNn);
+        double medianNn = sortedNn[sortedNn.Length / 2];
+        if (medianNn <= 1e-6)
+        {
+            failureReason = "degenerate-nn";
+            return false;
+        }
+
+        List<Point2f> core = new(n);
+        for (int i = 0; i < n; i++)
+        {
+            if (nnDist[i] <= 2.0 * medianNn)
+                core.Add(points[i]);
+        }
+        if (core.Count < expected)
+        {
+            failureReason = $"core-insufficient:{core.Count}<{expected}";
+            return false;
+        }
+
+        // 2. 用 x±y 极值确定四角（板近似轴对齐，允许透视倾斜）。
+        Point2f tl = core[0],
+            tr = core[0],
+            br = core[0],
+            bl = core[0];
+        double tlv = double.MaxValue,
+            brv = double.MinValue,
+            trv = double.MinValue,
+            blv = double.MaxValue;
+        foreach (Point2f p in core)
+        {
+            double sum = p.X + p.Y;
+            double diff = p.X - p.Y;
+            if (sum < tlv)
+            {
+                tlv = sum;
+                tl = p;
+            }
+            if (sum > brv)
+            {
+                brv = sum;
+                br = p;
+            }
+            if (diff > trv)
+            {
+                trv = diff;
+                tr = p;
+            }
+            if (diff < blv)
+            {
+                blv = diff;
+                bl = p;
+            }
+        }
+
+        // 3. 理想栅格四角 → 图像四角 的透视变换。
+        Point2f[] idealCorners =
+        [
+            new(0, 0),
+            new(cols - 1, 0),
+            new(cols - 1, rows - 1),
+            new(0, rows - 1),
+        ];
+        Point2f[] imageCorners = [tl, tr, br, bl];
+        double[] h;
+        try
+        {
+            using Mat hMat = Cv2.GetPerspectiveTransform(idealCorners, imageCorners);
+            h = new double[9];
+            for (int i = 0; i < 9; i++)
+                h[i] = hMat.At<double>(i / 3, i % 3);
+        }
+        catch (Exception)
+        {
+            failureReason = "homography-failed";
+            return false;
+        }
+
+        // 单元格尺寸（取栅格中心处，兼顾透视下的平均尺度）。
+        int midC = cols / 2;
+        int midR = rows / 2;
+        Point2f pc = ApplyHomographyToPoint(h, midC, midR);
+        Point2f pcx = ApplyHomographyToPoint(h, midC + 1, midR);
+        Point2f pcy = ApplyHomographyToPoint(h, midC, midR + 1);
+        double cell = Math.Min(PointDistanceForGrid(pc, pcx), PointDistanceForGrid(pc, pcy));
+        if (cell <= 1e-3)
+        {
+            failureReason = "degenerate-cell";
+            return false;
+        }
+        double half = 0.5 * cell;
+        double matchThreshold2 = half * half;
+
+        // 4. 逐栅格位置匹配最近的未用 core 点（跳过缺孔）。
+        bool[] used = new bool[core.Count];
+        Point2f[] ordered = new Point2f[expected];
+        int outIdx = 0;
+        for (int r = 0; r < rows; r++)
+        {
+            for (int c = 0; c < cols; c++)
+            {
+                if (hasMarkerHole && r == markerRow && c == markerCol)
+                    continue;
+
+                Point2f pred = ApplyHomographyToPoint(h, c, r);
+                int bestJ = -1;
+                double bestD2 = matchThreshold2;
+                for (int j = 0; j < core.Count; j++)
+                {
+                    if (used[j])
+                        continue;
+                    double dxj = core[j].X - pred.X;
+                    double dyj = core[j].Y - pred.Y;
+                    double d2 = (dxj * dxj) + (dyj * dyj);
+                    if (d2 <= bestD2)
+                    {
+                        bestD2 = d2;
+                        bestJ = j;
+                    }
+                }
+                if (bestJ < 0)
+                {
+                    failureReason = $"cell-unmatched:({r},{c})";
+                    return false;
+                }
+                used[bestJ] = true;
+                ordered[outIdx++] = core[bestJ];
+            }
+        }
+
+        if (outIdx != expected)
+        {
+            failureReason = $"ordered-count-mismatch:{outIdx}!={expected}";
+            return false;
+        }
+
+        orderedPoints = ordered;
+        return true;
+    }
+
+    private static Point2f ApplyHomographyToPoint(double[] h, double x, double y)
+    {
+        double w = (h[6] * x) + (h[7] * y) + h[8];
+        if (Math.Abs(w) < 1e-12)
+            w = w < 0 ? -1e-12 : 1e-12;
+        double u = ((h[0] * x) + (h[1] * y) + h[2]) / w;
+        double v = ((h[3] * x) + (h[4] * y) + h[5]) / w;
+        return new Point2f((float)u, (float)v);
+    }
+
+    private static double PointDistanceForGrid(Point2f a, Point2f b)
+    {
+        double dx = a.X - b.X;
+        double dy = a.Y - b.Y;
+        return Math.Sqrt((dx * dx) + (dy * dy));
+    }
+
+    /// <summary>
+    /// 投影棋盘格叠加在圆点物理板上时，用灰度形态学闭运算抹除小于核尺寸的暗色圆点，
+    /// 保留大尺度棋盘格结构，便于后续棋盘格角点检测。返回新建的灰度 Mat（调用方负责释放）。
+    /// </summary>
+    private static Mat SuppressDotsForProjectedChessboard(Mat gray)
+    {
+        int k = Math.Max(3, (int)Math.Round(gray.Width / 150.0));
+        if (k % 2 == 0)
+            k++;
+        using Mat kernel = Cv2.GetStructuringElement(MorphShapes.Ellipse, new Size(k, k));
+        Mat closed = new();
+        Cv2.MorphologyEx(gray, closed, MorphTypes.Close, kernel);
+        return closed;
+    }
+
+    /// <summary>OpenCV 棋盘格角点检测（使用亚像素精化）。</summary>
     private (bool isValid, int cornerCount) DetectChessboardCorners(
         byte[] imageBytes,
         int cols,
@@ -2445,30 +3262,146 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
         return points;
     }
 
-    /// <summary>从多张外参照片中找重投影误差最小的一张</summary>
-    private async Task<CalibPhotoRecord?> FindBestExtrinsicAsync(
-        List<CalibPhotoRecord> photos,
+    /// <summary>
+    /// 基于单组投影外参双拍样本，构建投影图案角点在相机坐标系中的度量 3D 坐标。
+    /// 原理：白屏帧解算实体标定板在相机坐标系中的平面位姿；图案帧检测投影图案角点像素，
+    /// 通过相机光线与标定板平面求交，得到投影角点的度量 3D 坐标（相机系）。
+    /// 这样跨样本的对象点共享统一度量坐标系，投影仪内参与相机→投影仪外参才具有一致尺度。
+    /// 任意一步检测失败或几何异常时返回 null，由调用方跳过该样本。
+    /// </summary>
+    private async Task<Point3f[]?> BuildProjectorObjectPointsCamAsync(
+        ProjectorExtrinsicSampleGroup sample,
+        Mat cameraMatrix,
+        Mat distCoeffs,
+        CalibProject project,
+        Size physicalPatternSize,
+        Point3f[] physicalWorldCorners,
+        Size projPatternSize,
+        int expectedProjCornerCount
+    )
+    {
+        // 1. 白屏帧 → 实体标定板在相机坐标系中的平面位姿
+        byte[] offBytes = await _blobContainer.GetAllBytesAsync(sample.ProjectorOffPhoto.BlobKey);
+        using Mat offGray = LoadGrayMat(offBytes);
+        if (offGray.Empty())
+            return null;
+        Point2f[]? boardCorners = FindBoardPointsSubpixGray(
+            offGray,
+            physicalPatternSize,
+            GetDetectionBoardType(project, isProjectedBoard: false),
+            project
+        );
+        if (boardCorners == null || boardCorners.Length != physicalWorldCorners.Length)
+            return null;
+
+        using Mat rvecBoard = new();
+        using Mat tvecBoard = new();
+        Cv2.SolvePnP(
+            InputArray.Create(physicalWorldCorners),
+            InputArray.Create(boardCorners),
+            cameraMatrix,
+            distCoeffs,
+            rvecBoard,
+            tvecBoard
+        );
+        using Mat rBoard = new();
+        Cv2.Rodrigues(rvecBoard, rBoard);
+
+        // 标定板平面：法向量 = 板坐标 Z 轴在相机系（R 第三列）；平面上一点 = 板原点在相机系 = t
+        double nx = rBoard.At<double>(0, 2);
+        double ny = rBoard.At<double>(1, 2);
+        double nz = rBoard.At<double>(2, 2);
+        double p0x = tvecBoard.At<double>(0, 0);
+        double p0y = tvecBoard.At<double>(1, 0);
+        double p0z = tvecBoard.At<double>(2, 0);
+        double nDotP0 = (nx * p0x) + (ny * p0y) + (nz * p0z);
+
+        // 2. 图案帧 → 投影图案角点像素（圆点物理板上先去点再检测棋盘格）
+        byte[] onBytes = await _blobContainer.GetAllBytesAsync(sample.ProjectorOnPhoto.BlobKey);
+        using Mat onGray = LoadGrayMat(onBytes);
+        if (onGray.Empty())
+            return null;
+
+        Point2f[]? patternCorners;
+        if (project.BoardType == CalibrationBoardType.Chessboard)
+        {
+            patternCorners = FindBoardPointsSubpixGray(
+                onGray,
+                projPatternSize,
+                GetDetectionBoardType(project, isProjectedBoard: true),
+                project
+            );
+        }
+        else
+        {
+            using Mat cleaned = SuppressDotsForProjectedChessboard(onGray);
+            patternCorners = FindBoardPointsSubpixGray(
+                cleaned,
+                projPatternSize,
+                GetDetectionBoardType(project, isProjectedBoard: true),
+                project
+            );
+        }
+        if (patternCorners == null || patternCorners.Length != expectedProjCornerCount)
+            return null;
+
+        // 3. 去畸变到归一化相机坐标（作为光线方向），与标定板平面求交得到度量 3D
+        using Mat undistMat = new();
+        Cv2.UndistortPoints(InputArray.Create(patternCorners), undistMat, cameraMatrix, distCoeffs);
+        undistMat.GetArray(out Point2f[] undist);
+        if (undist.Length != patternCorners.Length)
+            return null;
+
+        Point3f[] objPts = new Point3f[patternCorners.Length];
+        for (int i = 0; i < patternCorners.Length; i++)
+        {
+            double dx = undist[i].X;
+            double dy = undist[i].Y;
+            const double dz = 1.0;
+            double nDotD = (nx * dx) + (ny * dy) + (nz * dz);
+            if (Math.Abs(nDotD) < 1e-9)
+                return null;
+            double tRay = nDotP0 / nDotD;
+            if (tRay <= 0)
+                return null;
+            objPts[i] = new Point3f((float)(tRay * dx), (float)(tRay * dy), (float)(tRay * dz));
+        }
+
+        return objPts;
+    }
+
+    /// <summary>从多组外参样本中找重投影误差最小的一组（以白屏帧实体板位姿为准）</summary>
+    private async Task<ProjectorExtrinsicSampleGroup?> FindBestExtrinsicAsync(
+        List<ProjectorExtrinsicSampleGroup> photos,
         Mat cameraMatrix,
         Mat distCoeffs,
         Size patternSize,
-        Point3f[] worldCorners
+        Point3f[] worldCorners,
+        CalibProject project
     )
     {
-        CalibPhotoRecord? best = null;
+        ProjectorExtrinsicSampleGroup? best = null;
         double bestError = double.MaxValue;
 
-        foreach (CalibPhotoRecord photo in photos)
+        foreach (ProjectorExtrinsicSampleGroup sample in photos)
         {
             try
             {
-                byte[] bytes = await _blobContainer.GetAllBytesAsync(photo.BlobKey);
+                byte[] bytes = await _blobContainer.GetAllBytesAsync(
+                    sample.ProjectorOffPhoto.BlobKey
+                );
 
                 // 灰度加载 + 半分辨率加速角点检测
                 using Mat mat = LoadGrayMat(bytes);
                 if (mat.Empty())
                     continue;
 
-                Point2f[]? corners = FindCornersSubpixGray(mat, patternSize);
+                Point2f[]? corners = FindBoardPointsSubpixGray(
+                    mat,
+                    patternSize,
+                    GetDetectionBoardType(project, isProjectedBoard: false),
+                    project
+                );
                 if (corners == null)
                     continue;
 
@@ -2508,7 +3441,7 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
                 if (err < bestError)
                 {
                     bestError = err;
-                    best = photo;
+                    best = sample;
                 }
             }
             catch
@@ -2753,12 +3686,34 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
     private static CalibBoardConfigDto ToBoardConfigDto(CalibProject project) =>
         new()
         {
+            BoardType = project.BoardType,
             PhysicalCornerRows = project.PhysicalCornerRows,
             PhysicalCornerCols = project.PhysicalCornerCols,
             PhysicalSquareSizeMm = project.PhysicalSquareSizeMm,
             ProjectedCornerRows = project.ProjectedCornerRows,
             ProjectedCornerCols = project.ProjectedCornerCols,
             ProjectedPixelSize = project.ProjectedPixelSize,
+            CircleBoardConfig =
+                project.BoardType == CalibrationBoardType.Chessboard
+                    ? null
+                    : new CircleBoardConfigDto
+                    {
+                        PatternSize = new CirclePatternSizeDto
+                        {
+                            Width = project.CirclePatternCols ?? 27,
+                            Height = project.CirclePatternRows ?? 27,
+                        },
+                        CircleSpacing = project.CircleSpacingMm ?? 10m,
+                        CircleDiameter = project.CircleDiameterMm,
+                        HasCenterMarker = project.HasCenterMarker ?? false,
+                        HasCornerLocators = project.HasCornerLocators ?? false,
+                        MarkerPosition = new CircleMarkerPositionDto
+                        {
+                            Row = project.MarkerRow ?? 13,
+                            Col = project.MarkerCol ?? 13,
+                        },
+                        Detector = LoadCircleDetectorConfig(project),
+                    },
         };
 
     private static CalibPhotoDto ToPhotoDto(CalibPhotoRecord record) =>
@@ -2772,6 +3727,12 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
             ThumbnailBase64 = record.ThumbnailBase64,
             PairGroupId = record.PairGroupId,
             StereoRole = record.StereoRole,
+            ExtrinsicPhase = record.ExtrinsicPhase switch
+            {
+                ExtrinsicPhotoPhase.ProjectorOff => ExtrinsicPhotoPhaseDto.ProjectorOff,
+                ExtrinsicPhotoPhase.ProjectorOn => ExtrinsicPhotoPhaseDto.ProjectorOn,
+                _ => null,
+            },
         };
 
     private static CalibStereoComputeResultDto ToStereoResultDto(CalibStereoResult result) =>

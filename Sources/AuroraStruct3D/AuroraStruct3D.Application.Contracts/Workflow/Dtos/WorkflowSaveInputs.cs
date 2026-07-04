@@ -66,6 +66,12 @@ public class WorkflowNodeDto
     [Required]
     public string Type { get; set; } = string.Empty;
 
+    /// <summary>节点 X 坐标（画布定位）。</summary>
+    public double? X { get; set; }
+
+    /// <summary>节点 Y 坐标（画布定位）。</summary>
+    public double? Y { get; set; }
+
     /// <summary>节点文本。</summary>
     public WorkflowNodeTextDto? Text { get; set; }
 
@@ -78,6 +84,12 @@ public class WorkflowNodeDto
 /// </summary>
 public class WorkflowNodeTextDto
 {
+    /// <summary>文本 X 坐标（画布定位）。</summary>
+    public double? X { get; set; }
+
+    /// <summary>文本 Y 坐标（画布定位）。</summary>
+    public double? Y { get; set; }
+
     /// <summary>显示文本。</summary>
     public string? Value { get; set; }
 }

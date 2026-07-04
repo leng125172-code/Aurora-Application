@@ -2,6 +2,8 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.IO.Ports;
 using AuroraStruct3D.DeviceState;
+using AuroraStruct3D.Ktech;
+using AuroraStruct3D.Leisai;
 using AuroraStruct3D.Motors.Dtos;
 using AuroraStruct3D.RS485;
 using AuroraStruct3D.RS485.Ktech;
@@ -39,6 +41,8 @@ public class MotorDeviceAppService : AuroraStruct3DAppService, IMotorDeviceAppSe
     private readonly IMotorScanProgressNotifier _scanProgressNotifier;
     private readonly IDeviceStateManager _deviceStateManager;
     private readonly IMotorOperationLogRepository _operationLogRepository;
+    private readonly KtechSamplerStateStore _ktechSamplerStateStore;
+    private readonly LeisaiSamplerStateStore _leisaiSamplerStateStore;
 
     public MotorDeviceAppService(
         IMotorAxisRepository motorAxisRepository,
@@ -49,7 +53,9 @@ public class MotorDeviceAppService : AuroraStruct3DAppService, IMotorDeviceAppSe
         ICurrentClientSession currentClientSession,
         IMotorScanProgressNotifier scanProgressNotifier,
         IDeviceStateManager deviceStateManager,
-        IMotorOperationLogRepository operationLogRepository
+        IMotorOperationLogRepository operationLogRepository,
+        KtechSamplerStateStore ktechSamplerStateStore,
+        LeisaiSamplerStateStore leisaiSamplerStateStore
     )
     {
         _motorAxisRepository = motorAxisRepository;
@@ -61,6 +67,73 @@ public class MotorDeviceAppService : AuroraStruct3DAppService, IMotorDeviceAppSe
         _scanProgressNotifier = scanProgressNotifier;
         _deviceStateManager = deviceStateManager;
         _operationLogRepository = operationLogRepository;
+        _ktechSamplerStateStore = ktechSamplerStateStore;
+        _leisaiSamplerStateStore = leisaiSamplerStateStore;
+    }
+
+    /// <inheritdoc/>
+    public async Task SetSamplingAllAsync(bool enabled)
+    {
+        List<MotorAxis> axes = await _motorAxisRepository.GetEnabledListAsync();
+        int ktechAffected = 0;
+        int leisaiAffected = 0;
+
+        foreach (MotorAxis axis in axes)
+        {
+            if (axis.Brand == MotorBrand.KtechKtech)
+            {
+                _ktechSamplerStateStore.SetPollingEnabled(axis.Id, enabled);
+                ktechAffected++;
+                continue;
+            }
+
+            if (axis.Brand == MotorBrand.LeisaiIclRs)
+            {
+                _leisaiSamplerStateStore.SetPollingEnabled(axis.Id, enabled);
+                leisaiAffected++;
+            }
+        }
+
+        Logger.LogInformation(
+            "[MotorDevice] 一键设置实时采样：enabled={Enabled}, ktech={KtechAffected}, leisai={LeisaiAffected}",
+            enabled,
+            ktechAffected,
+            leisaiAffected
+        );
+    }
+
+    /// <inheritdoc/>
+    public async Task<bool> GetSamplingAllEnabledAsync()
+    {
+        List<MotorAxis> axes = await _motorAxisRepository.GetEnabledListAsync();
+        List<MotorAxis> servoAxes = axes.Where(axis =>
+                axis.Brand == MotorBrand.KtechKtech || axis.Brand == MotorBrand.LeisaiIclRs
+            )
+            .ToList();
+
+        if (servoAxes.Count == 0)
+        {
+            return false;
+        }
+
+        return servoAxes.All(GetSamplingEnabledByBrand);
+    }
+
+    /// <inheritdoc/>
+    public async Task<bool> GetSamplingEnabledAsync(Guid id)
+    {
+        MotorAxis axis = await _motorAxisRepository.GetAsync(id);
+        return GetSamplingEnabledByBrand(axis);
+    }
+
+    private bool GetSamplingEnabledByBrand(MotorAxis axis)
+    {
+        return axis.Brand switch
+        {
+            MotorBrand.KtechKtech => _ktechSamplerStateStore.IsPollingEnabled(axis.Id),
+            MotorBrand.LeisaiIclRs => _leisaiSamplerStateStore.IsPollingEnabled(axis.Id),
+            _ => false,
+        };
     }
 
     /// <inheritdoc/>

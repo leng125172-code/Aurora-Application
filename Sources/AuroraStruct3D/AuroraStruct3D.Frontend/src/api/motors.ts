@@ -270,3 +270,26 @@ export async function getMotorLogs(params: GetMotorLogListDto = {}): Promise<Pag
     const { data } = await httpClient.get<PagedResultDto<MotorOperationLogDto>>(`${BASE}/logs`, { params })
     return data
 }
+
+/**
+ * 一键设置所有启用中的伺服电机实时采样开关（Ktech + Leisai）。
+ */
+export async function setAllServoSampling(enabled: boolean): Promise<void> {
+    await httpClient.post(`${BASE}/set-sampling-all`, null, { params: { enabled } })
+}
+
+/**
+ * 获取所有启用中的伺服电机实时采样是否全部开启。
+ */
+export async function getAllServoSamplingEnabled(): Promise<boolean> {
+    const { data } = await httpClient.get<boolean>(`${BASE}/sampling-all-enabled`)
+    return data
+}
+
+/**
+ * 获取指定伺服电机实时采样开关（统一接口）。
+ */
+export async function getServoSamplingEnabled(id: string): Promise<boolean> {
+    const { data } = await httpClient.get<boolean>(`${BASE}/${id}/sampling-enabled`)
+    return data
+}

@@ -25,6 +25,20 @@ export enum StereoPhotoRole {
     Secondary = 1,
 }
 
+/** 投影外参双拍阶段 */
+export enum ExtrinsicPhotoPhase {
+    ProjectorOff = 0,
+    ProjectorOn = 1,
+}
+
+/** 标定板类型（与后端 CalibrationBoardType 对齐） */
+export enum CalibrationBoardType {
+    Chessboard = 0,
+    SymmetricCircleGrid = 1,
+    AsymmetricCircleGrid = 2,
+    MarkedSymmetricCircleGrid = 3,
+}
+
 // ─── 接口定义 ─────────────────────────────────────────────────────────────────
 
 /** 标定照片列表项 */
@@ -37,28 +51,70 @@ export interface CalibPhotoDto {
     thumbnailBase64: string | null
     pairGroupId: string | null
     stereoRole: StereoPhotoRole | null
+    extrinsicPhase: ExtrinsicPhotoPhase | null
+}
+
+/** 单组投影外参双拍样本 */
+export interface CalibExtrinsicSampleDto {
+    pairGroupId: string
+    projectorOffPhoto: CalibPhotoDto
+    projectorOnPhoto: CalibPhotoDto
+    isValid: boolean
 }
 
 /** 标定板参数（读/写） */
 export interface CalibBoardConfigDto {
+    boardType: CalibrationBoardType
     physicalCornerRows: number
     physicalCornerCols: number
     physicalSquareSizeMm: number
     projectedCornerRows: number
     projectedCornerCols: number
     projectedPixelSize: number
+    circleBoardConfig: CircleBoardConfigDto | null
+}
+
+export interface CirclePatternSizeDto {
+    width: number
+    height: number
+}
+
+export interface CircleMarkerPositionDto {
+    row: number
+    col: number
+}
+
+export interface CircleBlobDetectorConfigDto {
+    minThreshold: number
+    maxThreshold: number
+    minArea: number
+    maxArea: number
+    minCircularity: number
+    minConvexity: number
+}
+
+export interface CircleBoardConfigDto {
+    patternSize: CirclePatternSizeDto
+    circleSpacing: number
+    circleDiameter: number | null
+    hasCenterMarker: boolean
+    hasCornerLocators: boolean
+    markerPosition: CircleMarkerPositionDto
+    detector: CircleBlobDetectorConfigDto
 }
 
 /** 更新标定板参数输入（CalibProjectId 必填） */
 export interface UpdateBoardConfigInput {
     /** 标定项目 ID（会愀入 PUT body，不在路径中） */
     calibProjectId: string
+    boardType: CalibrationBoardType
     physicalCornerRows: number
     physicalCornerCols: number
     physicalSquareSizeMm: number
     projectedCornerRows: number
     projectedCornerCols: number
     projectedPixelSize: number
+    circleBoardConfig?: CircleBoardConfigDto | null
 }
 
 /** 内参拍照输入 */
@@ -167,6 +223,35 @@ export async function getBoardConfig(calibProjectId: string): Promise<CalibBoard
 }
 
 /**
+ * 导出标定板参数配置 JSON。
+ * ABP 路由: GET /api/app/calib-photo/export-board-config?calibProjectId={id}
+ */
+export async function exportBoardConfig(calibProjectId: string): Promise<Blob> {
+    const res = await httpClient.get(`${BASE}/export-board-config`, {
+        params: { calibProjectId },
+        responseType: 'blob',
+    })
+    return res.data as Blob
+}
+
+/**
+ * 导入标定板参数配置 JSON。
+ * ABP 路由: POST /api/app/calib-photo/import-board-config?calibProjectId={id}
+ */
+export async function importBoardConfig(
+    calibProjectId: string,
+    file: File,
+): Promise<CalibBoardConfigDto> {
+    const formData = new FormData()
+    formData.append('file', file, file.name)
+    const res = await httpClient.post<CalibBoardConfigDto>(`${BASE}/import-board-config`, formData, {
+        params: { calibProjectId },
+        headers: { 'Content-Type': 'multipart/form-data' },
+    })
+    return res.data
+}
+
+/**
  * 内参拍照（后端自动处理：拍照 → 角点检测 → 存 BLOB）
  */
 export async function takeIntrinsicPhoto(
@@ -180,13 +265,13 @@ export async function takeIntrinsicPhoto(
 }
 
 /**
- * 外参拍照（后端自动处理：开灯 → 投影棋盘图 → 拍照 → 关灯 → 角点检测 → 存 BLOB）
+ * 外参拍照（后端自动处理：先关灯拍实体板，再开灯拍投影图案，并按一组样本返回）
  */
 export async function takeExtrinsicPhoto(
     input: TakeExtrinsicPhotoInput,
     timeout = 30000,
-): Promise<CalibPhotoDto> {
-    const res = await httpClient.post<CalibPhotoDto>(`${BASE}/take-extrinsic-photo`, input, {
+): Promise<CalibExtrinsicSampleDto> {
+    const res = await httpClient.post<CalibExtrinsicSampleDto>(`${BASE}/take-extrinsic-photo`, input, {
         timeout,
     })
     return res.data

@@ -28,6 +28,12 @@ public sealed class NodeModel
     /// </summary>
     public string Type { get; set; } = string.Empty;
 
+    /// <summary>节点 X 坐标（画布定位）。</summary>
+    public double? X { get; set; }
+
+    /// <summary>节点 Y 坐标（画布定位）。</summary>
+    public double? Y { get; set; }
+
     /// <summary>节点显示名（可选）。</summary>
     public NodeTextModel? Text { get; set; }
 
@@ -38,6 +44,12 @@ public sealed class NodeModel
 /// <summary>节点显示名包装。</summary>
 public sealed class NodeTextModel
 {
+    /// <summary>文本 X 坐标（画布定位）。</summary>
+    public double? X { get; set; }
+
+    /// <summary>文本 Y 坐标（画布定位）。</summary>
+    public double? Y { get; set; }
+
     /// <summary>显示文本。</summary>
     public string? Value { get; set; }
 }
