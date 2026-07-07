@@ -71,9 +71,10 @@ public class WorkflowRuntimeDeploymentContractTests
         PropertyInfo deploymentIdProperty = typeof(WorkflowProjectTaskEnqueueResultDto).GetProperty(
             nameof(WorkflowProjectTaskEnqueueResultDto.DeploymentId)
         )!;
-        PropertyInfo deploymentRevisionProperty = typeof(
-            WorkflowProjectTaskEnqueueResultDto
-        ).GetProperty(nameof(WorkflowProjectTaskEnqueueResultDto.DeploymentRevision))!;
+        PropertyInfo deploymentRevisionProperty =
+            typeof(WorkflowProjectTaskEnqueueResultDto).GetProperty(
+                nameof(WorkflowProjectTaskEnqueueResultDto.DeploymentRevision)
+            )!;
 
         Assert.Equal(typeof(Guid?), deploymentIdProperty.PropertyType);
         Assert.Equal(typeof(int?), deploymentRevisionProperty.PropertyType);
