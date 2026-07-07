@@ -3,6 +3,7 @@ using System;
 using AuroraStruct3D.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Volo.Abp.EntityFrameworkCore;
@@ -12,9 +13,11 @@ using Volo.Abp.EntityFrameworkCore;
 namespace AuroraStruct3D.EntityFrameworkCore.Migrations
 {
     [DbContext(typeof(AuroraStruct3DDbContext))]
-    partial class AuroraStruct3DDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260707060309_AddWorkflowProjectBindingAndDeployment")]
+    partial class AddWorkflowProjectBindingAndDeployment
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -3046,6 +3049,9 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                         .HasColumnType("character varying(40)")
                         .HasColumnName("ConcurrencyStamp");
 
+                    b.Property<bool>("ContinueOnError")
+                        .HasColumnType("boolean");
+
                     b.Property<DateTime>("CreationTime")
                         .HasColumnType("timestamp without time zone")
                         .HasColumnName("CreationTime");
@@ -3216,12 +3222,6 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                         .HasColumnType("timestamp without time zone")
                         .HasColumnName("DeletionTime");
 
-                    b.Property<Guid?>("DeploymentId")
-                        .HasColumnType("uuid");
-
-                    b.Property<int?>("DeploymentRevision")
-                        .HasColumnType("integer");
-
                     b.Property<string>("ErrorMessage")
                         .HasMaxLength(2048)
                         .HasColumnType("character varying(2048)");
@@ -3301,8 +3301,6 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                         .HasColumnType("character varying(16384)");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("DeploymentId");
 
                     b.HasIndex("HangfireJobId");
 

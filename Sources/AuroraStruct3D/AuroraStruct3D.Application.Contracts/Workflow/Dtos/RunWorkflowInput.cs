@@ -38,16 +38,8 @@ public class RunWorkflowInput
     public List<WorkflowVariableBindingKeyDto>? OutputVariableBindings { get; set; }
 
     /// <summary>
-    /// 是否启用在线变量池执行模式。
-    /// <para>
-    /// 关闭时保持历史行为（Redis 暂存桥接）；开启时走独立变量模块的在线变量池。
-    /// </para>
-    /// </summary>
-    public bool UseOnlineVariablePool { get; set; }
-
-    /// <summary>
     /// 运行时实例 ID。
-    /// <para>启用在线变量池时生效；为空则由服务端自动生成。</para>
+    /// <para>为空则由服务端自动生成。</para>
     /// </summary>
     public Guid? RuntimeInstanceId { get; set; }
 

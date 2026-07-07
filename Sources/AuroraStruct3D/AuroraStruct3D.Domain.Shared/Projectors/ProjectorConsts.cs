@@ -194,10 +194,10 @@ public enum ProjectorBootImage
     /// <summary>棋盘格图像</summary>
     Checkerboard = 3,
 
-    /// <summary>内部图像 1</summary>
+    /// <summary>模式 6（S6）</summary>
     Internal1 = 6,
 
-    /// <summary>内部图像 2</summary>
+    /// <summary>模式 7（S7）</summary>
     Internal2 = 7,
 }
 
@@ -218,10 +218,10 @@ public enum ProjectorDisplayMode : byte
     /// <summary>棋盘格</summary>
     Checkerboard = 3,
 
-    /// <summary>内部图像 1（S6）</summary>
+    /// <summary>模式 6（S6）</summary>
     Internal1 = 6,
 
-    /// <summary>内部图像 2（S7）</summary>
+    /// <summary>模式 7（S7）</summary>
     Internal2 = 7,
 }
 

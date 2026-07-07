@@ -226,6 +226,11 @@ public class TriggerProjectorDto : ProjectorControlDto
 }
 
 /// <summary>
+/// 切换到下一张条纹请求 DTO（单帧触发模式 B 2）。
+/// </summary>
+public class NextProjectorFrameDto : ProjectorControlDto { }
+
+/// <summary>
 /// 写寄存器请求 DTO
 /// </summary>
 public class WriteProjectorRegisterDto : ProjectorControlDto
@@ -317,7 +322,7 @@ public class DownloadFringePatternInputDto
     public int PeriodCount { get; set; }
 
     /// <summary>生成图片数量</summary>
-    [Range(1, 64)]
+    [Range(1, 128)]
     public int ImageCount { get; set; }
 
     /// <summary>每张图相对上一张的像素相移量（整数，0 &lt; phaseShift &lt; periodCount）</summary>

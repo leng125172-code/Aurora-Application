@@ -93,16 +93,15 @@ public class WorkflowExecutionAppService : AuroraStruct3DAppService, IWorkflowEx
         ValidateBindingKeys(inputBindings, "input");
         ValidateBindingKeys(outputBindings, "output", uniqueByVariableName: true);
 
-        bool useOnlineVariablePool =
-            input.UseOnlineVariablePool || input.RuntimeInstanceId.HasValue;
-        Guid? runtimeInstanceId = useOnlineVariablePool
-            ? (input.RuntimeInstanceId ?? GuidGenerator.Create())
-            : null;
+        const bool useOnlineVariablePool = true;
+        Guid? runtimeInstanceId = input.RuntimeInstanceId ?? GuidGenerator.Create();
 
         // ④ 加载初始变量（在线变量池 / Redis 暂存二选一）。
-        Dictionary<string, object?> initialVariables = useOnlineVariablePool
-            ? await LoadFromOnlineVariablePoolAsync(input, runtimeInstanceId!.Value, inputBindings)
-            : await _bridge.LoadAsync(inputKeys);
+        Dictionary<string, object?> initialVariables = await LoadFromOnlineVariablePoolAsync(
+            input,
+            runtimeInstanceId!.Value,
+            inputBindings
+        );
 
         // ④ 执行。
         var stopwatch = Stopwatch.StartNew();

@@ -50,8 +50,6 @@ async function run(fn: () => Promise<boolean | void>) {
 async function onLedOn() {
     await run(async () => {
         await store.ledOn(deviceId.value)
-        // 开灯后切换到内置图像 2
-        await store.setDisplayMode({ projectorDeviceId: deviceId.value, mode: ProjectorDisplayMode.Internal2 })
     })
 }
 async function onLedOff() {

@@ -487,13 +487,17 @@ sequenceDiagram
 1. `S6`：切到默认显示/Flash 播放模式
 2. `LN`：开灯
 3. `MB N`：写入总图像幅数
-4. `MD N` 或 `MD 0`：设置条纹方向
-   - 横条纹：`MD {imageCount}`
-   - 竖条纹：`MD 0`
+4. `MF%d %d %d %d %d`：按帧配置横竖方向位图
+
+- 第 1 个参数块索引：`0~3`，每块覆盖 32 幅图
+- 后 4 个参数（`0~255`）共 32bit，对应 32 幅图方向
+- 每幅图 1bit：`0=竖条纹`，`1=横条纹`
+- 当前策略：固定 `1-2-1-2...`（横竖交替）
+
 5. `FE`：擦除 Flash
    - 期望回复 `F0`
    - 如果回复 `F1` 则重试
-6. 循环发送 `FW{index} {gray}`
+2. 循环发送 `FW{index} {gray}`
    - 每条命令后等待 25ms
    - 到 page 边界或最后一条后等待设备应答
 
@@ -677,11 +681,11 @@ flowchart LR
 
 - 下载接口改为后台启动后立即返回，不再依赖长时间 HTTP 挂起
 
-2. 刷新后无法恢复下载状态的问题
+1. 刷新后无法恢复下载状态的问题
 
 - 通过 `ProjectorFringeDownloadStateStore` + `GET /fringe-download-status` + SignalR 状态事件恢复 UI
 
-3. `Progress<int>` + `async void` 问题
+1. `Progress<int>` + `async void` 问题
    - 当前已改为 `Func<int, Task>` 串行 await 推送
    - 避免 fire-and-forget 导致二次下载时进度错乱或丢失
 
@@ -791,7 +795,7 @@ flowchart LR
 
 - 将 `ReceiveProjectorStateAsync`、`ReceiveProjectorConnectionChangedAsync`、`ReceiveProjectorLedChangedAsync` 真正绑定到页面 UI
 
-3. Step 4 ~ Step 7 的 API 与 SignalR 设计
+1. Step 4 ~ Step 7 的 API 与 SignalR 设计
    - 采集任务进度
    - 标定计算任务进度
    - 结果预览与导出

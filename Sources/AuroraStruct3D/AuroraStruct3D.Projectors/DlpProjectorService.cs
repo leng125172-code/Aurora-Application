@@ -447,6 +447,24 @@ public class DlpProjectorService : IDlpProjectorService, IDisposable
             .ConfigureAwait(false);
     }
 
+    /// <inheritdoc/>
+    public async Task<bool> NextFrameAsync(CancellationToken cancellationToken = default)
+    {
+        EnsureClient();
+        _logger.LogInformation(
+            "{Tag} [Device {Device}] Trigger next fringe frame",
+            LogTag,
+            DeviceId
+        );
+        return await SendAndLogAsync(
+                TjProjectorCommands.TriggerNextFrame,
+                ProjectorOperationType.TriggerOnce,
+                "NextFrame",
+                cancellationToken
+            )
+            .ConfigureAwait(false);
+    }
+
     // ─── 通用命令 ────────────────────────────────────────────────
 
     /// <inheritdoc/>
@@ -904,6 +922,9 @@ public class DlpProjectorService : IDlpProjectorService, IDisposable
     {
         EnsureClient();
 
+        // 新协议采用 MF 位图按帧配置横/竖方向，isHorizontal 参数保留仅为兼容旧调用签名。
+        _ = isHorizontal;
+
         int widthPixels = columnGrayValues.Length / imageCount;
         int totalWrites = columnGrayValues.Length;
 
@@ -916,10 +937,7 @@ public class DlpProjectorService : IDlpProjectorService, IDisposable
             totalWrites
         );
 
-        // 1. 切换到默认显示模式（S6），再开灯（LN）
-        await SendCommandCoreAsync(TjProjectorCommands.SetModeFlash, cancellationToken)
-            .ConfigureAwait(false);
-        await Task.Delay(50, cancellationToken).ConfigureAwait(false);
+        // 1. 开灯（LN）。条纹下载只写 MB/MF/FE/FW，不再把 S1-S7 内置图案误当成条纹播放模式。
         await SendCommandCoreAsync(TjProjectorCommands.LedOn, cancellationToken)
             .ConfigureAwait(false);
         await Task.Delay(50, cancellationToken).ConfigureAwait(false);
@@ -930,12 +948,23 @@ public class DlpProjectorService : IDlpProjectorService, IDisposable
         await SendCommandCoreAsync(mbCmd, cancellationToken).ConfigureAwait(false);
         await Task.Delay(50, cancellationToken).ConfigureAwait(false);
 
-        // 3. 设置条纹方向（MD N）：横条纹传幅数，竖条纹传 0
-        int mdParam = isHorizontal ? imageCount : 0;
-        string mdCmd =
-            $"{TjProjectorCommands.SetFringeDirectionPrefix}{mdParam}{TjProjectorCommands.CommandSuffix}";
-        await SendCommandCoreAsync(mdCmd, cancellationToken).ConfigureAwait(false);
-        await Task.Delay(50, cancellationToken).ConfigureAwait(false);
+        // 3. 使用 MF 位图配置每一幅条纹的横竖方向：固定 1-2-1-2...（横-竖交替）
+        // bit=1 表示横条纹，bit=0 表示竖条纹。第 0 幅起始为横条纹。
+        byte[] orientationBits = BuildAlternatingFringeOrientationBits(imageCount);
+        for (int block = 0; block < 4; block++)
+        {
+            int offset = block * 4;
+            string mfCmd =
+                $"{TjProjectorCommands.SetFringeOrientationBitmapPrefix}{block}"
+                + $" {orientationBits[offset + 0]}"
+                + $" {orientationBits[offset + 1]}"
+                + $" {orientationBits[offset + 2]}"
+                + $" {orientationBits[offset + 3]}"
+                + TjProjectorCommands.CommandSuffix;
+
+            await SendCommandCoreAsync(mfCmd, cancellationToken).ConfigureAwait(false);
+            await Task.Delay(50, cancellationToken).ConfigureAwait(false);
+        }
 
         // 4. 擦除 Flash（FE），等待 F0 成功应答；若 F1 则重试（最多 5 次）
         const int MaxEraseRetries = 5;
@@ -1027,5 +1056,27 @@ public class DlpProjectorService : IDlpProjectorService, IDisposable
             DeviceId,
             totalWrites
         );
+    }
+
+    private static byte[] BuildAlternatingFringeOrientationBits(int imageCount)
+    {
+        const int maxImages = 128;
+        byte[] bits = new byte[16];
+        int usableCount = Math.Clamp(imageCount, 0, maxImages);
+
+        for (int frame = 0; frame < usableCount; frame++)
+        {
+            bool isHorizontalFrame = frame % 2 == 0;
+            if (!isHorizontalFrame)
+            {
+                continue;
+            }
+
+            int byteIndex = frame / 8;
+            int bitIndex = frame % 8;
+            bits[byteIndex] = (byte)(bits[byteIndex] | (1 << bitIndex));
+        }
+
+        return bits;
     }
 }

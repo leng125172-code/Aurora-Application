@@ -20,7 +20,6 @@ const props = defineProps<{
     projectorWidthPixels: number | null
     projectorPixelMode: string | null
     projectorReading: boolean
-    fringeMode: 'horizontal' | 'vertical'
     fringeType: 'bw' | 'wb'
     projectorHeightInput: number
     fringe3PeriodCount: number
@@ -43,7 +42,6 @@ const emit = defineEmits<{
     prev: []
     next: []
     'update:selectedProjectorId': [value: string | null]
-    'update:fringeMode': [value: 'horizontal' | 'vertical']
     'update:fringeType': [value: 'bw' | 'wb']
     'update:projectorHeightInput': [value: number]
     'update:fringe3PeriodCount': [value: number]
@@ -59,11 +57,6 @@ const previewCanvasRef = ref<HTMLCanvasElement | null>(null)
 const selectedProjectorIdModel = computed({
     get: () => props.selectedProjectorId,
     set: (value: string | null) => emit('update:selectedProjectorId', value),
-})
-
-const fringeModeModel = computed({
-    get: () => props.fringeMode,
-    set: (value: 'horizontal' | 'vertical') => emit('update:fringeMode', value),
 })
 
 const fringeTypeModel = computed({
@@ -113,7 +106,8 @@ function renderFringePreview(): void {
     const imageData = ctx.createImageData(width, height)
     const data = imageData.data
 
-    if (props.fringeMode === 'vertical') {
+    const isHorizontalFrame = img.index % 2 === 0
+    if (!isHorizontalFrame) {
         for (let x = 0; x < width; x++) {
             const gray = pixels[Math.min(x, pixels.length - 1)]
             for (let y = 0; y < height; y++) {
@@ -145,7 +139,6 @@ watch(
     () => [
         props.selectedFringeImageIdx,
         props.generatedFringeImages,
-        props.fringeMode,
         props.projectorWidthPixels,
         props.projectorHeightInput,
     ],
@@ -198,23 +191,10 @@ watch(
                         <label class="block text-xs text-muted-foreground mb-1">
                             {{ t('calib.step3FringeMode') }}
                         </label>
-                        <div class="flex gap-1.5">
-                            <Button
-                                :severity="fringeModeModel === 'horizontal' ? 'primary' : 'secondary'"
-                                size="small"
-                                class="!text-xs flex-1"
-                                @click="fringeModeModel = 'horizontal'"
-                            >
-                                {{ t('calib.step3FringeModeH') }}
-                            </Button>
-                            <Button
-                                :severity="fringeModeModel === 'vertical' ? 'primary' : 'secondary'"
-                                size="small"
-                                class="!text-xs flex-1"
-                                @click="fringeModeModel = 'vertical'"
-                            >
-                                {{ t('calib.step3FringeModeV') }}
-                            </Button>
+                        <div
+                            class="h-7 flex items-center text-xs px-2 rounded border border-border/40 bg-muted/20 text-muted-foreground"
+                        >
+                            1-2-1-2（{{ t('calib.step3FringeModeH') }} / {{ t('calib.step3FringeModeV') }}）
                         </div>
                     </div>
 
@@ -311,7 +291,7 @@ watch(
                         <InputNumber
                             v-model="fringe3ImageCountModel"
                             :min="1"
-                            :max="100"
+                            :max="128"
                             :max-fraction-digits="0"
                             size="small"
                             class="w-full"

@@ -527,8 +527,6 @@ const projectorWidthPixels = ref<number | null>(null)
 const projectorPixelMode = ref<string | null>(null)
 const projectorReading = ref(false)
 
-/** 条纹方向：horizontal=横条纹 vertical=竖条纹 */
-const fringeMode = ref<'horizontal' | 'vertical'>('horizontal')
 /** 条纹类型：bw=黑白（首色黑）wb=白黑（首色白） */
 const fringeType = ref<'bw' | 'wb'>('bw')
 const projectorHeightInput = ref<number>(1024)
@@ -567,10 +565,8 @@ async function refreshCurrentFringeDownloadStatus(): Promise<void> {
     }
 }
 
-/** 当前条纹的有效像素数（竖条纹=宽，横条纹=高） */
-const fringe3PixelCount = computed(() =>
-    fringeMode.value === 'vertical' ? projectorWidthPixels.value : projectorHeightInput.value
-)
+/** Step3 固定按 121212 横竖交替生成；像素序列统一按投影宽度计算。 */
+const fringe3PixelCount = computed(() => projectorWidthPixels.value)
 
 /** 周期数整除校验 */
 const fringe3PeriodError = computed<string | null>(() => {
@@ -591,8 +587,7 @@ const fringe3PhaseError = computed<string | null>(() => {
 const fringe3CanGenerate = computed(() => {
     if (fringe3PeriodError.value || fringe3PhaseError.value) return false
     if (fringe3ImageCount.value <= 0) return false
-    if (fringeMode.value === 'vertical') return projectorWidthPixels.value != null
-    return projectorHeightInput.value > 0
+    return projectorWidthPixels.value != null && projectorHeightInput.value > 0
 })
 
 async function initStep3Hub(): Promise<void> {
@@ -678,7 +673,7 @@ async function generateFringeImages(): Promise<void> {
     try {
         const images = await generateFringePreview({
             projectorId: selectedProjectorId.value,
-            fringeMode: fringeMode.value,
+            fringeMode: 'horizontal',
             fringeType: fringeType.value,
             widthPixels: projectorWidthPixels.value,
             heightPixels: projectorHeightInput.value,
@@ -708,7 +703,7 @@ async function triggerFringeDownload(): Promise<void> {
     try {
         await downloadFringePattern({
             projectorId: selectedProjectorId.value,
-            fringeMode: fringeMode.value,
+            fringeMode: 'horizontal',
             fringeType: fringeType.value,
             widthPixels: projectorWidthPixels.value,
             heightPixels: projectorHeightInput.value,
@@ -826,7 +821,6 @@ onUnmounted(() => {
                                 :projector-width-pixels="projectorWidthPixels"
                                 :projector-pixel-mode="projectorPixelMode"
                                 :projector-reading="projectorReading"
-                                :fringe-mode="fringeMode"
                                 :fringe-type="fringeType"
                                 :projector-height-input="projectorHeightInput"
                                 :fringe3-period-count="fringe3PeriodCount"
@@ -846,7 +840,6 @@ onUnmounted(() => {
                                 @prev="goToStep('camera')"
                                 @next="handleStep3Next"
                                 @update:selected-projector-id="selectedProjectorId = $event"
-                                @update:fringe-mode="fringeMode = $event"
                                 @update:fringe-type="fringeType = $event"
                                 @update:projector-height-input="projectorHeightInput = $event"
                                 @update:fringe3-period-count="fringe3PeriodCount = $event"
