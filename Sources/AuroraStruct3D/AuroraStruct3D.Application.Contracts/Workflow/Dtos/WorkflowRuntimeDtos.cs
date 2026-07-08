@@ -47,8 +47,10 @@ public class WorkflowExecutionTriggerInput
     [Required]
     public Guid ProjectId { get; set; }
 
+    /// <summary>运行 ID（可选，传入后可按运行进度解析目标工作流）。</summary>
+    public Guid? RunId { get; set; }
+
     /// <summary>工作流 ID。</summary>
-    [Required]
     public Guid WorkflowId { get; set; }
 
     /// <summary>执行模式。</summary>
@@ -81,12 +83,7 @@ public class WorkflowExecutionTriggerInput
     public List<string>? OutputVariableNames { get; set; }
 
     /// <summary>
-    /// 在线变量池实例 ID。
-    /// </summary>
-    public Guid? RuntimeInstanceId { get; set; }
-
-    /// <summary>
-    /// 在线变量池读取超时毫秒。
+    /// 在线变量池读取超时毫秒（保留兼容性，当前版本内部不使用）。
     /// </summary>
     public int VariableReadTimeoutMs { get; set; } = 5000;
 }
@@ -109,11 +106,11 @@ public class WorkflowExecutionStepInput
 }
 
 /// <summary>
-/// 项目级工作流任务入队请求。
+/// 项目级工作流运行入队请求。
 /// </summary>
-public class WorkflowProjectTaskEnqueueInput
+public class WorkflowProjectRunEnqueueInput
 {
-    /// <summary>任务名称。</summary>
+    /// <summary>运行名称。</summary>
     [Required]
     [StringLength(128)]
     public string Name { get; set; } = string.Empty;
@@ -123,56 +120,60 @@ public class WorkflowProjectTaskEnqueueInput
     public Guid ProjectId { get; set; }
 
     /// <summary>触发启动类型。</summary>
-    public WorkflowProjectTaskStartType StartType { get; set; } =
-        WorkflowProjectTaskStartType.Immediate;
+    public WorkflowProjectRunStartType StartType { get; set; } =
+        WorkflowProjectRunStartType.Immediate;
+
+    /// <summary>周期间隔（秒）；仅 Cyclic 有效，必须大于 0。</summary>
+    [Range(1, 86400)]
+    public int? CycleIntervalSeconds { get; set; }
 
     /// <summary>运行出错后的处理策略。</summary>
-    public WorkflowProjectTaskOnErrorAction OnErrorAction { get; set; } =
-        WorkflowProjectTaskOnErrorAction.StopTask;
+    public WorkflowProjectRunOnErrorAction OnErrorAction { get; set; } =
+        WorkflowProjectRunOnErrorAction.StopRun;
 }
 
 /// <summary>
-/// 项目任务运行出错后的处理策略。
+/// 项目运行出错后的处理策略。
 /// </summary>
-public enum WorkflowProjectTaskOnErrorAction
+public enum WorkflowProjectRunOnErrorAction
 {
-    /// <summary>遇错即停止任务。</summary>
-    StopTask = 0,
+    /// <summary>遇错即停止运行。</summary>
+    StopRun = 0,
 
     /// <summary>跳过失败工作流并继续执行后续工作流。</summary>
-    ContinueTask = 1,
+    ContinueRun = 1,
 }
 
 /// <summary>
-/// 项目级工作流任务入队结果。
+/// 项目级工作流运行入队结果。
 /// </summary>
-public class WorkflowProjectTaskEnqueueResultDto
+public class WorkflowProjectRunEnqueueResultDto
 {
-    /// <summary>任务 ID。</summary>
-    public Guid TaskId { get; set; }
+    /// <summary>运行 ID。</summary>
+    public Guid RunId { get; set; }
 
     /// <summary>项目 ID。</summary>
     public Guid ProjectId { get; set; }
 
-    /// <summary>任务内工作流数。</summary>
+    /// <summary>运行内工作流数。</summary>
     public int WorkflowCount { get; set; }
 
     /// <summary>Hangfire JobId。</summary>
     public string HangfireJobId { get; set; } = string.Empty;
 
-    /// <summary>本次任务绑定的部署快照 ID；legacy 回退模式下为 null。</summary>
-    public Guid? DeploymentId { get; set; }
+    /// <summary>本次运行来源的部署快照 ID。</summary>
+    public Guid DeploymentId { get; set; }
 
-    /// <summary>本次任务绑定的部署版本号；legacy 回退模式下为 null。</summary>
-    public int? DeploymentRevision { get; set; }
+    /// <summary>本次运行来源的部署版本号。</summary>
+    public int DeploymentRevision { get; set; }
 }
 
 /// <summary>
-/// 项目工作流绑定 DTO。
+/// 项目工作流任务配置行项（单个工作流的启用与执行顺序）。
 /// </summary>
-public class WorkflowProjectBindingDto
+public class WorkflowProjectTaskDto
 {
-    /// <summary>绑定 ID。</summary>
+    /// <summary>任务配置 ID。</summary>
     public Guid Id { get; set; }
 
     /// <summary>项目 ID。</summary>
@@ -188,38 +189,29 @@ public class WorkflowProjectBindingDto
     public bool IsEnabled { get; set; }
 
     /// <summary>执行顺序。</summary>
-    public int OrderNo { get; set; }
-}
-
-/// <summary>
-/// 项目工作流绑定批量更新项。
-/// </summary>
-public class WorkflowProjectBindingUpdateItemInput
-{
-    /// <summary>工作流 ID。</summary>
-    [Required]
-    public Guid WorkflowId { get; set; }
-
-    /// <summary>是否启用。</summary>
-    public bool IsEnabled { get; set; }
-
-    /// <summary>执行顺序。</summary>
     [Range(0, 100000)]
     public int OrderNo { get; set; }
 }
 
 /// <summary>
-/// 项目工作流绑定批量更新请求。
+/// 项目工作流任务配置（项目级触发配置 + 工作流行项）。
+/// <para>查询与更新统一使用该对象；更新时以 <see cref="Items"/> 整体覆盖项目任务配置。</para>
 /// </summary>
-public class WorkflowProjectBindingBatchUpdateInput
+public class WorkflowProjectTaskBatchDto
 {
     /// <summary>项目 ID。</summary>
     [Required]
     public Guid ProjectId { get; set; }
 
-    /// <summary>绑定项。</summary>
-    [Required]
-    public List<WorkflowProjectBindingUpdateItemInput> Items { get; set; } = new();
+    /// <summary>项目级触发类型。</summary>
+    public WorkflowProjectTaskType TaskType { get; set; } = WorkflowProjectTaskType.Immediate;
+
+    /// <summary>周期间隔（秒）；仅 Cyclic 有效。</summary>
+    [Range(1, 86400)]
+    public int? CycleIntervalSeconds { get; set; }
+
+    /// <summary>任务配置行项（各工作流的启用与顺序）。</summary>
+    public List<WorkflowProjectTaskDto> Items { get; set; } = new();
 }
 
 /// <summary>
@@ -268,11 +260,15 @@ public class WorkflowProjectDeploymentDto
 }
 
 /// <summary>
-/// 项目任务列表查询请求。
+/// 项目运行列表查询请求。
 /// </summary>
-public class WorkflowProjectTaskListInput
+public class WorkflowProjectRunListInput
 {
-    /// <summary>项目 ID（可选，不传则查询全部项目任务）。</summary>
+    /// <summary>运行名称（可选，按名称模糊匹配）。</summary>
+    [StringLength(128)]
+    public string? Name { get; set; }
+
+    /// <summary>项目 ID（可选，不传则查询全部项目运行）。</summary>
     public Guid ProjectId { get; set; }
 
     /// <summary>跳过条数。</summary>
@@ -285,30 +281,30 @@ public class WorkflowProjectTaskListInput
 }
 
 /// <summary>
-/// 项目任务修改请求。
+/// 项目运行修改请求。
 /// </summary>
-public class WorkflowProjectTaskUpdateInput
+public class WorkflowProjectRunUpdateInput
 {
-    /// <summary>任务名称。</summary>
+    /// <summary>运行名称。</summary>
     [Required]
     [StringLength(128)]
     public string Name { get; set; } = string.Empty;
 
     /// <summary>运行出错后的处理策略。</summary>
-    public WorkflowProjectTaskOnErrorAction OnErrorAction { get; set; } =
-        WorkflowProjectTaskOnErrorAction.StopTask;
+    public WorkflowProjectRunOnErrorAction OnErrorAction { get; set; } =
+        WorkflowProjectRunOnErrorAction.StopRun;
 }
 
 /// <summary>
-/// 任务内单工作流执行结果 DTO。
+/// 运行内单工作流执行结果 DTO。
 /// </summary>
-public class WorkflowProjectTaskItemDto
+public class WorkflowProjectRunItemDto
 {
     /// <summary>工作流 ID。</summary>
     public Guid WorkflowId { get; set; }
 
     /// <summary>状态。</summary>
-    public WorkflowProjectTaskItemStatus Status { get; set; }
+    public WorkflowProjectRunItemStatus Status { get; set; }
 
     /// <summary>执行会话 ID。</summary>
     public Guid? ExecutionId { get; set; }
@@ -324,42 +320,39 @@ public class WorkflowProjectTaskItemDto
 }
 
 /// <summary>
-/// 项目任务状态 DTO。
+/// 项目运行状态 DTO。
 /// </summary>
-public class WorkflowProjectTaskStatusDto
+public class WorkflowProjectRunStatusDto
 {
-    /// <summary>任务 ID。</summary>
-    public Guid TaskId { get; set; }
+    /// <summary>运行 ID。</summary>
+    public Guid RunId { get; set; }
 
     /// <summary>项目 ID。</summary>
     public Guid ProjectId { get; set; }
 
-    /// <summary>任务名称。</summary>
+    /// <summary>运行名称。</summary>
     public string Name { get; set; } = string.Empty;
 
     /// <summary>Hangfire JobId。</summary>
     public string? HangfireJobId { get; set; }
 
-    /// <summary>任务状态。</summary>
-    public WorkflowProjectTaskStatus Status { get; set; }
+    /// <summary>运行状态。</summary>
+    public WorkflowProjectRunStatus Status { get; set; }
 
-    /// <summary>任务类型（触发启动类型）。</summary>
-    public WorkflowProjectTaskStartType StartType { get; set; }
+    /// <summary>触发启动类型。</summary>
+    public WorkflowProjectRunStartType StartType { get; set; }
+
+    /// <summary>周期间隔（秒）；仅 Cyclic 有效。</summary>
+    public int? CycleIntervalSeconds { get; set; }
 
     /// <summary>执行出错后的动作选择。</summary>
-    public WorkflowProjectTaskOnErrorAction OnErrorAction { get; set; }
+    public WorkflowProjectRunOnErrorAction OnErrorAction { get; set; }
 
-    /// <summary>本次任务绑定的部署快照 ID；legacy 回退模式下为 null。</summary>
+    /// <summary>本次运行来源的部署快照 ID。</summary>
     public Guid? DeploymentId { get; set; }
 
-    /// <summary>本次任务绑定的部署版本号；legacy 回退模式下为 null。</summary>
+    /// <summary>本次运行来源的部署版本号。</summary>
     public int? DeploymentRevision { get; set; }
-
-    /// <summary>是否为 legacy 回退解析模式。</summary>
-    public bool IsLegacyResolution { get; set; }
-
-    /// <summary>在线变量池实例 ID。</summary>
-    public Guid? RuntimeInstanceId { get; set; }
 
     /// <summary>工作流总数。</summary>
     public int WorkflowCount { get; set; }
@@ -388,8 +381,8 @@ public class WorkflowProjectTaskStatusDto
     /// <summary>错误信息。</summary>
     public string? ErrorMessage { get; set; }
 
-    /// <summary>任务内各工作流结果。</summary>
-    public List<WorkflowProjectTaskItemDto> Items { get; set; } = new();
+    /// <summary>运行内各工作流结果。</summary>
+    public List<WorkflowProjectRunItemDto> Items { get; set; } = new();
 }
 
 /// <summary>
@@ -424,6 +417,9 @@ public class WorkflowExecutionStatusDto
     /// <summary>执行会话 ID。</summary>
     public Guid ExecutionId { get; set; }
 
+    /// <summary>运行 ID（运行调试场景下返回）。</summary>
+    public Guid? RunId { get; set; }
+
     /// <summary>项目 ID。</summary>
     public Guid ProjectId { get; set; }
 
@@ -448,6 +444,12 @@ public class WorkflowExecutionStatusDto
     /// <summary>当前节点 ID。</summary>
     public string? CurrentNodeId { get; set; }
 
+    /// <summary>当前工作流在任务列表中的序号（从 1 开始；0 表示未知）。</summary>
+    public int WorkflowOrderNo { get; set; }
+
+    /// <summary>当前节点序号（从 1 开始；0 表示尚未进入）。</summary>
+    public int CurrentNodeOrderNo { get; set; }
+
     /// <summary>故障节点 ID。</summary>
     public string? FaultNodeId { get; set; }
 
@@ -462,11 +464,6 @@ public class WorkflowExecutionStatusDto
 
     /// <summary>耗时毫秒。</summary>
     public long DurationMs { get; set; }
-
-    /// <summary>
-    /// 在线变量池实例 ID（启用在线变量池时返回）。
-    /// </summary>
-    public Guid? RuntimeInstanceId { get; set; }
 
     /// <summary>变量快照。</summary>
     public List<WorkflowVariableResultDto> Variables { get; set; } = new();

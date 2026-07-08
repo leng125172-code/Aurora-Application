@@ -33,11 +33,28 @@ public interface IWorkflowDebugSessionStore
     WorkflowExecutionSession Get(Guid executionId);
 
     /// <summary>
+    /// 获取全部调试会话快照。
+    /// </summary>
+    /// <returns>调试会话列表。</returns>
+    IReadOnlyList<WorkflowExecutionSession> GetAll();
+
+    /// <summary>
     /// 移除会话。
     /// </summary>
     /// <param name="executionId">会话 ID。</param>
     /// <returns>移除结果。</returns>
     bool Remove(Guid executionId);
+
+    /// <summary>
+    /// 获取当前正在调试的项目 ID（无活动调试会话时为 null）。
+    /// </summary>
+    Guid? GetActiveDebugProjectId();
+
+    /// <summary>
+    /// 校验项目级调试互斥：若存在其他项目的活动调试会话则抛出异常（一次只能调试一个项目）。
+    /// </summary>
+    /// <param name="projectId">拟调试的项目 ID。</param>
+    void EnsureExclusiveDebugProject(Guid projectId);
 }
 
 /// <summary>
@@ -46,13 +63,22 @@ public interface IWorkflowDebugSessionStore
 public sealed class WorkflowDebugSessionStore : IWorkflowDebugSessionStore, ISingletonDependency
 {
     private readonly ConcurrentDictionary<Guid, WorkflowExecutionSession> _sessions = new();
+    private readonly object _debugLock = new();
 
     /// <inheritdoc/>
     public void Add(WorkflowExecutionSession session)
     {
-        if (!_sessions.TryAdd(session.ExecutionId, session))
+        lock (_debugLock)
         {
-            throw new UserFriendlyException($"执行会话已存在：{session.ExecutionId}");
+            if (session.Mode == WorkflowExecutionMode.DebugStep)
+            {
+                EnsureExclusiveDebugProject(session.ProjectId);
+            }
+
+            if (!_sessions.TryAdd(session.ExecutionId, session))
+            {
+                throw new UserFriendlyException($"执行会话已存在：{session.ExecutionId}");
+            }
         }
     }
 
@@ -68,6 +94,12 @@ public sealed class WorkflowDebugSessionStore : IWorkflowDebugSessionStore, ISin
     }
 
     /// <inheritdoc/>
+    public IReadOnlyList<WorkflowExecutionSession> GetAll()
+    {
+        return _sessions.Values.Where(x => x.Mode == WorkflowExecutionMode.DebugStep).ToList();
+    }
+
+    /// <inheritdoc/>
     public bool Remove(Guid executionId)
     {
         if (_sessions.TryRemove(executionId, out WorkflowExecutionSession? session))
@@ -78,6 +110,33 @@ public sealed class WorkflowDebugSessionStore : IWorkflowDebugSessionStore, ISin
 
         return false;
     }
+
+    /// <inheritdoc/>
+    public Guid? GetActiveDebugProjectId()
+    {
+        return _sessions
+            .Values.Where(IsActiveDebug)
+            .Select(x => (Guid?)x.ProjectId)
+            .FirstOrDefault();
+    }
+
+    /// <inheritdoc/>
+    public void EnsureExclusiveDebugProject(Guid projectId)
+    {
+        WorkflowExecutionSession? other = _sessions.Values.FirstOrDefault(x =>
+            IsActiveDebug(x) && x.ProjectId != projectId
+        );
+        if (other is not null)
+        {
+            throw new UserFriendlyException(
+                "当前主机已有其他项目正在调试，一次只能调试一个项目，请先停止当前调试会话后再开始。"
+            );
+        }
+    }
+
+    private static bool IsActiveDebug(WorkflowExecutionSession session) =>
+        session.Mode == WorkflowExecutionMode.DebugStep
+        && session.Status is WorkflowExecutionStatus.Pending or WorkflowExecutionStatus.Running;
 }
 
 /// <summary>
@@ -192,6 +251,9 @@ public sealed class WorkflowExecutionSession : IDisposable
     /// <summary>执行会话 ID。</summary>
     public Guid ExecutionId { get; init; }
 
+    /// <summary>运行 ID（运行调试场景下有值）。</summary>
+    public Guid? RunId { get; init; }
+
     /// <summary>项目 ID。</summary>
     public Guid ProjectId { get; init; }
 
@@ -209,9 +271,6 @@ public sealed class WorkflowExecutionSession : IDisposable
 
     /// <summary>已完成轮次。</summary>
     public int CompletedLoops { get; set; }
-
-    /// <summary>运行时实例 ID。</summary>
-    public Guid? RuntimeInstanceId { get; init; }
 
     /// <summary>执行状态。</summary>
     public WorkflowExecutionStatus Status { get; set; } = WorkflowExecutionStatus.Pending;

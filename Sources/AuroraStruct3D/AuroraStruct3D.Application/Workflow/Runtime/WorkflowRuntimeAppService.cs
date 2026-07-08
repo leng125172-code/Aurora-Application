@@ -30,15 +30,18 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
     private readonly IRepository<WorkflowDefinition, Guid> _repository;
     private readonly IOperatorRegistry _registry;
     private readonly IWorkflowVariableBridge _bridge;
-    private readonly IOnlineVariablePoolAppService _onlineVariablePool;
+    private readonly IWorkflowRuntimeVariablePool _runtimeVariablePool;
     private readonly IOfflineVariableLibraryAppService _offlineVariableLibrary;
     private readonly WorkflowVariableCompileRequestFactory _compileRequestFactory;
     private readonly WorkflowExecutionKernel _kernel;
     private readonly IWorkflowDebugSessionStore _sessionStore;
     private readonly IBackgroundJobClient _backgroundJobClient;
-    private readonly IRepository<WorkflowProjectBinding, Guid> _bindingRepository;
-    private readonly IRepository<WorkflowProjectDeployment, Guid> _deploymentRepository;
+    private readonly IRecurringJobManager _recurringJobManager;
+    private readonly IRepository<WorkflowProjectTaskConfig, Guid> _taskConfigRepository;
     private readonly IRepository<WorkflowProjectTask, Guid> _taskRepository;
+    private readonly IRepository<WorkflowProjectDeployment, Guid> _deploymentRepository;
+    private readonly IRepository<WorkflowProjectRun, Guid> _runRepository;
+    private readonly IRepository<VariableDefinition, Guid> _variableDefinitionRepository;
 
     /// <summary>
     /// 初始化运行时服务。
@@ -47,77 +50,93 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
         IRepository<WorkflowDefinition, Guid> repository,
         IOperatorRegistry registry,
         IWorkflowVariableBridge bridge,
-        IOnlineVariablePoolAppService onlineVariablePool,
+        IWorkflowRuntimeVariablePool runtimeVariablePool,
         IOfflineVariableLibraryAppService offlineVariableLibrary,
         WorkflowVariableCompileRequestFactory compileRequestFactory,
         WorkflowExecutionKernel kernel,
         IWorkflowDebugSessionStore sessionStore,
         IBackgroundJobClient backgroundJobClient,
-        IRepository<WorkflowProjectBinding, Guid> bindingRepository,
+        IRecurringJobManager recurringJobManager,
+        IRepository<WorkflowProjectTaskConfig, Guid> taskConfigRepository,
+        IRepository<WorkflowProjectTask, Guid> taskRepository,
         IRepository<WorkflowProjectDeployment, Guid> deploymentRepository,
-        IRepository<WorkflowProjectTask, Guid> taskRepository
+        IRepository<WorkflowProjectRun, Guid> runRepository,
+        IRepository<VariableDefinition, Guid> variableDefinitionRepository
     )
     {
         _repository = repository;
         _registry = registry;
         _bridge = bridge;
-        _onlineVariablePool = onlineVariablePool;
+        _runtimeVariablePool = runtimeVariablePool;
         _offlineVariableLibrary = offlineVariableLibrary;
         _compileRequestFactory = compileRequestFactory;
         _kernel = kernel;
         _sessionStore = sessionStore;
         _backgroundJobClient = backgroundJobClient;
-        _bindingRepository = bindingRepository;
-        _deploymentRepository = deploymentRepository;
+        _recurringJobManager = recurringJobManager;
+        _taskConfigRepository = taskConfigRepository;
         _taskRepository = taskRepository;
+        _deploymentRepository = deploymentRepository;
+        _runRepository = runRepository;
+        _variableDefinitionRepository = variableDefinitionRepository;
     }
 
     /// <inheritdoc/>
-    [HttpGet("projects/{projectId:guid}/bindings")]
-    public async Task<List<WorkflowProjectBindingDto>> GetProjectBindingsAsync(Guid projectId)
+    [HttpGet("projects/{projectId:guid}/tasks")]
+    public async Task<WorkflowProjectTaskBatchDto> GetProjectTasksAsync(Guid projectId)
     {
         if (projectId == Guid.Empty)
         {
             throw new UserFriendlyException("ProjectId 不能为空。");
         }
 
-        List<WorkflowDefinition> workflows = await AsyncExecuter.ToListAsync(
-            (await _repository.GetQueryableAsync())
-                .Where(x => x.ProjectId == projectId)
-                .OrderBy(x => x.CreationTime)
+        WorkflowProjectTaskConfig? taskConfig = await AsyncExecuter.FirstOrDefaultAsync(
+            (await _taskConfigRepository.GetQueryableAsync()).Where(x => x.ProjectId == projectId)
         );
 
-        List<WorkflowProjectBinding> bindings = await AsyncExecuter.ToListAsync(
-            (await _bindingRepository.GetQueryableAsync()).Where(x => x.ProjectId == projectId)
+        List<WorkflowProjectTask> tasks = await AsyncExecuter.ToListAsync(
+            (await _taskRepository.GetQueryableAsync()).Where(x => x.ProjectId == projectId)
         );
 
-        Dictionary<Guid, WorkflowProjectBinding> bindingMap = bindings.ToDictionary(x =>
-            x.WorkflowId
-        );
+        if (tasks.Count == 0)
+        {
+            return new WorkflowProjectTaskBatchDto { ProjectId = projectId, Items = [] };
+        }
 
-        return workflows
-            .Select(x =>
-                bindingMap.TryGetValue(x.Id, out WorkflowProjectBinding? binding)
-                    ? MapBindingDto(binding, x.Name)
-                    : new WorkflowProjectBindingDto
-                    {
-                        Id = Guid.Empty,
-                        ProjectId = projectId,
-                        WorkflowId = x.Id,
-                        WorkflowName = x.Name,
-                        IsEnabled = false,
-                        OrderNo = 0,
-                    }
+        List<Guid> workflowIds = tasks.Select(x => x.WorkflowId).Distinct().ToList();
+        Dictionary<Guid, string> workflowNameMap = (
+            await AsyncExecuter.ToListAsync(
+                (await _repository.GetQueryableAsync()).Where(x =>
+                    x.ProjectId == projectId && workflowIds.Contains(x.Id)
+                )
             )
-            .OrderBy(x => x.OrderNo)
-            .ThenBy(x => x.WorkflowName)
-            .ToList();
+        ).ToDictionary(x => x.Id, x => x.Name);
+
+        WorkflowProjectTaskType taskType =
+            taskConfig?.TaskType ?? WorkflowProjectTaskType.Immediate;
+        int? cycleIntervalSeconds =
+            taskConfig?.TaskType == WorkflowProjectTaskType.Cyclic
+                ? taskConfig.CycleIntervalSeconds
+                : null;
+
+        return new WorkflowProjectTaskBatchDto
+        {
+            ProjectId = projectId,
+            TaskType = taskType,
+            CycleIntervalSeconds = cycleIntervalSeconds,
+            Items = tasks
+                .Where(x => workflowNameMap.ContainsKey(x.WorkflowId))
+                .OrderBy(x => x.OrderNo)
+                .ThenBy(x => x.CreationTime)
+                .Select(x => MapTaskDto(x, workflowNameMap[x.WorkflowId]))
+                .ToList(),
+        };
     }
 
     /// <inheritdoc/>
-    [HttpPut("projects/bindings")]
-    public async Task<List<WorkflowProjectBindingDto>> UpdateProjectBindingsAsync(
-        WorkflowProjectBindingBatchUpdateInput input
+    [HttpPut("projects/tasks")]
+    public async Task<WorkflowProjectTaskBatchDto> UpdateProjectTasksAsync(
+        WorkflowProjectTaskBatchDto input
     )
     {
         if (input is null)
@@ -132,13 +151,21 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
 
         if (input.Items.Count == 0)
         {
-            throw new UserFriendlyException("至少需要一条绑定配置。");
+            throw new UserFriendlyException("至少需要一条任务配置。");
+        }
+
+        if (
+            input.TaskType == WorkflowProjectTaskType.Cyclic
+            && input.CycleIntervalSeconds is null or <= 0
+        )
+        {
+            throw new UserFriendlyException("周期触发必须提供大于 0 的周期间隔（秒）。");
         }
 
         List<Guid> workflowIds = input.Items.Select(x => x.WorkflowId).Distinct().ToList();
         if (workflowIds.Any(x => x == Guid.Empty) || workflowIds.Count != input.Items.Count)
         {
-            throw new UserFriendlyException("绑定中的 WorkflowId 不能为空且不能重复。");
+            throw new UserFriendlyException("任务配置中的 WorkflowId 不能为空且不能重复。");
         }
 
         IQueryable<WorkflowDefinition> workflowQuery = await _repository.GetQueryableAsync();
@@ -147,45 +174,64 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
         );
         if (workflows.Count != workflowIds.Count)
         {
-            throw new UserFriendlyException("存在不属于当前项目的工作流，无法保存绑定配置。");
+            throw new UserFriendlyException("存在不属于当前项目的工作流，无法保存任务配置。");
         }
 
-        Dictionary<Guid, WorkflowProjectBinding> existingMap = (
+        int? cycleIntervalSeconds =
+            input.TaskType == WorkflowProjectTaskType.Cyclic ? input.CycleIntervalSeconds : null;
+
+        WorkflowProjectTaskConfig? taskConfig = await AsyncExecuter.FirstOrDefaultAsync(
+            (await _taskConfigRepository.GetQueryableAsync()).Where(x =>
+                x.ProjectId == input.ProjectId
+            )
+        );
+        if (taskConfig is null)
+        {
+            taskConfig = WorkflowProjectTaskConfig.Create(
+                GuidGenerator.Create(),
+                input.ProjectId,
+                input.TaskType,
+                cycleIntervalSeconds
+            );
+            await _taskConfigRepository.InsertAsync(taskConfig, autoSave: true);
+        }
+        else
+        {
+            taskConfig.SetTrigger(input.TaskType, cycleIntervalSeconds);
+            await _taskConfigRepository.UpdateAsync(taskConfig, autoSave: true);
+        }
+
+        Dictionary<Guid, WorkflowProjectTask> existingMap = (
             await AsyncExecuter.ToListAsync(
-                (await _bindingRepository.GetQueryableAsync()).Where(x =>
+                (await _taskRepository.GetQueryableAsync()).Where(x =>
                     x.ProjectId == input.ProjectId
                 )
             )
         ).ToDictionary(x => x.WorkflowId);
 
-        foreach (WorkflowProjectBindingUpdateItemInput item in input.Items)
+        foreach (WorkflowProjectTaskDto item in input.Items)
         {
-            if (existingMap.TryGetValue(item.WorkflowId, out WorkflowProjectBinding? binding))
+            if (existingMap.TryGetValue(item.WorkflowId, out WorkflowProjectTask? task))
             {
-                binding.SetEnabled(item.IsEnabled);
-                binding.SetOrderNo(item.OrderNo);
-                await _bindingRepository.UpdateAsync(binding, autoSave: true);
+                task.SetEnabled(item.IsEnabled);
+                task.SetOrderNo(item.OrderNo);
+                await _taskRepository.UpdateAsync(task, autoSave: true);
             }
             else
             {
-                WorkflowProjectBinding newBinding = WorkflowProjectBinding.Create(
+                WorkflowProjectTask newTask = WorkflowProjectTask.Create(
                     GuidGenerator.Create(),
                     input.ProjectId,
                     item.WorkflowId,
                     item.IsEnabled,
                     item.OrderNo
                 );
-                await _bindingRepository.InsertAsync(newBinding, autoSave: true);
-                existingMap[item.WorkflowId] = newBinding;
+                await _taskRepository.InsertAsync(newTask, autoSave: true);
+                existingMap[item.WorkflowId] = newTask;
             }
         }
 
-        return existingMap
-            .Values.Where(x => workflowIds.Contains(x.WorkflowId))
-            .OrderBy(x => x.OrderNo)
-            .ThenBy(x => x.CreationTime)
-            .Select(x => MapBindingDto(x, workflows.First(w => w.Id == x.WorkflowId).Name))
-            .ToList();
+        return await GetProjectTasksAsync(input.ProjectId);
     }
 
     /// <inheritdoc/>
@@ -215,16 +261,16 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
             throw new UserFriendlyException("ProjectId 不能为空。");
         }
 
-        List<WorkflowProjectBinding> bindings = await AsyncExecuter.ToListAsync(
-            (await _bindingRepository.GetQueryableAsync())
+        List<WorkflowProjectTask> tasks = await AsyncExecuter.ToListAsync(
+            (await _taskRepository.GetQueryableAsync())
                 .Where(x => x.ProjectId == projectId && x.IsEnabled)
                 .OrderBy(x => x.OrderNo)
                 .ThenBy(x => x.CreationTime)
         );
 
-        if (bindings.Count == 0)
+        if (tasks.Count == 0)
         {
-            throw new UserFriendlyException("当前项目没有已启用的工作流绑定，无法发布部署快照。");
+            throw new UserFriendlyException("当前项目没有已启用的工作流任务，无法发布部署快照。");
         }
 
         int nextRevision =
@@ -237,7 +283,7 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
                 ) ?? 0
             ) + 1;
 
-        List<Guid> workflowIds = bindings.Select(x => x.WorkflowId).Distinct().ToList();
+        List<Guid> workflowIds = tasks.Select(x => x.WorkflowId).Distinct().ToList();
         List<WorkflowDefinition> workflows = await AsyncExecuter.ToListAsync(
             (await _repository.GetQueryableAsync()).Where(x =>
                 x.ProjectId == projectId && workflowIds.Contains(x.Id)
@@ -246,11 +292,11 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
 
         if (workflows.Count != workflowIds.Count)
         {
-            throw new UserFriendlyException("存在已绑定但已不存在的工作流，无法发布部署快照。");
+            throw new UserFriendlyException("存在已启用但已不存在的工作流，无法发布部署快照。");
         }
 
         Dictionary<Guid, WorkflowDefinition> workflowMap = workflows.ToDictionary(x => x.Id);
-        List<WorkflowProjectDeploymentItem> items = bindings
+        List<WorkflowProjectDeploymentItem> items = tasks
             .Select(x => new WorkflowProjectDeploymentItem
             {
                 WorkflowId = x.WorkflowId,
@@ -260,12 +306,39 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
             })
             .ToList();
 
+        // 冻结完整工作流图（按发布顺序固化 GraphData）。
+        List<WorkflowProjectFrozenGraph> frozenGraphs = items
+            .Select(x => new WorkflowProjectFrozenGraph
+            {
+                WorkflowId = x.WorkflowId,
+                GraphData = workflowMap[x.WorkflowId].GraphData,
+            })
+            .ToList();
+
+        // 冻结项目变量定义默认值（与运行时变量池初始化一致）。
+        List<VariableDefinition> variableDefinitions = await AsyncExecuter.ToListAsync(
+            (await _variableDefinitionRepository.GetQueryableAsync()).Where(x =>
+                x.ProjectId == projectId
+            )
+        );
+        List<WorkflowProjectFrozenVariable> frozenVariables = variableDefinitions
+            .Select(x => new WorkflowProjectFrozenVariable
+            {
+                OwnerWorkflowId = x.OwnerWorkflowId,
+                Name = x.Name,
+                TypeName = x.TypeName,
+                DefaultValueJson = x.DefaultValueJson,
+            })
+            .ToList();
+
         string snapshotHash = ComputeSnapshotHash(items);
         WorkflowProjectDeployment deployment = WorkflowProjectDeployment.CreatePublished(
             GuidGenerator.Create(),
             projectId,
             nextRevision,
             items,
+            frozenGraphs,
+            frozenVariables,
             snapshotHash
         );
         await _deploymentRepository.InsertAsync(deployment, autoSave: true);
@@ -319,9 +392,9 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
     }
 
     /// <inheritdoc/>
-    [HttpPost("tasks")]
-    public async Task<WorkflowProjectTaskEnqueueResultDto> EnqueueProjectTaskAsync(
-        WorkflowProjectTaskEnqueueInput input
+    [HttpPost("runs")]
+    public async Task<WorkflowProjectRunEnqueueResultDto> EnqueueProjectRunAsync(
+        WorkflowProjectRunEnqueueInput input
     )
     {
         if (input.ProjectId == Guid.Empty)
@@ -329,58 +402,97 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
             throw new UserFriendlyException("ProjectId 不能为空。");
         }
 
-        if (input.StartType != WorkflowProjectTaskStartType.Immediate)
+        if (!Enum.IsDefined(typeof(WorkflowProjectRunStartType), input.StartType))
         {
-            throw new UserFriendlyException("当前仅支持 Immediate 触发启动类型。");
+            throw new UserFriendlyException("StartType 参数不合法。");
+        }
+
+        if (
+            input.StartType == WorkflowProjectRunStartType.Cyclic
+            && input.CycleIntervalSeconds is null or <= 0
+        )
+        {
+            throw new UserFriendlyException("周期启动必须提供大于 0 的周期间隔（秒）。");
         }
 
         Guid projectId = input.ProjectId;
 
-        (List<Guid> workflowIds, Guid? deploymentId, int? deploymentRevision) =
-            await ResolveTaskWorkflowIdsAsync(projectId);
+        // 项目独占校验：同一项目已有 Queued 或 Running 运行时拒绝创建新运行。
+        bool hasActiveRun = await AsyncExecuter.AnyAsync(
+            (await _runRepository.GetQueryableAsync()).Where(x =>
+                x.ProjectId == projectId
+                && (
+                    x.Status == WorkflowProjectRunStatus.Queued
+                    || x.Status == WorkflowProjectRunStatus.Running
+                )
+            )
+        );
+        if (hasActiveRun)
+        {
+            throw new UserFriendlyException(
+                "该项目已有进行中的运行，请等待完成、取消或删除现有运行后再启动新运行。"
+            );
+        }
 
-        bool continueOnError = input.OnErrorAction == WorkflowProjectTaskOnErrorAction.ContinueTask;
-        Guid runtimeInstanceId = GuidGenerator.Create();
-        const int variableReadTimeoutMs = 5000;
+        (List<Guid> workflowIds, Guid deploymentId, int deploymentRevision) =
+            await ResolveActiveDeploymentAsync(projectId);
 
-        Guid taskId = GuidGenerator.Create();
-        // 项目任务固定使用在线变量池，保持跨工作流的数据一致性。
-        const bool useOnlineVariablePool = true;
-        WorkflowProjectTask task = WorkflowProjectTask.Create(
-            taskId,
+        bool continueOnError = input.OnErrorAction == WorkflowProjectRunOnErrorAction.ContinueRun;
+
+        Guid runId = GuidGenerator.Create();
+        WorkflowProjectRun run = WorkflowProjectRun.Create(
+            runId,
             projectId,
             input.Name.Trim(),
             input.StartType,
+            input.StartType == WorkflowProjectRunStartType.Cyclic
+                ? input.CycleIntervalSeconds
+                : null,
             deploymentId,
             deploymentRevision,
             workflowIds,
-            continueOnError,
-            useOnlineVariablePool,
-            runtimeInstanceId,
-            variableReadTimeoutMs
+            continueOnError
         );
-        await _taskRepository.InsertAsync(task, autoSave: true);
+        await _runRepository.InsertAsync(run, autoSave: true);
 
-        string hangfireJobId = _backgroundJobClient.Enqueue<WorkflowProjectExecutionJob>(job =>
+        string hangfireJobId = _backgroundJobClient.Enqueue<WorkflowProjectRunJob>(job =>
             job.ExecuteAsync(
-                new WorkflowProjectExecutionJobArgs
+                new WorkflowProjectRunJobArgs
                 {
-                    TaskId = taskId,
+                    RunId = runId,
                     ProjectId = projectId,
+                    DeploymentId = deploymentId,
                     WorkflowIds = workflowIds,
-                    UseOnlineVariablePool = useOnlineVariablePool,
-                    RuntimeInstanceId = runtimeInstanceId,
-                    VariableReadTimeoutMs = variableReadTimeoutMs,
                     ContinueOnError = continueOnError,
                 }
             )
         );
-        task.SetHangfireJobId(hangfireJobId);
-        await _taskRepository.UpdateAsync(task, autoSave: true);
+        run.SetHangfireJobId(hangfireJobId);
+        await _runRepository.UpdateAsync(run, autoSave: true);
 
-        return new WorkflowProjectTaskEnqueueResultDto
+        // 周期任务：注册项目级 RecurringJob，后续按周期创建新的运行实例。
+        if (input.StartType == WorkflowProjectRunStartType.Cyclic)
         {
-            TaskId = taskId,
+            _recurringJobManager.AddOrUpdate<WorkflowProjectRunJob>(
+                BuildRecurringJobId(projectId),
+                job =>
+                    job.ExecuteRecurringAsync(
+                        new WorkflowProjectRunRecurringArgs
+                        {
+                            ProjectId = projectId,
+                            DeploymentId = deploymentId,
+                            DeploymentRevision = deploymentRevision,
+                            ContinueOnError = continueOnError,
+                            NamePrefix = input.Name.Trim(),
+                        }
+                    ),
+                BuildCronExpression(input.CycleIntervalSeconds!.Value)
+            );
+        }
+
+        return new WorkflowProjectRunEnqueueResultDto
+        {
+            RunId = runId,
             ProjectId = projectId,
             WorkflowCount = workflowIds.Count,
             HangfireJobId = hangfireJobId,
@@ -391,9 +503,9 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
 
     private async Task<(
         List<Guid> WorkflowIds,
-        Guid? DeploymentId,
-        int? DeploymentRevision
-    )> ResolveTaskWorkflowIdsAsync(Guid projectId)
+        Guid DeploymentId,
+        int DeploymentRevision
+    )> ResolveActiveDeploymentAsync(Guid projectId)
     {
         WorkflowProjectDeployment? activeDeployment = await AsyncExecuter.FirstOrDefaultAsync(
             (await _deploymentRepository.GetQueryableAsync())
@@ -404,77 +516,51 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
                 .OrderByDescending(x => x.Revision)
         );
 
-        if (activeDeployment is not null)
+        if (activeDeployment is null)
         {
-            List<WorkflowProjectDeploymentItem> deploymentItems =
-                DeserializeJson<List<WorkflowProjectDeploymentItem>>(activeDeployment.SnapshotJson)
-                ?? [];
-
-            List<Guid> deploymentWorkflowIds = deploymentItems
-                .OrderBy(x => x.OrderNo)
-                .Select(x => x.WorkflowId)
-                .Where(x => x != Guid.Empty)
-                .Distinct()
-                .ToList();
-
-            if (deploymentWorkflowIds.Count == 0)
-            {
-                throw new UserFriendlyException("当前项目的激活部署快照为空，无法创建任务。");
-            }
-
-            List<WorkflowDefinition> existingWorkflows = await AsyncExecuter.ToListAsync(
-                (await _repository.GetQueryableAsync()).Where(x =>
-                    x.ProjectId == projectId && deploymentWorkflowIds.Contains(x.Id)
-                )
+            throw new UserFriendlyException(
+                "当前项目没有已激活的部署快照，请先发布并激活部署后再创建运行。"
             );
-
-            if (existingWorkflows.Count != deploymentWorkflowIds.Count)
-            {
-                throw new UserFriendlyException(
-                    "当前项目的激活部署快照包含不存在的工作流，请重新发布项目后再创建任务。"
-                );
-            }
-
-            Dictionary<Guid, WorkflowDefinition> workflowMap = existingWorkflows.ToDictionary(x =>
-                x.Id
-            );
-            foreach (WorkflowProjectDeploymentItem item in deploymentItems)
-            {
-                WorkflowDefinition workflow = workflowMap[item.WorkflowId];
-                if (
-                    !string.Equals(
-                        item.GraphHash,
-                        ComputeGraphHash(workflow.GraphData),
-                        StringComparison.Ordinal
-                    )
-                )
-                {
-                    throw new UserFriendlyException(
-                        $"工作流 {workflow.Name} 已在发布后发生变化，请重新发布项目后再创建任务。"
-                    );
-                }
-            }
-
-            return (deploymentWorkflowIds, activeDeployment.Id, activeDeployment.Revision);
         }
 
-        IQueryable<WorkflowDefinition> queryable = await _repository.GetQueryableAsync();
-        List<WorkflowDefinition> projectWorkflows = await AsyncExecuter.ToListAsync(
-            queryable.Where(x => x.ProjectId == projectId).OrderBy(x => x.CreationTime)
-        );
+        List<WorkflowProjectDeploymentItem> deploymentItems =
+            DeserializeJson<List<WorkflowProjectDeploymentItem>>(activeDeployment.SnapshotJson)
+            ?? [];
 
-        if (projectWorkflows.Count == 0)
+        List<Guid> deploymentWorkflowIds = deploymentItems
+            .OrderBy(x => x.OrderNo)
+            .Select(x => x.WorkflowId)
+            .Where(x => x != Guid.Empty)
+            .Distinct()
+            .ToList();
+
+        if (deploymentWorkflowIds.Count == 0)
         {
-            throw new UserFriendlyException("当前项目下不存在工作流，无法创建任务。");
+            throw new UserFriendlyException("当前项目的激活部署快照为空，无法创建运行。");
         }
 
-        return (projectWorkflows.Select(x => x.Id).Distinct().ToList(), null, null);
+        return (deploymentWorkflowIds, activeDeployment.Id, activeDeployment.Revision);
+    }
+
+    private static string BuildRecurringJobId(Guid projectId) =>
+        $"workflow-project-run:{projectId:N}";
+
+    private static string BuildCronExpression(int intervalSeconds)
+    {
+        if (intervalSeconds < 60)
+        {
+            int seconds = Math.Clamp(intervalSeconds, 1, 59);
+            return $"*/{seconds} * * * * *";
+        }
+
+        int minutes = Math.Clamp(intervalSeconds / 60, 1, 1440);
+        return $"*/{minutes} * * * *";
     }
 
     /// <inheritdoc/>
-    [HttpGet("tasks")]
-    public async Task<List<WorkflowProjectTaskStatusDto>> GetProjectTasksAsync(
-        WorkflowProjectTaskListInput input
+    [HttpGet("runs")]
+    public async Task<List<WorkflowProjectRunStatusDto>> GetProjectRunsAsync(
+        WorkflowProjectRunListInput input
     )
     {
         if (input is null)
@@ -494,54 +580,65 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
 
         try
         {
-            IQueryable<WorkflowProjectTask> queryable = await _taskRepository.GetQueryableAsync();
+            IQueryable<WorkflowProjectRun> queryable = await _runRepository.GetQueryableAsync();
             if (input.ProjectId != Guid.Empty)
             {
                 queryable = queryable.Where(x => x.ProjectId == input.ProjectId);
             }
 
-            List<WorkflowProjectTask> tasks = await AsyncExecuter.ToListAsync(
+            if (!string.IsNullOrWhiteSpace(input.Name))
+            {
+                string keyword = input.Name.Trim();
+                queryable = queryable.Where(x => x.Name.Contains(keyword));
+            }
+
+            List<WorkflowProjectRun> runs = await AsyncExecuter.ToListAsync(
                 queryable
                     .OrderByDescending(x => x.CreationTime)
                     .Skip(input.SkipCount)
                     .Take(input.MaxResultCount)
             );
 
-            return tasks.Select(MapTaskToStatusDto).ToList();
+            return runs.Select(MapRunToStatusDto).ToList();
         }
         catch (Exception)
         {
-            throw new UserFriendlyException("查询任务列表失败，请稍后重试。");
+            throw new UserFriendlyException("查询运行列表失败，请稍后重试。");
         }
     }
 
     /// <inheritdoc/>
-    [HttpGet("tasks/{taskId:guid}")]
-    public async Task<WorkflowProjectTaskStatusDto> GetProjectTaskStatusAsync(Guid taskId)
+    [HttpGet("runs/{runId:guid}")]
+    public async Task<WorkflowProjectRunStatusDto> GetProjectRunStatusAsync(Guid runId)
     {
-        WorkflowProjectTask task = await _taskRepository.GetAsync(taskId);
-        return MapTaskToStatusDto(task);
+        WorkflowProjectRun run = await _runRepository.GetAsync(runId);
+        return MapRunToStatusDto(run);
     }
 
     /// <inheritdoc/>
-    [HttpPost("tasks/{taskId:guid}/cancel")]
-    public async Task CancelProjectTaskAsync(Guid taskId)
+    [HttpPost("runs/{runId:guid}/cancel")]
+    public async Task CancelProjectRunAsync(Guid runId)
     {
-        WorkflowProjectTask task = await _taskRepository.GetAsync(taskId);
-        task.RequestCancel();
-        await _taskRepository.UpdateAsync(task, autoSave: true);
+        WorkflowProjectRun run = await _runRepository.GetAsync(runId);
+        run.RequestCancel();
+        await _runRepository.UpdateAsync(run, autoSave: true);
+
+        if (run.StartType == WorkflowProjectRunStartType.Cyclic)
+        {
+            _recurringJobManager.RemoveIfExists(BuildRecurringJobId(run.ProjectId));
+        }
     }
 
     /// <inheritdoc/>
-    [HttpPut("tasks/{taskId:guid}")]
-    public async Task<WorkflowProjectTaskStatusDto> UpdateProjectTaskAsync(
-        Guid taskId,
-        WorkflowProjectTaskUpdateInput input
+    [HttpPut("runs/{runId:guid}")]
+    public async Task<WorkflowProjectRunStatusDto> UpdateProjectRunAsync(
+        Guid runId,
+        WorkflowProjectRunUpdateInput input
     )
     {
-        if (taskId == Guid.Empty)
+        if (runId == Guid.Empty)
         {
-            throw new UserFriendlyException("TaskId 不能为空。");
+            throw new UserFriendlyException("RunId 不能为空。");
         }
 
         if (input is null)
@@ -551,36 +648,36 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
 
         if (string.IsNullOrWhiteSpace(input.Name))
         {
-            throw new UserFriendlyException("任务名称不能为空。");
+            throw new UserFriendlyException("运行名称不能为空。");
         }
 
-        if (!Enum.IsDefined(typeof(WorkflowProjectTaskOnErrorAction), input.OnErrorAction))
+        if (!Enum.IsDefined(typeof(WorkflowProjectRunOnErrorAction), input.OnErrorAction))
         {
             throw new UserFriendlyException("OnErrorAction 参数不合法。");
         }
 
         try
         {
-            WorkflowProjectTask? task = await AsyncExecuter.FirstOrDefaultAsync(
-                (await _taskRepository.GetQueryableAsync()).Where(x => x.Id == taskId)
+            WorkflowProjectRun? run = await AsyncExecuter.FirstOrDefaultAsync(
+                (await _runRepository.GetQueryableAsync()).Where(x => x.Id == runId)
             );
-            if (task is null)
+            if (run is null)
             {
-                throw new UserFriendlyException("任务不存在或已被删除。");
+                throw new UserFriendlyException("运行不存在或已被删除。");
             }
 
-            if (task.Status == WorkflowProjectTaskStatus.Running)
+            if (run.Status == WorkflowProjectRunStatus.Running)
             {
-                throw new UserFriendlyException("执行中的任务不允许修改，请先取消或等待结束。");
+                throw new UserFriendlyException("执行中的运行不允许修改，请先取消或等待结束。");
             }
 
-            task.UpdateName(input.Name.Trim());
-            task.UpdateContinueOnError(
-                input.OnErrorAction == WorkflowProjectTaskOnErrorAction.ContinueTask
+            run.UpdateName(input.Name.Trim());
+            run.UpdateContinueOnError(
+                input.OnErrorAction == WorkflowProjectRunOnErrorAction.ContinueRun
             );
 
-            await _taskRepository.UpdateAsync(task, autoSave: true);
-            return MapTaskToStatusDto(task);
+            await _runRepository.UpdateAsync(run, autoSave: true);
+            return MapRunToStatusDto(run);
         }
         catch (UserFriendlyException)
         {
@@ -588,21 +685,26 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
         }
         catch (Exception)
         {
-            throw new UserFriendlyException("修改任务失败，请稍后重试。");
+            throw new UserFriendlyException("修改运行失败，请稍后重试。");
         }
     }
 
     /// <inheritdoc/>
-    [HttpDelete("tasks/{taskId:guid}")]
-    public async Task DeleteProjectTaskAsync(Guid taskId)
+    [HttpDelete("runs/{runId:guid}")]
+    public async Task DeleteProjectRunAsync(Guid runId)
     {
-        WorkflowProjectTask task = await _taskRepository.GetAsync(taskId);
-        if (task.Status == WorkflowProjectTaskStatus.Running)
+        WorkflowProjectRun run = await _runRepository.GetAsync(runId);
+        if (run.Status == WorkflowProjectRunStatus.Running)
         {
-            throw new UserFriendlyException("执行中的任务不允许删除，请先取消或等待结束。");
+            throw new UserFriendlyException("执行中的运行不允许删除，请先取消或等待结束。");
         }
 
-        await _taskRepository.DeleteAsync(task, autoSave: true);
+        if (run.StartType == WorkflowProjectRunStartType.Cyclic)
+        {
+            _recurringJobManager.RemoveIfExists(BuildRecurringJobId(run.ProjectId));
+        }
+
+        await _runRepository.DeleteAsync(run, autoSave: true);
     }
 
     /// <inheritdoc/>
@@ -616,7 +718,14 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
             throw new UserFriendlyException("ProjectId 不能为空。");
         }
 
+        // 项目级调试互斥：单机一次只能调试一个项目（固定调试任务）。
+        if (input.Mode == WorkflowExecutionMode.DebugStep)
+        {
+            _sessionStore.EnsureExclusiveDebugProject(input.ProjectId);
+        }
+
         WorkflowExecutionBootstrap bootstrap = await PrepareBootstrapAsync(input);
+        await PreheatRunDependenciesAsync(input, bootstrap);
 
         return input.Mode switch
         {
@@ -624,6 +733,43 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
             WorkflowExecutionMode.Loop => await RunLoopModeAsync(input, bootstrap),
             _ => await RunOnceAsync(input, bootstrap),
         };
+    }
+
+    /// <summary>
+    /// 从冻结部署快照的图数据执行单个工作流（供运行 Job 内部调用，不对外暴露 HTTP 端点）。
+    /// </summary>
+    [RemoteService(false)]
+    public async Task<WorkflowExecutionTriggerResultDto> ExecuteFrozenWorkflowAsync(
+        Guid projectId,
+        Guid runId,
+        Guid workflowId,
+        string frozenGraphData
+    )
+    {
+        if (projectId == Guid.Empty || workflowId == Guid.Empty)
+        {
+            throw new UserFriendlyException("ProjectId 与 WorkflowId 不能为空。");
+        }
+
+        if (string.IsNullOrWhiteSpace(frozenGraphData))
+        {
+            throw new UserFriendlyException("冻结图数据不能为空。");
+        }
+
+        WorkflowExecutionTriggerInput input = new()
+        {
+            ProjectId = projectId,
+            RunId = runId == Guid.Empty ? null : runId,
+            WorkflowId = workflowId,
+            Mode = WorkflowExecutionMode.RunOnce,
+        };
+
+        WorkflowExecutionBootstrap bootstrap = await PrepareBootstrapAsync(
+            input,
+            frozenGraphData,
+            skipOfflineValidation: true
+        );
+        return await RunOnceAsync(input, bootstrap);
     }
 
     /// <inheritdoc/>
@@ -661,7 +807,7 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
                 _kernel.ExecuteSteps(session, input.Steps);
                 if (session.Status == WorkflowExecutionStatus.Completed)
                 {
-                    await PersistOutputsAsync(session, input: null, allowContextRead: true);
+                    PersistOutputs(session);
                     session.FrozenVariables = session.VariablePool.Snapshot(
                         session.Context,
                         session.OutputStagedKeys
@@ -686,6 +832,76 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
         {
             session.Gate.Release();
         }
+    }
+
+    /// <inheritdoc/>
+    [HttpGet("executions")]
+    public async Task<List<WorkflowExecutionStatusDto>> GetDebugSessionsAsync(
+        Guid projectId = default,
+        Guid runId = default,
+        bool includeVariables = false
+    )
+    {
+        IEnumerable<WorkflowExecutionSession> sessions = _sessionStore.GetAll();
+        List<Guid> runWorkflowIds = [];
+
+        if (runId != Guid.Empty)
+        {
+            WorkflowProjectRun run = await _runRepository.GetAsync(runId);
+            if (projectId != Guid.Empty && run.ProjectId != projectId)
+            {
+                throw new UserFriendlyException("RunId 与 ProjectId 不匹配。");
+            }
+
+            runWorkflowIds = (DeserializeJson<List<Guid>>(run.WorkflowIdsJson) ?? [])
+                .Where(x => x != Guid.Empty)
+                .Distinct()
+                .ToList();
+            sessions = sessions.Where(x => x.ProjectId == run.ProjectId && x.RunId == runId);
+        }
+        else if (projectId != Guid.Empty)
+        {
+            sessions = sessions.Where(x => x.ProjectId == projectId);
+        }
+
+        List<WorkflowExecutionStatusDto> result = new();
+        foreach (WorkflowExecutionSession session in sessions)
+        {
+            await session.Gate.WaitAsync();
+            try
+            {
+                WorkflowExecutionStatusDto dto = BuildStatusDto(session, includeVariables);
+                if (runWorkflowIds.Count > 0)
+                {
+                    dto.WorkflowOrderNo = Math.Max(
+                        runWorkflowIds.IndexOf(session.WorkflowId) + 1,
+                        0
+                    );
+                    dto.CurrentNodeOrderNo =
+                        session.ExecutedSteps > 0
+                            ? session.ExecutedSteps
+                            : (string.IsNullOrWhiteSpace(session.CurrentNodeId) ? 0 : 1);
+                }
+
+                result.Add(dto);
+            }
+            finally
+            {
+                session.Gate.Release();
+            }
+        }
+
+        if (runId != Guid.Empty && result.Count > 1)
+        {
+            WorkflowExecutionStatusDto current = result
+                .OrderByDescending(x => GetExecutionStatusPriority(x.Status))
+                .ThenByDescending(x => x.WorkflowOrderNo)
+                .ThenByDescending(x => x.CurrentNodeOrderNo)
+                .First();
+            return [current];
+        }
+
+        return result;
     }
 
     /// <inheritdoc/>
@@ -732,9 +948,7 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
         WorkflowExecutionBootstrap bootstrap
     )
     {
-        Dictionary<string, object?> initialVariables = await LoadInitialVariablesAsync(
-            input,
-            bootstrap.RuntimeInstanceId,
+        Dictionary<string, object?> initialVariables = LoadInitialVariables(
             bootstrap.InputBindings
         );
 
@@ -758,9 +972,7 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
         WorkflowExecutionBootstrap bootstrap
     )
     {
-        Dictionary<string, object?> initialVariables = await LoadInitialVariablesAsync(
-            input,
-            bootstrap.RuntimeInstanceId,
+        Dictionary<string, object?> initialVariables = LoadInitialVariables(
             bootstrap.InputBindings
         );
 
@@ -774,7 +986,7 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
         try
         {
             _kernel.ExecuteToCompletion(session);
-            await PersistOutputsAsync(session, input, allowContextRead: true);
+            PersistOutputs(session);
             session.FrozenVariables = session.VariablePool.Snapshot(
                 session.Context,
                 session.OutputStagedKeys
@@ -816,9 +1028,7 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
 
         for (int i = 0; i < input.LoopCount; i++)
         {
-            Dictionary<string, object?> initialVariables = await LoadInitialVariablesAsync(
-                input,
-                bootstrap.RuntimeInstanceId,
+            Dictionary<string, object?> initialVariables = LoadInitialVariables(
                 bootstrap.InputBindings
             );
 
@@ -864,7 +1074,7 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
         );
         resultSession.CompletedLoops = input.LoopCount;
         resultSession.MarkCompleted();
-        await PersistOutputsAsync(resultSession, input, allowContextRead: true);
+        PersistOutputs(resultSession);
         resultSession.FrozenVariables = resultSession.VariablePool.Snapshot(
             resultSession.Context,
             resultSession.OutputStagedKeys
@@ -879,50 +1089,93 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
         };
     }
 
-    private async Task PersistOutputsAsync(
-        WorkflowExecutionSession session,
-        WorkflowExecutionTriggerInput? input,
-        bool allowContextRead
-    )
+    private void PersistOutputs(WorkflowExecutionSession session)
     {
-        if (!allowContextRead)
-        {
-            return;
-        }
-
-        bool useOnlinePool = session.RuntimeInstanceId.HasValue;
         foreach (WorkflowVariableBindingKeyDto binding in session.OutputBindings)
         {
             object? value = session.Context.Get(binding.VariableName);
-            string valueType = WorkflowValueSerializer.InferValueType(value);
-
-            string stagedKey = useOnlinePool
-                ? await SaveToOnlineVariablePoolAsync(
-                    session,
-                    binding.OwnerWorkflowId,
-                    binding.VariableName,
-                    value,
-                    valueType
-                )
-                : await _bridge.SaveAsync(binding.VariableName, value);
-
-            session.OutputStagedKeys[binding.VariableName] = stagedKey;
+            _runtimeVariablePool.Write(binding.OwnerWorkflowId, binding.VariableName, value);
+            session.OutputStagedKeys[binding.VariableName] =
+                $"pool:{binding.OwnerWorkflowId:N}:{binding.VariableName}";
         }
     }
 
     private async Task<WorkflowExecutionBootstrap> PrepareBootstrapAsync(
-        WorkflowExecutionTriggerInput input
+        WorkflowExecutionTriggerInput input,
+        string? frozenGraphDataOverride = null,
+        bool skipOfflineValidation = false
     )
     {
-        if (input.ProjectId == Guid.Empty || input.WorkflowId == Guid.Empty)
+        if (input.ProjectId == Guid.Empty)
         {
-            throw new UserFriendlyException("ProjectId/WorkflowId 不能为空。");
+            throw new UserFriendlyException("ProjectId 不能为空。");
         }
 
-        WorkflowDefinition entity = await _repository.GetAsync(input.WorkflowId);
-        if (entity.ProjectId != input.ProjectId)
+        WorkflowProjectRun? runForExecution = null;
+
+        Guid resolvedWorkflowId = input.WorkflowId;
+        if (resolvedWorkflowId == Guid.Empty)
         {
-            throw new UserFriendlyException("工作流不存在或不属于该项目。");
+            if (!input.RunId.HasValue || input.RunId.Value == Guid.Empty)
+            {
+                throw new UserFriendlyException("WorkflowId 与 RunId 至少传一个。");
+            }
+
+            runForExecution = await _runRepository.GetAsync(input.RunId.Value);
+            if (runForExecution.ProjectId != input.ProjectId)
+            {
+                throw new UserFriendlyException("RunId 与 ProjectId 不匹配。");
+            }
+
+            List<Guid> runWorkflowIds =
+                DeserializeJson<List<Guid>>(runForExecution.WorkflowIdsJson) ?? [];
+            runWorkflowIds = runWorkflowIds.Where(x => x != Guid.Empty).Distinct().ToList();
+
+            if (runWorkflowIds.Count == 0)
+            {
+                throw new UserFriendlyException("运行内不存在可调试工作流。");
+            }
+
+            List<WorkflowProjectRunItemResult> runResults =
+                DeserializeJson<List<WorkflowProjectRunItemResult>>(runForExecution.ResultsJson)
+                ?? [];
+            resolvedWorkflowId = ResolveDebugWorkflowIdByRunProgress(runWorkflowIds, runResults);
+        }
+        else if (input.RunId.HasValue && input.RunId.Value != Guid.Empty)
+        {
+            runForExecution = await _runRepository.GetAsync(input.RunId.Value);
+            if (runForExecution.ProjectId != input.ProjectId)
+            {
+                throw new UserFriendlyException("RunId 与 ProjectId 不匹配。");
+            }
+
+            List<Guid> runWorkflowIds =
+                DeserializeJson<List<Guid>>(runForExecution.WorkflowIdsJson) ?? [];
+            if (!runWorkflowIds.Contains(resolvedWorkflowId))
+            {
+                throw new UserFriendlyException("传入的 WorkflowId 不属于该 RunId。");
+            }
+        }
+
+        input.WorkflowId = resolvedWorkflowId;
+
+        // 冻结执行：优先使用部署快照中的冻结图，独立于 live 工作流实体。
+        string graphData;
+        string? entityName = null;
+        if (frozenGraphDataOverride is not null)
+        {
+            graphData = frozenGraphDataOverride;
+        }
+        else
+        {
+            WorkflowDefinition entity = await _repository.GetAsync(resolvedWorkflowId);
+            if (entity.ProjectId != input.ProjectId)
+            {
+                throw new UserFriendlyException("工作流不存在或不属于该项目。");
+            }
+
+            graphData = entity.GraphData;
+            entityName = entity.Name;
         }
 
         RuntimeWorkflowDefinition compiled;
@@ -930,7 +1183,7 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
         string workflowName;
         try
         {
-            (workflowName, graph) = WorkflowGraphCompiler.ParseContent(entity.GraphData);
+            (workflowName, graph) = WorkflowGraphCompiler.ParseContent(graphData);
             compiled = await new WorkflowGraphCompiler(_registry).CompileAsync(graph, workflowName);
         }
         catch (WorkflowCompilationException ex)
@@ -946,39 +1199,40 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
         List<WorkflowVariableBindingKeyDto> inputBindings = BuildBindingKeys(
             input.InputVariableBindings,
             input.InputVariableKeys is { Count: > 0 } keys ? keys : signature.Inputs,
-            input.WorkflowId
+            resolvedWorkflowId
         );
         List<WorkflowVariableBindingKeyDto> outputBindings = BuildBindingKeys(
             input.OutputVariableBindings,
             input.OutputVariableNames is { Count: > 0 } names ? names : signature.Outputs,
-            input.WorkflowId
+            resolvedWorkflowId
         );
 
         ValidateBindingKeys(inputBindings, "input");
         ValidateBindingKeys(outputBindings, "output", uniqueByVariableName: true);
 
-        Guid? runtimeInstanceId = input.RuntimeInstanceId ?? GuidGenerator.Create();
-
         VariableCompileRequestDto compileRequest = await _compileRequestFactory.BuildAsync(
             input.ProjectId,
-            input.WorkflowId,
+            resolvedWorkflowId,
             graph,
             VariableDefUseAnalysisMode.Conservative
         );
-        VariableCompileResultDto compileResult = await _offlineVariableLibrary.CompileAsync(
-            compileRequest
-        );
-        if (!compileResult.CanPublish)
+        if (!skipOfflineValidation)
         {
-            string message = string.Join(
-                " | ",
-                compileResult
-                    .Diagnostics.Where(x => x.Severity == VariableDiagnosticSeverity.Error)
-                    .Select(x => x.Message)
-                    .Take(10)
+            VariableCompileResultDto compileResult = await _offlineVariableLibrary.CompileAsync(
+                compileRequest
             );
+            if (!compileResult.CanPublish)
+            {
+                string message = string.Join(
+                    " | ",
+                    compileResult
+                        .Diagnostics.Where(x => x.Severity == VariableDiagnosticSeverity.Error)
+                        .Select(x => x.Message)
+                        .Take(10)
+                );
 
-            throw new UserFriendlyException("执行前变量编译校验未通过：" + message);
+                throw new UserFriendlyException("执行前变量编译校验未通过：" + message);
+            }
         }
 
         IReadOnlyList<string> statementNodeIds =
@@ -987,12 +1241,12 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
         return new WorkflowExecutionBootstrap
         {
             ProjectId = input.ProjectId,
-            WorkflowId = input.WorkflowId,
-            WorkflowName = string.IsNullOrWhiteSpace(entity.Name) ? compiled.Name : entity.Name,
+            RunId = input.RunId,
+            WorkflowId = resolvedWorkflowId,
+            WorkflowName = string.IsNullOrWhiteSpace(entityName) ? compiled.Name : entityName,
             RuntimeWorkflow = compiled,
             InputBindings = inputBindings,
             OutputBindings = outputBindings,
-            RuntimeInstanceId = runtimeInstanceId,
             Declarations = compileRequest.Declarations,
             StatementNodeIds = statementNodeIds,
         };
@@ -1019,12 +1273,12 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
         return new WorkflowExecutionSession
         {
             ExecutionId = GuidGenerator.Create(),
+            RunId = bootstrap.RunId,
             ProjectId = bootstrap.ProjectId,
             WorkflowId = bootstrap.WorkflowId,
             WorkflowName = bootstrap.WorkflowName,
             Mode = mode,
             LoopCount = loopCount,
-            RuntimeInstanceId = bootstrap.RuntimeInstanceId,
             RuntimeWorkflow = bootstrap.RuntimeWorkflow,
             StatementNodeIds = bootstrap.StatementNodeIds,
             Context = context,
@@ -1048,39 +1302,10 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
         return values;
     }
 
-    private async Task<Dictionary<string, object?>> LoadInitialVariablesAsync(
-        WorkflowExecutionTriggerInput input,
-        Guid? runtimeInstanceId,
+    private Dictionary<string, object?> LoadInitialVariables(
         IReadOnlyList<WorkflowVariableBindingKeyDto> inputBindings
     )
     {
-        if (runtimeInstanceId.HasValue)
-        {
-            return await LoadFromOnlineVariablePoolAsync(
-                input,
-                runtimeInstanceId.Value,
-                inputBindings
-            );
-        }
-
-        return await _bridge.LoadAsync(inputBindings.Select(x => x.VariableName));
-    }
-
-    private async Task<Dictionary<string, object?>> LoadFromOnlineVariablePoolAsync(
-        WorkflowExecutionTriggerInput input,
-        Guid runtimeInstanceId,
-        IReadOnlyList<WorkflowVariableBindingKeyDto> inputBindings
-    )
-    {
-        await _onlineVariablePool.InitializeAsync(
-            new InitializeVariablePoolInput
-            {
-                ProjectId = input.ProjectId,
-                InstanceId = runtimeInstanceId,
-                SnapshotVersion = 0,
-            }
-        );
-
         Dictionary<string, object?> result = new(StringComparer.Ordinal);
         foreach (
             WorkflowVariableBindingKeyDto binding in inputBindings.DistinctBy(x =>
@@ -1088,60 +1313,19 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
             )
         )
         {
-            ReadVariableResultDto read = await _onlineVariablePool.ReadAsync(
-                new ReadVariableInput
-                {
-                    ProjectId = input.ProjectId,
-                    InstanceId = runtimeInstanceId,
-                    ReaderWorkflowId = input.WorkflowId,
-                    OwnerWorkflowId = binding.OwnerWorkflowId,
-                    VariableName = binding.VariableName,
-                    WaitPolicy = VariableWaitPolicy.WaitOrDefault,
-                    TimeoutMs = Math.Max(input.VariableReadTimeoutMs, 0),
-                }
-            );
-
-            if (string.IsNullOrWhiteSpace(read.ValueJson))
+            if (
+                _runtimeVariablePool.TryRead(
+                    binding.OwnerWorkflowId,
+                    binding.VariableName,
+                    out object? value
+                )
+            )
             {
-                result[binding.VariableName] = null;
-                continue;
+                result[binding.VariableName] = value;
             }
-
-            byte[] bytes = Convert.FromBase64String(read.ValueJson);
-            result[binding.VariableName] = WorkflowValueSerializer.Deserialize(
-                bytes,
-                read.TypeName
-            );
         }
 
         return result;
-    }
-
-    private async Task<string> SaveToOnlineVariablePoolAsync(
-        WorkflowExecutionSession session,
-        Guid ownerWorkflowId,
-        string variableName,
-        object? value,
-        string valueType
-    )
-    {
-        byte[] bytes = WorkflowValueSerializer.Serialize(value, valueType);
-        string valueJson = Convert.ToBase64String(bytes);
-
-        await _onlineVariablePool.WriteAsync(
-            new WriteVariableInput
-            {
-                ProjectId = session.ProjectId,
-                InstanceId = session.RuntimeInstanceId!.Value,
-                WriterWorkflowId = session.WorkflowId,
-                OwnerWorkflowId = ownerWorkflowId,
-                VariableName = variableName,
-                TypeName = valueType,
-                ValueJson = valueJson,
-            }
-        );
-
-        return $"pool:{session.RuntimeInstanceId:N}:{ownerWorkflowId:N}:{variableName}";
     }
 
     private WorkflowExecutionStatusDto BuildStatusDto(
@@ -1163,6 +1347,7 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
         return new WorkflowExecutionStatusDto
         {
             ExecutionId = session.ExecutionId,
+            RunId = session.RunId,
             ProjectId = session.ProjectId,
             WorkflowId = session.WorkflowId,
             WorkflowName = session.WorkflowName,
@@ -1171,14 +1356,59 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
             ExecutedSteps = session.ExecutedSteps,
             TotalSteps = session.RuntimeWorkflow.Statements.Count,
             CurrentNodeId = session.CurrentNodeId,
+            WorkflowOrderNo = 0,
+            CurrentNodeOrderNo =
+                session.ExecutedSteps > 0
+                    ? session.ExecutedSteps
+                    : (string.IsNullOrWhiteSpace(session.CurrentNodeId) ? 0 : 1),
             FaultNodeId = session.FaultNodeId,
             LoopCount = session.LoopCount,
             CompletedLoops = session.CompletedLoops,
             ErrorMessage = session.ErrorMessage,
             DurationMs = session.DurationMs,
-            RuntimeInstanceId = session.RuntimeInstanceId,
             Variables = variables,
         };
+    }
+
+    private async Task PreheatRunDependenciesAsync(
+        WorkflowExecutionTriggerInput input,
+        WorkflowExecutionBootstrap bootstrap
+    )
+    {
+        if (input.Mode != WorkflowExecutionMode.DebugStep || !input.RunId.HasValue)
+        {
+            return;
+        }
+
+        WorkflowProjectRun run = await _runRepository.GetAsync(input.RunId.Value);
+        if (run.ProjectId != input.ProjectId)
+        {
+            throw new UserFriendlyException("RunId 与 ProjectId 不匹配。");
+        }
+
+        List<Guid> runWorkflowIds = (DeserializeJson<List<Guid>>(run.WorkflowIdsJson) ?? [])
+            .Where(x => x != Guid.Empty)
+            .Distinct()
+            .ToList();
+
+        int targetIndex = runWorkflowIds.IndexOf(bootstrap.WorkflowId);
+        if (targetIndex <= 0)
+        {
+            return;
+        }
+
+        for (int i = 0; i < targetIndex; i++)
+        {
+            WorkflowExecutionTriggerInput preheatInput = new()
+            {
+                ProjectId = input.ProjectId,
+                WorkflowId = runWorkflowIds[i],
+                Mode = WorkflowExecutionMode.RunOnce,
+            };
+
+            WorkflowExecutionBootstrap preheatBootstrap = await PrepareBootstrapAsync(preheatInput);
+            await RunOnceAsync(preheatInput, preheatBootstrap);
+        }
     }
 
     private static List<WorkflowVariableBindingKeyDto> BuildBindingKeys(
@@ -1238,38 +1468,37 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
         }
     }
 
-    private static WorkflowProjectTaskStatusDto MapTaskToStatusDto(WorkflowProjectTask task)
+    private static WorkflowProjectRunStatusDto MapRunToStatusDto(WorkflowProjectRun run)
     {
-        List<Guid> workflowIds = DeserializeJson<List<Guid>>(task.WorkflowIdsJson) ?? [];
-        List<WorkflowProjectTaskItemResult> items =
-            DeserializeJson<List<WorkflowProjectTaskItemResult>>(task.ResultsJson) ?? [];
+        List<Guid> workflowIds = DeserializeJson<List<Guid>>(run.WorkflowIdsJson) ?? [];
+        List<WorkflowProjectRunItemResult> items =
+            DeserializeJson<List<WorkflowProjectRunItemResult>>(run.ResultsJson) ?? [];
 
-        return new WorkflowProjectTaskStatusDto
+        return new WorkflowProjectRunStatusDto
         {
-            TaskId = task.Id,
-            ProjectId = task.ProjectId,
-            Name = task.Name,
-            HangfireJobId = task.HangfireJobId,
-            Status = task.Status,
-            StartType = task.StartType,
-            OnErrorAction = task.ContinueOnError
-                ? WorkflowProjectTaskOnErrorAction.ContinueTask
-                : WorkflowProjectTaskOnErrorAction.StopTask,
-            DeploymentId = task.DeploymentId,
-            DeploymentRevision = task.DeploymentRevision,
-            IsLegacyResolution = !task.DeploymentId.HasValue,
-            RuntimeInstanceId = task.RuntimeInstanceId,
+            RunId = run.Id,
+            ProjectId = run.ProjectId,
+            Name = run.Name,
+            HangfireJobId = run.HangfireJobId,
+            Status = run.Status,
+            StartType = run.StartType,
+            CycleIntervalSeconds = run.CycleIntervalSeconds,
+            OnErrorAction = run.ContinueOnError
+                ? WorkflowProjectRunOnErrorAction.ContinueRun
+                : WorkflowProjectRunOnErrorAction.StopRun,
+            DeploymentId = run.DeploymentId,
+            DeploymentRevision = run.DeploymentRevision,
             WorkflowCount = workflowIds.Count,
-            ExecutedCount = task.ExecutedCount,
-            SuccessCount = task.SuccessCount,
-            FailedCount = task.FailedCount,
-            IsCancelRequested = task.IsCancelRequested,
-            CreationTime = task.CreationTime,
-            StartedAt = task.StartedAt,
-            FinishedAt = task.FinishedAt,
-            ErrorMessage = task.ErrorMessage,
+            ExecutedCount = run.ExecutedCount,
+            SuccessCount = run.SuccessCount,
+            FailedCount = run.FailedCount,
+            IsCancelRequested = run.IsCancelRequested,
+            CreationTime = run.CreationTime,
+            StartedAt = run.StartedAt,
+            FinishedAt = run.FinishedAt,
+            ErrorMessage = run.ErrorMessage,
             Items = items
-                .Select(x => new WorkflowProjectTaskItemDto
+                .Select(x => new WorkflowProjectRunItemDto
                 {
                     WorkflowId = x.WorkflowId,
                     Status = x.Status,
@@ -1282,19 +1511,16 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
         };
     }
 
-    private static WorkflowProjectBindingDto MapBindingDto(
-        WorkflowProjectBinding binding,
-        string workflowName
-    )
+    private static WorkflowProjectTaskDto MapTaskDto(WorkflowProjectTask task, string workflowName)
     {
-        return new WorkflowProjectBindingDto
+        return new WorkflowProjectTaskDto
         {
-            Id = binding.Id,
-            ProjectId = binding.ProjectId,
-            WorkflowId = binding.WorkflowId,
+            Id = task.Id,
+            ProjectId = task.ProjectId,
+            WorkflowId = task.WorkflowId,
             WorkflowName = workflowName,
-            IsEnabled = binding.IsEnabled,
-            OrderNo = binding.OrderNo,
+            IsEnabled = task.IsEnabled,
+            OrderNo = task.OrderNo,
         };
     }
 
@@ -1415,6 +1641,8 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
     {
         public required Guid ProjectId { get; init; }
 
+        public Guid? RunId { get; init; }
+
         public required Guid WorkflowId { get; init; }
 
         public required string WorkflowName { get; init; }
@@ -1428,7 +1656,64 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
         public required List<WorkflowVariableBindingKeyDto> InputBindings { get; init; }
 
         public required List<WorkflowVariableBindingKeyDto> OutputBindings { get; init; }
+    }
 
-        public required Guid? RuntimeInstanceId { get; init; }
+    private static int GetExecutionStatusPriority(WorkflowExecutionStatus status)
+    {
+        return status switch
+        {
+            WorkflowExecutionStatus.Running => 5,
+            WorkflowExecutionStatus.Pending => 4,
+            WorkflowExecutionStatus.Faulted => 3,
+            WorkflowExecutionStatus.Completed => 2,
+            WorkflowExecutionStatus.Stopped => 1,
+            _ => 0,
+        };
+    }
+
+    private static Guid ResolveDebugWorkflowIdByRunProgress(
+        IReadOnlyList<Guid> orderedWorkflowIds,
+        IReadOnlyList<WorkflowProjectRunItemResult> results
+    )
+    {
+        Dictionary<Guid, WorkflowProjectRunItemStatus> statusMap = results
+            .Where(x => x.WorkflowId != Guid.Empty)
+            .GroupBy(x => x.WorkflowId)
+            .ToDictionary(x => x.Key, x => x.Last().Status);
+
+        foreach (Guid workflowId in orderedWorkflowIds)
+        {
+            if (
+                statusMap.TryGetValue(workflowId, out WorkflowProjectRunItemStatus status)
+                && status == WorkflowProjectRunItemStatus.Running
+            )
+            {
+                return workflowId;
+            }
+        }
+
+        foreach (Guid workflowId in orderedWorkflowIds)
+        {
+            if (
+                !statusMap.TryGetValue(workflowId, out WorkflowProjectRunItemStatus status)
+                || status == WorkflowProjectRunItemStatus.Pending
+            )
+            {
+                return workflowId;
+            }
+        }
+
+        foreach (Guid workflowId in orderedWorkflowIds)
+        {
+            if (
+                statusMap.TryGetValue(workflowId, out WorkflowProjectRunItemStatus status)
+                && status == WorkflowProjectRunItemStatus.Failed
+            )
+            {
+                return workflowId;
+            }
+        }
+
+        return orderedWorkflowIds[0];
     }
 }

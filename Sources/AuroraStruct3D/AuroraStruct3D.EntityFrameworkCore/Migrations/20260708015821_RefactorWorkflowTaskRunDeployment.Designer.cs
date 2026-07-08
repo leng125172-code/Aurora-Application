@@ -3,6 +3,7 @@ using System;
 using AuroraStruct3D.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Volo.Abp.EntityFrameworkCore;
@@ -12,9 +13,11 @@ using Volo.Abp.EntityFrameworkCore;
 namespace AuroraStruct3D.EntityFrameworkCore.Migrations
 {
     [DbContext(typeof(AuroraStruct3DDbContext))]
-    partial class AuroraStruct3DDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260708015821_RefactorWorkflowTaskRunDeployment")]
+    partial class RefactorWorkflowTaskRunDeployment
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -3268,6 +3271,9 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("CreatorId");
 
+                    b.Property<int?>("CycleIntervalSeconds")
+                        .HasColumnType("integer");
+
                     b.Property<Guid?>("DeleterId")
                         .HasColumnType("uuid")
                         .HasColumnName("DeleterId");
@@ -3304,6 +3310,9 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                     b.Property<Guid>("ProjectId")
                         .HasColumnType("uuid");
 
+                    b.Property<int>("TaskType")
+                        .HasColumnType("integer");
+
                     b.Property<Guid>("WorkflowId")
                         .HasColumnType("uuid");
 
@@ -3315,70 +3324,6 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                     b.HasIndex("ProjectId", "IsEnabled", "OrderNo");
 
                     b.ToTable("AbpProWorkflowProjectTasks", (string)null);
-                });
-
-            modelBuilder.Entity("AuroraStruct3D.Workflow.WorkflowProjectTaskConfig", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
-
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp without time zone")
-                        .HasColumnName("CreationTime");
-
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
-
-                    b.Property<int?>("CycleIntervalSeconds")
-                        .HasColumnType("integer");
-
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
-
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp without time zone")
-                        .HasColumnName("DeletionTime");
-
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
-
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
-
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp without time zone")
-                        .HasColumnName("LastModificationTime");
-
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
-
-                    b.Property<Guid>("ProjectId")
-                        .HasColumnType("uuid");
-
-                    b.Property<int>("TaskType")
-                        .HasColumnType("integer");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ProjectId")
-                        .IsUnique();
-
-                    b.ToTable("AbpProWorkflowProjectTaskConfigs", (string)null);
                 });
 
             modelBuilder.Entity("Lion.AbpPro.BasicManagement.UserRefreshTokens.UserRefreshToken", b =>

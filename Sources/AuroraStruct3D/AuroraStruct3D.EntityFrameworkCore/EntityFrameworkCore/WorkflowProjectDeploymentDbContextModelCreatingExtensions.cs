@@ -30,6 +30,12 @@ public static class WorkflowProjectDeploymentDbContextModelCreatingExtensions
             b.Property(x => x.SnapshotHash)
                 .IsRequired()
                 .HasMaxLength(WorkflowProjectDeploymentConsts.MaxSnapshotHashLength);
+            b.Property(x => x.FrozenGraphsJson)
+                .IsRequired()
+                .HasMaxLength(WorkflowProjectDeploymentConsts.MaxFrozenGraphsJsonLength);
+            b.Property(x => x.FrozenVariablesJson)
+                .IsRequired()
+                .HasMaxLength(WorkflowProjectDeploymentConsts.MaxFrozenVariablesJsonLength);
             b.Property(x => x.ActivatedAt);
             b.Property(x => x.ActivatedBy);
 

@@ -66,18 +66,18 @@ public class WorkflowRuntimeDeploymentContractTests
     }
 
     [Fact]
-    public void Enqueue_Result_Deployment_Fields_Should_Be_Nullable_For_Legacy_Fallback()
+    public void Enqueue_Result_Deployment_Fields_Should_Be_Required_After_Mandatory_Deployment()
     {
-        PropertyInfo deploymentIdProperty = typeof(WorkflowProjectTaskEnqueueResultDto).GetProperty(
-            nameof(WorkflowProjectTaskEnqueueResultDto.DeploymentId)
+        PropertyInfo deploymentIdProperty = typeof(WorkflowProjectRunEnqueueResultDto).GetProperty(
+            nameof(WorkflowProjectRunEnqueueResultDto.DeploymentId)
         )!;
         PropertyInfo deploymentRevisionProperty =
-            typeof(WorkflowProjectTaskEnqueueResultDto).GetProperty(
-                nameof(WorkflowProjectTaskEnqueueResultDto.DeploymentRevision)
+            typeof(WorkflowProjectRunEnqueueResultDto).GetProperty(
+                nameof(WorkflowProjectRunEnqueueResultDto.DeploymentRevision)
             )!;
 
-        Assert.Equal(typeof(Guid?), deploymentIdProperty.PropertyType);
-        Assert.Equal(typeof(int?), deploymentRevisionProperty.PropertyType);
+        Assert.Equal(typeof(Guid), deploymentIdProperty.PropertyType);
+        Assert.Equal(typeof(int), deploymentRevisionProperty.PropertyType);
     }
 
     private static WorkflowProjectDeployment CreatePublishedDeployment()
@@ -105,6 +105,8 @@ public class WorkflowRuntimeDeploymentContractTests
             Guid.NewGuid(),
             revision: 1,
             items,
+            frozenGraphs: [],
+            frozenVariables: [],
             snapshotHash: "snapshot-hash"
         );
     }

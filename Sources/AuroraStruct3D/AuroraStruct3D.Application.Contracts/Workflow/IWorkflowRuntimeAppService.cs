@@ -10,20 +10,18 @@ namespace AuroraStruct3D.Workflow;
 public interface IWorkflowRuntimeAppService : IApplicationService
 {
     /// <summary>
-    /// 查询项目工作流绑定配置。
+    /// 查询项目工作流任务配置。
     /// </summary>
     /// <param name="projectId">项目 ID。</param>
-    /// <returns>绑定列表。</returns>
-    Task<List<WorkflowProjectBindingDto>> GetProjectBindingsAsync(Guid projectId);
+    /// <returns>任务配置批量结果。</returns>
+    Task<WorkflowProjectTaskBatchDto> GetProjectTasksAsync(Guid projectId);
 
     /// <summary>
-    /// 批量更新项目工作流绑定配置。
+    /// 更新项目工作流任务配置（整体覆盖）。
     /// </summary>
-    /// <param name="input">更新请求。</param>
-    /// <returns>更新后的绑定列表。</returns>
-    Task<List<WorkflowProjectBindingDto>> UpdateProjectBindingsAsync(
-        WorkflowProjectBindingBatchUpdateInput input
-    );
+    /// <param name="input">任务配置（项目级触发 + 工作流行项）。</param>
+    /// <returns>更新后的任务配置。</returns>
+    Task<WorkflowProjectTaskBatchDto> UpdateProjectTasksAsync(WorkflowProjectTaskBatchDto input);
 
     /// <summary>
     /// 查询项目部署历史。
@@ -61,51 +59,49 @@ public interface IWorkflowRuntimeAppService : IApplicationService
     Task<WorkflowProjectDeploymentDto> RollbackProjectDeploymentAsync(Guid deploymentId);
 
     /// <summary>
-    /// 创建并入队项目级工作流任务（1 任务 = 1 项目 = 多个工作流）。
+    /// 创建并入队项目级工作流运行（1 运行 = 1 项目 = 多个工作流，来源于激活部署快照）。
     /// </summary>
-    /// <param name="input">任务请求。</param>
+    /// <param name="input">运行请求。</param>
     /// <returns>入队结果。</returns>
-    Task<WorkflowProjectTaskEnqueueResultDto> EnqueueProjectTaskAsync(
-        WorkflowProjectTaskEnqueueInput input
+    Task<WorkflowProjectRunEnqueueResultDto> EnqueueProjectRunAsync(
+        WorkflowProjectRunEnqueueInput input
     );
 
     /// <summary>
-    /// 查询项目任务列表。
+    /// 查询项目运行列表。
     /// </summary>
     /// <param name="input">查询参数。</param>
-    /// <returns>任务列表。</returns>
-    Task<List<WorkflowProjectTaskStatusDto>> GetProjectTasksAsync(
-        WorkflowProjectTaskListInput input
-    );
+    /// <returns>运行列表。</returns>
+    Task<List<WorkflowProjectRunStatusDto>> GetProjectRunsAsync(WorkflowProjectRunListInput input);
 
     /// <summary>
-    /// 查询单个项目任务状态。
+    /// 查询单个项目运行状态。
     /// </summary>
-    /// <param name="taskId">任务 ID。</param>
-    /// <returns>任务状态。</returns>
-    Task<WorkflowProjectTaskStatusDto> GetProjectTaskStatusAsync(Guid taskId);
+    /// <param name="runId">运行 ID。</param>
+    /// <returns>运行状态。</returns>
+    Task<WorkflowProjectRunStatusDto> GetProjectRunStatusAsync(Guid runId);
 
     /// <summary>
-    /// 请求取消项目任务。
+    /// 请求取消项目运行。
     /// </summary>
-    /// <param name="taskId">任务 ID。</param>
-    Task CancelProjectTaskAsync(Guid taskId);
+    /// <param name="runId">运行 ID。</param>
+    Task CancelProjectRunAsync(Guid runId);
 
     /// <summary>
-    /// 修改项目任务。
+    /// 修改项目运行。
     /// </summary>
-    /// <param name="taskId">任务 ID。</param>
+    /// <param name="runId">运行 ID。</param>
     /// <param name="input">修改请求。</param>
-    Task<WorkflowProjectTaskStatusDto> UpdateProjectTaskAsync(
-        Guid taskId,
-        WorkflowProjectTaskUpdateInput input
+    Task<WorkflowProjectRunStatusDto> UpdateProjectRunAsync(
+        Guid runId,
+        WorkflowProjectRunUpdateInput input
     );
 
     /// <summary>
-    /// 删除项目任务。
+    /// 删除项目运行。
     /// </summary>
-    /// <param name="taskId">任务 ID。</param>
-    Task DeleteProjectTaskAsync(Guid taskId);
+    /// <param name="runId">运行 ID。</param>
+    Task DeleteProjectRunAsync(Guid runId);
 
     /// <summary>
     /// 触发工作流执行。
@@ -123,6 +119,19 @@ public interface IWorkflowRuntimeAppService : IApplicationService
     Task<WorkflowExecutionStepResultDto> StepAsync(
         Guid executionId,
         WorkflowExecutionStepInput input
+    );
+
+    /// <summary>
+    /// 查询调试会话列表。
+    /// </summary>
+    /// <param name="projectId">项目 ID（可选）。</param>
+    /// <param name="runId">运行 ID（可选）。</param>
+    /// <param name="includeVariables">是否返回变量快照。</param>
+    /// <returns>调试会话状态列表。</returns>
+    Task<List<WorkflowExecutionStatusDto>> GetDebugSessionsAsync(
+        Guid projectId = default,
+        Guid runId = default,
+        bool includeVariables = false
     );
 
     /// <summary>
