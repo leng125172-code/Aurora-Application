@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Hangfire;
 using Microsoft.Extensions.Logging;
+using Volo.Abp;
 using Volo.Abp.DependencyInjection;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Guids;
@@ -254,6 +255,11 @@ public class WorkflowProjectRunJob : ITransientDependency
                         workflowId,
                         graphData
                     );
+
+                if (result.Error)
+                {
+                    throw new UserFriendlyException(result.Message ?? "工作流执行失败。");
+                }
 
                 item.ExecutionId = result.ExecutionId;
                 item.Status = WorkflowProjectRunItemStatus.Succeeded;

@@ -24,14 +24,14 @@ public interface IWorkflowRuntimeAppService : IApplicationService
     Task<WorkflowProjectTaskBatchDto> UpdateProjectTasksAsync(WorkflowProjectTaskBatchDto input);
 
     /// <summary>
-    /// 查询项目部署历史。
+    /// 查询项目部署。
     /// </summary>
     /// <param name="projectId">项目 ID。</param>
-    /// <returns>部署列表。</returns>
-    Task<List<WorkflowProjectDeploymentDto>> GetProjectDeploymentsAsync(Guid projectId);
+    /// <returns>部署信息。</returns>
+    Task<WorkflowProjectDeploymentDto> GetProjectDeploymentsAsync(Guid projectId);
 
     /// <summary>
-    /// 根据当前绑定发布新的项目部署快照。
+    /// 根据当前配置发布项目部署快照（按内容幂等并支持原地更新）。
     /// </summary>
     /// <param name="projectId">项目 ID。</param>
     /// <returns>发布后的部署快照。</returns>
@@ -57,6 +57,12 @@ public interface IWorkflowRuntimeAppService : IApplicationService
     /// <param name="deploymentId">目标部署快照 ID。</param>
     /// <returns>回滚后激活的部署快照。</returns>
     Task<WorkflowProjectDeploymentDto> RollbackProjectDeploymentAsync(Guid deploymentId);
+
+    /// <summary>
+    /// 删除项目部署快照。
+    /// </summary>
+    /// <param name="deploymentId">部署快照 ID。</param>
+    Task DeleteProjectDeploymentAsync(Guid deploymentId);
 
     /// <summary>
     /// 创建并入队项目级工作流运行（1 运行 = 1 项目 = 多个工作流，来源于激活部署快照）。

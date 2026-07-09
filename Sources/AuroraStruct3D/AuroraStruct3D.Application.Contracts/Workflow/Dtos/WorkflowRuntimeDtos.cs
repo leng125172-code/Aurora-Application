@@ -390,6 +390,12 @@ public class WorkflowProjectRunStatusDto
 /// </summary>
 public class WorkflowExecutionTriggerResultDto
 {
+    /// <summary>是否发生业务错误。</summary>
+    public bool Error { get; set; }
+
+    /// <summary>结果消息；失败时为错误信息。</summary>
+    public string? Message { get; set; }
+
     /// <summary>执行会话 ID。</summary>
     public Guid ExecutionId { get; set; }
 
@@ -402,6 +408,12 @@ public class WorkflowExecutionTriggerResultDto
 /// </summary>
 public class WorkflowExecutionStepResultDto
 {
+    /// <summary>是否发生业务错误。</summary>
+    public bool Error { get; set; }
+
+    /// <summary>结果消息；失败时为错误信息。</summary>
+    public string? Message { get; set; }
+
     /// <summary>执行会话 ID。</summary>
     public Guid ExecutionId { get; set; }
 

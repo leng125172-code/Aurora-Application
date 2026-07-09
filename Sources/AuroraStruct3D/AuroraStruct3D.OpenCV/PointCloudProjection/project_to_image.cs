@@ -92,7 +92,6 @@ public class project_to_image : IOperator
             throw new InvalidOperationException("输入点云为空，无法执行投影。");
 
         int pointCount = pointCloud.Rows;
-        int colCount = pointCloud.Cols;
 
         // 计算 XY 范围
         float minX = float.MaxValue,
@@ -132,10 +131,10 @@ public class project_to_image : IOperator
 
         int res = _imageResolution;
 
-        if (_projectionMode == "rgb" && colCount >= 6)
+        if (_projectionMode == "rgb")
         {
-            // RGB 模式：使用点云颜色渲染
-            Mat rgbImage = RenderRgbImage(pointCloud, pointCount, minX, minY, rangeX, rangeY, res);
+            // RGB 模式：优先使用 PointCloudData 自带颜色信息，兼容旧格式回退。
+            Mat rgbImage = Common.PointCloudProjectionRenderer.RenderColorImage(input, res);
             context.Set("output_image", rgbImage);
         }
         else
@@ -154,60 +153,6 @@ public class project_to_image : IOperator
             );
             context.Set("output_image", depthImage);
         }
-    }
-
-    /// <summary>
-    /// 渲染 RGB 彩色图像。
-    /// </summary>
-    private static Mat RenderRgbImage(
-        Mat pointCloud,
-        int pointCount,
-        float minX,
-        float minY,
-        float rangeX,
-        float rangeY,
-        int res
-    )
-    {
-        using Mat accumR = Mat.Zeros(res, res, MatType.CV_64FC1);
-        using Mat accumG = Mat.Zeros(res, res, MatType.CV_64FC1);
-        using Mat accumB = Mat.Zeros(res, res, MatType.CV_64FC1);
-        using Mat count = Mat.Zeros(res, res, MatType.CV_32SC1);
-
-        for (int i = 0; i < pointCount; i++)
-        {
-            int px = (int)((pointCloud.Get<float>(i, 0) - minX) / rangeX * (res - 1));
-            int py = (int)((pointCloud.Get<float>(i, 1) - minY) / rangeY * (res - 1));
-            px = Math.Clamp(px, 0, res - 1);
-            py = Math.Clamp(py, 0, res - 1);
-
-            float r = pointCloud.Get<float>(i, 3);
-            float g = pointCloud.Get<float>(i, 4);
-            float b = pointCloud.Get<float>(i, 5);
-
-            accumB.Set(py, px, accumB.Get<double>(py, px) + b);
-            accumG.Set(py, px, accumG.Get<double>(py, px) + g);
-            accumR.Set(py, px, accumR.Get<double>(py, px) + r);
-            count.Set(py, px, count.Get<int>(py, px) + 1);
-        }
-
-        Mat image = new Mat(res, res, MatType.CV_8UC3, new Scalar(0, 0, 0));
-        for (int y = 0; y < res; y++)
-        {
-            for (int x = 0; x < res; x++)
-            {
-                int cnt = count.Get<int>(y, x);
-                if (cnt > 0)
-                {
-                    byte b = (byte)Math.Clamp(accumB.Get<double>(y, x) / cnt, 0, 255);
-                    byte g = (byte)Math.Clamp(accumG.Get<double>(y, x) / cnt, 0, 255);
-                    byte r = (byte)Math.Clamp(accumR.Get<double>(y, x) / cnt, 0, 255);
-                    image.Set(y, x, new Vec3b(b, g, r));
-                }
-            }
-        }
-
-        return image;
     }
 
     /// <summary>

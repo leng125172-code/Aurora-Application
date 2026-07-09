@@ -80,6 +80,32 @@ public class WorkflowRuntimeDeploymentContractTests
         Assert.Equal(typeof(int), deploymentRevisionProperty.PropertyType);
     }
 
+    [Fact]
+    public void Execution_Result_Dto_Should_Expose_Error_And_Message_While_Status_Keeps_ErrorMessage()
+    {
+        PropertyInfo triggerErrorProperty = typeof(WorkflowExecutionTriggerResultDto).GetProperty(
+            nameof(WorkflowExecutionTriggerResultDto.Error)
+        )!;
+        PropertyInfo triggerMessageProperty = typeof(WorkflowExecutionTriggerResultDto).GetProperty(
+            nameof(WorkflowExecutionTriggerResultDto.Message)
+        )!;
+        PropertyInfo stepErrorProperty = typeof(WorkflowExecutionStepResultDto).GetProperty(
+            nameof(WorkflowExecutionStepResultDto.Error)
+        )!;
+        PropertyInfo stepMessageProperty = typeof(WorkflowExecutionStepResultDto).GetProperty(
+            nameof(WorkflowExecutionStepResultDto.Message)
+        )!;
+        PropertyInfo statusErrorMessageProperty = typeof(WorkflowExecutionStatusDto).GetProperty(
+            nameof(WorkflowExecutionStatusDto.ErrorMessage)
+        )!;
+
+        Assert.Equal(typeof(bool), triggerErrorProperty.PropertyType);
+        Assert.Equal(typeof(string), triggerMessageProperty.PropertyType);
+        Assert.Equal(typeof(bool), stepErrorProperty.PropertyType);
+        Assert.Equal(typeof(string), stepMessageProperty.PropertyType);
+        Assert.Equal(typeof(string), statusErrorMessageProperty.PropertyType);
+    }
+
     private static WorkflowProjectDeployment CreatePublishedDeployment()
     {
         List<WorkflowProjectDeploymentItem> items =

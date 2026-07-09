@@ -1,15 +1,18 @@
 using System.Diagnostics;
 using System.Text.Json;
+using AuroraStruct3D.OpenCV.File.PointCloud;
 using AuroraStruct3D.OpenCV.Registry;
 using AuroraStruct3D.OpenCV.Workflow;
 using AuroraStruct3D.OpenCV.Workflow.Compilation;
 using AuroraStruct3D.OpenCV.Workflow.Compilation.Model;
 using AuroraStruct3D.OpenCV.Workflow.Values;
+using AuroraStruct3D.OperatorFile;
 using AuroraStruct3D.Variables;
 using AuroraStruct3D.Variables.Dtos;
 using AuroraStruct3D.Workflow.Dtos;
 using Microsoft.AspNetCore.Authorization;
 using Volo.Abp;
+using Volo.Abp.BlobStoring;
 using Volo.Abp.Domain.Repositories;
 using RuntimeWorkflow = AuroraStruct3D.OpenCV.Workflow.WorkflowDefinition;
 
@@ -29,18 +32,21 @@ public class WorkflowExecutionAppService : AuroraStruct3DAppService, IWorkflowEx
     private readonly IOperatorRegistry _registry;
     private readonly IWorkflowVariableBridge _bridge;
     private readonly IOnlineVariablePoolAppService _onlineVariablePool;
+    private readonly IBlobContainer<OperatorFileBlobContainer> _operatorFileBlobContainer;
 
     public WorkflowExecutionAppService(
         IRepository<WorkflowDefinition, Guid> repository,
         IOperatorRegistry registry,
         IWorkflowVariableBridge bridge,
-        IOnlineVariablePoolAppService onlineVariablePool
+        IOnlineVariablePoolAppService onlineVariablePool,
+        IBlobContainer<OperatorFileBlobContainer> operatorFileBlobContainer
     )
     {
         _repository = repository;
         _registry = registry;
         _bridge = bridge;
         _onlineVariablePool = onlineVariablePool;
+        _operatorFileBlobContainer = operatorFileBlobContainer;
     }
 
     /// <inheritdoc/>
@@ -108,6 +114,7 @@ public class WorkflowExecutionAppService : AuroraStruct3DAppService, IWorkflowEx
         WorkflowContext context;
         try
         {
+            using IDisposable blobStoreScope = CreateOperatorFileBlobStoreScope();
             context = new WorkflowExecutor().Execute(compiled, initialVariables);
         }
         catch (WorkflowExecutionException ex)
@@ -340,5 +347,12 @@ public class WorkflowExecutionAppService : AuroraStruct3DAppService, IWorkflowEx
         }
 
         return fallback;
+    }
+
+    private IDisposable CreateOperatorFileBlobStoreScope()
+    {
+        return OperatorFileBlobStoreAmbient.Push(
+            new WorkflowOperatorFileBlobStore(_operatorFileBlobContainer)
+        );
     }
 }

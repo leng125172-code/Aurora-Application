@@ -4,6 +4,7 @@ using AuroraStruct3D.OpenCV.Registry;
 using AuroraStruct3D.OperatorFile.Dtos;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using OpenCvSharp;
 using Volo.Abp;
 using Volo.Abp.BlobStoring;
@@ -214,6 +215,22 @@ public class OperatorFileAppService : AuroraStruct3DAppService, IOperatorFileApp
         }
 
         return new RemoteStreamContent(stream, blobName, "image/png");
+    }
+
+    /// <inheritdoc/>
+    [HttpGet("download")]
+    public async Task<IRemoteStreamContent> DownloadAsync(string blobName)
+    {
+        Check.NotNullOrWhiteSpace(blobName, nameof(blobName));
+
+        Stream? stream = await _blobContainer.GetAsync(blobName);
+        if (stream is null)
+        {
+            throw new UserFriendlyException($"文件不存在或已过期：{blobName}");
+        }
+
+        string fileName = Path.GetFileName(blobName);
+        return new RemoteStreamContent(stream, fileName, ResolveContentType(fileName));
     }
 
     /// <inheritdoc/>
@@ -812,6 +829,21 @@ public class OperatorFileAppService : AuroraStruct3DAppService, IOperatorFileApp
         string timestamp = DateTime.Now.ToString("yyyyMMddHHmmss_fff");
         string safeFileName = Path.GetFileName(originalFileName);
         return $"{operatorId:N}/{timestamp}_{safeFileName}";
+    }
+
+    private static string ResolveContentType(string fileName)
+    {
+        string extension = Path.GetExtension(fileName).ToLowerInvariant();
+        return extension switch
+        {
+            ".png" => "image/png",
+            ".jpg" or ".jpeg" => "image/jpeg",
+            ".bmp" => "image/bmp",
+            ".tif" or ".tiff" => "image/tiff",
+            ".webp" => "image/webp",
+            ".txt" or ".asc" or ".xyz" or ".pts" => "text/plain",
+            _ => "application/octet-stream",
+        };
     }
 
     private static void DeleteTempFileQuietly(string? tempFilePath)

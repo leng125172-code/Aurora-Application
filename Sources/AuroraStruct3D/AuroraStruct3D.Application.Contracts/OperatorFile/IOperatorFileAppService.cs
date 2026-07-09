@@ -43,6 +43,14 @@ public interface IOperatorFileAppService : IApplicationService
     Task<IRemoteStreamContent> GetPreviewAsync(string blobName);
 
     /// <summary>
+    /// 下载原始算子文件。
+    /// GET /api/app/operator-file/download
+    /// </summary>
+    /// <param name="blobName">文件 Blob 名称。</param>
+    /// <returns>文件流。</returns>
+    Task<IRemoteStreamContent> DownloadAsync(string blobName);
+
+    /// <summary>
     /// 确认文件已被工作流使用。
     /// 前端保存工作流后调用此接口，标记文件为已使用，取消过期时间避免被自动清理。
     /// POST /api/app/operator-file/confirm
