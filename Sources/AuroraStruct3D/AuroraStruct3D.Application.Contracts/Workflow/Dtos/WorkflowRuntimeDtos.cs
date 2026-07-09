@@ -393,6 +393,12 @@ public class WorkflowExecutionTriggerResultDto
     /// <summary>是否发生业务错误。</summary>
     public bool Error { get; set; }
 
+    /// <summary>机器可识别的错误码；成功时为空。</summary>
+    public string? ErrorCode { get; set; }
+
+    /// <summary>结果图下载地址；若本次执行未产生结果图则为空。</summary>
+    public string? ResultImageUrl { get; set; }
+
     /// <summary>结果消息；失败时为错误信息。</summary>
     public string? Message { get; set; }
 
@@ -410,6 +416,9 @@ public class WorkflowExecutionStepResultDto
 {
     /// <summary>是否发生业务错误。</summary>
     public bool Error { get; set; }
+
+    /// <summary>机器可识别的错误码；成功时为空。</summary>
+    public string? ErrorCode { get; set; }
 
     /// <summary>结果消息；失败时为错误信息。</summary>
     public string? Message { get; set; }

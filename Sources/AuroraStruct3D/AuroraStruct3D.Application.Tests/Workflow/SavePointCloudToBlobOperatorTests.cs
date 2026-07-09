@@ -76,6 +76,14 @@ public class SavePointCloudToBlobOperatorTests
             CancellationToken cancellationToken = default
         ) => Task.FromResult(fileName);
 
+        public Task<string> SaveImagePngAsync(
+            string fileName,
+            byte[] content,
+            CancellationToken cancellationToken = default
+        ) => Task.FromResult(fileName);
+
         public string BuildDownloadUrl(string blobName) => blobName;
+
+        public string BuildPreviewUrl(string blobName) => blobName;
     }
 }

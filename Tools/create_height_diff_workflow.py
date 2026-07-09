@@ -47,23 +47,56 @@ PROJECT = {
     "projectCode": "PRJ-HEIGHT-DIFF-001",
     "name": "高度差检测项目",
     "version": "1.0.0",
-    "description": "标准高度差检测流程——通过 RANSAC 拟合参考平面，裁剪两个 ROI 区域，分别统计高度并比较",
+    "description": "固定 ROI 的高度差检测流程——含点云预处理、分割着色、Blob 可视化、ROI 掩膜裁剪、阈值判定与结果图导出",
 }
 
 # 工作流名称
-WORKFLOW_NAME = "标准高度差检测"
+WORKFLOW_NAME = "固定ROI高度差检测"
 
 # 点云文件路径（部署时按实际路径修改）
 POINT_CLOUD_PATH = "/data/pointclouds/sample.ply"
 
-# 区域A 裁剪参数（包围盒，单位：毫米）
-REGION_A = {"minX": -50, "maxX": 0, "minY": -50, "maxY": 50, "minZ": -100, "maxZ": 100}
+PROJECTION_BOUNDS = {"minX": -80.0, "maxX": 80.0, "minY": -60.0, "maxY": 60.0}
 
-# 区域B 裁剪参数（包围盒，单位：毫米）
-REGION_B = {"minX": 0, "maxX": 50, "minY": -50, "maxY": 50, "minZ": -100, "maxZ": 100}
+ROI_A_JSON = json.dumps(
+    {
+        "rois": [
+            {
+                "name": "PlaneA",
+                "type": "Rect",
+                "x": 120,
+                "y": 180,
+                "width": 120,
+                "height": 100,
+                "rotation": 0,
+            }
+        ]
+    },
+    ensure_ascii=False,
+)
+
+ROI_B_JSON = json.dumps(
+    {
+        "rois": [
+            {
+                "name": "PlaneB",
+                "type": "Rect",
+                "x": 290,
+                "y": 180,
+                "width": 120,
+                "height": 100,
+                "rotation": 0,
+            }
+        ]
+    },
+    ensure_ascii=False,
+)
 
 # RANSAC 平面拟合参数
 RANSAC_PARAMS = {"distanceThreshold": 0.01, "maxIterations": 1000, "probability": 0.99}
+VOXEL_SIZE = 0.2
+THRESHOLD_MIN = -0.2
+THRESHOLD_MAX = 0.2
 
 # 全局 token 和 session
 _access_token = None
@@ -192,6 +225,23 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--workflow-name", default=WORKFLOW_NAME)
     parser.add_argument("--project-name", default=PROJECT["name"])
     parser.add_argument("--project-code", default=PROJECT["projectCode"])
+    parser.add_argument("--voxel-size", type=float, default=VOXEL_SIZE)
+    parser.add_argument(
+        "--projection-min-x", type=float, default=PROJECTION_BOUNDS["minX"]
+    )
+    parser.add_argument(
+        "--projection-max-x", type=float, default=PROJECTION_BOUNDS["maxX"]
+    )
+    parser.add_argument(
+        "--projection-min-y", type=float, default=PROJECTION_BOUNDS["minY"]
+    )
+    parser.add_argument(
+        "--projection-max-y", type=float, default=PROJECTION_BOUNDS["maxY"]
+    )
+    parser.add_argument("--roi-a-json", default=ROI_A_JSON)
+    parser.add_argument("--roi-b-json", default=ROI_B_JSON)
+    parser.add_argument("--threshold-min", type=float, default=THRESHOLD_MIN)
+    parser.add_argument("--threshold-max", type=float, default=THRESHOLD_MAX)
     return parser.parse_args()
 
 
@@ -199,9 +249,17 @@ def parse_args() -> argparse.Namespace:
 # 算子 GUID（与后端 [Guid] 特性一致）
 # ============================================================
 OP_READ_POINT_CLOUD = "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+OP_VOXEL_DOWNSAMPLE = "b1d01234-5678-9012-4567-89012345670a"
+OP_Z_COLORIZE = "de31c1ab-9ef0-43ab-a30f-0dce0e1d8201"
 OP_RANSAC_PLANE_FIT = "d3f12345-6789-0123-4567-89012345670c"
+OP_SAVE_POINT_CLOUD_BLOB = "a1b2c3d4-e5f6-7890-abcd-ef1234567891"
+OP_COLORED_CLOUD_TO_IMAGE = "1dd66555-a882-436b-bf30-dab8c680a201"
+OP_ROI_PARTITION = "a1b2c3d4-0001-4000-8000-000000000001"
 OP_POINT_CLOUD_CROP = "b1c2d3e4-0001-4000-8000-000000000101"
 OP_Z_CHANNEL_STATS = "b1c2d3e4-0002-4000-8000-000000000102"
+OP_HEIGHT_DIFF_EVAL = "8c3dd5d9-8234-49fb-8d1f-1d7c7e0b4201"
+OP_ANNOTATE_HEIGHT_DIFF = "1d6498c5-8d95-41ab-8801-c3f8e20d7301"
+OP_SAVE_IMAGE_BLOB = "4b8af0f5-c0fb-45df-97a6-5ab2462cfd01"
 
 
 def new_uuid() -> str:
@@ -410,346 +468,431 @@ def find_workflow_by_name(project_id: str, workflow_name: str) -> dict | None:
     return None
 
 
-def build_graph_data() -> dict:
-    """
-    构建高度差检测工作流的 graphData。
+def node(
+    node_id: str, node_type: str, x: int, y: int, title: str, properties: dict
+) -> dict:
+    return {
+        "id": node_id,
+        "type": node_type,
+        "x": x,
+        "y": y,
+        "text": {"x": x, "y": y, "value": title},
+        "properties": properties,
+    }
 
-    节点布局（从上到下）：
-      - 开始节点
-      - 读取点云
-      - RANSAC 平面拟合
-      - 裁剪区域A    裁剪区域B
-      - 高度统计A    高度统计B
-      - 结束节点
-    """
-    # 预生成所有节点 ID
+
+def make_properties(
+    *,
+    params: dict | None = None,
+    param_sources: dict | None = None,
+    input_bindings: dict | None = None,
+    input_sources: dict | None = None,
+    output_bindings: dict | None = None,
+    output_sources: dict | None = None,
+) -> dict:
+    return {
+        "params": params or {},
+        "paramSources": param_sources or {},
+        "inputBindings": input_bindings or {},
+        "inputBindingSources": input_sources or {},
+        "outputBindings": output_bindings or {},
+        "outputBindingSources": output_sources or {},
+    }
+
+
+def edge(source_id: str, target_id: str) -> dict:
+    return {
+        "id": new_uuid(),
+        "type": "polyline",
+        "sourceNodeId": source_id,
+        "targetNodeId": target_id,
+        "sourceAnchorIndex": 2,
+        "targetAnchorIndex": 0,
+        "properties": {},
+    }
+
+
+def build_graph_data() -> dict:
+    """构建固定 ROI 的高度差检测工作流。"""
     id_start = new_uuid()
     id_read = new_uuid()
+    id_downsample = new_uuid()
+    id_colorize = new_uuid()
+    id_export_cloud = new_uuid()
+    id_preview = new_uuid()
     id_ransac = new_uuid()
+    id_roi_a = new_uuid()
+    id_roi_b = new_uuid()
     id_crop_a = new_uuid()
     id_crop_b = new_uuid()
     id_stats_a = new_uuid()
     id_stats_b = new_uuid()
+    id_eval = new_uuid()
+    id_annotate = new_uuid()
+    id_export_image = new_uuid()
     id_end = new_uuid()
 
+    bounds = PROJECTION_BOUNDS
+
     nodes = [
-        # ── 开始节点 ──
-        {
-            "id": id_start,
-            "type": "start-node",
-            "x": 400,
-            "y": 50,
-            "text": {"x": 400, "y": 50, "value": "开始"},
-            "properties": {
-                "params": {},
-                "paramSources": {},
-                "inputBindings": {},
-                "inputBindingSources": {},
-                "outputBindings": {},
-                "outputBindingSources": {},
-            },
-        },
-        # ── 读取点云 ──
-        {
-            "id": id_read,
-            "type": OP_READ_POINT_CLOUD,
-            "x": 400,
-            "y": 150,
-            "text": {"x": 400, "y": 150, "value": "读取点云"},
-            "properties": {
-                "params": {},
-                "paramSources": {},
-                "inputBindings": {
-                    "point_cloud_path": POINT_CLOUD_PATH,
+        node(id_start, "start-node", 560, 40, "开始", make_properties()),
+        node(
+            id_read,
+            OP_READ_POINT_CLOUD,
+            560,
+            120,
+            "读取点云",
+            make_properties(
+                input_bindings={"point_cloud_path": POINT_CLOUD_PATH},
+                input_sources={"point_cloud_path": "literal"},
+                output_bindings={"output_point_cloud": "raw_cloud"},
+                output_sources={"output_point_cloud": "variable"},
+            ),
+        ),
+        node(
+            id_downsample,
+            OP_VOXEL_DOWNSAMPLE,
+            560,
+            200,
+            "体素下采样",
+            make_properties(
+                params={"voxelSize": VOXEL_SIZE},
+                param_sources={"voxelSize": "literal"},
+                input_bindings={"input_point_cloud": "raw_cloud"},
+                input_sources={"input_point_cloud": "variable"},
+                output_bindings={"output_point_cloud": "filtered_cloud"},
+                output_sources={"output_point_cloud": "variable"},
+            ),
+        ),
+        node(
+            id_colorize,
+            OP_Z_COLORIZE,
+            560,
+            280,
+            "Z轴着色点云",
+            make_properties(
+                input_bindings={"input_point_cloud": "filtered_cloud"},
+                input_sources={"input_point_cloud": "variable"},
+                output_bindings={"output_point_cloud": "colored_segment_cloud"},
+                output_sources={"output_point_cloud": "variable"},
+            ),
+        ),
+        node(
+            id_export_cloud,
+            OP_SAVE_POINT_CLOUD_BLOB,
+            280,
+            520,
+            "彩色点云存Blob",
+            make_properties(
+                params={"fileName": "height-diff-segments.ply"},
+                param_sources={"fileName": "literal"},
+                input_bindings={"input_point_cloud": "colored_segment_cloud"},
+                input_sources={"input_point_cloud": "variable"},
+                output_bindings={"download_url": "colored_cloud_download_url"},
+                output_sources={"download_url": "variable"},
+            ),
+        ),
+        node(
+            id_preview,
+            OP_COLORED_CLOUD_TO_IMAGE,
+            560,
+            520,
+            "彩色点云转图像",
+            make_properties(
+                params={
+                    "autoBounds": False,
+                    "imageResolution": 512,
+                    "minX": bounds["minX"],
+                    "maxX": bounds["maxX"],
+                    "minY": bounds["minY"],
+                    "maxY": bounds["maxY"],
                 },
-                "inputBindingSources": {
-                    "point_cloud_path": "literal",
+                param_sources={
+                    "autoBounds": "literal",
+                    "imageResolution": "literal",
+                    "minX": "literal",
+                    "maxX": "literal",
+                    "minY": "literal",
+                    "maxY": "literal",
                 },
-                "outputBindings": {
-                    "output_point_cloud": "cloud",
-                },
-                "outputBindingSources": {
-                    "output_point_cloud": "variable",
-                },
-            },
-        },
-        # ── RANSAC 平面拟合 ──
-        {
-            "id": id_ransac,
-            "type": OP_RANSAC_PLANE_FIT,
-            "x": 400,
-            "y": 280,
-            "text": {"x": 400, "y": 280, "value": "RANSAC 平面拟合"},
-            "properties": {
-                "params": {
-                    "distanceThreshold": RANSAC_PARAMS["distanceThreshold"],
-                    "maxIterations": RANSAC_PARAMS["maxIterations"],
-                    "probability": RANSAC_PARAMS["probability"],
-                },
-                "paramSources": {
+                input_bindings={"input_point_cloud": "colored_segment_cloud"},
+                input_sources={"input_point_cloud": "variable"},
+                output_bindings={"output_image": "preview_image"},
+                output_sources={"output_image": "variable"},
+            ),
+        ),
+        node(
+            id_ransac,
+            OP_RANSAC_PLANE_FIT,
+            860,
+            200,
+            "参考平面拟合",
+            make_properties(
+                params=RANSAC_PARAMS,
+                param_sources={
                     "distanceThreshold": "literal",
                     "maxIterations": "literal",
                     "probability": "literal",
                 },
-                "inputBindings": {
-                    "input_point_cloud": "cloud",
+                input_bindings={"input_point_cloud": "filtered_cloud"},
+                input_sources={"input_point_cloud": "variable"},
+                output_bindings={"plane_params": "ref_plane"},
+                output_sources={"plane_params": "variable"},
+            ),
+        ),
+        node(
+            id_roi_a,
+            OP_ROI_PARTITION,
+            400,
+            620,
+            "ROI A",
+            make_properties(
+                params={"roiJson": ROI_A_JSON},
+                param_sources={"roiJson": "literal"},
+                input_bindings={"input_mat": "preview_image"},
+                input_sources={"input_mat": "variable"},
+                output_bindings={
+                    "primary_mask": "roi_a_mask",
+                    "roi_metadata": "roi_a_metadata",
                 },
-                "inputBindingSources": {
-                    "input_point_cloud": "variable",
+                output_sources={
+                    "primary_mask": "variable",
+                    "roi_metadata": "variable",
                 },
-                "outputBindings": {
-                    "plane_params": "ref_plane",
-                    "inlier_points": "inlier_cloud",
+            ),
+        ),
+        node(
+            id_roi_b,
+            OP_ROI_PARTITION,
+            720,
+            620,
+            "ROI B",
+            make_properties(
+                params={"roiJson": ROI_B_JSON},
+                param_sources={"roiJson": "literal"},
+                input_bindings={"input_mat": "preview_image"},
+                input_sources={"input_mat": "variable"},
+                output_bindings={
+                    "primary_mask": "roi_b_mask",
+                    "roi_metadata": "roi_b_metadata",
                 },
-                "outputBindingSources": {
-                    "plane_params": "variable",
-                    "inlier_points": "variable",
+                output_sources={
+                    "primary_mask": "variable",
+                    "roi_metadata": "variable",
                 },
-            },
-        },
-        # ── 裁剪区域A ──
-        {
-            "id": id_crop_a,
-            "type": OP_POINT_CLOUD_CROP,
-            "x": 200,
-            "y": 420,
-            "text": {"x": 200, "y": 420, "value": "裁剪区域A（左半）"},
-            "properties": {
-                "params": {
-                    "cropMode": "box",
-                    "minX": REGION_A["minX"],
-                    "maxX": REGION_A["maxX"],
-                    "minY": REGION_A["minY"],
-                    "maxY": REGION_A["maxY"],
-                    "minZ": REGION_A["minZ"],
-                    "maxZ": REGION_A["maxZ"],
+            ),
+        ),
+        node(
+            id_crop_a,
+            OP_POINT_CLOUD_CROP,
+            400,
+            720,
+            "掩膜裁剪A",
+            make_properties(
+                params={
+                    "cropMode": "mask",
+                    "maskWorldMinX": bounds["minX"],
+                    "maskWorldMaxX": bounds["maxX"],
+                    "maskWorldMinY": bounds["minY"],
+                    "maskWorldMaxY": bounds["maxY"],
                 },
-                "paramSources": {
+                param_sources={
                     "cropMode": "literal",
-                    "minX": "literal",
-                    "maxX": "literal",
-                    "minY": "literal",
-                    "maxY": "literal",
-                    "minZ": "literal",
-                    "maxZ": "literal",
+                    "maskWorldMinX": "literal",
+                    "maskWorldMaxX": "literal",
+                    "maskWorldMinY": "literal",
+                    "maskWorldMaxY": "literal",
                 },
-                "inputBindings": {
-                    "input_point_cloud": "inlier_cloud",
+                input_bindings={
+                    "input_point_cloud": "filtered_cloud",
+                    "roi_mask": "roi_a_mask",
                 },
-                "inputBindingSources": {
+                input_sources={
                     "input_point_cloud": "variable",
+                    "roi_mask": "variable",
                 },
-                "outputBindings": {
-                    "output_point_cloud": "region_a",
+                output_bindings={"output_point_cloud": "region_a_cloud"},
+                output_sources={"output_point_cloud": "variable"},
+            ),
+        ),
+        node(
+            id_crop_b,
+            OP_POINT_CLOUD_CROP,
+            720,
+            720,
+            "掩膜裁剪B",
+            make_properties(
+                params={
+                    "cropMode": "mask",
+                    "maskWorldMinX": bounds["minX"],
+                    "maskWorldMaxX": bounds["maxX"],
+                    "maskWorldMinY": bounds["minY"],
+                    "maskWorldMaxY": bounds["maxY"],
                 },
-                "outputBindingSources": {
-                    "output_point_cloud": "variable",
-                },
-            },
-        },
-        # ── 裁剪区域B ──
-        {
-            "id": id_crop_b,
-            "type": OP_POINT_CLOUD_CROP,
-            "x": 600,
-            "y": 420,
-            "text": {"x": 600, "y": 420, "value": "裁剪区域B（右半）"},
-            "properties": {
-                "params": {
-                    "cropMode": "box",
-                    "minX": REGION_B["minX"],
-                    "maxX": REGION_B["maxX"],
-                    "minY": REGION_B["minY"],
-                    "maxY": REGION_B["maxY"],
-                    "minZ": REGION_B["minZ"],
-                    "maxZ": REGION_B["maxZ"],
-                },
-                "paramSources": {
+                param_sources={
                     "cropMode": "literal",
-                    "minX": "literal",
-                    "maxX": "literal",
-                    "minY": "literal",
-                    "maxY": "literal",
-                    "minZ": "literal",
-                    "maxZ": "literal",
+                    "maskWorldMinX": "literal",
+                    "maskWorldMaxX": "literal",
+                    "maskWorldMinY": "literal",
+                    "maskWorldMaxY": "literal",
                 },
-                "inputBindings": {
-                    "input_point_cloud": "inlier_cloud",
+                input_bindings={
+                    "input_point_cloud": "filtered_cloud",
+                    "roi_mask": "roi_b_mask",
                 },
-                "inputBindingSources": {
+                input_sources={
                     "input_point_cloud": "variable",
+                    "roi_mask": "variable",
                 },
-                "outputBindings": {
-                    "output_point_cloud": "region_b",
-                },
-                "outputBindingSources": {
-                    "output_point_cloud": "variable",
-                },
-            },
-        },
-        # ── 高度统计A ──
-        {
-            "id": id_stats_a,
-            "type": OP_Z_CHANNEL_STATS,
-            "x": 200,
-            "y": 560,
-            "text": {"x": 200, "y": 560, "value": "高度统计A"},
-            "properties": {
-                "params": {},
-                "paramSources": {},
-                "inputBindings": {
-                    "input_point_cloud": "region_a",
+                output_bindings={"output_point_cloud": "region_b_cloud"},
+                output_sources={"output_point_cloud": "variable"},
+            ),
+        ),
+        node(
+            id_stats_a,
+            OP_Z_CHANNEL_STATS,
+            400,
+            820,
+            "高度统计A",
+            make_properties(
+                input_bindings={
+                    "input_point_cloud": "region_a_cloud",
                     "plane_params": "ref_plane",
                 },
-                "inputBindingSources": {
+                input_sources={
                     "input_point_cloud": "variable",
                     "plane_params": "variable",
                 },
-                "outputBindings": {
-                    "avg_height": "avg_h_a",
-                    "max_height": "max_h_a",
-                    "min_height": "min_h_a",
-                    "std_height": "std_h_a",
-                },
-                "outputBindingSources": {
-                    "avg_height": "variable",
-                    "max_height": "variable",
-                    "min_height": "variable",
-                    "std_height": "variable",
-                },
-            },
-        },
-        # ── 高度统计B ──
-        {
-            "id": id_stats_b,
-            "type": OP_Z_CHANNEL_STATS,
-            "x": 600,
-            "y": 560,
-            "text": {"x": 600, "y": 560, "value": "高度统计B"},
-            "properties": {
-                "params": {},
-                "paramSources": {},
-                "inputBindings": {
-                    "input_point_cloud": "region_b",
+                output_bindings={"avg_height": "height_a"},
+                output_sources={"avg_height": "variable"},
+            ),
+        ),
+        node(
+            id_stats_b,
+            OP_Z_CHANNEL_STATS,
+            720,
+            820,
+            "高度统计B",
+            make_properties(
+                input_bindings={
+                    "input_point_cloud": "region_b_cloud",
                     "plane_params": "ref_plane",
                 },
-                "inputBindingSources": {
+                input_sources={
                     "input_point_cloud": "variable",
                     "plane_params": "variable",
                 },
-                "outputBindings": {
-                    "avg_height": "avg_h_b",
-                    "max_height": "max_h_b",
-                    "min_height": "min_h_b",
-                    "std_height": "std_h_b",
+                output_bindings={"avg_height": "height_b"},
+                output_sources={"avg_height": "variable"},
+            ),
+        ),
+        node(
+            id_eval,
+            OP_HEIGHT_DIFF_EVAL,
+            560,
+            920,
+            "高度差判定",
+            make_properties(
+                params={"minDiff": THRESHOLD_MIN, "maxDiff": THRESHOLD_MAX},
+                param_sources={"minDiff": "literal", "maxDiff": "literal"},
+                input_bindings={"height_a": "height_a", "height_b": "height_b"},
+                input_sources={"height_a": "variable", "height_b": "variable"},
+                output_bindings={
+                    "signed_diff": "signed_diff",
+                    "is_ok": "is_ok",
                 },
-                "outputBindingSources": {
-                    "avg_height": "variable",
-                    "max_height": "variable",
-                    "min_height": "variable",
-                    "std_height": "variable",
+                output_sources={
+                    "signed_diff": "variable",
+                    "is_ok": "variable",
                 },
-            },
-        },
-        # ── 结束节点 ──
-        {
-            "id": id_end,
-            "type": "end-node",
-            "x": 400,
-            "y": 700,
-            "text": {"x": 400, "y": 700, "value": "结束"},
-            "properties": {
-                "params": {},
-                "paramSources": {},
-                "inputBindings": {},
-                "inputBindingSources": {},
-                "outputBindings": {},
-                "outputBindingSources": {},
-            },
-        },
+            ),
+        ),
+        node(
+            id_annotate,
+            OP_ANNOTATE_HEIGHT_DIFF,
+            560,
+            1020,
+            "结果图标注",
+            make_properties(
+                input_bindings={
+                    "input_mat": "preview_image",
+                    "roi_metadata_a": "roi_a_metadata",
+                    "roi_metadata_b": "roi_b_metadata",
+                    "height_a": "height_a",
+                    "height_b": "height_b",
+                    "signed_diff": "signed_diff",
+                    "is_ok": "is_ok",
+                },
+                input_sources={
+                    "input_mat": "variable",
+                    "roi_metadata_a": "variable",
+                    "roi_metadata_b": "variable",
+                    "height_a": "variable",
+                    "height_b": "variable",
+                    "signed_diff": "variable",
+                    "is_ok": "variable",
+                },
+                output_bindings={"output_mat": "annotated_result_image"},
+                output_sources={"output_mat": "variable"},
+            ),
+        ),
+        node(
+            id_export_image,
+            OP_SAVE_IMAGE_BLOB,
+            560,
+            1100,
+            "结果图存Blob",
+            make_properties(
+                params={"fileName": "height-diff-result.png"},
+                param_sources={"fileName": "literal"},
+                input_bindings={"input_mat": "annotated_result_image"},
+                input_sources={"input_mat": "variable"},
+                output_bindings={"download_url": "result_image_download_url"},
+                output_sources={"download_url": "variable"},
+            ),
+        ),
+        node(
+            id_end,
+            "end-node",
+            560,
+            1180,
+            "结束",
+            make_properties(
+                input_bindings={
+                    "coloredPointCloudUrl": "colored_cloud_download_url",
+                    "resultImageUrl": "result_image_download_url",
+                    "signedDiff": "signed_diff",
+                    "isOk": "is_ok",
+                },
+                input_sources={
+                    "coloredPointCloudUrl": "variable",
+                    "resultImageUrl": "variable",
+                    "signedDiff": "variable",
+                    "isOk": "variable",
+                },
+            ),
+        ),
     ]
 
     edges = [
-        # 开始 → 读取点云
-        {
-            "id": new_uuid(),
-            "type": "polyline",
-            "sourceNodeId": id_start,
-            "targetNodeId": id_read,
-            "sourceAnchorIndex": 2,
-            "targetAnchorIndex": 0,
-            "properties": {},
-        },
-        # 读取点云 → RANSAC
-        {
-            "id": new_uuid(),
-            "type": "polyline",
-            "sourceNodeId": id_read,
-            "targetNodeId": id_ransac,
-            "sourceAnchorIndex": 2,
-            "targetAnchorIndex": 0,
-            "properties": {},
-        },
-        # RANSAC → 裁剪A
-        {
-            "id": new_uuid(),
-            "type": "polyline",
-            "sourceNodeId": id_ransac,
-            "targetNodeId": id_crop_a,
-            "sourceAnchorIndex": 2,
-            "targetAnchorIndex": 0,
-            "properties": {},
-        },
-        # RANSAC → 裁剪B
-        {
-            "id": new_uuid(),
-            "type": "polyline",
-            "sourceNodeId": id_ransac,
-            "targetNodeId": id_crop_b,
-            "sourceAnchorIndex": 2,
-            "targetAnchorIndex": 0,
-            "properties": {},
-        },
-        # 裁剪A → 高度统计A
-        {
-            "id": new_uuid(),
-            "type": "polyline",
-            "sourceNodeId": id_crop_a,
-            "targetNodeId": id_stats_a,
-            "sourceAnchorIndex": 2,
-            "targetAnchorIndex": 0,
-            "properties": {},
-        },
-        # 裁剪B → 高度统计B
-        {
-            "id": new_uuid(),
-            "type": "polyline",
-            "sourceNodeId": id_crop_b,
-            "targetNodeId": id_stats_b,
-            "sourceAnchorIndex": 2,
-            "targetAnchorIndex": 0,
-            "properties": {},
-        },
-        # 高度统计A → 结束
-        {
-            "id": new_uuid(),
-            "type": "polyline",
-            "sourceNodeId": id_stats_a,
-            "targetNodeId": id_end,
-            "sourceAnchorIndex": 2,
-            "targetAnchorIndex": 0,
-            "properties": {},
-        },
-        # 高度统计B → 结束
-        {
-            "id": new_uuid(),
-            "type": "polyline",
-            "sourceNodeId": id_stats_b,
-            "targetNodeId": id_end,
-            "sourceAnchorIndex": 2,
-            "targetAnchorIndex": 0,
-            "properties": {},
-        },
+        edge(id_start, id_read),
+        edge(id_read, id_downsample),
+        edge(id_downsample, id_colorize),
+        edge(id_colorize, id_export_cloud),
+        edge(id_colorize, id_preview),
+        edge(id_downsample, id_ransac),
+        edge(id_preview, id_roi_a),
+        edge(id_preview, id_roi_b),
+        edge(id_roi_a, id_crop_a),
+        edge(id_roi_b, id_crop_b),
+        edge(id_crop_a, id_stats_a),
+        edge(id_crop_b, id_stats_b),
+        edge(id_stats_a, id_eval),
+        edge(id_stats_b, id_eval),
+        edge(id_eval, id_annotate),
+        edge(id_annotate, id_export_image),
+        edge(id_export_cloud, id_end),
+        edge(id_export_image, id_end),
     ]
 
     return {"nodes": nodes, "edges": edges}
@@ -766,8 +909,13 @@ def create_workflow(project_id: str) -> dict:
         "graphData": graph_data,
     }
 
-    print("      生成的请求 JSON：")
-    print(json.dumps(payload, ensure_ascii=False, indent=2))
+    if os.getenv("AURORA_VERBOSE_PAYLOAD", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+    }:
+        print("      生成的请求 JSON：")
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
 
     existed = find_workflow_by_name(project_id, WORKFLOW_NAME)
     if existed is not None:
@@ -784,8 +932,22 @@ def create_workflow(project_id: str) -> dict:
     return result
 
 
+def validate_roi_json(roi_json: str, arg_name: str) -> str:
+    try:
+        parsed = json.loads(roi_json)
+    except json.JSONDecodeError as ex:
+        raise ValueError(f"{arg_name} 不是合法 JSON：{ex}") from ex
+
+    rois = parsed.get("rois") if isinstance(parsed, dict) else None
+    if not isinstance(rois, list) or len(rois) != 1:
+        raise ValueError(f"{arg_name} 必须是且仅包含 1 个 ROI 的 JSON。")
+
+    return json.dumps(parsed, ensure_ascii=False)
+
+
 def main():
-    global BASE_URL, USERNAME, PASSWORD, POINT_CLOUD_PATH, WORKFLOW_NAME
+    global BASE_URL, USERNAME, PASSWORD, POINT_CLOUD_PATH, WORKFLOW_NAME, VOXEL_SIZE
+    global ROI_A_JSON, ROI_B_JSON, THRESHOLD_MIN, THRESHOLD_MAX, PROJECTION_BOUNDS
 
     args = parse_args()
     BASE_URL = resolve_base_url(args)
@@ -795,6 +957,17 @@ def main():
     WORKFLOW_NAME = args.workflow_name
     PROJECT["name"] = args.project_name
     PROJECT["projectCode"] = args.project_code
+    VOXEL_SIZE = args.voxel_size
+    THRESHOLD_MIN = args.threshold_min
+    THRESHOLD_MAX = args.threshold_max
+    PROJECTION_BOUNDS = {
+        "minX": args.projection_min_x,
+        "maxX": args.projection_max_x,
+        "minY": args.projection_min_y,
+        "maxY": args.projection_max_y,
+    }
+    ROI_A_JSON = validate_roi_json(args.roi_a_json, "--roi-a-json")
+    ROI_B_JSON = validate_roi_json(args.roi_b_json, "--roi-b-json")
 
     if not PASSWORD:
         print(

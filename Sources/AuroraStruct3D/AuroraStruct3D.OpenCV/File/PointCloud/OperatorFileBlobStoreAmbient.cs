@@ -19,11 +19,31 @@ public interface IOperatorFileBlobStore
     );
 
     /// <summary>
+    /// 保存 PNG 图像到 BLOB，并返回保存后的 blob 键。
+    /// </summary>
+    /// <param name="fileName">目标文件名。</param>
+    /// <param name="content">PNG 文件内容。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>blob 键。</returns>
+    Task<string> SaveImagePngAsync(
+        string fileName,
+        byte[] content,
+        CancellationToken cancellationToken = default
+    );
+
+    /// <summary>
     /// 根据 blob 键构建下载 URL。
     /// </summary>
     /// <param name="blobName">blob 键。</param>
     /// <returns>下载 URL。</returns>
     string BuildDownloadUrl(string blobName);
+
+    /// <summary>
+    /// 根据 blob 键构建预览 URL。
+    /// </summary>
+    /// <param name="blobName">blob 键。</param>
+    /// <returns>预览 URL。</returns>
+    string BuildPreviewUrl(string blobName);
 }
 
 /// <summary>

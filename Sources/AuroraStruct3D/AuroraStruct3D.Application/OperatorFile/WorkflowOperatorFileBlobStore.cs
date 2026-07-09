@@ -31,6 +31,27 @@ internal sealed class WorkflowOperatorFileBlobStore : IOperatorFileBlobStore
         return blobName;
     }
 
+    public async Task<string> SaveImagePngAsync(
+        string fileName,
+        byte[] content,
+        CancellationToken cancellationToken = default
+    )
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(fileName);
+        ArgumentNullException.ThrowIfNull(content);
+
+        string normalizedFileName = Path.GetFileName(fileName.Trim());
+        string timestamp = DateTime.Now.ToString("yyyyMMddHHmmss_fff");
+        string blobName = $"workflow-image/{timestamp}_{normalizedFileName}";
+
+        await using MemoryStream stream = new(content, writable: false);
+        await _blobContainer.SaveAsync(blobName, stream, overrideExisting: true, cancellationToken);
+        return blobName;
+    }
+
     public string BuildDownloadUrl(string blobName) =>
         $"/api/app/operator-file/download?blobName={Uri.EscapeDataString(blobName)}";
+
+    public string BuildPreviewUrl(string blobName) =>
+        $"/api/app/operator-file/preview?blobName={Uri.EscapeDataString(blobName)}";
 }

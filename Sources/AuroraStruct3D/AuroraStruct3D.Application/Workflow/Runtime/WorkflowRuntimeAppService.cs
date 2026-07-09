@@ -3,6 +3,7 @@ using System.Reflection;
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using AuroraStruct3D.OpenCV.File.Images;
 using AuroraStruct3D.OpenCV.File.PointCloud;
 using AuroraStruct3D.OpenCV.Registry;
 using AuroraStruct3D.OpenCV.VisionParameters;
@@ -36,6 +37,12 @@ namespace AuroraStruct3D.Workflow.Runtime;
 [Route("api/app/workflow")]
 public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRuntimeAppService
 {
+    private const string ExecutionErrorCodeInvalidInput = "EXECUTION_INVALID_INPUT";
+    private const string ExecutionErrorCodeUnhandled = "EXECUTION_UNHANDLED";
+    private const string ExecutionErrorCodeFault = "EXECUTION_FAULT";
+    private const string ExecutionErrorCodeLoopFault = "EXECUTION_LOOP_FAULT";
+    private const string ExecutionErrorCodeStepInvalidInput = "STEP_INVALID_INPUT";
+
     private readonly IRepository<WorkflowDefinition, Guid> _repository;
     private readonly IOperatorRegistry _registry;
     private readonly IWorkflowVariableBridge _bridge;
@@ -843,7 +850,7 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
         }
         catch (Exception ex)
         {
-            return CreateExecutionTriggerErrorResult(ex.Message);
+            return CreateExecutionTriggerErrorResult(ex.Message, ExecutionErrorCodeUnhandled);
         }
     }
 
@@ -1098,6 +1105,7 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
             Error = false,
             Message = session.ErrorMessage,
             ExecutionId = session.ExecutionId,
+            ResultImageUrl = ResolveResultImageUrl(session),
             Status = BuildStatusDto(session, includeVariables: true),
         };
     }
@@ -1145,6 +1153,7 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
             Error = false,
             Message = session.ErrorMessage,
             ExecutionId = session.ExecutionId,
+            ResultImageUrl = ResolveResultImageUrl(session),
             Status = BuildStatusDto(session, includeVariables: true),
         };
     }
@@ -1221,6 +1230,7 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
             Error = false,
             Message = resultSession.ErrorMessage,
             ExecutionId = resultSession.ExecutionId,
+            ResultImageUrl = ResolveResultImageUrl(resultSession),
             Status = BuildStatusDto(resultSession, includeVariables: true),
         };
     }
@@ -1257,20 +1267,28 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
     }
 
     private static WorkflowExecutionTriggerResultDto CreateExecutionTriggerErrorResult(
-        string? message
+        string? message,
+        string errorCode = ExecutionErrorCodeInvalidInput
     )
     {
-        return new WorkflowExecutionTriggerResultDto { Error = true, Message = message };
+        return new WorkflowExecutionTriggerResultDto
+        {
+            Error = true,
+            ErrorCode = errorCode,
+            Message = message,
+        };
     }
 
     private static WorkflowExecutionStepResultDto CreateExecutionStepErrorResult(
         Guid executionId,
-        string? message
+        string? message,
+        string errorCode = ExecutionErrorCodeStepInvalidInput
     )
     {
         return new WorkflowExecutionStepResultDto
         {
             Error = true,
+            ErrorCode = errorCode,
             Message = message,
             ExecutionId = executionId,
         };
@@ -1285,8 +1303,10 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
         return new WorkflowExecutionTriggerResultDto
         {
             Error = true,
+            ErrorCode = ExecutionErrorCodeFault,
             Message = message,
             ExecutionId = session.ExecutionId,
+            ResultImageUrl = ResolveResultImageUrl(session),
             Status = BuildStatusDtoStatic(session, includeVariables: true),
         };
     }
@@ -1301,8 +1321,10 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
         return new WorkflowExecutionTriggerResultDto
         {
             Error = true,
+            ErrorCode = ExecutionErrorCodeLoopFault,
             Message = message,
             ExecutionId = session.ExecutionId,
+            ResultImageUrl = ResolveResultImageUrl(session),
             Status = BuildStatusDtoStatic(session, includeVariables: true),
         };
     }
@@ -1901,6 +1923,33 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
         return rawValue;
     }
 
+    private async Task<string?> ResolveExistingBlobNameAsync(string? candidate)
+    {
+        if (string.IsNullOrWhiteSpace(candidate))
+        {
+            return null;
+        }
+
+        foreach (string blobName in BuildBlobNameCandidates(candidate))
+        {
+            if (string.IsNullOrWhiteSpace(blobName))
+            {
+                continue;
+            }
+
+            Stream? blobStream = await _operatorFileBlobContainer.GetAsync(blobName);
+            if (blobStream is null)
+            {
+                continue;
+            }
+
+            await blobStream.DisposeAsync();
+            return blobName;
+        }
+
+        return null;
+    }
+
     private static List<string> BuildBlobNameCandidates(string rawValue)
     {
         HashSet<string> candidates = new(StringComparer.OrdinalIgnoreCase);
@@ -2003,6 +2052,90 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
         WorkflowExecutionSession session,
         bool includeVariables
     ) => BuildStatusDtoStatic(session, includeVariables);
+
+    private static string? ResolveResultImageUrl(WorkflowExecutionSession session)
+    {
+        HashSet<string> variableNames = new(StringComparer.Ordinal);
+        CollectResultImageUrlVariables(session.RuntimeWorkflow.Statements, variableNames);
+        if (variableNames.Count == 0)
+        {
+            return null;
+        }
+
+        List<WorkflowVariableResultDto> variables;
+        if (
+            session.Status
+            is WorkflowExecutionStatus.Completed
+                or WorkflowExecutionStatus.Faulted
+                or WorkflowExecutionStatus.Stopped
+        )
+        {
+            variables = session.FrozenVariables;
+        }
+        else
+        {
+            variables = session.VariablePool.Snapshot(session.Context, session.OutputStagedKeys);
+        }
+
+        Dictionary<string, string> scalarMap = variables
+            .Where(x =>
+                !string.IsNullOrWhiteSpace(x.Name) && !string.IsNullOrWhiteSpace(x.ScalarValue)
+            )
+            .ToDictionary(x => x.Name, x => x.ScalarValue!, StringComparer.Ordinal);
+
+        foreach (string variableName in variableNames)
+        {
+            if (
+                scalarMap.TryGetValue(variableName, out string? value)
+                && !string.IsNullOrWhiteSpace(value)
+            )
+            {
+                return value;
+            }
+        }
+
+        return null;
+    }
+
+    private static void CollectResultImageUrlVariables(
+        IReadOnlyList<IWorkflowStatement> statements,
+        HashSet<string> variableNames
+    )
+    {
+        foreach (IWorkflowStatement statement in statements)
+        {
+            switch (statement)
+            {
+                case OperatorCallStatement operatorCall:
+                    if (operatorCall.OperatorType != typeof(save_image_to_blob))
+                    {
+                        break;
+                    }
+
+                    if (
+                        operatorCall.OutputBindings.TryGetValue(
+                            "download_url",
+                            out OutputBinding? outputBinding
+                        )
+                    )
+                    {
+                        if (!string.IsNullOrWhiteSpace(outputBinding.VariableName))
+                        {
+                            variableNames.Add(outputBinding.VariableName);
+                        }
+                    }
+
+                    break;
+                case ForLoopStatement forLoop:
+                    CollectResultImageUrlVariables(forLoop.Body, variableNames);
+                    break;
+                case IfElseStatement ifElse:
+                    CollectResultImageUrlVariables(ifElse.ThenBody, variableNames);
+                    CollectResultImageUrlVariables(ifElse.ElseBody, variableNames);
+                    break;
+            }
+        }
+    }
 
     private static WorkflowExecutionStatusDto BuildStatusDtoStatic(
         WorkflowExecutionSession session,

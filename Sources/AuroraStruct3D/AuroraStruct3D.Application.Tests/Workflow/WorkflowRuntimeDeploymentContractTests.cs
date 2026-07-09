@@ -86,11 +86,22 @@ public class WorkflowRuntimeDeploymentContractTests
         PropertyInfo triggerErrorProperty = typeof(WorkflowExecutionTriggerResultDto).GetProperty(
             nameof(WorkflowExecutionTriggerResultDto.Error)
         )!;
+        PropertyInfo triggerErrorCodeProperty =
+            typeof(WorkflowExecutionTriggerResultDto).GetProperty(
+                nameof(WorkflowExecutionTriggerResultDto.ErrorCode)
+            )!;
+        PropertyInfo triggerResultImageUrlProperty =
+            typeof(WorkflowExecutionTriggerResultDto).GetProperty(
+                nameof(WorkflowExecutionTriggerResultDto.ResultImageUrl)
+            )!;
         PropertyInfo triggerMessageProperty = typeof(WorkflowExecutionTriggerResultDto).GetProperty(
             nameof(WorkflowExecutionTriggerResultDto.Message)
         )!;
         PropertyInfo stepErrorProperty = typeof(WorkflowExecutionStepResultDto).GetProperty(
             nameof(WorkflowExecutionStepResultDto.Error)
+        )!;
+        PropertyInfo stepErrorCodeProperty = typeof(WorkflowExecutionStepResultDto).GetProperty(
+            nameof(WorkflowExecutionStepResultDto.ErrorCode)
         )!;
         PropertyInfo stepMessageProperty = typeof(WorkflowExecutionStepResultDto).GetProperty(
             nameof(WorkflowExecutionStepResultDto.Message)
@@ -100,8 +111,11 @@ public class WorkflowRuntimeDeploymentContractTests
         )!;
 
         Assert.Equal(typeof(bool), triggerErrorProperty.PropertyType);
+        Assert.Equal(typeof(string), triggerErrorCodeProperty.PropertyType);
+        Assert.Equal(typeof(string), triggerResultImageUrlProperty.PropertyType);
         Assert.Equal(typeof(string), triggerMessageProperty.PropertyType);
         Assert.Equal(typeof(bool), stepErrorProperty.PropertyType);
+        Assert.Equal(typeof(string), stepErrorCodeProperty.PropertyType);
         Assert.Equal(typeof(string), stepMessageProperty.PropertyType);
         Assert.Equal(typeof(string), statusErrorMessageProperty.PropertyType);
     }

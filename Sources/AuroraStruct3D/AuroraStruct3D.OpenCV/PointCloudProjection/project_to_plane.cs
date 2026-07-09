@@ -148,6 +148,10 @@ public class project_to_plane : IOperator
 
         var outputCloud = new PointCloudData();
         outputCloud.Value = projectedCloud;
+        if (input.HasColors && input.Colors is not null && !input.Colors.Empty())
+        {
+            outputCloud.SetColors(input.Colors.Clone());
+        }
 
         context.Set("projected_cloud", outputCloud);
         context.Set("projection_image", projectionImage);

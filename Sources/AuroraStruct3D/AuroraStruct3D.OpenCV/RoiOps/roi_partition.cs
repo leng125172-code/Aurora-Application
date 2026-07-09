@@ -153,6 +153,7 @@ public class roi_partition : IOperator
     public static List<IVisionParameter>? OutputVisionParameters =>
         new()
         {
+            new MatImg { ParameterName = "primary_mask", DisplayName = "主掩膜" },
             new VisionParameter<List<Mat>>
             {
                 ParameterName = "output_masks",
@@ -258,6 +259,11 @@ public class roi_partition : IOperator
         string metadataJson = JsonSerializer.Serialize(metadata, JsonOptions);
 
         // ⑤ 输出结果：每个 ROI 的独立掩膜列表 + 元数据 JSON
+        if (roiMasks.Count == 1)
+        {
+            context.Set("primary_mask", roiMasks[0].Clone());
+        }
+
         context.Set("output_masks", roiMasks);
         context.Set("roi_metadata", metadataJson);
     }
