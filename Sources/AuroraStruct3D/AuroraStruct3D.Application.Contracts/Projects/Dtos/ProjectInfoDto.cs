@@ -31,4 +31,13 @@ public class ProjectInfoDto : FullAuditedEntityDto<Guid>
 
     /// <summary>工作流数量</summary>
     public int WorkflowCount { get; set; }
+
+    /// <summary>是否存在已激活部署</summary>
+    public bool HasActiveDeployment { get; set; }
+
+    /// <summary>当前激活部署 ID（无则为空）</summary>
+    public Guid? ActiveDeploymentId { get; set; }
+
+    /// <summary>当前激活部署版本号（无则为空）</summary>
+    public int? ActiveDeploymentRevision { get; set; }
 }

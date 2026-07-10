@@ -106,6 +106,11 @@ public interface IProjectorDeviceAppService : IApplicationService
     /// </summary>
     Task<bool> TriggerOnceAsync(TriggerProjectorDto input);
 
+    /// <summary>
+    /// 单帧触发模式下切换到下一张条纹（发送 N 指令）。
+    /// </summary>
+    Task<bool> NextFrameAsync(NextProjectorFrameDto input);
+
     // ─── 高级操作 ─────────────────────────────────────────────────────────
 
     /// <summary>

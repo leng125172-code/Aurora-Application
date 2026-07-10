@@ -1,5 +1,8 @@
 namespace AuroraStruct3D.OpenCV.PointCloudOps;
 
+using System.Text.Json;
+using AuroraStruct3D.OpenCV.RoiOps;
+
 /// <summary>
 /// 工作流算子：3D 点云裁剪。
 /// <para>
@@ -56,151 +59,245 @@ public class point_cloud_crop : IOperator
             // ── box 模式参数 ──
             new ConfigParameter
             {
-                Name = "minX", DisplayName = "最小X",
-                ParameterType = typeof(double), DefaultValue = "0",
-                Required = false, ControlType = PortControlType.Input,
+                Name = "minX",
+                DisplayName = "最小X",
+                ParameterType = typeof(double),
+                DefaultValue = "0",
+                Required = false,
+                ControlType = PortControlType.Input,
             },
             new ConfigParameter
             {
-                Name = "maxX", DisplayName = "最大X",
-                ParameterType = typeof(double), DefaultValue = "100",
-                Required = false, ControlType = PortControlType.Input,
+                Name = "maxX",
+                DisplayName = "最大X",
+                ParameterType = typeof(double),
+                DefaultValue = "100",
+                Required = false,
+                ControlType = PortControlType.Input,
             },
             new ConfigParameter
             {
-                Name = "minY", DisplayName = "最小Y",
-                ParameterType = typeof(double), DefaultValue = "0",
-                Required = false, ControlType = PortControlType.Input,
+                Name = "minY",
+                DisplayName = "最小Y",
+                ParameterType = typeof(double),
+                DefaultValue = "0",
+                Required = false,
+                ControlType = PortControlType.Input,
             },
             new ConfigParameter
             {
-                Name = "maxY", DisplayName = "最大Y",
-                ParameterType = typeof(double), DefaultValue = "100",
-                Required = false, ControlType = PortControlType.Input,
+                Name = "maxY",
+                DisplayName = "最大Y",
+                ParameterType = typeof(double),
+                DefaultValue = "100",
+                Required = false,
+                ControlType = PortControlType.Input,
             },
             new ConfigParameter
             {
-                Name = "minZ", DisplayName = "最小Z",
-                ParameterType = typeof(double), DefaultValue = "0",
-                Required = false, ControlType = PortControlType.Input,
+                Name = "minZ",
+                DisplayName = "最小Z",
+                ParameterType = typeof(double),
+                DefaultValue = "0",
+                Required = false,
+                ControlType = PortControlType.Input,
             },
             new ConfigParameter
             {
-                Name = "maxZ", DisplayName = "最大Z",
-                ParameterType = typeof(double), DefaultValue = "100",
-                Required = false, ControlType = PortControlType.Input,
+                Name = "maxZ",
+                DisplayName = "最大Z",
+                ParameterType = typeof(double),
+                DefaultValue = "100",
+                Required = false,
+                ControlType = PortControlType.Input,
             },
             // ── sphere 模式参数 ──
             new ConfigParameter
             {
-                Name = "centerX", DisplayName = "球心X",
-                ParameterType = typeof(double), DefaultValue = "0",
-                Required = false, ControlType = PortControlType.Input,
+                Name = "centerX",
+                DisplayName = "球心X",
+                ParameterType = typeof(double),
+                DefaultValue = "0",
+                Required = false,
+                ControlType = PortControlType.Input,
             },
             new ConfigParameter
             {
-                Name = "centerY", DisplayName = "球心Y",
-                ParameterType = typeof(double), DefaultValue = "0",
-                Required = false, ControlType = PortControlType.Input,
+                Name = "centerY",
+                DisplayName = "球心Y",
+                ParameterType = typeof(double),
+                DefaultValue = "0",
+                Required = false,
+                ControlType = PortControlType.Input,
             },
             new ConfigParameter
             {
-                Name = "centerZ", DisplayName = "球心Z",
-                ParameterType = typeof(double), DefaultValue = "0",
-                Required = false, ControlType = PortControlType.Input,
+                Name = "centerZ",
+                DisplayName = "球心Z",
+                ParameterType = typeof(double),
+                DefaultValue = "0",
+                Required = false,
+                ControlType = PortControlType.Input,
             },
             new ConfigParameter
             {
-                Name = "radius", DisplayName = "球半径",
-                ParameterType = typeof(double), DefaultValue = "10",
-                Required = false, ControlType = PortControlType.Input,
+                Name = "radius",
+                DisplayName = "球半径",
+                ParameterType = typeof(double),
+                DefaultValue = "10",
+                Required = false,
+                ControlType = PortControlType.Input,
             },
             // ── plane 模式参数 ──
             new ConfigParameter
             {
-                Name = "planeA", DisplayName = "法向A",
-                ParameterType = typeof(double), DefaultValue = "0",
-                Required = false, ControlType = PortControlType.Input,
+                Name = "planeA",
+                DisplayName = "法向A",
+                ParameterType = typeof(double),
+                DefaultValue = "0",
+                Required = false,
+                ControlType = PortControlType.Input,
             },
             new ConfigParameter
             {
-                Name = "planeB", DisplayName = "法向B",
-                ParameterType = typeof(double), DefaultValue = "0",
-                Required = false, ControlType = PortControlType.Input,
+                Name = "planeB",
+                DisplayName = "法向B",
+                ParameterType = typeof(double),
+                DefaultValue = "0",
+                Required = false,
+                ControlType = PortControlType.Input,
             },
             new ConfigParameter
             {
-                Name = "planeC", DisplayName = "法向C",
-                ParameterType = typeof(double), DefaultValue = "1",
-                Required = false, ControlType = PortControlType.Input,
+                Name = "planeC",
+                DisplayName = "法向C",
+                ParameterType = typeof(double),
+                DefaultValue = "1",
+                Required = false,
+                ControlType = PortControlType.Input,
             },
             new ConfigParameter
             {
-                Name = "planeD", DisplayName = "截距D",
-                ParameterType = typeof(double), DefaultValue = "0",
-                Required = false, ControlType = PortControlType.Input,
+                Name = "planeD",
+                DisplayName = "截距D",
+                ParameterType = typeof(double),
+                DefaultValue = "0",
+                Required = false,
+                ControlType = PortControlType.Input,
             },
             new ConfigParameter
             {
-                Name = "keepAbove", DisplayName = "保留上方",
-                ParameterType = typeof(bool), DefaultValue = "true",
-                Required = false, ControlType = PortControlType.Input,
+                Name = "keepAbove",
+                DisplayName = "保留上方",
+                ParameterType = typeof(bool),
+                DefaultValue = "true",
+                Required = false,
+                ControlType = PortControlType.Input,
             },
             // ── mask 模式参数 ──
             new ConfigParameter
             {
-                Name = "maskWorldMinX", DisplayName = "世界最小X",
-                ParameterType = typeof(double), DefaultValue = "0",
-                Required = false, ControlType = PortControlType.Input,
+                Name = "maskWorldMinX",
+                DisplayName = "世界最小X",
+                ParameterType = typeof(double),
+                DefaultValue = "0",
+                Required = false,
+                ControlType = PortControlType.Input,
             },
             new ConfigParameter
             {
-                Name = "maskWorldMaxX", DisplayName = "世界最大X",
-                ParameterType = typeof(double), DefaultValue = "100",
-                Required = false, ControlType = PortControlType.Input,
+                Name = "maskWorldMaxX",
+                DisplayName = "世界最大X",
+                ParameterType = typeof(double),
+                DefaultValue = "100",
+                Required = false,
+                ControlType = PortControlType.Input,
             },
             new ConfigParameter
             {
-                Name = "maskWorldMinY", DisplayName = "世界最小Y",
-                ParameterType = typeof(double), DefaultValue = "0",
-                Required = false, ControlType = PortControlType.Input,
+                Name = "maskWorldMinY",
+                DisplayName = "世界最小Y",
+                ParameterType = typeof(double),
+                DefaultValue = "0",
+                Required = false,
+                ControlType = PortControlType.Input,
             },
             new ConfigParameter
             {
-                Name = "maskWorldMaxY", DisplayName = "世界最大Y",
-                ParameterType = typeof(double), DefaultValue = "100",
-                Required = false, ControlType = PortControlType.Input,
+                Name = "maskWorldMaxY",
+                DisplayName = "世界最大Y",
+                ParameterType = typeof(double),
+                DefaultValue = "100",
+                Required = false,
+                ControlType = PortControlType.Input,
             },
         };
 
     private readonly string _cropMode;
-    private readonly double _minX, _maxX, _minY, _maxY, _minZ, _maxZ;
-    private readonly double _centerX, _centerY, _centerZ, _radius;
-    private readonly double _planeA, _planeB, _planeC, _planeD;
+    private readonly double _minX,
+        _maxX,
+        _minY,
+        _maxY,
+        _minZ,
+        _maxZ;
+    private readonly double _centerX,
+        _centerY,
+        _centerZ,
+        _radius;
+    private readonly double _planeA,
+        _planeB,
+        _planeC,
+        _planeD;
     private readonly bool _keepAbove;
-    private readonly double _maskWorldMinX, _maskWorldMaxX, _maskWorldMinY, _maskWorldMaxY;
+    private readonly double _maskWorldMinX,
+        _maskWorldMaxX,
+        _maskWorldMinY,
+        _maskWorldMaxY;
     private bool _disposed;
 
     public point_cloud_crop(
         string cropMode = "box",
-        double minX = 0, double maxX = 100,
-        double minY = 0, double maxY = 100,
-        double minZ = 0, double maxZ = 100,
-        double centerX = 0, double centerY = 0, double centerZ = 0, double radius = 10,
-        double planeA = 0, double planeB = 0, double planeC = 1, double planeD = 0,
+        double minX = 0,
+        double maxX = 100,
+        double minY = 0,
+        double maxY = 100,
+        double minZ = 0,
+        double maxZ = 100,
+        double centerX = 0,
+        double centerY = 0,
+        double centerZ = 0,
+        double radius = 10,
+        double planeA = 0,
+        double planeB = 0,
+        double planeC = 1,
+        double planeD = 0,
         bool keepAbove = true,
-        double maskWorldMinX = 0, double maskWorldMaxX = 100,
-        double maskWorldMinY = 0, double maskWorldMaxY = 100)
+        double maskWorldMinX = 0,
+        double maskWorldMaxX = 100,
+        double maskWorldMinY = 0,
+        double maskWorldMaxY = 100
+    )
     {
         _cropMode = cropMode;
-        _minX = minX; _maxX = maxX;
-        _minY = minY; _maxY = maxY;
-        _minZ = minZ; _maxZ = maxZ;
-        _centerX = centerX; _centerY = centerY; _centerZ = centerZ; _radius = radius;
-        _planeA = planeA; _planeB = planeB; _planeC = planeC; _planeD = planeD;
+        _minX = minX;
+        _maxX = maxX;
+        _minY = minY;
+        _maxY = maxY;
+        _minZ = minZ;
+        _maxZ = maxZ;
+        _centerX = centerX;
+        _centerY = centerY;
+        _centerZ = centerZ;
+        _radius = radius;
+        _planeA = planeA;
+        _planeB = planeB;
+        _planeC = planeC;
+        _planeD = planeD;
         _keepAbove = keepAbove;
-        _maskWorldMinX = maskWorldMinX; _maskWorldMaxX = maskWorldMaxX;
-        _maskWorldMinY = maskWorldMinY; _maskWorldMaxY = maskWorldMaxY;
+        _maskWorldMinX = maskWorldMinX;
+        _maskWorldMaxX = maskWorldMaxX;
+        _maskWorldMinY = maskWorldMinY;
+        _maskWorldMaxY = maskWorldMaxY;
     }
 
     public void Execute(IWorkflowContext context)
@@ -267,9 +364,7 @@ public class point_cloud_crop : IOperator
             float x = cloud.Get<float>(i, 0);
             float y = cloud.Get<float>(i, 1);
             float z = cloud.Get<float>(i, 2);
-            if (x >= _minX && x <= _maxX
-                && y >= _minY && y <= _maxY
-                && z >= _minZ && z <= _maxZ)
+            if (x >= _minX && x <= _maxX && y >= _minY && y <= _maxY && z >= _minZ && z <= _maxZ)
                 indices.Add(i);
         }
         return indices;
@@ -297,9 +392,11 @@ public class point_cloud_crop : IOperator
         List<int> indices = new();
         for (int i = 0; i < count; i++)
         {
-            double signedDist = _planeA * cloud.Get<float>(i, 0)
+            double signedDist =
+                _planeA * cloud.Get<float>(i, 0)
                 + _planeB * cloud.Get<float>(i, 1)
-                + _planeC * cloud.Get<float>(i, 2) + _planeD;
+                + _planeC * cloud.Get<float>(i, 2)
+                + _planeD;
             bool inside = _keepAbove ? signedDist >= 0 : signedDist <= 0;
             if (inside)
                 indices.Add(i);
@@ -326,8 +423,17 @@ public class point_cloud_crop : IOperator
         int maskWidth = mask.Width;
         int maskHeight = mask.Height;
 
-        double worldRangeX = _maskWorldMaxX - _maskWorldMinX;
-        double worldRangeY = _maskWorldMaxY - _maskWorldMinY;
+        (
+            double worldMinX,
+            double worldMaxX,
+            double worldMinY,
+            double worldMaxY,
+            int axisX,
+            int axisY
+        ) = ResolveMaskMapping(context, maskWidth, maskHeight);
+
+        double worldRangeX = worldMaxX - worldMinX;
+        double worldRangeY = worldMaxY - worldMinY;
         if (Math.Abs(worldRangeX) < 1e-10 || Math.Abs(worldRangeY) < 1e-10)
             throw new InvalidOperationException(
                 "掩膜裁剪的世界坐标范围无效，请设置 maskWorldMinX/MaxX/MinY/MaxY。"
@@ -336,12 +442,12 @@ public class point_cloud_crop : IOperator
         List<int> indices = new();
         for (int i = 0; i < count; i++)
         {
-            float worldX = cloud.Get<float>(i, 0);
-            float worldY = cloud.Get<float>(i, 1);
+            float worldX = cloud.Get<float>(i, axisX);
+            float worldY = cloud.Get<float>(i, axisY);
 
             // 世界坐标 → 像素坐标
-            int px = (int)((worldX - _maskWorldMinX) / worldRangeX * (maskWidth - 1));
-            int py = (int)((worldY - _maskWorldMinY) / worldRangeY * (maskHeight - 1));
+            int px = (int)((worldX - worldMinX) / worldRangeX * (maskWidth - 1));
+            int py = (int)((worldY - worldMinY) / worldRangeY * (maskHeight - 1));
 
             // 边界检查
             if (px < 0 || px >= maskWidth || py < 0 || py >= maskHeight)
@@ -352,6 +458,80 @@ public class point_cloud_crop : IOperator
                 indices.Add(i);
         }
         return indices;
+    }
+
+    private (
+        double worldMinX,
+        double worldMaxX,
+        double worldMinY,
+        double worldMaxY,
+        int axisX,
+        int axisY
+    ) ResolveMaskMapping(IWorkflowContext context, int maskWidth, int maskHeight)
+    {
+        string? metadataJson = context.Get<string>("roi_metadata");
+        if (string.IsNullOrWhiteSpace(metadataJson))
+        {
+            return (_maskWorldMinX, _maskWorldMaxX, _maskWorldMinY, _maskWorldMaxY, 0, 1);
+        }
+
+        try
+        {
+            RoiPartitionMetadata? metadata = JsonSerializer.Deserialize<RoiPartitionMetadata>(
+                metadataJson,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true }
+            );
+            RoiProjectionMapping? mapping = metadata?.ProjectionMapping;
+            if (mapping is null)
+            {
+                return (_maskWorldMinX, _maskWorldMaxX, _maskWorldMinY, _maskWorldMaxY, 0, 1);
+            }
+
+            (int axisX, int axisY) = ResolveAxesFromViewLabel(mapping.ViewLabel);
+
+            if (mapping.ImageWidth > 0 && mapping.ImageWidth != maskWidth)
+            {
+                throw new InvalidOperationException(
+                    $"ROI 映射宽度 {mapping.ImageWidth} 与 roi_mask 宽度 {maskWidth} 不一致。"
+                );
+            }
+
+            if (mapping.ImageHeight > 0 && mapping.ImageHeight != maskHeight)
+            {
+                throw new InvalidOperationException(
+                    $"ROI 映射高度 {mapping.ImageHeight} 与 roi_mask 高度 {maskHeight} 不一致。"
+                );
+            }
+
+            return (
+                mapping.WorldMinX,
+                mapping.WorldMaxX,
+                mapping.WorldMinY,
+                mapping.WorldMaxY,
+                axisX,
+                axisY
+            );
+        }
+        catch (JsonException ex)
+        {
+            throw new InvalidOperationException(
+                $"roi_metadata 解析失败，无法建立 ROI 到模型映射：{ex.Message}"
+            );
+        }
+    }
+
+    private static (int axisX, int axisY) ResolveAxesFromViewLabel(string? viewLabel)
+    {
+        string normalized = (viewLabel ?? "XY").Trim().ToUpperInvariant();
+        return normalized switch
+        {
+            "XY" => (0, 1),
+            "XZ" => (0, 2),
+            "YZ" => (1, 2),
+            _ => throw new InvalidOperationException(
+                $"不支持的 ROI 视图映射标签：{viewLabel}，仅支持 XY/XZ/YZ。"
+            ),
+        };
     }
 
     public void Dispose()

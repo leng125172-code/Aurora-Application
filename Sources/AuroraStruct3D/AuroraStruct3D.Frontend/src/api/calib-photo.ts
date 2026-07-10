@@ -129,6 +129,7 @@ export interface TakeIntrinsicPhotoInput {
 export interface TakeExtrinsicPhotoInput {
     calibProjectId: string
     cameraDeviceId: string
+    stripeImageCount?: number
 }
 
 /** 双目联合外参成对拍照输入 */

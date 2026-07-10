@@ -20,6 +20,7 @@ public class ProjectInfoAppService : AuroraStruct3DAppService, IProjectInfoAppSe
     private readonly IProjectInfoRepository _projectInfoRepository;
     private readonly IIdentityUserRepository _identityUserRepository;
     private readonly IRepository<WorkflowDefinition, Guid> _workflowRepository;
+    private readonly IRepository<WorkflowProjectDeployment, Guid> _deploymentRepository;
 
     /// <summary>
     /// 初始化 ProjectInfoAppService 实例
@@ -27,12 +28,14 @@ public class ProjectInfoAppService : AuroraStruct3DAppService, IProjectInfoAppSe
     public ProjectInfoAppService(
         IProjectInfoRepository projectInfoRepository,
         IIdentityUserRepository identityUserRepository,
-        IRepository<WorkflowDefinition, Guid> workflowRepository
+        IRepository<WorkflowDefinition, Guid> workflowRepository,
+        IRepository<WorkflowProjectDeployment, Guid> deploymentRepository
     )
     {
         _projectInfoRepository = projectInfoRepository;
         _identityUserRepository = identityUserRepository;
         _workflowRepository = workflowRepository;
+        _deploymentRepository = deploymentRepository;
     }
 
     // ─────────────────────────── 查询 ───────────────────────────
@@ -79,12 +82,37 @@ public class ProjectInfoAppService : AuroraStruct3DAppService, IProjectInfoAppSe
             r => r.Count
         );
 
+        // 关联查询：批量获取每个项目当前激活部署（最多一条）。
+        IQueryable<WorkflowProjectDeployment> deploymentQueryable =
+            await _deploymentRepository.GetQueryableAsync();
+        List<ActiveDeploymentResult> activeDeployments = await AsyncExecuter.ToListAsync(
+            deploymentQueryable
+                .Where(d =>
+                    projectIds.Contains(d.ProjectId)
+                    && d.Status == WorkflowProjectDeploymentStatus.Activated
+                )
+                .GroupBy(d => d.ProjectId)
+                .Select(g =>
+                    g.OrderByDescending(x => x.Revision)
+                        .Select(x => new ActiveDeploymentResult
+                        {
+                            ProjectId = x.ProjectId,
+                            DeploymentId = x.Id,
+                            Revision = x.Revision,
+                        })
+                        .First()
+                )
+        );
+        Dictionary<Guid, ActiveDeploymentResult> activeDeploymentMap =
+            activeDeployments.ToDictionary(x => x.ProjectId, x => x);
+
         List<ProjectInfoDto> dtos = items
             .Select(p =>
                 MapToDto(
                     p,
                     userNameMap.GetValueOrDefault(p.CreatorId ?? Guid.Empty),
-                    workflowCountMap.GetValueOrDefault(p.Id, 0)
+                    workflowCountMap.GetValueOrDefault(p.Id, 0),
+                    activeDeploymentMap.GetValueOrDefault(p.Id)
                 )
             )
             .ToList();
@@ -112,7 +140,23 @@ public class ProjectInfoAppService : AuroraStruct3DAppService, IProjectInfoAppSe
             w => w.ProjectId == id
         );
 
-        return MapToDto(project, creatorUserName, workflowCount);
+        IQueryable<WorkflowProjectDeployment> deploymentQueryable =
+            await _deploymentRepository.GetQueryableAsync();
+        ActiveDeploymentResult? activeDeployment = await AsyncExecuter.FirstOrDefaultAsync(
+            deploymentQueryable
+                .Where(d =>
+                    d.ProjectId == id && d.Status == WorkflowProjectDeploymentStatus.Activated
+                )
+                .OrderByDescending(d => d.Revision)
+                .Select(d => new ActiveDeploymentResult
+                {
+                    ProjectId = d.ProjectId,
+                    DeploymentId = d.Id,
+                    Revision = d.Revision,
+                })
+        );
+
+        return MapToDto(project, creatorUserName, workflowCount, activeDeployment);
     }
 
     // ─────────────────────────── 创建 ───────────────────────────
@@ -188,7 +232,8 @@ public class ProjectInfoAppService : AuroraStruct3DAppService, IProjectInfoAppSe
     private static ProjectInfoDto MapToDto(
         ProjectInfo project,
         string? creatorUserName,
-        int workflowCount
+        int workflowCount,
+        ActiveDeploymentResult? activeDeployment = null
     )
     {
         return new ProjectInfoDto
@@ -209,6 +254,9 @@ public class ProjectInfoAppService : AuroraStruct3DAppService, IProjectInfoAppSe
             StatusDisplay = GetStatusDisplay(project.Status),
             CreatorUserName = creatorUserName,
             WorkflowCount = workflowCount,
+            HasActiveDeployment = activeDeployment is not null,
+            ActiveDeploymentId = activeDeployment?.DeploymentId,
+            ActiveDeploymentRevision = activeDeployment?.Revision,
         };
     }
 
@@ -232,5 +280,13 @@ public class ProjectInfoAppService : AuroraStruct3DAppService, IProjectInfoAppSe
     {
         public Guid ProjectId { get; set; }
         public int Count { get; set; }
+    }
+
+    /// <summary>项目激活部署关联查询结果。</summary>
+    private class ActiveDeploymentResult
+    {
+        public Guid ProjectId { get; set; }
+        public Guid DeploymentId { get; set; }
+        public int Revision { get; set; }
     }
 }

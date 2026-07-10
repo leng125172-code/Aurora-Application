@@ -163,6 +163,22 @@ const boardTypeOptions = computed(() => [
 const isCircleBoard = computed(() => boardConfig.boardType !== CalibrationBoardType.Chessboard)
 const isMarkedCircleBoard = computed(() => boardConfig.boardType === CalibrationBoardType.MarkedSymmetricCircleGrid)
 
+function normalizeBoardConfigNumericFields(): void {
+    const readNumber = (value: unknown, fallback: number): number => {
+        if (typeof value !== 'number' || Number.isNaN(value) || !Number.isFinite(value)) {
+            return fallback
+        }
+        return value
+    }
+
+    boardConfig.physicalCornerRows = Math.max(2, Math.round(readNumber(boardConfig.physicalCornerRows, 9)))
+    boardConfig.physicalCornerCols = Math.max(2, Math.round(readNumber(boardConfig.physicalCornerCols, 6)))
+    boardConfig.physicalSquareSizeMm = Math.max(0.1, readNumber(boardConfig.physicalSquareSizeMm, 30))
+    boardConfig.projectedCornerRows = Math.max(2, Math.round(readNumber(boardConfig.projectedCornerRows, 9)))
+    boardConfig.projectedCornerCols = Math.max(2, Math.round(readNumber(boardConfig.projectedCornerCols, 6)))
+    boardConfig.projectedPixelSize = Math.max(1, Math.round(readNumber(boardConfig.projectedPixelSize, 20)))
+}
+
 function applyCirclePreset2727(): void {
     boardConfig.boardType = CalibrationBoardType.MarkedSymmetricCircleGrid
     boardConfig.circleBoardConfig = {
@@ -204,6 +220,7 @@ async function loadBoardConfig(): Promise<void> {
     try {
         const cfg = await getBoardConfig(props.project.id)
         Object.assign(boardConfig, cfg)
+        normalizeBoardConfigNumericFields()
         if (boardConfig.boardType !== CalibrationBoardType.Chessboard && !boardConfig.circleBoardConfig) {
             applyCirclePreset2727()
         }
@@ -281,6 +298,8 @@ function validateBoardConfigBeforeSave(): string | null {
 }
 
 async function saveBoardConfig(): Promise<void> {
+    normalizeBoardConfigNumericFields()
+
     const validationError = validateBoardConfigBeforeSave()
     if (validationError) {
         toast.error(validationError)
@@ -313,6 +332,7 @@ async function onBoardConfigFileSelected(event: Event): Promise<void> {
     try {
         const cfg = await importBoardConfig(props.project.id, file)
         Object.assign(boardConfig, cfg)
+        normalizeBoardConfigNumericFields()
         if (boardConfig.boardType !== CalibrationBoardType.Chessboard && !boardConfig.circleBoardConfig) {
             applyCirclePreset2727()
         }
@@ -423,29 +443,64 @@ const intrinsicPhotosMap = ref<Record<string, CalibPhotoDto[]>>({})
 const extrinsicPhotosMap = ref<Record<string, CalibPhotoDto[]>>({})
 const stereoPairPhotosMap = ref<Record<string, CalibPhotoDto[]>>({})
 
-function getExtrinsicSamples(cameraId: string): CalibExtrinsicSampleDto[] {
+interface CalibExtrinsicSampleViewDto extends CalibExtrinsicSampleDto {
+    /** 本组条纹总帧数（off + on 序列） */
+    stripeFrameCount: number
+    projectorOnPhotos: CalibPhotoDto[]
+    invalidFrameCount: number
+}
+
+interface ExtrinsicSampleGroupBuilder {
+    pairGroupId: string
+    projectorOffPhoto?: CalibPhotoDto
+    projectorOnPhoto?: CalibPhotoDto
+    projectorOnPhotos: CalibPhotoDto[]
+    projectorOnCount: number
+}
+
+function getExtrinsicSamples(cameraId: string): CalibExtrinsicSampleViewDto[] {
     const photos = extrinsicPhotosMap.value[cameraId] ?? []
-    const groups = new Map<string, Partial<CalibExtrinsicSampleDto>>()
+    const groups = new Map<string, ExtrinsicSampleGroupBuilder>()
 
     for (const photo of photos) {
         if (!photo.pairGroupId || photo.extrinsicPhase === null) {
             continue
         }
 
-        const current = groups.get(photo.pairGroupId) ?? { pairGroupId: photo.pairGroupId }
+        const current = groups.get(photo.pairGroupId) ?? {
+            pairGroupId: photo.pairGroupId,
+            projectorOnPhotos: [],
+            projectorOnCount: 0,
+        }
         if (photo.extrinsicPhase === ExtrinsicPhotoPhase.ProjectorOff) {
             current.projectorOffPhoto = photo
         } else if (photo.extrinsicPhase === ExtrinsicPhotoPhase.ProjectorOn) {
             current.projectorOnPhoto = photo
+            current.projectorOnPhotos.push(photo)
+            current.projectorOnCount += 1
         }
         groups.set(photo.pairGroupId, current)
     }
 
     return Array.from(groups.values())
-        .filter((sample): sample is CalibExtrinsicSampleDto => !!sample.projectorOffPhoto && !!sample.projectorOnPhoto)
+        .filter(
+            (
+                sample
+            ): sample is ExtrinsicSampleGroupBuilder & {
+                projectorOffPhoto: CalibPhotoDto
+                projectorOnPhoto: CalibPhotoDto
+            } => !!sample.projectorOffPhoto && !!sample.projectorOnPhoto
+        )
         .map((sample) => ({
-            ...sample,
-            isValid: sample.projectorOffPhoto.isValid && sample.projectorOnPhoto.isValid,
+            pairGroupId: sample.pairGroupId,
+            projectorOffPhoto: sample.projectorOffPhoto,
+            projectorOnPhoto: sample.projectorOnPhoto,
+            isValid: sample.projectorOffPhoto.isValid && sample.projectorOnPhotos.every((photo) => photo.isValid),
+            stripeFrameCount: sample.projectorOnCount + 1,
+            projectorOnPhotos: sample.projectorOnPhotos,
+            invalidFrameCount:
+                (sample.projectorOffPhoto.isValid ? 0 : 1) +
+                sample.projectorOnPhotos.filter((photo) => !photo.isValid).length,
         }))
         .sort(
             (a, b) =>
@@ -495,6 +550,7 @@ async function toggleLed(): Promise<void> {
 
 const takingIntrinsicIds = ref<Set<string>>(new Set())
 const takingExtrinsicIds = ref<Set<string>>(new Set())
+const extrinsicStripeImageCount = ref<number>(2)
 
 async function doTakeIntrinsic(cam: CameraDeviceDto): Promise<void> {
     if (takingIntrinsicIds.value.has(cam.id)) return
@@ -537,9 +593,10 @@ async function doTakeExtrinsic(cam: CameraDeviceDto): Promise<void> {
         const sample = await takeExtrinsicPhoto({
             calibProjectId: props.project.id,
             cameraDeviceId: cam.id,
+            stripeImageCount: Math.max(2, Math.round(extrinsicStripeImageCount.value || 2)),
         })
-        const list = extrinsicPhotosMap.value[cam.id] ?? []
-        extrinsicPhotosMap.value[cam.id] = [sample.projectorOnPhoto, sample.projectorOffPhoto, ...list]
+        // 后端会落库整组条纹帧，拍完后重新加载，避免前端仅显示 2 张造成误解。
+        await loadPhotos(cam.id, CalibPhotoType.Extrinsic)
         await loadCameraStatus(cam.id)
         if (!sample.isValid) {
             toast.warn(t('calib.step5ExtrinsicGroupInvalid', { camera: cam.name }))
@@ -1361,6 +1418,32 @@ onMounted(async () => {
                                 {{ t('calib.step5NoProjectorWarning') }}
                             </div>
 
+                            <div
+                                v-if="canUseProjectorExtrinsic(cam.id)"
+                                class="rounded-lg border border-border/30 bg-muted/10 p-3"
+                            >
+                                <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                    {{ t('calib.step3FringeSettings') }}
+                                </p>
+                                <div class="grid grid-cols-1 gap-2">
+                                    <div>
+                                        <p class="mb-1 text-[11px] text-muted-foreground">
+                                            {{ t('calib.step3ImageCount') }}
+                                        </p>
+                                        <InputNumber
+                                            v-model="extrinsicStripeImageCount"
+                                            :min="2"
+                                            :max="128"
+                                            :step="1"
+                                            show-buttons
+                                            button-layout="horizontal"
+                                            class="w-full"
+                                            size="small"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+
                             <!-- 拍照按钮组 -->
                             <div class="flex flex-col gap-2">
                                 <Button
@@ -1788,69 +1871,151 @@ onMounted(async () => {
                                             >
                                                 {{ t('calib.step5PhotoCount', { count: 0 }) }}
                                             </div>
-                                            <div v-else class="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5">
+                                            <div v-else class="space-y-3">
                                                 <div
                                                     v-for="sample in getExtrinsicSamples(cam.id)"
                                                     :key="sample.pairGroupId"
-                                                    class="group relative overflow-hidden rounded-lg border p-2"
+                                                    class="group relative overflow-hidden rounded-lg border p-3"
                                                     :class="
                                                         sample.isValid ? 'border-green-500/40' : 'border-red-500/40'
                                                     "
                                                 >
-                                                    <div class="grid grid-cols-2 gap-2">
+                                                    <div class="mb-3 flex items-center justify-between gap-2">
+                                                        <div class="flex items-center gap-2">
+                                                            <Tag
+                                                                :severity="sample.isValid ? 'success' : 'danger'"
+                                                                :value="sample.isValid ? 'OK' : 'NG'"
+                                                            />
+                                                            <span class="text-xs text-muted-foreground">
+                                                                {{ sample.stripeFrameCount }} 帧
+                                                                <span v-if="sample.invalidFrameCount > 0">
+                                                                    · {{ sample.invalidFrameCount }} 张异常
+                                                                </span>
+                                                            </span>
+                                                        </div>
+                                                        <span class="text-[11px] text-muted-foreground">
+                                                            {{
+                                                                new Date(
+                                                                    sample.projectorOffPhoto.capturedAt
+                                                                ).toLocaleString()
+                                                            }}
+                                                        </span>
+                                                    </div>
+
+                                                    <div
+                                                        class="grid grid-cols-1 gap-3 lg:grid-cols-[160px_minmax(0,1fr)]"
+                                                    >
                                                         <div>
                                                             <div
                                                                 class="mb-1 text-[10px] font-medium text-muted-foreground"
                                                             >
                                                                 {{ t('calib.step5ExtrinsicLedOffFrame') }}
                                                             </div>
-                                                            <img
-                                                                v-if="sample.projectorOffPhoto.thumbnailBase64"
-                                                                :src="sample.projectorOffPhoto.thumbnailBase64"
-                                                                class="aspect-square w-full rounded object-cover"
-                                                                :alt="sample.projectorOffPhoto.capturedAt"
-                                                            />
                                                             <div
-                                                                v-else
-                                                                class="flex aspect-square items-center justify-center rounded bg-muted/20"
+                                                                class="relative overflow-hidden rounded border"
+                                                                :class="
+                                                                    sample.projectorOffPhoto.isValid
+                                                                        ? 'border-green-500/30'
+                                                                        : 'border-red-500/40'
+                                                                "
                                                             >
-                                                                <Camera class="size-6 text-muted-foreground/30" />
+                                                                <img
+                                                                    v-if="sample.projectorOffPhoto.thumbnailBase64"
+                                                                    :src="sample.projectorOffPhoto.thumbnailBase64"
+                                                                    class="aspect-square w-full rounded object-cover"
+                                                                    :alt="sample.projectorOffPhoto.capturedAt"
+                                                                />
+                                                                <div
+                                                                    v-else
+                                                                    class="flex aspect-square items-center justify-center rounded bg-muted/20"
+                                                                >
+                                                                    <Camera class="size-6 text-muted-foreground/30" />
+                                                                </div>
+                                                                <div
+                                                                    class="absolute left-1 top-1 rounded bg-black/65 px-1 py-0.5 text-[9px] text-white"
+                                                                >
+                                                                    白屏
+                                                                </div>
+                                                                <div
+                                                                    class="absolute right-1 top-1 rounded px-1 py-0.5 text-[9px] font-semibold text-white"
+                                                                    :class="
+                                                                        sample.projectorOffPhoto.isValid
+                                                                            ? 'bg-green-600/80'
+                                                                            : 'bg-red-600/80'
+                                                                    "
+                                                                >
+                                                                    {{ sample.projectorOffPhoto.isValid ? 'OK' : 'NG' }}
+                                                                </div>
                                                             </div>
                                                         </div>
-                                                        <div>
-                                                            <div
-                                                                class="mb-1 text-[10px] font-medium text-muted-foreground"
-                                                            >
-                                                                {{ t('calib.step5ExtrinsicLedOnFrame') }}
-                                                            </div>
-                                                            <img
-                                                                v-if="sample.projectorOnPhoto.thumbnailBase64"
-                                                                :src="sample.projectorOnPhoto.thumbnailBase64"
-                                                                class="aspect-square w-full rounded object-cover"
-                                                                :alt="sample.projectorOnPhoto.capturedAt"
-                                                            />
-                                                            <div
-                                                                v-else
-                                                                class="flex aspect-square items-center justify-center rounded bg-muted/20"
-                                                            >
-                                                                <Zap class="size-6 text-muted-foreground/30" />
-                                                            </div>
-                                                        </div>
-                                                    </div>
 
-                                                    <div
-                                                        class="absolute left-1 top-1 rounded px-1 py-0.5 text-[9px] font-semibold"
-                                                        :class="
-                                                            sample.isValid
-                                                                ? 'bg-green-600/80 text-white'
-                                                                : 'bg-red-600/80 text-white'
-                                                        "
-                                                    >
-                                                        {{
-                                                            sample.isValid
-                                                                ? t('calib.step5ValidPhoto')
-                                                                : t('calib.step5InvalidPhoto').slice(0, 2)
-                                                        }}
+                                                        <div>
+                                                            <div class="mb-1 flex items-center justify-between gap-2">
+                                                                <span
+                                                                    class="text-[10px] font-medium text-muted-foreground"
+                                                                >
+                                                                    {{ t('calib.step5ExtrinsicLedOnFrame') }}
+                                                                </span>
+                                                                <span class="text-[10px] text-muted-foreground">
+                                                                    {{ sample.projectorOnPhotos.length }} 张
+                                                                </span>
+                                                            </div>
+                                                            <div
+                                                                class="grid grid-cols-3 gap-2 sm:grid-cols-4 xl:grid-cols-6"
+                                                            >
+                                                                <div
+                                                                    v-for="(
+                                                                        stripePhoto, stripeIndex
+                                                                    ) in sample.projectorOnPhotos"
+                                                                    :key="stripePhoto.id"
+                                                                    class="space-y-1"
+                                                                >
+                                                                    <div
+                                                                        class="relative overflow-hidden rounded border"
+                                                                        :class="
+                                                                            stripePhoto.isValid
+                                                                                ? 'border-green-500/30'
+                                                                                : 'border-red-500/40'
+                                                                        "
+                                                                    >
+                                                                        <img
+                                                                            v-if="stripePhoto.thumbnailBase64"
+                                                                            :src="stripePhoto.thumbnailBase64"
+                                                                            class="aspect-square w-full rounded object-cover"
+                                                                            :alt="stripePhoto.capturedAt"
+                                                                        />
+                                                                        <div
+                                                                            v-else
+                                                                            class="flex aspect-square items-center justify-center rounded bg-muted/20"
+                                                                        >
+                                                                            <Zap
+                                                                                class="size-6 text-muted-foreground/30"
+                                                                            />
+                                                                        </div>
+                                                                        <div
+                                                                            class="absolute left-1 top-1 rounded bg-black/65 px-1 py-0.5 text-[9px] text-white"
+                                                                        >
+                                                                            #{{ stripeIndex + 1 }}
+                                                                        </div>
+                                                                        <div
+                                                                            class="absolute right-1 top-1 rounded px-1 py-0.5 text-[9px] font-semibold text-white"
+                                                                            :class="
+                                                                                stripePhoto.isValid
+                                                                                    ? 'bg-green-600/80'
+                                                                                    : 'bg-red-600/80'
+                                                                            "
+                                                                        >
+                                                                            {{ stripePhoto.isValid ? 'OK' : 'NG' }}
+                                                                        </div>
+                                                                    </div>
+                                                                    <div
+                                                                        class="truncate text-[10px] text-muted-foreground"
+                                                                    >
+                                                                        {{ stripePhoto.cornerCountDetected }} corners
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
                                                     </div>
 
                                                     <button

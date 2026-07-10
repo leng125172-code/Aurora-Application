@@ -3,10 +3,10 @@
 ## 1. 文档说明
 
 - 本文档以以下代码为准整理：
-    - 前端接口封装：`Sources\AuroraStruct3D\AuroraStruct3D.Frontend\src\api\*.ts`
-    - 前端实时通信：`Sources\AuroraStruct3D\AuroraStruct3D.Frontend\src\stores\deviceState.ts`
-    - 后端设备状态应用服务：`Sources\AuroraStruct3D\AuroraStruct3D.Application\DeviceState\DeviceStateAppService.cs`
-    - 后端 SignalR Hub：`Sources\AuroraStruct3D\AuroraStruct3D.HttpApi.Host\Hubs\DeviceStateHub.cs`
+  - 前端接口封装：`Sources\AuroraStruct3D\AuroraStruct3D.Frontend\src\api\*.ts`
+  - 前端实时通信：`Sources\AuroraStruct3D\AuroraStruct3D.Frontend\src\stores\deviceState.ts`
+  - 后端设备状态应用服务：`Sources\AuroraStruct3D\AuroraStruct3D.Application\DeviceState\DeviceStateAppService.cs`
+  - 后端 SignalR Hub：`Sources\AuroraStruct3D\AuroraStruct3D.HttpApi.Host\Hubs\DeviceStateHub.cs`
 - `Documents\swagger.json` 已过期，**不作为本文档依据**。
 - 本文档覆盖当前前端已接入或已明确声明的 REST 接口与设备状态 SignalR 推送。
 
@@ -737,6 +737,28 @@
 | --------- | --------------- | ---------------------------- |
 | `endGray` | 0~255，默认 255 | 末尾帧灰度值（0=黑，255=白） |
 
+##### POST `/api/projectors/next-frame`
+
+- **说明**：在单帧触发模式（`B 2`）下切换到下一张条纹图（发送 `N` 指令）
+- **返回**：`boolean`（成功返回 `true`）
+
+请求体：
+
+```json
+{
+    "projectorDeviceId": "string"
+}
+```
+
+##### 推荐采集流程（B 2 + T/N）
+
+1. 先调用 `setProjectorTriggerMode`，将触发模式设为 `SingleFrame(2)`（即 `B 2`）。
+2. 调用 `trigger-once`（`T`）触发并采集第 1 张。
+3. 根据用户输入的图片数，循环调用 `next-frame`（`N`）并采集后续图片。
+4. 采集结束后恢复触发模式到 `Normal(0)`（即 `B 0`）。
+
+> 说明：`T + N` 的总次数由用户输入图片数决定，不应在业务代码中写死为固定值。
+
 #### 3.5.6 高级操作
 
 | 前端方法                 | HTTP 方法 | 路径                                      | 说明                                |
@@ -918,9 +940,9 @@
 - **方向**：服务端 -> 客户端
 - **载荷**：`DeviceStateDto`
 - **触发时机**：
-    - 客户端刚连接成功时
-    - 设备状态发生变化时
-    - 设备运行模式发生变化时
+  - 客户端刚连接成功时
+  - 设备状态发生变化时
+  - 设备运行模式发生变化时
 
 示例载荷：
 
@@ -942,8 +964,8 @@
 - **方向**：服务端 -> 客户端
 - **载荷**：`DeviceFaultDto | null`
 - **触发时机**：
-    - 客户端刚连接成功时
-    - 设备状态或模式广播时同步发送当前故障
+  - 客户端刚连接成功时
+  - 设备状态或模式广播时同步发送当前故障
 - **说明**：无活跃故障时返回 `null`
 
 示例载荷：

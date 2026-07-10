@@ -446,6 +446,15 @@ public class ProjectorDeviceAppService : AuroraStruct3DAppService, IProjectorDev
         return await svc.TriggerOnceAsync(input.EndGray);
     }
 
+    /// <inheritdoc/>
+    public async Task<bool> NextFrameAsync(NextProjectorFrameDto input)
+    {
+        EnsureManualOrMaintenanceMode();
+        await EnsureOrAcquireSessionAsync(input.ProjectorDeviceId, DeviceType.Projector);
+        IDlpProjectorService svc = GetConnectedService(input.ProjectorDeviceId);
+        return await svc.NextFrameAsync();
+    }
+
     // ─── 高级操作 ─────────────────────────────────────────────────────────
 
     /// <inheritdoc/>
@@ -660,12 +669,11 @@ public class ProjectorDeviceAppService : AuroraStruct3DAppService, IProjectorDev
 
     /// <summary>
     /// 按与设备下载完全一致的规则生成条纹图一维像素数据。
-    /// 竖条纹：每张图长度为 WidthPixels；横条纹：每张图长度为 HeightPixels。
+    /// Step3 固定按 1-2-1-2（横-竖）交替方向生成；像素序列统一按 WidthPixels 长度构建。
     /// </summary>
     private static byte[][] BuildFringeImagePixels(DownloadFringePatternInputDto input)
     {
-        bool isVertical = input.FringeMode.Equals("vertical", StringComparison.OrdinalIgnoreCase);
-        int pixelCount = isVertical ? input.WidthPixels : input.HeightPixels;
+        int pixelCount = input.WidthPixels;
 
         if (pixelCount <= 0)
         {

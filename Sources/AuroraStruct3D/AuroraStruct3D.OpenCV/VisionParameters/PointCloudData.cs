@@ -31,11 +31,14 @@ public class PointCloudData : IVisionParameter
     /// <summary>端口 UI 显示名（实例级），为 null 时回退到类型上的 [DisplayName] 特性。</summary>
     public string? DisplayName { get; set; }
 
-    /// <summary>参数实际数据类型：<see cref="Mat"/>。</summary>
-    public Type ParameterType => typeof(Mat);
+    /// <summary>
+    /// 端口声明类型：工作流图与变量编译阶段按 <see cref="PointCloudData"/> 识别，
+    /// 内部坐标矩阵仍通过 <see cref="Value"/> / <see cref="PointCloud"/> 访问。
+    /// </summary>
+    public Type ParameterType => typeof(PointCloudData);
 
     /// <summary>
-    /// 获取或设置参数值（<see cref="Mat"/> 实例）。
+    /// 获取或设置点云坐标矩阵值（<see cref="Mat"/> 实例）。
     /// <para>
     /// 当 <see cref="ErrorCheck"/> 为 <see langword="true"/> 时，
     /// setter 会验证值必须为 <see cref="Mat"/> 类型；
@@ -86,7 +89,7 @@ public class PointCloudData : IVisionParameter
     }
 
     /// <summary>
-    /// 获取内部 <see cref="Mat"/> 对象，供下游节点直接读取点云坐标数据。
+    /// 获取内部 <see cref="Mat"/> 对象，供点云算子直接读取坐标数据。
     /// 若尚未执行或已释放则返回 <see langword="null"/>。
     /// </summary>
     public Mat? PointCloud => _pointCloud;

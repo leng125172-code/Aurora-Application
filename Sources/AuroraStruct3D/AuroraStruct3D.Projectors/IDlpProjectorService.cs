@@ -159,6 +159,11 @@ public interface IDlpProjectorService
     /// <param name="endGray">末尾帧灰度值（0~254，注意 255 走白色快速命令）</param>
     Task<bool> TriggerOnceAsync(byte endGray, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// 单帧触发模式下切换到下一张条纹（发送 N 指令）。
+    /// </summary>
+    Task<bool> NextFrameAsync(CancellationToken cancellationToken = default);
+
     // ─── 通用命令 ────────────────────────────────────────────────
 
     /// <summary>
@@ -262,7 +267,7 @@ public interface IDlpProjectorService
 
     /// <summary>
     /// 将条纹图案数据写入投影机内部 Flash。
-    /// 流程：切换到默认显示(S6) → 开灯(LN) → 设置幅数(MB) → 擦除Flash(FE,等F0) → 循环写列数据(FW,每256列等待page写入应答)
+    /// 流程：开灯(LN) → 设置幅数(MB) → 擦除Flash(FE,等F0) → 写方向位图(MF) → 循环写列数据(FW,每256列等待page写入应答)
     /// </summary>
     /// <param name="imageCount">图像总幅数</param>
     /// <param name="columnGrayValues">

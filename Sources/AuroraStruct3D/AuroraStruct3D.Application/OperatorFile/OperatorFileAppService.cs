@@ -4,6 +4,8 @@ using AuroraStruct3D.OpenCV.Registry;
 using AuroraStruct3D.OperatorFile.Dtos;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Configuration;
 using OpenCvSharp;
 using Volo.Abp;
 using Volo.Abp.BlobStoring;
@@ -27,6 +29,7 @@ public class OperatorFileAppService : AuroraStruct3DAppService, IOperatorFileApp
     private readonly IBlobContainer<OperatorFileBlobContainer> _blobContainer;
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly IOperatorFileRecordRepository _recordRepository;
+    private readonly IConfiguration _configuration;
 
     /// <summary>文件默认有效期（小时）。</summary>
     private const int DefaultExpirationHours = 24;
@@ -45,13 +48,15 @@ public class OperatorFileAppService : AuroraStruct3DAppService, IOperatorFileApp
         IOperatorRegistry operatorRegistry,
         IBlobContainer<OperatorFileBlobContainer> blobContainer,
         IHttpContextAccessor httpContextAccessor,
-        IOperatorFileRecordRepository recordRepository
+        IOperatorFileRecordRepository recordRepository,
+        IConfiguration configuration
     )
     {
         _operatorRegistry = operatorRegistry;
         _blobContainer = blobContainer;
         _httpContextAccessor = httpContextAccessor;
         _recordRepository = recordRepository;
+        _configuration = configuration;
     }
 
     /// <inheritdoc/>
@@ -159,10 +164,7 @@ public class OperatorFileAppService : AuroraStruct3DAppService, IOperatorFileApp
             DateTime now = DateTime.Now;
             DateTime expiresAt = now.AddHours(DefaultExpirationHours);
 
-            string previewBlobNames = string.Join(
-                ",",
-                previewImages.Select(p => ExtractBlobNameFromUrl(p.DownloadUrl))
-            );
+            string previewBlobNames = string.Join(",", previewImages.Select(p => p.BlobName));
 
             var record = new OperatorFileRecord
             {
@@ -217,6 +219,22 @@ public class OperatorFileAppService : AuroraStruct3DAppService, IOperatorFileApp
     }
 
     /// <inheritdoc/>
+    [HttpGet("download")]
+    public async Task<IRemoteStreamContent> DownloadAsync(string blobName)
+    {
+        Check.NotNullOrWhiteSpace(blobName, nameof(blobName));
+
+        Stream? stream = await _blobContainer.GetAsync(blobName);
+        if (stream is null)
+        {
+            throw new UserFriendlyException($"文件不存在或已过期：{blobName}");
+        }
+
+        string fileName = Path.GetFileName(blobName);
+        return new RemoteStreamContent(stream, fileName, ResolveContentType(fileName));
+    }
+
+    /// <inheritdoc/>
     public async Task ConfirmAsync(ConfirmOperatorFileInput input)
     {
         Check.NotNull(input, nameof(input));
@@ -245,25 +263,8 @@ public class OperatorFileAppService : AuroraStruct3DAppService, IOperatorFileApp
     }
 
     /// <summary>
-    /// 从预览图下载 URL 中提取 BLOB 名称。
-    /// </summary>
-    private static string ExtractBlobNameFromUrl(string downloadUrl)
-    {
-        int index = downloadUrl.IndexOf("blobName=", StringComparison.Ordinal);
-        if (index < 0)
-            return string.Empty;
-
-        string encoded = downloadUrl[(index + "blobName=".Length)..];
-        int ampIndex = encoded.IndexOf('&');
-        if (ampIndex >= 0)
-            encoded = encoded[..ampIndex];
-
-        return Uri.UnescapeDataString(encoded);
-    }
-
-    /// <summary>
     /// 根据算子类型生成预览图。
-    /// 图片算子生成灰度图，点云算子生成三视图灰度图。
+    /// 图片算子生成灰度图，点云算子生成 XY/XZ/YZ 三视图灰度图。
     /// </summary>
     private async Task<List<PreviewImageDto>> GeneratePreviewsAsync(
         Guid operatorId,
@@ -283,9 +284,10 @@ public class OperatorFileAppService : AuroraStruct3DAppService, IOperatorFileApp
 
         if (operatorId == ReadPointCloudOperatorId)
         {
-            // 点云：生成三视图灰度预览
+            // 点云：生成 XY/XZ/YZ 三视图灰度预览
             return await GeneratePointCloudThreeViewPreviewsAsync(
                 tempFilePath,
+                originalFileName,
                 previewPrefix,
                 baseName
             );
@@ -330,11 +332,9 @@ public class OperatorFileAppService : AuroraStruct3DAppService, IOperatorFileApp
             using MemoryStream ms = new MemoryStream(pngBytes);
             await _blobContainer.SaveAsync(blobName, ms, overrideExisting: true);
 
-            string downloadUrl = BuildPreviewUrl(blobName);
-
             return new List<PreviewImageDto>
             {
-                new PreviewImageDto { Label = "灰度图", DownloadUrl = downloadUrl },
+                new PreviewImageDto { Label = "灰度图", BlobName = blobName },
             };
         }
         finally
@@ -345,16 +345,17 @@ public class OperatorFileAppService : AuroraStruct3DAppService, IOperatorFileApp
     }
 
     /// <summary>
-    /// 生成点云的三视图灰度预览图（俯视、正视、侧视）。
+    /// 生成点云的三视图灰度预览图（XY、XZ、YZ）。
     /// </summary>
     private async Task<List<PreviewImageDto>> GeneratePointCloudThreeViewPreviewsAsync(
         string tempFilePath,
+        string originalFileName,
         string previewPrefix,
         string baseName
     )
     {
         // 读取点云
-        (Mat pointCloud, _) = ReadPointCloudFile(tempFilePath);
+        (Mat pointCloud, _) = ReadPointCloudFile(originalFileName, tempFilePath);
 
         if (pointCloud is null || pointCloud.Empty())
         {
@@ -398,13 +399,41 @@ public class OperatorFileAppService : AuroraStruct3DAppService, IOperatorFileApp
             float rangeY = maxY - minY;
             float rangeZ = maxZ - minZ;
 
-            const int imageSize = 512;
+            const float pixelsPerUnit = 180f;
+            float xyPaddingScale = GetXyPreviewPaddingScale();
+            const int minSidePixels = 128;
+            const int maxSidePixels = 1024;
+            const float xyMinPointsPerPixel = 0.35f;
 
-            // 俯视图（XY 平面，从上往下看）：X 横轴，Y 纵轴
+            int xyWidth = ComputeAxisPixels(rangeX, pixelsPerUnit, xyPaddingScale);
+            int xyHeight = ComputeAxisPixels(rangeY, pixelsPerUnit, xyPaddingScale);
+            (xyWidth, xyHeight) = FitSizeToPointDensity(
+                xyWidth,
+                xyHeight,
+                pointCount,
+                xyMinPointsPerPixel
+            );
+            (int xzWidth, int xzHeight) = ComputeAdaptiveImageSize(
+                rangeX,
+                rangeZ,
+                pixelsPerUnit,
+                minSidePixels,
+                maxSidePixels
+            );
+            (int yzWidth, int yzHeight) = ComputeAdaptiveImageSize(
+                rangeY,
+                rangeZ,
+                pixelsPerUnit,
+                minSidePixels,
+                maxSidePixels
+            );
+
+            // XY 平面：X 横轴，Y 纵轴
             var topView = RenderPointCloudView(
                 pointCloud,
                 pointCount,
-                imageSize,
+                xyWidth,
+                xyHeight,
                 minX,
                 maxX,
                 rangeX,
@@ -415,11 +444,12 @@ public class OperatorFileAppService : AuroraStruct3DAppService, IOperatorFileApp
                 1
             );
 
-            // 正视图（XZ 平面，从前往后看）：X 横轴，Z 纵轴
+            // XZ 平面：X 横轴，Z 纵轴
             var frontView = RenderPointCloudView(
                 pointCloud,
                 pointCount,
-                imageSize,
+                xzWidth,
+                xzHeight,
                 minX,
                 maxX,
                 rangeX,
@@ -430,11 +460,12 @@ public class OperatorFileAppService : AuroraStruct3DAppService, IOperatorFileApp
                 2
             );
 
-            // 侧视图（YZ 平面，从右往左看）：Y 横轴，Z 纵轴
+            // YZ 平面：Y 横轴，Z 纵轴
             var sideView = RenderPointCloudView(
                 pointCloud,
                 pointCount,
-                imageSize,
+                yzWidth,
+                yzHeight,
                 minY,
                 maxY,
                 rangeY,
@@ -447,15 +478,9 @@ public class OperatorFileAppService : AuroraStruct3DAppService, IOperatorFileApp
 
             var result = new List<PreviewImageDto>();
 
-            result.Add(
-                await SavePreviewBlobAsync(topView, previewPrefix, baseName, "top", "俯视图")
-            );
-            result.Add(
-                await SavePreviewBlobAsync(frontView, previewPrefix, baseName, "front", "正视图")
-            );
-            result.Add(
-                await SavePreviewBlobAsync(sideView, previewPrefix, baseName, "side", "侧视图")
-            );
+            result.Add(await SavePreviewBlobAsync(topView, previewPrefix, baseName, "xy", "XY"));
+            result.Add(await SavePreviewBlobAsync(frontView, previewPrefix, baseName, "xz", "XZ"));
+            result.Add(await SavePreviewBlobAsync(sideView, previewPrefix, baseName, "yz", "YZ"));
 
             return result;
         }
@@ -471,7 +496,8 @@ public class OperatorFileAppService : AuroraStruct3DAppService, IOperatorFileApp
     private static Mat RenderPointCloudView(
         Mat pointCloud,
         int pointCount,
-        int imageSize,
+        int imageWidth,
+        int imageHeight,
         float minA,
         float maxA,
         float rangeA,
@@ -483,27 +509,26 @@ public class OperatorFileAppService : AuroraStruct3DAppService, IOperatorFileApp
     )
     {
         // 创建累加器（浮点精度，避免多次叠加丢失暗部细节）
-        float[,] accumulator = new float[imageSize, imageSize];
+        float[,] accumulator = new float[imageHeight, imageWidth];
+
+        // 预留内边距，避免投影内容紧贴图像边缘。
+        int edgePadding = Math.Clamp(Math.Min(imageWidth, imageHeight) / 20, 8, 32);
+        float usableSpanX = Math.Max(1, imageWidth - 1 - (edgePadding * 2));
+        float usableSpanY = Math.Max(1, imageHeight - 1 - (edgePadding * 2));
 
         // 缩放因子
-        float scaleA = (rangeA > 0) ? (imageSize - 1) / rangeA : 1f;
-        float scaleB = (rangeB > 0) ? (imageSize - 1) / rangeB : 1f;
-
-        float invScaleA = 1f / scaleA;
-        float invScaleB = 1f / scaleB;
+        float scaleA = (rangeA > 0) ? usableSpanX / rangeA : 0f;
+        float scaleB = (rangeB > 0) ? usableSpanY / rangeB : 0f;
 
         for (int i = 0; i < pointCount; i++)
         {
             float a = pointCloud.Get<float>(i, colA);
             float b = pointCloud.Get<float>(i, colB);
 
-            int ia = (int)((a - minA) * scaleA);
-            int ib = (int)((b - minB) * scaleB);
-
-            // 反向映射：a = minA + ia * invScaleA，b = minB + ib * invScaleB
-            // 点到像素中心的距离越近，权重越大（双线性插值风格）
-            float fa = (a - minA) * scaleA;
-            float fb = (b - minB) * scaleB;
+            // 点到像素中心的距离越近，权重越大（双线性插值风格）。
+            // 当轴向范围为 0 时，退化到中心线绘制，避免集中到左上角。
+            float fa = (rangeA > 0) ? edgePadding + (a - minA) * scaleA : (imageWidth - 1) * 0.5f;
+            float fb = (rangeB > 0) ? edgePadding + (b - minB) * scaleB : (imageHeight - 1) * 0.5f;
 
             int ia0 = (int)Math.Floor(fa);
             int ib0 = (int)Math.Floor(fb);
@@ -515,29 +540,36 @@ public class OperatorFileAppService : AuroraStruct3DAppService, IOperatorFileApp
             float wa0 = 1f - wa1;
             float wb0 = 1f - wb1;
 
-            AddWeight(accumulator, ia0, ib0, imageSize, wa0 * wb0);
-            AddWeight(accumulator, ia1, ib0, imageSize, wa1 * wb0);
-            AddWeight(accumulator, ia0, ib1, imageSize, wa0 * wb1);
-            AddWeight(accumulator, ia1, ib1, imageSize, wa1 * wb1);
+            AddWeight(accumulator, ia0, ib0, imageWidth, imageHeight, wa0 * wb0);
+            AddWeight(accumulator, ia1, ib0, imageWidth, imageHeight, wa1 * wb0);
+            AddWeight(accumulator, ia0, ib1, imageWidth, imageHeight, wa0 * wb1);
+            AddWeight(accumulator, ia1, ib1, imageWidth, imageHeight, wa1 * wb1);
         }
+
+        float[,] centeredAccumulator = CenterAccumulatorContent(
+            accumulator,
+            imageWidth,
+            imageHeight,
+            edgePadding
+        );
 
         // 找到最大值，用于归一化
         float maxVal = 0;
-        for (int y = 0; y < imageSize; y++)
-        for (int x = 0; x < imageSize; x++)
-            if (accumulator[y, x] > maxVal)
-                maxVal = accumulator[y, x];
+        for (int y = 0; y < imageHeight; y++)
+        for (int x = 0; x < imageWidth; x++)
+            if (centeredAccumulator[y, x] > maxVal)
+                maxVal = centeredAccumulator[y, x];
 
         // 创建灰度图
-        Mat gray = new Mat(imageSize, imageSize, MatType.CV_8UC1);
+        Mat gray = new Mat(imageHeight, imageWidth, MatType.CV_8UC1);
 
         if (maxVal > 0)
         {
             float invMax = 255f / maxVal;
-            for (int y = 0; y < imageSize; y++)
-            for (int x = 0; x < imageSize; x++)
+            for (int y = 0; y < imageHeight; y++)
+            for (int x = 0; x < imageWidth; x++)
             {
-                byte val = (byte)Math.Clamp(accumulator[y, x] * invMax, 0, 255);
+                byte val = (byte)Math.Clamp(centeredAccumulator[y, x] * invMax, 0, 255);
                 gray.Set(y, x, val);
             }
         }
@@ -549,14 +581,153 @@ public class OperatorFileAppService : AuroraStruct3DAppService, IOperatorFileApp
         return gray;
     }
 
-    private static void AddWeight(float[,] acc, int x, int y, int size, float weight)
+    private static void AddWeight(float[,] acc, int x, int y, int width, int height, float weight)
     {
-        if (x >= 0 && x < size && y >= 0 && y < size)
+        if (x >= 0 && x < width && y >= 0 && y < height)
             acc[y, x] += weight;
     }
 
+    private static float[,] CenterAccumulatorContent(
+        float[,] source,
+        int width,
+        int height,
+        int edgePadding
+    )
+    {
+        int minX = width;
+        int minY = height;
+        int maxX = -1;
+        int maxY = -1;
+
+        for (int y = 0; y < height; y++)
+        for (int x = 0; x < width; x++)
+        {
+            if (source[y, x] <= 0f)
+            {
+                continue;
+            }
+
+            if (x < minX)
+                minX = x;
+            if (x > maxX)
+                maxX = x;
+            if (y < minY)
+                minY = y;
+            if (y > maxY)
+                maxY = y;
+        }
+
+        if (maxX < minX || maxY < minY)
+        {
+            return source;
+        }
+
+        double contentCenterX = (minX + maxX) / 2.0;
+        double contentCenterY = (minY + maxY) / 2.0;
+        double canvasCenterX = (width - 1) / 2.0;
+        double canvasCenterY = (height - 1) / 2.0;
+
+        int desiredOffsetX = (int)Math.Round(canvasCenterX - contentCenterX);
+        int desiredOffsetY = (int)Math.Round(canvasCenterY - contentCenterY);
+
+        int minOffsetX = edgePadding - minX;
+        int maxOffsetX = (width - 1 - edgePadding) - maxX;
+        int minOffsetY = edgePadding - minY;
+        int maxOffsetY = (height - 1 - edgePadding) - maxY;
+
+        int offsetX = Math.Clamp(desiredOffsetX, minOffsetX, maxOffsetX);
+        int offsetY = Math.Clamp(desiredOffsetY, minOffsetY, maxOffsetY);
+
+        if (offsetX == 0 && offsetY == 0)
+        {
+            return source;
+        }
+
+        float[,] centered = new float[height, width];
+        for (int y = 0; y < height; y++)
+        for (int x = 0; x < width; x++)
+        {
+            float value = source[y, x];
+            if (value <= 0f)
+            {
+                continue;
+            }
+
+            int nx = x + offsetX;
+            int ny = y + offsetY;
+            if (nx < 0 || nx >= width || ny < 0 || ny >= height)
+            {
+                continue;
+            }
+
+            centered[ny, nx] += value;
+        }
+
+        return centered;
+    }
+
+    private static (int Width, int Height) ComputeAdaptiveImageSize(
+        float rangeA,
+        float rangeB,
+        float pixelsPerUnit,
+        int minSidePixels,
+        int maxSidePixels
+    )
+    {
+        float safeRangeA = Math.Max(rangeA, 1e-6f);
+        float safeRangeB = Math.Max(rangeB, 1e-6f);
+
+        int width = (int)Math.Round(safeRangeA * pixelsPerUnit);
+        int height = (int)Math.Round(safeRangeB * pixelsPerUnit);
+
+        width = Math.Clamp(width, minSidePixels, maxSidePixels);
+        height = Math.Clamp(height, minSidePixels, maxSidePixels);
+
+        return (width, height);
+    }
+
+    private static int ComputeAxisPixels(float range, float pixelsPerUnit, float paddingScale)
+    {
+        float safeRange = Math.Max(range, 1e-6f);
+        return Math.Max(1, (int)Math.Round(safeRange * paddingScale * pixelsPerUnit));
+    }
+
+    private static (int Width, int Height) FitSizeToPointDensity(
+        int width,
+        int height,
+        int pointCount,
+        float minPointsPerPixel
+    )
+    {
+        if (pointCount <= 0 || minPointsPerPixel <= 0f)
+        {
+            return (Math.Max(1, width), Math.Max(1, height));
+        }
+
+        double totalPixels = Math.Max(1d, (double)width * height);
+        double maxPixelsByDensity = pointCount / minPointsPerPixel;
+        if (totalPixels <= maxPixelsByDensity)
+        {
+            return (Math.Max(1, width), Math.Max(1, height));
+        }
+
+        double scale = Math.Sqrt(maxPixelsByDensity / totalPixels);
+        int adjustedWidth = Math.Max(1, (int)Math.Round(width * scale));
+        int adjustedHeight = Math.Max(1, (int)Math.Round(height * scale));
+        return (adjustedWidth, adjustedHeight);
+    }
+
+    private float GetXyPreviewPaddingScale()
+    {
+        const float defaultScale = 1.10f;
+        float configuredScale = _configuration.GetValue<float>(
+            "OperatorFile:XyPreviewPaddingScale"
+        );
+        return configuredScale > 1f ? configuredScale : defaultScale;
+    }
+
     /// <summary>
-    /// 编码灰度 Mat 为 PNG 并保存到 BLOB 存储。
+    /// 编码灰度 Mat 为带透明背景的 PNG 并保存到 BLOB 存储。
     /// </summary>
     private async Task<PreviewImageDto> SavePreviewBlobAsync(
         Mat gray,
@@ -566,7 +737,7 @@ public class OperatorFileAppService : AuroraStruct3DAppService, IOperatorFileApp
         string label
     )
     {
-        Cv2.ImEncode(".png", gray, out byte[] pngBytes);
+        byte[] pngBytes = EncodeTransparentPreviewPng(gray);
         gray.Dispose();
 
         string blobName = $"{previewPrefix}_{baseName}_{viewSuffix}.png";
@@ -574,9 +745,35 @@ public class OperatorFileAppService : AuroraStruct3DAppService, IOperatorFileApp
         using MemoryStream ms = new MemoryStream(pngBytes);
         await _blobContainer.SaveAsync(blobName, ms, overrideExisting: true);
 
-        string downloadUrl = BuildPreviewUrl(blobName);
+        return new PreviewImageDto { Label = label, BlobName = blobName };
+    }
 
-        return new PreviewImageDto { Label = label, DownloadUrl = downloadUrl };
+    private static byte[] EncodeTransparentPreviewPng(Mat gray)
+    {
+        if (gray.Empty())
+        {
+            return Array.Empty<byte>();
+        }
+
+        int rows = gray.Rows;
+        int cols = gray.Cols;
+        using Mat bgra = new(gray.Rows, gray.Cols, MatType.CV_8UC4, Scalar.All(0));
+        for (int y = 0; y < rows; y++)
+        {
+            for (int x = 0; x < cols; x++)
+            {
+                byte value = gray.Get<byte>(y, x);
+                if (value == 0)
+                {
+                    continue;
+                }
+
+                bgra.Set(y, x, new Vec4b(value, value, value, byte.MaxValue));
+            }
+        }
+
+        Cv2.ImEncode(".png", bgra, out byte[] pngBytes);
+        return pngBytes;
     }
 
     /// <summary>
@@ -585,7 +782,15 @@ public class OperatorFileAppService : AuroraStruct3DAppService, IOperatorFileApp
     /// </summary>
     private static (Mat pointCloud, Mat? colors) ReadPointCloudFile(string filePath)
     {
-        string extension = Path.GetExtension(filePath).ToLowerInvariant();
+        return ReadPointCloudFile(filePath, filePath);
+    }
+
+    private static (Mat pointCloud, Mat? colors) ReadPointCloudFile(
+        string fileName,
+        string filePath
+    )
+    {
+        string extension = Path.GetExtension(fileName).ToLowerInvariant();
         return extension switch
         {
             ".ply" => ReadPlyFile(filePath),
@@ -812,6 +1017,21 @@ public class OperatorFileAppService : AuroraStruct3DAppService, IOperatorFileApp
         string timestamp = DateTime.Now.ToString("yyyyMMddHHmmss_fff");
         string safeFileName = Path.GetFileName(originalFileName);
         return $"{operatorId:N}/{timestamp}_{safeFileName}";
+    }
+
+    private static string ResolveContentType(string fileName)
+    {
+        string extension = Path.GetExtension(fileName).ToLowerInvariant();
+        return extension switch
+        {
+            ".png" => "image/png",
+            ".jpg" or ".jpeg" => "image/jpeg",
+            ".bmp" => "image/bmp",
+            ".tif" or ".tiff" => "image/tiff",
+            ".webp" => "image/webp",
+            ".txt" or ".asc" or ".xyz" or ".pts" => "text/plain",
+            _ => "application/octet-stream",
+        };
     }
 
     private static void DeleteTempFileQuietly(string? tempFilePath)

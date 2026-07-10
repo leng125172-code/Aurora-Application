@@ -51,6 +51,9 @@ internal static class TjProjectorCommands
     /// <summary>触发一次（条纹末尾为白色，nGray=255 时使用此命令）</summary>
     public const string TriggerOnce = "T\r\n";
 
+    /// <summary>单帧触发模式下切换到下一张条纹（B 2 + N）。</summary>
+    public const string TriggerNextFrame = "N\r\n";
+
     /// <summary>触发一次并指定末尾灰度（命令前缀，完整命令如 "G 128\r\n"）</summary>
     public const string TriggerWithGrayPrefix = "G ";
 
@@ -104,11 +107,6 @@ internal static class TjProjectorCommands
     public const string ReadPixelMode = "Fp\r\n";
 
     /// <summary>
-    /// 切换到 Flash 存储图案播放模式（对应内容模式 6）
-    /// </summary>
-    public const string SetModeFlash = "S6\r\n";
-
-    /// <summary>
     /// 设置总图像幅数命令前缀（完整命令如 "MB 3\r\n"）
     /// </summary>
     public const string SetImageCountPrefix = "MB ";
@@ -129,6 +127,13 @@ internal static class TjProjectorCommands
     /// 横条纹时传入图像幅数；竖条纹时传入 0。
     /// </summary>
     public const string SetFringeDirectionPrefix = "MD ";
+
+    /// <summary>
+    /// 配置每幅条纹的横竖方向位图（完整命令如 "MF0 41 0 0 0\r\n"）。
+    /// 第一个参数块索引范围 0~3，每块覆盖 32 幅图；后四个参数为 4 个字节位图。
+    /// 每幅图占 1bit：0=竖条纹，1=横条纹。
+    /// </summary>
+    public const string SetFringeOrientationBitmapPrefix = "MF";
 
     /// <summary>
     /// 写 Flash 像素列命令前缀（完整命令如 "FW 128 200\r\n"）。

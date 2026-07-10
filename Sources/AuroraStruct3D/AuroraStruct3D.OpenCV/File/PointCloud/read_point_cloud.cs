@@ -1,7 +1,7 @@
 namespace AuroraStruct3D.OpenCV.File.PointCloud;
 
 /// <summary>
-/// 工作流算子：从文件系统读取点云文件，输出 <see cref="Mat"/> 点云矩阵。
+/// 工作流算子：从文件系统读取点云文件，输出 <see cref="PointCloudData"/> 点云对象。
 /// <para>
 /// 支持的点云格式：
 /// <list type="bullet">
@@ -15,7 +15,7 @@ namespace AuroraStruct3D.OpenCV.File.PointCloud;
 /// 端口约定：
 /// <list type="bullet">
 ///   <item>输入 <c>point_cloud_path</c>（string）— 点云文件路径</item>
-///   <item>输出 <c>output_point_cloud</c>（Mat）— 读取结果，每行代表一个点</item>
+///   <item>输出 <c>output_point_cloud</c>（PointCloudData）— 读取结果，内部包含点坐标矩阵与可选颜色矩阵</item>
 /// </list>
 /// </para>
 /// <para>
@@ -37,13 +37,23 @@ public class read_point_cloud : IOperator
     /// 输入端口定义（工作流引擎反射用）。
     /// </summary>
     public static List<IVisionParameter>? InputVisionParameters =>
-        new() { new PointCloudFilePath(errorCheck: true) { ParameterName = "point_cloud_path", DisplayName = "点云路径" } };
+        new()
+        {
+            new PointCloudFilePath(errorCheck: true)
+            {
+                ParameterName = "point_cloud_path",
+                DisplayName = "点云路径",
+            },
+        };
 
     /// <summary>
     /// 输出端口定义（工作流引擎反射用）。
     /// </summary>
     public static List<IVisionParameter>? OutputVisionParameters =>
-        new() { new PointCloudData() { ParameterName = "output_point_cloud", DisplayName = "输出点云" } };
+        new()
+        {
+            new PointCloudData() { ParameterName = "output_point_cloud", DisplayName = "输出点云" },
+        };
 
     /// <summary>
     /// 构造函数配置参数定义（工作流引擎反射用）。

@@ -115,6 +115,14 @@ public class CalibProject : FullAuditedAggregateRoot<Guid>
     {
         SetName(name);
         SetDeviceType(deviceType);
+        SetBoardConfig(
+            physicalCornerRows: 9,
+            physicalCornerCols: 6,
+            physicalSquareSizeMm: 30m,
+            projectedCornerRows: 9,
+            projectedCornerCols: 6,
+            projectedPixelSize: 20
+        );
         CalibStatus = CalibStatus.Initializing;
     }
 

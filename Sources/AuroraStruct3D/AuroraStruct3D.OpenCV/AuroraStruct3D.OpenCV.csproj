@@ -20,7 +20,7 @@
         <PackageReference
             Include="OpenCvSharp4.runtime.win"
             Version="$(OpenCvSharp4Version)"
-            Condition="'$(RuntimeIdentifier)' == 'win-x64' OR '$(RuntimeIdentifier)' == 'win-x86'"
+            Condition="'$(OS)' == 'Windows_NT' AND ('$(RuntimeIdentifier)' == '' OR '$(RuntimeIdentifier)' == 'win-x64' OR '$(RuntimeIdentifier)' == 'win-x86')"
         />
 
         <!-- Linux ARM64 运行时 (需要手动构建) -->

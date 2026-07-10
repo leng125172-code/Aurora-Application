@@ -150,6 +150,10 @@ namespace AuroraStruct3D.EntityFrameworkCore
 
         // ── 工作流模块 ─────────────────────────────────────────────────────────
         public DbSet<WorkflowDefinition> WorkflowDefinitions { get; set; }
+        public DbSet<WorkflowProjectTaskConfig> WorkflowProjectTaskConfigs { get; set; }
+        public DbSet<WorkflowProjectTask> WorkflowProjectTasks { get; set; }
+        public DbSet<WorkflowProjectDeployment> WorkflowProjectDeployments { get; set; }
+        public DbSet<WorkflowProjectRun> WorkflowProjectRuns { get; set; }
 
         // ── 变量模块（离线变量库 + 在线变量池）────────────────────────────────────
         public DbSet<VariableDefinition> VariableDefinitions { get; set; }
@@ -223,6 +227,10 @@ namespace AuroraStruct3D.EntityFrameworkCore
 
             // 工作流模块
             builder.ConfigureWorkflowDefinition();
+            builder.ConfigureWorkflowProjectTaskConfig();
+            builder.ConfigureWorkflowProjectTask();
+            builder.ConfigureWorkflowProjectDeployment();
+            builder.ConfigureWorkflowProjectRun();
 
             // 变量模块
             builder.ConfigureVariables();

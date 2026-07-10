@@ -153,6 +153,12 @@ public class TakeExtrinsicPhotoInput
     /// <summary>相机设备ID</summary>
     [Required]
     public Guid CameraDeviceId { get; set; }
+
+    /// <summary>
+    /// 条纹采集总帧数（T + N 的图片数）。
+    /// </summary>
+    [Range(2, 128)]
+    public int StripeImageCount { get; set; } = 2;
 }
 
 /// <summary>

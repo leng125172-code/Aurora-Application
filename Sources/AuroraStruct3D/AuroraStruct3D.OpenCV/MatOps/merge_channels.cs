@@ -24,6 +24,8 @@ namespace AuroraStruct3D.OpenCV.MatOps;
 [Description("把几张单通道图拼回一张多通道彩图。")]
 public class merge_channels : IOperator
 {
+    private readonly MergeMode _mergeMode;
+
     public static List<IVisionParameter>? InputVisionParameters =>
         new()
         {
@@ -63,7 +65,10 @@ public class merge_channels : IOperator
         XYZ,
     }
 
-    public merge_channels() { }
+    public merge_channels(MergeMode merge_mode = MergeMode.XY)
+    {
+        _mergeMode = merge_mode;
+    }
 
     public void Execute(IWorkflowContext context)
     {
@@ -98,10 +103,7 @@ public class merge_channels : IOperator
             throw new InvalidOperationException("输入通道的尺寸不一致，无法合并。");
         }
 
-        var modeStr = context.Get<string?>("merge_mode");
-        MergeMode mode = Enum.TryParse(modeStr, out MergeMode parsed) ? parsed : MergeMode.XY;
-
-        Mat merged = MergeChannels(channelX, channelY, channelZ, mode);
+        Mat merged = MergeChannels(channelX, channelY, channelZ, _mergeMode);
 
         context.Set("merged_mat", merged);
     }
