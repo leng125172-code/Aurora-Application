@@ -19,6 +19,12 @@ public class colored_point_cloud_to_image : IOperator
         new()
         {
             new MatImg { ParameterName = "output_image", DisplayName = "输出图像" },
+            new VisionParameter<string>
+            {
+                ParameterName = "projection_mapping",
+                ParameterType = typeof(string),
+                DisplayName = "投影映射",
+            },
         };
 
     public static List<IConfigParameter>? ConfigParameters =>
@@ -120,17 +126,56 @@ public class colored_point_cloud_to_image : IOperator
                 "上下文变量 'input_point_cloud' 为空，请确认输入绑定已正确设置。"
             );
 
-        Mat output = _autoBounds
-            ? Common.PointCloudProjectionRenderer.RenderColorImage(input, _imageResolution)
-            : Common.PointCloudProjectionRenderer.RenderColorImage(
+        double minX;
+        double maxX;
+        double minY;
+        double maxY;
+        Mat output;
+        if (_autoBounds)
+        {
+            output = Common.PointCloudProjectionRenderer.RenderColorImage(
                 input,
                 _imageResolution,
-                _minX,
-                _maxX,
-                _minY,
-                _maxY
+                out minX,
+                out maxX,
+                out minY,
+                out maxY
             );
+        }
+        else
+        {
+            minX = _minX;
+            maxX = _maxX;
+            minY = _minY;
+            maxY = _maxY;
+            output = Common.PointCloudProjectionRenderer.RenderColorImage(
+                input,
+                _imageResolution,
+                minX,
+                maxX,
+                minY,
+                maxY
+            );
+        }
+
         context.Set("output_image", output);
+
+        // 同步产出投影映射，作为 ROI 底图像素坐标 → 模型世界坐标映射的权威来源，
+        // 从源头消除 ROI 底图尺寸/边界与实际投影不一致的问题。
+        var projectionMapping = new RoiOps.RoiProjectionMapping
+        {
+            ViewLabel = "XY",
+            WorldMinX = minX,
+            WorldMaxX = maxX,
+            WorldMinY = minY,
+            WorldMaxY = maxY,
+            ImageWidth = output.Width,
+            ImageHeight = output.Height,
+        };
+        context.Set(
+            "projection_mapping",
+            System.Text.Json.JsonSerializer.Serialize(projectionMapping)
+        );
     }
 
     /// <inheritdoc/>

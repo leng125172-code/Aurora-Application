@@ -11,7 +11,7 @@ namespace AuroraStruct3D.OperatorFile;
 /// 上传时通过 <c>operatorId</c>（Guid）区分目标算子，如：
 /// <list type="bullet">
 ///   <item><c>read_image</c>（7544f3f3-040d-4571-b0f2-741c8f17ab41）— 上传图片文件，自动生成灰度预览图</item>
-///   <item><c>read_point_cloud</c>（a1b2c3d4-e5f6-7890-abcd-ef1234567890）— 上传点云文件，自动生成三视图灰度预览</item>
+///   <item><c>read_point_cloud</c>（a1b2c3d4-e5f6-7890-abcd-ef1234567890）— 上传点云文件（不在上传阶段生成预览）</item>
 /// </list>
 /// 系统会根据算子注册表中的输入端口定义自动校验文件格式。
 /// </para>
@@ -21,7 +21,7 @@ public interface IOperatorFileAppService : IApplicationService
     /// <summary>
     /// 上传文件到指定算子，并绑定到指定项目。
     /// 系统根据算子 GUID 查找算子注册表，校验输入端口类型与文件格式匹配后，
-    /// 将文件保存到 BLOB 存储，并自动生成预览图（图片→灰度图，点云→三视图灰度图）。
+    /// 将文件保存到 BLOB 存储；图片自动生成灰度预览图，点云不在上传阶段生成预览。
     /// POST /api/app/operator-file/upload
     /// </summary>
     /// <param name="projectId">项目唯一标识（Guid）。</param>

@@ -12,7 +12,21 @@ public static class PointCloudProjectionRenderer
     /// <param name="cloud">输入点云。</param>
     /// <param name="resolution">输出图像最长边尺寸。</param>
     /// <returns>投影结果图像。</returns>
-    public static Mat RenderColorImage(PointCloudData cloud, int resolution)
+    public static Mat RenderColorImage(PointCloudData cloud, int resolution) =>
+        RenderColorImage(cloud, resolution, out _, out _, out _, out _);
+
+    /// <summary>
+    /// 将带颜色的点云投影到 XY 平面并回传实际使用的世界坐标边界（自动包围盒）。
+    /// 便于上层稳定建立 ROI 底图像素坐标到模型坐标的映射。
+    /// </summary>
+    public static Mat RenderColorImage(
+        PointCloudData cloud,
+        int resolution,
+        out double usedMinX,
+        out double usedMaxX,
+        out double usedMinY,
+        out double usedMaxY
+    )
     {
         ArgumentNullException.ThrowIfNull(cloud);
 
@@ -26,6 +40,11 @@ public static class PointCloudProjectionRenderer
 
         int pointCount = pointCloud.Rows;
         (float minX, float maxX, float minY, float maxY) = ComputeXyBounds(pointCloud, pointCount);
+
+        usedMinX = minX;
+        usedMaxX = maxX;
+        usedMinY = minY;
+        usedMaxY = maxY;
 
         return RenderColorImage(cloud, resolution, minX, maxX, minY, maxY);
     }

@@ -4,7 +4,7 @@ namespace AuroraStruct3D.OperatorFile.Dtos;
 /// 上传算子文件结果 DTO。
 /// <para>
 /// 图片上传：<see cref="PreviewImages"/> 包含 1 个灰度预览图 Blob 名称。
-/// 点云上传：<see cref="PreviewImages"/> 包含 3 个正交投影预览图 Blob 名称（XY、XZ、YZ）。
+/// 点云上传：<see cref="PreviewImages"/> 为空（点云不再在上传阶段生成预览，ROI 底图改由工作流预运行动态生成）。
 /// </para>
 /// <para>
 /// 文件有效期：上传后若未在 <see cref="ExpiresAt"/> 之前通过 <c>ConfirmAsync</c> 确认使用，
@@ -44,10 +44,10 @@ public class UploadOperatorFileResultDto
     public bool IsUsed { get; set; }
 
     /// <summary>
-    /// 预览图下载 URL 列表。
+    /// 预览图列表。
     /// <list type="bullet">
     ///   <item>图片：1 个灰度预览图 BlobName</item>
-    ///   <item>点云：3 个正交投影预览图 BlobName（XY、XZ、YZ）</item>
+    ///   <item>点云：空列表（不再在上传阶段生成预览）</item>
     /// </list>
     /// </summary>
     public List<PreviewImageDto> PreviewImages { get; set; } = new();

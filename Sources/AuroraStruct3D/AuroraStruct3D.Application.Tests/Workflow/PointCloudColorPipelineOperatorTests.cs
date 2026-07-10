@@ -53,9 +53,9 @@ public class PointCloudColorPipelineOperatorTests
         Assert.IsType<PointCloudData>(inputs[0]);
         Assert.Equal("input_point_cloud", inputs[0].ParameterName);
 
-        Assert.Single(outputs!);
-        Assert.IsType<MatImg>(outputs[0]);
-        Assert.Equal("output_image", outputs[0].ParameterName);
+        Assert.Equal(2, outputs!.Count);
+        Assert.Contains(outputs!, o => o.ParameterName == "output_image" && o is MatImg);
+        Assert.Contains(outputs!, o => o.ParameterName == "projection_mapping");
 
         Assert.Contains(configs!, config => config.Name == "autoBounds");
         Assert.Contains(configs!, config => config.Name == "imageResolution");
@@ -153,7 +153,6 @@ public class PointCloudColorPipelineOperatorTests
             ],
             BaseImage = new RoiBaseImageInfo
             {
-                SelectedLabel = "XY",
                 SelectedBlobName = "workflow-image/xy.png",
                 ProjectionMapping = new RoiProjectionMapping
                 {
@@ -165,11 +164,6 @@ public class PointCloudColorPipelineOperatorTests
                     ImageWidth = 640,
                     ImageHeight = 320,
                 },
-                PreviewImages =
-                [
-                    new RoiBaseImagePreview { Label = "XY", BlobName = "workflow-image/xy.png" },
-                    new RoiBaseImagePreview { Label = "XZ", BlobName = "workflow-image/xz.png" },
-                ],
             },
         };
 
@@ -180,9 +174,7 @@ public class PointCloudColorPipelineOperatorTests
         Assert.NotNull(restored);
         Assert.Single(restored!.Rois);
         Assert.NotNull(restored.BaseImage);
-        Assert.Equal("XY", restored.BaseImage!.SelectedLabel);
-        Assert.Equal("workflow-image/xy.png", restored.BaseImage.SelectedBlobName);
-        Assert.Equal(2, restored.BaseImage.PreviewImages.Count);
+        Assert.Equal("workflow-image/xy.png", restored.BaseImage!.SelectedBlobName);
         Assert.NotNull(restored.BaseImage.ProjectionMapping);
         Assert.Equal("XY", restored.BaseImage.ProjectionMapping!.ViewLabel);
         Assert.Equal(640, restored.BaseImage.ProjectionMapping.ImageWidth);
@@ -236,6 +228,73 @@ public class PointCloudColorPipelineOperatorTests
 
         Vec4b emptyPixel = output.Get<Vec4b>(50, 100);
         Assert.Equal(0, emptyPixel.Item3);
+    }
+
+    [Fact]
+    public void ColoredPointCloudToImage_Should_Declare_ProjectionMapping_Output_Port()
+    {
+        List<IVisionParameter>? outputs = colored_point_cloud_to_image.OutputVisionParameters;
+
+        Assert.NotNull(outputs);
+        Assert.Contains(outputs!, o => o.ParameterName == "output_image");
+        Assert.Contains(outputs!, o => o.ParameterName == "projection_mapping");
+    }
+
+    [Fact]
+    public void ColoredPointCloudToImage_Should_Emit_ProjectionMapping_Matching_Output()
+    {
+        using Mat cloudMat = new(2, 6, MatType.CV_32FC1, Scalar.All(0));
+        cloudMat.Set(0, 0, 0f);
+        cloudMat.Set(0, 1, 0f);
+        cloudMat.Set(0, 2, 0f);
+        cloudMat.Set(0, 3, 255f);
+        cloudMat.Set(0, 4, 0f);
+        cloudMat.Set(0, 5, 0f);
+
+        cloudMat.Set(1, 0, 4f);
+        cloudMat.Set(1, 1, 2f);
+        cloudMat.Set(1, 2, 0f);
+        cloudMat.Set(1, 3, 0f);
+        cloudMat.Set(1, 4, 255f);
+        cloudMat.Set(1, 5, 0f);
+
+        PointCloudData pointCloud = new() { Value = cloudMat };
+
+        using WorkflowContext context = new();
+        context.Set("input_point_cloud", pointCloud);
+
+        using var op = new colored_point_cloud_to_image(
+            autoBounds: false,
+            imageResolution: 200,
+            minX: 0,
+            maxX: 4,
+            minY: 0,
+            maxY: 2
+        );
+
+        op.Execute(context);
+
+        Mat? output = context.Get<Mat>("output_image");
+        Assert.NotNull(output);
+
+        string? mappingJson = context.Get<string>("projection_mapping");
+        Assert.False(string.IsNullOrWhiteSpace(mappingJson));
+
+        RoiProjectionMapping? mapping =
+            System.Text.Json.JsonSerializer.Deserialize<RoiProjectionMapping>(
+                mappingJson!,
+                new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true }
+            );
+
+        Assert.NotNull(mapping);
+        Assert.Equal("XY", mapping!.ViewLabel);
+        Assert.Equal(0, mapping.WorldMinX);
+        Assert.Equal(4, mapping.WorldMaxX);
+        Assert.Equal(0, mapping.WorldMinY);
+        Assert.Equal(2, mapping.WorldMaxY);
+        // 映射尺寸必须与真实输出图像一致，从源头消除尺寸漂移。
+        Assert.Equal(output!.Width, mapping.ImageWidth);
+        Assert.Equal(output.Height, mapping.ImageHeight);
     }
 
     [Fact]

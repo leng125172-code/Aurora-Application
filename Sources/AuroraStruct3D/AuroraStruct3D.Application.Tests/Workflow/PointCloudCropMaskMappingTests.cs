@@ -31,8 +31,8 @@ public class PointCloudCropMaskMappingTests
             ProjectionMapping = new RoiProjectionMapping
             {
                 ViewLabel = "XY",
-                WorldMinX = 0,
-                WorldMaxX = 10,
+                WorldMinX = -5,
+                WorldMaxX = 5,
                 WorldMinY = -5,
                 WorldMaxY = 5,
                 ImageWidth = 11,
@@ -81,10 +81,10 @@ public class PointCloudCropMaskMappingTests
             ProjectionMapping = new RoiProjectionMapping
             {
                 ViewLabel = "XZ",
-                WorldMinX = 0,
-                WorldMaxX = 10,
-                WorldMinY = 0,
-                WorldMaxY = 10,
+                WorldMinX = -5,
+                WorldMaxX = 5,
+                WorldMinY = -5,
+                WorldMaxY = 5,
                 ImageWidth = 11,
                 ImageHeight = 11,
             },
@@ -131,10 +131,10 @@ public class PointCloudCropMaskMappingTests
             ProjectionMapping = new RoiProjectionMapping
             {
                 ViewLabel = "YZ",
-                WorldMinX = 0,
-                WorldMaxX = 10,
-                WorldMinY = 0,
-                WorldMaxY = 10,
+                WorldMinX = -5,
+                WorldMaxX = 5,
+                WorldMinY = -5,
+                WorldMaxY = 5,
                 ImageWidth = 11,
                 ImageHeight = 11,
             },

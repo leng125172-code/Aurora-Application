@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using AuroraStruct3D.OpenCV.File.Images;
 using AuroraStruct3D.OpenCV.File.PointCloud;
@@ -20,6 +21,7 @@ using AuroraStruct3D.Workflow.Runtime.Jobs;
 using Hangfire;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using OpenCvSharp;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.BlobStoring;
@@ -852,6 +854,440 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
         {
             return CreateExecutionTriggerErrorResult(ex.Message, ExecutionErrorCodeUnhandled);
         }
+    }
+
+    /// <inheritdoc/>
+    [HttpPost("roi-base-image")]
+    [DisableValidation]
+    public async Task<RoiBaseImageResultDto> GenerateRoiBaseImageAsync(
+        GenerateRoiBaseImageInput input
+    )
+    {
+        if (input is null || input.ProjectId == Guid.Empty)
+        {
+            return RoiBaseImageError("ProjectId 不能为空。");
+        }
+
+        if (string.IsNullOrWhiteSpace(input.RoiNodeId))
+        {
+            return RoiBaseImageError("RoiNodeId 不能为空。");
+        }
+
+        try
+        {
+            // 1. 取得 graphData：优先当前画布，其次已保存工作流。
+            //    仅当从已保存工作流读取时 savedEntity 非空，用于后续把底图字段写回并持久化。
+            WorkflowDefinition? savedEntity = null;
+            string graphData = input.GraphData ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(graphData))
+            {
+                if (input.WorkflowId == Guid.Empty)
+                {
+                    return RoiBaseImageError("GraphData 与 WorkflowId 至少提供一个。");
+                }
+
+                savedEntity = await _repository.GetAsync(input.WorkflowId);
+                if (savedEntity.ProjectId != input.ProjectId)
+                {
+                    return RoiBaseImageError("工作流不存在或不属于该项目。");
+                }
+
+                graphData = savedEntity.GraphData;
+            }
+
+            // 2. 解析 + 编译整图。
+            string workflowName;
+            GraphDataModel graph;
+            RuntimeWorkflowDefinition compiled;
+            try
+            {
+                (workflowName, graph) = WorkflowGraphCompiler.ParseContent(graphData);
+                compiled = await new WorkflowGraphCompiler(_registry).CompileAsync(
+                    graph,
+                    workflowName
+                );
+            }
+            catch (WorkflowCompilationException ex)
+            {
+                return RoiBaseImageError("工作流编译失败：" + ex.Message);
+            }
+            catch (JsonException ex)
+            {
+                return RoiBaseImageError("工作流内容 JSON 解析失败：" + ex.Message);
+            }
+
+            // 3. 定位 ROI 节点与其 input_mat 绑定变量。
+            NodeModel? roiNode = graph.Nodes.FirstOrDefault(n =>
+                string.Equals(n.Id, input.RoiNodeId, StringComparison.Ordinal)
+            );
+            if (roiNode is null)
+            {
+                return RoiBaseImageError($"未找到 ROI 节点：{input.RoiNodeId}。");
+            }
+
+            string? sourceVariable = null;
+            roiNode.Properties?.InputBindings?.TryGetValue("input_mat", out sourceVariable);
+            if (string.IsNullOrWhiteSpace(sourceVariable))
+            {
+                return RoiBaseImageError("ROI 节点未绑定 input_mat 输入。");
+            }
+
+            // 取当前 ROI 节点的 roiJson（保留已有 rois，只替换 baseImage）。
+            string? currentRoiJson = null;
+            if (
+                roiNode.Properties?.Params is { } roiParams
+                && roiParams.TryGetValue("roiJson", out JsonElement roiJsonElement)
+                && roiJsonElement.ValueKind == JsonValueKind.String
+            )
+            {
+                currentRoiJson = roiJsonElement.GetString();
+            }
+
+            // 4. 祖先子图：仅保留 ROI 节点真正依赖的上游算子语句，天然跳过并行副作用节点。
+            HashSet<string> ancestorSet = new(
+                WorkflowNodeScheduleBuilder.BuildAncestorNodeOrder(graph, input.RoiNodeId),
+                StringComparer.Ordinal
+            );
+            IReadOnlyList<string> fullOrder = WorkflowNodeScheduleBuilder.BuildExecutableNodeOrder(
+                graph
+            );
+
+            List<IWorkflowStatement> ancestorStatements = new();
+            List<string> ancestorNodeIds = new();
+            for (int i = 0; i < compiled.Statements.Count; i++)
+            {
+                string? nodeId = i < fullOrder.Count ? fullOrder[i] : null;
+                if (nodeId is not null && ancestorSet.Contains(nodeId))
+                {
+                    ancestorStatements.Add(compiled.Statements[i]);
+                    ancestorNodeIds.Add(nodeId);
+                }
+            }
+
+            if (ancestorStatements.Count == 0)
+            {
+                return RoiBaseImageError("ROI 节点没有可执行的上游算子，无法生成底图。");
+            }
+
+            // 5. 物化上传文件引用（read_point_cloud 等），并准备变量声明与初值。
+            HashSet<string> uploadedFileVariableNames = new(StringComparer.Ordinal);
+            IReadOnlyList<IWorkflowStatement> materialized =
+                await MaterializeUploadedFileStatementsAsync(
+                    ancestorStatements,
+                    uploadedFileVariableNames
+                );
+
+            VariableCompileRequestDto compileRequest = await _compileRequestFactory.BuildAsync(
+                input.ProjectId,
+                input.WorkflowId,
+                graph,
+                VariableDefUseAnalysisMode.Conservative
+            );
+            List<VariableDeclarationDto> declarations =
+                await MaterializeUploadedFileDefaultValuesAsync(
+                    compileRequest.Declarations,
+                    uploadedFileVariableNames
+                );
+
+            WorkflowSignature signature = WorkflowSignatureExtractor.Extract(graph);
+            List<WorkflowVariableBindingKeyDto> inputBindings = BuildBindingKeys(
+                input.InputVariableBindings,
+                input.InputVariableKeys is { Count: > 0 } keys ? keys : signature.Inputs,
+                input.WorkflowId
+            );
+            Dictionary<string, object?> initialVariables = await LoadInitialVariablesAsync(
+                inputBindings
+            );
+
+            // 6. 构建并执行祖先子图会话。
+            WorkflowContext context = new();
+            WorkflowExecutionVariablePool variablePool = new(declarations);
+            variablePool.Clear(context);
+            variablePool.Initialize(context);
+            variablePool.ApplyInitialValues(initialVariables);
+            foreach ((string key, object? value) in initialVariables)
+            {
+                context.Set(key, value);
+            }
+
+            WorkflowExecutionSession session = new()
+            {
+                ExecutionId = GuidGenerator.Create(),
+                ProjectId = input.ProjectId,
+                WorkflowId = input.WorkflowId,
+                WorkflowName = workflowName,
+                Mode = WorkflowExecutionMode.RunOnce,
+                LoopCount = 1,
+                RuntimeWorkflow = new RuntimeWorkflowDefinition(workflowName, materialized),
+                StatementNodeIds = ancestorNodeIds,
+                Context = context,
+                VariablePool = variablePool,
+                OutputBindings = new List<WorkflowVariableBindingKeyDto>(),
+            };
+
+            byte[] pngBytes;
+            int imageWidth;
+            int imageHeight;
+            string? mappingJson;
+            try
+            {
+                using IDisposable blobStoreScope = CreateOperatorFileBlobStoreScope();
+                _kernel.ExecuteToCompletion(session);
+
+                Mat? baseMat = context.Get<Mat>(sourceVariable);
+                if (baseMat is null || baseMat.Empty())
+                {
+                    return RoiBaseImageError(
+                        $"预运行完成但变量 '{sourceVariable}' 不是有效图像，无法生成底图。"
+                    );
+                }
+
+                imageWidth = baseMat.Width;
+                imageHeight = baseMat.Height;
+                Cv2.ImEncode(".png", baseMat, out pngBytes);
+
+                mappingJson = ResolveProjectionMappingJson(graph, sourceVariable!, context);
+            }
+            catch (WorkflowNodeExecutionException ex)
+            {
+                return RoiBaseImageError(
+                    $"预运行到 ROI 上游失败，节点 {ex.NodeId}：{ex.InnerException?.Message ?? ex.Message}",
+                    ExecutionErrorCodeFault
+                );
+            }
+            finally
+            {
+                session.VariablePool.Clear(session.Context);
+                session.Dispose();
+            }
+
+            // 7. 保存底图 Blob 并组装结果（尺寸以真实图像为权威，图片统一用 blobName 引用）。
+            WorkflowOperatorFileBlobStore blobStore = new(_operatorFileBlobContainer);
+            string blobName = await blobStore.SaveImagePngAsync("roi-base-image.png", pngBytes);
+
+            RoiBaseImageResultDto result = new() { Error = false, BlobName = blobName };
+
+            // 8. 把底图字段（selectedBlobName + projectionMapping）写回 ROI 节点的 roiJson。
+            //    projectionMapping 的 viewLabel/世界边界来自投影算子输出，尺寸以真实图像为权威。
+            //    - 已保存工作流：直接持久化写回，前端重载即见字段已填。
+            //    - 未保存画布：仅返回更新后的 roiJson，供前端应用到画布节点。
+            AuroraStruct3D.OpenCV.RoiOps.RoiProjectionMapping mapping = ResolveMappingForRoiJson(
+                mappingJson,
+                imageWidth,
+                imageHeight
+            );
+            result.RoiJson = BuildUpdatedRoiJson(currentRoiJson, blobName, mapping);
+            if (savedEntity is not null)
+            {
+                string? updatedGraph = ApplyRoiJsonToGraph(
+                    graphData,
+                    input.RoiNodeId,
+                    result.RoiJson
+                );
+                if (updatedGraph is not null)
+                {
+                    savedEntity.Update(savedEntity.Name, updatedGraph);
+                    await _repository.UpdateAsync(savedEntity);
+                    result.Persisted = true;
+                }
+            }
+
+            return result;
+        }
+        catch (Exception ex)
+        {
+            return RoiBaseImageError(ex.Message, ExecutionErrorCodeUnhandled);
+        }
+    }
+
+    private static RoiBaseImageResultDto RoiBaseImageError(
+        string? message,
+        string errorCode = ExecutionErrorCodeInvalidInput
+    ) =>
+        new()
+        {
+            Error = true,
+            ErrorCode = errorCode,
+            Message = message,
+        };
+
+    private static string? ResolveProjectionMappingJson(
+        GraphDataModel graph,
+        string sourceVariable,
+        WorkflowContext context
+    )
+    {
+        // 优先读取"产出 ROI 输入图像"的节点显式绑定的 projection_mapping 变量；
+        // 否则回退读取算子直接写入上下文的端口键 projection_mapping。
+        NodeModel? producer = graph.Nodes.FirstOrDefault(n =>
+            n.Properties?.OutputBindings is { } outputs
+            && outputs.TryGetValue("output_image", out string? mapped)
+            && string.Equals(mapped, sourceVariable, StringComparison.Ordinal)
+        );
+
+        if (
+            producer?.Properties?.OutputBindings is { } producerOutputs
+            && producerOutputs.TryGetValue("projection_mapping", out string? mappingVar)
+            && !string.IsNullOrWhiteSpace(mappingVar)
+        )
+        {
+            string? bound = context.Get<string>(mappingVar);
+            if (!string.IsNullOrWhiteSpace(bound))
+            {
+                return bound;
+            }
+        }
+
+        return context.Get<string>("projection_mapping");
+    }
+
+    private static AuroraStruct3D.OpenCV.RoiOps.RoiProjectionMapping ResolveMappingForRoiJson(
+        string? mappingJson,
+        int imageWidth,
+        int imageHeight
+    )
+    {
+        AuroraStruct3D.OpenCV.RoiOps.RoiProjectionMapping mapping = new() { ViewLabel = "XY" };
+
+        if (!string.IsNullOrWhiteSpace(mappingJson))
+        {
+            try
+            {
+                AuroraStruct3D.OpenCV.RoiOps.RoiProjectionMapping? parsed =
+                    JsonSerializer.Deserialize<AuroraStruct3D.OpenCV.RoiOps.RoiProjectionMapping>(
+                        mappingJson,
+                        new JsonSerializerOptions { PropertyNameCaseInsensitive = true }
+                    );
+                if (parsed is not null)
+                {
+                    mapping = parsed;
+                }
+            }
+            catch (JsonException)
+            {
+                // 保底：映射非法则退化为仅含尺寸的默认映射。
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(mapping.ViewLabel))
+        {
+            mapping.ViewLabel = "XY";
+        }
+
+        // 尺寸以真实渲染图像为权威。
+        mapping.ImageWidth = imageWidth;
+        mapping.ImageHeight = imageHeight;
+        return mapping;
+    }
+
+    private static readonly JsonSerializerOptions RoiJsonWriteOptions = new()
+    {
+        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+    };
+
+    /// <summary>
+    /// 根据预运行结果重建 ROI 节点的 roiJson：保留原有 rois，整体替换 baseImage
+    /// 为单张底图 blobName + projectionMapping（天然去掉旧的 selectedLabel / previewImages）。
+    /// </summary>
+    private static string BuildUpdatedRoiJson(
+        string? currentRoiJson,
+        string blobName,
+        AuroraStruct3D.OpenCV.RoiOps.RoiProjectionMapping mapping
+    )
+    {
+        JsonObject roiObject = new();
+        if (!string.IsNullOrWhiteSpace(currentRoiJson))
+        {
+            try
+            {
+                if (JsonNode.Parse(currentRoiJson) is JsonObject parsedObject)
+                {
+                    roiObject = parsedObject;
+                }
+            }
+            catch (JsonException)
+            {
+                // 保底：currentRoiJson 非法则用空对象重建。
+            }
+        }
+
+        roiObject["baseImage"] = new JsonObject
+        {
+            ["selectedBlobName"] = blobName,
+            ["projectionMapping"] = new JsonObject
+            {
+                ["viewLabel"] = string.IsNullOrWhiteSpace(mapping.ViewLabel)
+                    ? "XY"
+                    : mapping.ViewLabel,
+                ["worldMinX"] = mapping.WorldMinX,
+                ["worldMaxX"] = mapping.WorldMaxX,
+                ["worldMinY"] = mapping.WorldMinY,
+                ["worldMaxY"] = mapping.WorldMaxY,
+                ["imageWidth"] = mapping.ImageWidth,
+                ["imageHeight"] = mapping.ImageHeight,
+            },
+        };
+
+        return roiObject.ToJsonString(RoiJsonWriteOptions);
+    }
+
+    /// <summary>
+    /// 将更新后的 roiJson 写回 graphData 中指定 ROI 节点的 <c>params.roiJson</c>，
+    /// 保留其余结构不变。解析失败或未命中节点时返回 null。
+    /// </summary>
+    private static string? ApplyRoiJsonToGraph(
+        string graphDataJson,
+        string roiNodeId,
+        string updatedRoiJson
+    )
+    {
+        JsonNode? root;
+        try
+        {
+            root = JsonNode.Parse(graphDataJson);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+
+        JsonArray? nodes = root?["nodes"]?.AsArray();
+        if (nodes is null)
+        {
+            return null;
+        }
+
+        foreach (JsonNode? nodeNode in nodes)
+        {
+            if (nodeNode is null)
+            {
+                continue;
+            }
+
+            if (!string.Equals((string?)nodeNode["id"], roiNodeId, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            JsonObject? properties = nodeNode["properties"]?.AsObject();
+            if (properties is null)
+            {
+                properties = new JsonObject();
+                nodeNode["properties"] = properties;
+            }
+
+            JsonObject? paramsObject = properties["params"]?.AsObject();
+            if (paramsObject is null)
+            {
+                paramsObject = new JsonObject();
+                properties["params"] = paramsObject;
+            }
+
+            paramsObject["roiJson"] = updatedRoiJson;
+            return root!.ToJsonString(RoiJsonWriteOptions);
+        }
+
+        return null;
     }
 
     /// <summary>

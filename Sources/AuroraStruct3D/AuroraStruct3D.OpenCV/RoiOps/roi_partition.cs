@@ -74,31 +74,15 @@ public class RoiPartitionConfig
 {
     public List<RoiDefinition> Rois { get; set; } = new();
 
-    /// <summary>ROI 编辑底图信息（XY/XZ/YZ 三视图候选及当前选中项）。</summary>
+    /// <summary>ROI 编辑底图信息（单张底图 + 投影映射，由工作流预运行按 ROI 实际入参动态生成）。</summary>
     public RoiBaseImageInfo? BaseImage { get; set; }
-}
-
-/// <summary>ROI 编辑底图候选图信息。</summary>
-public class RoiBaseImagePreview
-{
-    /// <summary>视图标签，例如 XY、XZ、YZ。</summary>
-    public string Label { get; set; } = string.Empty;
-
-    /// <summary>对应 blob 名称。</summary>
-    public string BlobName { get; set; } = string.Empty;
 }
 
 /// <summary>ROI 编辑底图信息。</summary>
 public class RoiBaseImageInfo
 {
-    /// <summary>当前选中的 blob 名称。</summary>
+    /// <summary>底图 blob 名称（由工作流预运行按 ROI 实际入参动态生成）。</summary>
     public string? SelectedBlobName { get; set; }
-
-    /// <summary>当前选中的视图标签。</summary>
-    public string? SelectedLabel { get; set; }
-
-    /// <summary>三视图候选列表。</summary>
-    public List<RoiBaseImagePreview> PreviewImages { get; set; } = new();
 
     /// <summary>
     /// 底图到模型坐标的映射参数。
@@ -676,7 +660,7 @@ public class roi_partition : IOperator
 
         if (string.IsNullOrWhiteSpace(mapping.ViewLabel))
         {
-            mapping.ViewLabel = baseImage?.SelectedLabel ?? "XY";
+            mapping.ViewLabel = "XY";
         }
 
         return mapping;
@@ -688,60 +672,10 @@ public class roi_partition : IOperator
         int imageHeight
     )
     {
-        if (baseImage is null)
-        {
-            return;
-        }
-
-        if (!string.IsNullOrWhiteSpace(baseImage.SelectedBlobName))
-        {
-            bool selectedExists = baseImage.PreviewImages.Any(p =>
-                string.Equals(
-                    p.BlobName,
-                    baseImage.SelectedBlobName,
-                    StringComparison.OrdinalIgnoreCase
-                )
-            );
-
-            if (!selectedExists)
-            {
-                throw new InvalidOperationException(
-                    "ROI 底图配置无效：SelectedBlobName 不在 PreviewImages 列表中。"
-                );
-            }
-        }
-
-        if (
-            !string.IsNullOrWhiteSpace(baseImage.SelectedLabel)
-            && baseImage.PreviewImages.Count > 0
-            && !baseImage.PreviewImages.Any(p =>
-                string.Equals(p.Label, baseImage.SelectedLabel, StringComparison.OrdinalIgnoreCase)
-            )
-        )
-        {
-            throw new InvalidOperationException(
-                "ROI 底图配置无效：SelectedLabel 不在 PreviewImages 列表中。"
-            );
-        }
-
-        RoiProjectionMapping? mapping = baseImage.ProjectionMapping;
+        RoiProjectionMapping? mapping = baseImage?.ProjectionMapping;
         if (mapping is null)
         {
             return;
-        }
-
-        if (
-            !string.IsNullOrWhiteSpace(baseImage.SelectedLabel)
-            && !string.Equals(
-                baseImage.SelectedLabel,
-                mapping.ViewLabel,
-                StringComparison.OrdinalIgnoreCase
-            )
-        )
-        {
-            throw new InvalidOperationException(
-                "ROI 映射参数无效：ProjectionMapping.ViewLabel 与 SelectedLabel 不一致。"
-            );
         }
 
         if (mapping.ImageWidth > 0 && mapping.ImageWidth != imageWidth)

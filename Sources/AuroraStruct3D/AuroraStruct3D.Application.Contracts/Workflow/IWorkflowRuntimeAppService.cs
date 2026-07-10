@@ -117,6 +117,14 @@ public interface IWorkflowRuntimeAppService : IApplicationService
     Task<WorkflowExecutionTriggerResultDto> ExecuteAsync(WorkflowExecutionTriggerInput input);
 
     /// <summary>
+    /// 生成 ROI 编辑底图（预运行到目标 ROI 节点的祖先子图，只执行其真正依赖的上游算子）。
+    /// 用于替代上传阶段的 XY/XZ/YZ 底图：ROI 底图与实际裁剪的数据严格同源同尺寸。
+    /// </summary>
+    /// <param name="input">ROI 底图预运行请求。</param>
+    /// <returns>底图 Blob、真实尺寸与投影映射。</returns>
+    Task<RoiBaseImageResultDto> GenerateRoiBaseImageAsync(GenerateRoiBaseImageInput input);
+
+    /// <summary>
     /// 对调试会话执行单步步进。
     /// </summary>
     /// <param name="executionId">执行会话 ID。</param>

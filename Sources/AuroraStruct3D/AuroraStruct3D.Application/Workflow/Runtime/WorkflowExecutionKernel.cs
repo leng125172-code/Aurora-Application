@@ -613,6 +613,76 @@ public static class WorkflowNodeScheduleBuilder
             .ToList();
     }
 
+    /// <summary>
+    /// 生成目标节点的祖先执行顺序：仅包含该节点真正依赖的上游算子（拓扑序，跳过 start/end
+    /// 与目标节点自身）。用于“只执行需要的算子”的预运行场景，天然跳过并行分支上的副作用节点。
+    /// </summary>
+    /// <param name="graph">图模型。</param>
+    /// <param name="targetNodeId">目标节点 ID。</param>
+    /// <returns>祖先节点 ID 顺序（拓扑序）。目标节点无上游依赖时返回空列表。</returns>
+    public static IReadOnlyList<string> BuildAncestorNodeOrder(
+        GraphDataModel graph,
+        string targetNodeId
+    )
+    {
+        ArgumentNullException.ThrowIfNull(graph);
+        if (string.IsNullOrWhiteSpace(targetNodeId))
+        {
+            throw new UserFriendlyException("目标节点 ID 不能为空。");
+        }
+
+        // 反向邻接：目标 ← 直接前驱集合。
+        Dictionary<string, List<string>> predecessors = new(StringComparer.Ordinal);
+        foreach (EdgeModel edge in graph.Edges)
+        {
+            if (edge.SourceNodeId is null || edge.TargetNodeId is null)
+            {
+                continue;
+            }
+
+            if (!predecessors.TryGetValue(edge.TargetNodeId, out List<string>? list))
+            {
+                list = [];
+                predecessors[edge.TargetNodeId] = list;
+            }
+
+            list.Add(edge.SourceNodeId);
+        }
+
+        // 从目标节点反向遍历，收集全部祖先。
+        HashSet<string> ancestors = new(StringComparer.Ordinal);
+        Queue<string> pending = new();
+        pending.Enqueue(targetNodeId);
+        while (pending.Count > 0)
+        {
+            string current = pending.Dequeue();
+            if (!predecessors.TryGetValue(current, out List<string>? preds))
+            {
+                continue;
+            }
+
+            foreach (string pred in preds)
+            {
+                if (ancestors.Add(pred))
+                {
+                    pending.Enqueue(pred);
+                }
+            }
+        }
+
+        // 按全局拓扑序过滤祖先集合，排除 start/end 与目标节点自身。
+        List<NodeModel> ordered = TopologicalOrder(graph);
+        return ordered
+            .Where(x =>
+                ancestors.Contains(x.Id)
+                && !string.Equals(x.Id, targetNodeId, StringComparison.Ordinal)
+                && x.Type is not ("start-node" or "end-node")
+                && !string.IsNullOrWhiteSpace(x.Id)
+            )
+            .Select(x => x.Id)
+            .ToList();
+    }
+
     private static List<NodeModel> TopologicalOrder(GraphDataModel graph)
     {
         List<NodeModel> nodes = graph.Nodes;
