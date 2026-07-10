@@ -73,6 +73,63 @@ public class RoiDefinition
 public class RoiPartitionConfig
 {
     public List<RoiDefinition> Rois { get; set; } = new();
+
+    /// <summary>ROI 编辑底图信息（XY/XZ/YZ 三视图候选及当前选中项）。</summary>
+    public RoiBaseImageInfo? BaseImage { get; set; }
+}
+
+/// <summary>ROI 编辑底图候选图信息。</summary>
+public class RoiBaseImagePreview
+{
+    /// <summary>视图标签，例如 XY、XZ、YZ。</summary>
+    public string Label { get; set; } = string.Empty;
+
+    /// <summary>对应 blob 名称。</summary>
+    public string BlobName { get; set; } = string.Empty;
+}
+
+/// <summary>ROI 编辑底图信息。</summary>
+public class RoiBaseImageInfo
+{
+    /// <summary>当前选中的 blob 名称。</summary>
+    public string? SelectedBlobName { get; set; }
+
+    /// <summary>当前选中的视图标签。</summary>
+    public string? SelectedLabel { get; set; }
+
+    /// <summary>三视图候选列表。</summary>
+    public List<RoiBaseImagePreview> PreviewImages { get; set; } = new();
+
+    /// <summary>
+    /// 底图到模型坐标的映射参数。
+    /// 用于将 ROI 像素坐标稳定映射回模型世界坐标。
+    /// </summary>
+    public RoiProjectionMapping? ProjectionMapping { get; set; }
+}
+
+/// <summary>ROI 底图像素坐标到模型坐标的投影映射信息。</summary>
+public class RoiProjectionMapping
+{
+    /// <summary>映射对应的视图标签，如 XY、XZ、YZ。</summary>
+    public string ViewLabel { get; set; } = "XY";
+
+    /// <summary>模型坐标 X 轴最小值。</summary>
+    public double WorldMinX { get; set; }
+
+    /// <summary>模型坐标 X 轴最大值。</summary>
+    public double WorldMaxX { get; set; }
+
+    /// <summary>模型坐标 Y 轴最小值。</summary>
+    public double WorldMinY { get; set; }
+
+    /// <summary>模型坐标 Y 轴最大值。</summary>
+    public double WorldMaxY { get; set; }
+
+    /// <summary>映射对应的底图像素宽度。</summary>
+    public int ImageWidth { get; set; }
+
+    /// <summary>映射对应的底图像素高度。</summary>
+    public int ImageHeight { get; set; }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -115,6 +172,12 @@ public class RoiPartitionMetadata
 {
     public List<RoiMetadata> Rois { get; set; } = new();
     public double TotalArea { get; set; }
+
+    /// <summary>ROI 编辑底图信息（与输入配置保持一致，便于前端回显）。</summary>
+    public RoiBaseImageInfo? BaseImage { get; set; }
+
+    /// <summary>ROI 底图到模型坐标的映射信息。</summary>
+    public RoiProjectionMapping? ProjectionMapping { get; set; }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -254,7 +317,21 @@ public class roi_partition : IOperator
         // ④ 计算总面积并组装元数据
         double totalArea = roiMasks.Sum(m => Cv2.CountNonZero(m));
 
-        var metadata = new RoiPartitionMetadata { Rois = metadataList, TotalArea = totalArea };
+        ValidateBaseImageConsistency(config.BaseImage, imageWidth, imageHeight);
+
+        RoiProjectionMapping? projectionMapping = ResolveProjectionMapping(
+            config.BaseImage,
+            imageWidth,
+            imageHeight
+        );
+
+        var metadata = new RoiPartitionMetadata
+        {
+            Rois = metadataList,
+            TotalArea = totalArea,
+            BaseImage = config.BaseImage,
+            ProjectionMapping = projectionMapping,
+        };
 
         string metadataJson = JsonSerializer.Serialize(metadata, JsonOptions);
 
@@ -563,6 +640,123 @@ public class roi_partition : IOperator
         int x2 = Math.Min(imageWidth, x + w);
         int y2 = Math.Min(imageHeight, y + h);
         return new Rect(x1, y1, Math.Max(0, x2 - x1), Math.Max(0, y2 - y1));
+    }
+
+    private static RoiProjectionMapping? ResolveProjectionMapping(
+        RoiBaseImageInfo? baseImage,
+        int imageWidth,
+        int imageHeight
+    )
+    {
+        RoiProjectionMapping? mapping = baseImage?.ProjectionMapping;
+        if (mapping is null)
+        {
+            return null;
+        }
+
+        if (mapping.WorldMaxX <= mapping.WorldMinX)
+        {
+            throw new InvalidOperationException("ROI 映射参数无效：worldMaxX 必须大于 worldMinX。");
+        }
+
+        if (mapping.WorldMaxY <= mapping.WorldMinY)
+        {
+            throw new InvalidOperationException("ROI 映射参数无效：worldMaxY 必须大于 worldMinY。");
+        }
+
+        if (mapping.ImageWidth <= 0)
+        {
+            mapping.ImageWidth = imageWidth;
+        }
+
+        if (mapping.ImageHeight <= 0)
+        {
+            mapping.ImageHeight = imageHeight;
+        }
+
+        if (string.IsNullOrWhiteSpace(mapping.ViewLabel))
+        {
+            mapping.ViewLabel = baseImage?.SelectedLabel ?? "XY";
+        }
+
+        return mapping;
+    }
+
+    private static void ValidateBaseImageConsistency(
+        RoiBaseImageInfo? baseImage,
+        int imageWidth,
+        int imageHeight
+    )
+    {
+        if (baseImage is null)
+        {
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(baseImage.SelectedBlobName))
+        {
+            bool selectedExists = baseImage.PreviewImages.Any(p =>
+                string.Equals(
+                    p.BlobName,
+                    baseImage.SelectedBlobName,
+                    StringComparison.OrdinalIgnoreCase
+                )
+            );
+
+            if (!selectedExists)
+            {
+                throw new InvalidOperationException(
+                    "ROI 底图配置无效：SelectedBlobName 不在 PreviewImages 列表中。"
+                );
+            }
+        }
+
+        if (
+            !string.IsNullOrWhiteSpace(baseImage.SelectedLabel)
+            && baseImage.PreviewImages.Count > 0
+            && !baseImage.PreviewImages.Any(p =>
+                string.Equals(p.Label, baseImage.SelectedLabel, StringComparison.OrdinalIgnoreCase)
+            )
+        )
+        {
+            throw new InvalidOperationException(
+                "ROI 底图配置无效：SelectedLabel 不在 PreviewImages 列表中。"
+            );
+        }
+
+        RoiProjectionMapping? mapping = baseImage.ProjectionMapping;
+        if (mapping is null)
+        {
+            return;
+        }
+
+        if (
+            !string.IsNullOrWhiteSpace(baseImage.SelectedLabel)
+            && !string.Equals(
+                baseImage.SelectedLabel,
+                mapping.ViewLabel,
+                StringComparison.OrdinalIgnoreCase
+            )
+        )
+        {
+            throw new InvalidOperationException(
+                "ROI 映射参数无效：ProjectionMapping.ViewLabel 与 SelectedLabel 不一致。"
+            );
+        }
+
+        if (mapping.ImageWidth > 0 && mapping.ImageWidth != imageWidth)
+        {
+            throw new InvalidOperationException(
+                $"ROI 映射参数无效：ProjectionMapping.ImageWidth={mapping.ImageWidth} 与输入图像宽度 {imageWidth} 不一致。"
+            );
+        }
+
+        if (mapping.ImageHeight > 0 && mapping.ImageHeight != imageHeight)
+        {
+            throw new InvalidOperationException(
+                $"ROI 映射参数无效：ProjectionMapping.ImageHeight={mapping.ImageHeight} 与输入图像高度 {imageHeight} 不一致。"
+            );
+        }
     }
 
     // ── SVG Path 解析 ───────────────────────────────────────────────────────────

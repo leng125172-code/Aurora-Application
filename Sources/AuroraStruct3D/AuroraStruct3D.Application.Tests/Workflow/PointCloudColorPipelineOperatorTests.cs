@@ -135,6 +135,61 @@ public class PointCloudColorPipelineOperatorTests
     }
 
     [Fact]
+    public void RoiPartition_Config_Should_Carry_Base_Image_Info_For_Roi_Editor()
+    {
+        RoiPartitionConfig config = new()
+        {
+            Rois =
+            [
+                new RoiDefinition
+                {
+                    Name = "ROI-1",
+                    Type = RoiType.Rect,
+                    X = 10,
+                    Y = 20,
+                    Width = 30,
+                    Height = 40,
+                },
+            ],
+            BaseImage = new RoiBaseImageInfo
+            {
+                SelectedLabel = "XY",
+                SelectedBlobName = "workflow-image/xy.png",
+                ProjectionMapping = new RoiProjectionMapping
+                {
+                    ViewLabel = "XY",
+                    WorldMinX = 0,
+                    WorldMaxX = 100,
+                    WorldMinY = -50,
+                    WorldMaxY = 50,
+                    ImageWidth = 640,
+                    ImageHeight = 320,
+                },
+                PreviewImages =
+                [
+                    new RoiBaseImagePreview { Label = "XY", BlobName = "workflow-image/xy.png" },
+                    new RoiBaseImagePreview { Label = "XZ", BlobName = "workflow-image/xz.png" },
+                ],
+            },
+        };
+
+        string json = System.Text.Json.JsonSerializer.Serialize(config);
+        RoiPartitionConfig? restored =
+            System.Text.Json.JsonSerializer.Deserialize<RoiPartitionConfig>(json);
+
+        Assert.NotNull(restored);
+        Assert.Single(restored!.Rois);
+        Assert.NotNull(restored.BaseImage);
+        Assert.Equal("XY", restored.BaseImage!.SelectedLabel);
+        Assert.Equal("workflow-image/xy.png", restored.BaseImage.SelectedBlobName);
+        Assert.Equal(2, restored.BaseImage.PreviewImages.Count);
+        Assert.NotNull(restored.BaseImage.ProjectionMapping);
+        Assert.Equal("XY", restored.BaseImage.ProjectionMapping!.ViewLabel);
+        Assert.Equal(640, restored.BaseImage.ProjectionMapping.ImageWidth);
+        Assert.Equal(320, restored.BaseImage.ProjectionMapping.ImageHeight);
+    }
+
+    [Fact]
     public void ColoredPointCloudToImage_Should_Keep_AspectRatio_And_Use_Transparent_Background()
     {
         using Mat cloudMat = new(2, 6, MatType.CV_32FC1, Scalar.All(0));
