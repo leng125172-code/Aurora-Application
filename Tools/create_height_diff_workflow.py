@@ -82,66 +82,130 @@ PREVIEW_WIDTH, PREVIEW_HEIGHT = compute_preview_size(
     PROJECTION_BOUNDS, IMAGE_RESOLUTION
 )
 
-ROI_A_JSON = json.dumps(
-    {
-        "rois": [
-            {
-                "name": "PlaneA",
-                "type": "Rect",
-                "x": 120,
-                "y": 180,
-                "width": 120,
-                "height": 100,
-                "rotation": 0,
-            }
-        ],
-        "baseImage": {
-            "selectedBlobName": "workflow-image/preview_xy.png",
-            "projectionMapping": {
-                "viewLabel": "XY",
-                "worldMinX": PROJECTION_BOUNDS["minX"],
-                "worldMaxX": PROJECTION_BOUNDS["maxX"],
-                "worldMinY": PROJECTION_BOUNDS["minY"],
-                "worldMaxY": PROJECTION_BOUNDS["maxY"],
-                "imageWidth": PREVIEW_WIDTH,
-                "imageHeight": PREVIEW_HEIGHT,
+ROIS_JSON = [
+    json.dumps(
+        {
+            "rois": [
+                {
+                    "name": "A",
+                    "type": "Rect",
+                    "x": 100,
+                    "y": 140,
+                    "width": 100,
+                    "height": 80,
+                    "rotation": 0,
+                }
+            ],
+            "baseImage": {
+                "selectedBlobName": "workflow-image/preview_xy.png",
+                "projectionMapping": {
+                    "viewLabel": "XY",
+                    "worldMinX": PROJECTION_BOUNDS["minX"],
+                    "worldMaxX": PROJECTION_BOUNDS["maxX"],
+                    "worldMinY": PROJECTION_BOUNDS["minY"],
+                    "worldMaxY": PROJECTION_BOUNDS["maxY"],
+                    "imageWidth": PREVIEW_WIDTH,
+                    "imageHeight": PREVIEW_HEIGHT,
+                },
             },
         },
-    },
-    ensure_ascii=False,
-)
-
-ROI_B_JSON = json.dumps(
-    {
-        "rois": [
-            {
-                "name": "PlaneB",
-                "type": "Rect",
-                "x": 290,
-                "y": 180,
-                "width": 120,
-                "height": 100,
-                "rotation": 0,
-            }
-        ],
-        "baseImage": {
-            "selectedBlobName": "workflow-image/preview_xy.png",
-            "projectionMapping": {
-                "viewLabel": "XY",
-                "worldMinX": PROJECTION_BOUNDS["minX"],
-                "worldMaxX": PROJECTION_BOUNDS["maxX"],
-                "worldMinY": PROJECTION_BOUNDS["minY"],
-                "worldMaxY": PROJECTION_BOUNDS["maxY"],
-                "imageWidth": PREVIEW_WIDTH,
-                "imageHeight": PREVIEW_HEIGHT,
+        ensure_ascii=False,
+    ),
+    json.dumps(
+        {
+            "rois": [
+                {
+                    "name": "B",
+                    "type": "Rect",
+                    "x": 300,
+                    "y": 140,
+                    "width": 100,
+                    "height": 80,
+                    "rotation": 0,
+                }
+            ],
+            "baseImage": {
+                "selectedBlobName": "workflow-image/preview_xy.png",
+                "projectionMapping": {
+                    "viewLabel": "XY",
+                    "worldMinX": PROJECTION_BOUNDS["minX"],
+                    "worldMaxX": PROJECTION_BOUNDS["maxX"],
+                    "worldMinY": PROJECTION_BOUNDS["minY"],
+                    "worldMaxY": PROJECTION_BOUNDS["maxY"],
+                    "imageWidth": PREVIEW_WIDTH,
+                    "imageHeight": PREVIEW_HEIGHT,
+                },
             },
         },
-    },
-    ensure_ascii=False,
-)
+        ensure_ascii=False,
+    ),
+    json.dumps(
+        {
+            "rois": [
+                {
+                    "name": "C",
+                    "type": "Rect",
+                    "x": 100,
+                    "y": 300,
+                    "width": 100,
+                    "height": 80,
+                    "rotation": 0,
+                }
+            ],
+            "baseImage": {
+                "selectedBlobName": "workflow-image/preview_xy.png",
+                "projectionMapping": {
+                    "viewLabel": "XY",
+                    "worldMinX": PROJECTION_BOUNDS["minX"],
+                    "worldMaxX": PROJECTION_BOUNDS["maxX"],
+                    "worldMinY": PROJECTION_BOUNDS["minY"],
+                    "worldMaxY": PROJECTION_BOUNDS["maxY"],
+                    "imageWidth": PREVIEW_WIDTH,
+                    "imageHeight": PREVIEW_HEIGHT,
+                },
+            },
+        },
+        ensure_ascii=False,
+    ),
+    json.dumps(
+        {
+            "rois": [
+                {
+                    "name": "D",
+                    "type": "Rect",
+                    "x": 300,
+                    "y": 300,
+                    "width": 100,
+                    "height": 80,
+                    "rotation": 0,
+                }
+            ],
+            "baseImage": {
+                "selectedBlobName": "workflow-image/preview_xy.png",
+                "projectionMapping": {
+                    "viewLabel": "XY",
+                    "worldMinX": PROJECTION_BOUNDS["minX"],
+                    "worldMaxX": PROJECTION_BOUNDS["maxX"],
+                    "worldMinY": PROJECTION_BOUNDS["minY"],
+                    "worldMaxY": PROJECTION_BOUNDS["maxY"],
+                    "imageWidth": PREVIEW_WIDTH,
+                    "imageHeight": PREVIEW_HEIGHT,
+                },
+            },
+        },
+        ensure_ascii=False,
+    ),
+]
 
 # RANSAC 平面拟合参数
-RANSAC_PARAMS = {"distanceThreshold": 0.01, "maxIterations": 1000, "probability": 0.99}
+RANSAC_PARAMS = {
+    "distanceThreshold": 0.01,
+    "maxIterations": 1000,
+    "probability": 0.99,
+    "refinePlane": True,
+    "normalConstraint": "z-up",
+    "seed": 0,
+}
 VOXEL_SIZE = 0.2
 THRESHOLD_MIN = -0.2
 THRESHOLD_MAX = 0.2
@@ -286,8 +350,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--projection-max-y", type=float, default=PROJECTION_BOUNDS["maxY"]
     )
-    parser.add_argument("--roi-a-json", default=ROI_A_JSON)
-    parser.add_argument("--roi-b-json", default=ROI_B_JSON)
+    parser.add_argument(
+        "--roi-json",
+        action="append",
+        default=[],
+        help="ROI配置JSON，可多次指定以添加多个区域",
+    )
     parser.add_argument("--threshold-min", type=float, default=THRESHOLD_MIN)
     parser.add_argument("--threshold-max", type=float, default=THRESHOLD_MAX)
     return parser.parse_args()
@@ -300,14 +368,19 @@ OP_READ_POINT_CLOUD = "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
 OP_VOXEL_DOWNSAMPLE = "b1d01234-5678-9012-4567-89012345670a"
 OP_Z_COLORIZE = "de31c1ab-9ef0-43ab-a30f-0dce0e1d8201"
 OP_RANSAC_PLANE_FIT = "d3f12345-6789-0123-4567-89012345670c"
+OP_STATISTICAL_OUTLIER_REMOVAL = "8a708912-3456-7890-1234-567890123407"
 OP_SAVE_POINT_CLOUD_BLOB = "a1b2c3d4-e5f6-7890-abcd-ef1234567891"
 OP_COLORED_CLOUD_TO_IMAGE = "1dd66555-a882-436b-bf30-dab8c680a201"
 OP_ROI_PARTITION = "a1b2c3d4-0001-4000-8000-000000000001"
 OP_POINT_CLOUD_CROP = "b1c2d3e4-0001-4000-8000-000000000101"
 OP_Z_CHANNEL_STATS = "b1c2d3e4-0002-4000-8000-000000000102"
+OP_COLORIZE_CLOUD_BY_ROI = "c8b5e2a1-3d4f-5c6d-7e8f-9a0b1c2d3e4f"
 OP_HEIGHT_DIFF_EVAL = "8c3dd5d9-8234-49fb-8d1f-1d7c7e0b4201"
 OP_ANNOTATE_HEIGHT_DIFF = "1d6498c5-8d95-41ab-8801-c3f8e20d7301"
 OP_SAVE_IMAGE_BLOB = "4b8af0f5-c0fb-45df-97a6-5ab2462cfd01"
+OP_AGGREGATE_REGIONS = "a8b3c4d5-e6f7-890a-bcde-f01234567890"
+OP_COLORED_CLOUD_TO_TILTED_IMAGE = "7e3a2b1c-9d4e-4f5a-8b6c-1d2e3f4a5b6c"
+OP_ANNOTATE_TILTED_VIEW = "9f4b2c3d-8e5a-4b6c-9d1e-2f3a4b5c6d7e"
 
 
 def new_uuid() -> str:
@@ -560,27 +633,180 @@ def edge(source_id: str, target_id: str) -> dict:
     }
 
 
+COLORS = [
+    {"r": 255, "g": 180, "b": 0},
+    {"r": 0, "g": 220, "b": 255},
+    {"r": 180, "g": 255, "b": 0},
+    {"r": 255, "g": 80, "b": 200},
+    {"r": 0, "g": 255, "b": 180},
+    {"r": 255, "g": 255, "b": 0},
+    {"r": 200, "g": 80, "b": 255},
+    {"r": 80, "g": 200, "b": 255},
+]
+
+
 def build_graph_data() -> dict:
-    """构建固定 ROI 的高度差检测工作流。"""
+    """构建支持动态数量ROI的高度差检测工作流。"""
     id_start = new_uuid()
     id_read = new_uuid()
     id_downsample = new_uuid()
+    id_denoise = new_uuid()
     id_colorize = new_uuid()
     id_export_cloud = new_uuid()
     id_preview = new_uuid()
     id_ransac = new_uuid()
-    id_roi_a = new_uuid()
-    id_roi_b = new_uuid()
-    id_crop_a = new_uuid()
-    id_crop_b = new_uuid()
-    id_stats_a = new_uuid()
-    id_stats_b = new_uuid()
     id_eval = new_uuid()
+    id_aggregate = new_uuid()
     id_annotate = new_uuid()
     id_export_image = new_uuid()
+    id_tilted_view = new_uuid()
+    id_annotate_tilted = new_uuid()
+    id_export_tilted = new_uuid()
     id_end = new_uuid()
 
     bounds = PROJECTION_BOUNDS
+    region_count = len(ROIS_JSON)
+
+    roi_nodes = []
+    color_nodes = []
+    crop_nodes = []
+    stats_nodes = []
+
+    base_x = 560 - (region_count - 1) * 160
+    for i in range(region_count):
+        color = COLORS[i % len(COLORS)]
+        x = base_x + i * 320
+
+        id_roi = new_uuid()
+        id_color = new_uuid()
+        id_crop = new_uuid()
+        id_stats = new_uuid()
+
+        roi_nodes.append(
+            node(
+                id_roi,
+                OP_ROI_PARTITION,
+                x,
+                620,
+                f"ROI {i + 1}",
+                make_properties(
+                    params={"roiJson": ROIS_JSON[i]},
+                    param_sources={"roiJson": "literal"},
+                    input_bindings={
+                        "input_mat": "preview_image",
+                        "projection_mapping": "projection_mapping",
+                    },
+                    input_sources={
+                        "input_mat": "variable",
+                        "projection_mapping": "variable",
+                    },
+                    output_bindings={
+                        "primary_mask": f"roi_{i + 1}_mask",
+                        "roi_metadata": f"roi_{i + 1}_metadata",
+                    },
+                    output_sources={
+                        "primary_mask": "variable",
+                        "roi_metadata": "variable",
+                    },
+                ),
+            )
+        )
+
+        color_nodes.append(
+            node(
+                id_color,
+                OP_COLORIZE_CLOUD_BY_ROI,
+                x,
+                670,
+                f"区域{i + 1}着色",
+                make_properties(
+                    params={
+                        "colorR": color["r"],
+                        "colorG": color["g"],
+                        "colorB": color["b"],
+                        "blendMode": "replace",
+                    },
+                    param_sources={
+                        "colorR": "literal",
+                        "colorG": "literal",
+                        "colorB": "literal",
+                        "blendMode": "literal",
+                    },
+                    input_bindings={
+                        "input_point_cloud": "colored_segment_cloud",
+                        "roi_mask": f"roi_{i + 1}_mask",
+                        "roi_metadata": f"roi_{i + 1}_metadata",
+                    },
+                    input_sources={
+                        "input_point_cloud": "variable",
+                        "roi_mask": "variable",
+                        "roi_metadata": "variable",
+                    },
+                    output_bindings={"output_point_cloud": "colored_segment_cloud"},
+                    output_sources={"output_point_cloud": "variable"},
+                ),
+            )
+        )
+
+        crop_nodes.append(
+            node(
+                id_crop,
+                OP_POINT_CLOUD_CROP,
+                x,
+                770,
+                f"掩膜裁剪{i + 1}",
+                make_properties(
+                    params={
+                        "cropMode": "mask",
+                        "maskWorldMinX": bounds["minX"],
+                        "maskWorldMaxX": bounds["maxX"],
+                        "maskWorldMinY": bounds["minY"],
+                        "maskWorldMaxY": bounds["maxY"],
+                    },
+                    param_sources={
+                        "cropMode": "literal",
+                        "maskWorldMinX": "literal",
+                        "maskWorldMaxX": "literal",
+                        "maskWorldMinY": "literal",
+                        "maskWorldMaxY": "literal",
+                    },
+                    input_bindings={
+                        "input_point_cloud": "filtered_cloud",
+                        "roi_mask": f"roi_{i + 1}_mask",
+                        "roi_metadata": f"roi_{i + 1}_metadata",
+                    },
+                    input_sources={
+                        "input_point_cloud": "variable",
+                        "roi_mask": "variable",
+                        "roi_metadata": "variable",
+                    },
+                    output_bindings={"output_point_cloud": f"region_{i + 1}_cloud"},
+                    output_sources={"output_point_cloud": "variable"},
+                ),
+            )
+        )
+
+        stats_nodes.append(
+            node(
+                id_stats,
+                OP_Z_CHANNEL_STATS,
+                x,
+                870,
+                f"高度统计{i + 1}",
+                make_properties(
+                    input_bindings={
+                        "input_point_cloud": f"region_{i + 1}_cloud",
+                        "plane_params": "ref_plane",
+                    },
+                    input_sources={
+                        "input_point_cloud": "variable",
+                        "plane_params": "variable",
+                    },
+                    output_bindings={"avg_height": f"height_{i + 1}"},
+                    output_sources={"avg_height": "variable"},
+                ),
+            )
+        )
 
     nodes = [
         node(id_start, "start-node", 560, 40, "开始", make_properties()),
@@ -608,6 +834,21 @@ def build_graph_data() -> dict:
                 param_sources={"voxelSize": "literal"},
                 input_bindings={"input_point_cloud": "raw_cloud"},
                 input_sources={"input_point_cloud": "variable"},
+                output_bindings={"output_point_cloud": "downsampled_cloud"},
+                output_sources={"output_point_cloud": "variable"},
+            ),
+        ),
+        node(
+            id_denoise,
+            OP_STATISTICAL_OUTLIER_REMOVAL,
+            560,
+            280,
+            "统计滤波去噪",
+            make_properties(
+                params={"k": 12, "stddevMultiplier": 3.0},
+                param_sources={"k": "literal", "stddevMultiplier": "literal"},
+                input_bindings={"input_point_cloud": "downsampled_cloud"},
+                input_sources={"input_point_cloud": "variable"},
                 output_bindings={"output_point_cloud": "filtered_cloud"},
                 output_sources={"output_point_cloud": "variable"},
             ),
@@ -616,7 +857,7 @@ def build_graph_data() -> dict:
             id_colorize,
             OP_Z_COLORIZE,
             560,
-            280,
+            360,
             "Z轴着色点云",
             make_properties(
                 input_bindings={"input_point_cloud": "filtered_cloud"},
@@ -648,25 +889,23 @@ def build_graph_data() -> dict:
             "彩色点云转图像",
             make_properties(
                 params={
-                    "autoBounds": False,
+                    "autoBounds": True,
                     "imageResolution": IMAGE_RESOLUTION,
-                    "minX": bounds["minX"],
-                    "maxX": bounds["maxX"],
-                    "minY": bounds["minY"],
-                    "maxY": bounds["maxY"],
                 },
                 param_sources={
                     "autoBounds": "literal",
                     "imageResolution": "literal",
-                    "minX": "literal",
-                    "maxX": "literal",
-                    "minY": "literal",
-                    "maxY": "literal",
                 },
                 input_bindings={"input_point_cloud": "colored_segment_cloud"},
                 input_sources={"input_point_cloud": "variable"},
-                output_bindings={"output_image": "preview_image"},
-                output_sources={"output_image": "variable"},
+                output_bindings={
+                    "output_image": "preview_image",
+                    "projection_mapping": "projection_mapping",
+                },
+                output_sources={
+                    "output_image": "variable",
+                    "projection_mapping": "variable",
+                },
             ),
         ),
         node(
@@ -681,6 +920,9 @@ def build_graph_data() -> dict:
                     "distanceThreshold": "literal",
                     "maxIterations": "literal",
                     "probability": "literal",
+                    "refinePlane": "literal",
+                    "normalConstraint": "literal",
+                    "seed": "literal",
                 },
                 input_bindings={"input_point_cloud": "filtered_cloud"},
                 input_sources={"input_point_cloud": "variable"},
@@ -688,166 +930,20 @@ def build_graph_data() -> dict:
                 output_sources={"plane_params": "variable"},
             ),
         ),
-        node(
-            id_roi_a,
-            OP_ROI_PARTITION,
-            400,
-            620,
-            "ROI A",
-            make_properties(
-                params={"roiJson": ROI_A_JSON},
-                param_sources={"roiJson": "literal"},
-                input_bindings={"input_mat": "preview_image"},
-                input_sources={"input_mat": "variable"},
-                output_bindings={
-                    "primary_mask": "roi_a_mask",
-                    "roi_metadata": "roi_a_metadata",
-                },
-                output_sources={
-                    "primary_mask": "variable",
-                    "roi_metadata": "variable",
-                },
-            ),
-        ),
-        node(
-            id_roi_b,
-            OP_ROI_PARTITION,
-            720,
-            620,
-            "ROI B",
-            make_properties(
-                params={"roiJson": ROI_B_JSON},
-                param_sources={"roiJson": "literal"},
-                input_bindings={"input_mat": "preview_image"},
-                input_sources={"input_mat": "variable"},
-                output_bindings={
-                    "primary_mask": "roi_b_mask",
-                    "roi_metadata": "roi_b_metadata",
-                },
-                output_sources={
-                    "primary_mask": "variable",
-                    "roi_metadata": "variable",
-                },
-            ),
-        ),
-        node(
-            id_crop_a,
-            OP_POINT_CLOUD_CROP,
-            400,
-            720,
-            "掩膜裁剪A",
-            make_properties(
-                params={
-                    "cropMode": "mask",
-                    "maskWorldMinX": bounds["minX"],
-                    "maskWorldMaxX": bounds["maxX"],
-                    "maskWorldMinY": bounds["minY"],
-                    "maskWorldMaxY": bounds["maxY"],
-                },
-                param_sources={
-                    "cropMode": "literal",
-                    "maskWorldMinX": "literal",
-                    "maskWorldMaxX": "literal",
-                    "maskWorldMinY": "literal",
-                    "maskWorldMaxY": "literal",
-                },
-                input_bindings={
-                    "input_point_cloud": "filtered_cloud",
-                    "roi_mask": "roi_a_mask",
-                    "roi_metadata": "roi_a_metadata",
-                },
-                input_sources={
-                    "input_point_cloud": "variable",
-                    "roi_mask": "variable",
-                    "roi_metadata": "variable",
-                },
-                output_bindings={"output_point_cloud": "region_a_cloud"},
-                output_sources={"output_point_cloud": "variable"},
-            ),
-        ),
-        node(
-            id_crop_b,
-            OP_POINT_CLOUD_CROP,
-            720,
-            720,
-            "掩膜裁剪B",
-            make_properties(
-                params={
-                    "cropMode": "mask",
-                    "maskWorldMinX": bounds["minX"],
-                    "maskWorldMaxX": bounds["maxX"],
-                    "maskWorldMinY": bounds["minY"],
-                    "maskWorldMaxY": bounds["maxY"],
-                },
-                param_sources={
-                    "cropMode": "literal",
-                    "maskWorldMinX": "literal",
-                    "maskWorldMaxX": "literal",
-                    "maskWorldMinY": "literal",
-                    "maskWorldMaxY": "literal",
-                },
-                input_bindings={
-                    "input_point_cloud": "filtered_cloud",
-                    "roi_mask": "roi_b_mask",
-                    "roi_metadata": "roi_b_metadata",
-                },
-                input_sources={
-                    "input_point_cloud": "variable",
-                    "roi_mask": "variable",
-                    "roi_metadata": "variable",
-                },
-                output_bindings={"output_point_cloud": "region_b_cloud"},
-                output_sources={"output_point_cloud": "variable"},
-            ),
-        ),
-        node(
-            id_stats_a,
-            OP_Z_CHANNEL_STATS,
-            400,
-            820,
-            "高度统计A",
-            make_properties(
-                input_bindings={
-                    "input_point_cloud": "region_a_cloud",
-                    "plane_params": "ref_plane",
-                },
-                input_sources={
-                    "input_point_cloud": "variable",
-                    "plane_params": "variable",
-                },
-                output_bindings={"avg_height": "height_a"},
-                output_sources={"avg_height": "variable"},
-            ),
-        ),
-        node(
-            id_stats_b,
-            OP_Z_CHANNEL_STATS,
-            720,
-            820,
-            "高度统计B",
-            make_properties(
-                input_bindings={
-                    "input_point_cloud": "region_b_cloud",
-                    "plane_params": "ref_plane",
-                },
-                input_sources={
-                    "input_point_cloud": "variable",
-                    "plane_params": "variable",
-                },
-                output_bindings={"avg_height": "height_b"},
-                output_sources={"avg_height": "variable"},
-            ),
-        ),
+        *roi_nodes,
+        *color_nodes,
+        *crop_nodes,
+        *stats_nodes,
         node(
             id_eval,
             OP_HEIGHT_DIFF_EVAL,
             560,
-            920,
+            970,
             "高度差判定",
             make_properties(
                 params={"minDiff": THRESHOLD_MIN, "maxDiff": THRESHOLD_MAX},
                 param_sources={"minDiff": "literal", "maxDiff": "literal"},
-                input_bindings={"height_a": "height_a", "height_b": "height_b"},
+                input_bindings={"height_a": "height_1", "height_b": "height_2"},
                 input_sources={"height_a": "variable", "height_b": "variable"},
                 output_bindings={
                     "signed_diff": "signed_diff",
@@ -860,28 +956,41 @@ def build_graph_data() -> dict:
             ),
         ),
         node(
+            id_aggregate,
+            OP_AGGREGATE_REGIONS,
+            560,
+            1050,
+            "聚合区域数据",
+            make_properties(
+                params={"regionCount": region_count, "referenceRegionIndex": 0},
+                param_sources={
+                    "regionCount": "literal",
+                    "referenceRegionIndex": "literal",
+                },
+                output_bindings={
+                    "regions_json": "regions_json",
+                    "result_json": "result_json",
+                },
+                output_sources={"regions_json": "variable", "result_json": "variable"},
+            ),
+        ),
+        node(
             id_annotate,
             OP_ANNOTATE_HEIGHT_DIFF,
             560,
-            1020,
+            1130,
             "结果图标注",
             make_properties(
+                params={"referenceRegionIndex": 0},
+                param_sources={"referenceRegionIndex": "literal"},
                 input_bindings={
                     "input_mat": "preview_image",
-                    "roi_metadata_a": "roi_a_metadata",
-                    "roi_metadata_b": "roi_b_metadata",
-                    "height_a": "height_a",
-                    "height_b": "height_b",
-                    "signed_diff": "signed_diff",
+                    "regions_json": "regions_json",
                     "is_ok": "is_ok",
                 },
                 input_sources={
                     "input_mat": "variable",
-                    "roi_metadata_a": "variable",
-                    "roi_metadata_b": "variable",
-                    "height_a": "variable",
-                    "height_b": "variable",
-                    "signed_diff": "variable",
+                    "regions_json": "variable",
                     "is_ok": "variable",
                 },
                 output_bindings={"output_mat": "annotated_result_image"},
@@ -892,7 +1001,7 @@ def build_graph_data() -> dict:
             id_export_image,
             OP_SAVE_IMAGE_BLOB,
             560,
-            1100,
+            1210,
             "结果图存Blob",
             make_properties(
                 params={"fileName": "height-diff-result.png"},
@@ -904,21 +1013,74 @@ def build_graph_data() -> dict:
             ),
         ),
         node(
+            id_tilted_view,
+            OP_COLORED_CLOUD_TO_TILTED_IMAGE,
+            860,
+            1130,
+            "倾斜视图生成",
+            make_properties(
+                params={"tiltAngle": 30, "imageResolution": IMAGE_RESOLUTION},
+                param_sources={"tiltAngle": "literal", "imageResolution": "literal"},
+                input_bindings={"input_point_cloud": "colored_segment_cloud"},
+                input_sources={"input_point_cloud": "variable"},
+                output_bindings={"output_image": "tilted_preview_image"},
+                output_sources={"output_image": "variable"},
+            ),
+        ),
+        node(
+            id_annotate_tilted,
+            OP_ANNOTATE_TILTED_VIEW,
+            860,
+            1210,
+            "倾斜视图标注",
+            make_properties(
+                input_bindings={
+                    "input_mat": "tilted_preview_image",
+                    "is_ok": "is_ok",
+                },
+                input_sources={
+                    "input_mat": "variable",
+                    "is_ok": "variable",
+                },
+                output_bindings={"output_mat": "annotated_tilted_image"},
+                output_sources={"output_mat": "variable"},
+            ),
+        ),
+        node(
+            id_export_tilted,
+            OP_SAVE_IMAGE_BLOB,
+            860,
+            1290,
+            "倾斜视图存Blob",
+            make_properties(
+                params={"fileName": "height-diff-tilted.png"},
+                param_sources={"fileName": "literal"},
+                input_bindings={"input_mat": "annotated_tilted_image"},
+                input_sources={"input_mat": "variable"},
+                output_bindings={"download_url": "tilted_image_download_url"},
+                output_sources={"download_url": "variable"},
+            ),
+        ),
+        node(
             id_end,
             "end-node",
             560,
-            1180,
+            1370,
             "结束",
             make_properties(
                 input_bindings={
                     "coloredPointCloudUrl": "colored_cloud_download_url",
                     "resultImageUrl": "result_image_download_url",
+                    "tiltedImageUrl": "tilted_image_download_url",
+                    "resultJson": "result_json",
                     "signedDiff": "signed_diff",
                     "isOk": "is_ok",
                 },
                 input_sources={
                     "coloredPointCloudUrl": "variable",
                     "resultImageUrl": "variable",
+                    "tiltedImageUrl": "variable",
+                    "resultJson": "variable",
                     "signedDiff": "variable",
                     "isOk": "variable",
                 },
@@ -929,23 +1091,33 @@ def build_graph_data() -> dict:
     edges = [
         edge(id_start, id_read),
         edge(id_read, id_downsample),
-        edge(id_downsample, id_colorize),
+        edge(id_downsample, id_denoise),
+        edge(id_denoise, id_colorize),
         edge(id_colorize, id_export_cloud),
         edge(id_colorize, id_preview),
-        edge(id_downsample, id_ransac),
-        edge(id_preview, id_roi_a),
-        edge(id_preview, id_roi_b),
-        edge(id_roi_a, id_crop_a),
-        edge(id_roi_b, id_crop_b),
-        edge(id_crop_a, id_stats_a),
-        edge(id_crop_b, id_stats_b),
-        edge(id_stats_a, id_eval),
-        edge(id_stats_b, id_eval),
-        edge(id_eval, id_annotate),
-        edge(id_annotate, id_export_image),
-        edge(id_export_cloud, id_end),
-        edge(id_export_image, id_end),
+        edge(id_denoise, id_ransac),
     ]
+
+    for i in range(region_count):
+        edges.append(edge(id_preview, roi_nodes[i]["id"]))
+        edges.append(edge(roi_nodes[i]["id"], color_nodes[i]["id"]))
+        edges.append(edge(roi_nodes[i]["id"], crop_nodes[i]["id"]))
+        edges.append(edge(crop_nodes[i]["id"], stats_nodes[i]["id"]))
+        edges.append(edge(stats_nodes[i]["id"], id_eval))
+
+    edges.extend(
+        [
+            edge(id_eval, id_aggregate),
+            edge(id_aggregate, id_annotate),
+            edge(id_annotate, id_export_image),
+            edge(id_colorize, id_tilted_view),
+            edge(id_tilted_view, id_annotate_tilted),
+            edge(id_annotate_tilted, id_export_tilted),
+            edge(id_export_cloud, id_end),
+            edge(id_export_image, id_end),
+            edge(id_export_tilted, id_end),
+        ]
+    )
 
     return {"nodes": nodes, "edges": edges}
 
@@ -984,22 +1156,21 @@ def create_workflow(project_id: str) -> dict:
     return result
 
 
-def validate_roi_json(roi_json: str, arg_name: str) -> str:
+def validate_roi_json(roi_json: str, arg_name: str, index: int) -> str:
     try:
         parsed = json.loads(roi_json)
     except json.JSONDecodeError as ex:
-        raise ValueError(f"{arg_name} 不是合法 JSON：{ex}") from ex
+        raise ValueError(f"{arg_name}[{index}] 不是合法 JSON：{ex}") from ex
 
     rois = parsed.get("rois") if isinstance(parsed, dict) else None
     if not isinstance(rois, list) or len(rois) != 1:
-        raise ValueError(f"{arg_name} 必须是且仅包含 1 个 ROI 的 JSON。")
+        raise ValueError(f"{arg_name}[{index}] 必须是且仅包含 1 个 ROI 的 JSON。")
 
     base_image = parsed.get("baseImage")
     if not isinstance(base_image, dict):
         base_image = {}
         parsed["baseImage"] = base_image
 
-    # 与后端重构对齐：ROI 底图不再有 selectedLabel / previewImages 字段。
     base_image.pop("selectedLabel", None)
     base_image.pop("previewImages", None)
 
@@ -1019,9 +1190,21 @@ def validate_roi_json(roi_json: str, arg_name: str) -> str:
     return json.dumps(parsed, ensure_ascii=False)
 
 
+def validate_rois_json(rois_json_list: list[str]) -> list[str]:
+    """验证并处理多个ROI配置JSON列表。"""
+    if not rois_json_list:
+        raise ValueError("至少需要指定一个ROI区域（--roi-json）。")
+
+    validated = []
+    for i, roi_json in enumerate(rois_json_list):
+        validated.append(validate_roi_json(roi_json, "--roi-json", i))
+
+    return validated
+
+
 def main():
     global BASE_URL, USERNAME, PASSWORD, POINT_CLOUD_PATH, WORKFLOW_NAME, VOXEL_SIZE
-    global ROI_A_JSON, ROI_B_JSON, THRESHOLD_MIN, THRESHOLD_MAX, PROJECTION_BOUNDS
+    global ROIS_JSON, THRESHOLD_MIN, THRESHOLD_MAX, PROJECTION_BOUNDS
     global PREVIEW_WIDTH, PREVIEW_HEIGHT
 
     args = parse_args()
@@ -1044,8 +1227,10 @@ def main():
     PREVIEW_WIDTH, PREVIEW_HEIGHT = compute_preview_size(
         PROJECTION_BOUNDS, IMAGE_RESOLUTION
     )
-    ROI_A_JSON = validate_roi_json(args.roi_a_json, "--roi-a-json")
-    ROI_B_JSON = validate_roi_json(args.roi_b_json, "--roi-b-json")
+    if args.roi_json:
+        ROIS_JSON = validate_rois_json(args.roi_json)
+    else:
+        ROIS_JSON = validate_rois_json(ROIS_JSON)
 
     if not PASSWORD:
         print(

@@ -61,6 +61,7 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
     private readonly IRepository<WorkflowProjectRun, Guid> _runRepository;
     private readonly IRepository<VariableDefinition, Guid> _variableDefinitionRepository;
     private readonly IBlobContainer<OperatorFileBlobContainer> _operatorFileBlobContainer;
+    private readonly IOperatorFileRecordRepository _operatorFileRecordRepository;
 
     private static readonly HashSet<string> UploadedFileExtensions = new(
         StringComparer.OrdinalIgnoreCase
@@ -100,7 +101,8 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
         IRepository<WorkflowProjectDeployment, Guid> deploymentRepository,
         IRepository<WorkflowProjectRun, Guid> runRepository,
         IRepository<VariableDefinition, Guid> variableDefinitionRepository,
-        IBlobContainer<OperatorFileBlobContainer> operatorFileBlobContainer
+        IBlobContainer<OperatorFileBlobContainer> operatorFileBlobContainer,
+        IOperatorFileRecordRepository operatorFileRecordRepository
     )
     {
         _repository = repository;
@@ -119,6 +121,7 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
         _runRepository = runRepository;
         _variableDefinitionRepository = variableDefinitionRepository;
         _operatorFileBlobContainer = operatorFileBlobContainer;
+        _operatorFileRecordRepository = operatorFileRecordRepository;
     }
 
     /// <inheritdoc/>
@@ -943,6 +946,23 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
                 currentRoiJson = roiJsonElement.GetString();
             }
 
+            // 检查是否已有有效的缓存底图：底图已生成且工作流未变化
+            string currentGraphHash = ComputeGraphHash(graphData);
+            (string? cachedBlobName, string? cachedRoiJson) = ExtractCachedBaseImage(
+                currentRoiJson,
+                currentGraphHash
+            );
+            if (cachedBlobName is not null)
+            {
+                return new RoiBaseImageResultDto
+                {
+                    Error = false,
+                    BlobName = cachedBlobName,
+                    RoiJson = cachedRoiJson,
+                    Persisted = savedEntity is not null,
+                };
+            }
+
             // 4. 祖先子图：仅保留 ROI 节点真正依赖的上游算子语句，天然跳过并行副作用节点。
             HashSet<string> ancestorSet = new(
                 WorkflowNodeScheduleBuilder.BuildAncestorNodeOrder(graph, input.RoiNodeId),
@@ -1076,7 +1096,12 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
                 imageWidth,
                 imageHeight
             );
-            result.RoiJson = BuildUpdatedRoiJson(currentRoiJson, blobName, mapping);
+            result.RoiJson = BuildUpdatedRoiJson(
+                currentRoiJson,
+                blobName,
+                mapping,
+                currentGraphHash
+            );
             if (savedEntity is not null)
             {
                 string? updatedGraph = ApplyRoiJsonToGraph(
@@ -1192,7 +1217,8 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
     private static string BuildUpdatedRoiJson(
         string? currentRoiJson,
         string blobName,
-        AuroraStruct3D.OpenCV.RoiOps.RoiProjectionMapping mapping
+        AuroraStruct3D.OpenCV.RoiOps.RoiProjectionMapping mapping,
+        string? graphHash = null
     )
     {
         JsonObject roiObject = new();
@@ -1226,9 +1252,61 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
                 ["imageWidth"] = mapping.ImageWidth,
                 ["imageHeight"] = mapping.ImageHeight,
             },
+            ["graphHash"] = graphHash,
         };
 
         return roiObject.ToJsonString(RoiJsonWriteOptions);
+    }
+
+    private static (string? BlobName, string? RoiJson) ExtractCachedBaseImage(
+        string? roiJson,
+        string currentGraphHash
+    )
+    {
+        if (string.IsNullOrWhiteSpace(roiJson))
+        {
+            return (null, null);
+        }
+
+        try
+        {
+            if (JsonNode.Parse(roiJson) is not JsonObject roiObject)
+            {
+                return (null, null);
+            }
+
+            if (roiObject["baseImage"] is not JsonObject baseImageObject)
+            {
+                return (null, null);
+            }
+
+            if (
+                baseImageObject["selectedBlobName"] is not JsonValue blobNameValue
+                || string.IsNullOrWhiteSpace(blobNameValue.ToString())
+            )
+            {
+                return (null, null);
+            }
+
+            string cachedBlobName = blobNameValue.ToString()!;
+            string? cachedGraphHash = baseImageObject["graphHash"]?.ToString();
+
+            if (string.IsNullOrWhiteSpace(cachedGraphHash))
+            {
+                return (null, null);
+            }
+
+            if (!string.Equals(cachedGraphHash, currentGraphHash, StringComparison.Ordinal))
+            {
+                return (null, null);
+            }
+
+            return (cachedBlobName, roiJson);
+        }
+        catch (JsonException)
+        {
+            return (null, null);
+        }
     }
 
     /// <summary>
@@ -1542,6 +1620,7 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
             Message = session.ErrorMessage,
             ExecutionId = session.ExecutionId,
             ResultImageUrl = ResolveResultImageUrl(session),
+            ResultImageUrls = ResolveResultImageUrls(session),
             Status = BuildStatusDto(session, includeVariables: true),
         };
     }
@@ -1590,6 +1669,7 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
             Message = session.ErrorMessage,
             ExecutionId = session.ExecutionId,
             ResultImageUrl = ResolveResultImageUrl(session),
+            ResultImageUrls = ResolveResultImageUrls(session),
             Status = BuildStatusDto(session, includeVariables: true),
         };
     }
@@ -1667,6 +1747,7 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
             Message = resultSession.ErrorMessage,
             ExecutionId = resultSession.ExecutionId,
             ResultImageUrl = ResolveResultImageUrl(resultSession),
+            ResultImageUrls = ResolveResultImageUrls(resultSession),
             Status = BuildStatusDto(resultSession, includeVariables: true),
         };
     }
@@ -1743,6 +1824,7 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
             Message = message,
             ExecutionId = session.ExecutionId,
             ResultImageUrl = ResolveResultImageUrl(session),
+            ResultImageUrls = ResolveResultImageUrls(session),
             Status = BuildStatusDtoStatic(session, includeVariables: true),
         };
     }
@@ -1761,6 +1843,7 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
             Message = message,
             ExecutionId = session.ExecutionId,
             ResultImageUrl = ResolveResultImageUrl(session),
+            ResultImageUrls = ResolveResultImageUrls(session),
             Status = BuildStatusDtoStatic(session, includeVariables: true),
         };
     }
@@ -2348,6 +2431,8 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
                 await blobStream.CopyToAsync(fileStream);
             }
 
+            await MarkFileAsUsedAsync(blobName);
+
             return localPath;
         }
 
@@ -2357,6 +2442,23 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
         }
 
         return rawValue;
+    }
+
+    private async Task MarkFileAsUsedAsync(string blobName)
+    {
+        try
+        {
+            OperatorFileRecord? record = await _operatorFileRecordRepository.FindAsync(r =>
+                r.BlobName == blobName
+            );
+
+            if (record is not null && !record.IsUsed)
+            {
+                record.MarkAsUsed();
+                await _operatorFileRecordRepository.UpdateAsync(record);
+            }
+        }
+        catch (Exception) { }
     }
 
     private async Task<string?> ResolveExistingBlobNameAsync(string? candidate)
@@ -2491,11 +2593,17 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
 
     private static string? ResolveResultImageUrl(WorkflowExecutionSession session)
     {
+        List<string> urls = ResolveResultImageUrls(session);
+        return urls.Count > 0 ? urls[0] : null;
+    }
+
+    private static List<string> ResolveResultImageUrls(WorkflowExecutionSession session)
+    {
         HashSet<string> variableNames = new(StringComparer.Ordinal);
         CollectResultImageUrlVariables(session.RuntimeWorkflow.Statements, variableNames);
         if (variableNames.Count == 0)
         {
-            return null;
+            return new List<string>();
         }
 
         List<WorkflowVariableResultDto> variables;
@@ -2519,6 +2627,7 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
             )
             .ToDictionary(x => x.Name, x => x.ScalarValue!, StringComparer.Ordinal);
 
+        List<string> result = new();
         foreach (string variableName in variableNames)
         {
             if (
@@ -2526,11 +2635,11 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
                 && !string.IsNullOrWhiteSpace(value)
             )
             {
-                return value;
+                result.Add(value);
             }
         }
 
-        return null;
+        return result;
     }
 
     private static void CollectResultImageUrlVariables(

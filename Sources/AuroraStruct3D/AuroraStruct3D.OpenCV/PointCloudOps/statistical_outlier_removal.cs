@@ -77,75 +77,154 @@ public class statistical_outlier_removal : IOperator
         int pointCount = pointCloud.Rows;
         int colCount = pointCloud.Cols;
 
-        // 计算每个点到 K 近邻的平均距离
-        double[] distances = new double[pointCount];
-        for (int i = 0; i < pointCount; i++)
-        {
-            var neighbors = new List<double>();
-            for (int j = 0; j < pointCount; j++)
-            {
-                if (i == j)
-                    continue;
-                double dx = pointCloud.Get<float>(i, 0) - pointCloud.Get<float>(j, 0);
-                double dy = pointCloud.Get<float>(i, 1) - pointCloud.Get<float>(j, 1);
-                double dz = pointCloud.Get<float>(i, 2) - pointCloud.Get<float>(j, 2);
-                double dist = Math.Sqrt(dx * dx + dy * dy + dz * dz);
-                InsertSorted(neighbors, dist, _k);
-            }
-            distances[i] = neighbors.Average();
-        }
+        if (pointCount <= _k)
+            throw new InvalidOperationException($"点云点数({pointCount})少于邻域点数({_k})，无法执行统计滤波。");
+
+        double[] distances = ComputeKNearestDistances(pointCloud, pointCount, _k);
 
         double mean = distances.Average();
-        double stddev = Math.Sqrt(distances.Select(d => (d - mean) * (d - mean)).Average());
+        double variance = distances.Select(d => (d - mean) * (d - mean)).Average();
+        double stddev = Math.Sqrt(variance);
         double threshold = mean + _stddevMultiplier * stddev;
 
-        // 筛选内点
-        var inliers = new List<float[]>();
-        var inlierColors = new List<byte[]>();
+        Mat result = new Mat(pointCount, colCount, MatType.CV_32FC1);
+        Mat? colors = input.HasColors && input.Colors != null
+            ? new Mat(pointCount, 3, MatType.CV_8UC3)
+            : null;
+
+        int outCount = 0;
         for (int i = 0; i < pointCount; i++)
         {
             if (distances[i] <= threshold)
             {
-                var point = new float[colCount];
                 for (int c = 0; c < colCount; c++)
-                    point[c] = pointCloud.Get<float>(i, c);
-                inliers.Add(point);
+                    result.Set(outCount, c, pointCloud.Get<float>(i, c));
 
-                if (input.HasColors && input.Colors != null)
-                {
-                    inlierColors.Add(
-                        new[]
-                        {
-                            input.Colors.Get<byte>(i, 0),
-                            input.Colors.Get<byte>(i, 1),
-                            input.Colors.Get<byte>(i, 2),
-                        }
-                    );
-                }
+                if (colors != null)
+                    for (int c = 0; c < 3; c++)
+                        colors.Set<byte>(outCount, c, input.Colors!.Get<byte>(i, c));
+
+                outCount++;
             }
         }
 
-        if (inliers.Count == 0)
+        if (outCount == 0)
             throw new InvalidOperationException("统计滤波后点云为空，请调整参数。");
 
-        Mat result = new Mat(inliers.Count, colCount, MatType.CV_32FC1);
-        for (int i = 0; i < inliers.Count; i++)
-        for (int c = 0; c < colCount; c++)
-            result.Set(i, c, inliers[i][c]);
+        result = result.RowRange(0, outCount);
+        if (colors != null)
+            colors = colors.RowRange(0, outCount);
 
         var output = new PointCloudData();
         output.Value = result;
-
-        if (inlierColors.Count > 0)
-        {
-            Mat colors = new Mat(inlierColors.Count, 3, MatType.CV_8UC3);
-            for (int i = 0; i < inlierColors.Count; i++)
-            for (int c = 0; c < 3; c++)
-                colors.Set<byte>(i, c, inlierColors[i][c]);
+        if (colors != null)
             output.SetColors(colors);
-        }
 
         context.Set("output_point_cloud", output);
+    }
+
+    private static double[] ComputeKNearestDistances(Mat pointCloud, int pointCount, int k)
+    {
+        double[] distances = new double[pointCount];
+
+        double cellSize = EstimateCellSize(pointCloud, pointCount, k);
+
+        Dictionary<(int, int, int), List<int>> voxelGrid = BuildVoxelGrid(pointCloud, pointCount, cellSize);
+
+        for (int i = 0; i < pointCount; i++)
+        {
+            float x = pointCloud.Get<float>(i, 0);
+            float y = pointCloud.Get<float>(i, 1);
+            float z = pointCloud.Get<float>(i, 2);
+
+            int cx = (int)Math.Floor(x / cellSize);
+            int cy = (int)Math.Floor(y / cellSize);
+            int cz = (int)Math.Floor(z / cellSize);
+
+            var neighbors = new List<double>();
+
+            for (int dx = -1; dx <= 1; dx++)
+            {
+                for (int dy = -1; dy <= 1; dy++)
+                {
+                    for (int dz = -1; dz <= 1; dz++)
+                    {
+                        if (voxelGrid.TryGetValue((cx + dx, cy + dy, cz + dz), out var cellPoints))
+                        {
+                            foreach (int j in cellPoints)
+                            {
+                                if (i == j)
+                                    continue;
+
+                                double dx2 = pointCloud.Get<float>(i, 0) - pointCloud.Get<float>(j, 0);
+                                double dy2 = pointCloud.Get<float>(i, 1) - pointCloud.Get<float>(j, 1);
+                                double dz2 = pointCloud.Get<float>(i, 2) - pointCloud.Get<float>(j, 2);
+                                double dist = dx2 * dx2 + dy2 * dy2 + dz2 * dz2;
+
+                                InsertSortedSquared(neighbors, dist, k);
+                            }
+                        }
+                    }
+                }
+            }
+
+            distances[i] = neighbors.Count > 0
+                ? Math.Sqrt(neighbors.Average())
+                : double.MaxValue;
+        }
+
+        return distances;
+    }
+
+    private static double EstimateCellSize(Mat pointCloud, int pointCount, int k)
+    {
+        double minX = double.MaxValue, maxX = double.MinValue;
+        double minY = double.MaxValue, maxY = double.MinValue;
+        double minZ = double.MaxValue, maxZ = double.MinValue;
+
+        for (int i = 0; i < Math.Min(1000, pointCount); i++)
+        {
+            float x = pointCloud.Get<float>(i, 0);
+            float y = pointCloud.Get<float>(i, 1);
+            float z = pointCloud.Get<float>(i, 2);
+            minX = Math.Min(minX, x); maxX = Math.Max(maxX, x);
+            minY = Math.Min(minY, y); maxY = Math.Max(maxY, y);
+            minZ = Math.Min(minZ, z); maxZ = Math.Max(maxZ, z);
+        }
+
+        double volume = (maxX - minX) * (maxY - minY) * (maxZ - minZ);
+        double density = pointCount / volume;
+        double cellVolume = k / density;
+        return Math.Pow(cellVolume, 1.0 / 3.0) * 1.5;
+    }
+
+    private static Dictionary<(int, int, int), List<int>> BuildVoxelGrid(Mat pointCloud, int pointCount, double cellSize)
+    {
+        var grid = new Dictionary<(int, int, int), List<int>>();
+
+        for (int i = 0; i < pointCount; i++)
+        {
+            int cx = (int)Math.Floor(pointCloud.Get<float>(i, 0) / cellSize);
+            int cy = (int)Math.Floor(pointCloud.Get<float>(i, 1) / cellSize);
+            int cz = (int)Math.Floor(pointCloud.Get<float>(i, 2) / cellSize);
+
+            var key = (cx, cy, cz);
+            if (!grid.ContainsKey(key))
+                grid[key] = new List<int>();
+            grid[key].Add(i);
+        }
+
+        return grid;
+    }
+
+    private static void InsertSortedSquared(List<double> list, double value, int maxCount)
+    {
+        int idx = list.BinarySearch(value);
+        if (idx < 0)
+            idx = ~idx;
+        list.Insert(idx, value);
+        if (list.Count > maxCount)
+            list.RemoveAt(list.Count - 1);
     }
 
     private static void InsertSorted(List<double> list, double value, int maxCount)

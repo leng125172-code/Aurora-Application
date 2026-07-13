@@ -2,13 +2,10 @@ using System.Text.Json;
 
 namespace AuroraStruct3D.OpenCV.RoiOps;
 
-/// <summary>
-/// 在结果图上绘制 ROI、测量值和 OK/NG 判定。
-/// </summary>
 [Guid("1d6498c5-8d95-41ab-8801-c3f8e20d7301")]
 [Category("2D预处理")]
 [DisplayName("高度差结果标注")]
-[Description("在 2D 结果图上绘制两个 ROI 轮廓，并标注高度值、差值和 OK/NG。")]
+[Description("在 2D 结果图上绘制多个 ROI 轮廓和 OK/NG 判定。详细测量数据通过接口返回。")]
 public class annotate_height_diff_result : IOperator
 {
     public static List<IVisionParameter>? InputVisionParameters =>
@@ -17,37 +14,9 @@ public class annotate_height_diff_result : IOperator
             new MatImg { ParameterName = "input_mat", DisplayName = "输入图像" },
             new VisionParameter<string>
             {
-                ParameterName = "roi_metadata_a",
+                ParameterName = "regions_json",
                 ParameterType = typeof(string),
-                DisplayName = "区域A元数据",
-                ControlType = PortControlType.Variable,
-            },
-            new VisionParameter<string>
-            {
-                ParameterName = "roi_metadata_b",
-                ParameterType = typeof(string),
-                DisplayName = "区域B元数据",
-                ControlType = PortControlType.Variable,
-            },
-            new VisionParameter<double>
-            {
-                ParameterName = "height_a",
-                ParameterType = typeof(double),
-                DisplayName = "区域A高度",
-                ControlType = PortControlType.Variable,
-            },
-            new VisionParameter<double>
-            {
-                ParameterName = "height_b",
-                ParameterType = typeof(double),
-                DisplayName = "区域B高度",
-                ControlType = PortControlType.Variable,
-            },
-            new VisionParameter<double>
-            {
-                ParameterName = "signed_diff",
-                ParameterType = typeof(double),
-                DisplayName = "带符号差值",
+                DisplayName = "区域数据JSON",
                 ControlType = PortControlType.Variable,
             },
             new VisionParameter<bool>
@@ -94,6 +63,18 @@ public class annotate_height_diff_result : IOperator
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
     };
 
+    private static readonly Scalar[] DefaultColors =
+    {
+        new(255, 180, 0, 255),
+        new(0, 220, 255, 255),
+        new(180, 255, 0, 255),
+        new(255, 80, 200, 255),
+        new(0, 255, 180, 255),
+        new(255, 255, 0, 255),
+        new(200, 80, 255, 255),
+        new(80, 200, 255, 255),
+    };
+
     private readonly string _okText;
     private readonly string _ngText;
     private bool _disposed;
@@ -118,38 +99,57 @@ public class annotate_height_diff_result : IOperator
             throw new InvalidOperationException("输入图像为空，无法绘制结果标注。");
         }
 
-        Mat output = EnsureBgra(inputMat);
-        RoiMetadata roiA = ResolveSingleRoi(
-            context.Get<string>("roi_metadata_a"),
-            "roi_metadata_a"
-        );
-        RoiMetadata roiB = ResolveSingleRoi(
-            context.Get<string>("roi_metadata_b"),
-            "roi_metadata_b"
-        );
-        double heightA = context.Get<double>("height_a");
-        double heightB = context.Get<double>("height_b");
-        double signedDiff = context.Get<double>("signed_diff");
+        string? regionsJson = context.Get<string>("regions_json");
+        if (string.IsNullOrWhiteSpace(regionsJson))
+        {
+            throw new InvalidOperationException(
+                "上下文变量 'regions_json' 为空，请确认输入绑定已正确设置。"
+            );
+        }
+
+        List<AnnotateRegion> regions;
+        try
+        {
+            regions =
+                JsonSerializer.Deserialize<List<AnnotateRegion>>(regionsJson, JsonOptions)
+                ?? throw new InvalidOperationException("区域数据JSON反序列化失败。");
+        }
+        catch (JsonException ex)
+        {
+            throw new InvalidOperationException($"区域数据JSON格式错误: {ex.Message}", ex);
+        }
+
+        if (regions.Count == 0)
+        {
+            throw new InvalidOperationException("区域数据列表为空。");
+        }
+
         bool isOk = context.Get<bool>("is_ok");
 
-        DrawRoi(output, roiA, new Scalar(255, 180, 0, 255), $"A {heightA:F4}");
-        DrawRoi(output, roiB, new Scalar(0, 220, 255, 255), $"B {heightB:F4}");
+        Mat output = EnsureBgra(inputMat);
+
+        for (int i = 0; i < regions.Count; i++)
+        {
+            var region = regions[i];
+            Scalar color =
+                i < DefaultColors.Length
+                    ? DefaultColors[i]
+                    : new Scalar(
+                        (byte)(255 * Math.Sin(i * 0.7)),
+                        (byte)(255 * Math.Cos(i * 0.5)),
+                        (byte)(255 * Math.Sin(i * 0.3)),
+                        255
+                    );
+
+            DrawRoi(output, region.Roi, color, region.Name);
+        }
 
         Scalar statusColor = isOk ? new Scalar(80, 200, 120, 255) : new Scalar(60, 60, 255, 255);
         string statusText = isOk ? _okText : _ngText;
         Cv2.PutText(
             output,
-            $"Diff={signedDiff:F4}",
-            new Point(16, 28),
-            HersheyFonts.HersheySimplex,
-            0.75,
-            statusColor,
-            2
-        );
-        Cv2.PutText(
-            output,
             statusText,
-            new Point(16, 58),
+            new Point(16, 36),
             HersheyFonts.HersheySimplex,
             0.9,
             statusColor,
@@ -162,10 +162,7 @@ public class annotate_height_diff_result : IOperator
     public void Dispose()
     {
         if (_disposed)
-        {
             return;
-        }
-
         _disposed = true;
         GC.SuppressFinalize(this);
     }
@@ -186,30 +183,6 @@ public class annotate_height_diff_result : IOperator
         }
     }
 
-    private static RoiMetadata ResolveSingleRoi(string? metadataJson, string inputName)
-    {
-        if (string.IsNullOrWhiteSpace(metadataJson))
-        {
-            throw new InvalidOperationException(
-                $"上下文变量 '{inputName}' 为空，无法绘制 ROI 标注。"
-            );
-        }
-
-        RoiPartitionMetadata? metadata = JsonSerializer.Deserialize<RoiPartitionMetadata>(
-            metadataJson,
-            JsonOptions
-        );
-        RoiMetadata? roi = metadata?.Rois.FirstOrDefault();
-        if (roi is null)
-        {
-            throw new InvalidOperationException(
-                $"上下文变量 '{inputName}' 中未找到可用 ROI 元数据。"
-            );
-        }
-
-        return roi;
-    }
-
     private static void DrawRoi(Mat output, RoiMetadata roi, Scalar color, string label)
     {
         Point[] contour = roi
@@ -219,8 +192,11 @@ public class annotate_height_diff_result : IOperator
             ))
             .ToArray();
 
+        Scalar fillColor = new(color.Val0, color.Val1, color.Val2, 80);
+
         if (contour.Length >= 2)
         {
+            Cv2.FillPoly(output, new[] { contour }, fillColor);
             Cv2.Polylines(output, new[] { contour }, true, color, 2);
         }
         else
@@ -231,6 +207,7 @@ public class annotate_height_diff_result : IOperator
                 Math.Max(1, (int)Math.Round(roi.BoundingRect.Width)),
                 Math.Max(1, (int)Math.Round(roi.BoundingRect.Height))
             );
+            Cv2.Rectangle(output, rect, fillColor, -1);
             Cv2.Rectangle(output, rect, color, 2);
         }
 
@@ -239,5 +216,13 @@ public class annotate_height_diff_result : IOperator
             Math.Max(20, (int)Math.Round(roi.BoundingRect.Y) - 8)
         );
         Cv2.PutText(output, label, labelPoint, HersheyFonts.HersheySimplex, 0.55, color, 2);
+    }
+
+    public class AnnotateRegion
+    {
+        public string Name { get; set; } = string.Empty;
+        public double Height { get; set; }
+        public RoiMetadata Roi { get; set; } = new();
+        public RoiProjectionMapping? ProjectionMapping { get; set; }
     }
 }

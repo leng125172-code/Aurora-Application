@@ -101,51 +101,138 @@ public sealed class OperatorCallStatement : IWorkflowStatement
     /// </summary>
     public void Execute(IWorkflowContext context)
     {
+        string operatorName = OperatorType.Name;
+        Console.WriteLine($"[OperatorCall] ========== 开始调用算子: {operatorName} ==========");
+
+        // 记录执行前已存在的端口变量，避免清理时误删上游创建的工作流变量
+        HashSet<string> existingPortVars = new();
+        foreach (string portName in InputBindings.Keys)
+        {
+            if (context.Contains(portName))
+                existingPortVars.Add(portName);
+        }
+
         // ① 将输入绑定解析后写入上下文的端口变量（端口变量名 = ParameterName）
+        Console.WriteLine(
+            $"[OperatorCall] [{operatorName}] 步骤①: 解析输入绑定 ({InputBindings.Count} 个)"
+        );
         foreach ((string portName, InputBinding binding) in InputBindings)
         {
-            context.Set(portName, binding.Resolve(context));
+            object? resolvedValue = binding.Resolve(context);
+            context.Set(portName, resolvedValue);
+
+            string valueStr = FormatValue(resolvedValue);
+            Console.WriteLine(
+                $"[OperatorCall] [{operatorName}]   输入端口 '{portName}' = {valueStr}"
+            );
         }
 
         // ② 解析配置参数：字面量直接取值，$var 绑定此刻从上下文读取上游变量
         //    （上游节点已执行并写入变量，故可读）。然后按顺序作为构造函数实参。
-        object?[] configArgs = ConfigArgBindings.Count > 0
-            ? ConfigArgBindings.Select(b => b.Resolve(context)).ToArray()
-            : Array.Empty<object?>();
+        Console.WriteLine(
+            $"[OperatorCall] [{operatorName}] 步骤②: 解析配置参数 ({ConfigArgBindings.Count} 个)"
+        );
+        object?[] configArgs =
+            ConfigArgBindings.Count > 0
+                ? ConfigArgBindings.Select(b => b.Resolve(context)).ToArray()
+                : Array.Empty<object?>();
+
+        for (int i = 0; i < configArgs.Length; i++)
+        {
+            Console.WriteLine(
+                $"[OperatorCall] [{operatorName}]   配置参数[{i}] = {FormatValue(configArgs[i])}"
+            );
+        }
 
         // ③ 反射实例化算子（构造函数参数为算法配置，不含端口变量）
+        Console.WriteLine($"[OperatorCall] [{operatorName}] 步骤③: 实例化算子");
         IOperator op = CreateOperatorInstance(configArgs);
 
         try
         {
             // ④ 执行算子（算子内部从 context 读取端口变量，写入结果到端口变量）
+            Console.WriteLine($"[OperatorCall] [{operatorName}] 步骤④: 执行算子");
+            var watch = System.Diagnostics.Stopwatch.StartNew();
             op.Execute(context);
+            watch.Stop();
+            Console.WriteLine(
+                $"[OperatorCall] [{operatorName}]   执行完成，耗时: {watch.ElapsedMilliseconds}ms"
+            );
 
             // ⑤ 按输出绑定：将算子写入的端口变量重命名为工作流变量
             //    先以工作流变量名建立引用，再移除端口别名，避免中途被上下文回收。
             //    例：算子写 "output_mat"，OutputBinding 映射为 "ImageTexture1"
+            Console.WriteLine(
+                $"[OperatorCall] [{operatorName}] 步骤⑤: 重命名输出变量 ({OutputBindings.Count} 个)"
+            );
             foreach ((string portName, OutputBinding binding) in OutputBindings)
             {
                 object? value = context.Get(portName);
                 context.Set(binding.VariableName, value);
+
+                string valueStr = FormatValue(value);
+                Console.WriteLine(
+                    $"[OperatorCall] [{operatorName}]   端口 '{portName}' -> 变量 '{binding.VariableName}' = {valueStr}"
+                );
+
                 if (!string.Equals(binding.VariableName, portName, StringComparison.Ordinal))
                     context.Remove(portName);
             }
         }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[OperatorCall] [{operatorName}]   执行异常: {ex.Message}");
+            throw;
+        }
         finally
         {
             // ⑥ 释放算子实例（Mat 等非托管资源）
+            Console.WriteLine($"[OperatorCall] [{operatorName}] 步骤⑥: 释放算子实例");
             op.Dispose();
 
             // ⑦ 清理输入端口的临时变量，避免污染上下文与跨算子串味。
             //    跳过被输出绑定占用为结果变量的名字，避免误删结果。
+            //    同时跳过执行前已存在的变量（可能是上游创建的工作流变量）。
+            Console.WriteLine($"[OperatorCall] [{operatorName}] 步骤⑦: 清理输入端口临时变量");
             foreach (string portName in InputBindings.Keys)
             {
                 if (IsOutputTarget(portName))
+                {
+                    Console.WriteLine(
+                        $"[OperatorCall] [{operatorName}]   跳过清理 '{portName}' (被输出绑定占用)"
+                    );
                     continue;
+                }
+                if (existingPortVars.Contains(portName))
+                {
+                    Console.WriteLine(
+                        $"[OperatorCall] [{operatorName}]   跳过清理 '{portName}' (执行前已存在)"
+                    );
+                    continue;
+                }
                 context.Remove(portName);
+                Console.WriteLine($"[OperatorCall] [{operatorName}]   清理端口变量 '{portName}'");
             }
+
+            Console.WriteLine($"[OperatorCall] ========== 算子调用结束: {operatorName} ==========");
         }
+    }
+
+    private static string FormatValue(object? value)
+    {
+        if (value is null)
+            return "null";
+        if (value is Mat mat)
+            return $"Mat({mat.Rows}x{mat.Cols}, {mat.Channels()}ch, {mat.Type().ToString()})";
+        if (value is PointCloudData cloud)
+            return $"PointCloud({cloud.PointCount} points)";
+        if (value is string str)
+            return $"\"{(str.Length > 100 ? str.Substring(0, 100) + "..." : str)}\"";
+        if (value is double d)
+            return d.ToString("F6");
+        if (value is float f)
+            return f.ToString("F6");
+        return value.ToString() ?? "unknown";
     }
 
     /// <summary>判断某端口名是否被某个输出绑定用作结果变量名（避免清理时误删结果）。</summary>

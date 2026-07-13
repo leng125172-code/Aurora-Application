@@ -399,6 +399,9 @@ public class WorkflowExecutionTriggerResultDto
     /// <summary>结果图下载地址；若本次执行未产生结果图则为空。</summary>
     public string? ResultImageUrl { get; set; }
 
+    /// <summary>结果图片 URL 列表（支持多张图，如俯视图、倾斜视图等）。</summary>
+    public List<string> ResultImageUrls { get; set; } = new();
+
     /// <summary>结果消息；失败时为错误信息。</summary>
     public string? Message { get; set; }
 
