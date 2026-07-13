@@ -1,10 +1,10 @@
 namespace AuroraStruct3D.OpenCV.PointCloudProjection;
 
 /// <summary>
-/// 工作流算子：将带颜色的点云绕 Y 轴旋转指定角度后投影到 2D 图像。
+/// 工作流算子：将带颜色的点云绕 Y 轴和 X 轴旋转后投影到 2D 图像。
 /// <para>
 /// 与 <see cref="colored_point_cloud_to_image"/> 不同，本算子先将点云绕 Y 轴旋转，
-/// 再将旋转后的点云投影到 XY 平面，生成一张带透视效果的倾斜视图。
+/// 再绕 X 轴旋转，然后将旋转后的点云投影到 XY 平面，生成一张带双轴透视效果的倾斜视图。
 /// 常用于辅助展示高度差异（Z 方向的变化在倾斜视角下更直观）。
 /// </para>
 /// <para>
@@ -18,7 +18,7 @@ namespace AuroraStruct3D.OpenCV.PointCloudProjection;
 [Guid("7e3a2b1c-9d4e-4f5a-8b6c-1d2e3f4a5b6c")]
 [Category("3D重建分割")]
 [DisplayName("彩色点云转倾斜视图")]
-[Description("把带颜色的点云绕Y轴旋转指定角度后投影成2D彩色图，用于展示高度差异。")]
+[Description("把带颜色的点云绕Y轴和X轴旋转后投影成2D彩色图，展示双轴透视的高度差异。")]
 public class colored_point_cloud_to_tilted_image : IOperator
 {
     public static List<IVisionParameter>? InputVisionParameters =>
@@ -38,8 +38,17 @@ public class colored_point_cloud_to_tilted_image : IOperator
         {
             new ConfigParameter
             {
-                Name = "tiltAngle",
-                DisplayName = "倾斜角度(度)",
+                Name = "tiltAngleY",
+                DisplayName = "Y轴倾斜角度(度)",
+                ParameterType = typeof(double),
+                DefaultValue = "30",
+                Required = false,
+                ControlType = PortControlType.Input,
+            },
+            new ConfigParameter
+            {
+                Name = "tiltAngleX",
+                DisplayName = "X轴倾斜角度(度)",
                 ParameterType = typeof(double),
                 DefaultValue = "30",
                 Required = false,
@@ -57,21 +66,25 @@ public class colored_point_cloud_to_tilted_image : IOperator
             },
         };
 
-    private readonly double _tiltAngleDeg;
+    private readonly double _tiltAngleYDeg;
+    private readonly double _tiltAngleXDeg;
     private readonly int _imageResolution;
     private bool _disposed;
 
     /// <summary>
     /// 初始化彩色点云转倾斜视图算子。
     /// </summary>
-    /// <param name="tiltAngle">绕 Y 轴旋转的角度（度），正值表示俯视方向倾斜。</param>
+    /// <param name="tiltAngleY">绕 Y 轴旋转的角度（度），正值表示俯视方向倾斜。</param>
+    /// <param name="tiltAngleX">绕 X 轴旋转的角度（度），正值表示右侧下倾。</param>
     /// <param name="imageResolution">输出图像最长边像素数。</param>
     public colored_point_cloud_to_tilted_image(
-        double tiltAngle = 30,
+        double tiltAngleY = 30,
+        double tiltAngleX = 30,
         int imageResolution = 512
     )
     {
-        _tiltAngleDeg = tiltAngle;
+        _tiltAngleYDeg = tiltAngleY;
+        _tiltAngleXDeg = tiltAngleX;
         _imageResolution = imageResolution;
     }
 
@@ -97,10 +110,15 @@ public class colored_point_cloud_to_tilted_image : IOperator
         int pointCount = pointCloud.Rows;
         int res = Math.Max(1, _imageResolution);
 
-        // 绕 Y 轴旋转：x' = x*cosθ + z*sinθ, y' = y, z' = -x*sinθ + z*cosθ
-        double theta = _tiltAngleDeg * Math.PI / 180.0;
-        double cosT = Math.Cos(theta);
-        double sinT = Math.Sin(theta);
+        // 绕 Y 轴旋转：x' = x*cosθy + z*sinθy, y' = y, z' = -x*sinθy + z*cosθy
+        double thetaY = _tiltAngleYDeg * Math.PI / 180.0;
+        double cosTY = Math.Cos(thetaY);
+        double sinTY = Math.Sin(thetaY);
+
+        // 绕 X 轴旋转：x'' = x', y'' = y'*cosθx - z'*sinθx, z'' = y'*sinθx + z'*cosθx
+        double thetaX = _tiltAngleXDeg * Math.PI / 180.0;
+        double cosTX = Math.Cos(thetaX);
+        double sinTX = Math.Sin(thetaX);
 
         // 第一遍：计算旋转后的 XY 范围
         double minX = double.MaxValue;
@@ -118,8 +136,14 @@ public class colored_point_cloud_to_tilted_image : IOperator
             float y = pointCloud.Get<float>(i, 1);
             float z = pointCloud.Get<float>(i, 2);
 
-            float rx = (float)(x * cosT + z * sinT);
-            float ry = y;
+            // 绕 Y 轴
+            float rxY = (float)(x * cosTY + z * sinTY);
+            float rzY = (float)(-x * sinTY + z * cosTY);
+
+            // 绕 X 轴
+            float rx = rxY;
+            float ry = (float)(y * cosTX - rzY * sinTX);
+            // float rz = (float)(y * sinTX + rzY * cosTX); // 不需要 Z 值
 
             rotX[i] = rx;
             rotY[i] = ry;

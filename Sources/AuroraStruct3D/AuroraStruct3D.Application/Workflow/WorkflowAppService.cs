@@ -217,7 +217,7 @@ public class WorkflowAppService : AuroraStruct3DAppService, IWorkflowAppService
     }
 
     /// <inheritdoc/>
-    public async Task<WorkflowOutputConfigDto> SaveOutputConfigAsync(
+    public async Task<WorkflowOutputConfigDto> UpdateOutputConfigAsync(
         Guid id,
         WorkflowOutputConfigDto input
     )

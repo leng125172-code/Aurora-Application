@@ -80,5 +80,5 @@ public interface IWorkflowAppService : IApplicationService
     /// </summary>
     /// <param name="id">工作流 ID。</param>
     /// <param name="input">输出变量配置。</param>
-    Task<WorkflowOutputConfigDto> SaveOutputConfigAsync(Guid id, WorkflowOutputConfigDto input);
+    Task<WorkflowOutputConfigDto> UpdateOutputConfigAsync(Guid id, WorkflowOutputConfigDto input);
 }

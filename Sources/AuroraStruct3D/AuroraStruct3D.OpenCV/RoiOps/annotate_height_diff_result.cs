@@ -1,5 +1,3 @@
-using System.Text.Json;
-
 namespace AuroraStruct3D.OpenCV.RoiOps;
 
 [Guid("1d6498c5-8d95-41ab-8801-c3f8e20d7301")]
@@ -12,13 +10,6 @@ public class annotate_height_diff_result : IOperator
         new()
         {
             new MatImg { ParameterName = "input_mat", DisplayName = "输入图像" },
-            new VisionParameter<string>
-            {
-                ParameterName = "regions_json",
-                ParameterType = typeof(string),
-                DisplayName = "区域数据JSON",
-                ControlType = PortControlType.Variable,
-            },
             new VisionParameter<bool>
             {
                 ParameterName = "is_ok",
@@ -57,24 +48,6 @@ public class annotate_height_diff_result : IOperator
             },
         };
 
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNameCaseInsensitive = true,
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-    };
-
-    private static readonly Scalar[] DefaultColors =
-    {
-        new(255, 180, 0, 255),
-        new(0, 220, 255, 255),
-        new(180, 255, 0, 255),
-        new(255, 80, 200, 255),
-        new(0, 255, 180, 255),
-        new(255, 255, 0, 255),
-        new(200, 80, 255, 255),
-        new(80, 200, 255, 255),
-    };
-
     private readonly string _okText;
     private readonly string _ngText;
     private bool _disposed;
@@ -99,51 +72,11 @@ public class annotate_height_diff_result : IOperator
             throw new InvalidOperationException("输入图像为空，无法绘制结果标注。");
         }
 
-        string? regionsJson = context.Get<string>("regions_json");
-        if (string.IsNullOrWhiteSpace(regionsJson))
-        {
-            throw new InvalidOperationException(
-                "上下文变量 'regions_json' 为空，请确认输入绑定已正确设置。"
-            );
-        }
-
-        List<AnnotateRegion> regions;
-        try
-        {
-            regions =
-                JsonSerializer.Deserialize<List<AnnotateRegion>>(regionsJson, JsonOptions)
-                ?? throw new InvalidOperationException("区域数据JSON反序列化失败。");
-        }
-        catch (JsonException ex)
-        {
-            throw new InvalidOperationException($"区域数据JSON格式错误: {ex.Message}", ex);
-        }
-
-        if (regions.Count == 0)
-        {
-            throw new InvalidOperationException("区域数据列表为空。");
-        }
-
         bool isOk = context.Get<bool>("is_ok");
 
         Mat output = EnsureBgra(inputMat);
 
-        for (int i = 0; i < regions.Count; i++)
-        {
-            var region = regions[i];
-            Scalar color =
-                i < DefaultColors.Length
-                    ? DefaultColors[i]
-                    : new Scalar(
-                        (byte)(255 * Math.Sin(i * 0.7)),
-                        (byte)(255 * Math.Cos(i * 0.5)),
-                        (byte)(255 * Math.Sin(i * 0.3)),
-                        255
-                    );
-
-            DrawRoi(output, region.Roi, color, region.Name);
-        }
-
+        // 仅绘制整体 OK/NG 状态（轮廓和标签由 render_plane_outlines 负责）
         Scalar statusColor = isOk ? new Scalar(80, 200, 120, 255) : new Scalar(60, 60, 255, 255);
         string statusText = isOk ? _okText : _ngText;
         Cv2.PutText(
@@ -183,46 +116,17 @@ public class annotate_height_diff_result : IOperator
         }
     }
 
-    private static void DrawRoi(Mat output, RoiMetadata roi, Scalar color, string label)
-    {
-        Point[] contour = roi
-            .ContourPoints.Select(point => new Point(
-                (int)Math.Round(point.X),
-                (int)Math.Round(point.Y)
-            ))
-            .ToArray();
-
-        Scalar fillColor = new(color.Val0, color.Val1, color.Val2, 80);
-
-        if (contour.Length >= 2)
-        {
-            Cv2.FillPoly(output, new[] { contour }, fillColor);
-            Cv2.Polylines(output, new[] { contour }, true, color, 2);
-        }
-        else
-        {
-            Rect rect = new(
-                (int)Math.Round(roi.BoundingRect.X),
-                (int)Math.Round(roi.BoundingRect.Y),
-                Math.Max(1, (int)Math.Round(roi.BoundingRect.Width)),
-                Math.Max(1, (int)Math.Round(roi.BoundingRect.Height))
-            );
-            Cv2.Rectangle(output, rect, fillColor, -1);
-            Cv2.Rectangle(output, rect, color, 2);
-        }
-
-        Point labelPoint = new(
-            Math.Max(0, (int)Math.Round(roi.BoundingRect.X)),
-            Math.Max(20, (int)Math.Round(roi.BoundingRect.Y) - 8)
-        );
-        Cv2.PutText(output, label, labelPoint, HersheyFonts.HersheySimplex, 0.55, color, 2);
-    }
-
+    /// <summary>
+    /// 用于结果标注的区域数据结构，供其他算子反序列化使用。
+    /// </summary>
     public class AnnotateRegion
     {
         public string Name { get; set; } = string.Empty;
         public double Height { get; set; }
         public RoiMetadata Roi { get; set; } = new();
         public RoiProjectionMapping? ProjectionMapping { get; set; }
+        public double[]? PlaneParams { get; set; }
+        public List<RoiPoint>? OutlinePoints { get; set; }
+        public bool IsSelected { get; set; }
     }
 }

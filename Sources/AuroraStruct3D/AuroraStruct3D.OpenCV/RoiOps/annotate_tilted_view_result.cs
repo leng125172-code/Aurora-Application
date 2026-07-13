@@ -1,11 +1,12 @@
+using System.Text.Json;
+
 namespace AuroraStruct3D.OpenCV.RoiOps;
 
 /// <summary>
 /// 工作流算子：在倾斜视图上绘制 OK/NG 状态标注。
 /// <para>
-/// 与 <see cref="annotate_height_diff_result"/> 不同，本算子不在图像上绘制 ROI 轮廓
-/// （因为 ROI 像素坐标基于俯视图，在倾斜视图上无法直接映射），
-/// 仅绘制 OK/NG 状态文本，用于倾斜视图的结果展示。
+/// 平面轮廓边框和区域名称由 <see cref="render_plane_outlines"/> 负责绘制，
+/// 本算子仅负责在倾斜视图左上角叠加 OK/NG 整体判定状态。
 /// </para>
 /// </summary>
 [Guid("9f4b2c3d-8e5a-4b6c-9d1e-2f3a4b5c6d7e")]
@@ -84,6 +85,7 @@ public class annotate_tilted_view_result : IOperator
 
         Mat output = EnsureBgra(inputMat);
 
+        // 仅绘制整体 OK/NG 状态
         Scalar statusColor = isOk ? new Scalar(80, 200, 120, 255) : new Scalar(60, 60, 255, 255);
         string statusText = isOk ? _okText : _ngText;
         Cv2.PutText(

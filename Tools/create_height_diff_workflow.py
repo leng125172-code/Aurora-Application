@@ -381,6 +381,8 @@ OP_SAVE_IMAGE_BLOB = "4b8af0f5-c0fb-45df-97a6-5ab2462cfd01"
 OP_AGGREGATE_REGIONS = "a8b3c4d5-e6f7-890a-bcde-f01234567890"
 OP_COLORED_CLOUD_TO_TILTED_IMAGE = "7e3a2b1c-9d4e-4f5a-8b6c-1d2e3f4a5b6c"
 OP_ANNOTATE_TILTED_VIEW = "9f4b2c3d-8e5a-4b6c-9d1e-2f3a4b5c6d7e"
+OP_PLANE_HEIGHT_DIFF = "f1a2b3c4-d5e6-7890-abcd-ef0123456789"
+OP_RENDER_PLANE_OUTLINES = "e1f2a3b4-c5d6-7890-abcd-ef0123456789"
 
 
 def new_uuid() -> str:
@@ -646,7 +648,7 @@ COLORS = [
 
 
 def build_graph_data() -> dict:
-    """构建支持动态数量ROI的高度差检测工作流。"""
+    """构建支持动态数量ROI的高度差检测工作流（独立平面拟合 + 平面高度差）。"""
     id_start = new_uuid()
     id_read = new_uuid()
     id_downsample = new_uuid()
@@ -654,12 +656,12 @@ def build_graph_data() -> dict:
     id_colorize = new_uuid()
     id_export_cloud = new_uuid()
     id_preview = new_uuid()
-    id_ransac = new_uuid()
-    id_eval = new_uuid()
     id_aggregate = new_uuid()
     id_annotate = new_uuid()
     id_export_image = new_uuid()
     id_tilted_view = new_uuid()
+    id_render_outlines_top = new_uuid()
+    id_render_outlines_tilted = new_uuid()
     id_annotate_tilted = new_uuid()
     id_export_tilted = new_uuid()
     id_end = new_uuid()
@@ -668,27 +670,32 @@ def build_graph_data() -> dict:
     region_count = len(ROIS_JSON)
 
     roi_nodes = []
-    color_nodes = []
     crop_nodes = []
+    ransac_nodes = []
+    color_nodes = []
     stats_nodes = []
+    plane_diff_nodes = []
 
     base_x = 560 - (region_count - 1) * 160
     for i in range(region_count):
+        idx = i + 1
         color = COLORS[i % len(COLORS)]
         x = base_x + i * 320
 
         id_roi = new_uuid()
-        id_color = new_uuid()
         id_crop = new_uuid()
+        id_ransac = new_uuid()
+        id_color = new_uuid()
         id_stats = new_uuid()
 
+        # ROI 分区
         roi_nodes.append(
             node(
                 id_roi,
                 OP_ROI_PARTITION,
                 x,
                 620,
-                f"ROI {i + 1}",
+                f"ROI {idx}",
                 make_properties(
                     params={"roiJson": ROIS_JSON[i]},
                     param_sources={"roiJson": "literal"},
@@ -701,8 +708,8 @@ def build_graph_data() -> dict:
                         "projection_mapping": "variable",
                     },
                     output_bindings={
-                        "primary_mask": f"roi_{i + 1}_mask",
-                        "roi_metadata": f"roi_{i + 1}_metadata",
+                        "primary_mask": f"roi_{idx}_mask",
+                        "roi_metadata": f"roi_{idx}_metadata",
                     },
                     output_sources={
                         "primary_mask": "variable",
@@ -712,49 +719,14 @@ def build_graph_data() -> dict:
             )
         )
 
-        color_nodes.append(
-            node(
-                id_color,
-                OP_COLORIZE_CLOUD_BY_ROI,
-                x,
-                670,
-                f"区域{i + 1}着色",
-                make_properties(
-                    params={
-                        "colorR": color["r"],
-                        "colorG": color["g"],
-                        "colorB": color["b"],
-                        "blendMode": "replace",
-                    },
-                    param_sources={
-                        "colorR": "literal",
-                        "colorG": "literal",
-                        "colorB": "literal",
-                        "blendMode": "literal",
-                    },
-                    input_bindings={
-                        "input_point_cloud": "colored_segment_cloud",
-                        "roi_mask": f"roi_{i + 1}_mask",
-                        "roi_metadata": f"roi_{i + 1}_metadata",
-                    },
-                    input_sources={
-                        "input_point_cloud": "variable",
-                        "roi_mask": "variable",
-                        "roi_metadata": "variable",
-                    },
-                    output_bindings={"output_point_cloud": "colored_segment_cloud"},
-                    output_sources={"output_point_cloud": "variable"},
-                ),
-            )
-        )
-
+        # 掩膜裁剪
         crop_nodes.append(
             node(
                 id_crop,
                 OP_POINT_CLOUD_CROP,
                 x,
-                770,
-                f"掩膜裁剪{i + 1}",
+                700,
+                f"掩膜裁剪{idx}",
                 make_properties(
                     params={
                         "cropMode": "mask",
@@ -772,38 +744,149 @@ def build_graph_data() -> dict:
                     },
                     input_bindings={
                         "input_point_cloud": "filtered_cloud",
-                        "roi_mask": f"roi_{i + 1}_mask",
-                        "roi_metadata": f"roi_{i + 1}_metadata",
+                        "roi_mask": f"roi_{idx}_mask",
+                        "roi_metadata": f"roi_{idx}_metadata",
                     },
                     input_sources={
                         "input_point_cloud": "variable",
                         "roi_mask": "variable",
                         "roi_metadata": "variable",
                     },
-                    output_bindings={"output_point_cloud": f"region_{i + 1}_cloud"},
+                    output_bindings={"output_point_cloud": f"region_{idx}_cloud"},
                     output_sources={"output_point_cloud": "variable"},
                 ),
             )
         )
 
+        # 独立 RANSAC 平面拟合（每个区域拟合自己的平面）
+        ransac_nodes.append(
+            node(
+                id_ransac,
+                OP_RANSAC_PLANE_FIT,
+                x,
+                780,
+                f"拟合平面{idx}",
+                make_properties(
+                    params=RANSAC_PARAMS,
+                    param_sources={
+                        "distanceThreshold": "literal",
+                        "maxIterations": "literal",
+                        "probability": "literal",
+                        "refinePlane": "literal",
+                        "normalConstraint": "literal",
+                        "seed": "literal",
+                    },
+                    input_bindings={"input_point_cloud": f"region_{idx}_cloud"},
+                    input_sources={"input_point_cloud": "variable"},
+                    output_bindings={
+                        "plane_params": f"plane_{idx}_params",
+                        "inlier_points": f"region_{idx}_inlier_cloud",
+                    },
+                    output_sources={
+                        "plane_params": "variable",
+                        "inlier_points": "variable",
+                    },
+                ),
+            )
+        )
+
+        # 区域着色
+        color_nodes.append(
+            node(
+                id_color,
+                OP_COLORIZE_CLOUD_BY_ROI,
+                x,
+                860,
+                f"区域{idx}着色",
+                make_properties(
+                    params={
+                        "colorR": color["r"],
+                        "colorG": color["g"],
+                        "colorB": color["b"],
+                        "blendMode": "replace",
+                    },
+                    param_sources={
+                        "colorR": "literal",
+                        "colorG": "literal",
+                        "colorB": "literal",
+                        "blendMode": "literal",
+                    },
+                    input_bindings={
+                        "input_point_cloud": "colored_segment_cloud",
+                        "roi_mask": f"roi_{idx}_mask",
+                        "roi_metadata": f"roi_{idx}_metadata",
+                    },
+                    input_sources={
+                        "input_point_cloud": "variable",
+                        "roi_mask": "variable",
+                        "roi_metadata": "variable",
+                    },
+                    output_bindings={"output_point_cloud": "colored_segment_cloud"},
+                    output_sources={"output_point_cloud": "variable"},
+                ),
+            )
+        )
+
+        # 高度统计（保留，用于获取 avg_height 和记录内点云信息）
         stats_nodes.append(
             node(
                 id_stats,
                 OP_Z_CHANNEL_STATS,
                 x,
-                870,
-                f"高度统计{i + 1}",
+                940,
+                f"高度统计{idx}",
                 make_properties(
                     input_bindings={
-                        "input_point_cloud": f"region_{i + 1}_cloud",
-                        "plane_params": "ref_plane",
+                        "input_point_cloud": f"region_{idx}_cloud",
+                        "plane_params": f"plane_{idx}_params",
                     },
                     input_sources={
                         "input_point_cloud": "variable",
                         "plane_params": "variable",
                     },
-                    output_bindings={"avg_height": f"height_{i + 1}"},
+                    output_bindings={"avg_height": f"height_{idx}"},
                     output_sources={"avg_height": "variable"},
+                ),
+            )
+        )
+
+    # 平面高度差节点（B-A、C-A、D-A）
+    diff_region_names = ["B", "C", "D"]
+    for j in range(1, region_count):
+        id_diff = new_uuid()
+        target_idx = j + 1  # 2, 3, 4
+        diff_name = f"{diff_region_names[j - 1]}-A"
+
+        plane_diff_nodes.append(
+            node(
+                id_diff,
+                OP_PLANE_HEIGHT_DIFF,
+                560,
+                980 + j * 80,
+                f"平面高度差({diff_name})",
+                make_properties(
+                    params={"minDiff": THRESHOLD_MIN, "maxDiff": THRESHOLD_MAX},
+                    param_sources={"minDiff": "literal", "maxDiff": "literal"},
+                    input_bindings={
+                        "ref_plane_params": "plane_1_params",
+                        "target_plane_params": f"plane_{target_idx}_params",
+                        "target_cloud": f"region_{target_idx}_cloud",
+                    },
+                    input_sources={
+                        "ref_plane_params": "variable",
+                        "target_plane_params": "variable",
+                        "target_cloud": "variable",
+                    },
+                    output_bindings={
+                        "signed_diff": f"signed_diff_{target_idx}",
+                        "abs_diff": f"abs_diff_{target_idx}",
+                        "is_ok": f"is_ok_{target_idx}",
+                    },
+                    output_sources={
+                        "signed_diff": "variable",
+                        "abs_diff": "variable",
+                        "is_ok": "variable",
+                    },
                 ),
             )
         )
@@ -908,58 +991,17 @@ def build_graph_data() -> dict:
                 },
             ),
         ),
-        node(
-            id_ransac,
-            OP_RANSAC_PLANE_FIT,
-            860,
-            200,
-            "参考平面拟合",
-            make_properties(
-                params=RANSAC_PARAMS,
-                param_sources={
-                    "distanceThreshold": "literal",
-                    "maxIterations": "literal",
-                    "probability": "literal",
-                    "refinePlane": "literal",
-                    "normalConstraint": "literal",
-                    "seed": "literal",
-                },
-                input_bindings={"input_point_cloud": "filtered_cloud"},
-                input_sources={"input_point_cloud": "variable"},
-                output_bindings={"plane_params": "ref_plane"},
-                output_sources={"plane_params": "variable"},
-            ),
-        ),
         *roi_nodes,
-        *color_nodes,
         *crop_nodes,
+        *ransac_nodes,
+        *color_nodes,
         *stats_nodes,
-        node(
-            id_eval,
-            OP_HEIGHT_DIFF_EVAL,
-            560,
-            970,
-            "高度差判定",
-            make_properties(
-                params={"minDiff": THRESHOLD_MIN, "maxDiff": THRESHOLD_MAX},
-                param_sources={"minDiff": "literal", "maxDiff": "literal"},
-                input_bindings={"height_a": "height_1", "height_b": "height_2"},
-                input_sources={"height_a": "variable", "height_b": "variable"},
-                output_bindings={
-                    "signed_diff": "signed_diff",
-                    "is_ok": "is_ok",
-                },
-                output_sources={
-                    "signed_diff": "variable",
-                    "is_ok": "variable",
-                },
-            ),
-        ),
+        *plane_diff_nodes,
         node(
             id_aggregate,
             OP_AGGREGATE_REGIONS,
             560,
-            1050,
+            980 + (region_count - 1) * 80,
             "聚合区域数据",
             make_properties(
                 params={"regionCount": region_count, "referenceRegionIndex": 0},
@@ -970,27 +1012,47 @@ def build_graph_data() -> dict:
                 output_bindings={
                     "regions_json": "regions_json",
                     "result_json": "result_json",
+                    "is_ok": "is_ok",
                 },
-                output_sources={"regions_json": "variable", "result_json": "variable"},
+                output_sources={
+                    "regions_json": "variable",
+                    "result_json": "variable",
+                    "is_ok": "variable",
+                },
+            ),
+        ),
+        node(
+            id_render_outlines_top,
+            OP_RENDER_PLANE_OUTLINES,
+            560,
+            1060 + (region_count - 1) * 80,
+            "平面轮廓渲染(俯视)",
+            make_properties(
+                input_bindings={
+                    "input_mat": "preview_image",
+                    "regions_json": "regions_json",
+                },
+                input_sources={
+                    "input_mat": "variable",
+                    "regions_json": "variable",
+                },
+                output_bindings={"output_mat": "outlined_top_image"},
+                output_sources={"output_mat": "variable"},
             ),
         ),
         node(
             id_annotate,
             OP_ANNOTATE_HEIGHT_DIFF,
             560,
-            1130,
+            1140 + (region_count - 1) * 80,
             "结果图标注",
             make_properties(
-                params={"referenceRegionIndex": 0},
-                param_sources={"referenceRegionIndex": "literal"},
                 input_bindings={
-                    "input_mat": "preview_image",
-                    "regions_json": "regions_json",
+                    "input_mat": "outlined_top_image",
                     "is_ok": "is_ok",
                 },
                 input_sources={
                     "input_mat": "variable",
-                    "regions_json": "variable",
                     "is_ok": "variable",
                 },
                 output_bindings={"output_mat": "annotated_result_image"},
@@ -1001,7 +1063,7 @@ def build_graph_data() -> dict:
             id_export_image,
             OP_SAVE_IMAGE_BLOB,
             560,
-            1210,
+            1220 + (region_count - 1) * 80,
             "结果图存Blob",
             make_properties(
                 params={"fileName": "height-diff-result.png"},
@@ -1016,11 +1078,15 @@ def build_graph_data() -> dict:
             id_tilted_view,
             OP_COLORED_CLOUD_TO_TILTED_IMAGE,
             860,
-            1130,
+            1060 + (region_count - 1) * 80,
             "倾斜视图生成",
             make_properties(
-                params={"tiltAngle": 30, "imageResolution": IMAGE_RESOLUTION},
-                param_sources={"tiltAngle": "literal", "imageResolution": "literal"},
+                params={"tiltAngleY": 30, "tiltAngleX": 30, "imageResolution": IMAGE_RESOLUTION},
+                param_sources={
+                    "tiltAngleY": "literal",
+                    "tiltAngleX": "literal",
+                    "imageResolution": "literal",
+                },
                 input_bindings={"input_point_cloud": "colored_segment_cloud"},
                 input_sources={"input_point_cloud": "variable"},
                 output_bindings={"output_image": "tilted_preview_image"},
@@ -1028,14 +1094,33 @@ def build_graph_data() -> dict:
             ),
         ),
         node(
-            id_annotate_tilted,
-            OP_ANNOTATE_TILTED_VIEW,
+            id_render_outlines_tilted,
+            OP_RENDER_PLANE_OUTLINES,
             860,
-            1210,
-            "倾斜视图标注",
+            1140 + (region_count - 1) * 80,
+            "平面轮廓渲染(倾斜)",
             make_properties(
                 input_bindings={
                     "input_mat": "tilted_preview_image",
+                    "regions_json": "regions_json",
+                },
+                input_sources={
+                    "input_mat": "variable",
+                    "regions_json": "variable",
+                },
+                output_bindings={"output_mat": "outlined_tilted_image"},
+                output_sources={"output_mat": "variable"},
+            ),
+        ),
+        node(
+            id_annotate_tilted,
+            OP_ANNOTATE_TILTED_VIEW,
+            860,
+            1220 + (region_count - 1) * 80,
+            "倾斜视图标注",
+            make_properties(
+                input_bindings={
+                    "input_mat": "outlined_tilted_image",
                     "is_ok": "is_ok",
                 },
                 input_sources={
@@ -1050,7 +1135,7 @@ def build_graph_data() -> dict:
             id_export_tilted,
             OP_SAVE_IMAGE_BLOB,
             860,
-            1290,
+            1300 + (region_count - 1) * 80,
             "倾斜视图存Blob",
             make_properties(
                 params={"fileName": "height-diff-tilted.png"},
@@ -1065,7 +1150,7 @@ def build_graph_data() -> dict:
             id_end,
             "end-node",
             560,
-            1370,
+            1380 + (region_count - 1) * 80,
             "结束",
             make_properties(
                 input_bindings={
@@ -1073,7 +1158,6 @@ def build_graph_data() -> dict:
                     "resultImageUrl": "result_image_download_url",
                     "tiltedImageUrl": "tilted_image_download_url",
                     "resultJson": "result_json",
-                    "signedDiff": "signed_diff",
                     "isOk": "is_ok",
                 },
                 input_sources={
@@ -1081,7 +1165,6 @@ def build_graph_data() -> dict:
                     "resultImageUrl": "variable",
                     "tiltedImageUrl": "variable",
                     "resultJson": "variable",
-                    "signedDiff": "variable",
                     "isOk": "variable",
                 },
             ),
@@ -1095,23 +1178,28 @@ def build_graph_data() -> dict:
         edge(id_denoise, id_colorize),
         edge(id_colorize, id_export_cloud),
         edge(id_colorize, id_preview),
-        edge(id_denoise, id_ransac),
     ]
 
     for i in range(region_count):
         edges.append(edge(id_preview, roi_nodes[i]["id"]))
-        edges.append(edge(roi_nodes[i]["id"], color_nodes[i]["id"]))
         edges.append(edge(roi_nodes[i]["id"], crop_nodes[i]["id"]))
-        edges.append(edge(crop_nodes[i]["id"], stats_nodes[i]["id"]))
-        edges.append(edge(stats_nodes[i]["id"], id_eval))
+        edges.append(edge(crop_nodes[i]["id"], ransac_nodes[i]["id"]))
+        edges.append(edge(ransac_nodes[i]["id"], color_nodes[i]["id"]))
+        edges.append(edge(ransac_nodes[i]["id"], stats_nodes[i]["id"]))
+
+    # plane_height_diff 节点连接到 aggregate
+    for diff_node in plane_diff_nodes:
+        edges.append(edge(diff_node["id"], id_aggregate))
 
     edges.extend(
         [
-            edge(id_eval, id_aggregate),
-            edge(id_aggregate, id_annotate),
+            edge(id_aggregate, id_render_outlines_top),
+            edge(id_render_outlines_top, id_annotate),
             edge(id_annotate, id_export_image),
             edge(id_colorize, id_tilted_view),
-            edge(id_tilted_view, id_annotate_tilted),
+            edge(id_aggregate, id_render_outlines_tilted),
+            edge(id_tilted_view, id_render_outlines_tilted),
+            edge(id_render_outlines_tilted, id_annotate_tilted),
             edge(id_annotate_tilted, id_export_tilted),
             edge(id_export_cloud, id_end),
             edge(id_export_image, id_end),
@@ -1148,11 +1236,23 @@ def create_workflow(project_id: str) -> dict:
             raise RuntimeError("命中已存在工作流但缺少 id，无法更新")
         result = api_put(f"/api/app/workflow/{workflow_id}", payload)
         print(f"      ✓ 命中已有工作流，已更新，ID：{workflow_id}")
+
+        # 配置输出变量：将 result_json 提级到接口返回的 variables 字段
+        output_config = {"workflowId": workflow_id, "outputVariables": ["result_json"]}
+        api_put(f"/api/app/workflow/{workflow_id}/output-config", output_config)
+        print(f"      ✓ 输出变量已配置：result_json")
+
         return result
 
     result = api_post("/api/app/workflow", payload)
     workflow_id = result.get("id")
     print(f"      ✓ 工作流创建成功，ID：{workflow_id}")
+
+    # 配置输出变量：将 result_json 提级到接口返回的 variables 字段
+    output_config = {"workflowId": workflow_id, "outputVariables": ["result_json"]}
+    api_put(f"/api/app/workflow/{workflow_id}/output-config", output_config)
+    print(f"      ✓ 输出变量已配置：result_json")
+
     return result
 
 
