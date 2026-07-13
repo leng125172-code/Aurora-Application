@@ -18,4 +18,19 @@ public class WorkflowDto : FullAuditedEntityDto<Guid>
 
     /// <summary>工作流画布数据 JSON（graphData，原生对象，非转义字符串）。</summary>
     public JsonElement GraphData { get; set; }
+
+    /// <summary>输出变量配置（变量名列表的 JSON 数组）。</summary>
+    public string? OutputVariables { get; set; }
+}
+
+/// <summary>
+/// 工作流输出变量配置 DTO。
+/// </summary>
+public class WorkflowOutputConfigDto
+{
+    /// <summary>工作流 ID。</summary>
+    public Guid WorkflowId { get; set; }
+
+    /// <summary>输出变量名列表。</summary>
+    public List<string> OutputVariables { get; set; } = new();
 }

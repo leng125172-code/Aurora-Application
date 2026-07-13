@@ -207,6 +207,35 @@ public class WorkflowAppService : AuroraStruct3DAppService, IWorkflowAppService
         };
     }
 
+    /// <inheritdoc/>
+    public async Task<WorkflowOutputConfigDto> GetOutputConfigAsync(Guid id)
+    {
+        WorkflowDefinition workflow = await _repository.GetAsync(id);
+
+        List<string> outputVariables = ParseOutputVariablesJson(workflow.OutputVariables);
+        return new WorkflowOutputConfigDto { WorkflowId = id, OutputVariables = outputVariables };
+    }
+
+    /// <inheritdoc/>
+    public async Task<WorkflowOutputConfigDto> SaveOutputConfigAsync(
+        Guid id,
+        WorkflowOutputConfigDto input
+    )
+    {
+        WorkflowDefinition workflow = await _repository.GetAsync(id);
+
+        string outputVariablesJson = SerializeOutputVariables(input.OutputVariables);
+        workflow.UpdateOutputVariables(outputVariablesJson);
+
+        await _repository.UpdateAsync(workflow, autoSave: true);
+
+        return new WorkflowOutputConfigDto
+        {
+            WorkflowId = id,
+            OutputVariables = input.OutputVariables,
+        };
+    }
+
     // ─────────────────────────── 私有辅助 ───────────────────────────
 
     /// <summary>
@@ -638,6 +667,7 @@ public class WorkflowAppService : AuroraStruct3DAppService, IWorkflowAppService
             ProjectId = workflow.ProjectId,
             Name = workflow.Name,
             GraphData = doc.RootElement.Clone(),
+            OutputVariables = workflow.OutputVariables,
             CreationTime = workflow.CreationTime,
             CreatorId = workflow.CreatorId,
             LastModificationTime = workflow.LastModificationTime,
@@ -646,5 +676,27 @@ public class WorkflowAppService : AuroraStruct3DAppService, IWorkflowAppService
             DeletionTime = workflow.DeletionTime,
             DeleterId = workflow.DeleterId,
         };
+    }
+
+    private static List<string> ParseOutputVariablesJson(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return [];
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<List<string>>(json, GraphJson.Options) ?? [];
+        }
+        catch (JsonException)
+        {
+            return [];
+        }
+    }
+
+    private static string SerializeOutputVariables(List<string> outputVariables)
+    {
+        return JsonSerializer.Serialize(outputVariables, GraphJson.Options);
     }
 }

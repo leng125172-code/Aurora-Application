@@ -22,6 +22,9 @@ public class WorkflowDefinition : FullAuditedAggregateRoot<Guid>
     /// <summary>工作流画布数据 JSON（graphData），按原文存储。</summary>
     public string GraphData { get; private set; } = null!;
 
+    /// <summary>输出变量配置 JSON（变量名列表），用于运行时从所有变量中提取目标变量返回给前端。</summary>
+    public string? OutputVariables { get; private set; }
+
     /// <summary>EF Core 所需的无参构造函数（不得直接使用）。</summary>
     protected WorkflowDefinition() { }
 
@@ -58,5 +61,14 @@ public class WorkflowDefinition : FullAuditedAggregateRoot<Guid>
 
         Name = name;
         GraphData = graphData;
+    }
+
+    /// <summary>
+    /// 更新输出变量配置。
+    /// </summary>
+    /// <param name="outputVariablesJson">输出变量名列表的 JSON 字符串。</param>
+    public void UpdateOutputVariables(string? outputVariablesJson)
+    {
+        OutputVariables = outputVariablesJson;
     }
 }

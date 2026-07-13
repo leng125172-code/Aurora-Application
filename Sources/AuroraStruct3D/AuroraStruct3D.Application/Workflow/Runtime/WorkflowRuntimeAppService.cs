@@ -1621,6 +1621,7 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
             ExecutionId = session.ExecutionId,
             ResultImageUrl = ResolveResultImageUrl(session),
             ResultImageUrls = ResolveResultImageUrls(session),
+            Variables = await ResolveOutputVariables(session),
             Status = BuildStatusDto(session, includeVariables: true),
         };
     }
@@ -1655,7 +1656,7 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
         {
             session.MarkFaulted(ex.NodeId, ex.InnerException?.Message ?? ex.Message);
             session.FrozenVariables = session.VariablePool.Snapshot(session.Context);
-            return CreateExecutionTriggerFaultResult(session);
+            return await CreateExecutionTriggerFaultResult(session);
         }
         finally
         {
@@ -1670,6 +1671,7 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
             ExecutionId = session.ExecutionId,
             ResultImageUrl = ResolveResultImageUrl(session),
             ResultImageUrls = ResolveResultImageUrls(session),
+            Variables = await ResolveOutputVariables(session),
             Status = BuildStatusDto(session, includeVariables: true),
         };
     }
@@ -1711,7 +1713,7 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
             {
                 session.MarkFaulted(ex.NodeId, ex.InnerException?.Message ?? ex.Message);
                 session.FrozenVariables = session.VariablePool.Snapshot(session.Context);
-                return CreateLoopExecutionFaultResult(session, i + 1);
+                return await CreateLoopExecutionFaultResult(session, i + 1);
             }
             finally
             {
@@ -1748,6 +1750,7 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
             ExecutionId = resultSession.ExecutionId,
             ResultImageUrl = ResolveResultImageUrl(resultSession),
             ResultImageUrls = ResolveResultImageUrls(resultSession),
+            Variables = await ResolveOutputVariables(resultSession),
             Status = BuildStatusDto(resultSession, includeVariables: true),
         };
     }
@@ -1811,7 +1814,7 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
         };
     }
 
-    private static WorkflowExecutionTriggerResultDto CreateExecutionTriggerFaultResult(
+    private async Task<WorkflowExecutionTriggerResultDto> CreateExecutionTriggerFaultResult(
         WorkflowExecutionSession session
     )
     {
@@ -1825,11 +1828,12 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
             ExecutionId = session.ExecutionId,
             ResultImageUrl = ResolveResultImageUrl(session),
             ResultImageUrls = ResolveResultImageUrls(session),
+            Variables = await ResolveOutputVariables(session),
             Status = BuildStatusDtoStatic(session, includeVariables: true),
         };
     }
 
-    private static WorkflowExecutionTriggerResultDto CreateLoopExecutionFaultResult(
+    private async Task<WorkflowExecutionTriggerResultDto> CreateLoopExecutionFaultResult(
         WorkflowExecutionSession session,
         int loopIndex
     )
@@ -1844,6 +1848,7 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
             ExecutionId = session.ExecutionId,
             ResultImageUrl = ResolveResultImageUrl(session),
             ResultImageUrls = ResolveResultImageUrls(session),
+            Variables = await ResolveOutputVariables(session),
             Status = BuildStatusDtoStatic(session, includeVariables: true),
         };
     }
@@ -2640,6 +2645,46 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
         }
 
         return result;
+    }
+
+    private async Task<List<WorkflowVariableResultDto>> ResolveOutputVariables(
+        WorkflowExecutionSession session
+    )
+    {
+        WorkflowDefinition entity = await _repository.GetAsync(session.WorkflowId);
+        List<string>? outputVariableNames = ParseOutputVariablesJson(entity.OutputVariables);
+
+        if (outputVariableNames == null || outputVariableNames.Count == 0)
+        {
+            return new List<WorkflowVariableResultDto>();
+        }
+
+        List<WorkflowVariableResultDto> allVariables = session.Status
+            is WorkflowExecutionStatus.Completed
+                or WorkflowExecutionStatus.Faulted
+                or WorkflowExecutionStatus.Stopped
+            ? session.FrozenVariables
+            : session.VariablePool.Snapshot(session.Context, session.OutputStagedKeys);
+
+        HashSet<string> targetNames = new(outputVariableNames, StringComparer.Ordinal);
+        return allVariables.Where(v => targetNames.Contains(v.Name)).ToList();
+    }
+
+    private static List<string>? ParseOutputVariablesJson(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return null;
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<List<string>>(json);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 
     private static void CollectResultImageUrlVariables(

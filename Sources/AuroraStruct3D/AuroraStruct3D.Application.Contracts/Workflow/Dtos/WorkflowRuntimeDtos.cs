@@ -408,6 +408,9 @@ public class WorkflowExecutionTriggerResultDto
     /// <summary>执行会话 ID。</summary>
     public Guid ExecutionId { get; set; }
 
+    /// <summary>输出变量列表（由 configure_output 算子配置，与 status 同级）。</summary>
+    public List<WorkflowVariableResultDto> Variables { get; set; } = new();
+
     /// <summary>当前状态。</summary>
     public WorkflowExecutionStatusDto Status { get; set; } = new();
 }

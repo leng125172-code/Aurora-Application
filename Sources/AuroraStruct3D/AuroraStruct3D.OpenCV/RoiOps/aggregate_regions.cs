@@ -87,10 +87,7 @@ public class aggregate_regions : IOperator
         {
             string? metadataJson = context.Get<string>($"roi_{i}_metadata");
             if (string.IsNullOrWhiteSpace(metadataJson))
-            {
-                Console.WriteLine($"[aggregate_regions] roi_{i}_metadata 为空，跳过");
                 continue;
-            }
 
             double height = context.Get<double>($"height_{i}");
 
@@ -99,30 +96,16 @@ public class aggregate_regions : IOperator
             {
                 meta = JsonSerializer.Deserialize<RoiPartitionMetadata>(metadataJson, JsonOptions);
             }
-            catch (JsonException ex)
+            catch (JsonException)
             {
-                Console.WriteLine(
-                    $"[aggregate_regions] roi_{i}_metadata JSON解析失败: {ex.Message}"
-                );
                 continue;
             }
 
             if (meta?.Rois == null || meta.Rois.Count == 0)
-            {
-                Console.WriteLine($"[aggregate_regions] roi_{i}_metadata 中未找到有效的 ROIs");
                 continue;
-            }
 
             var roi = meta.Rois.First();
             var mapping = meta.ProjectionMapping;
-
-            Console.WriteLine($"[aggregate_regions] roi_{i} 解析结果:");
-            Console.WriteLine($"  - roi.Name = '{roi.Name}'");
-            Console.WriteLine($"  - roi.Type = '{roi.Type}'");
-            Console.WriteLine($"  - roi.Index = {roi.Index}");
-            Console.WriteLine(
-                $"  - roi.BoundingRect = ({roi.BoundingRect.X}, {roi.BoundingRect.Y}, {roi.BoundingRect.Width}, {roi.BoundingRect.Height})"
-            );
 
             double centerPx = roi.BoundingRect.X + roi.BoundingRect.Width / 2;
             double centerPy = roi.BoundingRect.Y + roi.BoundingRect.Height / 2;
@@ -140,9 +123,6 @@ public class aggregate_regions : IOperator
             }
 
             string regionName = string.IsNullOrWhiteSpace(roi.Name) ? $"Region_{i}" : roi.Name;
-            Console.WriteLine(
-                $"[aggregate_regions] roi_{i} 使用的区域名称: '{regionName}' (原始 roi.Name 为空? {string.IsNullOrWhiteSpace(roi.Name)})"
-            );
 
             regions.Add(
                 new annotate_height_diff_result.AnnotateRegion
