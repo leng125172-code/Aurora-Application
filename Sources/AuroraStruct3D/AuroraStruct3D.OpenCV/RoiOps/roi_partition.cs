@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -251,9 +252,20 @@ public class roi_partition : IOperator
                 Required = true,
                 ControlType = PortControlType.Input,
             },
+            new ConfigParameter
+            {
+                Name = "partitionStrategy",
+                DisplayName = "分区选择策略",
+                ParameterType = typeof(string),
+                DefaultValue = "center",
+                ValueLimit = new[] { "center", "largest" },
+                Required = false,
+                ControlType = PortControlType.Select,
+            },
         };
 
     private readonly string _roiJson;
+    private readonly string _partitionStrategy;
     private bool _disposed;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -266,9 +278,11 @@ public class roi_partition : IOperator
     /// 初始化 ROI 分区算子。
     /// </summary>
     /// <param name="roiJson">ROI 配置 JSON 字符串，包含 rois 数组。</param>
-    public roi_partition(string roiJson)
+    /// <param name="partitionStrategy">分区选择策略：center（靠近选区中心，默认）或 largest（面积最大）。</param>
+    public roi_partition(string roiJson, string partitionStrategy = "center")
     {
         _roiJson = roiJson;
+        _partitionStrategy = partitionStrategy;
     }
 
     /// <inheritdoc/>
@@ -331,7 +345,14 @@ public class roi_partition : IOperator
 
             roiMasks.Add(mask);
 
-            RoiMetadata meta = ExtractRoiMetadata(mask, roi.Name, roi.Type.ToString(), i);
+            RoiMetadata meta = ExtractRoiMetadata(
+                mask,
+                roi.Name,
+                roi.Type.ToString(),
+                i,
+                imageWidth,
+                imageHeight
+            );
             metadataList.Add(meta);
         }
 
@@ -605,8 +626,16 @@ public class roi_partition : IOperator
     /// <summary>
     /// 提取单个 ROI 掩膜的几何元数据：外接矩形、面积、简化轮廓。
     /// <para>对于旋转矩形 ROI，外接矩形是轴对齐包围盒，会比原始矩形尺寸大，这是正常的。</para>
+    /// <para>根据分区策略选择目标轮廓：center 选离图像中心最近的，largest 选面积最大的。</para>
     /// </summary>
-    private static RoiMetadata ExtractRoiMetadata(Mat mask, string name, string typeName, int index)
+    private RoiMetadata ExtractRoiMetadata(
+        Mat mask,
+        string name,
+        string typeName,
+        int index,
+        int imageWidth,
+        int imageHeight
+    )
     {
         using Mat nonZeroMat = new Mat();
         Cv2.FindNonZero(mask, nonZeroMat);
@@ -640,10 +669,14 @@ public class roi_partition : IOperator
 
             if (contours.Length > 0)
             {
-                Point[] largest = contours.OrderByDescending(c => c.Length).First();
-                foreach (Point pt in largest)
+                Point[] selected =
+                    _partitionStrategy == "largest"
+                        ? SelectLargestContour(contours)
+                        : SelectCenterContour(contours, imageWidth, imageHeight);
+
+                foreach (Point pt in selected)
                     contourPoints.Add(new RoiPoint { X = pt.X, Y = pt.Y });
-                boundingRect = Cv2.BoundingRect(largest);
+                boundingRect = Cv2.BoundingRect(selected);
             }
         }
 
@@ -662,6 +695,33 @@ public class roi_partition : IOperator
             Area = area,
             ContourPoints = contourPoints,
         };
+    }
+
+    /// <summary>按实际面积选择最大的轮廓。</summary>
+    private static Point[] SelectLargestContour(Point[][] contours)
+    {
+        return contours.OrderByDescending(c => Cv2.ContourArea(c)).First();
+    }
+
+    /// <summary>选择离图像中心最近的轮廓，距离相同时选面积大的。</summary>
+    private static Point[] SelectCenterContour(Point[][] contours, int imageWidth, int imageHeight)
+    {
+        double centerX = imageWidth / 2.0;
+        double centerY = imageHeight / 2.0;
+
+        return contours
+            .Select(c =>
+            {
+                Moments m = Cv2.Moments(c);
+                double cx = m.M10 / (m.M00 + 1e-10);
+                double cy = m.M01 / (m.M00 + 1e-10);
+                double dist = (cx - centerX) * (cx - centerX) + (cy - centerY) * (cy - centerY);
+                return (contour: c, dist, area: Cv2.ContourArea(c));
+            })
+            .OrderBy(x => x.dist)
+            .ThenByDescending(x => x.area)
+            .First()
+            .contour;
     }
 
     // ── 校验方法 ────────────────────────────────────────────────────────────────

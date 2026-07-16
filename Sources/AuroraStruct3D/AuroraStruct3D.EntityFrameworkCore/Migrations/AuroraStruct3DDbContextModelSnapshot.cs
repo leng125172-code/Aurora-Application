@@ -830,6 +830,12 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                     b.Property<int?>("ExtrinsicPhase")
                         .HasColumnType("integer");
 
+                    b.Property<double?>("ImageDiffScore")
+                        .HasColumnType("double precision");
+
+                    b.Property<bool?>("ImageDiffSignificant")
+                        .HasColumnType("boolean");
+
                     b.Property<bool>("IsValid")
                         .HasColumnType("boolean");
 
@@ -872,6 +878,9 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
+
+                    b.Property<decimal>("BoardThicknessMm")
+                        .HasColumnType("numeric");
 
                     b.Property<int>("BoardType")
                         .HasColumnType("integer");

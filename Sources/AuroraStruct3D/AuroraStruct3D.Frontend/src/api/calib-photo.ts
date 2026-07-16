@@ -29,6 +29,8 @@ export enum StereoPhotoRole {
 export enum ExtrinsicPhotoPhase {
     ProjectorOff = 0,
     ProjectorOn = 1,
+    WhiteScreen = 2,
+    Checkerboard = 3,
 }
 
 /** 标定板类型（与后端 CalibrationBoardType 对齐） */
@@ -52,6 +54,8 @@ export interface CalibPhotoDto {
     pairGroupId: string | null
     stereoRole: StereoPhotoRole | null
     extrinsicPhase: ExtrinsicPhotoPhase | null
+    imageDiffScore: number | null
+    imageDiffSignificant: boolean | null
 }
 
 /** 单组投影外参双拍样本 */
@@ -71,6 +75,7 @@ export interface CalibBoardConfigDto {
     projectedCornerRows: number
     projectedCornerCols: number
     projectedPixelSize: number
+    boardThicknessMm: number
     circleBoardConfig: CircleBoardConfigDto | null
 }
 
@@ -114,6 +119,7 @@ export interface UpdateBoardConfigInput {
     projectedCornerRows: number
     projectedCornerCols: number
     projectedPixelSize: number
+    boardThicknessMm: number
     circleBoardConfig?: CircleBoardConfigDto | null
 }
 
@@ -192,6 +198,8 @@ export interface CalibCameraStatusDto {
     intrinsicValid: number
     extrinsicTotal: number
     extrinsicValid: number
+    stereoTotal: number
+    stereoValid: number
     latestResult: CalibComputeResultDto | null
 }
 
@@ -273,6 +281,34 @@ export async function takeExtrinsicPhoto(
     timeout = 30000,
 ): Promise<CalibExtrinsicSampleDto> {
     const res = await httpClient.post<CalibExtrinsicSampleDto>(`${BASE}/take-extrinsic-photo`, input, {
+        timeout,
+    })
+    return res.data
+}
+
+/**
+ * 外参圆点拍照：投影仪切换到 S1 白屏模式，拍摄圆点标定板。
+ * 返回新建的照片记录（含缩略图），用于后续与棋盘格照片配对。
+ */
+export async function takeExtrinsicDotPhoto(
+    input: TakeExtrinsicPhotoInput,
+    timeout = 30000,
+): Promise<CalibPhotoDto> {
+    const res = await httpClient.post<CalibPhotoDto>(`${BASE}/take-extrinsic-dot-photo`, input, {
+        timeout,
+    })
+    return res.data
+}
+
+/**
+ * 外参棋盘格拍照：投影仪切换到 S3 棋盘格模式，拍摄纯棋盘格（需先移除标定板）。
+ * 返回新建的照片记录（含缩略图），与之前拍摄的圆点照片配对为一组外参样本。
+ */
+export async function takeExtrinsicCheckerboardPhoto(
+    input: TakeExtrinsicPhotoInput,
+    timeout = 30000,
+): Promise<CalibPhotoDto> {
+    const res = await httpClient.post<CalibPhotoDto>(`${BASE}/take-extrinsic-checkerboard-photo`, input, {
         timeout,
     })
     return res.data
@@ -399,9 +435,9 @@ export async function computeStereoCalibration(
     timeout = 120000,
 ): Promise<CalibStereoComputeResultDto> {
     const res = await httpClient.post<CalibStereoComputeResultDto>(
-        `${BASE}/compute-stereo-calibration`,
+        `${BASE}/compute-stereo-calibration/${calibProjectId}`,
         null,
-        { params: { calibProjectId }, timeout },
+        { timeout },
     )
     return res.data
 }
@@ -425,50 +461,5 @@ export async function validateStep5(calibProjectId: string): Promise<boolean> {
     const res = await httpClient.get<boolean>(`${BASE}/validate-step5`, {
         params: { calibProjectId },
     })
-    return res.data
-}
-
-// ─── 相机自动对齐 ─────────────────────────────────────────────────────────────
-
-/** 单台相机的自动对齐结果 */
-export interface CameraAlignCameraResult {
-    readonly cameraDeviceId: string
-    readonly cameraRole: string
-    readonly skipped: boolean
-    /** 十字架中心相对图像中心的 X 偏差（像素） */
-    readonly crossOffsetXPixels: number | null
-    /** 十字架中心相对图像中心的 Y 偏差（像素） */
-    readonly crossOffsetYPixels: number | null
-    /** 对齐前角度（°） */
-    readonly angleBeforeDeg: number | null
-    /** 对齐后角度（°） */
-    readonly angleAfterDeg: number | null
-    /** 本次调整量（°） */
-    readonly adjustedAngleDeg: number | null
-    readonly isAligned: boolean
-    readonly message: string | null
-}
-
-/** 相机自动对齐整体结果 */
-export interface AutoAlignCamerasResultDto {
-    readonly mainCamera: CameraAlignCameraResult | null
-    readonly secondaryCamera: CameraAlignCameraResult | null
-    readonly success: boolean
-    readonly message: string
-}
-
-/**
- * 相机自动对齐：投影十字架 → 左右相机拍照 → 检测偏差 → 调整电机。
- * POST /api/app/calib-photo/auto-align-cameras?calibProjectId={id}
- */
-export async function autoAlignCameras(
-    calibProjectId: string,
-    timeout = 60000,
-): Promise<AutoAlignCamerasResultDto> {
-    const res = await httpClient.post<AutoAlignCamerasResultDto>(
-        `${BASE}/${calibProjectId}/auto-align-cameras`,
-        null,
-        { timeout },
-    )
     return res.data
 }

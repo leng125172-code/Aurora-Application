@@ -2766,7 +2766,39 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
             : session.VariablePool.Snapshot(session.Context, session.OutputStagedKeys);
 
         HashSet<string> targetNames = new(outputVariableNames, StringComparer.Ordinal);
-        return allVariables.Where(v => targetNames.Contains(v.Name)).ToList();
+        List<WorkflowVariableResultDto> result = new();
+
+        foreach (WorkflowVariableResultDto variable in allVariables)
+        {
+            if (!targetNames.Contains(variable.Name))
+            {
+                continue;
+            }
+
+            if (
+                variable.Name.StartsWith("abs_diff_", StringComparison.Ordinal)
+                && variable.ScalarValue != null
+            )
+            {
+                try
+                {
+                    JsonNode? jsonNode = JsonNode.Parse(variable.ScalarValue);
+                    if (jsonNode != null && jsonNode is JsonObject jsonObj)
+                    {
+                        string? targetRegion = jsonObj["targetRegion"]?.GetValue<string>();
+                        if (!string.IsNullOrWhiteSpace(targetRegion))
+                        {
+                            variable.DisplayName = targetRegion;
+                        }
+                    }
+                }
+                catch (JsonException) { }
+            }
+
+            result.Add(variable);
+        }
+
+        return result;
     }
 
     private static List<string>? ParseOutputVariablesJson(string? json)

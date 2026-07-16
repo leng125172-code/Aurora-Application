@@ -7,7 +7,7 @@ using Volo.Abp.EntityFrameworkCore;
 namespace AuroraStruct3D.Projectors;
 
 /// <summary>
-/// DLP 投影机操作日志 EFCore 仓储实现
+/// DLP 投影仪操作日志 EFCore 仓储实现
 /// </summary>
 public class EfCoreProjectorOperationLogRepository
     : EfCoreRepository<AuroraStruct3DDbContext, ProjectorOperationLog, Guid>,

@@ -326,10 +326,11 @@ public class ransac_plane_fit : IOperator
     )
     {
         int n = inliers.Count;
+
+        // 计算质心
         double cx = 0,
             cy = 0,
             cz = 0;
-
         foreach (int idx in inliers)
         {
             cx += pointCloud.Get<float>(idx, 0);
@@ -340,42 +341,39 @@ public class ransac_plane_fit : IOperator
         cy /= n;
         cz /= n;
 
-        double[,] centered = new double[n, 3];
-        for (int i = 0; i < n; i++)
+        // 构建中心化协方差矩阵（累加）
+        double s00 = 0,
+            s01 = 0,
+            s02 = 0;
+        double s11 = 0,
+            s12 = 0;
+        double s22 = 0;
+        foreach (int idx in inliers)
         {
-            int idx = inliers[i];
-            centered[i, 0] = pointCloud.Get<float>(idx, 0) - cx;
-            centered[i, 1] = pointCloud.Get<float>(idx, 1) - cy;
-            centered[i, 2] = pointCloud.Get<float>(idx, 2) - cz;
+            double dx = pointCloud.Get<float>(idx, 0) - cx;
+            double dy = pointCloud.Get<float>(idx, 1) - cy;
+            double dz = pointCloud.Get<float>(idx, 2) - cz;
+            s00 += dx * dx;
+            s01 += dx * dy;
+            s02 += dx * dz;
+            s11 += dy * dy;
+            s12 += dy * dz;
+            s22 += dz * dz;
         }
 
-        double[,] cov = new double[3, 3];
-        for (int i = 0; i < n; i++)
-        {
-            for (int j = 0; j < 3; j++)
-            for (int k = 0; k < 3; k++)
-                cov[j, k] += centered[i, j] * centered[i, k];
-        }
+        // 使用 Jacobi SVD 精确求解平面法向量（除以点数得到真正的协方差）
+        double[] refined = Math3D.SolvePlaneByCovariance(
+            s00 / n,
+            s01 / n,
+            s02 / n,
+            s11 / n,
+            s12 / n,
+            s22 / n,
+            cx,
+            cy,
+            cz
+        );
 
-        double a = cov[0, 1] * cov[1, 2] * 2 - cov[0, 2] * cov[1, 1];
-        double b = cov[0, 2] * cov[0, 1] * 2 - cov[0, 0] * cov[1, 2];
-        double c = cov[0, 0] * cov[1, 1] - cov[0, 1] * cov[0, 1];
-
-        double norm = Math.Sqrt(a * a + b * b + c * c);
-        if (norm < 1e-10)
-        {
-            a = 0;
-            b = 0;
-            c = 1;
-            norm = 1;
-        }
-
-        a /= norm;
-        b /= norm;
-        c /= norm;
-        double d = -(a * cx + b * cy + c * cz);
-
-        double[] refined = new[] { a, b, c, d };
         return ApplyNormalConstraint(refined, normalConstraint);
     }
 

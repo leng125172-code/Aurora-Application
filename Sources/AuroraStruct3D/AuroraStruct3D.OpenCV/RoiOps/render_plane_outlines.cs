@@ -1,16 +1,10 @@
 using System.Globalization;
+using System.Linq;
 using System.Text.Json;
+using OpenCvSharp;
 
 namespace AuroraStruct3D.OpenCV.RoiOps;
 
-/// <summary>
-/// 工作流算子：平面轮廓渲染。
-/// <para>
-/// 从区域数据 JSON 中读取每个区域的平面轮廓点（OutlinePoints），
-/// 在输入图像上绘制轮廓边框线，区分选中/未选中平面。
-/// 选中平面使用高亮颜色 + 粗线条，未选中平面使用对应颜色 + 细线条。
-/// </para>
-/// </summary>
 [Guid("e1f2a3b4-c5d6-7890-abcd-ef0123456789")]
 [Category("2D预处理")]
 [DisplayName("平面轮廓渲染")]
@@ -21,13 +15,7 @@ public class render_plane_outlines : IOperator
         new()
         {
             new MatImg { ParameterName = "input_mat", DisplayName = "输入图像" },
-            new VisionParameter<string>
-            {
-                ParameterName = "regions_json",
-                ParameterType = typeof(string),
-                DisplayName = "区域数据JSON",
-                ControlType = PortControlType.Variable,
-            },
+            new PointCloudData { ParameterName = "input_point_cloud", DisplayName = "输入点云" },
         };
 
     public static List<IVisionParameter>? OutputVisionParameters =>
@@ -39,6 +27,24 @@ public class render_plane_outlines : IOperator
     public static List<IConfigParameter>? ConfigParameters =>
         new()
         {
+            new ConfigParameter
+            {
+                Name = "regionCount",
+                DisplayName = "区域数量",
+                ParameterType = typeof(int),
+                DefaultValue = "4",
+                Required = false,
+                ControlType = PortControlType.Input,
+            },
+            new ConfigParameter
+            {
+                Name = "referenceRegionIndex",
+                DisplayName = "基准区域索引",
+                ParameterType = typeof(int),
+                DefaultValue = "0",
+                Required = false,
+                ControlType = PortControlType.Input,
+            },
             new ConfigParameter
             {
                 Name = "outlineThickness",
@@ -66,6 +72,43 @@ public class render_plane_outlines : IOperator
                 Required = false,
                 ControlType = PortControlType.Input,
             },
+            new ConfigParameter
+            {
+                Name = "viewType",
+                DisplayName = "视图类型",
+                ParameterType = typeof(string),
+                DefaultValue = "top",
+                ValueLimit = new[] { "top", "tilted" },
+                Required = false,
+                ControlType = PortControlType.Select,
+            },
+            new ConfigParameter
+            {
+                Name = "tiltAngleY",
+                DisplayName = "Y轴倾斜角度(度)",
+                ParameterType = typeof(double),
+                DefaultValue = "30",
+                Required = false,
+                ControlType = PortControlType.Input,
+            },
+            new ConfigParameter
+            {
+                Name = "tiltAngleX",
+                DisplayName = "X轴倾斜角度(度)",
+                ParameterType = typeof(double),
+                DefaultValue = "30",
+                Required = false,
+                ControlType = PortControlType.Input,
+            },
+            new ConfigParameter
+            {
+                Name = "tiltAngleZ",
+                DisplayName = "Z轴倾斜角度(度)",
+                ParameterType = typeof(double),
+                DefaultValue = "0",
+                Required = false,
+                ControlType = PortControlType.Input,
+            },
         };
 
     private static readonly Scalar[] DefaultColors =
@@ -86,20 +129,38 @@ public class render_plane_outlines : IOperator
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
     };
 
+    private readonly int _regionCount;
+    private readonly int _referenceRegionIndex;
     private readonly int _outlineThickness;
     private readonly int _highlightThickness;
     private readonly Scalar _highlightColor;
+    private readonly string _viewType;
+    private readonly double _tiltAngleYDeg;
+    private readonly double _tiltAngleXDeg;
+    private readonly double _tiltAngleZDeg;
     private bool _disposed;
 
     public render_plane_outlines(
+        int regionCount = 4,
+        int referenceRegionIndex = 0,
         int outlineThickness = 2,
         int highlightThickness = 3,
-        string highlightColor = "#00FF00"
+        string highlightColor = "#00FF00",
+        string viewType = "top",
+        double tiltAngleY = 30,
+        double tiltAngleX = 30,
+        double tiltAngleZ = 0
     )
     {
+        _regionCount = regionCount;
+        _referenceRegionIndex = referenceRegionIndex;
         _outlineThickness = Math.Max(1, outlineThickness);
         _highlightThickness = Math.Max(1, highlightThickness);
         _highlightColor = ParseHexColor(highlightColor);
+        _viewType = viewType;
+        _tiltAngleYDeg = tiltAngleY;
+        _tiltAngleXDeg = tiltAngleX;
+        _tiltAngleZDeg = tiltAngleZ;
     }
 
     public void Execute(IWorkflowContext context)
@@ -116,77 +177,146 @@ public class render_plane_outlines : IOperator
             throw new InvalidOperationException("输入图像为空，无法渲染平面轮廓。");
         }
 
-        string? regionsJson = context.Get<string>("regions_json");
-        if (string.IsNullOrWhiteSpace(regionsJson))
+        Mat output = EnsureBgra(inputMat);
+        int imageWidth = output.Width;
+        int imageHeight = output.Height;
+
+        PointCloudData? fullPointCloud = null;
+        if (_viewType == "tilted")
         {
-            throw new InvalidOperationException(
-                "上下文变量 'regions_json' 为空，请确认输入绑定已正确设置。"
-            );
+            fullPointCloud = context.Get<PointCloudData>("input_point_cloud");
         }
 
-        List<annotate_height_diff_result.AnnotateRegion> regions;
-        try
+        var regions = new List<RegionInfo>();
+        for (int i = 1; i <= _regionCount; i++)
         {
-            regions =
-                JsonSerializer.Deserialize<List<annotate_height_diff_result.AnnotateRegion>>(
-                    regionsJson,
-                    JsonOptions
-                ) ?? throw new InvalidOperationException("区域数据JSON反序列化失败。");
-        }
-        catch (JsonException ex)
-        {
-            throw new InvalidOperationException($"区域数据JSON格式错误: {ex.Message}", ex);
+            string? metadataJson = context.Get<string>($"roi_{i}_metadata");
+            if (string.IsNullOrWhiteSpace(metadataJson))
+                continue;
+
+            RoiPartitionMetadata? meta = null;
+            try
+            {
+                meta = JsonSerializer.Deserialize<RoiPartitionMetadata>(metadataJson, JsonOptions);
+            }
+            catch (JsonException)
+            {
+                continue;
+            }
+
+            if (meta?.Rois == null || meta.Rois.Count == 0)
+                continue;
+
+            var roi = meta.Rois.First();
+            var mapping = meta.ProjectionMapping;
+
+            string regionName = string.IsNullOrWhiteSpace(roi.Name) ? $"Region_{i}" : roi.Name;
+            bool isSelected = (i == _referenceRegionIndex + 1);
+
+            PointCloudData? inlierCloud = context.Get<PointCloudData>($"region_{i}_inlier_cloud");
+            Mat? planeParams = context.Get<Mat>($"plane_{i}_params");
+
+            regions.Add(
+                new RegionInfo
+                {
+                    Name = regionName,
+                    Roi = roi,
+                    ProjectionMapping = mapping,
+                    InlierCloud = inlierCloud,
+                    IsSelected = isSelected,
+                    PlaneParams = planeParams,
+                }
+            );
         }
 
         if (regions.Count == 0)
         {
-            throw new InvalidOperationException("区域数据列表为空。");
+            throw new InvalidOperationException("未找到有效的区域数据。");
         }
 
-        Mat output = EnsureBgra(inputMat);
+        // 第一步：收集所有区域的内点 Z 值，计算全局 Z 范围，用于 Jet 色彩映射
+        double overallMinZ = double.MaxValue;
+        double overallMaxZ = double.MinValue;
+        foreach (var region in regions)
+        {
+            if (region.InlierCloud?.PointCloud is null)
+                continue;
+            Mat cloud = region.InlierCloud.PointCloud;
+            int cloudRows = cloud.Rows;
+            for (int r = 0; r < cloudRows; r++)
+            {
+                float z = cloud.Get<float>(r, 2);
+                if (z < overallMinZ)
+                    overallMinZ = z;
+                if (z > overallMaxZ)
+                    overallMaxZ = z;
+            }
+        }
+        if (overallMaxZ <= overallMinZ)
+            overallMaxZ = overallMinZ + 1d;
 
+        // 第二步：计算每个区域的轮廓点
+        var regionOutlines = new List<(RegionInfo region, int index, Point[] outlinePoints)>();
         for (int i = 0; i < regions.Count; i++)
         {
             var region = regions[i];
+            Point[] outlinePoints =
+                _viewType == "tilted" && fullPointCloud?.PointCloud is not null
+                    ? ComputeTiltedViewOutline(
+                        region,
+                        fullPointCloud.PointCloud,
+                        imageWidth,
+                        imageHeight
+                    )
+                    : ComputeTopViewOutline(region, imageWidth, imageHeight);
 
-            if (region.OutlinePoints is not { Count: >= 3 })
+            if (outlinePoints.Length < 3)
                 continue;
 
-            Scalar baseColor =
-                i < DefaultColors.Length
-                    ? DefaultColors[i]
-                    : new Scalar(
-                        (byte)(255 * Math.Sin(i * 0.7)),
-                        (byte)(255 * Math.Cos(i * 0.5)),
-                        (byte)(255 * Math.Sin(i * 0.3)),
-                        255
-                    );
+            regionOutlines.Add((region, i, outlinePoints));
+        }
 
-            Scalar drawColor = region.IsSelected ? _highlightColor : baseColor;
-            int thickness = region.IsSelected ? _highlightThickness : _outlineThickness;
-
-            Point[] outlinePoints = region
-                .OutlinePoints.Select(point => new Point(
-                    (int)Math.Round(point.X),
-                    (int)Math.Round(point.Y)
-                ))
-                .ToArray();
-
-            Cv2.Polylines(output, new[] { outlinePoints }, true, drawColor, thickness);
-
-            // 在轮廓上方标注区域名称
-            if (outlinePoints.Length > 0)
+        // 第三步：先渲染所有平面表面（填充），再画轮廓线，保证轮廓线在最上层可见
+        // 斜视图不叠加平面选区，仅俯视图绘制
+        if (_viewType != "tilted")
+        {
+            foreach (var (region, i, outlinePoints) in regionOutlines)
             {
-                Point labelPoint = new(
-                    outlinePoints[0].X,
-                    Math.Max(20, outlinePoints[0].Y - 8)
-                );
+                Scalar fillColor = ComputePlaneFillColor(region, overallMinZ, overallMaxZ);
+
+                using Mat roiMask = Mat.Zeros(imageHeight, imageWidth, MatType.CV_8UC1);
+                Cv2.FillPoly(roiMask, new[] { outlinePoints }, Scalar.White);
+
+                using Mat overlay = output.Clone();
+                overlay.SetTo(fillColor, roiMask);
+                Cv2.AddWeighted(overlay, 0.55, output, 0.45, 0, output);
+            }
+
+            // 第四步：画轮廓线和标签
+            foreach (var (region, i, outlinePoints) in regionOutlines)
+            {
+                Scalar baseColor =
+                    i < DefaultColors.Length
+                        ? DefaultColors[i]
+                        : new Scalar(
+                            (byte)(255 * Math.Sin(i * 0.7)),
+                            (byte)(255 * Math.Cos(i * 0.5)),
+                            (byte)(255 * Math.Sin(i * 0.3)),
+                            255
+                        );
+
+                Scalar drawColor = region.IsSelected ? _highlightColor : baseColor;
+                int thickness = region.IsSelected ? _highlightThickness : _outlineThickness;
+
+                Cv2.Polylines(output, new[] { outlinePoints }, true, drawColor, thickness);
+
+                Point labelPoint = new(outlinePoints[0].X, Math.Max(20, outlinePoints[0].Y - 8));
                 Cv2.PutText(
                     output,
                     region.Name,
                     labelPoint,
                     HersheyFonts.HersheySimplex,
-                    0.55,
+                    0.45,
                     drawColor,
                     2
                 );
@@ -194,6 +324,202 @@ public class render_plane_outlines : IOperator
         }
 
         context.Set("output_mat", output);
+    }
+
+    /// <summary>
+    /// 使用 ROI 的实际轮廓点（ContourPoints）生成俯视图轮廓。
+    /// 轮廓点来自原始掩膜图像，按比例缩放到输出图像坐标系。
+    /// </summary>
+    private static Point[] ComputeTopViewOutline(RegionInfo region, int imageWidth, int imageHeight)
+    {
+        if (region.ProjectionMapping is null)
+            return Array.Empty<Point>();
+
+        var contourPoints = region.Roi.ContourPoints;
+        if (contourPoints is null || contourPoints.Count < 3)
+            return Array.Empty<Point>();
+
+        var mapping = region.ProjectionMapping;
+        double scaleX = (double)imageWidth / mapping.ImageWidth;
+        double scaleY = (double)imageHeight / mapping.ImageHeight;
+
+        return contourPoints
+            .Select(p => new Point((int)Math.Round(p.X * scaleX), (int)Math.Round(p.Y * scaleY)))
+            .ToArray();
+    }
+
+    /// <summary>
+    /// 根据拟合平面的 Z 高度，通过 Jet 色彩映射计算平面填充色。
+    /// 使用平面参数 [a,b,c,d] 计算 ROI 中心点的 Z 值，确保代表真正的拟合平面而非内点噪声。
+    /// </summary>
+    private static Scalar ComputePlaneFillColor(
+        RegionInfo region,
+        double overallMinZ,
+        double overallMaxZ
+    )
+    {
+        double zCenter;
+
+        if (
+            region.PlaneParams is not null
+            && region.PlaneParams.Rows == 1
+            && region.PlaneParams.Cols == 4
+            && region.ProjectionMapping is not null
+        )
+        {
+            float a = region.PlaneParams.Get<float>(0, 0);
+            float b = region.PlaneParams.Get<float>(0, 1);
+            float c = region.PlaneParams.Get<float>(0, 2);
+            float d = region.PlaneParams.Get<float>(0, 3);
+
+            if (Math.Abs(c) < 1e-9f)
+            {
+                // 平面垂直于 XY 平面（c≈0），用内点平均 Z 作为回退
+                zCenter = ComputeAverageZ(region.InlierCloud);
+            }
+            else
+            {
+                var mapping = region.ProjectionMapping;
+                double centerX = (mapping.WorldMinX + mapping.WorldMaxX) / 2.0;
+                double centerY = (mapping.WorldMinY + mapping.WorldMaxY) / 2.0;
+                zCenter = -(a * centerX + b * centerY + d) / (double)c;
+            }
+        }
+        else
+        {
+            zCenter = ComputeAverageZ(region.InlierCloud);
+        }
+
+        double range = overallMaxZ - overallMinZ;
+        double ratio = (zCenter - overallMinZ) / range;
+        ratio = Math.Clamp(ratio, 0d, 1d);
+
+        using Mat normalized = new Mat(1, 1, MatType.CV_8UC1, Scalar.All((byte)(ratio * 255)));
+        using Mat colorized = new();
+        Cv2.ApplyColorMap(normalized, colorized, ColormapTypes.Jet);
+        Vec3b color = colorized.Get<Vec3b>(0, 0);
+
+        return new Scalar(color.Item0, color.Item1, color.Item2, 180);
+    }
+
+    /// <summary>计算内点云的 Z 坐标平均值。</summary>
+    private static double ComputeAverageZ(PointCloudData? inlierCloud)
+    {
+        if (inlierCloud?.PointCloud is null || inlierCloud.PointCloud.Empty())
+            return 0d;
+
+        Mat cloud = inlierCloud.PointCloud;
+        int count = cloud.Rows;
+        if (count == 0)
+            return 0d;
+
+        double sum = 0;
+        for (int i = 0; i < count; i++)
+            sum += cloud.Get<float>(i, 2);
+
+        return sum / count;
+    }
+
+    private Point[] ComputeTiltedViewOutline(
+        RegionInfo region,
+        Mat pointCloud,
+        int imageWidth,
+        int imageHeight
+    )
+    {
+        if (region.ProjectionMapping is null)
+            return Array.Empty<Point>();
+
+        var mapping = region.ProjectionMapping;
+        int pointCount = pointCloud.Rows;
+
+        double thetaY = _tiltAngleYDeg * Math.PI / 180.0;
+        double cosTY = Math.Cos(thetaY);
+        double sinTY = Math.Sin(thetaY);
+
+        double thetaX = _tiltAngleXDeg * Math.PI / 180.0;
+        double cosTX = Math.Cos(thetaX);
+        double sinTX = Math.Sin(thetaX);
+
+        double thetaZ = _tiltAngleZDeg * Math.PI / 180.0;
+        double cosTZ = Math.Cos(thetaZ);
+        double sinTZ = Math.Sin(thetaZ);
+
+        double worldMinX = mapping.WorldMinX;
+        double worldMaxX = mapping.WorldMaxX;
+        double worldMinY = mapping.WorldMinY;
+        double worldMaxY = mapping.WorldMaxY;
+        double rangeX = worldMaxX - worldMinX;
+        double rangeY = worldMaxY - worldMinY;
+
+        if (Math.Abs(rangeX) < 1e-6 || Math.Abs(rangeY) < 1e-6)
+            return Array.Empty<Point>();
+
+        var pixelPoints = new List<Point>();
+
+        for (int i = 0; i < pointCount; i++)
+        {
+            float x = pointCloud.Get<float>(i, 0);
+            float y = pointCloud.Get<float>(i, 1);
+
+            if (!IsPointInRoi(x, y, region, mapping))
+                continue;
+
+            float z = pointCloud.Get<float>(i, 2);
+
+            float rxY = (float)(x * cosTY + z * sinTY);
+            float rzY = (float)(-x * sinTY + z * cosTY);
+
+            float rxX = rxY;
+            float ryX = (float)(y * cosTX - rzY * sinTX);
+            float rzX = (float)(y * sinTX + rzY * cosTX);
+
+            float rx = (float)(rxX * cosTZ - ryX * sinTZ);
+            float ry = (float)(rxX * sinTZ + ryX * cosTZ);
+
+            int px = (int)((rx - worldMinX) / rangeX * (imageWidth - 1));
+            int py = (int)((ry - worldMinY) / rangeY * (imageHeight - 1));
+            px = Math.Clamp(px, 0, imageWidth - 1);
+            py = Math.Clamp(py, 0, imageHeight - 1);
+            pixelPoints.Add(new Point(px, py));
+        }
+
+        if (pixelPoints.Count < 3)
+            return Array.Empty<Point>();
+
+        Point[] hull = Cv2.ConvexHull(pixelPoints.ToArray());
+        return hull;
+    }
+
+    private static bool IsPointInRoi(
+        float worldX,
+        float worldY,
+        RegionInfo region,
+        RoiProjectionMapping mapping
+    )
+    {
+        double worldMinX = mapping.WorldMinX;
+        double worldMaxX = mapping.WorldMaxX;
+        double worldMinY = mapping.WorldMinY;
+        double worldMaxY = mapping.WorldMaxY;
+
+        if (worldX < worldMinX || worldX > worldMaxX || worldY < worldMinY || worldY > worldMaxY)
+            return false;
+
+        double worldRangeX = worldMaxX - worldMinX;
+        double worldRangeY = worldMaxY - worldMinY;
+
+        int px = (int)((worldX - worldMinX) / worldRangeX * (mapping.ImageWidth - 1));
+        int py = (int)((worldY - worldMinY) / worldRangeY * (mapping.ImageHeight - 1));
+
+        px = Math.Clamp(px, 0, mapping.ImageWidth - 1);
+        py = Math.Clamp(py, 0, mapping.ImageHeight - 1);
+
+        var boundingRect = region.Roi.BoundingRect;
+        return px >= boundingRect.X
+            && px <= boundingRect.X + boundingRect.Width
+            && py >= boundingRect.Y
+            && py <= boundingRect.Y + boundingRect.Height;
     }
 
     public void Dispose()
@@ -204,9 +530,6 @@ public class render_plane_outlines : IOperator
         GC.SuppressFinalize(this);
     }
 
-    /// <summary>
-    /// 解析十六进制颜色字符串（如 "#00FF00"）为 OpenCV Scalar（BGR）。
-    /// </summary>
     private static Scalar ParseHexColor(string hex)
     {
         hex = hex.TrimStart('#');
@@ -221,17 +544,47 @@ public class render_plane_outlines : IOperator
 
     private static Mat EnsureBgra(Mat inputMat)
     {
-        Mat output = new();
         switch (inputMat.Channels())
         {
             case 4:
                 return inputMat.Clone();
             case 3:
+            {
+                // BGR → BGRA 转换后 alpha 通道可能为 0，导致颜色变浅，需手动设为 255
+                Mat output = new();
                 Cv2.CvtColor(inputMat, output, ColorConversionCodes.BGR2BGRA);
+                using Mat alphaChannel = new Mat(output.Size(), MatType.CV_8UC1, Scalar.All(255));
+                Mat[] channels = Cv2.Split(output);
+                channels[3].Dispose();
+                channels[3] = alphaChannel.Clone();
+                Cv2.Merge(channels, output);
+                foreach (var ch in channels)
+                    ch.Dispose();
                 return output;
+            }
             default:
+            {
+                Mat output = new();
                 Cv2.CvtColor(inputMat, output, ColorConversionCodes.GRAY2BGRA);
+                using Mat alphaChannel = new Mat(output.Size(), MatType.CV_8UC1, Scalar.All(255));
+                Mat[] channels = Cv2.Split(output);
+                channels[3].Dispose();
+                channels[3] = alphaChannel.Clone();
+                Cv2.Merge(channels, output);
+                foreach (var ch in channels)
+                    ch.Dispose();
                 return output;
+            }
         }
+    }
+
+    private class RegionInfo
+    {
+        public string Name { get; set; } = string.Empty;
+        public RoiMetadata Roi { get; set; } = new();
+        public RoiProjectionMapping? ProjectionMapping { get; set; }
+        public PointCloudData? InlierCloud { get; set; }
+        public bool IsSelected { get; set; }
+        public Mat? PlaneParams { get; set; }
     }
 }

@@ -7,7 +7,7 @@ using Volo.Abp.DependencyInjection;
 namespace AuroraStruct3D.Notifiers;
 
 /// <summary>
-/// 通过 SignalR Hub 推送投影机条纹图下载进度通知的具体实现。
+/// 通过 SignalR Hub 推送投影仪条纹图下载进度通知的具体实现。
 /// </summary>
 [ExposeServices(typeof(IProjectorHubNotifier))]
 public class SignalRProjectorHubNotifier : IProjectorHubNotifier, ISingletonDependency

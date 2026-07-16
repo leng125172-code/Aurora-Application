@@ -50,7 +50,7 @@ namespace AuroraStruct3D
             // 注册RS485电机控制服务为单例
             context.Services.AddRS485MotorServices();
 
-            // 注册DLP投影机服务为单例
+            // 注册DLP投影仪服务为单例
             context.Services.AddDlpProjectorServices();
 
             // 注册设备状态管理器为单例（来自 AuroraStruct3D.DeviceStateManagement 项目）

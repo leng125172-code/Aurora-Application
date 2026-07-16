@@ -5,7 +5,7 @@ using Microsoft.Extensions.Logging;
 namespace AuroraStruct3D.Projectors;
 
 /// <summary>
-/// 投影机连接池实现。
+/// 投影仪连接池实现。
 /// 内部使用 <see cref="ConcurrentDictionary{TKey,TValue}"/> 维护每台设备的独立连接实例，
 /// 解决单例 IDlpProjectorService 无法管理多设备的问题。
 /// </summary>
@@ -17,7 +17,7 @@ public sealed class ProjectorConnectionPool : IProjectorConnectionPool, IDisposa
     private bool _disposed;
 
     /// <summary>
-    /// 构造投影机连接池
+    /// 构造投影仪连接池
     /// </summary>
     /// <param name="serviceScopeFactory">用于操作日志写入的 DI 作用域工厂</param>
     /// <param name="loggerFactory">日志工厂（每个实例独立 Logger）</param>

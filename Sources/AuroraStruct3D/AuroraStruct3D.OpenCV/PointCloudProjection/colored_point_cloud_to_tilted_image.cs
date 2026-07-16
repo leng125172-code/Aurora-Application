@@ -1,10 +1,10 @@
 namespace AuroraStruct3D.OpenCV.PointCloudProjection;
 
 /// <summary>
-/// 工作流算子：将带颜色的点云绕 Y 轴和 X 轴旋转后投影到 2D 图像。
+/// 工作流算子：将带颜色的点云绕 Y 轴、X 轴和 Z 轴旋转后投影到 2D 图像。
 /// <para>
-/// 与 <see cref="colored_point_cloud_to_image"/> 不同，本算子先将点云绕 Y 轴旋转，
-/// 再绕 X 轴旋转，然后将旋转后的点云投影到 XY 平面，生成一张带双轴透视效果的倾斜视图。
+/// 与 <see cref="colored_point_cloud_to_image"/> 不同，本算子依次将点云绕 Y 轴、X 轴、Z 轴旋转，
+/// 然后将旋转后的点云投影到 XY 平面，生成一张带三轴透视效果的倾斜视图。
 /// 常用于辅助展示高度差异（Z 方向的变化在倾斜视角下更直观）。
 /// </para>
 /// <para>
@@ -18,7 +18,7 @@ namespace AuroraStruct3D.OpenCV.PointCloudProjection;
 [Guid("7e3a2b1c-9d4e-4f5a-8b6c-1d2e3f4a5b6c")]
 [Category("3D重建分割")]
 [DisplayName("彩色点云转倾斜视图")]
-[Description("把带颜色的点云绕Y轴和X轴旋转后投影成2D彩色图，展示双轴透视的高度差异。")]
+[Description("把带颜色的点云绕Y轴、X轴和Z轴旋转后投影成2D彩色图，展示三轴透视的高度差异。")]
 public class colored_point_cloud_to_tilted_image : IOperator
 {
     public static List<IVisionParameter>? InputVisionParameters =>
@@ -31,6 +31,12 @@ public class colored_point_cloud_to_tilted_image : IOperator
         new()
         {
             new MatImg { ParameterName = "output_image", DisplayName = "输出图像" },
+            new VisionParameter<string>
+            {
+                ParameterName = "projection_mapping",
+                ParameterType = typeof(string),
+                DisplayName = "投影映射",
+            },
         };
 
     public static List<IConfigParameter>? ConfigParameters =>
@@ -56,6 +62,15 @@ public class colored_point_cloud_to_tilted_image : IOperator
             },
             new ConfigParameter
             {
+                Name = "tiltAngleZ",
+                DisplayName = "Z轴倾斜角度(度)",
+                ParameterType = typeof(double),
+                DefaultValue = "0",
+                Required = false,
+                ControlType = PortControlType.Input,
+            },
+            new ConfigParameter
+            {
                 Name = "imageResolution",
                 DisplayName = "图像分辨率",
                 ParameterType = typeof(int),
@@ -68,6 +83,7 @@ public class colored_point_cloud_to_tilted_image : IOperator
 
     private readonly double _tiltAngleYDeg;
     private readonly double _tiltAngleXDeg;
+    private readonly double _tiltAngleZDeg;
     private readonly int _imageResolution;
     private bool _disposed;
 
@@ -76,15 +92,18 @@ public class colored_point_cloud_to_tilted_image : IOperator
     /// </summary>
     /// <param name="tiltAngleY">绕 Y 轴旋转的角度（度），正值表示俯视方向倾斜。</param>
     /// <param name="tiltAngleX">绕 X 轴旋转的角度（度），正值表示右侧下倾。</param>
+    /// <param name="tiltAngleZ">绕 Z 轴旋转的角度（度），正值表示顺时针旋转。</param>
     /// <param name="imageResolution">输出图像最长边像素数。</param>
     public colored_point_cloud_to_tilted_image(
         double tiltAngleY = 30,
         double tiltAngleX = 30,
+        double tiltAngleZ = 0,
         int imageResolution = 512
     )
     {
         _tiltAngleYDeg = tiltAngleY;
         _tiltAngleXDeg = tiltAngleX;
+        _tiltAngleZDeg = tiltAngleZ;
         _imageResolution = imageResolution;
     }
 
@@ -120,6 +139,11 @@ public class colored_point_cloud_to_tilted_image : IOperator
         double cosTX = Math.Cos(thetaX);
         double sinTX = Math.Sin(thetaX);
 
+        // 绕 Z 轴旋转：x''' = x''*cosθz - y''*sinθz, y''' = x''*sinθz + y''*cosθz
+        double thetaZ = _tiltAngleZDeg * Math.PI / 180.0;
+        double cosTZ = Math.Cos(thetaZ);
+        double sinTZ = Math.Sin(thetaZ);
+
         // 第一遍：计算旋转后的 XY 范围
         double minX = double.MaxValue;
         double maxX = double.MinValue;
@@ -141,9 +165,13 @@ public class colored_point_cloud_to_tilted_image : IOperator
             float rzY = (float)(-x * sinTY + z * cosTY);
 
             // 绕 X 轴
-            float rx = rxY;
-            float ry = (float)(y * cosTX - rzY * sinTX);
-            // float rz = (float)(y * sinTX + rzY * cosTX); // 不需要 Z 值
+            float rxX = rxY;
+            float ryX = (float)(y * cosTX - rzY * sinTX);
+            float rzX = (float)(y * sinTX + rzY * cosTX);
+
+            // 绕 Z 轴
+            float rx = (float)(rxX * cosTZ - ryX * sinTZ);
+            float ry = (float)(rxX * sinTZ + ryX * cosTZ);
 
             rotX[i] = rx;
             rotY[i] = ry;
@@ -238,7 +266,43 @@ public class colored_point_cloud_to_tilted_image : IOperator
             }
         }
 
+        using Mat gray = new Mat();
+        Cv2.CvtColor(image, gray, ColorConversionCodes.BGRA2GRAY);
+        using Mat mask = new Mat();
+        Cv2.Threshold(gray, mask, 1, 255, ThresholdTypes.Binary);
+
+        Cv2.GaussianBlur(image, image, new Size(7, 7), 0);
+
+        using Mat kernel = Cv2.GetStructuringElement(MorphShapes.Ellipse, new Size(3, 3));
+        Cv2.MorphologyEx(image, image, MorphTypes.Close, kernel);
+
+        for (int y = 0; y < height; y++)
+        {
+            for (int x = 0; x < width; x++)
+            {
+                if (mask.Get<byte>(y, x) == 0)
+                {
+                    image.Set(y, x, new Vec4b(0, 0, 0, 0));
+                }
+            }
+        }
+
         context.Set("output_image", image);
+
+        var projectionMapping = new RoiOps.RoiProjectionMapping
+        {
+            ViewLabel = "TILTED",
+            WorldMinX = minX,
+            WorldMaxX = maxX,
+            WorldMinY = minY,
+            WorldMaxY = maxY,
+            ImageWidth = width,
+            ImageHeight = height,
+        };
+        context.Set(
+            "projection_mapping",
+            System.Text.Json.JsonSerializer.Serialize(projectionMapping)
+        );
     }
 
     /// <inheritdoc/>

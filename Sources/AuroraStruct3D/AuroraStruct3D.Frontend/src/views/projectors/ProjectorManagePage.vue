@@ -324,7 +324,7 @@ onMounted(() => {
             </div>
         </AppCard>
 
-        <!-- 编辑投影机对话框 -->
+        <!-- 编辑投影仪对话框 -->
         <Dialog
             v-model:visible="showEditDialog"
             :header="t('projector.editTitle')"

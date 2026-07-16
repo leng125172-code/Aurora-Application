@@ -5,7 +5,7 @@ using Volo.Abp.DependencyInjection;
 namespace AuroraStruct3D.Projectors;
 
 /// <summary>
-/// 投影机条纹下载状态内存存储。
+/// 投影仪条纹下载状态内存存储。
 /// 用于支撑“接口立即返回 + 前端可刷新恢复”的状态查询与推送。
 /// </summary>
 public class ProjectorFringeDownloadStateStore : ISingletonDependency
@@ -14,7 +14,7 @@ public class ProjectorFringeDownloadStateStore : ISingletonDependency
     private readonly object _syncRoot = new();
 
     /// <summary>
-    /// 获取指定投影机当前状态；若不存在则返回 Idle。
+    /// 获取指定投影仪当前状态；若不存在则返回 Idle。
     /// </summary>
     public ProjectorFringeDownloadStatusDto Get(Guid projectorId)
     {
@@ -32,7 +32,7 @@ public class ProjectorFringeDownloadStateStore : ISingletonDependency
     }
 
     /// <summary>
-    /// 尝试将指定投影机置为 Running；若已在运行则返回 false。
+    /// 尝试将指定投影仪置为 Running；若已在运行则返回 false。
     /// </summary>
     public bool TryStart(Guid projectorId, out ProjectorFringeDownloadStatusDto status)
     {

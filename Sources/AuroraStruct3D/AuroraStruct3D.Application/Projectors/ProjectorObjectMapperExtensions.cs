@@ -4,12 +4,12 @@ using AuroraStruct3D.Projectors.Dtos;
 namespace AuroraStruct3D;
 
 /// <summary>
-/// 投影机模块对象映射辅助类
+/// 投影仪模块对象映射辅助类
 /// </summary>
 public static class ProjectorObjectMapperExtensions
 {
     /// <summary>
-    /// 将投影机设备实体转换为 DTO
+    /// 将投影仪设备实体转换为 DTO
     /// </summary>
     public static ProjectorDeviceDto ToDto(this ProjectorDevice entity)
     {
@@ -52,7 +52,7 @@ public static class ProjectorObjectMapperExtensions
     }
 
     /// <summary>
-    /// 将投影机操作日志实体转换为 DTO
+    /// 将投影仪操作日志实体转换为 DTO
     /// </summary>
     public static ProjectorOperationLogDto ToDto(this ProjectorOperationLog entity)
     {

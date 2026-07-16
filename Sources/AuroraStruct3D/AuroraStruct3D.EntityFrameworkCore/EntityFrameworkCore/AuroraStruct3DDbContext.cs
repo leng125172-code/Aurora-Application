@@ -123,7 +123,7 @@ namespace AuroraStruct3D.EntityFrameworkCore
         public DbSet<MotorPrPath> MotorPrPaths { get; set; }
         public DbSet<MotorOperationLog> MotorOperationLogs { get; set; }
 
-        // ── DLP 投影机模块 ─────────────────────────────────────────────────────────
+        // ── DLP 投影仪模块 ─────────────────────────────────────────────────────────
         public DbSet<ProjectorDevice> ProjectorDevices { get; set; }
         public DbSet<ProjectorOperationLog> ProjectorOperationLogs { get; set; }
 
@@ -204,7 +204,7 @@ namespace AuroraStruct3D.EntityFrameworkCore
             // 电机模块
             builder.ConfigureMotor();
 
-            // DLP 投影机模块
+            // DLP 投影仪模块
             builder.ConfigureProjector();
 
             // 设备状态管理模块

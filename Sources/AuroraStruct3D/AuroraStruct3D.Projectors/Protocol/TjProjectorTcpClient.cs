@@ -5,7 +5,7 @@ using Microsoft.Extensions.Logging;
 namespace AuroraStruct3D.Projectors.Protocol;
 
 /// <summary>
-/// 腾聚（TJ）结构光投影机 TCP 通信客户端。
+/// 腾聚（TJ）结构光投影仪 TCP 通信客户端。
 /// 封装底层 TCP 连接、ASCII 命令发送和响应读取，线程安全（SemaphoreSlim 互斥）。
 /// 支持 linux-arm64 和 Windows 平台，无需原生 DLL。
 /// </summary>

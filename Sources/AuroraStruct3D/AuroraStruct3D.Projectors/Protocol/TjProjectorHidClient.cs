@@ -5,7 +5,7 @@ using Microsoft.Extensions.Logging;
 namespace AuroraStruct3D.Projectors.Protocol;
 
 /// <summary>
-/// 腾聚投影机 USB HID 通信客户端（跨平台，Windows + Linux ARM64）。
+/// 腾聚投影仪 USB HID 通信客户端（跨平台，Windows + Linux ARM64）。
 ///
 /// 硬件：Megawin EasyPOD HID 芯片，默认 VID=0x0E6A，PID=0x0317。
 /// Linux 设备节点：/dev/hidraw0（需 udev 规则或 root 权限）。
@@ -19,11 +19,11 @@ public sealed class TjProjectorHidClient : IDisposable
 {
     private const string LogTag = "[Projector]";
 
-    // ─── 腾聚 TJ 投影机默认 USB HID 标识 ─────────────────────────
-    /// <summary>腾聚 TJ 投影机默认 HID 厂商 ID（VID 0x0483）</summary>
+    // ─── 腾聚 TJ 投影仪默认 USB HID 标识 ─────────────────────────
+    /// <summary>腾聚 TJ 投影仪默认 HID 厂商 ID（VID 0x0483）</summary>
     public const int DefaultVendorId = 0x0483;
 
-    /// <summary>腾聚 TJ 投影机默认 HID 产品 ID（PID 0x5750）</summary>
+    /// <summary>腾聚 TJ 投影仪默认 HID 产品 ID（PID 0x5750）</summary>
     public const int DefaultProductId = 0x5750;
 
     private readonly int _vendorId;
@@ -39,7 +39,7 @@ public sealed class TjProjectorHidClient : IDisposable
     public bool IsConnected => _stream != null;
 
     /// <summary>
-    /// 创建 TJ 投影机 HID 客户端
+    /// 创建 TJ 投影仪 HID 客户端
     /// </summary>
     /// <param name="vendorId">HID 厂商 ID（默认 0x0E6A）</param>
     /// <param name="productId">HID 产品 ID（默认 0x0317）</param>
@@ -125,7 +125,7 @@ public sealed class TjProjectorHidClient : IDisposable
     }
 
     /// <summary>
-    /// 向投影机发送 ASCII 命令（不等待响应）。
+    /// 向投影仪发送 ASCII 命令（不等待响应）。
     /// 返回 true 表示写入成功。
     /// </summary>
     public async Task<bool> SendCommandAsync(
@@ -158,7 +158,7 @@ public sealed class TjProjectorHidClient : IDisposable
     }
 
     /// <summary>
-    /// 向投影机发送 ASCII 命令并读取一行响应。
+    /// 向投影仪发送 ASCII 命令并读取一行响应。
     /// 返回响应字符串，超时或失败时返回 null。
     /// </summary>
     public async Task<string?> SendCommandAndReadAsync(

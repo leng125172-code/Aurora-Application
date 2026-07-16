@@ -253,7 +253,7 @@ namespace AuroraStruct3D
                 tucamService.SetCameraDeviceIdMapping(cameraMapping);
             }
 
-            // 初始化投影机设备 ID 映射（用于 DlpProjectorService 写入操作日志）
+            // 初始化投影仪设备 ID 映射（用于 DlpProjectorService 写入操作日志）
             using (IServiceScope scope = context.ServiceProvider.CreateScope())
             {
                 IProjectorDeviceRepository projectorRepo =
@@ -275,7 +275,7 @@ namespace AuroraStruct3D
         }
 
         /// <summary>
-        /// 异步初始化钩子：在同步初始化完成后，通过 Hangfire 触发相机和投影机扫描 Job。
+        /// 异步初始化钩子：在同步初始化完成后，通过 Hangfire 触发相机和投影仪扫描 Job。
         /// </summary>
         public override async Task OnApplicationInitializationAsync(
             ApplicationInitializationContext context
@@ -289,7 +289,7 @@ namespace AuroraStruct3D
             // 触发相机 SDK 初始化 + 扫描 Job
             await jobManager.EnqueueAsync(new CameraInitScanJobArgs());
 
-            // 触发投影机扫描 Job
+            // 触发投影仪扫描 Job
             await jobManager.EnqueueAsync(new ProjectorInitScanJobArgs());
 
             // 注册定时清理过期算子文件 Job（每小时执行一次）

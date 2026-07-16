@@ -6,6 +6,9 @@ public class WorkflowVariableResultDto
     /// <summary>变量名。</summary>
     public string Name { get; set; } = string.Empty;
 
+    /// <summary>显示名称。</summary>
+    public string? DisplayName { get; set; }
+
     /// <summary>值类型令牌（string/int/long/double/bool/Mat/PointCloudData）。</summary>
     public string ValueType { get; set; } = string.Empty;
 

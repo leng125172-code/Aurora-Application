@@ -41,6 +41,12 @@ public class CalibPhotoRecord : AuditedEntity<Guid>
     /// <summary>检测到的角点数量（内角点总数 = rows × cols，无效时为 0）</summary>
     public int CornerCountDetected { get; private set; }
 
+    /// <summary>图像差分分数（0-1，与同组另一张照片的差异程度）</summary>
+    public double? ImageDiffScore { get; private set; }
+
+    /// <summary>图像差分是否显著（两次拍摄有明显差异）</summary>
+    public bool? ImageDiffSignificant { get; private set; }
+
     /// <summary>拍摄时间</summary>
     public DateTime CapturedAt { get; private set; }
 
@@ -69,7 +75,9 @@ public class CalibPhotoRecord : AuditedEntity<Guid>
         string? thumbnailBase64 = null,
         Guid? pairGroupId = null,
         StereoPhotoRole? stereoRole = null,
-        ExtrinsicPhotoPhase? extrinsicPhase = null
+        ExtrinsicPhotoPhase? extrinsicPhase = null,
+        double? imageDiffScore = null,
+        bool? imageDiffSignificant = null
     )
         : base(id)
     {
@@ -83,6 +91,8 @@ public class CalibPhotoRecord : AuditedEntity<Guid>
         PairGroupId = pairGroupId;
         StereoRole = stereoRole;
         ExtrinsicPhase = extrinsicPhase;
+        ImageDiffScore = imageDiffScore;
+        ImageDiffSignificant = imageDiffSignificant;
         CapturedAt = DateTime.UtcNow;
     }
 
@@ -97,6 +107,14 @@ public class CalibPhotoRecord : AuditedEntity<Guid>
     public CalibPhotoRecord SetThumbnail(string? thumbnailBase64)
     {
         ThumbnailBase64 = thumbnailBase64;
+        return this;
+    }
+
+    /// <summary>设置图像差分结果</summary>
+    public CalibPhotoRecord SetImageDiffResult(double? diffScore, bool? isSignificant)
+    {
+        ImageDiffScore = diffScore;
+        ImageDiffSignificant = isSignificant;
         return this;
     }
 }

@@ -1,8 +1,8 @@
 /**
- * 投影机 Pinia Store
+ * 投影仪 Pinia Store
  *
  * 负责：
- *  1. 维护投影机设备列表响应式数据
+ *  1. 维护投影仪设备列表响应式数据
  *  2. 通过 SignalR Hub（/signalr-hubs/projector）接收实时状态推送
  *  3. 封装所有控制操作（连接/断开/LED/显示等）
  */
@@ -49,9 +49,9 @@ import {
 export const useProjectorStore = defineStore('projector', () => {
     // ─── 状态 ─────────────────────────────────────────────────────────────────
 
-    /** 投影机列表 */
+    /** 投影仪列表 */
     const projectors = ref<ProjectorDeviceDto[]>([])
-    /** 当前选中的投影机（控制页使用） */
+    /** 当前选中的投影仪（控制页使用） */
     const selectedProjector = ref<ProjectorDeviceDto | null>(null)
     /** 是否正在加载 */
     const loading = ref(false)
@@ -62,7 +62,7 @@ export const useProjectorStore = defineStore('projector', () => {
 
     // ─── 辅助函数 ─────────────────────────────────────────────────────────────
 
-    /** 用最新数据更新列表中某台投影机 */
+    /** 用最新数据更新列表中某台投影仪 */
     function _applyUpdate(updated: ProjectorDeviceDto) {
         const idx = projectors.value.findIndex((p) => p.id === updated.id)
         if (idx >= 0) {
@@ -88,7 +88,7 @@ export const useProjectorStore = defineStore('projector', () => {
             .configureLogging(signalR.LogLevel.Warning)
             .build()
 
-        // 接收完整投影机状态推送
+        // 接收完整投影仪状态推送
         connection.on('ReceiveProjectorStateAsync', (projector: ProjectorDeviceDto) => {
             _applyUpdate(projector)
         })
@@ -133,7 +133,7 @@ export const useProjectorStore = defineStore('projector', () => {
 
     // ─── 查询 ─────────────────────────────────────────────────────────────────
 
-    /** 加载全部投影机列表 */
+    /** 加载全部投影仪列表 */
     async function fetchList(params: GetProjectorListDto = {}) {
         loading.value = true
         try {
@@ -144,20 +144,20 @@ export const useProjectorStore = defineStore('projector', () => {
         }
     }
 
-    /** 刷新单台投影机 */
+    /** 刷新单台投影仪 */
     async function refreshProjector(id: string) {
         const updated = await getProjector(id)
         _applyUpdate(updated)
     }
 
-    /** 选中投影机（切换控制目标） */
+    /** 选中投影仪（切换控制目标） */
     function selectProjector(id: string) {
         selectedProjector.value = projectors.value.find((p) => p.id === id) ?? null
     }
 
     // ─── CRUD ─────────────────────────────────────────────────────────────────
 
-    /** 扫描 USB HID 投影机，自动同步数据库记录，返回检测到的数量 */
+    /** 扫描 USB HID 投影仪，自动同步数据库记录，返回检测到的数量 */
     async function scan(): Promise<number> {
         const count = await scanProjectors()
         // 扫描完成后刷新列表

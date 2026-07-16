@@ -5,7 +5,7 @@ using Volo.Abp.Application.Dtos;
 namespace AuroraStruct3D.Projectors.Dtos;
 
 /// <summary>
-/// 创建 TCP 连接方式投影机设备请求 DTO
+/// 创建 TCP 连接方式投影仪设备请求 DTO
 /// </summary>
 public class CreateTcpProjectorDeviceDto
 {
@@ -40,7 +40,7 @@ public class CreateTcpProjectorDeviceDto
 }
 
 /// <summary>
-/// 创建 USB HID 连接方式投影机设备请求 DTO
+/// 创建 USB HID 连接方式投影仪设备请求 DTO
 /// </summary>
 public class CreateHidProjectorDeviceDto
 {
@@ -70,7 +70,7 @@ public class CreateHidProjectorDeviceDto
 }
 
 /// <summary>
-/// 更新投影机设备基本信息请求 DTO
+/// 更新投影仪设备基本信息请求 DTO
 /// </summary>
 public class UpdateProjectorDeviceDto
 {
@@ -92,7 +92,7 @@ public class UpdateProjectorDeviceDto
 }
 
 /// <summary>
-/// 投影机列表查询请求 DTO
+/// 投影仪列表查询请求 DTO
 /// </summary>
 public class GetProjectorListDto : PagedAndSortedResultRequestDto
 {
@@ -104,11 +104,11 @@ public class GetProjectorListDto : PagedAndSortedResultRequestDto
 }
 
 /// <summary>
-/// 投影机操作日志分页查询请求 DTO
+/// 投影仪操作日志分页查询请求 DTO
 /// </summary>
 public class GetProjectorLogListDto : PagedAndSortedResultRequestDto
 {
-    /// <summary>投影机设备 ID（不传则查所有设备）</summary>
+    /// <summary>投影仪设备 ID（不传则查所有设备）</summary>
     public Guid? ProjectorDeviceId { get; set; }
 
     /// <summary>操作类型过滤</summary>
@@ -125,11 +125,11 @@ public class GetProjectorLogListDto : PagedAndSortedResultRequestDto
 }
 
 /// <summary>
-/// 手动控制投影机命令请求 DTO
+/// 手动控制投影仪命令请求 DTO
 /// </summary>
 public class ProjectorControlDto
 {
-    /// <summary>目标投影机设备 ID</summary>
+    /// <summary>目标投影仪设备 ID</summary>
     [Required]
     public Guid ProjectorDeviceId { get; set; }
 }
@@ -244,7 +244,7 @@ public class WriteProjectorRegisterDto : ProjectorControlDto
 }
 
 /// <summary>
-/// 投影机像素分辨率响应 DTO
+/// 投影仪像素分辨率响应 DTO
 /// </summary>
 public class ProjectorPixelResolutionDto
 {
@@ -275,11 +275,11 @@ public class FringePreviewImageDto
 }
 
 /// <summary>
-/// 投影机条纹下载状态 DTO。
+/// 投影仪条纹下载状态 DTO。
 /// </summary>
 public class ProjectorFringeDownloadStatusDto
 {
-    /// <summary>投影机设备 ID</summary>
+    /// <summary>投影仪设备 ID</summary>
     public Guid ProjectorId { get; set; }
 
     /// <summary>状态：Idle / Running / Completed / Failed</summary>
@@ -297,7 +297,7 @@ public class ProjectorFringeDownloadStatusDto
 /// </summary>
 public class DownloadFringePatternInputDto
 {
-    /// <summary>目标投影机设备 ID</summary>
+    /// <summary>目标投影仪设备 ID</summary>
     [Required]
     public Guid ProjectorId { get; set; }
 

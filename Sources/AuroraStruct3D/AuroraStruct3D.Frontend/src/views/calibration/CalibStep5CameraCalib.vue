@@ -39,10 +39,8 @@ import {
     type CalibPhotoDto,
     type CalibStereoComputeResultDto,
     type CalibStereoStatusDto,
-    type AutoAlignCamerasResultDto,
     CalibPhotoType,
     ExtrinsicPhotoPhase,
-    autoAlignCameras,
     computeIntrinsic,
     computeExtrinsic,
     computeStereoCalibration,
@@ -55,7 +53,8 @@ import {
     importBoardConfig,
     getStereoStatus,
     takeStereoExtrinsicPairPhoto,
-    takeExtrinsicPhoto,
+    takeExtrinsicDotPhoto,
+    takeExtrinsicCheckerboardPhoto,
     takeIntrinsicPhoto,
     updateBoardConfig,
 } from '@/api/calib-photo'
@@ -130,6 +129,7 @@ const boardConfig = reactive<CalibBoardConfigDto>({
     projectedCornerRows: 9,
     projectedCornerCols: 6,
     projectedPixelSize: 20,
+    boardThicknessMm: 1,
     circleBoardConfig: {
         patternSize: { width: 27, height: 27 },
         circleSpacing: 10,
@@ -177,6 +177,7 @@ function normalizeBoardConfigNumericFields(): void {
     boardConfig.projectedCornerRows = Math.max(2, Math.round(readNumber(boardConfig.projectedCornerRows, 9)))
     boardConfig.projectedCornerCols = Math.max(2, Math.round(readNumber(boardConfig.projectedCornerCols, 6)))
     boardConfig.projectedPixelSize = Math.max(1, Math.round(readNumber(boardConfig.projectedPixelSize, 20)))
+    boardConfig.boardThicknessMm = Math.max(0, readNumber(boardConfig.boardThicknessMm, 1))
 }
 
 function applyCirclePreset2727(): void {
@@ -472,9 +473,15 @@ function getExtrinsicSamples(cameraId: string): CalibExtrinsicSampleViewDto[] {
             projectorOnPhotos: [],
             projectorOnCount: 0,
         }
-        if (photo.extrinsicPhase === ExtrinsicPhotoPhase.ProjectorOff) {
+        if (
+            photo.extrinsicPhase === ExtrinsicPhotoPhase.ProjectorOff ||
+            photo.extrinsicPhase === ExtrinsicPhotoPhase.WhiteScreen
+        ) {
             current.projectorOffPhoto = photo
-        } else if (photo.extrinsicPhase === ExtrinsicPhotoPhase.ProjectorOn) {
+        } else if (
+            photo.extrinsicPhase === ExtrinsicPhotoPhase.ProjectorOn ||
+            photo.extrinsicPhase === ExtrinsicPhotoPhase.Checkerboard
+        ) {
             current.projectorOnPhoto = photo
             current.projectorOnPhotos.push(photo)
             current.projectorOnCount += 1
@@ -495,7 +502,10 @@ function getExtrinsicSamples(cameraId: string): CalibExtrinsicSampleViewDto[] {
             pairGroupId: sample.pairGroupId,
             projectorOffPhoto: sample.projectorOffPhoto,
             projectorOnPhoto: sample.projectorOnPhoto,
-            isValid: sample.projectorOffPhoto.isValid && sample.projectorOnPhotos.every((photo) => photo.isValid),
+            isValid:
+                sample.projectorOffPhoto.isValid &&
+                sample.projectorOnPhotos.every((photo) => photo.isValid) &&
+                (sample.projectorOffPhoto.imageDiffSignificant ?? true),
             stripeFrameCount: sample.projectorOnCount + 1,
             projectorOnPhotos: sample.projectorOnPhotos,
             invalidFrameCount:
@@ -549,7 +559,8 @@ async function toggleLed(): Promise<void> {
 // ─── 拍照 ─────────────────────────────────────────────────────────────────────
 
 const takingIntrinsicIds = ref<Set<string>>(new Set())
-const takingExtrinsicIds = ref<Set<string>>(new Set())
+const takingExtrinsicDotIds = ref<Set<string>>(new Set())
+const takingExtrinsicCheckerboardIds = ref<Set<string>>(new Set())
 const extrinsicStripeImageCount = ref<number>(2)
 
 async function doTakeIntrinsic(cam: CameraDeviceDto): Promise<void> {
@@ -577,7 +588,7 @@ async function doTakeIntrinsic(cam: CameraDeviceDto): Promise<void> {
     }
 }
 
-async function doTakeExtrinsic(cam: CameraDeviceDto): Promise<void> {
+async function doTakeExtrinsicDot(cam: CameraDeviceDto): Promise<void> {
     if (!canUseProjectorExtrinsic(cam.id)) {
         toast.warn('当前相机不需要执行投影外参拍照')
         return
@@ -587,24 +598,55 @@ async function doTakeExtrinsic(cam: CameraDeviceDto): Promise<void> {
         toast.warn(t('calib.step5NoProjectorWarning'))
         return
     }
-    if (takingExtrinsicIds.value.has(cam.id)) return
-    takingExtrinsicIds.value.add(cam.id)
+    if (takingExtrinsicDotIds.value.has(cam.id)) return
+    takingExtrinsicDotIds.value.add(cam.id)
     try {
-        const sample = await takeExtrinsicPhoto({
+        const photo = await takeExtrinsicDotPhoto({
             calibProjectId: props.project.id,
             cameraDeviceId: cam.id,
-            stripeImageCount: Math.max(2, Math.round(extrinsicStripeImageCount.value || 2)),
         })
-        // 后端会落库整组条纹帧，拍完后重新加载，避免前端仅显示 2 张造成误解。
-        await loadPhotos(cam.id, CalibPhotoType.Extrinsic)
+        const list = extrinsicPhotosMap.value[cam.id] ?? []
+        extrinsicPhotosMap.value[cam.id] = [photo, ...list]
         await loadCameraStatus(cam.id)
-        if (!sample.isValid) {
-            toast.warn(t('calib.step5ExtrinsicGroupInvalid', { camera: cam.name }))
+        if (!photo.isValid) {
+            toast.warn(`${cam.name}: 未检测到圆点标定板角点，该照片标记为无效`)
+        } else {
+            toast.success(`${cam.name}: 圆点标定板拍照成功，请移除标定板后继续拍摄棋盘格`)
         }
     } catch (e: unknown) {
         toast.error(e instanceof Error ? e.message : String(e))
     } finally {
-        takingExtrinsicIds.value.delete(cam.id)
+        takingExtrinsicDotIds.value.delete(cam.id)
+    }
+}
+
+async function doTakeExtrinsicCheckerboard(cam: CameraDeviceDto): Promise<void> {
+    if (!canUseProjectorExtrinsic(cam.id)) {
+        toast.warn('当前相机不需要执行投影外参拍照')
+        return
+    }
+
+    if (!activeProjectorId.value) {
+        toast.warn(t('calib.step5NoProjectorWarning'))
+        return
+    }
+    if (takingExtrinsicCheckerboardIds.value.has(cam.id)) return
+    takingExtrinsicCheckerboardIds.value.add(cam.id)
+    try {
+        const photo = await takeExtrinsicCheckerboardPhoto({
+            calibProjectId: props.project.id,
+            cameraDeviceId: cam.id,
+        })
+        const list = extrinsicPhotosMap.value[cam.id] ?? []
+        extrinsicPhotosMap.value[cam.id] = [photo, ...list]
+        await loadCameraStatus(cam.id)
+        if (!photo.isValid) {
+            toast.warn(`${cam.name}: 未检测到棋盘格角点，该照片标记为无效`)
+        }
+    } catch (e: unknown) {
+        toast.error(e instanceof Error ? e.message : String(e))
+    } finally {
+        takingExtrinsicCheckerboardIds.value.delete(cam.id)
     }
 }
 
@@ -801,34 +843,6 @@ async function doDeleteInvalidPhotos(cameraId: string): Promise<void> {
     })
 }
 
-// ─── 相机自动对齐 ─────────────────────────────────────────────────────────────
-
-/** 是否显示自动对齐按钮：双目项目 + 已绑定主相机电机轴 + 已绑定投影仪 */
-const showAutoAlign = computed<boolean>(() => {
-    return isStereoProject.value && !!props.project.mainCameraMotorAxisId && !!props.project.boundProjectorDeviceId
-})
-
-const aligningCameras = ref(false)
-const alignResult = ref<AutoAlignCamerasResultDto | null>(null)
-
-async function doAutoAlignCameras(): Promise<void> {
-    aligningCameras.value = true
-    alignResult.value = null
-    try {
-        const result = await autoAlignCameras(props.project.id)
-        alignResult.value = result
-        if (result.success) {
-            toast.success(t('calib.step5AlignSuccess'))
-        } else {
-            toast.warn(t('calib.step5AlignPartialFailed'))
-        }
-    } catch (e: unknown) {
-        toast.error(e instanceof Error ? e.message : String(e))
-    } finally {
-        aligningCameras.value = false
-    }
-}
-
 // ─── 解析内参矩阵为可读字符串 ─────────────────────────────────────────────────
 
 function formatMatrix(json: string | null | undefined): string {
@@ -903,7 +917,7 @@ onMounted(async () => {
             </div>
 
             <div class="grid grid-cols-1 gap-8 xl:grid-cols-2">
-                <!-- 实体棋盘格 -->
+                <!-- 实体标定板（棋盘格或圆点）-->
                 <div v-if="!isCircleBoard">
                     <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                         {{ t('calib.step5PhysicalBoard') }}
@@ -954,8 +968,8 @@ onMounted(async () => {
                     </div>
                 </div>
 
-                <!-- 投影棋盘格 -->
-                <div v-if="!isCircleBoard">
+                <!-- 投影棋盘格（独立显示，不受标定板类型影响）-->
+                <div v-if="showProjectorSection">
                     <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                         {{ t('calib.step5ProjectedBoard') }}
                     </p>
@@ -998,6 +1012,24 @@ onMounted(async () => {
                                 :use-grouping="false"
                                 :min="1"
                                 :max="4096"
+                                class="w-full"
+                                :input-class="'!text-xs !h-7 !py-0'"
+                            />
+                        </div>
+                    </div>
+
+                    <div class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <div class="min-w-0">
+                            <label class="mb-1 block text-xs text-muted-foreground">
+                                {{ t('calib.step5BoardThicknessMm') }}
+                            </label>
+                            <InputNumber
+                                v-model="boardConfig.boardThicknessMm"
+                                size="small"
+                                :use-grouping="false"
+                                :min="0"
+                                :max="100"
+                                :max-fraction-digits="3"
                                 class="w-full"
                                 :input-class="'!text-xs !h-7 !py-0'"
                             />
@@ -1224,22 +1256,7 @@ onMounted(async () => {
                 </div>
             </div>
 
-            <div class="mt-3 flex items-center justify-between gap-2">
-                <!-- 相机自动对齐按钮（双目+已绑定电机+投影仪时显示） -->
-                <Button
-                    v-if="showAutoAlign"
-                    size="small"
-                    severity="secondary"
-                    outlined
-                    class="!text-xs"
-                    :loading="aligningCameras"
-                    @click="doAutoAlignCameras"
-                >
-                    <Loader2 v-if="aligningCameras" class="mr-1.5 size-3 animate-spin" />
-                    {{ aligningCameras ? t('calib.step5AutoAligning') : t('calib.step5AutoAlignBtn') }}
-                </Button>
-                <span v-else />
-
+            <div class="mt-3 flex items-center justify-end gap-2">
                 <div class="flex items-center gap-2">
                     <Button
                         size="small"
@@ -1271,39 +1288,6 @@ onMounted(async () => {
         </div>
 
         <!-- ── 相机列表 ────────────────────────────────────────────────── -->
-
-        <!-- 自动对齐结果展示区 -->
-        <div
-            v-if="alignResult"
-            :class="[
-                'rounded-lg border px-3 py-2 text-xs',
-                alignResult.success
-                    ? 'border-green-500/40 bg-green-500/5 text-green-200'
-                    : 'border-yellow-500/40 bg-yellow-500/5 text-yellow-200',
-            ]"
-        >
-            <p class="mb-1 font-semibold">{{ alignResult.message }}</p>
-            <div v-if="alignResult.mainCamera" class="mb-0.5">
-                <span class="text-muted-foreground">{{ alignResult.mainCamera.cameraRole }}：</span>
-                <span v-if="alignResult.mainCamera.skipped">{{ t('calib.step5AlignSkipped') }}</span>
-                <span v-else-if="alignResult.mainCamera.isAligned">
-                    {{ alignResult.mainCamera.message }}
-                    （{{ t('calib.step5AlignBefore') }} {{ alignResult.mainCamera.angleBeforeDeg?.toFixed(2) }}° →
-                    {{ t('calib.step5AlignAfter') }} {{ alignResult.mainCamera.angleAfterDeg?.toFixed(2) }}°）
-                </span>
-                <span v-else class="text-red-300">{{ alignResult.mainCamera.message }}</span>
-            </div>
-            <div v-if="alignResult.secondaryCamera">
-                <span class="text-muted-foreground">{{ alignResult.secondaryCamera.cameraRole }}：</span>
-                <span v-if="alignResult.secondaryCamera.skipped">{{ t('calib.step5AlignSkipped') }}</span>
-                <span v-else-if="alignResult.secondaryCamera.isAligned">
-                    {{ alignResult.secondaryCamera.message }}
-                    （{{ t('calib.step5AlignBefore') }} {{ alignResult.secondaryCamera.angleBeforeDeg?.toFixed(2) }}° →
-                    {{ t('calib.step5AlignAfter') }} {{ alignResult.secondaryCamera.angleAfterDeg?.toFixed(2) }}°）
-                </span>
-                <span v-else class="text-red-300">{{ alignResult.secondaryCamera.message }}</span>
-            </div>
-        </div>
 
         <div class="flex items-center justify-between gap-2">
             <span class="text-sm font-medium text-foreground">{{ t('calib.step5CameraList') }}</span>
@@ -1465,15 +1449,31 @@ onMounted(async () => {
                                     size="small"
                                     severity="secondary"
                                     class="w-full !text-xs"
-                                    :loading="takingExtrinsicIds.has(cam.id)"
+                                    :loading="takingExtrinsicDotIds.has(cam.id)"
                                     :disabled="!canUseProjectorExtrinsic(cam.id)"
-                                    @click="doTakeExtrinsic(cam)"
+                                    @click="doTakeExtrinsicDot(cam)"
                                 >
                                     <Zap class="mr-1.5 size-3" />
                                     {{
-                                        takingExtrinsicIds.has(cam.id)
+                                        takingExtrinsicDotIds.has(cam.id)
                                             ? t('calib.step5TakingPhoto')
-                                            : t('calib.step5TakeExtrinsic')
+                                            : t('calib.step5TakeExtrinsicDot')
+                                    }}
+                                </Button>
+
+                                <Button
+                                    size="small"
+                                    severity="secondary"
+                                    class="w-full !text-xs"
+                                    :loading="takingExtrinsicCheckerboardIds.has(cam.id)"
+                                    :disabled="!canUseProjectorExtrinsic(cam.id)"
+                                    @click="doTakeExtrinsicCheckerboard(cam)"
+                                >
+                                    <Zap class="mr-1.5 size-3" />
+                                    {{
+                                        takingExtrinsicCheckerboardIds.has(cam.id)
+                                            ? t('calib.step5TakingPhoto')
+                                            : t('calib.step5TakeExtrinsicCheckerboard')
                                     }}
                                 </Button>
 
@@ -1902,9 +1902,7 @@ onMounted(async () => {
                                                         </span>
                                                     </div>
 
-                                                    <div
-                                                        class="grid grid-cols-1 gap-3 lg:grid-cols-[160px_minmax(0,1fr)]"
-                                                    >
+                                                    <div class="grid grid-cols-1 gap-3 lg:grid-cols-2">
                                                         <div>
                                                             <div
                                                                 class="mb-1 text-[10px] font-medium text-muted-foreground"
@@ -1922,7 +1920,7 @@ onMounted(async () => {
                                                                 <img
                                                                     v-if="sample.projectorOffPhoto.thumbnailBase64"
                                                                     :src="sample.projectorOffPhoto.thumbnailBase64"
-                                                                    class="aspect-square w-full rounded object-cover"
+                                                                    class="w-full rounded object-contain"
                                                                     :alt="sample.projectorOffPhoto.capturedAt"
                                                                 />
                                                                 <div

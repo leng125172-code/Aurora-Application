@@ -258,7 +258,7 @@ function navigate(path: string, tab?: string): void {
                 {{ t('menu.stateLog') }}
             </button>
 
-            <!-- 投影机管理展开组 -->
+            <!-- 投影仪管理展开组 -->
             <div>
                 <button
                     :class="

@@ -183,6 +183,7 @@ const previewing = ref(false)
 const previewTab = ref<'video' | 'snapshot'>('video')
 const snapshotUri = ref<string | null>(null)
 const busy = ref(false)
+const isFullscreen = ref(false)
 
 async function run(fn: () => Promise<void>) {
     busy.value = true
@@ -241,6 +242,14 @@ async function onExposureAutoOncePulse() {
         await store.exposureAutoOncePulse(deviceId.value)
         toast.success(t('camera.exposureAutoOnceDone'))
     })
+}
+
+function toggleFullscreen() {
+    isFullscreen.value = !isFullscreen.value
+}
+
+function closeFullscreen() {
+    isFullscreen.value = false
 }
 
 function displayMetric(value: number | null | undefined, digits = 1): string {
@@ -434,6 +443,28 @@ onUnmounted(() => {
                                         : t('camera.noSnapshot')
                                 }}
                             </div>
+                            <Button
+                                text
+                                size="small"
+                                class="absolute right-2 bottom-2 bg-black/50 hover:bg-black/70 text-white rounded-full p-1.5"
+                                @click="toggleFullscreen"
+                            >
+                                <svg
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    width="20"
+                                    height="20"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="2"
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                >
+                                    <path
+                                        d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"
+                                    />
+                                </svg>
+                            </Button>
                         </div>
 
                         <!-- 图像质量评分条（仅实时预览时显示） -->
@@ -636,4 +667,74 @@ onUnmounted(() => {
             </div>
         </div>
     </div>
+
+    <!-- 网页内全屏遮罩层 -->
+    <Teleport to="body">
+        <Transition name="fade">
+            <div
+                v-if="isFullscreen"
+                class="fixed inset-0 z-[100] bg-black flex items-center justify-center"
+                @click.self="closeFullscreen"
+            >
+                <div class="relative w-full h-full max-w-[95vw] max-h-[95vh]">
+                    <img
+                        v-if="previewTab === 'video' && previewUrl"
+                        :src="previewUrl"
+                        class="w-full h-full object-contain"
+                        :alt="t('camera.tabVideo')"
+                    />
+                    <img
+                        v-else-if="previewTab === 'snapshot' && snapshotUri"
+                        :src="snapshotUri"
+                        class="w-full h-full object-contain"
+                        :alt="t('camera.snapshot')"
+                    />
+                    <div v-else class="flex h-full items-center justify-center text-xs text-white/40">
+                        {{
+                            previewTab === 'video'
+                                ? previewing
+                                    ? t('camera.waitingFrame')
+                                    : t('camera.previewNotStarted')
+                                : t('camera.noSnapshot')
+                        }}
+                    </div>
+                    <Button
+                        text
+                        size="small"
+                        class="absolute top-4 right-4 bg-black/50 hover:bg-black/70 text-white rounded-full p-2"
+                        @click="closeFullscreen"
+                    >
+                        <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="24"
+                            height="24"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                        >
+                            <path d="M15 3h6v6M9 21H3v-6m12 0l5-5-5-5M6 18l-5-5 5-5" />
+                        </svg>
+                    </Button>
+                    <div class="absolute bottom-4 left-4 text-white/70 text-xs">
+                        {{ t('camera.fullscreenTip') }}
+                    </div>
+                </div>
+            </div>
+        </Transition>
+    </Teleport>
 </template>
+
+<style scoped>
+.fade-enter-active,
+.fade-leave-active {
+    transition: opacity 0.2s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+    opacity: 0;
+}
+</style>

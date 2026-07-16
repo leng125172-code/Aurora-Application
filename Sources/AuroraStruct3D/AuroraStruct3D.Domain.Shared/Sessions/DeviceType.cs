@@ -6,7 +6,7 @@ public enum DeviceType
     /// <summary>工业相机</summary>
     Camera,
 
-    /// <summary>结构光投影机</summary>
+    /// <summary>结构光投影仪</summary>
     Projector,
 
     /// <summary>伺服电机（RS-485）</summary>

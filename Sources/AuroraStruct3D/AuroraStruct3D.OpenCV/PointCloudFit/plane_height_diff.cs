@@ -32,7 +32,8 @@ public class plane_height_diff : IOperator
         {
             new MatImg { ParameterName = "ref_plane_params", DisplayName = "基准平面参数" },
             new MatImg { ParameterName = "target_plane_params", DisplayName = "目标平面参数" },
-            new PointCloudData { ParameterName = "target_cloud", DisplayName = "目标点云" },
+            new PointCloudData { ParameterName = "ref_cloud", DisplayName = "基准区域点云" },
+            new PointCloudData { ParameterName = "target_cloud", DisplayName = "目标区域点云" },
         };
 
     public static List<IVisionParameter>? OutputVisionParameters =>
@@ -44,10 +45,10 @@ public class plane_height_diff : IOperator
                 ParameterType = typeof(double),
                 DisplayName = "带符号差值",
             },
-            new VisionParameter<double>
+            new VisionParameter<string>
             {
                 ParameterName = "abs_diff",
-                ParameterType = typeof(double),
+                ParameterType = typeof(string),
                 DisplayName = "绝对差值",
             },
             new VisionParameter<bool>
@@ -70,6 +71,24 @@ public class plane_height_diff : IOperator
         {
             new ConfigParameter
             {
+                Name = "refRegionName",
+                DisplayName = "基准区域名称",
+                ParameterType = typeof(string),
+                DefaultValue = "A",
+                Required = false,
+                ControlType = PortControlType.Input,
+            },
+            new ConfigParameter
+            {
+                Name = "targetRegionName",
+                DisplayName = "目标区域名称",
+                ParameterType = typeof(string),
+                DefaultValue = "B",
+                Required = false,
+                ControlType = PortControlType.Input,
+            },
+            new ConfigParameter
+            {
                 Name = "minDiff",
                 DisplayName = "最小差值",
                 ParameterType = typeof(double),
@@ -88,12 +107,21 @@ public class plane_height_diff : IOperator
             },
         };
 
+    private readonly string _refRegionName;
+    private readonly string _targetRegionName;
     private readonly double _minDiff;
     private readonly double _maxDiff;
     private bool _disposed;
 
-    public plane_height_diff(double minDiff = -0.5, double maxDiff = 0.5)
+    public plane_height_diff(
+        string refRegionName = "A",
+        string targetRegionName = "B",
+        double minDiff = -0.5,
+        double maxDiff = 0.5
+    )
     {
+        _refRegionName = refRegionName;
+        _targetRegionName = targetRegionName;
         _minDiff = minDiff;
         _maxDiff = maxDiff;
     }
@@ -146,6 +174,31 @@ public class plane_height_diff : IOperator
             dTgt /= normTgt;
         }
 
+        // 计算基准点云质心
+        PointCloudData refCloud =
+            context.Get<PointCloudData>("ref_cloud")
+            ?? throw new InvalidOperationException("基准点云为空，无法计算质心。");
+
+        Mat refPoints = refCloud.PointCloud!;
+        if (refPoints is null || refPoints.Empty())
+        {
+            throw new InvalidOperationException("基准点云数据为空，无法计算质心。");
+        }
+
+        int refPointCount = refPoints.Rows;
+        double refCx = 0,
+            refCy = 0,
+            refCz = 0;
+        for (int i = 0; i < refPointCount; i++)
+        {
+            refCx += refPoints.Get<float>(i, 0);
+            refCy += refPoints.Get<float>(i, 1);
+            refCz += refPoints.Get<float>(i, 2);
+        }
+        refCx /= refPointCount;
+        refCy /= refPointCount;
+        refCz /= refPointCount;
+
         // 计算目标点云质心（用于计算高度差）
         PointCloudData targetCloud =
             context.Get<PointCloudData>("target_cloud")
@@ -158,7 +211,9 @@ public class plane_height_diff : IOperator
         }
 
         int pointCount = targetPoints.Rows;
-        double cx = 0, cy = 0, cz = 0;
+        double cx = 0,
+            cy = 0,
+            cz = 0;
         for (int i = 0; i < pointCount; i++)
         {
             cx += targetPoints.Get<float>(i, 0);
@@ -174,11 +229,31 @@ public class plane_height_diff : IOperator
         double absDiff = Math.Round(Math.Abs(signedDiff), 6);
         bool isOk = signedDiff >= _minDiff && signedDiff <= _maxDiff;
 
+        var absDiffResult = new
+        {
+            refRegion = _refRegionName,
+            targetRegion = _targetRegionName,
+            x = Math.Round(cx, 4),
+            y = Math.Round(cy, 4),
+            heightDiff = absDiff,
+        };
+
         var result = new
         {
-            refPlaneParams = new[] { aRef, bRef, cRef, dRef },
-            targetPlaneParams = new[] { aTgt, bTgt, cTgt, dTgt },
-            targetCentroid = new { x = Math.Round(cx, 4), y = Math.Round(cy, 4), z = Math.Round(cz, 4) },
+            refRegion = new
+            {
+                name = _refRegionName,
+                x = Math.Round(refCx, 4),
+                y = Math.Round(refCy, 4),
+                z = Math.Round(refCz, 4),
+            },
+            targetRegion = new
+            {
+                name = _targetRegionName,
+                x = Math.Round(cx, 4),
+                y = Math.Round(cy, 4),
+                z = Math.Round(cz, 4),
+            },
             signedDiff,
             absDiff,
             minDiff = _minDiff,
@@ -187,7 +262,7 @@ public class plane_height_diff : IOperator
         };
 
         context.Set("signed_diff", signedDiff);
-        context.Set("abs_diff", absDiff);
+        context.Set("abs_diff", JsonSerializer.Serialize(absDiffResult));
         context.Set("is_ok", isOk);
         context.Set("result_json", JsonSerializer.Serialize(result));
     }

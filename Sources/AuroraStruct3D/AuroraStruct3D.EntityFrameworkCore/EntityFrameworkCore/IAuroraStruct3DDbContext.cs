@@ -42,12 +42,12 @@ namespace AuroraStruct3D.EntityFrameworkCore
         /// <summary>电机操作日志集合</summary>
         DbSet<MotorOperationLog> MotorOperationLogs { get; }
 
-        // ── DLP 投影机模块 ────────────────────────────────────────────────────
+        // ── DLP 投影仪模块 ────────────────────────────────────────────────────
 
-        /// <summary>DLP 投影机设备集合</summary>
+        /// <summary>DLP 投影仪设备集合</summary>
         DbSet<ProjectorDevice> ProjectorDevices { get; }
 
-        /// <summary>DLP 投影机操作日志集合</summary>
+        /// <summary>DLP 投影仪操作日志集合</summary>
         DbSet<ProjectorOperationLog> ProjectorOperationLogs { get; }
 
         // ── 设备状态管理模块 ──────────────────────────────────────────────────────
