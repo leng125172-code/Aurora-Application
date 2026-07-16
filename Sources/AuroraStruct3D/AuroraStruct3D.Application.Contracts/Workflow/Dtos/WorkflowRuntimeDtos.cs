@@ -396,14 +396,17 @@ public class WorkflowExecutionTriggerResultDto
     /// <summary>机器可识别的错误码；成功时为空。</summary>
     public string? ErrorCode { get; set; }
 
-    /// <summary>结果图下载地址；若本次执行未产生结果图则为空。</summary>
-    public string? ResultImageUrl { get; set; }
+    /// <summary>结果图片 URL 列表（支持多张图，如俯视图、倾斜视图等）。</summary>
+    public List<string> ResultImageUrls { get; set; } = new();
 
     /// <summary>结果消息；失败时为错误信息。</summary>
     public string? Message { get; set; }
 
     /// <summary>执行会话 ID。</summary>
     public Guid ExecutionId { get; set; }
+
+    /// <summary>输出变量列表（由 configure_output 算子配置，与 status 同级）。</summary>
+    public List<WorkflowVariableResultDto> Variables { get; set; } = new();
 
     /// <summary>当前状态。</summary>
     public WorkflowExecutionStatusDto Status { get; set; } = new();

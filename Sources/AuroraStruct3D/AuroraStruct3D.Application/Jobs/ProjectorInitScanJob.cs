@@ -5,13 +5,13 @@ using Volo.Abp.BackgroundJobs;
 namespace AuroraStruct3D.Jobs;
 
 /// <summary>
-/// 投影机初始化扫描 Job 参数（无参，仅用于类型标识）
+/// 投影仪初始化扫描 Job 参数（无参，仅用于类型标识）
 /// </summary>
 public class ProjectorInitScanJobArgs { }
 
 /// <summary>
-/// 应用启动后触发的投影机初始化扫描 Hangfire Job。
-/// 负责：枚举 USB HID 投影机 → 同步数据库记录 → 依次连接每台已启用投影机 → 开灯 → 颜色自检序列 → 恢复数据库参数。
+/// 应用启动后触发的投影仪初始化扫描 Hangfire Job。
+/// 负责：枚举 USB HID 投影仪 → 同步数据库记录 → 依次连接每台已启用投影仪 → 开灯 → 颜色自检序列 → 恢复数据库参数。
 /// </summary>
 public class ProjectorInitScanJob
     : AsyncBackgroundJob<ProjectorInitScanJobArgs>,
@@ -36,30 +36,30 @@ public class ProjectorInitScanJob
     }
 
     /// <summary>
-    /// 执行投影机初始化扫描：枚举 HID 设备，同步数据库记录，依次连接、开灯、颜色自检、恢复参数。
+    /// 执行投影仪初始化扫描：枚举 HID 设备，同步数据库记录，依次连接、开灯、颜色自检、恢复参数。
     /// </summary>
     public override async Task ExecuteAsync(ProjectorInitScanJobArgs args)
     {
         // ── 第一步：扫描 HID 设备，同步数据库记录 ──
         try
         {
-            _logger.LogInformation("[ProjectorInitScanJob] 开始扫描 USB HID 投影机...");
+            _logger.LogInformation("[ProjectorInitScanJob] 开始扫描 USB HID 投影仪...");
             int count = await _projectorDeviceAppService.ScanProjectorsAsync();
             _logger.LogInformation(
-                "[ProjectorInitScanJob] 扫描完成，检测到 {Count} 台投影机。",
+                "[ProjectorInitScanJob] 扫描完成，检测到 {Count} 台投影仪。",
                 count
             );
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "[ProjectorInitScanJob] 投影机扫描失败：{Message}", ex.Message);
+            _logger.LogError(ex, "[ProjectorInitScanJob] 投影仪扫描失败：{Message}", ex.Message);
             return;
         }
 
-        // ── 第二步：依次初始化每台已启用投影机 ──
+        // ── 第二步：依次初始化每台已启用投影仪 ──
         List<ProjectorDevice> projectors = await _projectorDeviceRepository.GetEnabledListAsync();
         _logger.LogInformation(
-            "[ProjectorInitScanJob] 开始初始化 {Count} 台已启用投影机...",
+            "[ProjectorInitScanJob] 开始初始化 {Count} 台已启用投影仪...",
             projectors.Count
         );
         foreach (ProjectorDevice device in projectors)
@@ -69,7 +69,7 @@ public class ProjectorInitScanJob
     }
 
     /// <summary>
-    /// 对单台投影机执行：连接 → 开灯 → 颜色自检序列（R/G/B/White）→ 恢复数据库保存的亮度和颜色。
+    /// 对单台投影仪执行：连接 → 开灯 → 颜色自检序列（R/G/B/White）→ 恢复数据库保存的亮度和颜色。
     /// 任一步骤失败时记录日志并跳过该设备，不影响其他设备初始化。
     /// </summary>
     private async Task InitProjectorAsync(ProjectorDevice device)
@@ -80,7 +80,7 @@ public class ProjectorInitScanJob
         try
         {
             _logger.LogInformation(
-                "[ProjectorInitScanJob] 正在连接投影机「{Name}」...",
+                "[ProjectorInitScanJob] 正在连接投影仪「{Name}」...",
                 device.Name
             );
             if (device.ConnectionType == ProjectorConnectionType.Tcp)
@@ -101,14 +101,14 @@ public class ProjectorInitScanJob
             );
             await _projectorDeviceRepository.UpdateAsync(device);
             _logger.LogInformation(
-                "[ProjectorInitScanJob] 投影机「{Name}」连接成功。",
+                "[ProjectorInitScanJob] 投影仪「{Name}」连接成功。",
                 device.Name
             );
         }
         catch (Exception ex)
         {
             _logger.LogWarning(
-                "[ProjectorInitScanJob] 投影机「{Name}」连接失败：{Message}",
+                "[ProjectorInitScanJob] 投影仪「{Name}」连接失败：{Message}",
                 device.Name,
                 ex.Message
             );
@@ -129,7 +129,7 @@ public class ProjectorInitScanJob
                 device.UpdateLedStatus(ProjectorLedStatus.On);
                 await _projectorDeviceRepository.UpdateAsync(device);
                 _logger.LogInformation(
-                    "[ProjectorInitScanJob] 投影机「{Name}」已开灯。",
+                    "[ProjectorInitScanJob] 投影仪「{Name}」已开灯。",
                     device.Name
                 );
             }
@@ -137,7 +137,7 @@ public class ProjectorInitScanJob
         catch (Exception ex)
         {
             _logger.LogWarning(
-                "[ProjectorInitScanJob] 投影机「{Name}」开灯失败：{Message}",
+                "[ProjectorInitScanJob] 投影仪「{Name}」开灯失败：{Message}",
                 device.Name,
                 ex.Message
             );
@@ -161,7 +161,7 @@ public class ProjectorInitScanJob
             catch (Exception ex)
             {
                 _logger.LogWarning(
-                    "[ProjectorInitScanJob] 投影机「{Name}」颜色自检步骤 {Color} 失败：{Message}",
+                    "[ProjectorInitScanJob] 投影仪「{Name}」颜色自检步骤 {Color} 失败：{Message}",
                     device.Name,
                     color,
                     ex.Message
@@ -172,7 +172,7 @@ public class ProjectorInitScanJob
         // ── 恢复数据库保存的亮度和颜色 ──
         try
         {
-            // AuraSync 为前端虚拟颜色模式，不是投影机原生命令，恢复时回退到白光
+            // AuraSync 为前端虚拟颜色模式，不是投影仪原生命令，恢复时回退到白光
             ProjectorColor targetColor =
                 device.LastColor is ProjectorColor.AuraSync
                     ? ProjectorColor.White
@@ -188,7 +188,7 @@ public class ProjectorInitScanJob
             await _projectorDeviceRepository.UpdateAsync(device);
 
             _logger.LogInformation(
-                "[ProjectorInitScanJob] 投影机「{Name}」参数恢复完成：颜色={Color}，亮度={Light}。",
+                "[ProjectorInitScanJob] 投影仪「{Name}」参数恢复完成：颜色={Color}，亮度={Light}。",
                 device.Name,
                 targetColor,
                 targetLight
@@ -197,7 +197,7 @@ public class ProjectorInitScanJob
         catch (Exception ex)
         {
             _logger.LogWarning(
-                "[ProjectorInitScanJob] 投影机「{Name}」恢复参数失败：{Message}",
+                "[ProjectorInitScanJob] 投影仪「{Name}」恢复参数失败：{Message}",
                 device.Name,
                 ex.Message
             );

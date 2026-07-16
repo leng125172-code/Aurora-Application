@@ -287,4 +287,10 @@ public enum ExtrinsicPhotoPhase
 
     /// <summary>开灯拍投影标定图案。</summary>
     ProjectorOn = 1,
+
+    /// <summary>S1 白屏模式拍摄圆点标定板。</summary>
+    WhiteScreen = 2,
+
+    /// <summary>S3 棋盘格模式拍摄投影棋盘格。</summary>
+    Checkerboard = 3,
 }

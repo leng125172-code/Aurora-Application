@@ -9,7 +9,7 @@ using Volo.Abp.Domain.Entities;
 namespace AuroraStruct3D.Projectors;
 
 /// <summary>
-/// 投影机设备管理及手动控制应用服务。
+/// 投影仪设备管理及手动控制应用服务。
 /// 所有硬件控制操作（连接/LED/显示/触发等）要求设备运行模式为手动或检修模式，
 /// 由 <see cref="IDeviceStateManager"/> 进行运行模式校验。
 /// </summary>
@@ -94,7 +94,7 @@ public class ProjectorDeviceAppService : AuroraStruct3DAppService, IProjectorDev
     public async Task<int> ScanProjectorsAsync()
     {
         EnsureManualOrMaintenanceMode();
-        // 探测当前连接的 HID 投影机数量
+        // 探测当前连接的 HID 投影仪数量
         int count = _dlpProjectorService.GetHidDeviceCount(
             ProjectorConsts.HidVendorId,
             ProjectorConsts.HidProductId
@@ -111,7 +111,7 @@ public class ProjectorDeviceAppService : AuroraStruct3DAppService, IProjectorDev
                 int nextIndex = all.Count;
                 ProjectorDevice device = new(
                     GuidGenerator.Create(),
-                    $"投影机 {i}",
+                    $"投影仪 {i}",
                     nextIndex,
                     i,
                     ProjectorConsts.DefaultConnectTimeoutMs
@@ -189,7 +189,7 @@ public class ProjectorDeviceAppService : AuroraStruct3DAppService, IProjectorDev
                 )
             );
 
-            throw new UserFriendlyException($"连接投影机失败：{ex.Message}");
+            throw new UserFriendlyException($"连接投影仪失败：{ex.Message}");
         }
 
         // 连接成功后更新实体状态
@@ -589,7 +589,7 @@ public class ProjectorDeviceAppService : AuroraStruct3DAppService, IProjectorDev
             )
         )
         {
-            throw new UserFriendlyException("当前投影机已有条纹下载任务正在执行，请勿重复发起。");
+            throw new UserFriendlyException("当前投影仪已有条纹下载任务正在执行，请勿重复发起。");
         }
 
         _ = Task.Run(async () =>
@@ -741,7 +741,7 @@ public class ProjectorDeviceAppService : AuroraStruct3DAppService, IProjectorDev
     }
 
     /// <summary>    /// 校验当前设备运行模式是否为手动或检修模式；不满足时抛出 <see cref="UserFriendlyException"/>。
-    /// 投影机手动控制接口专属校验，联机/自动模式下禁止执行。
+    /// 投影仪手动控制接口专属校验，联机/自动模式下禁止执行。
     /// </summary>
     private void EnsureManualOrMaintenanceMode()
     {
@@ -753,20 +753,20 @@ public class ProjectorDeviceAppService : AuroraStruct3DAppService, IProjectorDev
                     DeviceRunMode.Online => "联机",
                     DeviceRunMode.Auto   => "自动",
                     _                    => mode.ToString()
-                }}】，投影机手动控制仅允许在手动模式或检修模式下执行"
+                }}】，投影仪手动控制仅允许在手动模式或检修模式下执行"
             );
         }
     }
 
     /// <summary>
-    /// 获取已连接的投影机服务实例，若无法找到则抛出异常
+    /// 获取已连接的投影仪服务实例，若无法找到则抛出异常
     /// </summary>
     private IDlpProjectorService GetConnectedService(Guid deviceId)
     {
         IDlpProjectorService? svc = _connectionPool.TryGet(deviceId);
         if (svc == null)
         {
-            throw new UserFriendlyException("投影机尚未连接，请先调用连接接口");
+            throw new UserFriendlyException("投影仪尚未连接，请先调用连接接口");
         }
         return svc;
     }

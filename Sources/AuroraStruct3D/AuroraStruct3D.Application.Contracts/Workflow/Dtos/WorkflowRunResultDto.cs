@@ -6,6 +6,9 @@ public class WorkflowVariableResultDto
     /// <summary>变量名。</summary>
     public string Name { get; set; } = string.Empty;
 
+    /// <summary>显示名称。</summary>
+    public string? DisplayName { get; set; }
+
     /// <summary>值类型令牌（string/int/long/double/bool/Mat/PointCloudData）。</summary>
     public string ValueType { get; set; } = string.Empty;
 
@@ -38,4 +41,16 @@ public class WorkflowRunResultDto
 
     /// <summary>所有顶层变量的摘要。</summary>
     public List<WorkflowVariableResultDto> Variables { get; set; } = new();
+
+    /// <summary>区域测量结果（高度差检测工作流专用）。</summary>
+    public List<RegionMeasurementResultDto>? Regions { get; set; }
+}
+
+/// <summary>单个区域的测量结果。</summary>
+public class RegionMeasurementResultDto
+{
+    public string Name { get; set; } = string.Empty;
+    public double X { get; set; }
+    public double Y { get; set; }
+    public double Z { get; set; }
 }

@@ -147,6 +147,27 @@ public static class PointCloudProjectionRenderer
             }
         }
 
+        using Mat gray = new Mat();
+        Cv2.CvtColor(image, gray, ColorConversionCodes.BGRA2GRAY);
+        using Mat mask = new Mat();
+        Cv2.Threshold(gray, mask, 1, 255, ThresholdTypes.Binary);
+
+        Cv2.GaussianBlur(image, image, new Size(7, 7), 0);
+
+        using Mat kernel = Cv2.GetStructuringElement(MorphShapes.Ellipse, new Size(3, 3));
+        Cv2.MorphologyEx(image, image, MorphTypes.Close, kernel);
+
+        for (int y = 0; y < height; y++)
+        {
+            for (int x = 0; x < width; x++)
+            {
+                if (mask.Get<byte>(y, x) == 0)
+                {
+                    image.Set(y, x, new Vec4b(0, 0, 0, 0));
+                }
+            }
+        }
+
         return image;
     }
 

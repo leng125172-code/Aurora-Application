@@ -66,4 +66,19 @@ public interface IWorkflowAppService : IApplicationService
     /// </summary>
     /// <param name="id">工作流 ID。</param>
     Task<WorkflowDataFlowReportDto> SimulateAsync(Guid id);
+
+    /// <summary>
+    /// 获取工作流输出变量配置。
+    /// Route: GET {id}/output-config
+    /// </summary>
+    /// <param name="id">工作流 ID。</param>
+    Task<WorkflowOutputConfigDto> GetOutputConfigAsync(Guid id);
+
+    /// <summary>
+    /// 保存工作流输出变量配置。
+    /// Route: PUT {id}/output-config
+    /// </summary>
+    /// <param name="id">工作流 ID。</param>
+    /// <param name="input">输出变量配置。</param>
+    Task<WorkflowOutputConfigDto> UpdateOutputConfigAsync(Guid id, WorkflowOutputConfigDto input);
 }

@@ -546,9 +546,9 @@
 }
 ```
 
-### 3.5 结构光投影机接口
+### 3.5 结构光投影仪接口
 
-结构光投影机接口由前端 `src/api/projectors.ts` 封装，路由前缀为 `/api/projectors`，对应后端 `IProjectorDeviceAppService`。
+结构光投影仪接口由前端 `src/api/projectors.ts` 封装，路由前缀为 `/api/projectors`，对应后端 `IProjectorDeviceAppService`。
 
 > **VID/PID 说明**：USB HID 连接时，厂商 ID（VID）固定为 `0x0483`，产品 ID（PID）固定为 `0x5750`（腾聚 TJ 系列 STM32 HID 芯片，硬件固定，无法修改），不作为配置项存储。
 
@@ -556,14 +556,14 @@
 
 | 前端方法             | HTTP 方法 | 路径                   | 说明                        |
 | -------------------- | --------- | ---------------------- | --------------------------- |
-| `getProjectorList`   | `GET`     | `/api/projectors`      | 分页查询投影机列表          |
-| `getProjector`       | `GET`     | `/api/projectors/{id}` | 获取单台投影机详情          |
-| `createTcpProjector` | `POST`    | `/api/projectors/tcp`  | 创建 TCP 连接方式投影机     |
-| `createHidProjector` | `POST`    | `/api/projectors/hid`  | 创建 USB HID 连接方式投影机 |
-| `updateProjector`    | `PUT`     | `/api/projectors/{id}` | 更新投影机基本信息          |
-| `deleteProjector`    | `DELETE`  | `/api/projectors/{id}` | 删除投影机                  |
+| `getProjectorList`   | `GET`     | `/api/projectors`      | 分页查询投影仪列表          |
+| `getProjector`       | `GET`     | `/api/projectors/{id}` | 获取单台投影仪详情          |
+| `createTcpProjector` | `POST`    | `/api/projectors/tcp`  | 创建 TCP 连接方式投影仪     |
+| `createHidProjector` | `POST`    | `/api/projectors/hid`  | 创建 USB HID 连接方式投影仪 |
+| `updateProjector`    | `PUT`     | `/api/projectors/{id}` | 更新投影仪基本信息          |
+| `deleteProjector`    | `DELETE`  | `/api/projectors/{id}` | 删除投影仪                  |
 
-##### 投影机设备 DTO（`ProjectorDeviceDto`）
+##### 投影仪设备 DTO（`ProjectorDeviceDto`）
 
 ```json
 {
@@ -576,7 +576,7 @@
     "deletionTime": null,
     "deleterId": null,
 
-    "name": "主投影机",
+    "name": "主投影仪",
     "deviceIndex": 0,
     "description": null,
     "isEnabled": true,
@@ -610,7 +610,7 @@
 }
 ```
 
-##### GET `/api/projectors` — 分页查询投影机列表
+##### GET `/api/projectors` — 分页查询投影仪列表
 
 查询参数：
 
@@ -623,13 +623,13 @@
 
 返回体：`PagedResultDto<ProjectorDeviceDto>`
 
-##### POST `/api/projectors/tcp` — 创建 TCP 投影机
+##### POST `/api/projectors/tcp` — 创建 TCP 投影仪
 
 请求体：
 
 ```json
 {
-    "name": "主投影机",
+    "name": "主投影仪",
     "deviceIndex": 0,
     "description": null,
     "isEnabled": true,
@@ -649,13 +649,13 @@
 | `tcpPort`          |      | 1~65535，默认 1234   | TCP 端口         |
 | `connectTimeoutMs` |      | 500~30000，默认 5000 | 连接超时（毫秒） |
 
-##### POST `/api/projectors/hid` — 创建 USB HID 投影机
+##### POST `/api/projectors/hid` — 创建 USB HID 投影仪
 
 请求体：
 
 ```json
 {
-    "name": "HID 投影机",
+    "name": "HID 投影仪",
     "deviceIndex": 0,
     "description": null,
     "isEnabled": true,
@@ -675,13 +675,13 @@
 
 > VID=`0x0483` / PID=`0x5750` 由后端 `ProjectorConsts` 固定，不在请求体中传入。
 
-##### PUT `/api/projectors/{id}` — 更新投影机基本信息
+##### PUT `/api/projectors/{id}` — 更新投影仪基本信息
 
 请求体：
 
 ```json
 {
-    "name": "主投影机",
+    "name": "主投影仪",
     "description": "更新说明",
     "isEnabled": true,
     "connectTimeoutMs": 5000
@@ -692,8 +692,8 @@
 
 | 前端方法              | HTTP 方法 | 路径                              | 说明                              |
 | --------------------- | --------- | --------------------------------- | --------------------------------- |
-| `connectProjector`    | `POST`    | `/api/projectors/{id}/connect`    | 连接投影机（自动按 TCP/HID 路由） |
-| `disconnectProjector` | `POST`    | `/api/projectors/{id}/disconnect` | 断开投影机连接                    |
+| `connectProjector`    | `POST`    | `/api/projectors/{id}/connect`    | 连接投影仪（自动按 TCP/HID 路由） |
+| `disconnectProjector` | `POST`    | `/api/projectors/{id}/disconnect` | 断开投影仪连接                    |
 
 #### 3.5.3 LED 控制
 
@@ -763,7 +763,7 @@
 
 | 前端方法                 | HTTP 方法 | 路径                                      | 说明                                |
 | ------------------------ | --------- | ----------------------------------------- | ----------------------------------- |
-| `projectorSoftReset`     | `POST`    | `/api/projectors/{id}/soft-reset`         | 软复位投影机                        |
+| `projectorSoftReset`     | `POST`    | `/api/projectors/{id}/soft-reset`         | 软复位投影仪                        |
 | `projectorSaveParams`    | `POST`    | `/api/projectors/{id}/save-params`        | 保存参数到设备 NVM                  |
 | `readProjectorRegister`  | `GET`     | `/api/projectors/{id}/register/{address}` | 读取寄存器（返回 `string \| null`） |
 | `writeProjectorRegister` | `POST`    | `/api/projectors/write-register`          | 写入寄存器                          |
@@ -786,7 +786,7 @@
 
 | 参数                | 类型      | 说明                          |
 | ------------------- | --------- | ----------------------------- |
-| `projectorDeviceId` | `string`  | 指定投影机 ID（不传则查全部） |
+| `projectorDeviceId` | `string`  | 指定投影仪 ID（不传则查全部） |
 | `operationType`     | `number`  | 操作类型枚举                  |
 | `isFailedOnly`      | `boolean` | 仅查失败记录                  |
 | `skipCount`         | `number`  | 跳过条数                      |

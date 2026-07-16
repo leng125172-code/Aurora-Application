@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 投影机操作记录页：独立页面，从投影机管理页拆分
+// 投影仪操作记录页：独立页面，从投影仪管理页拆分
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import DataTable from 'primevue/datatable'

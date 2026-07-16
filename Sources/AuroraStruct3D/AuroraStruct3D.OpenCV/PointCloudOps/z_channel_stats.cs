@@ -63,6 +63,12 @@ public class z_channel_stats : IOperator
             },
             new VisionParameter<double>
             {
+                ParameterName = "centroid_z",
+                ParameterType = typeof(double),
+                DisplayName = "质心Z高度",
+            },
+            new VisionParameter<double>
+            {
                 ParameterName = "max_height",
                 ParameterType = typeof(double),
                 DisplayName = "最大高度",
@@ -131,6 +137,7 @@ public class z_channel_stats : IOperator
 
         // 计算每个点的高度值（有参考平面时用有符号距离，否则用 Z 坐标）
         double sumH = 0;
+        double sumZ = 0;
         double maxH = double.MinValue;
         double minH = double.MaxValue;
         double[] heights = new double[pointCount];
@@ -140,6 +147,8 @@ public class z_channel_stats : IOperator
             float x = pointCloud.Get<float>(i, 0);
             float y = pointCloud.Get<float>(i, 1);
             float z = pointCloud.Get<float>(i, 2);
+
+            sumZ += z;
 
             double h = usePlane
                 ? a * x + b * y + c * z + d // 有符号距离：正值=法向量方向，负值=反向
@@ -154,6 +163,7 @@ public class z_channel_stats : IOperator
         }
 
         double avgH = sumH / pointCount;
+        double centroidZ = Math.Round(sumZ / pointCount, 4);
 
         // 计算标准差
         double sumSquaredDiff = 0;
@@ -187,6 +197,7 @@ public class z_channel_stats : IOperator
 
         context.Set("z_stats_json", statsJson);
         context.Set("avg_height", stats.AvgHeight);
+        context.Set("centroid_z", centroidZ);
         context.Set("max_height", stats.MaxHeight);
         context.Set("min_height", stats.MinHeight);
         context.Set("std_height", stats.StdHeight);

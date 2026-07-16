@@ -1,4 +1,4 @@
-﻿export default {
+export default {
     common: {
         confirm: 'Bestätigen',
         cancel: 'Abbrechen',
@@ -376,6 +376,7 @@
         tabVideo: 'Live-Vorschau',
         tabSnapshot: 'Schnappschuss',
         waitingFrame: 'Warte auf Frame…',
+        fullscreenTip: 'Klicken Sie auf leeren Bereich oder auf die Schaltfläche oben rechts, um den Vollbildmodus zu verlassen',
         previewNotStarted: 'Vorschau nicht gestartet',
         noSnapshot: 'Kein Schnappschuss',
         focusScore: 'Fokusschärfe',
@@ -1395,6 +1396,7 @@
         step5CornerCols: 'Innere Ecken Spalten',
         step5SquareSizeMm: 'Feldgröße (mm)',
         step5ProjectedPixelSize: 'Pixelgröße (px)',
+        step5BoardThicknessMm: 'Plattenstärke (mm)',
         step5SaveBoardConfig: 'Konfiguration speichern',
         step5SaveBoardConfigSuccess: 'Kalibrierplattenkonfiguration gespeichert',
         step5ImportBoardConfig: 'Konfiguration importieren',
@@ -1436,13 +1438,7 @@
         step5CircleValidationAreaRange: 'Ungültiger Flächenbereich: Es muss gelten 0 < minArea < maxArea.',
         step5CircleValidationMinCircularity: 'Min. Kreisförmigkeit muss im Bereich [0, 1] liegen.',
         step5CircleValidationMinConvexity: 'Min. Konvexität muss im Bereich [0, 1] liegen.',
-        step5AutoAlignBtn: 'Kamera automatisch ausrichten',
-        step5AutoAligning: 'Ausrichten…',
-        step5AlignSuccess: 'Kameraausrichtung abgeschlossen',
-        step5AlignPartialFailed: 'Einige Kameras konnten nicht ausgerichtet werden',
-        step5AlignSkipped: 'Kein Motor gebunden, übersprungen',
-        step5AlignBefore: 'Vorher',
-        step5AlignAfter: 'Nachher',
+
         step5ImageTracking: 'Bildverfolgung',
         step5ImageTrackingNotAvailable: 'Noch nicht verfügbar',
         step5CameraList: 'Kameraliste',
@@ -1453,6 +1449,8 @@
         step5LedOff: 'LED Aus',
         step5TakeIntrinsic: 'Intrinsik-Aufnahme',
         step5TakeExtrinsic: 'Extrinsik-Aufnahme',
+        step5TakeExtrinsicDot: 'Extrinsik-Dot-Aufnahme',
+        step5TakeExtrinsicCheckerboard: 'Extrinsik-Schachbrett-Aufnahme',
         step5TakingPhoto: 'Aufnahme…',
         step5Compute: 'Kalibrierung berechnen',
         step5ComputeIntrinsic: 'Intrinsik berechnen',
@@ -1465,6 +1463,7 @@
         step5ExtrinsicLedOffFrame: 'Weissbild',
         step5ExtrinsicLedOnFrame: 'Musterbild',
         step5ExtrinsicGroupInvalid: '{camera}: Diese Doppelaufnahme für die Extrinsik enthält ein ungültiges Bild. Bitte erneut aufnehmen.',
+        step5ExtrinsicImageDiffInsignificant: '{camera}: Der Bildunterschied ist nicht signifikant. Der Projektor-Moduswechsel ist möglicherweise fehlgeschlagen. Bitte Gerät prüfen und erneut versuchen.',
         step5ValidPhoto: 'Gültig',
         step5InvalidPhoto: 'Ungültig (kein Schachbrett erkannt)',
         step5PhotoCount: '{count} Fotos',

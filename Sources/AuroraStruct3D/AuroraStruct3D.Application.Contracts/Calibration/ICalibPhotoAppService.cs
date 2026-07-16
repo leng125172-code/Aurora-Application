@@ -46,6 +46,18 @@ public interface ICalibPhotoAppService : IApplicationService
     Task<CalibExtrinsicSampleDto> TakeExtrinsicPhotoAsync(TakeExtrinsicPhotoInput input);
 
     /// <summary>
+    /// 外参圆点拍照：投影仪切换到 S1 白屏模式，拍摄圆点标定板。
+    /// 返回新建的照片记录（含缩略图），用于后续与棋盘格照片配对。
+    /// </summary>
+    Task<CalibPhotoDto> TakeExtrinsicDotPhotoAsync(TakeExtrinsicPhotoInput input);
+
+    /// <summary>
+    /// 外参棋盘格拍照：投影仪切换到 S3 棋盘格模式，拍摄纯棋盘格（需先移除标定板）。
+    /// 返回新建的照片记录（含缩略图），与之前拍摄的圆点照片配对为一组外参样本。
+    /// </summary>
+    Task<CalibPhotoDto> TakeExtrinsicCheckerboardPhotoAsync(TakeExtrinsicPhotoInput input);
+
+    /// <summary>
     /// 双目联合外参成对拍照：一次采集主/从相机两张实体棋盘格照片，并以同组 ID 关联
     /// </summary>
     Task<CalibStereoPairPhotoDto> TakeStereoExtrinsicPairPhotoAsync(
@@ -108,11 +120,4 @@ public interface ICalibPhotoAppService : IApplicationService
     /// </summary>
     Task<bool> ValidateStep5Async(Guid calibProjectId);
 
-    /// <summary>
-    /// 相机自动对齐：投影十字架 → 左右相机各拍一帧 → OpenCV 检测十字架中心偏差
-    ///   → 计算目标角度 → 调整瓴控伺服电机，使两台相机都能看到十字架中心区域。
-    /// 仅对已绑定角度控制电机（MainCameraMotorAxisId / SecondaryCameraMotorAxisId）的相机执行调整。
-    /// POST /api/app/calib-photo/auto-align-cameras?calibProjectId={id}
-    /// </summary>
-    Task<AutoAlignCamerasResultDto> AutoAlignCamerasAsync(Guid id);
 }

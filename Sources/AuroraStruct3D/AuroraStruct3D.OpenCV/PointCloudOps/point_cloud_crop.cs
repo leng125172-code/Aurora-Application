@@ -35,6 +35,13 @@ public class point_cloud_crop : IOperator
         {
             new PointCloudData() { ParameterName = "input_point_cloud", DisplayName = "输入点云" },
             new MatImg() { ParameterName = "roi_mask", DisplayName = "ROI掩膜" },
+            new VisionParameter<string>
+            {
+                ParameterName = "roi_metadata",
+                ParameterType = typeof(string),
+                DisplayName = "ROI元数据",
+                ControlType = PortControlType.Variable,
+            },
         };
 
     public static List<IVisionParameter>? OutputVisionParameters =>
@@ -231,6 +238,15 @@ public class point_cloud_crop : IOperator
                 Required = false,
                 ControlType = PortControlType.Input,
             },
+            new ConfigParameter
+            {
+                Name = "maskThreshold",
+                DisplayName = "掩膜阈值",
+                ParameterType = typeof(double),
+                DefaultValue = "0",
+                Required = false,
+                ControlType = PortControlType.Input,
+            },
         };
 
     private readonly string _cropMode;
@@ -252,7 +268,8 @@ public class point_cloud_crop : IOperator
     private readonly double _maskWorldMinX,
         _maskWorldMaxX,
         _maskWorldMinY,
-        _maskWorldMaxY;
+        _maskWorldMaxY,
+        _maskThreshold;
     private bool _disposed;
 
     public point_cloud_crop(
@@ -275,7 +292,8 @@ public class point_cloud_crop : IOperator
         double maskWorldMinX = 0,
         double maskWorldMaxX = 100,
         double maskWorldMinY = 0,
-        double maskWorldMaxY = 100
+        double maskWorldMaxY = 100,
+        double maskThreshold = 0
     )
     {
         _cropMode = cropMode;
@@ -298,6 +316,7 @@ public class point_cloud_crop : IOperator
         _maskWorldMaxX = maskWorldMaxX;
         _maskWorldMinY = maskWorldMinY;
         _maskWorldMaxY = maskWorldMaxY;
+        _maskThreshold = maskThreshold;
     }
 
     public void Execute(IWorkflowContext context)
@@ -430,7 +449,7 @@ public class point_cloud_crop : IOperator
             double worldMaxY,
             int axisX,
             int axisY
-        ) = ResolveMaskMapping(context, maskWidth, maskHeight);
+        ) = ResolveMaskMapping(context, cloud, count, maskWidth, maskHeight);
 
         double worldRangeX = worldMaxX - worldMinX;
         double worldRangeY = worldMaxY - worldMinY;
@@ -454,7 +473,7 @@ public class point_cloud_crop : IOperator
                 continue;
 
             // 检查掩膜像素值（白色 = 255 = 在 ROI 内）
-            if (mask.Get<byte>(py, px) > 0)
+            if (mask.Get<byte>(py, px) > _maskThreshold)
                 indices.Add(i);
         }
         return indices;
@@ -467,42 +486,62 @@ public class point_cloud_crop : IOperator
         double worldMaxY,
         int axisX,
         int axisY
-    ) ResolveMaskMapping(IWorkflowContext context, int maskWidth, int maskHeight)
+    ) ResolveMaskMapping(
+        IWorkflowContext context,
+        Mat cloud,
+        int cloudPointCount,
+        int maskWidth,
+        int maskHeight
+    )
     {
         string? metadataJson = context.Get<string>("roi_metadata");
-        if (string.IsNullOrWhiteSpace(metadataJson))
+        RoiProjectionMapping? mapping = null;
+        int axisX = 0,
+            axisY = 1;
+
+        if (!string.IsNullOrWhiteSpace(metadataJson))
         {
-            return (_maskWorldMinX, _maskWorldMaxX, _maskWorldMinY, _maskWorldMaxY, 0, 1);
+            try
+            {
+                RoiPartitionMetadata? metadata = JsonSerializer.Deserialize<RoiPartitionMetadata>(
+                    metadataJson,
+                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true }
+                );
+                mapping = metadata?.ProjectionMapping;
+                if (mapping is not null)
+                {
+                    (axisX, axisY) = ResolveAxesFromViewLabel(mapping.ViewLabel);
+
+                    if (mapping.ImageWidth > 0 && mapping.ImageWidth != maskWidth)
+                    {
+                        throw new InvalidOperationException(
+                            $"ROI 映射宽度 {mapping.ImageWidth} 与 roi_mask 宽度 {maskWidth} 不一致。"
+                        );
+                    }
+
+                    if (mapping.ImageHeight > 0 && mapping.ImageHeight != maskHeight)
+                    {
+                        throw new InvalidOperationException(
+                            $"ROI 映射高度 {mapping.ImageHeight} 与 roi_mask 高度 {maskHeight} 不一致。"
+                        );
+                    }
+                }
+            }
+            catch (JsonException ex)
+            {
+                throw new InvalidOperationException(
+                    $"roi_metadata 解析失败，无法建立 ROI 到模型映射：{ex.Message}"
+                );
+            }
         }
 
-        try
+        // 优先使用 ROI 元数据中的映射范围，否则使用配置参数，最后回退到点云实际范围
+        if (
+            mapping is not null
+            && mapping.WorldMaxX > mapping.WorldMinX
+            && mapping.WorldMaxY > mapping.WorldMinY
+        )
         {
-            RoiPartitionMetadata? metadata = JsonSerializer.Deserialize<RoiPartitionMetadata>(
-                metadataJson,
-                new JsonSerializerOptions { PropertyNameCaseInsensitive = true }
-            );
-            RoiProjectionMapping? mapping = metadata?.ProjectionMapping;
-            if (mapping is null)
-            {
-                return (_maskWorldMinX, _maskWorldMaxX, _maskWorldMinY, _maskWorldMaxY, 0, 1);
-            }
-
-            (int axisX, int axisY) = ResolveAxesFromViewLabel(mapping.ViewLabel);
-
-            if (mapping.ImageWidth > 0 && mapping.ImageWidth != maskWidth)
-            {
-                throw new InvalidOperationException(
-                    $"ROI 映射宽度 {mapping.ImageWidth} 与 roi_mask 宽度 {maskWidth} 不一致。"
-                );
-            }
-
-            if (mapping.ImageHeight > 0 && mapping.ImageHeight != maskHeight)
-            {
-                throw new InvalidOperationException(
-                    $"ROI 映射高度 {mapping.ImageHeight} 与 roi_mask 高度 {maskHeight} 不一致。"
-                );
-            }
-
             return (
                 mapping.WorldMinX,
                 mapping.WorldMaxX,
@@ -512,12 +551,68 @@ public class point_cloud_crop : IOperator
                 axisY
             );
         }
-        catch (JsonException ex)
+
+        if (_maskWorldMaxX > _maskWorldMinX && _maskWorldMaxY > _maskWorldMinY)
         {
-            throw new InvalidOperationException(
-                $"roi_metadata 解析失败，无法建立 ROI 到模型映射：{ex.Message}"
-            );
+            // 检查配置参数是否与点云实际范围匹配，如果差异过大则回退到自动计算
+            (double cloudMinX, double cloudMaxX, double cloudMinY, double cloudMaxY, _, _) =
+                ComputeCloudRange(cloud, cloudPointCount, axisX, axisY);
+
+            double configRangeX = _maskWorldMaxX - _maskWorldMinX;
+            double configRangeY = _maskWorldMaxY - _maskWorldMinY;
+            double cloudRangeX = cloudMaxX - cloudMinX;
+            double cloudRangeY = cloudMaxY - cloudMinY;
+
+            // 如果配置参数范围与点云实际范围差异超过 10 倍，说明配置参数可能是默认值，回退到自动计算
+            if (
+                cloudRangeX > 0
+                && cloudRangeY > 0
+                && (configRangeX / cloudRangeX > 10 || configRangeY / cloudRangeY > 10)
+            )
+            {
+                return (cloudMinX, cloudMaxX, cloudMinY, cloudMaxY, axisX, axisY);
+            }
+
+            return (_maskWorldMinX, _maskWorldMaxX, _maskWorldMinY, _maskWorldMaxY, axisX, axisY);
         }
+
+        return ComputeCloudRange(cloud, cloudPointCount, axisX, axisY);
+    }
+
+    /// <summary>
+    /// 从点云数据中自动计算指定轴的实际范围，作为掩膜映射的回退方案。
+    /// </summary>
+    private static (
+        double worldMinX,
+        double worldMaxX,
+        double worldMinY,
+        double worldMaxY,
+        int axisX,
+        int axisY
+    ) ComputeCloudRange(Mat cloud, int count, int axisX, int axisY)
+    {
+        float minX = float.MaxValue,
+            maxX = float.MinValue;
+        float minY = float.MaxValue,
+            maxY = float.MinValue;
+
+        for (int i = 0; i < count; i++)
+        {
+            float vx = cloud.Get<float>(i, axisX);
+            float vy = cloud.Get<float>(i, axisY);
+            if (vx < minX)
+                minX = vx;
+            if (vx > maxX)
+                maxX = vx;
+            if (vy < minY)
+                minY = vy;
+            if (vy > maxY)
+                maxY = vy;
+        }
+
+        // 稍微扩展边界，避免边界点因取整被裁剪
+        const double margin = 0.01;
+        return (minX - margin, maxX + margin, minY - margin, maxY + margin, axisX, axisY);
     }
 
     private static (int axisX, int axisY) ResolveAxesFromViewLabel(string? viewLabel)

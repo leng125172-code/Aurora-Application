@@ -68,22 +68,59 @@ public class ransac_plane_fit : IOperator
                 Required = false,
                 ControlType = PortControlType.Input,
             },
+            new ConfigParameter
+            {
+                Name = "seed",
+                DisplayName = "随机种子",
+                ParameterType = typeof(int),
+                DefaultValue = "0",
+                Required = false,
+                ControlType = PortControlType.Input,
+            },
+            new ConfigParameter
+            {
+                Name = "refinePlane",
+                DisplayName = "内点细化",
+                ParameterType = typeof(bool),
+                DefaultValue = "true",
+                Required = false,
+                ControlType = PortControlType.Input,
+            },
+            new ConfigParameter
+            {
+                Name = "normalConstraint",
+                DisplayName = "法向量约束",
+                ParameterType = typeof(string),
+                DefaultValue = "none",
+                ValueLimit = new[] { "none", "z-up", "z-down", "xy-plane" },
+                Required = false,
+                ControlType = PortControlType.Select,
+            },
         };
 
     private readonly double _distanceThreshold;
     private readonly int _maxIterations;
     private readonly double _probability;
+    private readonly int _seed;
+    private readonly bool _refinePlane;
+    private readonly string _normalConstraint;
     private bool _disposed;
 
     public ransac_plane_fit(
         double distanceThreshold = 0.01,
         int maxIterations = 1000,
-        double probability = 0.99
+        double probability = 0.99,
+        int seed = 0,
+        bool refinePlane = true,
+        string normalConstraint = "none"
     )
     {
         _distanceThreshold = distanceThreshold;
         _maxIterations = maxIterations;
         _probability = probability;
+        _seed = seed;
+        _refinePlane = refinePlane;
+        _normalConstraint = normalConstraint;
     }
 
     public void Execute(IWorkflowContext context)
@@ -110,13 +147,24 @@ public class ransac_plane_fit : IOperator
             pointCount,
             _distanceThreshold,
             _maxIterations,
-            _probability
+            _probability,
+            _seed,
+            _refinePlane,
+            _normalConstraint
         );
 
         // 拆分内点和外点
-        (var inlierPoints, var inlierColors) = PointCloudUtils.ExtractSubset(input,bestInliers, pointCloud);
+        (var inlierPoints, var inlierColors) = PointCloudUtils.ExtractSubset(
+            input,
+            bestInliers,
+            pointCloud
+        );
         var outlierIndices = Enumerable.Range(0, pointCount).Except(bestInliers).ToList();
-        (var outlierPoints, var outlierColors) = PointCloudUtils.ExtractSubset(input,outlierIndices, pointCloud);
+        (var outlierPoints, var outlierColors) = PointCloudUtils.ExtractSubset(
+            input,
+            outlierIndices,
+            pointCloud
+        );
 
         // 保存平面参数
         Mat planeParams = new Mat(4, 1, MatType.CV_64FC1);
@@ -144,10 +192,13 @@ public class ransac_plane_fit : IOperator
         int pointCount,
         double threshold,
         int maxIter,
-        double prob
+        double prob,
+        int seed,
+        bool refinePlane,
+        string normalConstraint
     )
     {
-        Random rng = new Random(Guid.NewGuid().GetHashCode());
+        Random rng = seed > 0 ? new Random(seed) : new Random(Guid.NewGuid().GetHashCode());
         int bestInlierCount = 0;
         double[] bestPlane = new double[4];
         List<int> bestInliers = new List<int>();
@@ -155,7 +206,6 @@ public class ransac_plane_fit : IOperator
         int iterations = 0;
         while (iterations < maxIter)
         {
-            // 随机采样 3 个点
             var sample = SampleThreePoints(pointCount, rng);
             double[,] pts = new double[3, 3];
             for (int i = 0; i < 3; i++)
@@ -165,7 +215,6 @@ public class ransac_plane_fit : IOperator
                 pts[i, 2] = pointCloud.Get<float>(sample[i], 2);
             }
 
-            // 拟合平面
             double[] plane = FitPlaneFromThreePoints(pts);
             if (plane == null)
             {
@@ -173,7 +222,8 @@ public class ransac_plane_fit : IOperator
                 continue;
             }
 
-            // 统计内点
+            plane = ApplyNormalConstraint(plane, normalConstraint);
+
             List<int> inliers = new List<int>();
             for (int i = 0; i < pointCount; i++)
             {
@@ -185,14 +235,12 @@ public class ransac_plane_fit : IOperator
                     inliers.Add(i);
             }
 
-            // 更新最优解
             if (inliers.Count > bestInlierCount)
             {
                 bestInlierCount = inliers.Count;
                 bestPlane = plane;
                 bestInliers = inliers;
 
-                // 根据当前内点比例计算需要的迭代次数
                 double inlierRatio = (double)inliers.Count / pointCount;
                 if (inlierRatio > 0)
                 {
@@ -203,6 +251,11 @@ public class ransac_plane_fit : IOperator
             }
 
             iterations++;
+        }
+
+        if (refinePlane && bestInliers.Count >= 3)
+        {
+            bestPlane = RefinePlaneWithInliers(pointCloud, bestInliers, normalConstraint);
         }
 
         return (bestPlane, bestInliers);
@@ -220,7 +273,6 @@ public class ransac_plane_fit : IOperator
 
     private static double[] FitPlaneFromThreePoints(double[,] pts)
     {
-        // 计算两个向量
         double v1x = pts[1, 0] - pts[0, 0];
         double v1y = pts[1, 1] - pts[0, 1];
         double v1z = pts[1, 2] - pts[0, 2];
@@ -229,7 +281,6 @@ public class ransac_plane_fit : IOperator
         double v2y = pts[2, 1] - pts[0, 1];
         double v2z = pts[2, 2] - pts[0, 2];
 
-        // 叉积得到法向量
         double a = v1y * v2z - v1z * v2y;
         double b = v1z * v2x - v1x * v2z;
         double c = v1x * v2y - v1y * v2x;
@@ -238,13 +289,92 @@ public class ransac_plane_fit : IOperator
         if (norm < 1e-10)
             return null!;
 
-        // 单位化
         a /= norm;
         b /= norm;
         c /= norm;
         double d = -(a * pts[0, 0] + b * pts[0, 1] + c * pts[0, 2]);
 
         return new[] { a, b, c, d };
+    }
+
+    private static double[] ApplyNormalConstraint(double[] plane, string constraint)
+    {
+        double a = plane[0],
+            b = plane[1],
+            c = plane[2],
+            d = plane[3];
+
+        return constraint.ToLowerInvariant() switch
+        {
+            "z-up" when c < 0 => new[] { -a, -b, -c, -d },
+            "z-down" when c > 0 => new[] { -a, -b, -c, -d },
+            "xy-plane" when Math.Abs(c) < Math.Abs(a) || Math.Abs(c) < Math.Abs(b) => new[]
+            {
+                -a,
+                -b,
+                -c,
+                -d,
+            },
+            _ => plane,
+        };
+    }
+
+    private static double[] RefinePlaneWithInliers(
+        Mat pointCloud,
+        List<int> inliers,
+        string normalConstraint
+    )
+    {
+        int n = inliers.Count;
+
+        // 计算质心
+        double cx = 0,
+            cy = 0,
+            cz = 0;
+        foreach (int idx in inliers)
+        {
+            cx += pointCloud.Get<float>(idx, 0);
+            cy += pointCloud.Get<float>(idx, 1);
+            cz += pointCloud.Get<float>(idx, 2);
+        }
+        cx /= n;
+        cy /= n;
+        cz /= n;
+
+        // 构建中心化协方差矩阵（累加）
+        double s00 = 0,
+            s01 = 0,
+            s02 = 0;
+        double s11 = 0,
+            s12 = 0;
+        double s22 = 0;
+        foreach (int idx in inliers)
+        {
+            double dx = pointCloud.Get<float>(idx, 0) - cx;
+            double dy = pointCloud.Get<float>(idx, 1) - cy;
+            double dz = pointCloud.Get<float>(idx, 2) - cz;
+            s00 += dx * dx;
+            s01 += dx * dy;
+            s02 += dx * dz;
+            s11 += dy * dy;
+            s12 += dy * dz;
+            s22 += dz * dz;
+        }
+
+        // 使用 Jacobi SVD 精确求解平面法向量（除以点数得到真正的协方差）
+        double[] refined = Math3D.SolvePlaneByCovariance(
+            s00 / n,
+            s01 / n,
+            s02 / n,
+            s11 / n,
+            s12 / n,
+            s22 / n,
+            cx,
+            cy,
+            cz
+        );
+
+        return ApplyNormalConstraint(refined, normalConstraint);
     }
 
     public void Dispose()

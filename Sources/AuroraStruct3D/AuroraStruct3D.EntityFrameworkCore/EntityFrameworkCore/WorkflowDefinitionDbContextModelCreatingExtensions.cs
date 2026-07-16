@@ -30,6 +30,9 @@ public static class WorkflowDefinitionDbContextModelCreatingExtensions
             // 工作流画布数据 JSON，长度不限（PostgreSQL text）。
             b.Property(x => x.GraphData).IsRequired();
 
+            // 输出变量配置 JSON，长度不限（PostgreSQL text）。
+            b.Property(x => x.OutputVariables).IsRequired(false);
+
             b.HasIndex(x => x.ProjectId);
             b.HasIndex(x => new { x.ProjectId, x.Name });
         });

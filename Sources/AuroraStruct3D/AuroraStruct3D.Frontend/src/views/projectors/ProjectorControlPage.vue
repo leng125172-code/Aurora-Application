@@ -85,7 +85,7 @@ const colorOptions = computed(() => [
 ])
 // 本地选中的颜色 tab
 const selectedColor = ref<ProjectorColor>(ProjectorColor.White)
-// 单色亮度（10~175）
+// 单色亮度（0~175）
 const colorBrightness = ref(100)
 
 // 单色点击：立即切换颜色模式
@@ -210,7 +210,7 @@ onMounted(async () => {
     }
     if (device.value) {
         selectedColor.value = device.value.lastColor
-        colorBrightness.value = device.value.lastLightValue || 100
+        colorBrightness.value = device.value.lastLightValue
         checkerboardPixelSize.value = device.value.checkerboardPixelSize
         rgbR.value = device.value.ledRgbR
         rgbG.value = device.value.ledRgbG
@@ -221,7 +221,7 @@ onMounted(async () => {
 watch(device, (d) => {
     if (!d) return
     selectedColor.value = d.lastColor
-    colorBrightness.value = d.lastLightValue || 100
+    colorBrightness.value = d.lastLightValue
     checkerboardPixelSize.value = d.checkerboardPixelSize
     rgbR.value = d.ledRgbR
     rgbG.value = d.ledRgbG
@@ -396,12 +396,12 @@ watch(device, (d) => {
                             </Button>
                         </div>
 
-                        <!-- 单色：亮度调节 10-175 -->
+                        <!-- 单色：亮度调节 0-175 -->
                         <div v-else class="mt-4 flex items-center gap-3">
                             <span class="text-sm text-muted-foreground">{{ t('projector.brightness') }}</span>
                             <Slider
                                 v-model="colorBrightness"
-                                :min="10"
+                                :min="0"
                                 :max="175"
                                 :step="5"
                                 class="flex-1"

@@ -4,9 +4,9 @@ using Volo.Abp.Domain.Entities.Auditing;
 namespace AuroraStruct3D.Projectors;
 
 /// <summary>
-/// DLP 结构光投影机设备聚合根。
-/// 存储投影机的网络连接配置、当前运行状态及参数快照。
-/// 一台物理投影机对应一条记录。
+/// DLP 结构光投影仪设备聚合根。
+/// 存储投影仪的网络连接配置、当前运行状态及参数快照。
+/// 一台物理投影仪对应一条记录。
 ///
 /// 数据库表：AbpProProjectors
 /// 通信协议：TCP ASCII，端口 1234（腾聚 TJ 系列协议）
@@ -15,7 +15,7 @@ public class ProjectorDevice : FullAuditedAggregateRoot<Guid>
 {
     // ─────────────────────────── 基本信息 ───────────────────────────
 
-    /// <summary>投影机名称（如"主投影机"、"A工位投影机"）</summary>
+    /// <summary>投影仪名称（如"主投影仪"、"A工位投影仪"）</summary>
     public string Name { get; private set; } = null!;
 
     /// <summary>显示序号，用于排序（0=第一台）</summary>
@@ -32,7 +32,7 @@ public class ProjectorDevice : FullAuditedAggregateRoot<Guid>
     /// <summary>物理连接方式（TCP 或 USB HID）</summary>
     public ProjectorConnectionType ConnectionType { get; private set; }
 
-    /// <summary>投影机 IP 地址（仅 TCP 模式有效，如 192.168.100.100）</summary>
+    /// <summary>投影仪 IP 地址（仅 TCP 模式有效，如 192.168.100.100）</summary>
     public string? IpAddress { get; private set; }
 
     /// <summary>TCP 端口号（仅 TCP 模式有效，腾聚 TJ 系列固定为 1234）</summary>
@@ -98,7 +98,7 @@ public class ProjectorDevice : FullAuditedAggregateRoot<Guid>
 
     // ─────────────────────────── 操作日志集合（关联） ───────────────────────────
 
-    /// <summary>该投影机的操作历史日志</summary>
+    /// <summary>该投影仪的操作历史日志</summary>
     public ICollection<ProjectorOperationLog> OperationLogs { get; private set; } =
         new List<ProjectorOperationLog>();
 
@@ -110,7 +110,7 @@ public class ProjectorDevice : FullAuditedAggregateRoot<Guid>
     protected ProjectorDevice() { }
 
     /// <summary>
-    /// 创建 TCP 连接方式的投影机设备
+    /// 创建 TCP 连接方式的投影仪设备
     /// </summary>
     /// <param name="id">主键</param>
     /// <param name="name">设备名称</param>
@@ -151,7 +151,7 @@ public class ProjectorDevice : FullAuditedAggregateRoot<Guid>
     }
 
     /// <summary>
-    /// 创建 USB HID 连接方式的投影机设备（STM32 USB HID 芯片，VID/PID 由 ProjectorConsts 固定为 0x0483/0x5750）
+    /// 创建 USB HID 连接方式的投影仪设备（STM32 USB HID 芯片，VID/PID 由 ProjectorConsts 固定为 0x0483/0x5750）
     /// </summary>
     /// <param name="id">主键</param>
     /// <param name="name">设备名称</param>

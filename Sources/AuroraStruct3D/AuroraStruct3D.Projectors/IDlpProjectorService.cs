@@ -1,14 +1,14 @@
 namespace AuroraStruct3D.Projectors;
 
 /// <summary>
-/// 腾聚结构光投影机状态信息
+/// 腾聚结构光投影仪状态信息
 /// </summary>
 public class DlpProjectorStatus
 {
-    /// <summary>投影机连接方式</summary>
+    /// <summary>投影仪连接方式</summary>
     public string ConnectionType { get; init; } = string.Empty;
 
-    /// <summary>投影机 IP 地址（TCP 模式）</summary>
+    /// <summary>投影仪 IP 地址（TCP 模式）</summary>
     public string? IpAddress { get; init; }
 
     /// <summary>TCP 端口（TCP 模式）</summary>
@@ -37,29 +37,29 @@ public class DlpProjectorStatus
 }
 
 /// <summary>
-/// 腾聚（TJ）结构光投影机操作服务接口。
+/// 腾聚（TJ）结构光投影仪操作服务接口。
 /// 支持 TCP/IP 和 USB HID（Megawin EasyPOD 芯片）两种连接方式，协议均为 ASCII 文本命令（\r\n 结尾）。
 /// 全平台支持 linux-arm64 和 Windows，无需原生 DLL。
 /// </summary>
 public interface IDlpProjectorService
 {
     /// <summary>
-    /// 连接到指定 IP 的投影机（TCP 端口 1234）
+    /// 连接到指定 IP 的投影仪（TCP 端口 1234）
     /// </summary>
-    /// <param name="ip">投影机 IPv4 地址，如 "192.168.100.100"</param>
+    /// <param name="ip">投影仪 IPv4 地址，如 "192.168.100.100"</param>
     /// <param name="cancellationToken">取消令牌</param>
     Task ConnectAsync(string ip, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// 连接到指定 IP 和端口的投影机
+    /// 连接到指定 IP 和端口的投影仪
     /// </summary>
-    /// <param name="ip">投影机 IPv4 地址</param>
+    /// <param name="ip">投影仪 IPv4 地址</param>
     /// <param name="port">TCP 端口（默认 1234）</param>
     /// <param name="cancellationToken">取消令牌</param>
     Task ConnectAsync(string ip, int port, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// 通过 USB HID 连接投影机（Megawin EasyPOD 芯片，跨平台 Windows + Linux）
+    /// 通过 USB HID 连接投影仪（Megawin EasyPOD 芯片，跨平台 Windows + Linux）
     /// </summary>
     /// <param name="vendorId">HID 厂商 ID（默认 0x0E6A）</param>
     /// <param name="productId">HID 产品 ID（默认 0x0317）</param>
@@ -73,27 +73,27 @@ public interface IDlpProjectorService
     );
 
     /// <summary>
-    /// 断开投影机连接
+    /// 断开投影仪连接
     /// </summary>
     Task DisconnectAsync();
 
     /// <summary>
-    /// 绑定当前服务实例对应的投影机设备 ID（用于操作日志写入）。
-    /// 在连接投影机后调用，传入数据库中 ProjectorDevice 的 Guid。
+    /// 绑定当前服务实例对应的投影仪设备 ID（用于操作日志写入）。
+    /// 在连接投影仪后调用，传入数据库中 ProjectorDevice 的 Guid。
     /// 未调用此方法时操作日志不会写入。
     /// </summary>
-    /// <param name="projectorDeviceId">投影机设备数据库 ID</param>
+    /// <param name="projectorDeviceId">投影仪设备数据库 ID</param>
     void SetProjectorDeviceId(Guid projectorDeviceId);
 
     /// <summary>
-    /// 注入 HID 设备索引到投影机设备 ID 的映射（用于自动绑定操作日志设备 ID）。
+    /// 注入 HID 设备索引到投影仪设备 ID 的映射（用于自动绑定操作日志设备 ID）。
     /// 通常在应用启动时由数据库读取后注入。
     /// </summary>
     /// <param name="deviceIds">HID 设备索引 -> ProjectorDevice.Id</param>
     void SetProjectorDeviceIdMapping(IReadOnlyDictionary<int, Guid> deviceIds);
 
     /// <summary>
-    /// 枚举当前连接的 HID 投影机数量（不建立连接，仅探测设备）。
+    /// 枚举当前连接的 HID 投影仪数量（不建立连接，仅探测设备）。
     /// 跨平台支持 Windows 和 Linux ARM64。
     /// </summary>
     /// <param name="vendorId">HID 厂商 ID</param>
@@ -102,7 +102,7 @@ public interface IDlpProjectorService
     int GetHidDeviceCount(int vendorId, int productId);
 
     /// <summary>
-    /// 获取投影机当前状态（含连接状态、固件版本）
+    /// 获取投影仪当前状态（含连接状态、固件版本）
     /// </summary>
     Task<DlpProjectorStatus> GetStatusAsync(CancellationToken cancellationToken = default);
 
@@ -141,7 +141,7 @@ public interface IDlpProjectorService
     );
 
     /// <summary>
-    /// 设置投影颜色（仅多光谱结构光投影机支持）
+    /// 设置投影颜色（仅多光谱结构光投影仪支持）
     /// </summary>
     /// <param name="color">颜色</param>
     Task<bool> SetColorAsync(ProjectorColor color, CancellationToken cancellationToken = default);
@@ -228,7 +228,7 @@ public interface IDlpProjectorService
     );
 
     /// <summary>
-    /// 软复位（发送 X 指令重启投影机固件）
+    /// 软复位（发送 X 指令重启投影仪固件）
     /// </summary>
     Task<bool> SoftResetAsync(CancellationToken cancellationToken = default);
 
@@ -257,7 +257,7 @@ public interface IDlpProjectorService
     // ─── 像素分辨率查询与 Flash 条纹下载 ──────────────────────────
 
     /// <summary>
-    /// 通过 Fp 指令查询投影机像素分辨率模式。
+    /// 通过 Fp 指令查询投影仪像素分辨率模式。
     /// 响应格式示例："1280 Pixel Mode"，从中解析宽度像素数。
     /// </summary>
     /// <returns>宽度像素数与像素模式描述字符串</returns>
@@ -266,7 +266,7 @@ public interface IDlpProjectorService
     );
 
     /// <summary>
-    /// 将条纹图案数据写入投影机内部 Flash。
+    /// 将条纹图案数据写入投影仪内部 Flash。
     /// 流程：开灯(LN) → 设置幅数(MB) → 擦除Flash(FE,等F0) → 写方向位图(MF) → 循环写列数据(FW,每256列等待page写入应答)
     /// </summary>
     /// <param name="imageCount">图像总幅数</param>

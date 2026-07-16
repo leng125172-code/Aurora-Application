@@ -515,7 +515,7 @@ public class CalibScanAppService : AuroraStruct3DAppService, ICalibScanAppServic
         {
             if (!project.BoundProjectorDeviceId.HasValue)
             {
-                throw new UserFriendlyException("含结构光扫描模式下必须绑定投影机");
+                throw new UserFriendlyException("含结构光扫描模式下必须绑定投影仪");
             }
         }
     }

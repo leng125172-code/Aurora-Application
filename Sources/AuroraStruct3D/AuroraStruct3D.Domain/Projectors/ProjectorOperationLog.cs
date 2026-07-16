@@ -3,8 +3,8 @@ using Volo.Abp.Domain.Entities;
 namespace AuroraStruct3D.Projectors;
 
 /// <summary>
-/// DLP 投影机操作历史日志实体。
-/// 记录每次对投影机发出指令的时间、类型、参数和结果，便于追溯和故障分析。
+/// DLP 投影仪操作历史日志实体。
+/// 记录每次对投影仪发出指令的时间、类型、参数和结果，便于追溯和故障分析。
 ///
 /// 数据库表：AbpProProjectorOperationLogs
 /// </summary>
@@ -12,7 +12,7 @@ public class ProjectorOperationLog : Entity<Guid>
 {
     // ─────────────────────────── 关联 ───────────────────────────
 
-    /// <summary>所属投影机设备 ID</summary>
+    /// <summary>所属投影仪设备 ID</summary>
     public Guid ProjectorDeviceId { get; private set; }
 
     // ─────────────────────────── 操作信息 ───────────────────────────

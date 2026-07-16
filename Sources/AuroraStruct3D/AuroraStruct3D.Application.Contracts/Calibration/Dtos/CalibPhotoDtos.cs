@@ -38,6 +38,10 @@ public class UpdateBoardConfigInput
     [Range(1, 4096)]
     public int ProjectedPixelSize { get; set; } = 20;
 
+    /// <summary>标定板厚度（mm，用于投影仪外参标定补偿，默认 1mm）</summary>
+    [Range(0, 100)]
+    public decimal BoardThicknessMm { get; set; } = 1m;
+
     /// <summary>圆点标定板配置（圆点类型必填）。</summary>
     public CircleBoardConfigDto? CircleBoardConfig { get; set; }
 }
@@ -171,6 +175,12 @@ public enum ExtrinsicPhotoPhaseDto
 
     /// <summary>开灯拍投影标定图案。</summary>
     ProjectorOn = 1,
+
+    /// <summary>S1 白屏模式拍摄圆点标定板。</summary>
+    WhiteScreen = 2,
+
+    /// <summary>S3 棋盘格模式拍摄投影棋盘格。</summary>
+    Checkerboard = 3,
 }
 
 /// <summary>
@@ -214,6 +224,12 @@ public class CalibPhotoDto
 
     /// <summary>投影外参双拍阶段（仅 Extrinsic 有值）。</summary>
     public ExtrinsicPhotoPhaseDto? ExtrinsicPhase { get; set; }
+
+    /// <summary>图像差分分数（0-1，与同组另一张照片的差异程度）</summary>
+    public double? ImageDiffScore { get; set; }
+
+    /// <summary>图像差分是否显著（两次拍摄有明显差异）</summary>
+    public bool? ImageDiffSignificant { get; set; }
 }
 
 /// <summary>
@@ -230,8 +246,8 @@ public class CalibExtrinsicSampleDto
     /// <summary>开灯照片。</summary>
     public CalibPhotoDto ProjectorOnPhoto { get; set; } = null!;
 
-    /// <summary>该样本组是否有效（两张都有效）。</summary>
-    public bool IsValid => ProjectorOffPhoto.IsValid && ProjectorOnPhoto.IsValid;
+    /// <summary>该样本组是否有效。</summary>
+    public bool IsValid { get; set; }
 }
 
 /// <summary>
@@ -247,60 +263,6 @@ public class CalibStereoPairPhotoDto
 
     /// <summary>从相机照片记录</summary>
     public CalibPhotoDto SecondaryPhoto { get; set; } = null!;
-}
-
-/// <summary>
-/// 单台相机自动对齐的执行结果
-/// </summary>
-public class CameraAlignCameraResult
-{
-    /// <summary>相机设备 ID</summary>
-    public Guid CameraDeviceId { get; set; }
-
-    /// <summary>相机角色名称（"主相机"/"从相机"）</summary>
-    public string CameraRole { get; set; } = string.Empty;
-
-    /// <summary>是否跳过（未绑定电机时为 true）</summary>
-    public bool Skipped { get; set; }
-
-    /// <summary>十字架中心相对图像中心的 X 偏差（像素，正值=偏右）</summary>
-    public double? CrossOffsetXPixels { get; set; }
-
-    /// <summary>十字架中心相对图像中心的 Y 偏差（像素，正值=偏下）</summary>
-    public double? CrossOffsetYPixels { get; set; }
-
-    /// <summary>对齐前的单圈角度（°）</summary>
-    public double? AngleBeforeDeg { get; set; }
-
-    /// <summary>对齐后的单圈角度（°）</summary>
-    public double? AngleAfterDeg { get; set; }
-
-    /// <summary>调整量（°，正值=正向移动）</summary>
-    public double? AdjustedAngleDeg { get; set; }
-
-    /// <summary>对齐是否成功（检测到十字架且已移动）</summary>
-    public bool IsAligned { get; set; }
-
-    /// <summary>未对齐或跳过时的原因说明</summary>
-    public string? Message { get; set; }
-}
-
-/// <summary>
-/// 相机自动对齐（投影十字架拍照并调整电机）的整体结果 DTO
-/// </summary>
-public class AutoAlignCamerasResultDto
-{
-    /// <summary>主相机对齐结果</summary>
-    public CameraAlignCameraResult? MainCamera { get; set; }
-
-    /// <summary>从相机对齐结果</summary>
-    public CameraAlignCameraResult? SecondaryCamera { get; set; }
-
-    /// <summary>整体是否成功（所有已绑定电机的相机均已对齐）</summary>
-    public bool Success { get; set; }
-
-    /// <summary>整体说明</summary>
-    public string Message { get; set; } = string.Empty;
 }
 
 public class CalibComputeResultDto
@@ -424,6 +386,9 @@ public class CalibBoardConfigDto
     /// <summary>投影棋盘格单个方格像素尺寸（px）</summary>
     public int ProjectedPixelSize { get; set; }
 
+    /// <summary>标定板厚度（mm，用于投影仪外参标定补偿）</summary>
+    public decimal BoardThicknessMm { get; set; }
+
     /// <summary>圆点标定板配置（非圆点类型时为 null）。</summary>
     public CircleBoardConfigDto? CircleBoardConfig { get; set; }
 }
@@ -447,6 +412,12 @@ public class CalibCameraStatusDto
 
     /// <summary>外参有效照片数</summary>
     public int ExtrinsicValid { get; set; }
+
+    /// <summary>双目成对照片总数</summary>
+    public int StereoTotal { get; set; }
+
+    /// <summary>双目成对有效照片数</summary>
+    public int StereoValid { get; set; }
 
     /// <summary>最新标定结果（未计算则为 null）</summary>
     public CalibComputeResultDto? LatestResult { get; set; }

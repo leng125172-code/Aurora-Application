@@ -507,7 +507,7 @@ async function handleStep2Next(): Promise<void> {
     }
 }
 
-// ===================== Step 3 投影机参数 =====================
+// ===================== Step 3 投影仪参数 =====================
 
 /** Step 3 Next（单光系列）：校验项目已绑定主结构光机 → 前进 */
 async function handleStep3Next(): Promise<void> {

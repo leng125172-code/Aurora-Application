@@ -1,5 +1,5 @@
 /**
- * 投影机设备手动控制 REST API
+ * 投影仪设备手动控制 REST API
  *
  * 路由前缀：/api/projectors
  */
@@ -203,25 +203,25 @@ export interface WriteProjectorRegisterDto {
 
 const BASE = '/api/app/projector-device'
 
-/** 分页查询投影机列表 */
+/** 分页查询投影仪列表 */
 export async function getProjectorList(params: GetProjectorListDto = {}): Promise<PagedResultDto<ProjectorDeviceDto>> {
     const { data } = await httpClient.get<PagedResultDto<ProjectorDeviceDto>>(BASE, { params })
     return data
 }
 
-/** 查询单台投影机 */
+/** 查询单台投影仪 */
 export async function getProjector(id: string): Promise<ProjectorDeviceDto> {
     const { data } = await httpClient.get<ProjectorDeviceDto>(`${BASE}/${id}`)
     return data
 }
 
-/** 更新投影机信息 */
+/** 更新投影仪信息 */
 export async function updateProjector(id: string, dto: UpdateProjectorDeviceDto): Promise<ProjectorDeviceDto> {
     const { data } = await httpClient.put<ProjectorDeviceDto>(`${BASE}/${id}`, dto)
     return data
 }
 
-/** 扫描 USB HID 投影机，自动同步数据库记录，返回检测到的数量 */
+/** 扫描 USB HID 投影仪，自动同步数据库记录，返回检测到的数量 */
 export async function scanProjectors(): Promise<number> {
     const { data } = await httpClient.post<number>(`${BASE}/scan-projectors`)
     return data
@@ -229,12 +229,12 @@ export async function scanProjectors(): Promise<number> {
 
 // ─── 连接 ────────────────────────────────────────────────────────────────────
 
-/** 连接投影机 */
+/** 连接投影仪 */
 export async function connectProjector(id: string): Promise<void> {
     await httpClient.post(`${BASE}/${id}/connect`)
 }
 
-/** 断开投影机 */
+/** 断开投影仪 */
 export async function disconnectProjector(id: string): Promise<void> {
     await httpClient.post(`${BASE}/${id}/disconnect`)
 }
@@ -349,7 +349,7 @@ export async function getProjectorLogs(
 
 // ─── 条纹图（结构光标定） ──────────────────────────────────────────────────────
 
-/** 通过 Fp 指令读取投影机像素分辨率，返回宽度像素和像素模式 */
+/** 通过 Fp 指令读取投影仪像素分辨率，返回宽度像素和像素模式 */
 export interface ProjectorPixelResolutionDto {
     widthPixels: number
     pixelMode: string
@@ -396,7 +396,7 @@ export interface ProjectorFringeDownloadStatusDto {
     errorMessage: string | null
 }
 
-/** 通过 Fp 指令读取投影机像素分辨率 */
+/** 通过 Fp 指令读取投影仪像素分辨率 */
 export async function getProjectorPixelResolution(id: string): Promise<ProjectorPixelResolutionDto> {
     const { data } = await httpClient.get<ProjectorPixelResolutionDto>(`${BASE}/${id}/pixel-resolution`)
     return data
@@ -408,7 +408,7 @@ export async function generateFringePreview(input: DownloadFringePatternInput): 
     return data
 }
 
-/** 查询投影机当前条纹下载状态 */
+/** 查询投影仪当前条纹下载状态 */
 export async function getProjectorFringeDownloadStatus(id: string): Promise<ProjectorFringeDownloadStatusDto> {
     const { data } = await httpClient.get<ProjectorFringeDownloadStatusDto>(`${BASE}/${id}/fringe-download-status`)
     return data

@@ -4,7 +4,7 @@ using Volo.Abp.Application.Dtos;
 namespace AuroraStruct3D.Projectors.Dtos;
 
 /// <summary>
-/// 投影机设备 DTO
+/// 投影仪设备 DTO
 /// </summary>
 public class ProjectorDeviceDto : FullAuditedEntityDto<Guid>
 {
@@ -110,11 +110,11 @@ public class ProjectorDeviceDto : FullAuditedEntityDto<Guid>
 }
 
 /// <summary>
-/// 投影机操作日志 DTO
+/// 投影仪操作日志 DTO
 /// </summary>
 public class ProjectorOperationLogDto : EntityDto<Guid>
 {
-    /// <summary>投影机设备 ID</summary>
+    /// <summary>投影仪设备 ID</summary>
     public Guid ProjectorDeviceId { get; set; }
 
     /// <summary>操作类型</summary>

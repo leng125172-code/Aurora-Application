@@ -5,43 +5,43 @@ using Volo.Abp.Application.Services;
 namespace AuroraStruct3D.Projectors;
 
 /// <summary>
-/// 投影机设备管理及手动控制应用服务接口
+/// 投影仪设备管理及手动控制应用服务接口
 /// </summary>
 public interface IProjectorDeviceAppService : IApplicationService
 {
     // ─── 设备 CRUD ────────────────────────────────────────────────────────
 
     /// <summary>
-    /// 获取所有投影机设备列表（分页）
+    /// 获取所有投影仪设备列表（分页）
     /// </summary>
     Task<PagedResultDto<ProjectorDeviceDto>> GetListAsync(GetProjectorListDto input);
 
     /// <summary>
-    /// 获取单个投影机设备详情
+    /// 获取单个投影仪设备详情
     /// </summary>
     Task<ProjectorDeviceDto> GetAsync(Guid id);
 
     /// <summary>
-    /// 扫描当前连接的 USB HID 投影机，自动同步数据库记录（新增未知设备，保留已有设备）。
-    /// 仅处理 HID 类型投影机；TCP 类型设备不受影响。
+    /// 扫描当前连接的 USB HID 投影仪，自动同步数据库记录（新增未知设备，保留已有设备）。
+    /// 仅处理 HID 类型投影仪；TCP 类型设备不受影响。
     /// </summary>
-    /// <returns>检测到的 HID 投影机数量</returns>
+    /// <returns>检测到的 HID 投影仪数量</returns>
     Task<int> ScanProjectorsAsync();
 
     /// <summary>
-    /// 更新投影机设备基本信息
+    /// 更新投影仪设备基本信息
     /// </summary>
     Task<ProjectorDeviceDto> UpdateAsync(Guid id, UpdateProjectorDeviceDto input);
 
     // ─── 连接管理 ─────────────────────────────────────────────────────────
 
     /// <summary>
-    /// 连接投影机（根据设备配置自动选择 TCP 或 HID）
+    /// 连接投影仪（根据设备配置自动选择 TCP 或 HID）
     /// </summary>
     Task ConnectAsync(Guid id);
 
     /// <summary>
-    /// 断开投影机连接
+    /// 断开投影仪连接
     /// </summary>
     Task DisconnectAsync(Guid id);
 
@@ -114,7 +114,7 @@ public interface IProjectorDeviceAppService : IApplicationService
     // ─── 高级操作 ─────────────────────────────────────────────────────────
 
     /// <summary>
-    /// 软复位投影机
+    /// 软复位投影仪
     /// </summary>
     Task<bool> SoftResetAsync(Guid id);
 
@@ -143,9 +143,9 @@ public interface IProjectorDeviceAppService : IApplicationService
     // ─── 像素分辨率与条纹下载 ────────────────────────────────────────────
 
     /// <summary>
-    /// 通过 Fp 指令查询投影机像素分辨率（宽度像素数与像素模式描述）
+    /// 通过 Fp 指令查询投影仪像素分辨率（宽度像素数与像素模式描述）
     /// </summary>
-    /// <param name="id">投影机设备 ID</param>
+    /// <param name="id">投影仪设备 ID</param>
     Task<ProjectorPixelResolutionDto> GetPixelResolutionAsync(Guid id);
 
     /// <summary>
@@ -156,12 +156,12 @@ public interface IProjectorDeviceAppService : IApplicationService
     );
 
     /// <summary>
-    /// 获取指定投影机当前条纹下载状态。
+    /// 获取指定投影仪当前条纹下载状态。
     /// </summary>
     Task<ProjectorFringeDownloadStatusDto> GetFringeDownloadStatusAsync(Guid id);
 
     /// <summary>
-    /// 启动条纹图案下载到投影机 Flash。
+    /// 启动条纹图案下载到投影仪 Flash。
     /// 接口在后台任务启动后立即返回，进度与结果通过状态查询和 SignalR 推送。
     /// </summary>
     Task DownloadFringePatternAsync(DownloadFringePatternInputDto input);

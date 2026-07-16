@@ -1,11 +1,11 @@
 namespace AuroraStruct3D.Projectors;
 
 /// <summary>
-/// DLP 结构光投影机模块常量定义
+/// DLP 结构光投影仪模块常量定义
 /// </summary>
 public static class ProjectorConsts
 {
-    /// <summary>投影机名称最大长度（如"主投影机"、"备份投影机"）</summary>
+    /// <summary>投影仪名称最大长度（如"主投影仪"、"备份投影仪"）</summary>
     public const int MaxNameLength = 128;
 
     /// <summary>描述最大长度</summary>
@@ -23,10 +23,10 @@ public static class ProjectorConsts
     /// <summary>HID 设备路径最大长度（如 /dev/hidraw0、\\?\HID#...）</summary>
     public const int MaxHidDevicePathLength = 256;
 
-    /// <summary>腾聚 TJ 系列投影机固定 USB HID 厂商 ID（STM32 USB HID 芯片，硬件固定，不可修改）</summary>
+    /// <summary>腾聚 TJ 系列投影仪固定 USB HID 厂商 ID（STM32 USB HID 芯片，硬件固定，不可修改）</summary>
     public const int HidVendorId = 0x0483;
 
-    /// <summary>腾聚 TJ 系列投影机固定 USB HID 产品 ID（STM32 USB HID 芯片，硬件固定，不可修改）</summary>
+    /// <summary>腾聚 TJ 系列投影仪固定 USB HID 产品 ID（STM32 USB HID 芯片，硬件固定，不可修改）</summary>
     public const int HidProductId = 0x5750;
 
     /// <summary>默认连接超时时间（毫秒）</summary>
@@ -37,7 +37,7 @@ public static class ProjectorConsts
 }
 
 /// <summary>
-/// 投影机物理连接方式
+/// 投影仪物理连接方式
 /// </summary>
 public enum ProjectorConnectionType
 {
@@ -49,7 +49,7 @@ public enum ProjectorConnectionType
 }
 
 /// <summary>
-/// 投影机当前连接状态
+/// 投影仪当前连接状态
 /// </summary>
 public enum ProjectorConnectionStatus
 {
@@ -67,7 +67,7 @@ public enum ProjectorConnectionStatus
 }
 
 /// <summary>
-/// 投影机灯（LED）状态
+/// 投影仪灯（LED）状态
 /// </summary>
 public enum ProjectorLedStatus
 {
@@ -82,7 +82,7 @@ public enum ProjectorLedStatus
 }
 
 /// <summary>
-/// 投影机操作日志类型
+/// 投影仪操作日志类型
 /// </summary>
 public enum ProjectorOperationType
 {
@@ -202,7 +202,7 @@ public enum ProjectorBootImage
 }
 
 /// <summary>
-/// 投影机内容显示模式
+/// 投影仪内容显示模式
 /// </summary>
 public enum ProjectorDisplayMode : byte
 {
@@ -226,7 +226,7 @@ public enum ProjectorDisplayMode : byte
 }
 
 /// <summary>
-/// 投影机颜色（仅多光谱结构光投影机支持）
+/// 投影仪颜色（仅多光谱结构光投影仪支持）
 /// </summary>
 public enum ProjectorColor : byte
 {

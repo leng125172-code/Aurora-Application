@@ -1,0 +1,292 @@
+7月 11 14:27:57 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] ========== 开始调用算子: read_point_cloud ==========
+7月 11 14:27:57 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [read_point_cloud] 步骤①: 解析输入绑定 (1 个)
+7月 11 14:27:57 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [read_point_cloud]   输入端口 'point_cloud_path' = "/tmp/aurora-operator-files-cache/2b8dc4aacbe8ee3e6d4b5ab64da9c36e86cdd3b22498de30e1a194ca0c31af6e.pl..."
+7月 11 14:27:57 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [read_point_cloud] 步骤②: 解析配置参数 (0 个)
+7月 11 14:27:57 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [read_point_cloud] 步骤③: 实例化算子
+7月 11 14:27:57 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [read_point_cloud] 步骤④: 执行算子
+7月 11 14:27:59 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [read_point_cloud]   执行完成，耗时: 1360ms
+7月 11 14:27:59 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [read_point_cloud] 步骤⑤: 重命名输出变量 (1 个)
+7月 11 14:27:59 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [read_point_cloud]   端口 'output_point_cloud' -> 变量 'raw_cloud' = PointCloud(549992 points)
+7月 11 14:27:59 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [read_point_cloud] 步骤⑥: 释放算子实例
+7月 11 14:27:59 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [read_point_cloud] 步骤⑦: 清理输入端口临时变量
+7月 11 14:27:59 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [read_point_cloud]   清理端口变量 'point_cloud_path'
+7月 11 14:27:59 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] ========== 算子调用结束: read_point_cloud ==========
+7月 11 14:27:59 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] ========== 开始调用算子: voxel_downsample ==========
+7月 11 14:27:59 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [voxel_downsample] 步骤①: 解析输入绑定 (1 个)
+7月 11 14:27:59 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [voxel_downsample]   输入端口 'input_point_cloud' = PointCloud(549992 points)
+7月 11 14:27:59 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [voxel_downsample] 步骤②: 解析配置参数 (1 个)
+7月 11 14:27:59 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [voxel_downsample]   配置参数[0] = 0.200000
+7月 11 14:27:59 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [voxel_downsample] 步骤③: 实例化算子
+7月 11 14:27:59 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [voxel_downsample] 步骤④: 执行算子
+7月 11 14:28:00 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [voxel_downsample]   执行完成，耗时: 940ms
+7月 11 14:28:00 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [voxel_downsample] 步骤⑤: 重命名输出变量 (1 个)
+7月 11 14:28:00 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [voxel_downsample]   端口 'output_point_cloud' -> 变量 'filtered_cloud' = PointCloud(57302 points)
+7月 11 14:28:00 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [voxel_downsample] 步骤⑥: 释放算子实例
+7月 11 14:28:00 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [voxel_downsample] 步骤⑦: 清理输入端口临时变量
+7月 11 14:28:00 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [voxel_downsample]   清理端口变量 'input_point_cloud'
+7月 11 14:28:00 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] ========== 算子调用结束: voxel_downsample ==========
+7月 11 14:28:00 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] ========== 开始调用算子: z_colorize_point_cloud ==========
+7月 11 14:28:00 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [z_colorize_point_cloud] 步骤①: 解析输入绑定 (1 个)
+7月 11 14:28:00 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [z_colorize_point_cloud]   输入端口 'input_point_cloud' = PointCloud(57302 points)
+7月 11 14:28:00 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [z_colorize_point_cloud] 步骤②: 解析配置参数 (5 个)
+7月 11 14:28:00 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [z_colorize_point_cloud]   配置参数[0] = "jet"
+7月 11 14:28:00 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [z_colorize_point_cloud]   配置参数[1] = True
+7月 11 14:28:00 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [z_colorize_point_cloud]   配置参数[2] = 0.000000
+7月 11 14:28:00 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [z_colorize_point_cloud]   配置参数[3] = 1.000000
+7月 11 14:28:00 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [z_colorize_point_cloud]   配置参数[4] = False
+7月 11 14:28:00 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [z_colorize_point_cloud] 步骤③: 实例化算子
+7月 11 14:28:00 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [z_colorize_point_cloud] 步骤④: 执行算子
+7月 11 14:28:00 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [z_colorize_point_cloud]   执行完成，耗时: 39ms
+7月 11 14:28:00 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [z_colorize_point_cloud] 步骤⑤: 重命名输出变量 (1 个)
+7月 11 14:28:00 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [z_colorize_point_cloud]   端口 'output_point_cloud' -> 变量 'colored_segment_cloud' = PointCloud(57302 points)
+7月 11 14:28:00 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [z_colorize_point_cloud] 步骤⑥: 释放算子实例
+7月 11 14:28:00 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [z_colorize_point_cloud] 步骤⑦: 清理输入端口临时变量
+7月 11 14:28:00 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [z_colorize_point_cloud]   清理端口变量 'input_point_cloud'
+7月 11 14:28:00 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] ========== 算子调用结束: z_colorize_point_cloud ==========
+7月 11 14:28:00 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] ========== 开始调用算子: save_point_cloud_to_blob ==========
+7月 11 14:28:00 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [save_point_cloud_to_blob] 步骤①: 解析输入绑定 (1 个)
+7月 11 14:28:00 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [save_point_cloud_to_blob]   输入端口 'input_point_cloud' = PointCloud(57302 points)
+7月 11 14:28:00 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [save_point_cloud_to_blob] 步骤②: 解析配置参数 (1 个)
+7月 11 14:28:00 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [save_point_cloud_to_blob]   配置参数[0] = "height-diff-segments.ply"
+7月 11 14:28:00 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [save_point_cloud_to_blob] 步骤③: 实例化算子
+7月 11 14:28:00 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [save_point_cloud_to_blob] 步骤④: 执行算子
+7月 11 14:28:00 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [save_point_cloud_to_blob]   执行完成，耗时: 122ms
+7月 11 14:28:00 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [save_point_cloud_to_blob] 步骤⑤: 重命名输出变量 (1 个)
+7月 11 14:28:00 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [save_point_cloud_to_blob]   端口 'download_url' -> 变量 'colored_cloud_download_url' = "/api/app/operator-file/download?blobName=a1b2c3d4e5f67890abcdef1234567891%2F20260711142800_229_heigh..."
+7月 11 14:28:00 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [save_point_cloud_to_blob] 步骤⑥: 释放算子实例
+7月 11 14:28:00 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [save_point_cloud_to_blob] 步骤⑦: 清理输入端口临时变量
+7月 11 14:28:00 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [save_point_cloud_to_blob]   清理端口变量 'input_point_cloud'
+7月 11 14:28:00 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] ========== 算子调用结束: save_point_cloud_to_blob ==========
+7月 11 14:28:00 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] ========== 开始调用算子: colored_point_cloud_to_image ==========
+7月 11 14:28:00 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [colored_point_cloud_to_image] 步骤①: 解析输入绑定 (1 个)
+7月 11 14:28:00 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [colored_point_cloud_to_image]   输入端口 'input_point_cloud' = PointCloud(57302 points)
+7月 11 14:28:00 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [colored_point_cloud_to_image] 步骤②: 解析配置参数 (6 个)
+7月 11 14:28:00 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [colored_point_cloud_to_image]   配置参数[0] = True
+7月 11 14:28:00 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [colored_point_cloud_to_image]   配置参数[1] = 512
+7月 11 14:28:00 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [colored_point_cloud_to_image]   配置参数[2] = 0.000000
+7月 11 14:28:00 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [colored_point_cloud_to_image]   配置参数[3] = 100.000000
+7月 11 14:28:00 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [colored_point_cloud_to_image]   配置参数[4] = 0.000000
+7月 11 14:28:00 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [colored_point_cloud_to_image]   配置参数[5] = 100.000000
+7月 11 14:28:00 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [colored_point_cloud_to_image] 步骤③: 实例化算子
+7月 11 14:28:00 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [colored_point_cloud_to_image] 步骤④: 执行算子
+7月 11 14:28:00 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [colored_point_cloud_to_image]   执行完成，耗时: 123ms
+7月 11 14:28:00 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [colored_point_cloud_to_image] 步骤⑤: 重命名输出变量 (2 个)
+7月 11 14:28:00 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [colored_point_cloud_to_image]   端口 'output_image' -> 变量 'preview_image' = Mat(437x512, 4ch, CV_8UC4)
+7月 11 14:28:00 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [colored_point_cloud_to_image]   端口 'projection_mapping' -> 变量 'projection_mapping' = "{"ViewLabel":"XY","WorldMinX":-30.212459564208984,"WorldMaxX":58.61408233642578,"WorldMinY":-48.9139..."
+7月 11 14:28:00 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [colored_point_cloud_to_image] 步骤⑥: 释放算子实例
+7月 11 14:28:00 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [colored_point_cloud_to_image] 步骤⑦: 清理输入端口临时变量
+7月 11 14:28:00 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [colored_point_cloud_to_image]   清理端口变量 'input_point_cloud'
+7月 11 14:28:00 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] ========== 算子调用结束: colored_point_cloud_to_image ==========
+7月 11 14:28:00 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] ========== 开始调用算子: ransac_plane_fit ==========
+7月 11 14:28:00 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [ransac_plane_fit] 步骤①: 解析输入绑定 (1 个)
+7月 11 14:28:00 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [ransac_plane_fit]   输入端口 'input_point_cloud' = PointCloud(57302 points)
+7月 11 14:28:00 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [ransac_plane_fit] 步骤②: 解析配置参数 (3 个)
+7月 11 14:28:00 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [ransac_plane_fit]   配置参数[0] = 0.010000
+7月 11 14:28:00 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [ransac_plane_fit]   配置参数[1] = 1000
+7月 11 14:28:00 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [ransac_plane_fit]   配置参数[2] = 0.990000
+7月 11 14:28:00 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [ransac_plane_fit] 步骤③: 实例化算子
+7月 11 14:28:00 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [ransac_plane_fit] 步骤④: 执行算子
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [ransac_plane_fit]   执行完成，耗时: 17358ms
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [ransac_plane_fit] 步骤⑤: 重命名输出变量 (1 个)
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [ransac_plane_fit]   端口 'plane_params' -> 变量 'ref_plane' = Mat(4x1, 1ch, CV_64FC1)
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [ransac_plane_fit] 步骤⑥: 释放算子实例
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [ransac_plane_fit] 步骤⑦: 清理输入端口临时变量
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [ransac_plane_fit]   清理端口变量 'input_point_cloud'
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] ========== 算子调用结束: ransac_plane_fit ==========
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] ========== 开始调用算子: roi_partition ==========
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [roi_partition] 步骤①: 解析输入绑定 (2 个)
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [roi_partition]   输入端口 'input_mat' = Mat(437x512, 4ch, CV_8UC4)
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [roi_partition]   输入端口 'projection_mapping' = "{"ViewLabel":"XY","WorldMinX":-30.212459564208984,"WorldMaxX":58.61408233642578,"WorldMinY":-48.9139..."
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [roi_partition] 步骤②: 解析配置参数 (1 个)
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [roi_partition]   配置参数[0] = "{"rois":[{"type":"Rect","x":221,"y":177,"width":28,"height":24,"rotation":0,"name":"Region_1"}],"bas..."
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [roi_partition] 步骤③: 实例化算子
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [roi_partition] 步骤④: 执行算子
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [roi_partition]   执行完成，耗时: 38ms
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [roi_partition] 步骤⑤: 重命名输出变量 (2 个)
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [roi_partition]   端口 'primary_mask' -> 变量 'roi_a_mask' = Mat(437x512, 1ch, CV_8UC1)
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [roi_partition]   端口 'roi_metadata' -> 变量 'roi_a_metadata' = "{"rois":[{"name":"Region_1","index":0,"type":"Rect","boundingRect":{"x":221,"y":177,"width":28,"heig..."
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [roi_partition] 步骤⑥: 释放算子实例
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [roi_partition] 步骤⑦: 清理输入端口临时变量
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [roi_partition]   清理端口变量 'input_mat'
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [roi_partition]   跳过清理 'projection_mapping' (执行前已存在)
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] ========== 算子调用结束: roi_partition ==========
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] ========== 开始调用算子: roi_partition ==========
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [roi_partition] 步骤①: 解析输入绑定 (2 个)
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [roi_partition]   输入端口 'input_mat' = Mat(437x512, 4ch, CV_8UC4)
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [roi_partition]   输入端口 'projection_mapping' = "{"ViewLabel":"XY","WorldMinX":-30.212459564208984,"WorldMaxX":58.61408233642578,"WorldMinY":-48.9139..."
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [roi_partition] 步骤②: 解析配置参数 (1 个)
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [roi_partition]   配置参数[0] = "{"rois":[{"type":"Rect","x":294,"y":199,"width":41,"height":42,"rotation":0,"name":"Region_1"}],"bas..."
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [roi_partition] 步骤③: 实例化算子
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [roi_partition] 步骤④: 执行算子
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [roi_partition]   执行完成，耗时: 1ms
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [roi_partition] 步骤⑤: 重命名输出变量 (2 个)
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [roi_partition]   端口 'primary_mask' -> 变量 'roi_b_mask' = Mat(437x512, 1ch, CV_8UC1)
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [roi_partition]   端口 'roi_metadata' -> 变量 'roi_b_metadata' = "{"rois":[{"name":"Region_1","index":0,"type":"Rect","boundingRect":{"x":294,"y":199,"width":41,"heig..."
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [roi_partition] 步骤⑥: 释放算子实例
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [roi_partition] 步骤⑦: 清理输入端口临时变量
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [roi_partition]   清理端口变量 'input_mat'
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [roi_partition]   跳过清理 'projection_mapping' (执行前已存在)
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] ========== 算子调用结束: roi_partition ==========
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] ========== 开始调用算子: point_cloud_crop ==========
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [point_cloud_crop] 步骤①: 解析输入绑定 (3 个)
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [point_cloud_crop]   输入端口 'input_point_cloud' = PointCloud(57302 points)
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [point_cloud_crop]   输入端口 'roi_mask' = Mat(437x512, 1ch, CV_8UC1)
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [point_cloud_crop]   输入端口 'roi_metadata' = "{"rois":[{"name":"Region_1","index":0,"type":"Rect","boundingRect":{"x":221,"y":177,"width":28,"heig..."
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [point_cloud_crop] 步骤②: 解析配置参数 (20 个)
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [point_cloud_crop]   配置参数[0] = "mask"
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [point_cloud_crop]   配置参数[1] = 0.000000
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [point_cloud_crop]   配置参数[2] = 100.000000
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [point_cloud_crop]   配置参数[3] = 0.000000
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [point_cloud_crop]   配置参数[4] = 100.000000
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [point_cloud_crop]   配置参数[5] = 0.000000
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [point_cloud_crop]   配置参数[6] = 100.000000
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [point_cloud_crop]   配置参数[7] = 0.000000
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [point_cloud_crop]   配置参数[8] = 0.000000
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [point_cloud_crop]   配置参数[9] = 0.000000
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [point_cloud_crop]   配置参数[10] = 10.000000
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [point_cloud_crop]   配置参数[11] = 0.000000
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [point_cloud_crop]   配置参数[12] = 0.000000
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [point_cloud_crop]   配置参数[13] = 1.000000
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [point_cloud_crop]   配置参数[14] = 0.000000
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [point_cloud_crop]   配置参数[15] = True
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [point_cloud_crop]   配置参数[16] = -80.000000
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [point_cloud_crop]   配置参数[17] = 80.000000
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [point_cloud_crop]   配置参数[18] = -60.000000
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [point_cloud_crop]   配置参数[19] = 60.000000
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [point_cloud_crop] 步骤③: 实例化算子
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [point_cloud_crop] 步骤④: 执行算子
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [point_cloud_crop]   执行完成，耗时: 25ms
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [point_cloud_crop] 步骤⑤: 重命名输出变量 (1 个)
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [point_cloud_crop]   端口 'output_point_cloud' -> 变量 'region_a_cloud' = PointCloud(930 points)
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [point_cloud_crop] 步骤⑥: 释放算子实例
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [point_cloud_crop] 步骤⑦: 清理输入端口临时变量
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [point_cloud_crop]   清理端口变量 'input_point_cloud'
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [point_cloud_crop]   清理端口变量 'roi_mask'
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [point_cloud_crop]   清理端口变量 'roi_metadata'
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] ========== 算子调用结束: point_cloud_crop ==========
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] ========== 开始调用算子: point_cloud_crop ==========
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [point_cloud_crop] 步骤①: 解析输入绑定 (3 个)
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [point_cloud_crop]   输入端口 'input_point_cloud' = PointCloud(57302 points)
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [point_cloud_crop]   输入端口 'roi_mask' = Mat(437x512, 1ch, CV_8UC1)
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [point_cloud_crop]   输入端口 'roi_metadata' = "{"rois":[{"name":"Region_1","index":0,"type":"Rect","boundingRect":{"x":294,"y":199,"width":41,"heig..."
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [point_cloud_crop] 步骤②: 解析配置参数 (20 个)
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [point_cloud_crop]   配置参数[0] = "mask"
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [point_cloud_crop]   配置参数[1] = 0.000000
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [point_cloud_crop]   配置参数[2] = 100.000000
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [point_cloud_crop]   配置参数[3] = 0.000000
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [point_cloud_crop]   配置参数[4] = 100.000000
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [point_cloud_crop]   配置参数[5] = 0.000000
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [point_cloud_crop]   配置参数[6] = 100.000000
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [point_cloud_crop]   配置参数[7] = 0.000000
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [point_cloud_crop]   配置参数[8] = 0.000000
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [point_cloud_crop]   配置参数[9] = 0.000000
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [point_cloud_crop]   配置参数[10] = 10.000000
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [point_cloud_crop]   配置参数[11] = 0.000000
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [point_cloud_crop]   配置参数[12] = 0.000000
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [point_cloud_crop]   配置参数[13] = 1.000000
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [point_cloud_crop]   配置参数[14] = 0.000000
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [point_cloud_crop]   配置参数[15] = True
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [point_cloud_crop]   配置参数[16] = -80.000000
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [point_cloud_crop]   配置参数[17] = 80.000000
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [point_cloud_crop]   配置参数[18] = -60.000000
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [point_cloud_crop]   配置参数[19] = 60.000000
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [point_cloud_crop] 步骤③: 实例化算子
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [point_cloud_crop] 步骤④: 执行算子
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [point_cloud_crop]   执行完成，耗时: 21ms
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [point_cloud_crop] 步骤⑤: 重命名输出变量 (1 个)
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [point_cloud_crop]   端口 'output_point_cloud' -> 变量 'region_b_cloud' = PointCloud(1283 points)
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [point_cloud_crop] 步骤⑥: 释放算子实例
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [point_cloud_crop] 步骤⑦: 清理输入端口临时变量
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [point_cloud_crop]   清理端口变量 'input_point_cloud'
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [point_cloud_crop]   清理端口变量 'roi_mask'
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [point_cloud_crop]   清理端口变量 'roi_metadata'
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] ========== 算子调用结束: point_cloud_crop ==========
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] ========== 开始调用算子: z_channel_stats ==========
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [z_channel_stats] 步骤①: 解析输入绑定 (2 个)
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [z_channel_stats]   输入端口 'input_point_cloud' = PointCloud(930 points)
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [z_channel_stats]   输入端口 'plane_params' = Mat(4x1, 1ch, CV_64FC1)
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [z_channel_stats] 步骤②: 解析配置参数 (0 个)
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [z_channel_stats] 步骤③: 实例化算子
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [z_channel_stats] 步骤④: 执行算子
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [z_channel_stats]   执行完成，耗时: 3ms
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [z_channel_stats] 步骤⑤: 重命名输出变量 (1 个)
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [z_channel_stats]   端口 'avg_height' -> 变量 'height_a' = -0.887600
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [z_channel_stats] 步骤⑥: 释放算子实例
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [z_channel_stats] 步骤⑦: 清理输入端口临时变量
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [z_channel_stats]   清理端口变量 'input_point_cloud'
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [z_channel_stats]   清理端口变量 'plane_params'
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] ========== 算子调用结束: z_channel_stats ==========
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] ========== 开始调用算子: z_channel_stats ==========
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [z_channel_stats] 步骤①: 解析输入绑定 (2 个)
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [z_channel_stats]   输入端口 'input_point_cloud' = PointCloud(1283 points)
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [z_channel_stats]   输入端口 'plane_params' = Mat(4x1, 1ch, CV_64FC1)
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [z_channel_stats] 步骤②: 解析配置参数 (0 个)
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [z_channel_stats] 步骤③: 实例化算子
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [z_channel_stats] 步骤④: 执行算子
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [z_channel_stats]   执行完成，耗时: 0ms
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [z_channel_stats] 步骤⑤: 重命名输出变量 (1 个)
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [z_channel_stats]   端口 'avg_height' -> 变量 'height_b' = -0.333500
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [z_channel_stats] 步骤⑥: 释放算子实例
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [z_channel_stats] 步骤⑦: 清理输入端口临时变量
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [z_channel_stats]   清理端口变量 'input_point_cloud'
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [z_channel_stats]   清理端口变量 'plane_params'
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] ========== 算子调用结束: z_channel_stats ==========
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] ========== 开始调用算子: height_diff_range_eval ==========
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [height_diff_range_eval] 步骤①: 解析输入绑定 (2 个)
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [height_diff_range_eval]   输入端口 'height_a' = -0.887600
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [height_diff_range_eval]   输入端口 'height_b' = -0.333500
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [height_diff_range_eval] 步骤②: 解析配置参数 (2 个)
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [height_diff_range_eval]   配置参数[0] = -0.200000
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [height_diff_range_eval]   配置参数[1] = 0.200000
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [height_diff_range_eval] 步骤③: 实例化算子
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [height_diff_range_eval] 步骤④: 执行算子
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [height_diff_range_eval]   执行完成，耗时: 2ms
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [height_diff_range_eval] 步骤⑤: 重命名输出变量 (2 个)
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [height_diff_range_eval]   端口 'signed_diff' -> 变量 'signed_diff' = -0.554100
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [height_diff_range_eval]   端口 'is_ok' -> 变量 'is_ok' = False
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [height_diff_range_eval] 步骤⑥: 释放算子实例
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [height_diff_range_eval] 步骤⑦: 清理输入端口临时变量
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [height_diff_range_eval]   跳过清理 'height_a' (执行前已存在)
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [height_diff_range_eval]   跳过清理 'height_b' (执行前已存在)
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] ========== 算子调用结束: height_diff_range_eval ==========
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] ========== 开始调用算子: annotate_height_diff_result ==========
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [annotate_height_diff_result] 步骤①: 解析输入绑定 (7 个)
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [annotate_height_diff_result]   输入端口 'input_mat' = Mat(437x512, 4ch, CV_8UC4)
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [annotate_height_diff_result]   输入端口 'roi_metadata_a' = "{"rois":[{"name":"Region_1","index":0,"type":"Rect","boundingRect":{"x":221,"y":177,"width":28,"heig..."
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [annotate_height_diff_result]   输入端口 'roi_metadata_b' = "{"rois":[{"name":"Region_1","index":0,"type":"Rect","boundingRect":{"x":294,"y":199,"width":41,"heig..."
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [annotate_height_diff_result]   输入端口 'height_a' = -0.887600
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [annotate_height_diff_result]   输入端口 'height_b' = -0.333500
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [annotate_height_diff_result]   输入端口 'signed_diff' = -0.554100
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [annotate_height_diff_result]   输入端口 'is_ok' = False
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [annotate_height_diff_result] 步骤②: 解析配置参数 (2 个)
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [annotate_height_diff_result]   配置参数[0] = "OK"
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [annotate_height_diff_result]   配置参数[1] = "NG"
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [annotate_height_diff_result] 步骤③: 实例化算子
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [annotate_height_diff_result] 步骤④: 执行算子
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [annotate_height_diff_result]   执行完成，耗时: 6ms
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [annotate_height_diff_result] 步骤⑤: 重命名输出变量 (1 个)
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [annotate_height_diff_result]   端口 'output_mat' -> 变量 'annotated_result_image' = Mat(437x512, 4ch, CV_8UC4)
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [annotate_height_diff_result] 步骤⑥: 释放算子实例
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [annotate_height_diff_result] 步骤⑦: 清理输入端口临时变量
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [annotate_height_diff_result]   清理端口变量 'input_mat'
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [annotate_height_diff_result]   清理端口变量 'roi_metadata_a'
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [annotate_height_diff_result]   清理端口变量 'roi_metadata_b'
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [annotate_height_diff_result]   跳过清理 'height_a' (执行前已存在)
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [annotate_height_diff_result]   跳过清理 'height_b' (执行前已存在)
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [annotate_height_diff_result]   跳过清理 'signed_diff' (执行前已存在)
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [annotate_height_diff_result]   跳过清理 'is_ok' (执行前已存在)
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] ========== 算子调用结束: annotate_height_diff_result ==========
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] ========== 开始调用算子: save_image_to_blob ==========
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [save_image_to_blob] 步骤①: 解析输入绑定 (1 个)
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [save_image_to_blob]   输入端口 'input_mat' = Mat(437x512, 4ch, CV_8UC4)
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [save_image_to_blob] 步骤②: 解析配置参数 (1 个)
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [save_image_to_blob]   配置参数[0] = "height-diff-result.png"
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [save_image_to_blob] 步骤③: 实例化算子
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [save_image_to_blob] 步骤④: 执行算子
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [save_image_to_blob]   执行完成，耗时: 7ms
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [save_image_to_blob] 步骤⑤: 重命名输出变量 (1 个)
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [save_image_to_blob]   端口 'download_url' -> 变量 'result_image_download_url' = "/api/app/operator-file/preview?blobName=workflow-image%2F20260711142817_831_height-diff-result.png"
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [save_image_to_blob] 步骤⑥: 释放算子实例
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [save_image_to_blob] 步骤⑦: 清理输入端口临时变量
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] [save_image_to_blob]   清理端口变量 'input_mat'
+7月 11 14:28:17 rk3588-ubuntu aurora-struct3d-api[90526]: [OperatorCall] ========== 算子调用结束: save_image_to_blob ==========

@@ -7,7 +7,7 @@ using Microsoft.Extensions.Logging;
 namespace AuroraStruct3D.Projectors;
 
 /// <summary>
-/// 腾聚（TJ）结构光投影机控制服务实现。
+/// 腾聚（TJ）结构光投影仪控制服务实现。
 /// 支持 TCP/IP 和 USB HID 两种接口，ASCII 命令协议。
 /// </summary>
 public class DlpProjectorService : IDlpProjectorService, IDisposable
@@ -283,11 +283,11 @@ public class DlpProjectorService : IDlpProjectorService, IDisposable
     {
         EnsureClient();
 
-        if (light is < 10 or > 200)
+        if (light is > 175)
         {
             throw new ArgumentOutOfRangeException(
                 nameof(light),
-                "Brightness must be in range 10~200"
+                "Brightness must be in range 0~175"
             );
         }
 
@@ -298,25 +298,7 @@ public class DlpProjectorService : IDlpProjectorService, IDisposable
             light
         );
 
-        // 亮度 > 175 时需先发送高亮使能命令（源码：TJSTPrjSetLight）
-        if (light > 175)
-        {
-            bool hlOk = await SendAndLogAsync(
-                    TjProjectorCommands.HighLightEnable,
-                    ProjectorOperationType.SetLight,
-                    "Enable highlight",
-                    cancellationToken
-                )
-                .ConfigureAwait(false);
-            if (!hlOk)
-            {
-                return false;
-            }
-            await Task.Delay(50, cancellationToken).ConfigureAwait(false);
-        }
-
-        string cmd =
-            $"{TjProjectorCommands.SetLightPrefix}{light}{TjProjectorCommands.CommandSuffix}";
+        string cmd = $"{TjProjectorCommands.SetLightPrefix}{light}";
         bool ok = await SendAndLogAsync(
                 cmd,
                 ProjectorOperationType.SetLight,
@@ -434,8 +416,7 @@ public class DlpProjectorService : IDlpProjectorService, IDisposable
         else
         {
             // 末尾指定灰度："G {gray}\r\n"（源码：sprintf(str, "G %hhu\r\n", nGray)）
-            cmd =
-                $"{TjProjectorCommands.TriggerWithGrayPrefix}{endGray}{TjProjectorCommands.CommandSuffix}";
+            cmd = $"{TjProjectorCommands.TriggerWithGrayPrefix}{endGray}";
         }
 
         return await SendAndLogAsync(
@@ -551,7 +532,7 @@ public class DlpProjectorService : IDlpProjectorService, IDisposable
     }
 
     /// <summary>
-    /// fire-and-forget 写入投影机操作日志，异常仅记录 Warning，不向上抛出
+    /// fire-and-forget 写入投影仪操作日志，异常仅记录 Warning，不向上抛出
     /// </summary>
     private void RecordOperationLog(
         ProjectorOperationType operationType,
@@ -663,8 +644,7 @@ public class DlpProjectorService : IDlpProjectorService, IDisposable
             DeviceId,
             flip
         );
-        string cmd =
-            $"{TjProjectorCommands.SetFlipPrefix}{(int)flip}{TjProjectorCommands.CommandSuffix}";
+        string cmd = $"{TjProjectorCommands.SetFlipPrefix}{(int)flip}";
         return await SendAndLogAsync(
                 cmd,
                 ProjectorOperationType.SetFlip,
@@ -687,8 +667,7 @@ public class DlpProjectorService : IDlpProjectorService, IDisposable
             DeviceId,
             mode
         );
-        string cmd =
-            $"{TjProjectorCommands.SetTriggerModePrefix}{(int)mode}{TjProjectorCommands.CommandSuffix}";
+        string cmd = $"{TjProjectorCommands.SetTriggerModePrefix}{(int)mode}";
         return await SendAndLogAsync(
                 cmd,
                 ProjectorOperationType.SetTriggerMode,
@@ -711,8 +690,7 @@ public class DlpProjectorService : IDlpProjectorService, IDisposable
             DeviceId,
             image
         );
-        string cmd =
-            $"{TjProjectorCommands.SetBootImagePrefix}{(int)image}{TjProjectorCommands.CommandSuffix}";
+        string cmd = $"{TjProjectorCommands.SetBootImagePrefix}{(int)image}";
         return await SendAndLogAsync(
                 cmd,
                 ProjectorOperationType.SetBootImage,
@@ -735,8 +713,7 @@ public class DlpProjectorService : IDlpProjectorService, IDisposable
             DeviceId,
             pixelSize
         );
-        string cmd =
-            $"{TjProjectorCommands.SetCheckerboardPixelPrefix}{pixelSize}{TjProjectorCommands.CommandSuffix}";
+        string cmd = $"{TjProjectorCommands.SetCheckerboardPixelPrefix}{pixelSize}";
         return await SendAndLogAsync(
                 cmd,
                 ProjectorOperationType.SetCheckerboardPixel,
@@ -774,8 +751,7 @@ public class DlpProjectorService : IDlpProjectorService, IDisposable
         );
 
         // 协议：单条 LE r g b\r\n 同时使能彩光并设置 RGB 分量亮度（0~175）
-        string cmd =
-            $"{TjProjectorCommands.SetRgbColorPrefix}{lr} {lg} {lb}{TjProjectorCommands.CommandSuffix}";
+        string cmd = $"{TjProjectorCommands.SetRgbColorPrefix}{lr} {lg} {lb}";
         return await SendAndLogAsync(
                 cmd,
                 ProjectorOperationType.SetRgbColor,
@@ -826,8 +802,7 @@ public class DlpProjectorService : IDlpProjectorService, IDisposable
             DeviceId,
             address
         );
-        string cmd =
-            $"{TjProjectorCommands.ReadRegisterPrefix}{address}{TjProjectorCommands.CommandSuffix}";
+        string cmd = $"{TjProjectorCommands.ReadRegisterPrefix}{address}";
         return await SendCommandAndReadCoreAsync(cmd, cancellationToken).ConfigureAwait(false);
     }
 
@@ -846,8 +821,7 @@ public class DlpProjectorService : IDlpProjectorService, IDisposable
             address,
             value
         );
-        string cmd =
-            $"{TjProjectorCommands.WriteRegisterPrefix}{address} {value}{TjProjectorCommands.CommandSuffix}";
+        string cmd = $"{TjProjectorCommands.WriteRegisterPrefix}{address} {value}";
         return await SendAndLogAsync(
                 cmd,
                 ProjectorOperationType.WriteRegister,
@@ -943,8 +917,7 @@ public class DlpProjectorService : IDlpProjectorService, IDisposable
         await Task.Delay(50, cancellationToken).ConfigureAwait(false);
 
         // 2. 写入总图像幅数（MB N）
-        string mbCmd =
-            $"{TjProjectorCommands.SetImageCountPrefix}{imageCount}{TjProjectorCommands.CommandSuffix}";
+        string mbCmd = $"{TjProjectorCommands.SetImageCountPrefix}{imageCount}";
         await SendCommandCoreAsync(mbCmd, cancellationToken).ConfigureAwait(false);
         await Task.Delay(50, cancellationToken).ConfigureAwait(false);
 
@@ -959,8 +932,7 @@ public class DlpProjectorService : IDlpProjectorService, IDisposable
                 + $" {orientationBits[offset + 0]}"
                 + $" {orientationBits[offset + 1]}"
                 + $" {orientationBits[offset + 2]}"
-                + $" {orientationBits[offset + 3]}"
-                + TjProjectorCommands.CommandSuffix;
+                + $" {orientationBits[offset + 3]}";
 
             await SendCommandCoreAsync(mfCmd, cancellationToken).ConfigureAwait(false);
             await Task.Delay(50, cancellationToken).ConfigureAwait(false);
@@ -1021,7 +993,7 @@ public class DlpProjectorService : IDlpProjectorService, IDisposable
             cancellationToken.ThrowIfCancellationRequested();
 
             string fwCmd =
-                $"{TjProjectorCommands.WriteFlashPixelPrefix}{idx} {columnGrayValues[idx]}{TjProjectorCommands.CommandSuffix}";
+                $"{TjProjectorCommands.WriteFlashPixelPrefix}{idx} {columnGrayValues[idx]}";
 
             bool isPageBoundary = (idx + 1) % PageSize == 0;
             bool isLastWrite = idx == totalWrites - 1;

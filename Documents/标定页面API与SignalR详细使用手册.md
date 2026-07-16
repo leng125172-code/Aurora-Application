@@ -10,7 +10,7 @@
 
 1. Step 1：标定项目详情读取
 2. Step 2：相机参数配置
-3. Step 3：投影机参数读取、后端条纹图生成、异步下载、下载状态与进度 SignalR 推送
+3. Step 3：投影仪参数读取、后端条纹图生成、异步下载、下载状态与进度 SignalR 推送
 
 Step 4 ~ Step 7 在当前页面中仍属于 UI 占位状态，尚未接入新的 REST API 或新的 SignalR 事件。
 
@@ -46,7 +46,7 @@ flowchart TD
 |------|----------|----------|---------|
 | Step 1 | 加载标定项目详情 | `GET /api/app/calib-project/{id}` | 无 |
 | Step 2 | 加载相机列表、自动开关相机、读取硬件参数、保存参数 | `camera-device` + `calib-camera-param` | 无 |
-| Step 3 | 加载投影机列表、读取像素模式、后端生成条纹预览、异步启动下载、恢复下载状态 | `projector-device` | `projector` Hub |
+| Step 3 | 加载投影仪列表、读取像素模式、后端生成条纹预览、异步启动下载、恢复下载状态 | `projector-device` | `projector` Hub |
 
 ---
 
@@ -335,7 +335,7 @@ await saveCalibCameraParamAsync({
 
 ---
 
-## 5. Step 3：投影机参数与条纹图下载
+## 5. Step 3：投影仪参数与条纹图下载
 
 Step 3 依赖的后端资源有两类：
 
@@ -351,7 +351,7 @@ sequenceDiagram
     participant HUB as /signalr-hubs/projector
 
     FE->>HUB: 建立 HubConnection
-    HUB-->>FE: ReceiveProjectorStateAsync(当前全部投影机快照)
+    HUB-->>FE: ReceiveProjectorStateAsync(当前全部投影仪快照)
     FE->>API: GET /api/app/projector-device?maxResultCount=100
     FE->>API: GET /api/app/projector-device/{id}/pixel-resolution
   FE->>API: POST /api/app/projector-device/generate-fringe-preview
@@ -366,7 +366,7 @@ sequenceDiagram
   FE->>API: GET /api/app/projector-device/{id}/fringe-download-status (刷新/重连恢复)
 ```
 
-### 5.2 获取投影机列表
+### 5.2 获取投影仪列表
 
 - 方法：`GET`
 - 路径：`/api/app/projector-device`
@@ -382,9 +382,9 @@ sequenceDiagram
 
 #### 用途
 
-页面只筛选 `isEnabled = true` 的投影机作为可选设备。
+页面只筛选 `isEnabled = true` 的投影仪作为可选设备。
 
-### 5.3 读取投影机像素模式
+### 5.3 读取投影仪像素模式
 
 - 方法：`GET`
 - 路径：`/api/app/projector-device/{id}/pixel-resolution`
@@ -401,11 +401,11 @@ sequenceDiagram
 
 #### 说明
 
-- 该接口当前通过底层 `Fp` 指令读取投影机像素模式
+- 该接口当前通过底层 `Fp` 指令读取投影仪像素模式
 - 返回的是“宽度像素数 + 模式描述字符串”
 - 当前页面中的高度像素仍由用户输入 `projectorHeightInput`
 
-### 5.4 下载条纹图到投影机 Flash
+### 5.4 下载条纹图到投影仪 Flash
 
 - 方法：`POST`
 - 路径：`/api/app/projector-device/download-fringe-pattern`
@@ -417,7 +417,7 @@ sequenceDiagram
 
 1. 在服务端校验输入参数
 2. 生成本次下载需要写入的条纹数据
-3. 将投影机状态置为 `Running`
+3. 将投影仪状态置为 `Running`
 4. 启动后台任务执行真实下载
 5. HTTP 接口立即返回
 
@@ -442,7 +442,7 @@ sequenceDiagram
 
 | 字段 | 含义 |
 |------|------|
-| `projectorId` | 投影机设备 ID |
+| `projectorId` | 投影仪设备 ID |
 | `fringeMode` | `horizontal` 横条纹，`vertical` 竖条纹 |
 | `fringeType` | `bw` 黑白首色黑，`wb` 白黑首色白 |
 | `widthPixels` | 投影宽度像素，来自 `Fp` 查询 |
@@ -494,7 +494,7 @@ sequenceDiagram
 - 每幅图 1bit：`0=竖条纹`，`1=横条纹`
 - 当前策略：固定 `1-2-1-2...`（横竖交替）
 
-5. `FE`：擦除 Flash
+1. `FE`：擦除 Flash
    - 期望回复 `F0`
    - 如果回复 `F1` 则重试
 2. 循环发送 `FW{index} {gray}`
@@ -556,7 +556,7 @@ step3Hub = new signalR.HubConnectionBuilder()
 
 ### 6.3 Hub 连接成功后的行为
 
-前端一旦连接成功，后端 `OnConnectedAsync()` 会立刻查询全部投影机列表，并逐台向当前连接推送：
+前端一旦连接成功，后端 `OnConnectedAsync()` 会立刻查询全部投影仪列表，并逐台向当前连接推送：
 
 - `ReceiveProjectorStateAsync(projector)`
 
@@ -572,7 +572,7 @@ ReceiveProjectorStateAsync(projector: ProjectorDeviceDto)
 
 用途：
 
-- 连接后推送当前所有投影机状态快照
+- 连接后推送当前所有投影仪状态快照
 - 也可用于后续广播单台设备的最新状态
 
 #### 6.4.2 ReceiveProjectorConnectionChangedAsync
@@ -583,7 +583,7 @@ ReceiveProjectorConnectionChangedAsync(projectorDeviceId: string, status: string
 
 用途：
 
-- 投影机连接状态变化广播
+- 投影仪连接状态变化广播
 
 #### 6.4.3 ReceiveProjectorLedChangedAsync
 
@@ -593,7 +593,7 @@ ReceiveProjectorLedChangedAsync(projectorDeviceId: string, ledStatus: string)
 
 用途：
 
-- 投影机开灯/关灯状态变化广播
+- 投影仪开灯/关灯状态变化广播
 
 #### 6.4.4 ReceiveFringeDownloadProgressAsync
 
@@ -653,7 +653,7 @@ step3Hub.on('ReceiveFringeDownloadProgressAsync', (projectorId: string, progress
 
 - Step 3 初始化后
 - SignalR 重连后
-- 切换当前选中投影机后
+- 切换当前选中投影仪后
 - 调用下载接口返回后
 
 ### 6.6 服务端推送路径
@@ -734,12 +734,12 @@ flowchart LR
 优先检查：
 
 1. 页面是否重复创建了多个 HubConnection
-2. 当前监听的 `projectorId` 是否与选中投影机一致
+2. 当前监听的 `projectorId` 是否与选中投影仪一致
 3. `GET /api/app/projector-device/{id}/fringe-download-status` 是否能查到 `Running`
 4. 服务端是否仍使用 `Func<int, Task>` 串行推送
-5. 当前投影机是否被状态存储判定为已有任务在执行
+5. 当前投影仪是否被状态存储判定为已有任务在执行
 
-### 8.3 投影机像素模式读到乱码
+### 8.3 投影仪像素模式读到乱码
 
 优先检查：
 

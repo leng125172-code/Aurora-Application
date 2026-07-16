@@ -2,6 +2,7 @@ using System.Text.RegularExpressions;
 using AuroraStruct3D.Variables.Dtos;
 using Volo.Abp;
 using Volo.Abp.Domain.Repositories;
+using Volo.Abp.Uow;
 
 namespace AuroraStruct3D.Variables;
 
@@ -15,12 +16,15 @@ public class OfflineVariableLibraryAppService
     private static readonly Regex SequenceRegex = new("\\d+", RegexOptions.Compiled);
 
     private readonly IRepository<VariableDefinition, Guid> _variableDefinitionRepository;
+    private readonly IUnitOfWorkManager _unitOfWorkManager;
 
     public OfflineVariableLibraryAppService(
-        IRepository<VariableDefinition, Guid> variableDefinitionRepository
+        IRepository<VariableDefinition, Guid> variableDefinitionRepository,
+        IUnitOfWorkManager unitOfWorkManager
     )
     {
         _variableDefinitionRepository = variableDefinitionRepository;
+        _unitOfWorkManager = unitOfWorkManager;
     }
 
     /// <inheritdoc/>
@@ -637,6 +641,8 @@ public class OfflineVariableLibraryAppService
         long snapshotVersion
     )
     {
+        using var uow = _unitOfWorkManager.Begin();
+
         IQueryable<VariableDefinition> queryable =
             await _variableDefinitionRepository.GetQueryableAsync();
         List<VariableDefinition> existing = await AsyncExecuter.ToListAsync(
@@ -649,7 +655,7 @@ public class OfflineVariableLibraryAppService
 
         foreach (VariableDefinition item in existing.Where(x => !incomingNames.Contains(x.Name)))
         {
-            await _variableDefinitionRepository.DeleteAsync(item, autoSave: true);
+            await _variableDefinitionRepository.DeleteAsync(item, autoSave: false);
         }
 
         foreach ((string name, VariableDeclarationDto declaration) in declarationMap)
@@ -657,6 +663,15 @@ public class OfflineVariableLibraryAppService
             VariableDefinition? found = existing.FirstOrDefault(x => x.Name == name);
             if (found is null)
             {
+                // 使用 ABP 内置的 HardDeleteAsync 硬删除可能存在的软删除同名记录
+                await _variableDefinitionRepository.HardDeleteAsync(
+                    x =>
+                        x.ProjectId == input.ProjectId
+                        && x.OwnerWorkflowId == input.WorkflowId
+                        && x.Name == name,
+                    autoSave: false
+                );
+
                 VariableDefinition created = VariableDefinition.Create(
                     GuidGenerator.Create(),
                     input.ProjectId,
@@ -669,7 +684,7 @@ public class OfflineVariableLibraryAppService
                     declaration.DefaultValueJson,
                     snapshotVersion
                 );
-                await _variableDefinitionRepository.InsertAsync(created, autoSave: true);
+                await _variableDefinitionRepository.InsertAsync(created, autoSave: false);
                 continue;
             }
 
@@ -681,8 +696,10 @@ public class OfflineVariableLibraryAppService
                 declaration.DefaultValueJson,
                 snapshotVersion
             );
-            await _variableDefinitionRepository.UpdateAsync(found, autoSave: true);
+            await _variableDefinitionRepository.UpdateAsync(found, autoSave: false);
         }
+
+        await uow.CompleteAsync();
     }
 
     private async Task<List<VariableDefinitionDto>> GetVisibleVariablesInternalAsync(

@@ -56,7 +56,7 @@ namespace AuroraStruct3D.EntityFrameworkCore
                 options.AddRepository<MotorPrPath, EfCoreMotorPrPathRepository>();
                 options.AddRepository<MotorOperationLog, EfCoreMotorOperationLogRepository>();
 
-                // 注册 DLP 投影机模块自定义仓储
+                // 注册 DLP 投影仪模块自定义仓储
                 options.AddRepository<ProjectorDevice, EfCoreProjectorDeviceRepository>();
                 options.AddRepository<
                     ProjectorOperationLog,

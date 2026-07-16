@@ -61,6 +61,7 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
     private readonly IRepository<WorkflowProjectRun, Guid> _runRepository;
     private readonly IRepository<VariableDefinition, Guid> _variableDefinitionRepository;
     private readonly IBlobContainer<OperatorFileBlobContainer> _operatorFileBlobContainer;
+    private readonly IOperatorFileRecordRepository _operatorFileRecordRepository;
 
     private static readonly HashSet<string> UploadedFileExtensions = new(
         StringComparer.OrdinalIgnoreCase
@@ -100,7 +101,8 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
         IRepository<WorkflowProjectDeployment, Guid> deploymentRepository,
         IRepository<WorkflowProjectRun, Guid> runRepository,
         IRepository<VariableDefinition, Guid> variableDefinitionRepository,
-        IBlobContainer<OperatorFileBlobContainer> operatorFileBlobContainer
+        IBlobContainer<OperatorFileBlobContainer> operatorFileBlobContainer,
+        IOperatorFileRecordRepository operatorFileRecordRepository
     )
     {
         _repository = repository;
@@ -119,6 +121,7 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
         _runRepository = runRepository;
         _variableDefinitionRepository = variableDefinitionRepository;
         _operatorFileBlobContainer = operatorFileBlobContainer;
+        _operatorFileRecordRepository = operatorFileRecordRepository;
     }
 
     /// <inheritdoc/>
@@ -876,23 +879,26 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
         try
         {
             // 1. 取得 graphData：优先当前画布，其次已保存工作流。
-            //    仅当从已保存工作流读取时 savedEntity 非空，用于后续把底图字段写回并持久化。
+            //    如果提供了 WorkflowId，总是加载已保存实体，以便读取已缓存的底图信息。
             WorkflowDefinition? savedEntity = null;
             string graphData = input.GraphData ?? string.Empty;
-            if (string.IsNullOrWhiteSpace(graphData))
+            if (input.WorkflowId != Guid.Empty)
             {
-                if (input.WorkflowId == Guid.Empty)
-                {
-                    return RoiBaseImageError("GraphData 与 WorkflowId 至少提供一个。");
-                }
-
                 savedEntity = await _repository.GetAsync(input.WorkflowId);
                 if (savedEntity.ProjectId != input.ProjectId)
                 {
                     return RoiBaseImageError("工作流不存在或不属于该项目。");
                 }
 
-                graphData = savedEntity.GraphData;
+                // 如果前端没传 GraphData，用已保存的；否则用前端传的（前端画布可能有未保存修改）
+                if (string.IsNullOrWhiteSpace(graphData))
+                {
+                    graphData = savedEntity.GraphData;
+                }
+            }
+            else if (string.IsNullOrWhiteSpace(graphData))
+            {
+                return RoiBaseImageError("GraphData 与 WorkflowId 至少提供一个。");
             }
 
             // 2. 解析 + 编译整图。
@@ -941,6 +947,38 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
             )
             {
                 currentRoiJson = roiJsonElement.GetString();
+            }
+
+            // 检查是否已有有效的缓存底图：底图已生成且工作流未变化
+            // 优先从已保存实体中查找缓存（前端传的 GraphData 可能不含 baseImage 字段）
+            string currentGraphHash = ComputeGraphHash(graphData);
+            string? cachedRoiJsonForCheck = currentRoiJson;
+            if (savedEntity is not null)
+            {
+                // 从已保存实体中提取 roiJson，可能包含之前生成的 baseImage
+                string? savedRoiJson = ExtractRoiJsonFromGraph(
+                    savedEntity.GraphData,
+                    input.RoiNodeId
+                );
+                if (!string.IsNullOrWhiteSpace(savedRoiJson))
+                {
+                    cachedRoiJsonForCheck = savedRoiJson;
+                }
+            }
+
+            (string? cachedBlobName, string? cachedRoiJson) = ExtractCachedBaseImage(
+                cachedRoiJsonForCheck,
+                currentGraphHash
+            );
+            if (cachedBlobName is not null)
+            {
+                return new RoiBaseImageResultDto
+                {
+                    Error = false,
+                    BlobName = cachedBlobName,
+                    RoiJson = cachedRoiJson,
+                    Persisted = savedEntity is not null,
+                };
             }
 
             // 4. 祖先子图：仅保留 ROI 节点真正依赖的上游算子语句，天然跳过并行副作用节点。
@@ -1076,7 +1114,12 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
                 imageWidth,
                 imageHeight
             );
-            result.RoiJson = BuildUpdatedRoiJson(currentRoiJson, blobName, mapping);
+            result.RoiJson = BuildUpdatedRoiJson(
+                currentRoiJson,
+                blobName,
+                mapping,
+                currentGraphHash
+            );
             if (savedEntity is not null)
             {
                 string? updatedGraph = ApplyRoiJsonToGraph(
@@ -1192,7 +1235,8 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
     private static string BuildUpdatedRoiJson(
         string? currentRoiJson,
         string blobName,
-        AuroraStruct3D.OpenCV.RoiOps.RoiProjectionMapping mapping
+        AuroraStruct3D.OpenCV.RoiOps.RoiProjectionMapping mapping,
+        string? graphHash = null
     )
     {
         JsonObject roiObject = new();
@@ -1226,9 +1270,61 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
                 ["imageWidth"] = mapping.ImageWidth,
                 ["imageHeight"] = mapping.ImageHeight,
             },
+            ["graphHash"] = graphHash,
         };
 
         return roiObject.ToJsonString(RoiJsonWriteOptions);
+    }
+
+    private static (string? BlobName, string? RoiJson) ExtractCachedBaseImage(
+        string? roiJson,
+        string currentGraphHash
+    )
+    {
+        if (string.IsNullOrWhiteSpace(roiJson))
+        {
+            return (null, null);
+        }
+
+        try
+        {
+            if (JsonNode.Parse(roiJson) is not JsonObject roiObject)
+            {
+                return (null, null);
+            }
+
+            if (roiObject["baseImage"] is not JsonObject baseImageObject)
+            {
+                return (null, null);
+            }
+
+            if (
+                baseImageObject["selectedBlobName"] is not JsonValue blobNameValue
+                || string.IsNullOrWhiteSpace(blobNameValue.ToString())
+            )
+            {
+                return (null, null);
+            }
+
+            string cachedBlobName = blobNameValue.ToString()!;
+            string? cachedGraphHash = baseImageObject["graphHash"]?.ToString();
+
+            if (string.IsNullOrWhiteSpace(cachedGraphHash))
+            {
+                return (null, null);
+            }
+
+            if (!string.Equals(cachedGraphHash, currentGraphHash, StringComparison.Ordinal))
+            {
+                return (null, null);
+            }
+
+            return (cachedBlobName, roiJson);
+        }
+        catch (JsonException)
+        {
+            return (null, null);
+        }
     }
 
     /// <summary>
@@ -1291,6 +1387,57 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
     }
 
     /// <summary>
+    /// 从 graphData JSON 中提取指定 ROI 节点的 <c>params.roiJson</c> 值。
+    /// 解析失败或未命中节点时返回 null。
+    /// </summary>
+    private static string? ExtractRoiJsonFromGraph(string graphDataJson, string roiNodeId)
+    {
+        try
+        {
+            if (JsonNode.Parse(graphDataJson) is not JsonObject root)
+            {
+                return null;
+            }
+
+            if (root["nodes"] is not JsonArray nodes)
+            {
+                return null;
+            }
+
+            foreach (JsonNode? nodeNode in nodes)
+            {
+                if (nodeNode is null)
+                {
+                    continue;
+                }
+
+                if (!string.Equals((string?)nodeNode["id"], roiNodeId, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                if (
+                    nodeNode["properties"] is JsonObject properties
+                    && properties["params"] is JsonObject paramsObject
+                    && paramsObject["roiJson"] is JsonValue roiJsonValue
+                    && roiJsonValue.GetValue<string>() is { } roiJson
+                )
+                {
+                    return roiJson;
+                }
+
+                return null;
+            }
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+
+        return null;
+    }
+
+    /// <summary>
     /// 从冻结部署快照的图数据执行单个工作流（供运行 Job 内部调用，不对外暴露 HTTP 端点）。
     /// </summary>
     [RemoteService(false)]
@@ -1318,6 +1465,10 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
             WorkflowId = workflowId,
             Mode = WorkflowExecutionMode.RunOnce,
         };
+
+        // 校验输出变量配置（冻结执行路径绕过实体加载，需在此单独校验）
+        WorkflowDefinition entity = await _repository.GetAsync(workflowId);
+        ValidateSingleWorkflowOutputConfig(entity);
 
         WorkflowExecutionBootstrap bootstrap = await PrepareBootstrapAsync(
             input,
@@ -1541,7 +1692,8 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
             Error = false,
             Message = session.ErrorMessage,
             ExecutionId = session.ExecutionId,
-            ResultImageUrl = ResolveResultImageUrl(session),
+            ResultImageUrls = ResolveResultImageUrls(session),
+            Variables = await ResolveOutputVariables(session),
             Status = BuildStatusDto(session, includeVariables: true),
         };
     }
@@ -1576,7 +1728,7 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
         {
             session.MarkFaulted(ex.NodeId, ex.InnerException?.Message ?? ex.Message);
             session.FrozenVariables = session.VariablePool.Snapshot(session.Context);
-            return CreateExecutionTriggerFaultResult(session);
+            return await CreateExecutionTriggerFaultResult(session);
         }
         finally
         {
@@ -1589,7 +1741,8 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
             Error = false,
             Message = session.ErrorMessage,
             ExecutionId = session.ExecutionId,
-            ResultImageUrl = ResolveResultImageUrl(session),
+            ResultImageUrls = ResolveResultImageUrls(session),
+            Variables = await ResolveOutputVariables(session),
             Status = BuildStatusDto(session, includeVariables: true),
         };
     }
@@ -1631,7 +1784,7 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
             {
                 session.MarkFaulted(ex.NodeId, ex.InnerException?.Message ?? ex.Message);
                 session.FrozenVariables = session.VariablePool.Snapshot(session.Context);
-                return CreateLoopExecutionFaultResult(session, i + 1);
+                return await CreateLoopExecutionFaultResult(session, i + 1);
             }
             finally
             {
@@ -1666,9 +1819,41 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
             Error = false,
             Message = resultSession.ErrorMessage,
             ExecutionId = resultSession.ExecutionId,
-            ResultImageUrl = ResolveResultImageUrl(resultSession),
+            ResultImageUrls = ResolveResultImageUrls(resultSession),
+            Variables = await ResolveOutputVariables(resultSession),
             Status = BuildStatusDto(resultSession, includeVariables: true),
         };
+    }
+
+    /// <summary>
+    /// 校验方案内所有工作流是否已配置输出变量。
+    /// 任一工作流未配置则抛出异常，阻止执行。
+    /// </summary>
+    private async Task ValidateOutputConfigForRunAsync(List<Guid> workflowIds)
+    {
+        foreach (Guid id in workflowIds)
+        {
+            WorkflowDefinition entity = await _repository.GetAsync(id);
+            if (string.IsNullOrWhiteSpace(entity.OutputVariables))
+            {
+                throw new UserFriendlyException(
+                    $"工作流「{entity.Name}」尚未配置输出变量，请先配置后再运行。"
+                );
+            }
+        }
+    }
+
+    /// <summary>
+    /// 调试模式：校验单个工作流是否已配置输出变量。
+    /// </summary>
+    private static void ValidateSingleWorkflowOutputConfig(WorkflowDefinition entity)
+    {
+        if (string.IsNullOrWhiteSpace(entity.OutputVariables))
+        {
+            throw new UserFriendlyException(
+                $"工作流「{entity.Name}」尚未配置输出变量，请先配置后再运行。"
+            );
+        }
     }
 
     private static void ValidateExecutionInput(WorkflowExecutionTriggerInput input)
@@ -1730,7 +1915,7 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
         };
     }
 
-    private static WorkflowExecutionTriggerResultDto CreateExecutionTriggerFaultResult(
+    private async Task<WorkflowExecutionTriggerResultDto> CreateExecutionTriggerFaultResult(
         WorkflowExecutionSession session
     )
     {
@@ -1742,12 +1927,13 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
             ErrorCode = ExecutionErrorCodeFault,
             Message = message,
             ExecutionId = session.ExecutionId,
-            ResultImageUrl = ResolveResultImageUrl(session),
+            ResultImageUrls = ResolveResultImageUrls(session),
+            Variables = await ResolveOutputVariables(session),
             Status = BuildStatusDtoStatic(session, includeVariables: true),
         };
     }
 
-    private static WorkflowExecutionTriggerResultDto CreateLoopExecutionFaultResult(
+    private async Task<WorkflowExecutionTriggerResultDto> CreateLoopExecutionFaultResult(
         WorkflowExecutionSession session,
         int loopIndex
     )
@@ -1760,7 +1946,8 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
             ErrorCode = ExecutionErrorCodeLoopFault,
             Message = message,
             ExecutionId = session.ExecutionId,
-            ResultImageUrl = ResolveResultImageUrl(session),
+            ResultImageUrls = ResolveResultImageUrls(session),
+            Variables = await ResolveOutputVariables(session),
             Status = BuildStatusDtoStatic(session, includeVariables: true),
         };
     }
@@ -1812,6 +1999,9 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
                 throw new UserFriendlyException("运行内不存在可调试工作流。");
             }
 
+            // 校验方案内所有工作流是否已配置输出变量
+            await ValidateOutputConfigForRunAsync(runWorkflowIds);
+
             List<WorkflowProjectRunItemResult> runResults =
                 DeserializeJson<List<WorkflowProjectRunItemResult>>(runForExecution.ResultsJson)
                 ?? [];
@@ -1852,6 +2042,9 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
 
             graphData = entity.GraphData;
             entityName = entity.Name;
+
+            // 校验单个工作流是否已配置输出变量
+            ValidateSingleWorkflowOutputConfig(entity);
         }
 
         RuntimeWorkflowDefinition compiled;
@@ -2348,6 +2541,8 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
                 await blobStream.CopyToAsync(fileStream);
             }
 
+            await MarkFileAsUsedAsync(blobName);
+
             return localPath;
         }
 
@@ -2357,6 +2552,23 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
         }
 
         return rawValue;
+    }
+
+    private async Task MarkFileAsUsedAsync(string blobName)
+    {
+        try
+        {
+            OperatorFileRecord? record = await _operatorFileRecordRepository.FindAsync(r =>
+                r.BlobName == blobName
+            );
+
+            if (record is not null && !record.IsUsed)
+            {
+                record.MarkAsUsed();
+                await _operatorFileRecordRepository.UpdateAsync(record);
+            }
+        }
+        catch (Exception) { }
     }
 
     private async Task<string?> ResolveExistingBlobNameAsync(string? candidate)
@@ -2489,13 +2701,13 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
         bool includeVariables
     ) => BuildStatusDtoStatic(session, includeVariables);
 
-    private static string? ResolveResultImageUrl(WorkflowExecutionSession session)
+    private static List<string> ResolveResultImageUrls(WorkflowExecutionSession session)
     {
         HashSet<string> variableNames = new(StringComparer.Ordinal);
         CollectResultImageUrlVariables(session.RuntimeWorkflow.Statements, variableNames);
         if (variableNames.Count == 0)
         {
-            return null;
+            return new List<string>();
         }
 
         List<WorkflowVariableResultDto> variables;
@@ -2519,6 +2731,7 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
             )
             .ToDictionary(x => x.Name, x => x.ScalarValue!, StringComparer.Ordinal);
 
+        List<string> result = new();
         foreach (string variableName in variableNames)
         {
             if (
@@ -2526,11 +2739,83 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
                 && !string.IsNullOrWhiteSpace(value)
             )
             {
-                return value;
+                result.Add(value);
             }
         }
 
-        return null;
+        return result;
+    }
+
+    private async Task<List<WorkflowVariableResultDto>> ResolveOutputVariables(
+        WorkflowExecutionSession session
+    )
+    {
+        WorkflowDefinition entity = await _repository.GetAsync(session.WorkflowId);
+        List<string>? outputVariableNames = ParseOutputVariablesJson(entity.OutputVariables);
+
+        if (outputVariableNames == null || outputVariableNames.Count == 0)
+        {
+            return new List<WorkflowVariableResultDto>();
+        }
+
+        List<WorkflowVariableResultDto> allVariables = session.Status
+            is WorkflowExecutionStatus.Completed
+                or WorkflowExecutionStatus.Faulted
+                or WorkflowExecutionStatus.Stopped
+            ? session.FrozenVariables
+            : session.VariablePool.Snapshot(session.Context, session.OutputStagedKeys);
+
+        HashSet<string> targetNames = new(outputVariableNames, StringComparer.Ordinal);
+        List<WorkflowVariableResultDto> result = new();
+
+        foreach (WorkflowVariableResultDto variable in allVariables)
+        {
+            if (!targetNames.Contains(variable.Name))
+            {
+                continue;
+            }
+
+            if (
+                variable.Name.StartsWith("abs_diff_", StringComparison.Ordinal)
+                && variable.ScalarValue != null
+            )
+            {
+                try
+                {
+                    JsonNode? jsonNode = JsonNode.Parse(variable.ScalarValue);
+                    if (jsonNode != null && jsonNode is JsonObject jsonObj)
+                    {
+                        string? targetRegion = jsonObj["targetRegion"]?.GetValue<string>();
+                        if (!string.IsNullOrWhiteSpace(targetRegion))
+                        {
+                            variable.DisplayName = targetRegion;
+                        }
+                    }
+                }
+                catch (JsonException) { }
+            }
+
+            result.Add(variable);
+        }
+
+        return result;
+    }
+
+    private static List<string>? ParseOutputVariablesJson(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return null;
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<List<string>>(json);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 
     private static void CollectResultImageUrlVariables(
@@ -2852,8 +3137,68 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
 
     private static string ComputeGraphHash(string graphData)
     {
-        byte[] bytes = SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(graphData));
+        // 规范化：剔除 roiJson 中的 baseImage 字段，避免生成的底图信息影响哈希值
+        string normalized = NormalizeGraphDataForHash(graphData);
+        byte[] bytes = SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(normalized));
         return Convert.ToHexString(bytes);
+    }
+
+    /// <summary>
+    /// 规范化 graphData，剔除所有 roiJson 参数中的 <c>baseImage</c> 字段，
+    /// 确保哈希值只取决于工作流结构与 ROI 配置，不受已生成底图信息影响。
+    /// </summary>
+    private static string NormalizeGraphDataForHash(string graphData)
+    {
+        try
+        {
+            if (JsonNode.Parse(graphData) is not JsonObject graphObject)
+            {
+                return graphData;
+            }
+
+            if (graphObject["nodes"] is not JsonArray nodes)
+            {
+                return graphData;
+            }
+
+            foreach (JsonNode? node in nodes)
+            {
+                if (node is not JsonObject nodeObject)
+                {
+                    continue;
+                }
+
+                if (
+                    nodeObject["properties"] is not JsonObject properties
+                    || properties["params"] is not JsonObject paramsObj
+                    || !paramsObj.TryGetPropertyValue("roiJson", out JsonNode? roiJsonNode)
+                    || roiJsonNode is not JsonValue roiJsonValue
+                    || roiJsonValue.GetValue<string>() is not { } roiJsonStr
+                )
+                {
+                    continue;
+                }
+
+                try
+                {
+                    if (JsonNode.Parse(roiJsonStr) is JsonObject roiObject)
+                    {
+                        roiObject.Remove("baseImage");
+                        paramsObj["roiJson"] = roiObject.ToJsonString(RoiJsonWriteOptions);
+                    }
+                }
+                catch (JsonException)
+                {
+                    // roiJson 解析失败，保持原样
+                }
+            }
+
+            return graphObject.ToJsonString(RoiJsonWriteOptions);
+        }
+        catch (JsonException)
+        {
+            return graphData;
+        }
     }
 
     private static string ComputeSnapshotHash(IEnumerable<WorkflowProjectDeploymentItem> items)

@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -67,6 +68,13 @@ public class RoiDefinition
     // ── sector 专属字段 ──
     public RoiPoint? StartPoint { get; set; }
     public RoiPoint? EndPoint { get; set; }
+
+    // ── 通用字段 ──
+    /// <summary>
+    /// 边缘模糊半径（像素）。大于 0 时对掩膜边界进行高斯模糊，实现羽化效果。
+    /// 适用于曲面区域或需要平滑过渡的场景，减少边界噪声影响。
+    /// </summary>
+    public double BlurRadius { get; set; }
 }
 
 /// <summary>ROI 分区完整输入配置（仅含 rois 数组，不含合并模式，合并由前端处理）。</summary>
@@ -89,6 +97,12 @@ public class RoiBaseImageInfo
     /// 用于将 ROI 像素坐标稳定映射回模型世界坐标。
     /// </summary>
     public RoiProjectionMapping? ProjectionMapping { get; set; }
+
+    /// <summary>
+    /// 生成底图时的工作流 GraphData 哈希值。
+    /// 用于判断工作流是否发生变化，决定是否需要重新生成底图。
+    /// </summary>
+    public string? GraphHash { get; set; }
 }
 
 /// <summary>ROI 底图像素坐标到模型坐标的投影映射信息。</summary>
@@ -195,7 +209,17 @@ public class RoiPartitionMetadata
 public class roi_partition : IOperator
 {
     public static List<IVisionParameter>? InputVisionParameters =>
-        new() { new MatImg() { ParameterName = "input_mat" } };
+        new()
+        {
+            new MatImg() { ParameterName = "input_mat" },
+            new VisionParameter<string>
+            {
+                ParameterName = "projection_mapping",
+                ParameterType = typeof(string),
+                DisplayName = "投影映射",
+                ControlType = PortControlType.Variable,
+            },
+        };
 
     public static List<IVisionParameter>? OutputVisionParameters =>
         new()
@@ -228,9 +252,20 @@ public class roi_partition : IOperator
                 Required = true,
                 ControlType = PortControlType.Input,
             },
+            new ConfigParameter
+            {
+                Name = "partitionStrategy",
+                DisplayName = "分区选择策略",
+                ParameterType = typeof(string),
+                DefaultValue = "center",
+                ValueLimit = new[] { "center", "largest" },
+                Required = false,
+                ControlType = PortControlType.Select,
+            },
         };
 
     private readonly string _roiJson;
+    private readonly string _partitionStrategy;
     private bool _disposed;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -243,9 +278,11 @@ public class roi_partition : IOperator
     /// 初始化 ROI 分区算子。
     /// </summary>
     /// <param name="roiJson">ROI 配置 JSON 字符串，包含 rois 数组。</param>
-    public roi_partition(string roiJson)
+    /// <param name="partitionStrategy">分区选择策略：center（靠近选区中心，默认）或 largest（面积最大）。</param>
+    public roi_partition(string roiJson, string partitionStrategy = "center")
     {
         _roiJson = roiJson;
+        _partitionStrategy = partitionStrategy;
     }
 
     /// <inheritdoc/>
@@ -292,9 +329,30 @@ public class roi_partition : IOperator
         {
             RoiDefinition roi = config.Rois[i];
             Mat mask = GenerateRoiMask(roi, imageWidth, imageHeight, i);
+
+            if (roi.BlurRadius > 0)
+            {
+                int ksize = Math.Max(3, (int)(roi.BlurRadius * 2) + 1);
+                if (ksize % 2 == 0)
+                    ksize++;
+                Mat floatMask = new();
+                mask.ConvertTo(floatMask, MatType.CV_64F);
+                Cv2.GaussianBlur(floatMask, floatMask, new Size(ksize, ksize), roi.BlurRadius);
+                Cv2.Normalize(floatMask, mask, 0, 255, NormTypes.MinMax);
+                mask.ConvertTo(mask, MatType.CV_8U);
+                floatMask.Dispose();
+            }
+
             roiMasks.Add(mask);
 
-            RoiMetadata meta = ExtractRoiMetadata(mask, roi.Name, roi.Type.ToString(), i);
+            RoiMetadata meta = ExtractRoiMetadata(
+                mask,
+                roi.Name,
+                roi.Type.ToString(),
+                i,
+                imageWidth,
+                imageHeight
+            );
             metadataList.Add(meta);
         }
 
@@ -308,6 +366,24 @@ public class roi_partition : IOperator
             imageWidth,
             imageHeight
         );
+
+        string? projectionMappingJson = context.Get<string>("projection_mapping");
+        if (!string.IsNullOrWhiteSpace(projectionMappingJson))
+        {
+            try
+            {
+                RoiProjectionMapping? dynamicMapping =
+                    JsonSerializer.Deserialize<RoiProjectionMapping>(
+                        projectionMappingJson,
+                        JsonOptions
+                    );
+                if (dynamicMapping is not null)
+                {
+                    projectionMapping = dynamicMapping;
+                }
+            }
+            catch (JsonException) { }
+        }
 
         var metadata = new RoiPartitionMetadata
         {
@@ -549,8 +625,17 @@ public class roi_partition : IOperator
 
     /// <summary>
     /// 提取单个 ROI 掩膜的几何元数据：外接矩形、面积、简化轮廓。
+    /// <para>对于旋转矩形 ROI，外接矩形是轴对齐包围盒，会比原始矩形尺寸大，这是正常的。</para>
+    /// <para>根据分区策略选择目标轮廓：center 选离图像中心最近的，largest 选面积最大的。</para>
     /// </summary>
-    private static RoiMetadata ExtractRoiMetadata(Mat mask, string name, string typeName, int index)
+    private RoiMetadata ExtractRoiMetadata(
+        Mat mask,
+        string name,
+        string typeName,
+        int index,
+        int imageWidth,
+        int imageHeight
+    )
     {
         using Mat nonZeroMat = new Mat();
         Cv2.FindNonZero(mask, nonZeroMat);
@@ -567,11 +652,11 @@ public class roi_partition : IOperator
             };
         }
 
-        Rect boundingRect = Cv2.BoundingRect(nonZeroMat);
         double area = Cv2.CountNonZero(mask);
 
-        // 轮廓点集
+        // 轮廓点集 + 外接矩形（从轮廓计算，比从非零点像素算更精确）
         List<RoiPoint> contourPoints = new();
+        Rect boundingRect = default;
         using (Mat tempMask = mask.Clone())
         {
             Cv2.FindContours(
@@ -584,9 +669,14 @@ public class roi_partition : IOperator
 
             if (contours.Length > 0)
             {
-                Point[] largest = contours.OrderByDescending(c => c.Length).First();
-                foreach (Point pt in largest)
+                Point[] selected =
+                    _partitionStrategy == "largest"
+                        ? SelectLargestContour(contours)
+                        : SelectCenterContour(contours, imageWidth, imageHeight);
+
+                foreach (Point pt in selected)
                     contourPoints.Add(new RoiPoint { X = pt.X, Y = pt.Y });
+                boundingRect = Cv2.BoundingRect(selected);
             }
         }
 
@@ -605,6 +695,33 @@ public class roi_partition : IOperator
             Area = area,
             ContourPoints = contourPoints,
         };
+    }
+
+    /// <summary>按实际面积选择最大的轮廓。</summary>
+    private static Point[] SelectLargestContour(Point[][] contours)
+    {
+        return contours.OrderByDescending(c => Cv2.ContourArea(c)).First();
+    }
+
+    /// <summary>选择离图像中心最近的轮廓，距离相同时选面积大的。</summary>
+    private static Point[] SelectCenterContour(Point[][] contours, int imageWidth, int imageHeight)
+    {
+        double centerX = imageWidth / 2.0;
+        double centerY = imageHeight / 2.0;
+
+        return contours
+            .Select(c =>
+            {
+                Moments m = Cv2.Moments(c);
+                double cx = m.M10 / (m.M00 + 1e-10);
+                double cy = m.M01 / (m.M00 + 1e-10);
+                double dist = (cx - centerX) * (cx - centerX) + (cy - centerY) * (cy - centerY);
+                return (contour: c, dist, area: Cv2.ContourArea(c));
+            })
+            .OrderBy(x => x.dist)
+            .ThenByDescending(x => x.area)
+            .First()
+            .contour;
     }
 
     // ── 校验方法 ────────────────────────────────────────────────────────────────

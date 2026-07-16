@@ -83,6 +83,9 @@ public class CalibProject : FullAuditedAggregateRoot<Guid>
     /// <summary>圆点检测器参数 JSON（可空）。</summary>
     public string? CircleDetectorConfigJson { get; private set; }
 
+    /// <summary>标定板厚度（mm，用于投影仪外参标定补偿，默认 1mm）。</summary>
+    public decimal BoardThicknessMm { get; private set; } = 1m;
+
     /// <summary>绑定的结构光投影仪设备ID（单光系列在 Step 3 选定后持久化）</summary>
     public Guid? BoundProjectorDeviceId { get; private set; }
 
@@ -276,7 +279,8 @@ public class CalibProject : FullAuditedAggregateRoot<Guid>
         bool? hasCornerLocators,
         int? markerRow,
         int? markerCol,
-        string? circleDetectorConfigJson
+        string? circleDetectorConfigJson,
+        decimal? boardThicknessMm = null
     )
     {
         // 保留原有棋盘格字段，确保历史数据和旧接口兼容。
@@ -292,6 +296,10 @@ public class CalibProject : FullAuditedAggregateRoot<Guid>
         BoardType = boardType;
         if (boardType == CalibrationBoardType.Chessboard)
         {
+            if (boardThicknessMm.HasValue)
+            {
+                BoardThicknessMm = boardThicknessMm.Value;
+            }
             return this;
         }
 
@@ -337,6 +345,10 @@ public class CalibProject : FullAuditedAggregateRoot<Guid>
         MarkerRow = markerEnabled ? resolvedMarkerRow : null;
         MarkerCol = markerEnabled ? resolvedMarkerCol : null;
         CircleDetectorConfigJson = circleDetectorConfigJson;
+        if (boardThicknessMm.HasValue)
+        {
+            BoardThicknessMm = boardThicknessMm.Value;
+        }
         return this;
     }
 }

@@ -1,4 +1,4 @@
-﻿export default {
+export default {
     common: {
         confirm: '確定',
         cancel: 'キャンセル',
@@ -376,6 +376,7 @@
         tabVideo: 'ライブプレビュー',
         tabSnapshot: 'スナップショット',
         waitingFrame: 'フレーム待機中…',
+        fullscreenTip: '空白領域または右上ボタンをクリックして全画面を終了',
         previewNotStarted: 'プレビュー未開始',
         noSnapshot: 'スナップショットなし',
         focusScore: 'フォーカスクリアリティ',
@@ -1395,6 +1396,7 @@
         step5CornerCols: '内部コーナー列数',
         step5SquareSizeMm: 'マスサイズ (mm)',
         step5ProjectedPixelSize: 'マスピクセルサイズ (px)',
+        step5BoardThicknessMm: 'ボード厚さ (mm)',
         step5SaveBoardConfig: 'ボード設定を保存',
         step5SaveBoardConfigSuccess: 'ボード設定を保存しました',
         step5ImportBoardConfig: '設定をインポート',
@@ -1436,13 +1438,7 @@
         step5CircleValidationAreaRange: '面積範囲が不正です。0 < minArea < maxArea を満たしてください。',
         step5CircleValidationMinCircularity: '最小円形度は [0, 1] の範囲である必要があります。',
         step5CircleValidationMinConvexity: '最小凸度は [0, 1] の範囲である必要があります。',
-        step5AutoAlignBtn: 'カメラ自動位置合わせ',
-        step5AutoAligning: '位置合わせ中…',
-        step5AlignSuccess: 'カメラ位置合わせ完了',
-        step5AlignPartialFailed: '一部のカメラが位置合わせに失敗しました',
-        step5AlignSkipped: 'モーター未割当、スキップ',
-        step5AlignBefore: '調整前',
-        step5AlignAfter: '調整後',
+
         step5ImageTracking: '画像トラッキング',
         step5ImageTrackingNotAvailable: '未実装',
         step5CameraList: 'カメラ一覧',
@@ -1453,6 +1449,8 @@
         step5LedOff: 'LED オフ',
         step5TakeIntrinsic: '内部パラメータ撮影',
         step5TakeExtrinsic: '外部パラメータ撮影',
+        step5TakeExtrinsicDot: '外部パラメータドット撮影',
+        step5TakeExtrinsicCheckerboard: '外部パラメータチェッカーボード撮影',
         step5TakingPhoto: '撮影中…',
         step5Compute: 'キャリブレーション計算',
         step5ComputeIntrinsic: '内部パラメータ計算',
@@ -1465,6 +1463,7 @@
         step5ExtrinsicLedOffFrame: '白画面フレーム',
         step5ExtrinsicLedOnFrame: 'パターンフレーム',
         step5ExtrinsicGroupInvalid: '{camera}: この外部パラメータ用2枚組サンプルには無効な画像があります。再撮影してください。',
+        step5ExtrinsicImageDiffInsignificant: '{camera}: 画像の差分が顕著ではありません。プロジェクターのモード切り替えに失敗した可能性があります。デバイスを確認してリトライしてください。',
         step5ValidPhoto: '有効',
         step5InvalidPhoto: '無効（チェッカーボード未検出）',
         step5PhotoCount: '{count} 枚',
