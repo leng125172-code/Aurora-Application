@@ -283,11 +283,11 @@ public class DlpProjectorService : IDlpProjectorService, IDisposable
     {
         EnsureClient();
 
-        if (light is < 10 or > 200)
+        if (light is > 175)
         {
             throw new ArgumentOutOfRangeException(
                 nameof(light),
-                "Brightness must be in range 10~200"
+                "Brightness must be in range 0~175"
             );
         }
 
@@ -297,23 +297,6 @@ public class DlpProjectorService : IDlpProjectorService, IDisposable
             DeviceId,
             light
         );
-
-        // 亮度 > 175 时需先发送高亮使能命令（源码：TJSTPrjSetLight）
-        if (light > 175)
-        {
-            bool hlOk = await SendAndLogAsync(
-                    TjProjectorCommands.HighLightEnable,
-                    ProjectorOperationType.SetLight,
-                    "Enable highlight",
-                    cancellationToken
-                )
-                .ConfigureAwait(false);
-            if (!hlOk)
-            {
-                return false;
-            }
-            await Task.Delay(50, cancellationToken).ConfigureAwait(false);
-        }
 
         string cmd = $"{TjProjectorCommands.SetLightPrefix}{light}";
         bool ok = await SendAndLogAsync(

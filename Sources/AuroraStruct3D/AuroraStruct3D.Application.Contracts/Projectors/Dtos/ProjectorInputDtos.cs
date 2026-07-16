@@ -139,8 +139,8 @@ public class ProjectorControlDto
 /// </summary>
 public class SetProjectorLightDto : ProjectorControlDto
 {
-    /// <summary>亮度值（10~200）</summary>
-    [Range(10, 200)]
+    /// <summary>亮度值（0~175）</summary>
+    [Range(0, 175)]
     public byte Light { get; set; }
 }
 
