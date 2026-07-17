@@ -94,9 +94,9 @@ function canUseProjectorExtrinsic(cameraId: string): boolean {
         return false
     }
 
-    // 2目1光：仅主相机执行投影外参与外参拍照
+    // 双目结构光模式下，投影仪仅作为纹理生成工具，不参与标定
     if (props.project.deviceType === CalibDeviceType.TwoCamera1Light) {
-        return props.project.mainCameraDeviceId === cameraId
+        return false
     }
 
     return true

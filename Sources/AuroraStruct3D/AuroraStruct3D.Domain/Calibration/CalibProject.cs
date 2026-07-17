@@ -162,6 +162,16 @@ public class CalibProject : FullAuditedAggregateRoot<Guid>
         return this;
     }
 
+    /// <summary>
+    /// 判断是否需要投影仪标定
+    /// - OneCamera1Light（单目结构光）：需要投影仪标定
+    /// - TwoCamera1Light（双目结构光）：不需要，投影仪仅作为纹理生成器
+    /// </summary>
+    public bool IsProjectorCalibrationRequired()
+    {
+        return DeviceType.IsProjectorCalibrationRequired();
+    }
+
     /// <summary>推进标定步骤状态</summary>
     public CalibProject AdvanceStatus(CalibStatus status)
     {

@@ -118,7 +118,6 @@ public static class CalibrationDbContextModelCreatingExtensions
             b.Property(x => x.DistCoeffsJson).HasMaxLength(CalibConsts.MaxCalibResultJsonLength);
             b.Property(x => x.ExtrinsicRvecJson).HasMaxLength(CalibConsts.MaxCalibResultJsonLength);
             b.Property(x => x.ExtrinsicTvecJson).HasMaxLength(CalibConsts.MaxCalibResultJsonLength);
-            b.Property(x => x.ProjectorReprojectionError);
         });
 
         // ── 结构光参数表 ──────────────────────────────────────────────────────────

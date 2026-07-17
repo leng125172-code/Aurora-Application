@@ -266,6 +266,27 @@ public enum CalibPhotoType
 }
 
 /// <summary>
+/// CalibDeviceType 扩展方法
+/// </summary>
+public static class CalibDeviceTypeExtensions
+{
+    /// <summary>
+    /// 判断设备类型是否需要投影仪标定
+    /// - OneCamera1Light（单目结构光）：需要投影仪标定
+    /// - TwoCamera1Light（双目结构光）：不需要，投影仪仅作为纹理生成器
+    /// </summary>
+    public static bool IsProjectorCalibrationRequired(this CalibDeviceType deviceType)
+    {
+        return deviceType switch
+        {
+            CalibDeviceType.OneCamera1Light => true,
+            CalibDeviceType.TwoCamera1Light => false,
+            _ => false,
+        };
+    }
+}
+
+/// <summary>
 /// 双目成对照片中的相机角色
 /// </summary>
 public enum StereoPhotoRole
