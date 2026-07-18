@@ -1478,7 +1478,7 @@ export default {
         step5NoCalibResult: 'Noch nicht berechnet. Genügend Fotos aufnehmen, dann Berechnen klicken.',
         step5DeletePhoto: 'Löschen',
         step5DeleteConfirm: 'Dieses Foto löschen? Die Datei wird ebenfalls entfernt.',
-        step5NoProjectorWarning: 'Kein Projektor an dieser Kamera gebunden. Extrinsik-Aufnahme nicht verfügbar.',
+
         step5ComputeSuccess: 'Kalibrierung abgeschlossen. Reprojektionsfehler: {error} px',
         step5PhotoDeleteSuccess: 'Foto gelöscht',
         step5Refresh: 'Aktualisieren',

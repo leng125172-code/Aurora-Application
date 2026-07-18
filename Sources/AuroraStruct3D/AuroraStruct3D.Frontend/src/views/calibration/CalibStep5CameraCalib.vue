@@ -88,14 +88,9 @@ const showProjectorSection = computed(() => {
     return props.project.deviceSeries === DeviceSeries.SingleLight && !!activeProjectorId.value
 })
 
-// 投影外参能力为项目级判定（是否单光系列 + 是否绑定投影仪 + 非双目结构光），与具体相机无关
+// 投影外参能力为项目级判定（是否单光系列 + 是否绑定投影仪），与具体相机无关
 function canUseProjectorExtrinsic(): boolean {
     if (!showProjectorSection.value) {
-        return false
-    }
-
-    // 双目结构光模式下，投影仪仅作为纹理生成工具，不参与标定
-    if (props.project.deviceType === CalibDeviceType.TwoCamera1Light) {
         return false
     }
 
@@ -593,13 +588,7 @@ async function doTakeIntrinsic(cam: CameraDeviceDto): Promise<void> {
 }
 
 async function doTakeExtrinsicDot(cam: CameraDeviceDto): Promise<void> {
-    if (!canUseProjectorExtrinsic()) {
-        toast.warn(t('calib.step5NoProjectorWarning'))
-        return
-    }
-
-    if (!activeProjectorId.value) {
-        toast.warn(t('calib.step5NoProjectorWarning'))
+    if (!canUseProjectorExtrinsic() || !activeProjectorId.value) {
         return
     }
     if (takingExtrinsicDotIds.value.has(cam.id)) return
@@ -625,13 +614,7 @@ async function doTakeExtrinsicDot(cam: CameraDeviceDto): Promise<void> {
 }
 
 async function doTakeExtrinsicCheckerboard(cam: CameraDeviceDto): Promise<void> {
-    if (!canUseProjectorExtrinsic()) {
-        toast.warn(t('calib.step5NoProjectorWarning'))
-        return
-    }
-
-    if (!activeProjectorId.value) {
-        toast.warn(t('calib.step5NoProjectorWarning'))
+    if (!canUseProjectorExtrinsic() || !activeProjectorId.value) {
         return
     }
     if (takingExtrinsicCheckerboardIds.value.has(cam.id)) return
@@ -1350,12 +1333,6 @@ onMounted(async () => {
                                         {{ ledIsOn ? t('calib.step5LedOff') : t('calib.step5LedOn') }}
                                     </Button>
                                 </div>
-                            </div>
-                            <div
-                                v-else
-                                class="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-amber-400"
-                            >
-                                {{ t('calib.step5NoProjectorWarning') }}
                             </div>
 
                             <div

@@ -1489,7 +1489,7 @@ export default {
         step5NoCalibResult: '尚未计算，请拍摄足够照片后点击"计算内外参"',
         step5DeletePhoto: '删除',
         step5DeleteConfirm: '确认删除此张照片？删除后将同时移除存储文件。',
-        step5NoProjectorWarning: '此相机无投影仪绑定（无光设备），外参拍照不可用',
+
         step5PhotoDeleteSuccess: '照片已删除',
         step5Refresh: '刷新',
         step5DeleteInvalid: '删除无效照片',

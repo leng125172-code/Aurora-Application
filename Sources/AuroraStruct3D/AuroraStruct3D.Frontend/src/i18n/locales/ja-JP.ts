@@ -1478,7 +1478,7 @@ export default {
         step5NoCalibResult: '未計算。写真を十分撑影してから「キャリブレーション計算」をクリック',
         step5DeletePhoto: '削除',
         step5DeleteConfirm: 'この写真を削除しますか？ストレージファイルも削除されます。',
-        step5NoProjectorWarning: 'このカメラにプロジェクターがないため、外部パラメータ撮影は不可',
+
         step5ComputeSuccess: 'キャリブレーション完了。再投影誤差: {error} px',
         step5PhotoDeleteSuccess: '写真を削除しました',
         step5Refresh: '更新',

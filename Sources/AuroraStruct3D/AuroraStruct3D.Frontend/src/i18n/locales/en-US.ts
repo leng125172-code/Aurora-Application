@@ -1479,7 +1479,7 @@ export default {
         step5NoCalibResult: 'Not computed yet. Capture enough photos and click Compute.',
         step5DeletePhoto: 'Delete',
         step5DeleteConfirm: 'Delete this photo? The storage file will also be removed.',
-        step5NoProjectorWarning: 'No projector bound to this camera (no-light device). Extrinsic capture unavailable.',
+
         step5PhotoDeleteSuccess: 'Photo deleted',
         step5Refresh: 'Refresh',
         step5DeleteInvalid: 'Delete Invalid',

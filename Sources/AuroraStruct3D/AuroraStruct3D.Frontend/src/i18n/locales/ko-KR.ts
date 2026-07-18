@@ -1479,7 +1479,7 @@ export default {
         step5NoCalibResult: '아직 계산되지 않았습니다.',
         step5DeletePhoto: '삭제',
         step5DeleteConfirm: '이 사진을 삭제하시겠습니까? 저장 파일도 삭제됩니다.',
-        step5NoProjectorWarning: '이 카메라에 프로젝터가 없어 외부 캘리브 촬영을 할 수 없습니다',
+
         step5ComputeSuccess: '캘리브레이션 완료. 재투영 오차: {error} px',
         step5PhotoDeleteSuccess: '사진이 삭제되었습니다',
         step5Refresh: '새로 고침',
