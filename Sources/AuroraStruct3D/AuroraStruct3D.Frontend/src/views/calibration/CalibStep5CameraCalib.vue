@@ -88,16 +88,19 @@ const showProjectorSection = computed(() => {
     return props.project.deviceSeries === DeviceSeries.SingleLight && !!activeProjectorId.value
 })
 
-// 投影外参能力为项目级判定（是否单光系列 + 是否绑定投影仪），与具体相机无关
+// 投影外参能力为项目级判定（仅单目结构光 + 绑定投影仪）
+// 双目结构光（2目1光）不参与投影仪标定，外参拍照和计算都不显示
 function canUseProjectorExtrinsic(): boolean {
     if (!showProjectorSection.value) {
         return false
     }
-
+    if (props.project.deviceType === CalibDeviceType.TwoCamera1Light) {
+        return false
+    }
     return true
 }
 
-// 判断是否需要计算投影仪外参（仅单目结构光需要，双目结构光不参与标定）
+// 判断是否需要计算投影仪外参（仅单目结构光需要）
 function canComputeProjectorExtrinsic(): boolean {
     if (!canUseProjectorExtrinsic()) {
         return false

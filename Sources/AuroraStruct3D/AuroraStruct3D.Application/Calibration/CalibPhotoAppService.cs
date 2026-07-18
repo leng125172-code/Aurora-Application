@@ -2397,6 +2397,8 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
     {
         if (project.DeviceSeries == DeviceSeries.NoLight)
             throw new UserFriendlyException("无光系列不支持外参拍照");
+        if (project.DeviceType == CalibDeviceType.TwoCamera1Light)
+            throw new UserFriendlyException("双目结构光模式下不支持外参拍照");
         if (!project.BoundProjectorDeviceId.HasValue)
             throw new UserFriendlyException("请先在项目管理页绑定主结构光机后再执行外参拍照");
         return project.BoundProjectorDeviceId.Value;
