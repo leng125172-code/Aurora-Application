@@ -68,6 +68,14 @@ public static class CalibImageUtils
         return SkiaBytesToBgrMat(imageBytes);
     }
 
+    public static Mat LoadBgrMatWithRotation(byte[] imageBytes, int rotationAngle)
+    {
+        Mat bgr = LoadBgrMat(imageBytes);
+        if (bgr.Empty())
+            return bgr;
+        return ApplyRotation(bgr, rotationAngle);
+    }
+
     public static Mat SkiaBytesToBgrMat(byte[] imageBytes)
     {
         try
@@ -209,11 +217,9 @@ public static class CalibImageUtils
 
     public static string SerializeTransformToJson(Mat rotation, Mat translation)
     {
-        return JsonSerializer.Serialize(new
-        {
-            R = SerializeMatToJson(rotation),
-            T = SerializeVecToJson(translation),
-        });
+        return JsonSerializer.Serialize(
+            new { R = SerializeMatToJson(rotation), T = SerializeVecToJson(translation) }
+        );
     }
 
     public static string SerializeInverseTransformToJson(Mat rotation, Mat translation)
@@ -221,11 +227,9 @@ public static class CalibImageUtils
         using Mat rInv = rotation.T();
         using Mat tInv = -rInv * translation;
 
-        return JsonSerializer.Serialize(new
-        {
-            R = SerializeMatToJson(rInv),
-            T = SerializeVecToJson(tInv),
-        });
+        return JsonSerializer.Serialize(
+            new { R = SerializeMatToJson(rInv), T = SerializeVecToJson(tInv) }
+        );
     }
 
     public static byte[] SerializeFloatMapToBinary(Mat map)
@@ -252,41 +256,41 @@ public static class CalibImageUtils
     {
         try
         {
-            using Mat bgr = LoadBgrMat(imageBytes);
-            if (bgr.Empty())
+            using SKBitmap? bitmap = SKBitmap.Decode(imageBytes);
+            if (bitmap == null || bitmap.IsNull)
                 return null;
 
             const int maxSide = 200;
-            int longSide = Math.Max(bgr.Cols, bgr.Rows);
+            int longSide = Math.Max(bitmap.Width, bitmap.Height);
 
             if (longSide <= maxSide)
             {
-                using Mat rgbMat = new();
-                Cv2.CvtColor(bgr, rgbMat, ColorConversionCodes.BGR2RGB);
-                using SKImage skImage = SKImage.FromPixels(
-                    new SKImageInfo(rgbMat.Cols, rgbMat.Rows, SKColorType.Rgba8888, SKAlphaType.Opaque),
-                    rgbMat.Data,
-                    (int)rgbMat.Step()
-                );
-                using SKData skData = skImage.Encode(SKEncodedImageFormat.Jpeg, 80);
-                return "data:image/jpeg;base64," + Convert.ToBase64String(skData.ToArray());
+                using SKImage skImg = SKImage.FromBitmap(bitmap);
+                using SKData? encoded = skImg.Encode(SKEncodedImageFormat.Jpeg, 80);
+                if (encoded == null)
+                    return null;
+                return $"data:image/jpeg;base64,{Convert.ToBase64String(encoded.ToArray())}";
             }
 
             double scale = maxSide / (double)longSide;
-            int w = Math.Max(1, (int)Math.Round(bgr.Cols * scale));
-            int h = Math.Max(1, (int)Math.Round(bgr.Rows * scale));
-            using Mat resized = new();
-            Cv2.Resize(bgr, resized, new Size(w, h), interpolation: InterpolationFlags.Area);
+            int targetWidth = Math.Max(1, (int)Math.Round(bitmap.Width * scale));
+            int targetHeight = Math.Max(1, (int)Math.Round(bitmap.Height * scale));
 
-            using Mat rgbMat2 = new();
-            Cv2.CvtColor(resized, rgbMat2, ColorConversionCodes.BGR2RGB);
-            using SKImage skImage2 = SKImage.FromPixels(
-                new SKImageInfo(rgbMat2.Cols, rgbMat2.Rows, SKColorType.Rgba8888, SKAlphaType.Opaque),
-                rgbMat2.Data,
-                (int)rgbMat2.Step()
+            SKImageInfo info = new(
+                targetWidth,
+                targetHeight,
+                SKColorType.Bgra8888,
+                SKAlphaType.Opaque
             );
-            using SKData skData2 = skImage2.Encode(SKEncodedImageFormat.Jpeg, 80);
-            return "data:image/jpeg;base64," + Convert.ToBase64String(skData2.ToArray());
+            using SKBitmap resized = new(info);
+            bitmap.ScalePixels(resized, new SKSamplingOptions(SKFilterMode.Linear));
+
+            using SKImage skImg2 = SKImage.FromBitmap(resized);
+            using SKData? encoded2 = skImg2.Encode(SKEncodedImageFormat.Jpeg, 80);
+            if (encoded2 == null)
+                return null;
+
+            return $"data:image/jpeg;base64,{Convert.ToBase64String(encoded2.ToArray())}";
         }
         catch
         {
@@ -348,8 +352,14 @@ public static class CalibImageUtils
             LineSegmentPoint hLine = horizontalLines[0];
             LineSegmentPoint vLine = verticalLines[0];
 
-            double hx1 = hLine.P1.X, hy1 = hLine.P1.Y, hx2 = hLine.P2.X, hy2 = hLine.P2.Y;
-            double vx1 = vLine.P1.X, vy1 = vLine.P1.Y, vx2 = vLine.P2.X, vy2 = vLine.P2.Y;
+            double hx1 = hLine.P1.X,
+                hy1 = hLine.P1.Y,
+                hx2 = hLine.P2.X,
+                hy2 = hLine.P2.Y;
+            double vx1 = vLine.P1.X,
+                vy1 = vLine.P1.Y,
+                vx2 = vLine.P2.X,
+                vy2 = vLine.P2.Y;
 
             double denom = (hx2 - hx1) * (vy2 - vy1) - (hy2 - hy1) * (vx2 - vx1);
             if (Math.Abs(denom) < 1e-10)
@@ -385,7 +395,8 @@ public static class CalibImageUtils
         if (end - start < 2)
             return center;
 
-        double sum = 0, weightedSum = 0;
+        double sum = 0,
+            weightedSum = 0;
 
         for (int i = start; i <= end; i++)
         {
