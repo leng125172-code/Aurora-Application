@@ -2302,7 +2302,11 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
             }
             catch (Exception ex)
             {
-                _logger.LogDebug(ex, "标定拍照：相机 {Index} 读取触发模式失败，按自由运行处理", idx);
+                _logger.LogDebug(
+                    ex,
+                    "标定拍照：相机 {Index} 读取触发模式失败，按自由运行处理",
+                    idx
+                );
             }
 
             // 切换触发模式（必须在 Cap_Start 之前执行）
@@ -2334,12 +2338,20 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
                     int timeoutMs = targetTriggerMode == 1 ? 15000 : 8000;
                     try
                     {
-                        long exposureUs = await _tucamService.GetGenICamIntAsync(idx, "ExposureTime");
+                        long exposureUs = await _tucamService.GetGenICamIntAsync(
+                            idx,
+                            "ExposureTime"
+                        );
                         timeoutMs = Math.Max((int)(exposureUs / 1000L) * 2 + 1000, timeoutMs);
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogDebug(ex, "标定拍照：相机 {Index} 读取曝光时间失败，使用默认超时 {TimeoutMs}ms", idx, timeoutMs);
+                        _logger.LogDebug(
+                            ex,
+                            "标定拍照：相机 {Index} 读取曝光时间失败，使用默认超时 {TimeoutMs}ms",
+                            idx,
+                            timeoutMs
+                        );
                     }
 
                     (byte[] jpegBytes, _) = await _tucamService.GrabFrameRawAsync(idx, timeoutMs);
@@ -2357,7 +2369,11 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
                 {
                     try
                     {
-                        await _tucamService.SetGenICamIntAsync(idx, "TriggerMode", originalTriggerMode);
+                        await _tucamService.SetGenICamIntAsync(
+                            idx,
+                            "TriggerMode",
+                            originalTriggerMode
+                        );
                         _logger.LogInformation(
                             "标定拍照：相机 {Index} TriggerMode 已恢复为 {Original}",
                             idx,
@@ -2381,8 +2397,6 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
     {
         if (project.DeviceSeries == DeviceSeries.NoLight)
             throw new UserFriendlyException("无光系列不支持外参拍照");
-        if (!project.IsProjectorCalibrationRequired())
-            throw new UserFriendlyException("双目结构光模式下不支持投影外参拍照，结构光仅作为纹理生成器");
         if (!project.BoundProjectorDeviceId.HasValue)
             throw new UserFriendlyException("请先在项目管理页绑定主结构光机后再执行外参拍照");
         return project.BoundProjectorDeviceId.Value;
@@ -2522,7 +2536,11 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
         };
     }
 
-    private async Task<(List<Mat> objectMats, List<Mat> imageMats, Size imageSize)> CollectIntrinsicPointMatsAsync(
+    private async Task<(
+        List<Mat> objectMats,
+        List<Mat> imageMats,
+        Size imageSize
+    )> CollectIntrinsicPointMatsAsync(
         List<CalibPhotoRecord> intrinsicPhotos,
         Point3f[] worldCorners,
         Size patternSize,
@@ -2534,7 +2552,8 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
         List<Mat> objectMats = [];
         List<Mat> imageMats = [];
         Size imageSize = default;
-        System.Diagnostics.Stopwatch? sw = logPrefix != null ? System.Diagnostics.Stopwatch.StartNew() : null;
+        System.Diagnostics.Stopwatch? sw =
+            logPrefix != null ? System.Diagnostics.Stopwatch.StartNew() : null;
 
         for (int idx = 0; idx < intrinsicPhotos.Count; idx++)
         {

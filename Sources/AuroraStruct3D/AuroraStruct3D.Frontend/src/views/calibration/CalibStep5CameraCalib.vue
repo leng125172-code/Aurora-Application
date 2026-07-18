@@ -97,6 +97,14 @@ function canUseProjectorExtrinsic(): boolean {
     return true
 }
 
+// 判断是否需要计算投影仪外参（仅单目结构光需要，双目结构光不参与标定）
+function canComputeProjectorExtrinsic(): boolean {
+    if (!canUseProjectorExtrinsic()) {
+        return false
+    }
+    return props.project.deviceType === CalibDeviceType.OneCamera1Light
+}
+
 const isStereoProject = computed(() => {
     return (
         props.project.deviceType === CalibDeviceType.TwoCamera0Light ||
@@ -673,9 +681,9 @@ function canCompute(cameraId: string): boolean {
     return !!s && s.intrinsicValid >= MIN_VALID
 }
 
-/** 判断是否可计算外参：已有内参 + 有足够外参照片 */
+/** 判断是否可计算外参：已有内参 + 有足够外参照片 + 设备类型支持 */
 function canComputeExtrinsic(cameraId: string): boolean {
-    if (!canUseProjectorExtrinsic()) return false
+    if (!canComputeProjectorExtrinsic()) return false
     const s = cameraStatusMap.value[cameraId]
     const result = calibResultMap.value[cameraId]
     return !!s && s.extrinsicValid >= 1 && (!!result?.intrinsicMatrixJson || !!s.intrinsicValid)
@@ -1433,13 +1441,11 @@ onMounted(async () => {
                                 </Button>
 
                                 <Button
-                                    v-if="canUseProjectorExtrinsic()"
+                                    v-if="canComputeExtrinsic(cam.id)"
                                     size="small"
                                     severity="secondary"
                                     class="w-full !text-xs"
                                     :loading="extrinsicComputingIds.has(cam.id)"
-                                    :disabled="!canComputeExtrinsic(cam.id)"
-                                    :title="!canComputeExtrinsic(cam.id) ? t('calib.step5ExtrinsicInsufficient') : ''"
                                     @click="doComputeExtrinsic(cam)"
                                 >
                                     {{
