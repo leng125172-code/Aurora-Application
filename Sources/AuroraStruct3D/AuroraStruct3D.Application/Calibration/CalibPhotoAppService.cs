@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -36,6 +37,12 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
     private readonly ILogger<CalibPhotoAppService> _logger;
     private readonly CalibBoardDetector _boardDetector;
     private readonly CalibExtrinsicSampler _extrinsicSampler;
+
+    /// <summary>
+    /// 进程级每相机触发模式锁：串行化 <see cref="GrabCalibFrameRawAsync"/> 的「读取→切换→恢复」序列。
+    /// 应用服务为 Transient，故必须为 static 才能跨请求共享同一相机的锁。
+    /// </summary>
+    private static readonly ConcurrentDictionary<Guid, SemaphoreSlim> _triggerModeLocks = new();
 
     /// <summary>构造注入</summary>
     public CalibPhotoAppService(
@@ -300,215 +307,12 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
     }
 
     /// <inheritdoc/>
-    public async Task<CalibExtrinsicSampleDto> TakeExtrinsicPhotoAsync(
-        TakeExtrinsicPhotoInput input
-    )
-    {
-        CalibProject project = await _projectRepo.GetAsync(input.CalibProjectId);
-        CameraDevice camera = await _cameraDeviceRepository.GetAsync(input.CameraDeviceId);
-
-        if (project.DeviceSeries == DeviceSeries.NoLight)
-        {
-            throw new UserFriendlyException("无光系列不支持外参拍照");
-        }
-
-        if (!project.IsProjectorCalibrationRequired())
-        {
-            throw new UserFriendlyException(
-                "双目结构光模式下不支持投影外参拍照，结构光仅作为纹理生成器"
-            );
-        }
-
-        if (!project.BoundProjectorDeviceId.HasValue)
-        {
-            throw new UserFriendlyException("请先在项目管理页绑定主结构光机后再执行外参拍照");
-        }
-
-        Guid projectorDeviceId = project.BoundProjectorDeviceId.Value;
-        Guid pairGroupId = GuidGenerator.Create();
-
-        byte[] whiteScreenBytes = null!;
-        byte[] checkerboardBytes = null!;
-        try
-        {
-            await _projectorService.LedOnAsync(projectorDeviceId);
-
-            // 步骤 1：S1 白屏模式拍摄圆点标定板
-            await _projectorService.SetDisplayModeAsync(
-                new SetProjectorDisplayModeDto
-                {
-                    ProjectorDeviceId = projectorDeviceId,
-                    Mode = ProjectorDisplayMode.White,
-                }
-            );
-            await Task.Delay(200);
-            whiteScreenBytes = await GrabCalibFrameRawAsync(
-                input.CameraDeviceId,
-                targetTriggerMode: 2
-            );
-
-            // 步骤 2：S3 棋盘格模式拍摄投影棋盘格+圆点标定板组合场景
-            // 先设置棋盘格像素尺寸（S11），再切换到棋盘格模式（S3）
-            if (project.ProjectedPixelSize > 0)
-            {
-                await _projectorService.SetCheckerboardPixelSizeAsync(
-                    new SetProjectorCheckerboardDto
-                    {
-                        ProjectorDeviceId = projectorDeviceId,
-                        PixelSize = project.ProjectedPixelSize,
-                    }
-                );
-            }
-
-            await _projectorService.SetDisplayModeAsync(
-                new SetProjectorDisplayModeDto
-                {
-                    ProjectorDeviceId = projectorDeviceId,
-                    Mode = ProjectorDisplayMode.Checkerboard,
-                }
-            );
-            await Task.Delay(200);
-            checkerboardBytes = await GrabCalibFrameRawAsync(
-                input.CameraDeviceId,
-                targetTriggerMode: 2
-            );
-        }
-        finally
-        {
-            await _projectorService.LedOffAsync(projectorDeviceId);
-        }
-
-        // 步骤 3：图像差分验证两次拍摄的差异性
-        ImageDiffResult diffResult = ImageDiffAnalyzer.ComputeDiff(
-            whiteScreenBytes,
-            checkerboardBytes
-        );
-
-        // 步骤 4：角点检测验证标定板有效性
-        (bool whiteScreenValid, int whiteScreenCornerCount) =
-            _boardDetector.DetectBoardFeaturePoints(
-                whiteScreenBytes,
-                project,
-                isProjectedBoard: false,
-                camera.ImageRotationAngle
-            );
-
-        (bool checkerboardValid, int checkerboardCornerCount) =
-            _boardDetector.DetectBoardFeaturePoints(
-                checkerboardBytes,
-                project,
-                isProjectedBoard: true,
-                camera.ImageRotationAngle
-            );
-
-        // 判断样本有效性：差分显著且两张照片都检测到有效角点
-        bool isSampleValid = diffResult.IsSignificant && whiteScreenValid && checkerboardValid;
-
-        // 保存白屏照片
-        string whiteScreenBlobKey = BuildBlobKey(
-            input.CalibProjectId,
-            input.CameraDeviceId,
-            CalibPhotoType.Extrinsic,
-            ExtrinsicPhotoPhase.WhiteScreen,
-            frameIndex: 0
-        );
-        await _blobContainer.SaveAsync(
-            whiteScreenBlobKey,
-            whiteScreenBytes,
-            overrideExisting: false
-        );
-
-        CalibPhotoRecord whiteScreenRecord = new(
-            GuidGenerator.Create(),
-            input.CalibProjectId,
-            input.CameraDeviceId,
-            CalibPhotoType.Extrinsic,
-            whiteScreenBlobKey,
-            whiteScreenValid,
-            whiteScreenCornerCount,
-            CalibImageUtils.GenerateThumbnailBase64(whiteScreenBytes),
-            pairGroupId,
-            stereoRole: null,
-            extrinsicPhase: ExtrinsicPhotoPhase.WhiteScreen,
-            imageDiffScore: diffResult.DiffScore,
-            imageDiffSignificant: diffResult.IsSignificant
-        );
-        await _photoRepo.InsertAsync(whiteScreenRecord);
-
-        // 保存棋盘格照片
-        string checkerboardBlobKey = BuildBlobKey(
-            input.CalibProjectId,
-            input.CameraDeviceId,
-            CalibPhotoType.Extrinsic,
-            ExtrinsicPhotoPhase.Checkerboard,
-            frameIndex: 0
-        );
-        await _blobContainer.SaveAsync(
-            checkerboardBlobKey,
-            checkerboardBytes,
-            overrideExisting: false
-        );
-
-        CalibPhotoRecord checkerboardRecord = new(
-            GuidGenerator.Create(),
-            input.CalibProjectId,
-            input.CameraDeviceId,
-            CalibPhotoType.Extrinsic,
-            checkerboardBlobKey,
-            checkerboardValid,
-            checkerboardCornerCount,
-            CalibImageUtils.GenerateThumbnailBase64(checkerboardBytes),
-            pairGroupId,
-            stereoRole: null,
-            extrinsicPhase: ExtrinsicPhotoPhase.Checkerboard,
-            imageDiffScore: diffResult.DiffScore,
-            imageDiffSignificant: diffResult.IsSignificant
-        );
-        await _photoRepo.InsertAsync(checkerboardRecord);
-
-        _logger.LogInformation(
-            "[外参拍照] 样本 {PairGroupId} 完成：差分分数={DiffScore:F4}, 差分显著={DiffSignificant}, 白屏角点={WhiteCorners}, 棋盘格角点={CheckerboardCorners}, 有效={IsValid}",
-            pairGroupId,
-            diffResult.DiffScore,
-            diffResult.IsSignificant,
-            whiteScreenCornerCount,
-            checkerboardCornerCount,
-            isSampleValid
-        );
-
-        return new CalibExtrinsicSampleDto
-        {
-            PairGroupId = pairGroupId,
-            ProjectorOffPhoto = ToPhotoDto(whiteScreenRecord),
-            ProjectorOnPhoto = ToPhotoDto(checkerboardRecord),
-            IsValid = isSampleValid,
-        };
-    }
-
-    /// <inheritdoc/>
     public async Task<CalibPhotoDto> TakeExtrinsicDotPhotoAsync(TakeExtrinsicPhotoInput input)
     {
         CalibProject project = await _projectRepo.GetAsync(input.CalibProjectId);
         CameraDevice camera = await _cameraDeviceRepository.GetAsync(input.CameraDeviceId);
 
-        if (project.DeviceSeries == DeviceSeries.NoLight)
-        {
-            throw new UserFriendlyException("无光系列不支持外参拍照");
-        }
-
-        if (!project.IsProjectorCalibrationRequired())
-        {
-            throw new UserFriendlyException(
-                "双目结构光模式下不支持投影外参拍照，结构光仅作为纹理生成器"
-            );
-        }
-
-        if (!project.BoundProjectorDeviceId.HasValue)
-        {
-            throw new UserFriendlyException("请先在项目管理页绑定主结构光机后再执行外参拍照");
-        }
-
-        Guid projectorDeviceId = project.BoundProjectorDeviceId.Value;
+        Guid projectorDeviceId = ValidateAndGetProjectorId(project);
         Guid pairGroupId = GuidGenerator.Create();
 
         byte[] photoBytes;
@@ -581,29 +385,21 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
     {
         CalibProject project = await _projectRepo.GetAsync(input.CalibProjectId);
 
-        if (project.DeviceSeries == DeviceSeries.NoLight)
-        {
-            throw new UserFriendlyException("无光系列不支持外参拍照");
-        }
-
-        if (!project.IsProjectorCalibrationRequired())
-        {
-            throw new UserFriendlyException(
-                "双目结构光模式下不支持投影外参拍照，结构光仅作为纹理生成器"
-            );
-        }
-
-        if (!project.BoundProjectorDeviceId.HasValue)
-        {
-            throw new UserFriendlyException("请先在项目管理页绑定主结构光机后再执行外参拍照");
-        }
-
-        Guid projectorDeviceId = project.BoundProjectorDeviceId.Value;
+        Guid projectorDeviceId = ValidateAndGetProjectorId(project);
 
         Guid? pairGroupId = null;
         try
         {
             IQueryable<CalibPhotoRecord> query = await _photoRepo.GetQueryableAsync();
+
+            IQueryable<Guid?> alreadyPairedGroupIds = query
+                .Where(q =>
+                    q.CalibProjectId == input.CalibProjectId
+                    && q.CameraDeviceId == input.CameraDeviceId
+                    && q.ExtrinsicPhase == ExtrinsicPhotoPhase.Checkerboard
+                )
+                .Select(q => q.PairGroupId);
+
             CalibPhotoRecord? latestDotPhoto = await AsyncExecuter.FirstOrDefaultAsync(
                 query
                     .Where(x =>
@@ -611,10 +407,7 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
                         && x.CameraDeviceId == input.CameraDeviceId
                         && x.PhotoType == CalibPhotoType.Extrinsic
                         && x.ExtrinsicPhase == ExtrinsicPhotoPhase.WhiteScreen
-                        && !query.Any(q =>
-                            q.PairGroupId == x.PairGroupId
-                            && q.ExtrinsicPhase == ExtrinsicPhotoPhase.Checkerboard
-                        )
+                        && !alreadyPairedGroupIds.Contains(x.PairGroupId)
                     )
                     .OrderByDescending(x => x.CapturedAt)
             );
@@ -628,8 +421,9 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
                 pairGroupId = GuidGenerator.Create();
             }
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.LogWarning(ex, "[外参拍照] 查询未配对白屏照片失败，将创建新配对组");
             pairGroupId = GuidGenerator.Create();
         }
 
@@ -947,33 +741,14 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
         float spacingMm = GetBoardSpacingMm(project);
         Point3f[] worldCorners = BuildBoardWorldPoints(project, patternSize, spacingMm);
 
-        List<Mat> objectMats = [];
-        List<Mat> imageMats = [];
-        Size imageSize = default;
-
-        for (int idx = 0; idx < intrinsicPhotos.Count; idx++)
-        {
-            CalibPhotoRecord photo = intrinsicPhotos[idx];
-            byte[] bytes = await _blobContainer.GetAllBytesAsync(photo.BlobKey);
-            using Mat mat = CalibImageUtils.LoadGrayMatWithRotation(
-                bytes,
+        (List<Mat> objectMats, List<Mat> imageMats, Size imageSize) =
+            await CollectIntrinsicPointMatsAsync(
+                intrinsicPhotos,
+                worldCorners,
+                patternSize,
+                project,
                 camera.ImageRotationAngle
             );
-            if (mat.Empty())
-                continue;
-            if (imageSize == default)
-                imageSize = new Size(mat.Cols, mat.Rows);
-            Point2f[]? corners = _boardDetector.FindBoardPointsSubpixGray(
-                mat,
-                patternSize,
-                project.BoardType,
-                project
-            );
-            if (corners == null)
-                continue;
-            objectMats.Add(Mat.FromArray(worldCorners));
-            imageMats.Add(Mat.FromArray(corners));
-        }
 
         if (objectMats.Count < CalibConsts.MinValidPhotoCount)
         {
@@ -1481,69 +1256,16 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
         // 构建世界坐标（标定板平面，Z=0）
         Point3f[] worldCorners = BuildBoardWorldPoints(project, patternSize, spacingMm);
 
-        // OpenCvSharp4 CalibrateCamera 需要 IEnumerable<Mat>，将 Point 数组转换为 Mat
-        List<Mat> objectMats = [];
-        List<Mat> imageMats = [];
-        Size imageSize = default;
-
         System.Diagnostics.Stopwatch phaseSw = new();
-        for (int _idx = 0; _idx < intrinsicPhotos.Count; _idx++)
-        {
-            CalibPhotoRecord photo = intrinsicPhotos[_idx];
-            phaseSw.Restart();
-            byte[] bytes = await _blobContainer.GetAllBytesAsync(photo.BlobKey);
-            long blobMs = phaseSw.ElapsedMilliseconds;
-
-            // 直接加载为灰度（跳过 BGR→Gray 转换开销），计算路径不需要彩色数据
-            phaseSw.Restart();
-            using Mat mat = CalibImageUtils.LoadGrayMatWithRotation(
-                bytes,
-                camera.ImageRotationAngle
-            );
-            long loadMs = phaseSw.ElapsedMilliseconds;
-
-            if (mat.Empty())
-            {
-                _logger.LogWarning(
-                    "[单目标定] [{Idx}/{Total}] 图像解码失败，跳过",
-                    _idx + 1,
-                    intrinsicPhotos.Count
-                );
-                continue;
-            }
-
-            if (imageSize == default)
-            {
-                imageSize = new Size(mat.Cols, mat.Rows);
-                _logger.LogInformation("[单目标定] 图像分辨率 {W}x{H}", mat.Cols, mat.Rows);
-            }
-
-            phaseSw.Restart();
-            // 使用半分辨率加速版：在 50% 缩放图检测，还原至全分辨率精化
-            Point2f[]? corners = _boardDetector.FindBoardPointsSubpixGray(
-                mat,
+        (List<Mat> objectMats, List<Mat> imageMats, Size imageSize) =
+            await CollectIntrinsicPointMatsAsync(
+                intrinsicPhotos,
+                worldCorners,
                 patternSize,
-                project.BoardType,
-                project
+                project,
+                camera.ImageRotationAngle,
+                "单目标定"
             );
-            long cornerMs = phaseSw.ElapsedMilliseconds;
-
-            _logger.LogInformation(
-                "[单目标定] [{Idx}/{Total}] blob={BlobMs}ms 解码={LoadMs}ms 角点={CornerMs}ms {Result}",
-                _idx + 1,
-                intrinsicPhotos.Count,
-                blobMs,
-                loadMs,
-                cornerMs,
-                corners != null ? $"成功({corners.Length}角点)" : "未找到角点"
-            );
-
-            if (corners == null)
-                continue;
-
-            objectMats.Add(Mat.FromArray(worldCorners));
-            imageMats.Add(Mat.FromArray(corners));
-        }
 
         if (objectMats.Count < CalibConsts.MinValidPhotoCount)
         {
@@ -1568,8 +1290,8 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
         phaseSw.Restart();
 
         double reprojError;
-        Mat[] rvecArray;
-        Mat[] tvecArray;
+        Mat[] rvecArray = [];
+        Mat[] tvecArray = [];
         try
         {
             reprojError = Cv2.CalibrateCamera(
@@ -1588,6 +1310,10 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
             foreach (Mat m in objectMats)
                 m.Dispose();
             foreach (Mat m in imageMats)
+                m.Dispose();
+            foreach (Mat m in rvecArray)
+                m.Dispose();
+            foreach (Mat m in tvecArray)
                 m.Dispose();
         }
 
@@ -1787,7 +1513,7 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
                     );
 
                     _logger.LogInformation(
-                        "[单目标定] 投影仪内参计算完成，耐倦{Ms}ms，重投影误差 {Error:F4} px",
+                        "[单目标定] 投影仪内参计算完成，耗时 {Ms}ms，重投影误差 {Error:F4} px",
                         phaseSw.ElapsedMilliseconds,
                         projCalibReprojError
                     );
@@ -1892,12 +1618,6 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
                 $"投影外参重投影误差为 {projectorReprojectionError.Value:F4} px，超过阈值 {maxSingleReprojError:F2} px，请补拍后重算"
             );
         }
-
-        // 释放 rvec/tvec 数组
-        foreach (Mat m in rvecArray)
-            m.Dispose();
-        foreach (Mat m in tvecArray)
-            m.Dispose();
 
         // ── 持久化结果到 CalibCameraParam ────────────────────────────────────────
         IQueryable<CalibCameraParam> paramQuery = await _cameraParamRepo.GetQueryableAsync();
@@ -2564,92 +2284,108 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
             );
         }
 
-        // 读取并保存原始触发模式（拍照完成后恢复）
-        long originalTriggerMode = 0;
+        // 每相机串行化「读取→切换→恢复」触发模式：应用服务为 Transient，若两次标定拍照
+        // 并发命中同一相机，后者可能把前者设置的目标模式误读为「原始模式」，导致恢复阶段
+        // 把相机遗留在错误触发模式。故用进程级 static 每相机信号量把整段读改恢复串行化。
+        SemaphoreSlim triggerLock = _triggerModeLocks.GetOrAdd(
+            cameraDeviceId,
+            static _ => new SemaphoreSlim(1, 1)
+        );
+        await triggerLock.WaitAsync();
         try
         {
-            originalTriggerMode = await _tucamService.GetGenICamIntAsync(idx, "TriggerMode");
-        }
-        catch
-        { /* 读取失败按自由运行处理 */
-        }
-
-        // 切换触发模式（必须在 Cap_Start 之前执行）
-        bool needRestore = originalTriggerMode != targetTriggerMode;
-        if (needRestore)
-        {
-            await _tucamService.SetGenICamIntAsync(idx, "TriggerMode", targetTriggerMode);
-            _logger.LogInformation(
-                "标定拍照：相机 {Index} TriggerMode {Old} → {New}",
-                idx,
-                originalTriggerMode,
-                targetTriggerMode
-            );
-        }
-
-        try
-        {
-            // 单活锁保证：同一时刻仅一台相机处于 Cap_Start 活跃状态（USB 带宽限制）
-            await _tucamService.StartCaptureAsync(idx);
+            // 读取并保存原始触发模式（拍照完成后恢复）
+            long originalTriggerMode = 0;
             try
             {
-                // 软件触发模式：发送 TriggerSoftwarePulse
-                if (targetTriggerMode == 2)
-                {
-                    await _tucamService.DoSoftwareTriggerAsync(idx);
-                }
+                originalTriggerMode = await _tucamService.GetGenICamIntAsync(idx, "TriggerMode");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "标定拍照：相机 {Index} 读取触发模式失败，按自由运行处理", idx);
+            }
 
-                // 动态计算超时：曝光时间（微秒）× 2 + 1s，最小 8s；标准触发模式最小 15s
-                int timeoutMs = targetTriggerMode == 1 ? 15000 : 8000;
+            // 切换触发模式（必须在 Cap_Start 之前执行）
+            bool needRestore = originalTriggerMode != targetTriggerMode;
+            if (needRestore)
+            {
+                await _tucamService.SetGenICamIntAsync(idx, "TriggerMode", targetTriggerMode);
+                _logger.LogInformation(
+                    "标定拍照：相机 {Index} TriggerMode {Old} → {New}",
+                    idx,
+                    originalTriggerMode,
+                    targetTriggerMode
+                );
+            }
+
+            try
+            {
+                // 单活锁保证：同一时刻仅一台相机处于 Cap_Start 活跃状态（USB 带宽限制）
+                await _tucamService.StartCaptureAsync(idx);
                 try
                 {
-                    long exposureUs = await _tucamService.GetGenICamIntAsync(idx, "ExposureTime");
-                    timeoutMs = Math.Max((int)(exposureUs / 1000L) * 2 + 1000, timeoutMs);
-                }
-                catch
-                { /* 读取失败使用默认超时 */
-                }
+                    // 软件触发模式：发送 TriggerSoftwarePulse
+                    if (targetTriggerMode == 2)
+                    {
+                        await _tucamService.DoSoftwareTriggerAsync(idx);
+                    }
 
-                (byte[] jpegBytes, _) = await _tucamService.GrabFrameRawAsync(idx, timeoutMs);
-                return jpegBytes;
+                    // 动态计算超时：曝光时间（微秒）× 2 + 1s，最小 8s；标准触发模式最小 15s
+                    int timeoutMs = targetTriggerMode == 1 ? 15000 : 8000;
+                    try
+                    {
+                        long exposureUs = await _tucamService.GetGenICamIntAsync(idx, "ExposureTime");
+                        timeoutMs = Math.Max((int)(exposureUs / 1000L) * 2 + 1000, timeoutMs);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogDebug(ex, "标定拍照：相机 {Index} 读取曝光时间失败，使用默认超时 {TimeoutMs}ms", idx, timeoutMs);
+                    }
+
+                    (byte[] jpegBytes, _) = await _tucamService.GrabFrameRawAsync(idx, timeoutMs);
+                    return jpegBytes;
+                }
+                finally
+                {
+                    await _tucamService.StopCaptureAsync(idx);
+                }
             }
             finally
             {
-                await _tucamService.StopCaptureAsync(idx);
+                // 恢复原始触发模式
+                if (needRestore)
+                {
+                    try
+                    {
+                        await _tucamService.SetGenICamIntAsync(idx, "TriggerMode", originalTriggerMode);
+                        _logger.LogInformation(
+                            "标定拍照：相机 {Index} TriggerMode 已恢复为 {Original}",
+                            idx,
+                            originalTriggerMode
+                        );
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "标定拍照：相机 {Index} 恢复触发模式失败", idx);
+                    }
+                }
             }
         }
         finally
         {
-            // 恢复原始触发模式
-            if (needRestore)
-            {
-                try
-                {
-                    await _tucamService.SetGenICamIntAsync(idx, "TriggerMode", originalTriggerMode);
-                    _logger.LogInformation(
-                        "标定拍照：相机 {Index} TriggerMode 已恢复为 {Original}",
-                        idx,
-                        originalTriggerMode
-                    );
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "标定拍照：相机 {Index} 恢复触发模式失败", idx);
-                }
-            }
+            triggerLock.Release();
         }
     }
 
-    /// <summary>从 data URI 提取 JPEG 二进制</summary>
-    private static byte[] ExtractJpegBytes(string dataUri)
+    private Guid ValidateAndGetProjectorId(CalibProject project)
     {
-        const string prefix = "data:image/jpeg;base64,";
-        if (dataUri.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-        {
-            return Convert.FromBase64String(dataUri[prefix.Length..]);
-        }
-        // 尝试直接 Base64
-        return Convert.FromBase64String(dataUri);
+        if (project.DeviceSeries == DeviceSeries.NoLight)
+            throw new UserFriendlyException("无光系列不支持外参拍照");
+        if (!project.IsProjectorCalibrationRequired())
+            throw new UserFriendlyException("双目结构光模式下不支持投影外参拍照，结构光仅作为纹理生成器");
+        if (!project.BoundProjectorDeviceId.HasValue)
+            throw new UserFriendlyException("请先在项目管理页绑定主结构光机后再执行外参拍照");
+        return project.BoundProjectorDeviceId.Value;
     }
 
     /// <summary>构建标定照片的 BLOB Key</summary>
@@ -2671,8 +2407,10 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
         string ts = DateTime.UtcNow.ToString("yyyyMMddHHmmss_fff");
         string phaseSuffix = extrinsicPhase switch
         {
-            ExtrinsicPhotoPhase.ProjectorOff => "_off",
-            ExtrinsicPhotoPhase.ProjectorOn => "_on",
+            ExtrinsicPhotoPhase.WhiteScreen => "_ws",
+            ExtrinsicPhotoPhase.Checkerboard => "_cb",
+            ExtrinsicPhotoPhase.ProjectorOff => "_off", // 历史遗留：旧投影仪外参流程
+            ExtrinsicPhotoPhase.ProjectorOn => "_on", // 历史遗留：旧投影仪外参流程
             _ => string.Empty,
         };
         string frameSuffix = frameIndex.HasValue ? $"_f{frameIndex.Value:D3}" : string.Empty;
@@ -2782,6 +2520,87 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
             ImageDiffScore = record.ImageDiffScore,
             ImageDiffSignificant = record.ImageDiffSignificant,
         };
+    }
+
+    private async Task<(List<Mat> objectMats, List<Mat> imageMats, Size imageSize)> CollectIntrinsicPointMatsAsync(
+        List<CalibPhotoRecord> intrinsicPhotos,
+        Point3f[] worldCorners,
+        Size patternSize,
+        CalibProject project,
+        int rotationAngle,
+        string? logPrefix = null
+    )
+    {
+        List<Mat> objectMats = [];
+        List<Mat> imageMats = [];
+        Size imageSize = default;
+        System.Diagnostics.Stopwatch? sw = logPrefix != null ? System.Diagnostics.Stopwatch.StartNew() : null;
+
+        for (int idx = 0; idx < intrinsicPhotos.Count; idx++)
+        {
+            CalibPhotoRecord photo = intrinsicPhotos[idx];
+
+            sw?.Restart();
+            byte[] bytes = await _blobContainer.GetAllBytesAsync(photo.BlobKey);
+            long blobMs = sw?.ElapsedMilliseconds ?? 0;
+
+            sw?.Restart();
+            using Mat mat = CalibImageUtils.LoadGrayMatWithRotation(bytes, rotationAngle);
+            long loadMs = sw?.ElapsedMilliseconds ?? 0;
+
+            if (mat.Empty())
+            {
+                if (logPrefix != null)
+                    _logger.LogWarning(
+                        "[{Prefix}] [{Idx}/{Total}] 图像解码失败，跳过",
+                        logPrefix,
+                        idx + 1,
+                        intrinsicPhotos.Count
+                    );
+                continue;
+            }
+
+            if (imageSize == default)
+            {
+                imageSize = new Size(mat.Cols, mat.Rows);
+                if (logPrefix != null)
+                    _logger.LogInformation(
+                        "[{Prefix}] 图像分辨率 {W}x{H}",
+                        logPrefix,
+                        mat.Cols,
+                        mat.Rows
+                    );
+            }
+
+            sw?.Restart();
+            Point2f[]? corners = _boardDetector.FindBoardPointsSubpixGray(
+                mat,
+                patternSize,
+                project.BoardType,
+                project
+            );
+            long cornerMs = sw?.ElapsedMilliseconds ?? 0;
+
+            if (logPrefix != null)
+                _logger.LogInformation(
+                    "[{Prefix}] [{Idx}/{Total}] blob={BlobMs}ms 解码={LoadMs}ms 角点={CornerMs}ms {Result}",
+                    logPrefix,
+                    idx + 1,
+                    intrinsicPhotos.Count,
+                    blobMs,
+                    loadMs,
+                    cornerMs,
+                    corners != null ? $"成功({corners.Length}角点)" : "未找到角点"
+                );
+
+            if (corners == null)
+                continue;
+
+            objectMats.Add(Mat.FromArray(worldCorners));
+            imageMats.Add(Mat.FromArray(corners));
+        }
+
+        return (objectMats, imageMats, imageSize);
     }
 
     private static Size GetBoardPatternSize(CalibProject project, bool isProjectedBoard)

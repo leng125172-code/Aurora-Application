@@ -212,14 +212,16 @@ public class CalibScanAppService : AuroraStruct3DAppService, ICalibScanAppServic
         using Mat right = ResizeForStereo(rightGray);
 
         using Mat disparity16 = new();
-        using StereoBM stereo = StereoBM.Create(numDisparities: 96, blockSize: 15);
+        const int StereoNumDisparities = 96;
+        const int StereoBlockSize = 15;
+        using StereoBM stereo = StereoBM.Create(numDisparities: StereoNumDisparities, blockSize: StereoBlockSize);
         stereo.Compute(left, right, disparity16);
 
         using Mat validMask = new();
         Cv2.Compare(disparity16, Scalar.All(0), validMask, CmpTypes.GT);
 
         using Mat disparity8 = new();
-        Cv2.ConvertScaleAbs(disparity16, disparity8, 255d / (96d * 16d));
+        Cv2.ConvertScaleAbs(disparity16, disparity8, 255d / (StereoNumDisparities * 16d));
 
         using Mat depthColor = new();
         Cv2.ApplyColorMap(disparity8, depthColor, ColormapTypes.Jet);
@@ -260,9 +262,11 @@ public class CalibScanAppService : AuroraStruct3DAppService, ICalibScanAppServic
 
     private static Mat ResizeForStereo(Mat gray)
     {
-        int targetWidth = Math.Min(640, gray.Width);
+        const int TargetWidth = 640;
+        const int MinHeight = 64;
+        int targetWidth = Math.Min(TargetWidth, gray.Width);
         double scale = targetWidth / (double)gray.Width;
-        int targetHeight = Math.Max(64, (int)Math.Round(gray.Height * scale));
+        int targetHeight = Math.Max(MinHeight, (int)Math.Round(gray.Height * scale));
 
         Mat resized = new();
         Cv2.Resize(
@@ -364,8 +368,9 @@ public class CalibScanAppService : AuroraStruct3DAppService, ICalibScanAppServic
             {
                 triggerMode = await _tucamService.GetGenICamIntAsync(idx, "TriggerMode");
             }
-            catch
-            { /* 读取失败按自由运行处理 */
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Step6 指标帧抓取：相机 {Index} 读取触发模式失败，按自由运行处理", idx);
             }
 
             if (triggerMode == 2)
@@ -380,8 +385,9 @@ public class CalibScanAppService : AuroraStruct3DAppService, ICalibScanAppServic
                 long exposureUs = await _tucamService.GetGenICamIntAsync(idx, "ExposureTime");
                 timeoutMs = Math.Max((int)(exposureUs / 1000L) * 2 + 1000, 8000);
             }
-            catch
-            { /* 读取失败使用默认超时 */
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Step6 指标帧抓取：相机 {Index} 读取曝光时间失败，使用默认超时 {TimeoutMs}ms", idx, timeoutMs);
             }
 
             (byte[] jpegBytes, _) = await _tucamService.GrabFrameRawAsync(idx, timeoutMs);

@@ -1448,7 +1448,6 @@ export default {
         step5LedOn: 'LED On',
         step5LedOff: 'LED Off',
         step5TakeIntrinsic: 'Intrinsic Photo',
-        step5TakeExtrinsic: 'Extrinsic Photo',
         step5TakeExtrinsicDot: 'Extrinsic Dot Photo',
         step5TakeExtrinsicCheckerboard: 'Extrinsic Checkerboard Photo',
         step5TakingPhoto: 'Taking photo…',

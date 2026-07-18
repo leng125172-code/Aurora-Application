@@ -35,7 +35,6 @@ import {
     type CalibBoardConfigDto,
     type CalibCameraStatusDto,
     type CalibComputeResultDto,
-    type CalibExtrinsicSampleDto,
     type CalibPhotoDto,
     type CalibStereoComputeResultDto,
     type CalibStereoStatusDto,
@@ -89,7 +88,8 @@ const showProjectorSection = computed(() => {
     return props.project.deviceSeries === DeviceSeries.SingleLight && !!activeProjectorId.value
 })
 
-function canUseProjectorExtrinsic(cameraId: string): boolean {
+// 投影外参能力为项目级判定（是否单光系列 + 是否绑定投影仪 + 非双目结构光），与具体相机无关
+function canUseProjectorExtrinsic(): boolean {
     if (!showProjectorSection.value) {
         return false
     }
@@ -444,7 +444,11 @@ const intrinsicPhotosMap = ref<Record<string, CalibPhotoDto[]>>({})
 const extrinsicPhotosMap = ref<Record<string, CalibPhotoDto[]>>({})
 const stereoPairPhotosMap = ref<Record<string, CalibPhotoDto[]>>({})
 
-interface CalibExtrinsicSampleViewDto extends CalibExtrinsicSampleDto {
+interface CalibExtrinsicSampleViewDto {
+    pairGroupId: string
+    projectorOffPhoto: CalibPhotoDto
+    projectorOnPhoto: CalibPhotoDto
+    isValid: boolean
     /** 本组条纹总帧数（off + on 序列） */
     stripeFrameCount: number
     projectorOnPhotos: CalibPhotoDto[]
@@ -589,8 +593,8 @@ async function doTakeIntrinsic(cam: CameraDeviceDto): Promise<void> {
 }
 
 async function doTakeExtrinsicDot(cam: CameraDeviceDto): Promise<void> {
-    if (!canUseProjectorExtrinsic(cam.id)) {
-        toast.warn('当前相机不需要执行投影外参拍照')
+    if (!canUseProjectorExtrinsic()) {
+        toast.warn(t('calib.step5NoProjectorWarning'))
         return
     }
 
@@ -621,8 +625,8 @@ async function doTakeExtrinsicDot(cam: CameraDeviceDto): Promise<void> {
 }
 
 async function doTakeExtrinsicCheckerboard(cam: CameraDeviceDto): Promise<void> {
-    if (!canUseProjectorExtrinsic(cam.id)) {
-        toast.warn('当前相机不需要执行投影外参拍照')
+    if (!canUseProjectorExtrinsic()) {
+        toast.warn(t('calib.step5NoProjectorWarning'))
         return
     }
 
@@ -688,7 +692,7 @@ function canCompute(cameraId: string): boolean {
 
 /** 判断是否可计算外参：已有内参 + 有足够外参照片 */
 function canComputeExtrinsic(cameraId: string): boolean {
-    if (!canUseProjectorExtrinsic(cameraId)) return false
+    if (!canUseProjectorExtrinsic()) return false
     const s = cameraStatusMap.value[cameraId]
     const result = calibResultMap.value[cameraId]
     return !!s && s.extrinsicValid >= 1 && (!!result?.intrinsicMatrixJson || !!s.intrinsicValid)
@@ -968,57 +972,9 @@ onMounted(async () => {
                     </div>
                 </div>
 
-                <!-- 投影棋盘格（独立显示，不受标定板类型影响）-->
-                <div v-if="showProjectorSection">
-                    <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                        {{ t('calib.step5ProjectedBoard') }}
-                    </p>
-                    <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 2xl:grid-cols-3">
-                        <div class="min-w-0">
-                            <label class="mb-1 block text-xs text-muted-foreground">
-                                {{ t('calib.step5CornerRows') }}
-                            </label>
-                            <InputNumber
-                                v-model="boardConfig.projectedCornerRows"
-                                size="small"
-                                :use-grouping="false"
-                                :min="2"
-                                :max="100"
-                                class="w-full"
-                                :input-class="'!text-xs !h-7 !py-0'"
-                            />
-                        </div>
-                        <div class="min-w-0">
-                            <label class="mb-1 block text-xs text-muted-foreground">
-                                {{ t('calib.step5CornerCols') }}
-                            </label>
-                            <InputNumber
-                                v-model="boardConfig.projectedCornerCols"
-                                size="small"
-                                :use-grouping="false"
-                                :min="2"
-                                :max="100"
-                                class="w-full"
-                                :input-class="'!text-xs !h-7 !py-0'"
-                            />
-                        </div>
-                        <div class="min-w-0">
-                            <label class="mb-1 block text-xs text-muted-foreground">
-                                {{ t('calib.step5ProjectedPixelSize') }}
-                            </label>
-                            <InputNumber
-                                v-model="boardConfig.projectedPixelSize"
-                                size="small"
-                                :use-grouping="false"
-                                :min="1"
-                                :max="4096"
-                                class="w-full"
-                                :input-class="'!text-xs !h-7 !py-0'"
-                            />
-                        </div>
-                    </div>
-
-                    <div class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <!-- 标定板厚度（物理标定板属性，用于外参平面补偿）-->
+                <div>
+                    <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
                         <div class="min-w-0">
                             <label class="mb-1 block text-xs text-muted-foreground">
                                 {{ t('calib.step5BoardThicknessMm') }}
@@ -1365,7 +1321,7 @@ onMounted(async () => {
                         <div class="flex flex-col gap-3">
                             <!-- 投影仪 LED 控制 -->
                             <div
-                                v-if="canUseProjectorExtrinsic(cam.id)"
+                                v-if="canUseProjectorExtrinsic()"
                                 class="rounded-lg border border-border/30 bg-muted/10 p-3"
                             >
                                 <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -1403,7 +1359,7 @@ onMounted(async () => {
                             </div>
 
                             <div
-                                v-if="canUseProjectorExtrinsic(cam.id)"
+                                v-if="canUseProjectorExtrinsic()"
                                 class="rounded-lg border border-border/30 bg-muted/10 p-3"
                             >
                                 <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -1446,11 +1402,11 @@ onMounted(async () => {
                                 </Button>
 
                                 <Button
+                                    v-if="canUseProjectorExtrinsic()"
                                     size="small"
                                     severity="secondary"
                                     class="w-full !text-xs"
                                     :loading="takingExtrinsicDotIds.has(cam.id)"
-                                    :disabled="!canUseProjectorExtrinsic(cam.id)"
                                     @click="doTakeExtrinsicDot(cam)"
                                 >
                                     <Zap class="mr-1.5 size-3" />
@@ -1462,11 +1418,11 @@ onMounted(async () => {
                                 </Button>
 
                                 <Button
+                                    v-if="canUseProjectorExtrinsic()"
                                     size="small"
                                     severity="secondary"
                                     class="w-full !text-xs"
                                     :loading="takingExtrinsicCheckerboardIds.has(cam.id)"
-                                    :disabled="!canUseProjectorExtrinsic(cam.id)"
                                     @click="doTakeExtrinsicCheckerboard(cam)"
                                 >
                                     <Zap class="mr-1.5 size-3" />
@@ -1500,7 +1456,7 @@ onMounted(async () => {
                                 </Button>
 
                                 <Button
-                                    v-if="canUseProjectorExtrinsic(cam.id)"
+                                    v-if="canUseProjectorExtrinsic()"
                                     size="small"
                                     severity="secondary"
                                     class="w-full !text-xs"
@@ -1748,7 +1704,7 @@ onMounted(async () => {
 
                         <!-- ─ 右栏：照片展示（内参 / 外参 Tab）── -->
                         <div class="lg:col-span-2">
-                            <Tabs :value="canUseProjectorExtrinsic(cam.id) ? 'intrinsic' : 'intrinsic-only'">
+                            <Tabs :value="canUseProjectorExtrinsic() ? 'intrinsic' : 'intrinsic-only'">
                                 <div class="flex items-center justify-between gap-2">
                                     <TabList>
                                         <Tab value="intrinsic">
@@ -1762,7 +1718,7 @@ onMounted(async () => {
                                                 }})
                                             </span>
                                         </Tab>
-                                        <Tab v-if="canUseProjectorExtrinsic(cam.id)" value="extrinsic">
+                                        <Tab v-if="canUseProjectorExtrinsic()" value="extrinsic">
                                             {{ t('calib.step5ExtrinsicPhotos') }}
                                             <span
                                                 v-if="cameraStatusMap[cam.id]"
@@ -1860,7 +1816,7 @@ onMounted(async () => {
                                     </TabPanel>
 
                                     <!-- 外参照片 -->
-                                    <TabPanel v-if="canUseProjectorExtrinsic(cam.id)" value="extrinsic">
+                                    <TabPanel v-if="canUseProjectorExtrinsic()" value="extrinsic">
                                         <div class="pt-2">
                                             <div
                                                 v-if="

@@ -1448,7 +1448,6 @@ export default {
         step5LedOn: 'LED オン',
         step5LedOff: 'LED オフ',
         step5TakeIntrinsic: '内部パラメータ撮影',
-        step5TakeExtrinsic: '外部パラメータ撮影',
         step5TakeExtrinsicDot: '外部パラメータドット撮影',
         step5TakeExtrinsicCheckerboard: '外部パラメータチェッカーボード撮影',
         step5TakingPhoto: '撮影中…',

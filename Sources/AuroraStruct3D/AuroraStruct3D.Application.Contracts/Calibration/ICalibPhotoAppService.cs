@@ -40,12 +40,6 @@ public interface ICalibPhotoAppService : IApplicationService
     Task<CalibPhotoDto> TakeIntrinsicPhotoAsync(TakeIntrinsicPhotoInput input);
 
     /// <summary>
-    /// 外参拍照：后端先关灯拍实体标定板，再开灯拍投影标定图案，并将两张照片按同一分组样本写入 DB。
-    /// </summary>
-    /// <returns>新建的投影外参双拍样本（含关灯/开灯两张缩略图）</returns>
-    Task<CalibExtrinsicSampleDto> TakeExtrinsicPhotoAsync(TakeExtrinsicPhotoInput input);
-
-    /// <summary>
     /// 外参圆点拍照：投影仪切换到 S1 白屏模式，拍摄圆点标定板。
     /// 返回新建的照片记录（含缩略图），用于后续与棋盘格照片配对。
     /// </summary>

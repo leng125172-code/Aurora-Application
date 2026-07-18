@@ -2,10 +2,11 @@ using System.Text.Json;
 using AuroraStruct3D.Calibration.Dtos;
 using Microsoft.Extensions.Logging;
 using OpenCvSharp;
+using Volo.Abp.DependencyInjection;
 
 namespace AuroraStruct3D.Calibration;
 
-public class CalibBoardDetector
+public class CalibBoardDetector : ITransientDependency
 {
     private readonly ILogger<CalibBoardDetector> _logger;
 
@@ -13,6 +14,29 @@ public class CalibBoardDetector
     {
         _logger = logger;
     }
+
+    // ─── 亚像素角点精化参数（Cv2.CornerSubPix，多处共用）───
+    /// <summary>亚像素角点精化搜索窗口半径</summary>
+    private static readonly Size SubPixWinSize = new(11, 11);
+
+    /// <summary>亚像素角点精化死区（-1,-1 表示不使用死区）</summary>
+    private static readonly Size SubPixZeroZone = new(-1, -1);
+
+    /// <summary>亚像素角点精化收敛准则：最多迭代 30 次或精度达 0.001 像素即停止</summary>
+    private static readonly TermCriteria SubPixCriteria = new(
+        CriteriaTypes.Eps | CriteriaTypes.MaxIter,
+        30,
+        0.001
+    );
+
+    /// <summary>投影棋盘格 ROI 提取二值化阈值：灰度 &gt; 80 视为投影亮区</summary>
+    private const int ProjectorMaskThreshold = 80;
+
+    /// <summary>投影棋盘格 ROI 形态学开/闭运算的矩形结构元尺寸（像素）</summary>
+    private static readonly Size ProjectorMaskMorphKernel = new(31, 31);
+
+    /// <summary>圆点 BLOB 面积自适应缩放的参考分辨率（标定相机全画幅 2448×2048）</summary>
+    private const double ReferenceImagePixels = 2448.0 * 2048.0;
 
     public (bool isValid, int cornerCount) DetectBoardFeaturePoints(
         byte[] imageBytes,
@@ -36,20 +60,20 @@ public class CalibBoardDetector
                     return (false, 0);
 
                 using Mat projMask = new();
-                Cv2.Threshold(projGray, projMask, 80, 255, ThresholdTypes.Binary);
+                Cv2.Threshold(projGray, projMask, ProjectorMaskThreshold, 255, ThresholdTypes.Binary);
                 using Mat maskClosed = new();
                 Cv2.MorphologyEx(
                     projMask,
                     maskClosed,
                     MorphTypes.Close,
-                    Cv2.GetStructuringElement(MorphShapes.Rect, new Size(31, 31))
+                    Cv2.GetStructuringElement(MorphShapes.Rect, ProjectorMaskMorphKernel)
                 );
                 using Mat maskOpen = new();
                 Cv2.MorphologyEx(
                     maskClosed,
                     maskOpen,
                     MorphTypes.Open,
-                    Cv2.GetStructuringElement(MorphShapes.Rect, new Size(31, 31))
+                    Cv2.GetStructuringElement(MorphShapes.Rect, ProjectorMaskMorphKernel)
                 );
 
                 using Mat maskedGray = new();
@@ -124,9 +148,9 @@ public class CalibBoardDetector
                         Cv2.CornerSubPix(
                             sbGray,
                             sbCorners,
-                            new Size(11, 11),
-                            new Size(-1, -1),
-                            new TermCriteria(CriteriaTypes.Eps | CriteriaTypes.MaxIter, 30, 0.001)
+                            SubPixWinSize,
+                            SubPixZeroZone,
+                            SubPixCriteria
                         );
 
                         _logger.LogInformation(
@@ -138,7 +162,10 @@ public class CalibBoardDetector
                         return (true, sbCorners.Length);
                     }
                 }
-                catch { }
+                catch (Exception ex)
+                {
+                    _logger.LogDebug(ex, "投影棋盘格 FindChessboardCornersSB[SB原图] 检测失败，已跳过");
+                }
 
                 _logger.LogWarning(
                     "投影棋盘格检测失败(所有策略均失败): Pattern={Cols}x{Rows}, Image={W}x{H}",
@@ -387,9 +414,9 @@ public class CalibBoardDetector
                 Cv2.CornerSubPix(
                     gray,
                     corners,
-                    new Size(11, 11),
-                    new Size(-1, -1),
-                    new TermCriteria(CriteriaTypes.Eps | CriteriaTypes.MaxIter, 30, 0.001)
+                    SubPixWinSize,
+                    SubPixZeroZone,
+                    SubPixCriteria
                 );
 
                 if (useHalfSize)
@@ -417,9 +444,9 @@ public class CalibBoardDetector
                 Cv2.CornerSubPix(
                     gray,
                     corners,
-                    new Size(11, 11),
-                    new Size(-1, -1),
-                    new TermCriteria(CriteriaTypes.Eps | CriteriaTypes.MaxIter, 30, 0.001)
+                    SubPixWinSize,
+                    SubPixZeroZone,
+                    SubPixCriteria
                 );
 
                 if (useHalfSize)
@@ -449,9 +476,9 @@ public class CalibBoardDetector
                     Cv2.CornerSubPix(
                         gray,
                         corners,
-                        new Size(11, 11),
-                        new Size(-1, -1),
-                        new TermCriteria(CriteriaTypes.Eps | CriteriaTypes.MaxIter, 30, 0.001)
+                        SubPixWinSize,
+                        SubPixZeroZone,
+                        SubPixCriteria
                     );
 
                     if (useHalfSize)
@@ -466,7 +493,10 @@ public class CalibBoardDetector
                     return corners;
                 }
             }
-            catch { }
+            catch (Exception)
+            {
+                // FindChessboardCornersSB 在特定图像或 OpenCV 版本上可能抛出；此处为静态上下文，回退为 null
+            }
 
             return null;
         }
@@ -687,7 +717,7 @@ public class CalibBoardDetector
         if (imageSize.HasValue && imageSize.Value.Width > 0 && imageSize.Value.Height > 0)
         {
             double imagePixels = imageSize.Value.Width * imageSize.Value.Height;
-            double scaleFactor = imagePixels / (2448.0 * 2048.0);
+            double scaleFactor = imagePixels / ReferenceImagePixels;
 
             if (scaleFactor > 0)
             {

@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using OpenCvSharp;
 using Volo.Abp.BlobStoring;
+using Volo.Abp.DependencyInjection;
 
 namespace AuroraStruct3D.Calibration;
 
@@ -22,7 +23,7 @@ public sealed class ProjectorExtrinsicSampleGroup
         && (ProjectorOffPhoto.ImageDiffSignificant ?? true);
 }
 
-public class CalibExtrinsicSampler
+public class CalibExtrinsicSampler : ITransientDependency
 {
     private readonly IBlobContainer<CalibPhotoBlobContainer> _blobContainer;
     private readonly ILogger<CalibExtrinsicSampler> _logger;
@@ -149,9 +150,13 @@ public class CalibExtrinsicSampler
                     best = sample;
                 }
             }
-            catch
+            catch (Exception ex)
             {
-                // 忽略单张失败
+                _logger.LogDebug(
+                    ex,
+                    "[外参采样] 评估样本失败，已跳过 — PairGroupId={PairGroupId}",
+                    sample.PairGroupId
+                );
             }
         }
 

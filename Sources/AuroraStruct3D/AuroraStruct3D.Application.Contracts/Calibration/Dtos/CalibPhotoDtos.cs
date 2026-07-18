@@ -233,24 +233,6 @@ public class CalibPhotoDto
 }
 
 /// <summary>
-/// 单组投影外参双拍样本 DTO。
-/// </summary>
-public class CalibExtrinsicSampleDto
-{
-    /// <summary>外参样本分组ID。</summary>
-    public Guid PairGroupId { get; set; }
-
-    /// <summary>关灯照片。</summary>
-    public CalibPhotoDto ProjectorOffPhoto { get; set; } = null!;
-
-    /// <summary>开灯照片。</summary>
-    public CalibPhotoDto ProjectorOnPhoto { get; set; } = null!;
-
-    /// <summary>该样本组是否有效。</summary>
-    public bool IsValid { get; set; }
-}
-
-/// <summary>
 /// 双目成对拍照返回 DTO
 /// </summary>
 public class CalibStereoPairPhotoDto

@@ -58,14 +58,6 @@ export interface CalibPhotoDto {
     imageDiffSignificant: boolean | null
 }
 
-/** 单组投影外参双拍样本 */
-export interface CalibExtrinsicSampleDto {
-    pairGroupId: string
-    projectorOffPhoto: CalibPhotoDto
-    projectorOnPhoto: CalibPhotoDto
-    isValid: boolean
-}
-
 /** 标定板参数（读/写） */
 export interface CalibBoardConfigDto {
     boardType: CalibrationBoardType
@@ -268,19 +260,6 @@ export async function takeIntrinsicPhoto(
     timeout = 30000,
 ): Promise<CalibPhotoDto> {
     const res = await httpClient.post<CalibPhotoDto>(`${BASE}/take-intrinsic-photo`, input, {
-        timeout,
-    })
-    return res.data
-}
-
-/**
- * 外参拍照（后端自动处理：先关灯拍实体板，再开灯拍投影图案，并按一组样本返回）
- */
-export async function takeExtrinsicPhoto(
-    input: TakeExtrinsicPhotoInput,
-    timeout = 30000,
-): Promise<CalibExtrinsicSampleDto> {
-    const res = await httpClient.post<CalibExtrinsicSampleDto>(`${BASE}/take-extrinsic-photo`, input, {
         timeout,
     })
     return res.data

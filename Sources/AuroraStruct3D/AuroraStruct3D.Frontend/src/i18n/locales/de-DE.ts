@@ -1448,7 +1448,6 @@ export default {
         step5LedOn: 'LED Ein',
         step5LedOff: 'LED Aus',
         step5TakeIntrinsic: 'Intrinsik-Aufnahme',
-        step5TakeExtrinsic: 'Extrinsik-Aufnahme',
         step5TakeExtrinsicDot: 'Extrinsik-Dot-Aufnahme',
         step5TakeExtrinsicCheckerboard: 'Extrinsik-Schachbrett-Aufnahme',
         step5TakingPhoto: 'Aufnahme…',

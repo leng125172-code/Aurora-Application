@@ -1458,7 +1458,6 @@ export default {
         step5LedOn: '开灯',
         step5LedOff: '关灯',
         step5TakeIntrinsic: '内参拍照',
-        step5TakeExtrinsic: '外参拍照',
         step5TakeExtrinsicDot: '外参圆点拍照',
         step5TakeExtrinsicCheckerboard: '外参棋盘格拍照',
         step5TakingPhoto: '拍照中…',

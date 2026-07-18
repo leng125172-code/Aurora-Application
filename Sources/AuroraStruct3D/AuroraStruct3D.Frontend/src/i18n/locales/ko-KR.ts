@@ -1449,7 +1449,6 @@ export default {
         step5LedOn: 'LED 켜기',
         step5LedOff: 'LED 끄기',
         step5TakeIntrinsic: '내부 파라미터 촬영',
-        step5TakeExtrinsic: '외부 파라미터 촬영',
         step5TakeExtrinsicDot: '외부 파라미터 점 촬영',
         step5TakeExtrinsicCheckerboard: '외부 파라미터 체커보드 촬영',
         step5TakingPhoto: '촬영 중…',
