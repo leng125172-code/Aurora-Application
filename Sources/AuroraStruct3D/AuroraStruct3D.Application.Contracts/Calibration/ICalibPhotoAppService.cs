@@ -113,5 +113,4 @@ public interface ICalibPhotoAppService : IApplicationService
     /// GET /api/app/calib-photo/validate-step5?calibProjectId={id}
     /// </summary>
     Task<bool> ValidateStep5Async(Guid calibProjectId);
-
 }

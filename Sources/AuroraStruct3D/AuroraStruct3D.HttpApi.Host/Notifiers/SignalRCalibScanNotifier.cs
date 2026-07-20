@@ -39,4 +39,24 @@ public class SignalRCalibScanNotifier : ICalibScanNotifier, ISingletonDependency
             .Clients.Group(BuildProjectGroup(calibProjectId))
             .ReceiveCalibScanMetricsAsync(calibProjectId.ToString(), metrics);
     }
+
+    /// <inheritdoc/>
+    public Task NotifyFrameAsync(
+        Guid calibProjectId,
+        int cameraRole,
+        byte[] jpegBytes,
+        long roundIndex,
+        int frameIndexInRound
+    )
+    {
+        return _hubContext
+            .Clients.Group(BuildProjectGroup(calibProjectId))
+            .ReceiveCalibScanFrameAsync(
+                calibProjectId.ToString(),
+                cameraRole,
+                jpegBytes,
+                roundIndex,
+                frameIndexInRound
+            );
+    }
 }

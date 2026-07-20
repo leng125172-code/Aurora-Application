@@ -213,7 +213,7 @@ public class CalibPhotoDto
     /// <summary>拍摄时间</summary>
     public DateTime CapturedAt { get; set; }
 
-    /// <summary>缩略图 Base64（JPEG，约 400px 宽）；前端显示用，可能为 null</summary>
+    /// <summary>原图 Base64（JPEG，不压缩，用于前端预览）</summary>
     public string? ThumbnailBase64 { get; set; }
 
     /// <summary>双目成对拍照分组ID（仅 StereoExtrinsicPair 有值）</summary>

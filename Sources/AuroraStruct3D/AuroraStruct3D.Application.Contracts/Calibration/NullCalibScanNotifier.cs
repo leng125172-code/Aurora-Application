@@ -22,4 +22,16 @@ public class NullCalibScanNotifier : ICalibScanNotifier, ISingletonDependency
     {
         return Task.CompletedTask;
     }
+
+    /// <inheritdoc/>
+    public Task NotifyFrameAsync(
+        Guid calibProjectId,
+        int cameraRole,
+        byte[] jpegBytes,
+        long roundIndex,
+        int frameIndexInRound
+    )
+    {
+        return Task.CompletedTask;
+    }
 }

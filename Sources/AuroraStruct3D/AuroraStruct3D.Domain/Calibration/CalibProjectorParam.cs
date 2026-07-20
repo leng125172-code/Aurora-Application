@@ -4,7 +4,7 @@ using Volo.Abp.Domain.Entities.Auditing;
 namespace AuroraStruct3D.Calibration;
 
 /// <summary>
-/// 结构光投射器参数配置实体（Step 6，仅单光系列显示）。
+/// 结构光投射器参数配置实体（Step 3 投影仪参数配置页）。
 /// 存储用于标定的投射器光学和图案参数，
 /// 可按投射器型号分类保存为模板以便复用。
 ///
@@ -45,6 +45,12 @@ public class CalibProjectorParam : FullAuditedEntity<Guid>
     /// <summary>图案数量</summary>
     public int PatternCount { get; private set; }
 
+    /// <summary>条纹周期数（一个条纹周期包含的像素数，必须能整除分辨率宽度/高度）</summary>
+    public int PeriodCount { get; private set; }
+
+    /// <summary>条纹类型：bw=黑白（首色黑），wb=白黑（首色白）</summary>
+    public string FringeType { get; private set; } = "bw";
+
     /// <summary>相位偏移量（正弦条纹时有效）</summary>
     public decimal? PhaseShift { get; private set; }
 
@@ -75,6 +81,8 @@ public class CalibProjectorParam : FullAuditedEntity<Guid>
         SetName(name);
         PatternType = ProjectorPatternType.SineFringe;
         PatternCount = 4;
+        PeriodCount = 8;
+        FringeType = "bw";
         IsEnabled = true;
         IsTemplateMode = false;
     }
@@ -125,6 +133,35 @@ public class CalibProjectorParam : FullAuditedEntity<Guid>
         PatternType = patternType;
         PatternCount = patternCount;
         PhaseShift = phaseShift;
+        return this;
+    }
+
+    /// <summary>
+    /// 更新条纹参数（Step3 投影仪参数配置页使用）
+    /// </summary>
+    /// <param name="periodCount">条纹周期数</param>
+    /// <param name="fringeType">条纹类型：bw=黑白，wb=白黑</param>
+    /// <param name="patternCount">图案数量（相移步数）</param>
+    /// <param name="phaseShift">相位偏移量</param>
+    public CalibProjectorParam SetFringeParams(
+        int periodCount,
+        string fringeType,
+        int patternCount,
+        decimal? phaseShift = null
+    )
+    {
+        PeriodCount = periodCount;
+        FringeType = string.IsNullOrEmpty(fringeType) ? "bw" : fringeType;
+        PatternCount = patternCount;
+        PhaseShift = phaseShift;
+        return this;
+    }
+
+    /// <summary>更新分辨率（Step3 投影仪参数配置页使用，仅记录用户输入的高度；宽度从投影仪读取）</summary>
+    public CalibProjectorParam SetResolution(int width, int height)
+    {
+        ResolutionWidth = width;
+        ResolutionHeight = height;
         return this;
     }
 

@@ -132,6 +132,9 @@ public static class CalibrationDbContextModelCreatingExtensions
             b.Property(x => x.PatternType).HasConversion<int>();
             b.Property(x => x.ProjectionRatio).HasPrecision(10, 4);
             b.Property(x => x.PhaseShift).HasPrecision(10, 6);
+            // Step3 投影仪参数配置页新增字段
+            b.Property(x => x.FringeType).IsRequired().HasMaxLength(8).HasDefaultValue("bw");
+            b.Property(x => x.PeriodCount).HasDefaultValue(8);
 
             b.HasIndex(x => x.CalibProjectId);
             b.HasIndex(x => x.ProjectorDeviceId);

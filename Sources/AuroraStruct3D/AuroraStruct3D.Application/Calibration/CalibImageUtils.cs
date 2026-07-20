@@ -252,52 +252,6 @@ public static class CalibImageUtils
         return result;
     }
 
-    public static string? GenerateThumbnailBase64(byte[] imageBytes)
-    {
-        try
-        {
-            using SKBitmap? bitmap = SKBitmap.Decode(imageBytes);
-            if (bitmap == null || bitmap.IsNull)
-                return null;
-
-            const int maxSide = 200;
-            int longSide = Math.Max(bitmap.Width, bitmap.Height);
-
-            if (longSide <= maxSide)
-            {
-                using SKImage skImg = SKImage.FromBitmap(bitmap);
-                using SKData? encoded = skImg.Encode(SKEncodedImageFormat.Jpeg, 80);
-                if (encoded == null)
-                    return null;
-                return $"data:image/jpeg;base64,{Convert.ToBase64String(encoded.ToArray())}";
-            }
-
-            double scale = maxSide / (double)longSide;
-            int targetWidth = Math.Max(1, (int)Math.Round(bitmap.Width * scale));
-            int targetHeight = Math.Max(1, (int)Math.Round(bitmap.Height * scale));
-
-            SKImageInfo info = new(
-                targetWidth,
-                targetHeight,
-                SKColorType.Bgra8888,
-                SKAlphaType.Opaque
-            );
-            using SKBitmap resized = new(info);
-            bitmap.ScalePixels(resized, new SKSamplingOptions(SKFilterMode.Linear));
-
-            using SKImage skImg2 = SKImage.FromBitmap(resized);
-            using SKData? encoded2 = skImg2.Encode(SKEncodedImageFormat.Jpeg, 80);
-            if (encoded2 == null)
-                return null;
-
-            return $"data:image/jpeg;base64,{Convert.ToBase64String(encoded2.ToArray())}";
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
     public static Point2d? DetectCrossCenter(byte[] imageBytes, int rotationAngle = 0)
     {
         try

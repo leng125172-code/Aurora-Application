@@ -23,6 +23,14 @@ export enum CalibScanRunState {
     Failed = 4,
 }
 
+/** Step6 扫描相机角色（与后端 CalibScanCameraRole 枚举对齐） */
+export enum CalibScanCameraRole {
+    /** 主相机 */
+    Main = 0,
+    /** 从相机 */
+    Secondary = 1,
+}
+
 /** 启动扫描输入 */
 export interface StartCalibScanInput {
     calibProjectId: string
@@ -33,7 +41,11 @@ export interface StopCalibScanInput {
     calibProjectId: string
 }
 
-/** 实时指标 */
+/**
+ * 实时指标
+ * 注：DepthValidRate / Confidence / DepthMapDataUri 为兼容旧接口保留，
+ * 结构光扫描流程中固定为 0 / 0 / null
+ */
 export interface CalibScanMetricsDto {
     fps: number
     depthValidRate: number
@@ -41,6 +53,14 @@ export interface CalibScanMetricsDto {
     depthMapDataUri: string | null
     frameIndex: number
     timestamp: string
+    /** 当前轮次序号（从 1 开始递增） */
+    roundIndex: number
+    /** 当前轮内帧序号（0~patternCount-1） */
+    frameIndexInRound: number
+    /** 每轮总帧数（来自 Step3 CalibProjectorParam.PatternCount） */
+    patternCount: number
+    /** 十字图检测结果（true 表示检测到十字图，本轮播放完毕） */
+    isCrosshairDetected: boolean
 }
 
 /** 扫描状态 */
@@ -52,6 +72,22 @@ export interface CalibScanStatusDto {
     lastUpdatedAt: string
     errorMessage: string | null
     latestMetrics: CalibScanMetricsDto | null
+}
+
+/**
+ * Step6 扫描单帧图像推送 DTO（SignalR ReceiveCalibScanFrame 事件载荷）
+ * 注：jpegBytes 为 MessagePack 二进制传输的 JPEG 原图字节
+ */
+export interface CalibScanFrameDto {
+    calibProjectId: string
+    /** 相机角色（0=主相机, 1=从相机） */
+    cameraRole: CalibScanCameraRole
+    /** JPEG 原图二进制数据 */
+    jpegBytes: Uint8Array
+    /** 当前轮次序号 */
+    roundIndex: number
+    /** 当前轮内帧序号 */
+    frameIndexInRound: number
 }
 
 /** 启动在线扫描 */
@@ -70,15 +106,4 @@ export async function stopCalibScan(input: StopCalibScanInput): Promise<CalibSca
 export async function getCalibScanStatus(calibProjectId: string): Promise<CalibScanStatusDto> {
     const res = await httpClient.get<CalibScanStatusDto>(`${BASE}/status/${calibProjectId}`)
     return res.data
-}
-
-/** 设置图像增强开关输入 */
-export interface SetCalibScanImageEnhanceInput {
-    calibProjectId: string
-    enabled: boolean
-}
-
-/** 设置 OpenCV CLAHE 图像增强开关 */
-export async function setCalibScanImageEnhance(input: SetCalibScanImageEnhanceInput): Promise<void> {
-    await httpClient.post(`${BASE}/set-image-enhance`, input)
 }

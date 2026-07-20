@@ -580,13 +580,9 @@ async function doTakeIntrinsic(cam: CameraDeviceDto): Promise<void> {
         const photo = await takeIntrinsicPhoto({
             calibProjectId: props.project.id,
             cameraDeviceId: cam.id,
-            // 如果有投影仪，将其 ID 一并传入，后端拍照前自动关灯
-            projectorDeviceId: activeProjectorId.value ?? undefined,
         })
-        // 追加到列表头部（最新的在前）
         const list = intrinsicPhotosMap.value[cam.id] ?? []
         intrinsicPhotosMap.value[cam.id] = [photo, ...list]
-        // 刷新计数
         await loadCameraStatus(cam.id)
         if (!photo.isValid) {
             toast.warn(`${cam.name}: 未检测到棋盘格角点，该照片标记为无效`)
@@ -1866,12 +1862,6 @@ onMounted(async () => {
                                                                     :alt="sample.projectorOffPhoto.capturedAt"
                                                                 />
                                                                 <div
-                                                                    v-else
-                                                                    class="flex aspect-square items-center justify-center rounded bg-muted/20"
-                                                                >
-                                                                    <Camera class="size-6 text-muted-foreground/30" />
-                                                                </div>
-                                                                <div
                                                                     class="absolute left-1 top-1 rounded bg-black/65 px-1 py-0.5 text-[9px] text-white"
                                                                 >
                                                                     白屏
@@ -1924,14 +1914,6 @@ onMounted(async () => {
                                                                             class="aspect-square w-full rounded object-cover"
                                                                             :alt="stripePhoto.capturedAt"
                                                                         />
-                                                                        <div
-                                                                            v-else
-                                                                            class="flex aspect-square items-center justify-center rounded bg-muted/20"
-                                                                        >
-                                                                            <Zap
-                                                                                class="size-6 text-muted-foreground/30"
-                                                                            />
-                                                                        </div>
                                                                         <div
                                                                             class="absolute left-1 top-1 rounded bg-black/65 px-1 py-0.5 text-[9px] text-white"
                                                                         >

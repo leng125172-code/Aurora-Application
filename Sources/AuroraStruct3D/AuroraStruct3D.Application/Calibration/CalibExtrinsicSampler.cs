@@ -173,15 +173,25 @@ public class CalibExtrinsicSampler : ITransientDependency
         try
         {
             byte[] bytes = await _blobContainer.GetAllBytesAsync(sample.ProjectorOffPhoto.BlobKey);
-            using Mat mat = CalibImageUtils.LoadGrayMatWithRotation(bytes, rotationAngle);
+            // Blob 中的 JPEG 已在拍照阶段应用过旋转，此处不再二次旋转
+            using Mat mat = CalibImageUtils.LoadGrayMat(bytes);
             if (mat.Empty())
                 return null;
 
-            return _boardDetector.FindBoardPointsSubpixGray(mat, patternSize, project.BoardType, project);
+            return _boardDetector.FindBoardPointsSubpixGray(
+                mat,
+                patternSize,
+                project.BoardType,
+                project
+            );
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "[外参采样] 查找实体板角点失败 — PairGroupId={PairGroupId}", sample.PairGroupId);
+            _logger.LogWarning(
+                ex,
+                "[外参采样] 查找实体板角点失败 — PairGroupId={PairGroupId}",
+                sample.PairGroupId
+            );
             return null;
         }
     }
@@ -234,7 +244,8 @@ public class CalibExtrinsicSampler : ITransientDependency
             foreach (CalibPhotoRecord patternPhoto in sample.ProjectorPatternPhotos)
             {
                 byte[] onBytes = await _blobContainer.GetAllBytesAsync(patternPhoto.BlobKey);
-                using Mat onGray = CalibImageUtils.LoadGrayMatWithRotation(onBytes, rotationAngle);
+                // Blob 中的 JPEG 已在拍照阶段应用过旋转，此处不再二次旋转
+                using Mat onGray = CalibImageUtils.LoadGrayMat(onBytes);
                 if (onGray.Empty())
                     continue;
 
@@ -265,7 +276,12 @@ public class CalibExtrinsicSampler : ITransientDependency
             }
 
             using Mat undistMat = new();
-            Cv2.UndistortPoints(InputArray.Create(patternCorners), undistMat, cameraMatrix, distCoeffs);
+            Cv2.UndistortPoints(
+                InputArray.Create(patternCorners),
+                undistMat,
+                cameraMatrix,
+                distCoeffs
+            );
             undistMat.GetArray(out Point2f[] undist);
             if (undist.Length != patternCorners.Length)
                 return null;
@@ -304,7 +320,11 @@ public class CalibExtrinsicSampler : ITransientDependency
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "[外参采样] 构建投影仪对象点失败 — PairGroupId={PairGroupId}", sample.PairGroupId);
+            _logger.LogWarning(
+                ex,
+                "[外参采样] 构建投影仪对象点失败 — PairGroupId={PairGroupId}",
+                sample.PairGroupId
+            );
             return null;
         }
     }

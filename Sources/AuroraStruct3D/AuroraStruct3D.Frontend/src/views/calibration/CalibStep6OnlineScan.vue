@@ -4,16 +4,15 @@ import * as signalR from '@microsoft/signalr'
 import { MessagePackHubProtocol } from '@microsoft/signalr-protocol-msgpack'
 import Button from 'primevue/button'
 import Tag from 'primevue/tag'
-import Checkbox from 'primevue/checkbox'
 import { showErrorToastOnce } from '@/api/client'
 import { useAppToast } from '@/composables/useAppToast'
 import type { CalibProjectDto } from '@/api/calibration'
 import {
+    CalibScanCameraRole,
     CalibScanRunState,
     getCalibScanStatus,
     startCalibScan,
     stopCalibScan,
-    setCalibScanImageEnhance,
     type CalibScanStatusDto,
 } from '@/api/calib-scan'
 
@@ -28,7 +27,11 @@ const status = ref<CalibScanStatusDto | null>(null)
 const hubConnected = ref(false)
 const reconnecting = ref(false)
 const conflictHint = ref<string | null>(null)
-const imageEnhanceEnabled = ref(false)
+
+// 主/从相机原图 Blob URL（每帧覆盖，旧 URL 在更新前 revoke）
+const mainImageUrl = ref<string | null>(null)
+const secondaryImageUrl = ref<string | null>(null)
+
 let hubConnection: signalR.HubConnection | null = null
 
 const stateText = computed(() => {
@@ -68,9 +71,32 @@ const canStop = computed(() => {
     return !loading.value && !!status.value?.isRunning
 })
 
-const depthMapDataUri = computed(() => {
-    return status.value?.latestMetrics?.depthMapDataUri ?? null
-})
+const metrics = computed(() => status.value?.latestMetrics ?? null)
+
+/**
+ * 将 SignalR 推送的 JPEG 字节转换为 Blob URL 供 <img> 显示。
+ * 调用方需在覆盖前 revoke 旧 URL，避免内存泄漏。
+ */
+function bytesToImageUrl(bytes: Uint8Array): string {
+    // MessagePack 协议下 byte[] 会以 Uint8Array 形式到达。
+    // 复制到独立的 ArrayBuffer，避免 TS 5.7+ 严格类型下 Uint8Array<ArrayBufferLike>
+    // 与 BlobPart（要求 ArrayBuffer，不允许 SharedArrayBuffer）类型不兼容问题。
+    const buffer = new ArrayBuffer(bytes.byteLength)
+    new Uint8Array(buffer).set(bytes)
+    const blob = new Blob([buffer], { type: 'image/jpeg' })
+    return URL.createObjectURL(blob)
+}
+
+function revokeUrl(slot: 'main' | 'secondary'): void {
+    if (slot === 'main' && mainImageUrl.value) {
+        URL.revokeObjectURL(mainImageUrl.value)
+        mainImageUrl.value = null
+    }
+    if (slot === 'secondary' && secondaryImageUrl.value) {
+        URL.revokeObjectURL(secondaryImageUrl.value)
+        secondaryImageUrl.value = null
+    }
+}
 
 async function startHub(): Promise<void> {
     if (hubConnection?.state === signalR.HubConnectionState.Connected) {
@@ -118,20 +144,41 @@ async function startHub(): Promise<void> {
 
     hubConnection.on(
         'ReceiveCalibScanMetricsAsync',
-        (projectId: string, metrics: CalibScanStatusDto['latestMetrics']) => {
-            if (projectId !== props.project.id || !metrics) {
+        (projectId: string, m: NonNullable<CalibScanStatusDto['latestMetrics']>) => {
+            if (projectId !== props.project.id || !m) {
                 return
             }
-
             const current = status.value
             if (!current) {
                 return
             }
-
             status.value = {
                 ...current,
-                latestMetrics: metrics,
-                lastUpdatedAt: metrics.timestamp,
+                latestMetrics: m,
+                lastUpdatedAt: m.timestamp,
+            }
+        }
+    )
+
+    // 接收主/从相机原图 JPEG 二进制，更新对应槽位的 Blob URL
+    hubConnection.on(
+        'ReceiveCalibScanFrameAsync',
+        (
+            projectId: string,
+            cameraRole: number,
+            jpegBytes: Uint8Array,
+            _roundIndex: number,
+            _frameIndexInRound: number
+        ) => {
+            if (projectId !== props.project.id || !jpegBytes || jpegBytes.byteLength === 0) {
+                return
+            }
+            if (cameraRole === CalibScanCameraRole.Main) {
+                revokeUrl('main')
+                mainImageUrl.value = bytesToImageUrl(jpegBytes)
+            } else if (cameraRole === CalibScanCameraRole.Secondary) {
+                revokeUrl('secondary')
+                secondaryImageUrl.value = bytesToImageUrl(jpegBytes)
             }
         }
     )
@@ -151,7 +198,6 @@ async function stopHub(): Promise<void> {
     if (!hubConnection) {
         return
     }
-
     try {
         await hubConnection.invoke('LeaveCalibScanGroupAsync', props.project.id)
         await hubConnection.stop()
@@ -214,18 +260,6 @@ async function onStop(): Promise<void> {
     }
 }
 
-async function onImageEnhanceChange(): Promise<void> {
-    try {
-        await setCalibScanImageEnhance({
-            calibProjectId: props.project.id,
-            enabled: imageEnhanceEnabled.value,
-        })
-    } catch (e) {
-        imageEnhanceEnabled.value = !imageEnhanceEnabled.value
-        showErrorToastOnce(e)
-    }
-}
-
 onMounted(async () => {
     await startHub()
     await refreshStatus(true)
@@ -233,6 +267,9 @@ onMounted(async () => {
 
 onUnmounted(async () => {
     await stopHub()
+    // 组件卸载时释放所有 Blob URL，避免内存泄漏
+    revokeUrl('main')
+    revokeUrl('secondary')
 })
 </script>
 
@@ -252,14 +289,14 @@ onUnmounted(async () => {
             <div class="grid grid-cols-1 gap-3 md:grid-cols-3">
                 <div class="md:col-span-3 flex items-end gap-2">
                     <Button
-                        label="启动扫描"
+                        label="开始采集"
                         icon="pi pi-play"
                         :loading="loading"
                         :disabled="!canStart"
                         @click="onStart"
                     />
                     <Button
-                        label="停止扫描"
+                        label="结束采集"
                         severity="secondary"
                         outlined
                         icon="pi pi-stop"
@@ -277,44 +314,43 @@ onUnmounted(async () => {
                 </div>
             </div>
 
-            <div class="mt-3 flex items-center gap-2">
-                <Checkbox v-model="imageEnhanceEnabled" input-id="imageEnhance" binary @change="onImageEnhanceChange" />
-                <label for="imageEnhance" class="text-sm cursor-pointer select-none">
-                    启用 OpenCV 图像增强（CLAHE 自适应对比度优化）
-                </label>
-            </div>
-
             <p v-if="status?.errorMessage" class="mt-3 text-sm text-red-400">
                 {{ status.errorMessage }}
             </p>
             <p v-if="conflictHint" class="mt-2 text-sm text-amber-300">会话冲突：{{ conflictHint }}</p>
             <p class="mt-2 text-sm text-muted-foreground">
-                双 USB 相机场景受底层驱动限制，不走同时预览；Step6 采用后台轮询抓拍主从相机并生成深度图。
+                投影仪按 Step3 周期参数循环播放条纹图，主/从相机软件触发同步抓拍；检测到十字图即本轮结束，自动进入下一轮采集。
             </p>
         </div>
 
         <div class="rounded-xl border border-border/60 bg-card/40 p-4">
-            <h4 class="mb-3 text-sm font-semibold">实时指标（MVP 占位）</h4>
+            <h4 class="mb-3 text-sm font-semibold">采集状态</h4>
             <div class="grid grid-cols-2 gap-3 md:grid-cols-5">
                 <div class="rounded-lg border border-border/50 p-3">
-                    <div class="text-xs text-muted-foreground">FPS</div>
-                    <div class="text-lg font-semibold">{{ status?.latestMetrics?.fps?.toFixed(2) ?? '0.00' }}</div>
+                    <div class="text-xs text-muted-foreground">当前轮次</div>
+                    <div class="text-lg font-semibold">{{ metrics?.roundIndex ?? 0 }}</div>
                 </div>
                 <div class="rounded-lg border border-border/50 p-3">
-                    <div class="text-xs text-muted-foreground">深度有效率</div>
+                    <div class="text-xs text-muted-foreground">轮内帧序号</div>
                     <div class="text-lg font-semibold">
-                        {{ ((status?.latestMetrics?.depthValidRate ?? 0) * 100).toFixed(2) }}%
+                        {{ metrics?.frameIndexInRound ?? 0 }}
+                        <span class="text-xs font-normal text-muted-foreground">
+                            / {{ metrics?.patternCount ?? 0 }}
+                        </span>
                     </div>
                 </div>
                 <div class="rounded-lg border border-border/50 p-3">
-                    <div class="text-xs text-muted-foreground">置信度</div>
-                    <div class="text-lg font-semibold">
-                        {{ ((status?.latestMetrics?.confidence ?? 0) * 100).toFixed(2) }}%
-                    </div>
+                    <div class="text-xs text-muted-foreground">累计帧数</div>
+                    <div class="text-lg font-semibold">{{ metrics?.frameIndex ?? 0 }}</div>
                 </div>
                 <div class="rounded-lg border border-border/50 p-3">
-                    <div class="text-xs text-muted-foreground">帧序号</div>
-                    <div class="text-lg font-semibold">{{ status?.latestMetrics?.frameIndex ?? 0 }}</div>
+                    <div class="text-xs text-muted-foreground">十字图检测</div>
+                    <div class="text-lg font-semibold">
+                        <Tag
+                            :severity="metrics?.isCrosshairDetected ? 'success' : 'secondary'"
+                            :value="metrics?.isCrosshairDetected ? '已检测' : '未检测'"
+                        />
+                    </div>
                 </div>
                 <div class="rounded-lg border border-border/50 p-3">
                     <div class="text-xs text-muted-foreground">最后更新时间</div>
@@ -323,19 +359,39 @@ onUnmounted(async () => {
             </div>
         </div>
 
-        <div class="rounded-xl border border-border/60 bg-card/40 p-4">
-            <h4 class="mb-3 text-sm font-semibold">实时深度图（后台抓拍重建）</h4>
-            <div class="rounded-lg border border-border/50 p-2">
-                <div class="mb-2 text-xs text-muted-foreground">Depth Map</div>
+        <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div class="rounded-xl border border-border/60 bg-card/40 p-4">
+                <div class="mb-3 flex items-center justify-between">
+                    <h4 class="text-sm font-semibold">主相机原图</h4>
+                    <Tag severity="info" value="Main" />
+                </div>
                 <div class="aspect-video w-full overflow-hidden rounded bg-black/70">
                     <img
-                        v-if="depthMapDataUri"
-                        :src="depthMapDataUri"
-                        alt="depth-map-preview"
+                        v-if="mainImageUrl"
+                        :src="mainImageUrl"
+                        alt="main-camera-preview"
                         class="h-full w-full object-contain"
                     />
                     <div v-else class="flex h-full items-center justify-center text-xs text-muted-foreground">
-                        暂无深度图，请启动扫描并等待首帧重建
+                        暂无图像，请启动扫描并等待首帧推送
+                    </div>
+                </div>
+            </div>
+
+            <div class="rounded-xl border border-border/60 bg-card/40 p-4">
+                <div class="mb-3 flex items-center justify-between">
+                    <h4 class="text-sm font-semibold">从相机原图</h4>
+                    <Tag severity="info" value="Secondary" />
+                </div>
+                <div class="aspect-video w-full overflow-hidden rounded bg-black/70">
+                    <img
+                        v-if="secondaryImageUrl"
+                        :src="secondaryImageUrl"
+                        alt="secondary-camera-preview"
+                        class="h-full w-full object-contain"
+                    />
+                    <div v-else class="flex h-full items-center justify-center text-xs text-muted-foreground">
+                        暂无图像，请启动扫描并等待首帧推送
                     </div>
                 </div>
             </div>

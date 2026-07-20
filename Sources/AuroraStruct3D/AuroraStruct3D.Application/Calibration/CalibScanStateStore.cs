@@ -9,7 +9,7 @@ namespace AuroraStruct3D.Calibration;
 public class CalibScanStateStore
 {
     private readonly ConcurrentDictionary<Guid, CalibScanSessionState> _sessions = new();
-    private readonly ConcurrentDictionary<Guid, CancellationTokenSource> _metricLoops = new();
+    private readonly ConcurrentDictionary<Guid, CancellationTokenSource> _scanLoops = new();
 
     /// <summary>
     /// 获取指定项目会话状态。
@@ -24,7 +24,10 @@ public class CalibScanStateStore
     /// <summary>
     /// 启动或覆盖会话状态。
     /// </summary>
-    public CalibScanSessionState Start(Guid calibProjectId, CalibScanMode scanMode)
+    /// <param name="calibProjectId">标定项目 ID</param>
+    /// <param name="scanMode">扫描模式</param>
+    /// <param name="patternCount">每轮总帧数（来自 Step3 CalibProjectorParam.PatternCount）</param>
+    public CalibScanSessionState Start(Guid calibProjectId, CalibScanMode scanMode, int patternCount)
     {
         DateTime now = DateTime.UtcNow;
         CalibScanSessionState session = _sessions.AddOrUpdate(
@@ -38,7 +41,8 @@ public class CalibScanStateStore
                 StartedAt = now,
                 LastUpdatedAt = now,
                 ErrorMessage = null,
-                LatestMetrics = BuildInitialMetrics(now),
+                LatestMetrics = BuildInitialMetrics(now, patternCount),
+                PatternCount = patternCount,
             },
             (_, old) =>
             {
@@ -48,7 +52,10 @@ public class CalibScanStateStore
                 old.StartedAt ??= now;
                 old.LastUpdatedAt = now;
                 old.ErrorMessage = null;
-                old.LatestMetrics ??= BuildInitialMetrics(now);
+                old.PatternCount = patternCount;
+                old.CurrentRoundIndex = 0;
+                old.CurrentFrameIndexInRound = 0;
+                old.LatestMetrics ??= BuildInitialMetrics(now, patternCount);
                 return old;
             }
         );
@@ -66,7 +73,7 @@ public class CalibScanStateStore
             return null;
         }
 
-        if (_metricLoops.TryRemove(calibProjectId, out CancellationTokenSource? cts))
+        if (_scanLoops.TryRemove(calibProjectId, out CancellationTokenSource? cts))
         {
             try
             {
@@ -105,7 +112,7 @@ public class CalibScanStateStore
                 IsRunning = false,
                 LastUpdatedAt = now,
                 ErrorMessage = errorMessage,
-                LatestMetrics = BuildInitialMetrics(now),
+                LatestMetrics = BuildInitialMetrics(now, 0),
             },
             (_, old) =>
             {
@@ -131,20 +138,25 @@ public class CalibScanStateStore
         }
 
         session.LatestMetrics = metrics;
+        session.CurrentRoundIndex = metrics.RoundIndex;
+        session.CurrentFrameIndexInRound = metrics.FrameIndexInRound;
         session.LastUpdatedAt = DateTime.UtcNow;
         return session;
     }
 
     /// <summary>
-    /// 启动指定项目的实时指标推送循环。
+    /// 启动指定项目的扫描循环。
+    /// 循环体内部自行推送 frame/metrics，节奏由投影仪 T/N 指令和相机抓拍耗时自然控制，
+    /// 不再由 store 调度固定延迟。
     /// </summary>
-    public void StartMetricLoop(
-        Guid calibProjectId,
-        Func<long, Task<CalibScanMetricsDto>> buildMetricsAsync,
-        Func<CalibScanMetricsDto, Task> onMetricAsync
-    )
+    /// <param name="calibProjectId">标定项目 ID</param>
+    /// <param name="scanLoopAsync">
+    /// 扫描循环体回调，传入 CancellationToken，循环体应自行处理取消。
+    /// 循环体返回时若会话仍在运行，则继续下一轮调用。
+    /// </param>
+    public void StartScanLoop(Guid calibProjectId, Func<CancellationToken, Task> scanLoopAsync)
     {
-        if (_metricLoops.TryRemove(calibProjectId, out CancellationTokenSource? oldCts))
+        if (_scanLoops.TryRemove(calibProjectId, out CancellationTokenSource? oldCts))
         {
             try
             {
@@ -161,72 +173,30 @@ public class CalibScanStateStore
         }
 
         CancellationTokenSource cts = new();
-        _metricLoops[calibProjectId] = cts;
+        _scanLoops[calibProjectId] = cts;
 
         _ = Task.Run(async () =>
         {
-            long frameIndex = 0;
-            while (!cts.IsCancellationRequested)
+            try
             {
-                frameIndex++;
-                CalibScanMetricsDto metrics;
-                try
-                {
-                    metrics = await buildMetricsAsync(frameIndex);
-                }
-                catch
-                {
-                    metrics = new CalibScanMetricsDto
-                    {
-                        Fps = 0,
-                        DepthValidRate = 0,
-                        Confidence = 0,
-                        FrameIndex = frameIndex,
-                        Timestamp = DateTime.UtcNow,
-                    };
-                }
-
-                CalibScanSessionState? session = UpdateMetrics(calibProjectId, metrics);
-                if (session is null || !session.IsRunning)
-                {
-                    break;
-                }
-
-                await onMetricAsync(metrics);
-
-                try
-                {
-                    await Task.Delay(1000, cts.Token);
-                }
-                catch (OperationCanceledException)
-                {
-                    break;
-                }
+                await scanLoopAsync(cts.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                // 正常取消，忽略
+            }
+            catch (Exception)
+            {
+                // 循环体异常由调用方自行记录日志并标记会话失败
+            }
+            finally
+            {
+                _scanLoops.TryRemove(calibProjectId, out _);
             }
         });
     }
 
-    /// <summary>
-    /// 设置指定项目会话的图像增强开关。
-    /// </summary>
-    public void SetImageEnhance(Guid calibProjectId, bool enabled)
-    {
-        if (_sessions.TryGetValue(calibProjectId, out CalibScanSessionState? session))
-        {
-            session.ImageEnhanceEnabled = enabled;
-        }
-    }
-
-    /// <summary>
-    /// 获取指定项目会话是否启用图像增强。
-    /// </summary>
-    public bool GetImageEnhanceEnabled(Guid calibProjectId)
-    {
-        return _sessions.TryGetValue(calibProjectId, out CalibScanSessionState? session)
-            && session.ImageEnhanceEnabled;
-    }
-
-    private static CalibScanMetricsDto BuildInitialMetrics(DateTime now)
+    private static CalibScanMetricsDto BuildInitialMetrics(DateTime now, int patternCount)
     {
         return new CalibScanMetricsDto
         {
@@ -235,6 +205,10 @@ public class CalibScanStateStore
             Confidence = 0,
             FrameIndex = 0,
             Timestamp = now,
+            RoundIndex = 0,
+            FrameIndexInRound = 0,
+            PatternCount = patternCount,
+            IsCrosshairDetected = false,
         };
     }
 }
@@ -260,6 +234,12 @@ public class CalibScanSessionState
 
     public CalibScanMetricsDto? LatestMetrics { get; set; }
 
-    /// <summary>是否启用 OpenCV CLAHE 图像增强</summary>
-    public bool ImageEnhanceEnabled { get; set; }
+    /// <summary>每轮总帧数（来自 Step3 CalibProjectorParam.PatternCount）</summary>
+    public int PatternCount { get; set; }
+
+    /// <summary>当前轮次序号</summary>
+    public long CurrentRoundIndex { get; set; }
+
+    /// <summary>当前轮内帧序号</summary>
+    public int CurrentFrameIndexInRound { get; set; }
 }

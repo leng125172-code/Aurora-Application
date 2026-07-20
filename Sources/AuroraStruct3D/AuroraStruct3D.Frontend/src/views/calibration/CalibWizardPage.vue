@@ -54,6 +54,11 @@ import {
     type ProjectorFringeDownloadStatusDto,
     downloadFringePattern,
 } from '@/api/projectors'
+import {
+    getCalibProjectorParam,
+    updateCalibProjectorParam,
+    type SaveCalibProjectorParamInput,
+} from '@/api/calib-projector-param'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -509,7 +514,7 @@ async function handleStep2Next(): Promise<void> {
 
 // ===================== Step 3 投影仪参数 =====================
 
-/** Step 3 Next（单光系列）：校验项目已绑定主结构光机 → 前进 */
+/** Step 3 Next（单光系列）：校验项目已绑定主结构光机 → 保存投影仪参数 → 前进 */
 async function handleStep3Next(): Promise<void> {
     if (project.value?.projectorCount && project.value.projectorCount > 0) {
         if (!project.value.boundProjectorDeviceId) {
@@ -518,6 +523,28 @@ async function handleStep3Next(): Promise<void> {
             return
         }
     }
+
+    // 保存投影仪参数到数据库（Upsert），失败不阻断前进流程，仅提示
+    const projectId = project.value?.id
+    const projectorId = selectedProjectorId.value
+    if (projectId && projectorId) {
+        try {
+            const input: SaveCalibProjectorParamInput = {
+                calibProjectId: projectId,
+                projectorDeviceId: projectorId,
+                resolutionWidth: projectorWidthPixels.value ?? 0,
+                resolutionHeight: projectorHeightInput.value,
+                periodCount: fringe3PeriodCount.value,
+                fringeType: fringeType.value,
+                patternCount: fringe3ImageCount.value,
+                phaseShift: fringe3PhaseShift.value,
+            }
+            await updateCalibProjectorParam(projectId, input)
+        } catch (e) {
+            showErrorToastOnce(e)
+        }
+    }
+
     goToStep('motor')
 }
 const step3Loading = ref(false)
@@ -529,7 +556,7 @@ const projectorReading = ref(false)
 
 /** 条纹类型：bw=黑白（首色黑）wb=白黑（首色白） */
 const fringeType = ref<'bw' | 'wb'>('bw')
-const projectorHeightInput = ref<number>(1024)
+const projectorHeightInput = ref<number>(720)
 const fringe3PeriodCount = ref<number>(8)
 const fringe3ImageCount = ref<number>(4)
 const fringe3PhaseShift = ref<number>(2)
@@ -629,6 +656,40 @@ async function initStep3(): Promise<void> {
         if (boundProjectorId) {
             selectedProjectorId.value = boundProjectorId
         }
+
+        // 回显已保存的投影仪参数（Step3 配置页持久化）
+        const projectId = project.value?.id
+        if (projectId) {
+            try {
+                const saved = await getCalibProjectorParam(projectId)
+                if (saved) {
+                    if (saved.resolutionWidth > 0) {
+                        projectorWidthPixels.value = saved.resolutionWidth
+                    }
+                    if (saved.resolutionHeight > 0) {
+                        projectorHeightInput.value = saved.resolutionHeight
+                    }
+                    if (saved.periodCount > 0) {
+                        fringe3PeriodCount.value = saved.periodCount
+                    }
+                    if (saved.patternCount > 0) {
+                        fringe3ImageCount.value = saved.patternCount
+                    }
+                    if (saved.phaseShift != null && saved.phaseShift > 0) {
+                        fringe3PhaseShift.value = saved.phaseShift
+                    }
+                    if (saved.fringeType === 'bw' || saved.fringeType === 'wb') {
+                        fringeType.value = saved.fringeType
+                    }
+                    if (saved.projectorDeviceId) {
+                        selectedProjectorId.value = saved.projectorDeviceId
+                    }
+                }
+            } catch {
+                /* 回显失败不阻断页面，使用默认值 */
+            }
+        }
+
         await refreshCurrentFringeDownloadStatus()
     } catch (e) {
         showErrorToastOnce(e)

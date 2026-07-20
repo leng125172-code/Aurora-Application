@@ -224,65 +224,23 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
     /// <inheritdoc/>
     public async Task<CalibPhotoDto> TakeIntrinsicPhotoAsync(TakeIntrinsicPhotoInput input)
     {
-        // 获取项目棋盘格参数
         CalibProject project = await _projectRepo.GetAsync(input.CalibProjectId);
         CameraDevice camera = await _cameraDeviceRepository.GetAsync(input.CameraDeviceId);
 
-        if (
-            project.DeviceSeries == DeviceSeries.SingleLight
-            && project.BoundProjectorDeviceId.HasValue
-            && input.ProjectorDeviceId.HasValue
-            && input.ProjectorDeviceId.Value != project.BoundProjectorDeviceId.Value
-        )
-        {
-            throw new UserFriendlyException("当前项目绑定的投影仪与拍照参数不一致，请刷新后重试");
-        }
+        EnsureBoardConfigValid(project, isProjectedBoard: false);
 
-        // 有结构光：开灯并切换到白屏，为内参拍照提供均匀背景光
-        if (input.ProjectorDeviceId.HasValue && project.DeviceSeries == DeviceSeries.SingleLight)
-        {
-            Guid projId = input.ProjectorDeviceId.Value;
-            await _projectorService.LedOnAsync(projId);
-            await _projectorService.SetDisplayModeAsync(
-                new SetProjectorDisplayModeDto
-                {
-                    ProjectorDeviceId = projId,
-                    Mode = ProjectorDisplayMode.White,
-                }
-            );
-            await Task.Delay(200);
-        }
+        byte[] jpegBytes = await GrabCalibFrameRawAsync(
+            input.CameraDeviceId,
+            targetTriggerMode: 2,
+            imageRotationAngle: camera.ImageRotationAngle
+        );
 
-        // 内参拍照：切换到软件触发模式，避免自由运行模式下相机持续输出干扰拍照
-        byte[] jpegBytes;
-        try
-        {
-            jpegBytes = await GrabCalibFrameRawAsync(input.CameraDeviceId, targetTriggerMode: 2);
-        }
-        finally
-        {
-            // 拍完立即关灯（无论拍照是否成功）
-            if (
-                input.ProjectorDeviceId.HasValue
-                && project.DeviceSeries == DeviceSeries.SingleLight
-            )
-            {
-                await _projectorService.LedOffAsync(input.ProjectorDeviceId.Value);
-            }
-        }
-
-        // OpenCV 棋盘格角点检测
         (bool isValid, int cornerCount) = _boardDetector.DetectBoardFeaturePoints(
             jpegBytes,
             project,
-            isProjectedBoard: false,
-            camera.ImageRotationAngle
+            isProjectedBoard: false
         );
 
-        // 生成缩略图
-        string? thumbBase64 = CalibImageUtils.GenerateThumbnailBase64(jpegBytes);
-
-        // 存 BLOB
         string blobKey = BuildBlobKey(
             input.CalibProjectId,
             input.CameraDeviceId,
@@ -290,7 +248,8 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
         );
         await _blobContainer.SaveAsync(blobKey, jpegBytes, overrideExisting: false);
 
-        // 写数据库
+        string imageBase64 = $"data:image/jpeg;base64,{Convert.ToBase64String(jpegBytes)}";
+
         CalibPhotoRecord record = new(
             GuidGenerator.Create(),
             input.CalibProjectId,
@@ -299,7 +258,7 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
             blobKey,
             isValid,
             cornerCount,
-            thumbBase64
+            imageBase64
         );
         await _photoRepo.InsertAsync(record);
 
@@ -311,6 +270,8 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
     {
         CalibProject project = await _projectRepo.GetAsync(input.CalibProjectId);
         CameraDevice camera = await _cameraDeviceRepository.GetAsync(input.CameraDeviceId);
+
+        EnsureBoardConfigValid(project, isProjectedBoard: false);
 
         Guid projectorDeviceId = ValidateAndGetProjectorId(project);
         Guid pairGroupId = GuidGenerator.Create();
@@ -328,7 +289,11 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
                 }
             );
             await Task.Delay(200);
-            photoBytes = await GrabCalibFrameRawAsync(input.CameraDeviceId, targetTriggerMode: 2);
+            photoBytes = await GrabCalibFrameRawAsync(
+                input.CameraDeviceId,
+                targetTriggerMode: 2,
+                imageRotationAngle: camera.ImageRotationAngle
+            );
         }
         finally
         {
@@ -338,8 +303,7 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
         (bool isValid, int cornerCount) = _boardDetector.DetectBoardFeaturePoints(
             photoBytes,
             project,
-            isProjectedBoard: false,
-            camera.ImageRotationAngle
+            isProjectedBoard: false
         );
 
         string blobKey = BuildBlobKey(
@@ -351,6 +315,8 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
         );
         await _blobContainer.SaveAsync(blobKey, photoBytes, overrideExisting: false);
 
+        string imageBase64 = $"data:image/jpeg;base64,{Convert.ToBase64String(photoBytes)}";
+
         CalibPhotoRecord record = new(
             GuidGenerator.Create(),
             input.CalibProjectId,
@@ -359,7 +325,7 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
             blobKey,
             isValid,
             cornerCount,
-            CalibImageUtils.GenerateThumbnailBase64(photoBytes),
+            imageBase64,
             pairGroupId,
             stereoRole: null,
             extrinsicPhase: ExtrinsicPhotoPhase.WhiteScreen,
@@ -427,6 +393,8 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
             pairGroupId = GuidGenerator.Create();
         }
 
+        CameraDevice camera = await _cameraDeviceRepository.GetAsync(input.CameraDeviceId);
+
         byte[] photoBytes;
         try
         {
@@ -451,19 +419,21 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
                 }
             );
             await Task.Delay(200);
-            photoBytes = await GrabCalibFrameRawAsync(input.CameraDeviceId, targetTriggerMode: 2);
+            photoBytes = await GrabCalibFrameRawAsync(
+                input.CameraDeviceId,
+                targetTriggerMode: 2,
+                imageRotationAngle: camera.ImageRotationAngle
+            );
         }
         finally
         {
             await _projectorService.LedOffAsync(projectorDeviceId);
         }
 
-        CameraDevice camera = await _cameraDeviceRepository.GetAsync(input.CameraDeviceId);
         (bool isValid, int cornerCount) = _boardDetector.DetectBoardFeaturePoints(
             photoBytes,
             project,
-            isProjectedBoard: true,
-            camera.ImageRotationAngle
+            isProjectedBoard: true
         );
 
         string blobKey = BuildBlobKey(
@@ -475,6 +445,8 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
         );
         await _blobContainer.SaveAsync(blobKey, photoBytes, overrideExisting: false);
 
+        string imageBase64 = $"data:image/jpeg;base64,{Convert.ToBase64String(photoBytes)}";
+
         CalibPhotoRecord record = new(
             GuidGenerator.Create(),
             input.CalibProjectId,
@@ -483,7 +455,7 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
             blobKey,
             isValid,
             cornerCount,
-            CalibImageUtils.GenerateThumbnailBase64(photoBytes),
+            imageBase64,
             pairGroupId ?? GuidGenerator.Create(),
             stereoRole: null,
             extrinsicPhase: ExtrinsicPhotoPhase.Checkerboard,
@@ -509,6 +481,8 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
     {
         CalibProject project = await _projectRepo.GetAsync(input.CalibProjectId);
 
+        EnsureBoardConfigValid(project, isProjectedBoard: false);
+
         if (!project.MainCameraDeviceId.HasValue || !project.SecondaryCameraDeviceId.HasValue)
         {
             throw new UserFriendlyException("当前项目未绑定主/从相机，无法进行双目联合外参拍照");
@@ -527,23 +501,26 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
 
         // 主相机先拍，从相机再拍（_capStartActiveLock 保证顺序执行）
         // 两台均切换到软件触发模式进行标定拍照
-        byte[] mainBytes = await GrabCalibFrameRawAsync(mainCameraId, targetTriggerMode: 2);
+        byte[] mainBytes = await GrabCalibFrameRawAsync(
+            mainCameraId,
+            targetTriggerMode: 2,
+            imageRotationAngle: mainCamera.ImageRotationAngle
+        );
         byte[] secondaryBytes = await GrabCalibFrameRawAsync(
             secondaryCameraId,
-            targetTriggerMode: 2
+            targetTriggerMode: 2,
+            imageRotationAngle: secondaryCamera.ImageRotationAngle
         );
 
         (bool mainValid, int mainCornerCount) = _boardDetector.DetectBoardFeaturePoints(
             mainBytes,
             project,
-            isProjectedBoard: false,
-            mainCamera.ImageRotationAngle
+            isProjectedBoard: false
         );
         (bool secondaryValid, int secondaryCornerCount) = _boardDetector.DetectBoardFeaturePoints(
             secondaryBytes,
             project,
-            isProjectedBoard: false,
-            secondaryCamera.ImageRotationAngle
+            isProjectedBoard: false
         );
 
         Guid pairGroupId = GuidGenerator.Create();
@@ -562,6 +539,10 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
         await _blobContainer.SaveAsync(mainBlobKey, mainBytes, overrideExisting: false);
         await _blobContainer.SaveAsync(secondaryBlobKey, secondaryBytes, overrideExisting: false);
 
+        string mainImageBase64 = $"data:image/jpeg;base64,{Convert.ToBase64String(mainBytes)}";
+        string secondaryImageBase64 =
+            $"data:image/jpeg;base64,{Convert.ToBase64String(secondaryBytes)}";
+
         CalibPhotoRecord mainRecord = new(
             GuidGenerator.Create(),
             input.CalibProjectId,
@@ -570,7 +551,7 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
             mainBlobKey,
             mainValid,
             mainCornerCount,
-            CalibImageUtils.GenerateThumbnailBase64(mainBytes),
+            mainImageBase64,
             pairGroupId,
             StereoPhotoRole.Main
         );
@@ -583,7 +564,7 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
             secondaryBlobKey,
             secondaryValid,
             secondaryCornerCount,
-            CalibImageUtils.GenerateThumbnailBase64(secondaryBytes),
+            secondaryImageBase64,
             pairGroupId,
             StereoPhotoRole.Secondary
         );
@@ -620,7 +601,6 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
         return items.Select(ToPhotoDto).ToList();
     }
 
-    /// <inheritdoc/>
     /// <inheritdoc/>
     public async Task DeleteAsync(Guid id)
     {
@@ -1854,16 +1834,14 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
             byte[] secondaryBytes = await _blobContainer.GetAllBytesAsync(secondaryPhoto.BlobKey);
             long blobMs = phaseSwS.ElapsedMilliseconds;
 
-            // 直接加载为灰度（计算路径不需要彩色数据），并应用相机旋转角度
+            // 直接加载为灰度（计算路径不需要彩色数据）
+            // 注意：拍照阶段 GrabFrameRawAsync → EncodeToJpeg 已通过 RotateInterleavedPixels
+            //       将旋转烘焙进 JPEG 像素，Blob 中保存的 JPEG 已是旋转后的图像。
+            //       计算阶段若再次调用 LoadGrayMatWithRotation 会产生"二次旋转"，导致左右相机
+            //       坐标系错乱，双目重投误差可达 100px+。故此处使用不旋转的 LoadGrayMat。
             phaseSwS.Restart();
-            using Mat mainMat = CalibImageUtils.LoadGrayMatWithRotation(
-                mainBytes,
-                mainCamera.ImageRotationAngle
-            );
-            using Mat secondaryMat = CalibImageUtils.LoadGrayMatWithRotation(
-                secondaryBytes,
-                secondaryCamera.ImageRotationAngle
-            );
+            using Mat mainMat = CalibImageUtils.LoadGrayMat(mainBytes);
+            using Mat secondaryMat = CalibImageUtils.LoadGrayMat(secondaryBytes);
             long loadMs = phaseSwS.ElapsedMilliseconds;
 
             if (mainMat.Empty() || secondaryMat.Empty())
@@ -2114,10 +2092,11 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
         string map2XBlobKey = BuildStereoMapBlobKey(calibProjectId, "map2x");
         string map2YBlobKey = BuildStereoMapBlobKey(calibProjectId, "map2y");
 
-        await _blobContainer.SaveAsync(map1XBlobKey, SerializeFloatMapToBinary(map1x), false);
-        await _blobContainer.SaveAsync(map1YBlobKey, SerializeFloatMapToBinary(map1y), false);
-        await _blobContainer.SaveAsync(map2XBlobKey, SerializeFloatMapToBinary(map2x), false);
-        await _blobContainer.SaveAsync(map2YBlobKey, SerializeFloatMapToBinary(map2y), false);
+        // 重新计算双目时旧的 map 文件已存在，必须允许覆盖（map 为可重建的派生数据）
+        await _blobContainer.SaveAsync(map1XBlobKey, SerializeFloatMapToBinary(map1x), true);
+        await _blobContainer.SaveAsync(map1YBlobKey, SerializeFloatMapToBinary(map1y), true);
+        await _blobContainer.SaveAsync(map2XBlobKey, SerializeFloatMapToBinary(map2x), true);
+        await _blobContainer.SaveAsync(map2YBlobKey, SerializeFloatMapToBinary(map2y), true);
         _logger.LogInformation(
             "[双目标定] 4张 map 序列化并写入 BLOB 耗时 {Ms}ms",
             phaseSwS.ElapsedMilliseconds
@@ -2263,16 +2242,18 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
     // ─── 私有辅助方法 ─────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Step5 标定拍照专用帧抓取方法。
-    /// 直接调用 ITucamCameraService，无需手动模式检查。
+    /// 标定拍照专用帧抓取方法。
     /// 流程：读取并保存当前触发模式 → 切换到目标模式 →
     ///         StartCapture（获取单活锁）→ 必要时发软件触发 → GrabFrame → StopCapture（释放锁）→ 恢复触发模式。
     /// </summary>
     /// <param name="cameraDeviceId">相机设备 ID</param>
-    /// <param name="targetTriggerMode">
-    ///     0 = 自由运行；1 = 标准触发（硬件 IO）；2 = 软件触发
-    /// </param>
-    private async Task<byte[]> GrabCalibFrameRawAsync(Guid cameraDeviceId, int targetTriggerMode)
+    /// <param name="targetTriggerMode">0 = 自由运行；1 = 标准触发（硬件 IO）；2 = 软件触发</param>
+    /// <param name="imageRotationAngle">图像顺时针旋转角度（度，支持 0/90/180/270）</param>
+    private async Task<byte[]> GrabCalibFrameRawAsync(
+        Guid cameraDeviceId,
+        int targetTriggerMode,
+        int imageRotationAngle = 0
+    )
     {
         CameraDevice camera = await _cameraDeviceRepository.GetAsync(cameraDeviceId);
         int idx = camera.DeviceIndex;
@@ -2354,7 +2335,11 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
                         );
                     }
 
-                    (byte[] jpegBytes, _) = await _tucamService.GrabFrameRawAsync(idx, timeoutMs);
+                    (byte[] jpegBytes, _) = await _tucamService.GrabFrameRawAsync(
+                        idx,
+                        timeoutMs,
+                        imageRotationAngle: imageRotationAngle
+                    );
                     return jpegBytes;
                 }
                 finally
@@ -2566,7 +2551,9 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
             long blobMs = sw?.ElapsedMilliseconds ?? 0;
 
             sw?.Restart();
-            using Mat mat = CalibImageUtils.LoadGrayMatWithRotation(bytes, rotationAngle);
+            // Blob 中的 JPEG 已在拍照阶段（GrabFrameRawAsync → EncodeToJpeg）应用过旋转，
+            // 此处不再二次旋转，避免坐标系错乱导致标定误差激增。
+            using Mat mat = CalibImageUtils.LoadGrayMat(bytes);
             long loadMs = sw?.ElapsedMilliseconds ?? 0;
 
             if (mat.Empty())
@@ -2626,14 +2613,29 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
 
     private static Size GetBoardPatternSize(CalibProject project, bool isProjectedBoard)
     {
-        return isProjectedBoard
-            ? new Size(project.ProjectedCornerCols, project.ProjectedCornerRows)
-            : new Size(project.PhysicalCornerCols, project.PhysicalCornerRows);
+        if (isProjectedBoard)
+        {
+            return new Size(project.ProjectedCornerCols, project.ProjectedCornerRows);
+        }
+
+        if (project.BoardType == CalibrationBoardType.Chessboard)
+        {
+            return new Size(project.PhysicalCornerCols, project.PhysicalCornerRows);
+        }
+
+        int cols = project.CirclePatternCols ?? 0;
+        int rows = project.CirclePatternRows ?? 0;
+        return new Size(cols, rows);
     }
 
     private static float GetBoardSpacingMm(CalibProject project)
     {
-        return (float)project.PhysicalSquareSizeMm;
+        if (project.BoardType == CalibrationBoardType.Chessboard)
+        {
+            return (float)project.PhysicalSquareSizeMm;
+        }
+
+        return (float)(project.CircleSpacingMm ?? 0);
     }
 
     private static Point3f[] BuildBoardWorldPoints(
@@ -2654,10 +2656,22 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
         }
         else
         {
-            if (project.PhysicalCornerRows <= 1 || project.PhysicalCornerCols <= 1)
-                throw new UserFriendlyException("物理标定板行列数必须大于1");
-            if (project.PhysicalSquareSizeMm <= 0)
-                throw new UserFriendlyException("物理标定板格子尺寸必须大于0");
+            if (project.BoardType == CalibrationBoardType.Chessboard)
+            {
+                if (project.PhysicalCornerRows <= 1 || project.PhysicalCornerCols <= 1)
+                    throw new UserFriendlyException("物理标定板行列数必须大于1");
+                if (project.PhysicalSquareSizeMm <= 0)
+                    throw new UserFriendlyException("物理标定板格子尺寸必须大于0");
+            }
+            else
+            {
+                if (!project.CirclePatternRows.HasValue || project.CirclePatternRows.Value <= 1)
+                    throw new UserFriendlyException("圆点板行数必须大于1");
+                if (!project.CirclePatternCols.HasValue || project.CirclePatternCols.Value <= 1)
+                    throw new UserFriendlyException("圆点板列数必须大于1");
+                if (!project.CircleSpacingMm.HasValue || project.CircleSpacingMm.Value <= 0)
+                    throw new UserFriendlyException("圆点中心间距必须大于0");
+            }
         }
     }
 

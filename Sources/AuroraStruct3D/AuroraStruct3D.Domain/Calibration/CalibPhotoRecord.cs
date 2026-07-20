@@ -32,7 +32,7 @@ public class CalibPhotoRecord : AuditedEntity<Guid>
     /// <summary>BLOB 存储键（calib-photos 容器内的相对路径）</summary>
     public string BlobKey { get; private set; } = null!;
 
-    /// <summary>原图缩略图（Base64 JPEG，~400px 宽，用于前端预览，可为 null 表示尚未生成）</summary>
+    /// <summary>原图 Base64（JPEG，用于前端预览，不压缩）</summary>
     public string? ThumbnailBase64 { get; private set; }
 
     /// <summary>是否检测到有效棋盘格角点（OpenCV FindChessboardCorners 结果）</summary>
@@ -63,7 +63,7 @@ public class CalibPhotoRecord : AuditedEntity<Guid>
     /// <param name="blobKey">BLOB 存储键</param>
     /// <param name="isValid">角点检测是否成功</param>
     /// <param name="cornerCountDetected">检测到的角点数量</param>
-    /// <param name="thumbnailBase64">缩略图 Base64（可为 null）</param>
+    /// <param name="thumbnailBase64">原图 Base64（不压缩）</param>
     public CalibPhotoRecord(
         Guid id,
         Guid calibProjectId,
@@ -101,13 +101,6 @@ public class CalibPhotoRecord : AuditedEntity<Guid>
     {
         Check.NotNullOrWhiteSpace(blobKey, nameof(blobKey), CalibConsts.MaxBlobKeyLength);
         BlobKey = blobKey;
-    }
-
-    /// <summary>更新缩略图</summary>
-    public CalibPhotoRecord SetThumbnail(string? thumbnailBase64)
-    {
-        ThumbnailBase64 = thumbnailBase64;
-        return this;
     }
 
     /// <summary>设置图像差分结果</summary>

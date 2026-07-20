@@ -3,6 +3,7 @@ using System;
 using AuroraStruct3D.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Volo.Abp.EntityFrameworkCore;
@@ -12,9 +13,11 @@ using Volo.Abp.EntityFrameworkCore;
 namespace AuroraStruct3D.EntityFrameworkCore.Migrations
 {
     [DbContext(typeof(AuroraStruct3DDbContext))]
-    partial class AuroraStruct3DDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260718080117_RestoreThumbnailBase64")]
+    partial class RestoreThumbnailBase64
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1035,13 +1038,6 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                         .HasMaxLength(1024)
                         .HasColumnType("character varying(1024)");
 
-                    b.Property<string>("FringeType")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(8)
-                        .HasColumnType("character varying(8)")
-                        .HasDefaultValue("bw");
-
                     b.Property<bool>("IsDeleted")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
@@ -1072,11 +1068,6 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
 
                     b.Property<int>("PatternType")
                         .HasColumnType("integer");
-
-                    b.Property<int>("PeriodCount")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasDefaultValue(8);
 
                     b.Property<decimal?>("PhaseShift")
                         .HasPrecision(10, 6)

@@ -41,8 +41,7 @@ public class CalibBoardDetector : ITransientDependency
     public (bool isValid, int cornerCount) DetectBoardFeaturePoints(
         byte[] imageBytes,
         CalibProject project,
-        bool isProjectedBoard,
-        int rotationAngle = 0
+        bool isProjectedBoard
     )
     {
         CalibrationBoardType detectionBoardType = GetDetectionBoardType(project, isProjectedBoard);
@@ -52,15 +51,18 @@ public class CalibBoardDetector : ITransientDependency
 
             if (isProjectedBoard && project.BoardType != CalibrationBoardType.Chessboard)
             {
-                using Mat projGray = CalibImageUtils.LoadGrayMatWithRotation(
-                    imageBytes,
-                    rotationAngle
-                );
+                using Mat projGray = CalibImageUtils.LoadGrayMat(imageBytes);
                 if (projGray.Empty())
                     return (false, 0);
 
                 using Mat projMask = new();
-                Cv2.Threshold(projGray, projMask, ProjectorMaskThreshold, 255, ThresholdTypes.Binary);
+                Cv2.Threshold(
+                    projGray,
+                    projMask,
+                    ProjectorMaskThreshold,
+                    255,
+                    ThresholdTypes.Binary
+                );
                 using Mat maskClosed = new();
                 Cv2.MorphologyEx(
                     projMask,
@@ -164,7 +166,10 @@ public class CalibBoardDetector : ITransientDependency
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogDebug(ex, "投影棋盘格 FindChessboardCornersSB[SB原图] 检测失败，已跳过");
+                    _logger.LogDebug(
+                        ex,
+                        "投影棋盘格 FindChessboardCornersSB[SB原图] 检测失败，已跳过"
+                    );
                 }
 
                 _logger.LogWarning(
@@ -177,13 +182,13 @@ public class CalibBoardDetector : ITransientDependency
                 return (false, 0);
             }
 
-            return DetectChessboardCorners(imageBytes, chess.Width, chess.Height, rotationAngle);
+            return DetectChessboardCorners(imageBytes, chess.Width, chess.Height);
         }
 
         try
         {
             Size patternSize = GetBoardPatternSize(project, isProjectedBoard);
-            using Mat gray = CalibImageUtils.LoadGrayMatWithRotation(imageBytes, rotationAngle);
+            using Mat gray = CalibImageUtils.LoadGrayMat(imageBytes);
             if (gray.Empty())
                 return (false, 0);
 
@@ -237,8 +242,7 @@ public class CalibBoardDetector : ITransientDependency
     private (bool isValid, int cornerCount) DetectChessboardCorners(
         byte[] imageBytes,
         int cols,
-        int rows,
-        int rotationAngle = 0
+        int rows
     )
     {
         try
@@ -248,27 +252,26 @@ public class CalibBoardDetector : ITransientDependency
             using Mat mat = Cv2.ImDecode(imageBytes, ImreadModes.Color);
             if (!mat.Empty())
             {
-                using Mat rotatedMat = CalibImageUtils.ApplyRotation(mat, rotationAngle);
-                if (!HasChessboardFeatureQuickCheck(rotatedMat, patternSize))
+                if (!HasChessboardFeatureQuickCheck(mat, patternSize))
                 {
                     _logger.LogDebug(
                         "棋盘格快速预检未通过 (OpenCV解码路径): {Cols}x{Rows}，图像大小 {W}x{H}",
                         cols,
                         rows,
-                        rotatedMat.Cols,
-                        rotatedMat.Rows
+                        mat.Cols,
+                        mat.Rows
                     );
                     return (false, 0);
                 }
 
                 _logger.LogDebug(
                     "棋盘格检测: OpenCV 解码成功 {W}x{H}，目标格式 {Cols}x{Rows}",
-                    rotatedMat.Cols,
-                    rotatedMat.Rows,
+                    mat.Cols,
+                    mat.Rows,
                     cols,
                     rows
                 );
-                Point2f[]? corners = FindCornersSubpix(rotatedMat, patternSize);
+                Point2f[]? corners = FindCornersSubpix(mat, patternSize);
                 if (corners != null)
                 {
                     _logger.LogInformation(
@@ -281,8 +284,8 @@ public class CalibBoardDetector : ITransientDependency
                     "棋盘格检测失败 (OpenCV解码): {Cols}x{Rows} 角点未找到，图像大小 {W}x{H}",
                     cols,
                     rows,
-                    rotatedMat.Cols,
-                    rotatedMat.Rows
+                    mat.Cols,
+                    mat.Rows
                 );
                 return (false, 0);
             }
@@ -295,27 +298,26 @@ public class CalibBoardDetector : ITransientDependency
                 return (false, 0);
             }
 
-            using Mat rotatedSkMat = CalibImageUtils.ApplyRotation(skMat, rotationAngle);
-            if (!HasChessboardFeatureQuickCheck(rotatedSkMat, patternSize))
+            if (!HasChessboardFeatureQuickCheck(skMat, patternSize))
             {
                 _logger.LogDebug(
                     "棋盘格快速预检未通过 (SkiaSharp解码路径): {Cols}x{Rows}，图像大小 {W}x{H}",
                     cols,
                     rows,
-                    rotatedSkMat.Cols,
-                    rotatedSkMat.Rows
+                    skMat.Cols,
+                    skMat.Rows
                 );
                 return (false, 0);
             }
 
             _logger.LogDebug(
                 "棋盘格检测: SkiaSharp 解码成功 {W}x{H}，目标格式 {Cols}x{Rows}",
-                rotatedSkMat.Cols,
-                rotatedSkMat.Rows,
+                skMat.Cols,
+                skMat.Rows,
                 cols,
                 rows
             );
-            Point2f[]? skCorners = FindCornersSubpix(rotatedSkMat, patternSize);
+            Point2f[]? skCorners = FindCornersSubpix(skMat, patternSize);
             if (skCorners != null)
             {
                 _logger.LogInformation(
@@ -328,8 +330,8 @@ public class CalibBoardDetector : ITransientDependency
                 "棋盘格检测失败 (SkiaSharp解码): {Cols}x{Rows} 角点未找到，图像大小 {W}x{H}",
                 cols,
                 rows,
-                rotatedSkMat.Cols,
-                rotatedSkMat.Rows
+                skMat.Cols,
+                skMat.Rows
             );
             return (false, 0);
         }
@@ -411,13 +413,7 @@ public class CalibBoardDetector : ITransientDependency
             );
             if (found)
             {
-                Cv2.CornerSubPix(
-                    gray,
-                    corners,
-                    SubPixWinSize,
-                    SubPixZeroZone,
-                    SubPixCriteria
-                );
+                Cv2.CornerSubPix(gray, corners, SubPixWinSize, SubPixZeroZone, SubPixCriteria);
 
                 if (useHalfSize)
                 {
@@ -441,13 +437,7 @@ public class CalibBoardDetector : ITransientDependency
             );
             if (found)
             {
-                Cv2.CornerSubPix(
-                    gray,
-                    corners,
-                    SubPixWinSize,
-                    SubPixZeroZone,
-                    SubPixCriteria
-                );
+                Cv2.CornerSubPix(gray, corners, SubPixWinSize, SubPixZeroZone, SubPixCriteria);
 
                 if (useHalfSize)
                 {
@@ -473,13 +463,7 @@ public class CalibBoardDetector : ITransientDependency
                 );
                 if (sbFound)
                 {
-                    Cv2.CornerSubPix(
-                        gray,
-                        corners,
-                        SubPixWinSize,
-                        SubPixZeroZone,
-                        SubPixCriteria
-                    );
+                    Cv2.CornerSubPix(gray, corners, SubPixWinSize, SubPixZeroZone, SubPixCriteria);
 
                     if (useHalfSize)
                     {
@@ -566,9 +550,19 @@ public class CalibBoardDetector : ITransientDependency
                 if (markedKeypoints.Length == 0)
                     return null;
 
+                // 利用 keypoint.Size 估算先验像素半径，对粗略圆心做边缘亚像素精化
+                float estimatedRadius = EstimateMedianRadiusPx(markedKeypoints);
                 Point2f[] markedCenters = markedKeypoints
                     .Select(x => new Point2f(x.Pt.X, x.Pt.Y))
                     .ToArray();
+                if (estimatedRadius >= 3f)
+                {
+                    markedCenters = RefineCircleCentersByEdge(
+                        inputGray,
+                        markedCenters,
+                        estimatedRadius
+                    );
+                }
 
                 bool markedOk = TryBuildOrderedCircleGrid(
                     markedCenters,
@@ -594,6 +588,14 @@ public class CalibBoardDetector : ITransientDependency
                     return orderedMarked;
                 }
 
+                _logger.LogWarning(
+                    "圆点板检测失败[{Preprocessing}]: BoardType={BoardType}, Pattern={Cols}x{Rows}, 原因={FailureReason}",
+                    preprocessingName,
+                    boardType,
+                    patternSize.Width,
+                    patternSize.Height,
+                    markedFailureReason
+                );
                 return null;
             }
             else
@@ -628,9 +630,19 @@ public class CalibBoardDetector : ITransientDependency
                 if (keypoints.Length == 0)
                     return null;
 
+                // 利用 keypoint.Size 估算先验像素半径，对粗略圆心做边缘亚像素精化
+                float estimatedRadius = EstimateMedianRadiusPx(keypoints);
                 Point2f[] blobCenters = keypoints
                     .Select(x => new Point2f(x.Pt.X, x.Pt.Y))
                     .ToArray();
+                if (estimatedRadius >= 3f)
+                {
+                    blobCenters = RefineCircleCentersByEdge(
+                        inputGray,
+                        blobCenters,
+                        estimatedRadius
+                    );
+                }
 
                 bool orderedOk = TryBuildOrderedCircleGrid(
                     blobCenters,
@@ -656,6 +668,14 @@ public class CalibBoardDetector : ITransientDependency
                     return ordered;
                 }
 
+                _logger.LogWarning(
+                    "圆点板检测失败[{Preprocessing}]: BoardType={BoardType}, Pattern={Cols}x{Rows}, 原因={FailureReason}, Method=CustomSort",
+                    preprocessingName,
+                    boardType,
+                    patternSize.Width,
+                    patternSize.Height,
+                    failureReason
+                );
                 return null;
             }
         }
@@ -704,6 +724,141 @@ public class CalibBoardDetector : ITransientDependency
             gray.Rows
         );
         return null;
+    }
+
+    /// <summary>
+    /// 圆心边缘亚像素精化：基于 SimpleBlobDetector 估算的先验半径，
+    /// 在圆心附近沿径向搜索 Sobel 梯度最大点，用 Cv2.FitEllipse 拟合椭圆中心。
+    /// 适用于斜拍角度 &lt; 45° 的场景（椭圆短轴/长轴比 &gt;= 0.7）。
+    /// </summary>
+    /// <param name="gray">输入灰度图</param>
+    /// <param name="roughCenters">SimpleBlobDetector 给出的粗略圆心</param>
+    /// <param name="estimatedRadiusPx">先验像素半径（来自 keypoint.Size 中位数）</param>
+    /// <returns>精化后的圆心数组；精化失败的位置回退为原始圆心</returns>
+    private static Point2f[] RefineCircleCentersByEdge(
+        Mat gray,
+        Point2f[] roughCenters,
+        float estimatedRadiusPx
+    )
+    {
+        // 先验半径过小或没有圆心，直接返回原值
+        if (roughCenters.Length == 0 || estimatedRadiusPx < 3f)
+            return roughCenters;
+
+        // 高斯模糊降噪，提升梯度响应稳定性
+        using Mat blurred = new();
+        Cv2.GaussianBlur(gray, blurred, new Size(3, 3), 0);
+
+        // Sobel 梯度幅值图（CV_32F）
+        using Mat gradX = new();
+        using Mat gradY = new();
+        using Mat gradMag = new();
+        Cv2.Sobel(blurred, gradX, MatType.CV_32F, 1, 0, 3);
+        Cv2.Sobel(blurred, gradY, MatType.CV_32F, 0, 1, 3);
+        Cv2.Magnitude(gradX, gradY, gradMag);
+
+        // 搜索范围：理论半径 ±30%，覆盖斜拍 45° 时短轴 ≈ 0.7R 的变化
+        double rMin = estimatedRadiusPx * 0.7;
+        double rMax = estimatedRadiusPx * 1.3;
+        int radialSteps = (int)Math.Ceiling(rMax - rMin) + 1;
+        const int NAngles = 32; // 32 个方向采样，兼顾精度与性能
+        const float MinEdgeGradient = 30f; // 过滤弱响应，避免噪声干扰
+
+        Point2f[] refined = new Point2f[roughCenters.Length];
+        for (int i = 0; i < roughCenters.Length; i++)
+        {
+            double cx = roughCenters[i].X;
+            double cy = roughCenters[i].Y;
+
+            List<Point2f> edgePoints = new(NAngles);
+            for (int a = 0; a < NAngles; a++)
+            {
+                double theta = 2.0 * Math.PI * a / NAngles;
+                double cosT = Math.Cos(theta);
+                double sinT = Math.Sin(theta);
+
+                // 沿径向搜索最大梯度点
+                float maxGrad = 0f;
+                double bestR = estimatedRadiusPx;
+                for (int dr = 0; dr < radialSteps; dr++)
+                {
+                    double r = rMin + dr;
+                    if (r > rMax)
+                        break;
+
+                    int x = (int)Math.Round(cx + r * cosT);
+                    int y = (int)Math.Round(cy + r * sinT);
+                    if (x < 0 || x >= gray.Cols || y < 0 || y >= gray.Rows)
+                        continue;
+
+                    float g = gradMag.At<float>(y, x);
+                    if (g > maxGrad)
+                    {
+                        maxGrad = g;
+                        bestR = r;
+                    }
+                }
+
+                // 仅保留梯度足够强的边缘点
+                if (maxGrad > MinEdgeGradient)
+                {
+                    edgePoints.Add(
+                        new Point2f((float)(cx + bestR * cosT), (float)(cy + bestR * sinT))
+                    );
+                }
+            }
+
+            // 至少需要 5 个有效边缘点才能稳定拟合椭圆
+            if (edgePoints.Count >= 5)
+            {
+                try
+                {
+                    // Cv2.FitEllipse 需要 InputArray 参数，用 Mat 包装点集（CV_32FC2 双通道浮点）
+                    Point2f[] pts = edgePoints.ToArray();
+                    using Mat pointsMat = Mat.FromArray(pts);
+                    RotatedRect ellipse = Cv2.FitEllipse(pointsMat);
+
+                    // 健壮性校验：精化中心与原圆心偏移不超过半径的 50%
+                    // 避免边缘搜索失败导致椭圆拟合发散
+                    double dx = ellipse.Center.X - cx;
+                    double dy = ellipse.Center.Y - cy;
+                    double shift = Math.Sqrt((dx * dx) + (dy * dy));
+                    if (shift < estimatedRadiusPx * 0.5)
+                    {
+                        refined[i] = new Point2f(ellipse.Center.X, ellipse.Center.Y);
+                        continue;
+                    }
+                }
+                catch
+                {
+                    // FitEllipse 在点共线或退化时可能抛异常，回退到原始圆心
+                }
+            }
+
+            // 回退：使用原始粗略圆心
+            refined[i] = roughCenters[i];
+        }
+
+        return refined;
+    }
+
+    /// <summary>
+    /// 从 KeyPoint 数组估算中位像素半径。
+    /// SimpleBlobDetector 的 KeyPoint.Size 表示 BLOB 直径（像素），半径 = Size / 2。
+    /// 取中位数而非均值，以抑制异常 BLOB 的影响。
+    /// </summary>
+    private static float EstimateMedianRadiusPx(KeyPoint[] keypoints)
+    {
+        if (keypoints.Length == 0)
+            return 0f;
+
+        float[] sizes = new float[keypoints.Length];
+        for (int i = 0; i < keypoints.Length; i++)
+            sizes[i] = keypoints[i].Size;
+        Array.Sort(sizes);
+
+        // 中位数（浮点 Size 取中位即可）
+        return sizes[sizes.Length / 2] / 2f;
     }
 
     private static Feature2D CreateCircleBlobDetector(
@@ -760,6 +915,15 @@ public class CalibBoardDetector : ITransientDependency
         if (cols < 2 || rows < 2)
         {
             failureReason = $"invalid-grid:{cols}x{rows}";
+            return false;
+        }
+        if (
+            hasMarkerHole
+            && (markerRow < 0 || markerRow >= rows || markerCol < 0 || markerCol >= cols)
+        )
+        {
+            failureReason =
+                $"invalid-marker-position:{markerRow},{markerCol} for grid {cols}x{rows}";
             return false;
         }
         if (points.Length < expected)

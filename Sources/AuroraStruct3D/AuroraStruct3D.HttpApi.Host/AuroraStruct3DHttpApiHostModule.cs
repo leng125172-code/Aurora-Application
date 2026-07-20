@@ -108,7 +108,10 @@ namespace AuroraStruct3D
             );
 
             // 为 SignalR 启用 MessagePack 协议（在 AddAbpProSignalR 之后调用）
-            context.Services.AddSignalR().AddMessagePackProtocol();
+            // 配置 MaximumReceiveMessageSize=10MB 以支持 Step6 扫描原图二进制推送（2448×2048 JPEG 约 1-2MB/帧）
+            context.Services
+                .AddSignalR(o => o.MaximumReceiveMessageSize = 10 * 1024 * 1024)
+                .AddMessagePackProtocol();
         }
 
         public override void OnApplicationInitialization(ApplicationInitializationContext context)
