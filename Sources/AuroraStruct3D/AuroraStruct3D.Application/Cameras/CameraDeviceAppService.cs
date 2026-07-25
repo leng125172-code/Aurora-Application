@@ -638,7 +638,7 @@ public class CameraDeviceAppService : AuroraStruct3DAppService, ICameraDeviceApp
             byte[] jpegBytes;
             try
             {
-                (jpegBytes, _) = await _tucamService.GrabFrameRawAsync(
+                jpegBytes = await _tucamService.GrabFrameRawAsync(
                     idx,
                     timeoutMs: grabTimeoutMs,
                     imageRotationAngle: camera.ImageRotationAngle

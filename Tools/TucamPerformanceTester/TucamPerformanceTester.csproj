@@ -1,0 +1,44 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <TargetFramework>net10.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <RootNamespace>TucamPerformanceTester</RootNamespace>
+        <AssemblyName>TucamPerformanceTester</AssemblyName>
+        <RuntimeIdentifiers>linux-arm64;win-x64</RuntimeIdentifiers>
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\..\Sources\AuroraStruct3D\AuroraStruct3D.Tucam\AuroraStruct3D.Tucam.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="SkiaSharp" Version="3.119.0" />
+        <PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.2" />
+        <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="10.0.2" />
+        <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.0" />
+        <PackageReference
+            Include="Microsoft.AspNetCore.SignalR.Protocols.MessagePack"
+            Version="10.0.0"
+        />
+    </ItemGroup>
+
+    <ItemGroup Condition="Exists('C:\Program Files (x86)\TUCam_SDK\runtime\x64_all')">
+        <None Include="C:\Program Files (x86)\TUCam_SDK\runtime\x64_all\*.*">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+    </ItemGroup>
+
+    <ItemGroup Condition="'$(RuntimeIdentifier)' == 'linux-arm64'">
+        <None Include="$(MSBuildThisFileDirectory)..\..\Documents\TUCam_aarch64\lib\*.so*">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+            <TargetPath>%(Filename)%(Extension)</TargetPath>
+        </None>
+        <None Include="$(MSBuildThisFileDirectory)..\..\Documents\TUCam_aarch64\lib\CtiConfig.ini">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+            <TargetPath>%(Filename)%(Extension)</TargetPath>
+        </None>
+    </ItemGroup>
+</Project>

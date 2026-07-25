@@ -55,7 +55,7 @@ public class PointCloudFilePath : IVisionParameter
     public PointCloudFilePath(bool errorCheck)
     {
         ErrorCheck = errorCheck;
-        ValueLimit = new string[] { ".ply", ".pcd", ".xyz", ".txt", ".pts", ".asc" };
+        ValueLimit = new string[] { ".ply", ".obj", ".pcd", ".xyz", ".txt", ".pts", ".asc" };
     }
 
     private bool CheckValue(object? value)

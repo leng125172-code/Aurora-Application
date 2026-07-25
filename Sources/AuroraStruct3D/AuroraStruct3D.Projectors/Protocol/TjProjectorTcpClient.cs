@@ -117,13 +117,14 @@ internal sealed class TjProjectorTcpClient : IDisposable
         try
         {
             EnsureConnected();
-            byte[] data = Encoding.ASCII.GetBytes(command);
+            string normalizedCmd = EnsureTerminator(command);
+            byte[] data = Encoding.ASCII.GetBytes(normalizedCmd);
             await _stream!.WriteAsync(data, cancellationToken).ConfigureAwait(false);
-            _logger.LogDebug(
+            _logger.LogTrace(
                 "{Tag} [IP {Ip}] TX command: {Cmd}",
                 LogTag,
                 _ip,
-                command.TrimEnd('\r', '\n')
+                normalizedCmd.TrimEnd('\r', '\n')
             );
             return true;
         }
@@ -160,7 +161,8 @@ internal sealed class TjProjectorTcpClient : IDisposable
         try
         {
             EnsureConnected();
-            byte[] data = Encoding.ASCII.GetBytes(command);
+            string normalizedCmd = EnsureTerminator(command);
+            byte[] data = Encoding.ASCII.GetBytes(normalizedCmd);
             await _stream!.WriteAsync(data, cancellationToken).ConfigureAwait(false);
 
             // 延迟等待设备处理（对应 C++ 源码中的 Sleep(50)）
@@ -186,11 +188,11 @@ internal sealed class TjProjectorTcpClient : IDisposable
             }
 
             string response = Encoding.ASCII.GetString(buffer, 0, bytesRead).TrimEnd('\r', '\n');
-            _logger.LogDebug(
+            _logger.LogTrace(
                 "{Tag} [IP {Ip}] Command {Cmd} -> Response: {Resp}",
                 LogTag,
                 _ip,
-                command.TrimEnd('\r', '\n'),
+                normalizedCmd.TrimEnd('\r', '\n'),
                 response
             );
             return response;
@@ -240,7 +242,7 @@ internal sealed class TjProjectorTcpClient : IDisposable
                 return null;
 
             string response = Encoding.ASCII.GetString(buffer, 0, bytesRead).TrimEnd('\r', '\n');
-            _logger.LogDebug("{Tag} [IP {Ip}] Page-write ACK: {Resp}", LogTag, _ip, response);
+            _logger.LogTrace("{Tag} [IP {Ip}] Page-write ACK: {Resp}", LogTag, _ip, response);
             return response;
         }
         catch (Exception ex)
@@ -262,6 +264,20 @@ internal sealed class TjProjectorTcpClient : IDisposable
                 $"{LogTag} Projector {_ip}:{_port} is not connected. Call ConnectAsync first."
             );
         }
+    }
+
+    /// <summary>
+    /// 确保命令以 \r\n 结尾，防止粘包或固件解析失败。
+    /// </summary>
+    private static string EnsureTerminator(string command)
+    {
+        if (command.EndsWith("\r\n", StringComparison.Ordinal))
+            return command;
+        if (command.EndsWith('\n'))
+            return command.TrimEnd('\n') + "\r\n";
+        if (command.EndsWith('\r'))
+            return command.TrimEnd('\r') + "\r\n";
+        return command + "\r\n";
     }
 
     private void CloseConnection()

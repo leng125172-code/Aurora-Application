@@ -26,8 +26,8 @@ public class CalibScanStateStore
     /// </summary>
     /// <param name="calibProjectId">标定项目 ID</param>
     /// <param name="scanMode">扫描模式</param>
-    /// <param name="patternCount">每轮总帧数（来自 Step3 CalibProjectorParam.PatternCount）</param>
-    public CalibScanSessionState Start(Guid calibProjectId, CalibScanMode scanMode, int patternCount)
+    /// <param name="totalFrameCount">每轮总帧数（已含横竖两个方向）</param>
+    public CalibScanSessionState Start(Guid calibProjectId, CalibScanMode scanMode, int totalFrameCount)
     {
         DateTime now = DateTime.UtcNow;
         CalibScanSessionState session = _sessions.AddOrUpdate(
@@ -41,8 +41,8 @@ public class CalibScanStateStore
                 StartedAt = now,
                 LastUpdatedAt = now,
                 ErrorMessage = null,
-                LatestMetrics = BuildInitialMetrics(now, patternCount),
-                PatternCount = patternCount,
+                LatestMetrics = BuildInitialMetrics(now, totalFrameCount),
+                PatternCount = totalFrameCount, // 每轮总帧数（已含横竖两个方向）
             },
             (_, old) =>
             {
@@ -52,10 +52,10 @@ public class CalibScanStateStore
                 old.StartedAt ??= now;
                 old.LastUpdatedAt = now;
                 old.ErrorMessage = null;
-                old.PatternCount = patternCount;
+                old.PatternCount = totalFrameCount;
                 old.CurrentRoundIndex = 0;
                 old.CurrentFrameIndexInRound = 0;
-                old.LatestMetrics ??= BuildInitialMetrics(now, patternCount);
+                old.LatestMetrics ??= BuildInitialMetrics(now, totalFrameCount);
                 return old;
             }
         );

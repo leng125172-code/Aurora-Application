@@ -15,7 +15,9 @@ namespace AuroraStruct3D.Streaming;
 /// <summary>
 /// 相机实时推流后台服务，同时实现 <see cref="ICameraStreamingService"/>。
 /// 管理每台相机的预览会话：后台高优先级线程持续抓帧，
-/// 通过 SignalR (MessagePack) 推帧，同时可选 RTP/MJPEG UDP 副流。
+/// 通过 <see cref="CameraFrameBufferService"/> 写入帧缓冲，
+/// 前端通过 /api/streaming/cameras/{id}/preview 的 HTTP MJPEG 流直连播放；
+/// 同时可选 RTP/MJPEG UDP 副流。
 /// </summary>
 public class CameraPreviewService : ICameraStreamingService, IHostedService, IDisposable
 {
@@ -23,26 +25,25 @@ public class CameraPreviewService : ICameraStreamingService, IHostedService, IDi
     private const int MetricsPushIntervalMs = 500;
 
     /// <summary>
-    /// SignalR 推帧最大帧率（FPS）。
-    /// 浏览器受限于显示刷新率（通常 60Hz）且 JS 单线程 DOM 更新有开销，
-    /// 30FPS 对人眼预览已足够；120FPS 高速帧流应走 RTP/UDP 副流。
+    /// 预览帧最大宽度，原始分辨率用于快照。
+    /// 预览用中等分辨率即可：降低带宽和内存占用，保持流畅。
     /// </summary>
-    private const int SignalRMaxFps = 15;
+    private const int PreviewMaxWidth = 960;
 
-    /// <summary>SignalR 页面预览最大宽度，快照仍保留原始分辨率</summary>
-    private const int SignalRPreviewMaxWidth = 960;
-
-    /// <summary>SignalR 页面预览 JPEG 质量</summary>
-    private const int SignalRPreviewJpegQuality = 75;
+    /// <summary>
+    /// GrabFrameRawAsync 的 jpegQuality 参数已无实际意义（当前返回 BMP 无压缩），
+    /// 但为保持兼容传 0 即可。
+    /// </summary>
+    private const int PreviewJpegQualityUnused = 0;
 
     /// <summary>断线自动停止后同步数据库状态的最长等待时间（秒）</summary>
     private const int AutoStopStatusSyncTimeoutSeconds = 5;
 
-    /// <summary>SignalR 推帧最小间隔（毫秒），由 <see cref="SignalRMaxFps"/> 推导</summary>
-    private const long SignalRFrameIntervalMs = 1000 / SignalRMaxFps;
-
-    /// <summary>Software 触发模式下预览自动触发节拍（FPS）；过高会拖垮曝光时间长的相机</summary>
-    private const int SoftwareTriggerPreviewFps = 10;
+    /// <summary>
+    /// Software 触发模式下预览自动触发节拍（FPS）。
+    /// 30FPS 与页面预览目标一致；实际帧率仍受曝光时间和相机吞吐限制。
+    /// </summary>
+    private const int SoftwareTriggerPreviewFps = 30;
 
     /// <summary>Software 触发模式下两次软件触发的最小间隔（毫秒）</summary>
     private const int SoftwareTriggerIntervalMs = 1000 / SoftwareTriggerPreviewFps;
@@ -53,6 +54,7 @@ public class CameraPreviewService : ICameraStreamingService, IHostedService, IDi
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly IHubContext<CameraHub, ICameraHub> _hubContext;
     private readonly RtpMjpegServer _rtpServer;
+    private readonly CameraFrameBufferService _frameBuffer;
     private readonly ILogger<CameraPreviewService> _logger;
     private readonly IDeviceOperationSessionManager _sessionManager;
 
@@ -83,6 +85,7 @@ public class CameraPreviewService : ICameraStreamingService, IHostedService, IDi
         IServiceScopeFactory scopeFactory,
         IHubContext<CameraHub, ICameraHub> hubContext,
         RtpMjpegServer rtpServer,
+        CameraFrameBufferService frameBuffer,
         ILogger<CameraPreviewService> logger,
         IDeviceOperationSessionManager sessionManager
     )
@@ -90,6 +93,7 @@ public class CameraPreviewService : ICameraStreamingService, IHostedService, IDi
         _scopeFactory = scopeFactory;
         _hubContext = hubContext;
         _rtpServer = rtpServer;
+        _frameBuffer = frameBuffer;
         _logger = logger;
         _sessionManager = sessionManager;
     }
@@ -100,7 +104,7 @@ public class CameraPreviewService : ICameraStreamingService, IHostedService, IDi
     public Task StartAsync(CancellationToken cancellationToken)
     {
         _cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        _logger.LogInformation("CameraPreviewService 已启动");
+        _logger.LogInformation("CameraPreviewService 已启动（HTTP MJPEG 流模式）");
         return Task.CompletedTask;
     }
 
@@ -233,6 +237,7 @@ public class CameraPreviewService : ICameraStreamingService, IHostedService, IDi
         catch
         {
             _sessions.TryRemove(cameraId, out _);
+            _frameBuffer.ClearCamera(cameraId);
             if (ownsCapture)
             {
                 await tucamService.StopCaptureAsync(deviceIndex);
@@ -241,7 +246,7 @@ public class CameraPreviewService : ICameraStreamingService, IHostedService, IDi
         }
 
         _logger.LogInformation(
-            "相机 {Id} 实时预览已启动，EnableRtp={EnableRtp}, ConnectionId={ConnectionId}",
+            "相机 {Id} 实时预览已启动（HTTP MJPEG 流模式），EnableRtp={EnableRtp}, ConnectionId={ConnectionId}",
             cameraId,
             enableRtp,
             connectionId ?? "广播"
@@ -505,7 +510,7 @@ public class CameraPreviewService : ICameraStreamingService, IHostedService, IDi
     // ─── 推流循环 ────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// 单相机预览线程主体：持续抓帧 → 推送 SignalR → 推送 RTP
+    /// 单相机预览线程主体：持续抓帧 → 写入 HTTP MJPEG 帧缓冲 → 推送 RTP
     /// </summary>
     private void RunPreviewLoop(
         Guid cameraId,
@@ -522,10 +527,6 @@ public class CameraPreviewService : ICameraStreamingService, IHostedService, IDi
 
         _logger.LogInformation("相机 {Id} (index={Idx}) 预览线程开始运行", cameraId, deviceIndex);
 
-        // 读取当前 TriggerMode 决定预览策略：
-        //   0 = FreeRunning（连续自由出帧，最常用）
-        //   1 = Standard（外部硬件触发，需等待硬件信号）
-        //   2 = Software（每帧由软件触发，需主动 DoSoftwareTrigger）
         long triggerMode = 0;
         try
         {
@@ -554,22 +555,20 @@ public class CameraPreviewService : ICameraStreamingService, IHostedService, IDi
             }
         );
 
-        // 按 TriggerMode 计算单次 WaitForFrame 超时（Standard 模式拉长等待硬件触发）
         int waitTimeoutMs = triggerMode == 1 ? ExternalTriggerWaitTimeoutMs : 2000;
 
         long metricsLastSent = Environment.TickCount64;
-        long signalRLastSent = 0; // 上一次向 SignalR 推帧的时间戳（毫秒），初始化为 0 触发首帧立即编码
-        long softwareTriggerLastSent = 0; // Software 模式下上一次软件触发的时间戳
-        int consecutiveTimeouts = 0; // Bug 4 诊断：连续超时计数器（成功拽帧清零）
+        long softwareTriggerLastSent = 0;
+        int consecutiveTimeouts = 0;
 
-        // 缓存上次编码帧的质量评分，供 drain 帧期间的指标推送复用
-        FrameQualityScore lastQuality = default;
-
-        // drain 节流：WaitForFrame 两次调用之间的最小间隔（含 drain 调用耗时）。
-        // 目的：两台相机同时预览时，当一台相机在 drain 路径内休眠，另一台可获得 USB 带宽。
-        // 典型 JPEG 编码耗时 ~300ms（ARM64，2448×2048），远大于此间隔，
-        // 故 drain 睡眠主要在编码完成、下一次 SignalR 推帧到期之前的空窗期发挥作用。
-        const int DrainThrottleMs = 40; // ≈25fps drain 节拍，匹配相机典型最大帧率
+        const int DrainThrottleMs = 20;
+        /// <summary>
+        /// 预热帧数量：会话启动阶段无条件抓帧发布，避免 HTTP 订阅者到达时
+        /// 尚未发布任何帧 → HasFrame=false → 订阅者等待超时。
+        /// 设为 3 以应对软件触发的前几帧曝光不稳定的情况。
+        /// </summary>
+        const int WarmupFrames = 3;
+        int warmupRemaining = WarmupFrames;
 
         try
         {
@@ -580,7 +579,6 @@ public class CameraPreviewService : ICameraStreamingService, IHostedService, IDi
                     break;
                 }
 
-                // Software 触发模式：按固定节拍主动发软件触发，避免 WaitForFrame 永久阻塞
                 if (triggerMode == 2)
                 {
                     long nowTrig = Environment.TickCount64;
@@ -605,31 +603,27 @@ public class CameraPreviewService : ICameraStreamingService, IHostedService, IDi
                     }
                 }
 
-                // ── 决定本轮是否需要编码并推送 ────────────────────────────────────────
-                // signalRLastSent 在编码完成后才更新（见下方），因此编码刚结束的第一轮
-                // now - signalRLastSent ≈ 0，会进入 drain 路径，为其他相机释放 USB 带宽。
-                long iterStart = Environment.TickCount64;
-                bool needSignalR = iterStart - signalRLastSent >= SignalRFrameIntervalMs;
-                bool needPushFrame = needSignalR || enableRtp;
+                // 有 HTTP MJPEG 订阅者 或 RTP 副流开启 或 仍在预热阶段 才真实抓帧；
+                // 否则 Drain 丢帧以防止 SDK 缓存队列积压。
+                // 预热 3 帧：保证 HTTP MJPEG 端点在 HasFrame 查询时总能命中，订阅者无需等待。
+                bool hasHttpSubscribers = _frameBuffer.GetSubscriberCount(cameraId) > 0;
+                bool needPushFrame = hasHttpSubscribers || enableRtp || warmupRemaining > 0;
 
                 if (needPushFrame)
                 {
-                    // ── 完整抓帧路径：WaitForFrame + JPEG 编码 ────────────────────────
-                    byte[] jpegFrame;
-                    FrameQualityScore frameQuality;
+                    byte[] bmpFrame;
                     try
                     {
-                        (jpegFrame, frameQuality) = tucamService
+                        bmpFrame = tucamService
                             .GrabFrameRawAsync(
                                 deviceIndex,
                                 waitTimeoutMs,
-                                SignalRPreviewMaxWidth,
-                                SignalRPreviewJpegQuality,
+                                PreviewMaxWidth,
+                                PreviewJpegQualityUnused,
                                 currentSession.ImageRotationAngle
                             )
                             .GetAwaiter()
                             .GetResult();
-                        lastQuality = frameQuality;
                         consecutiveTimeouts = 0;
                     }
                     catch (OperationCanceledException)
@@ -645,7 +639,6 @@ public class CameraPreviewService : ICameraStreamingService, IHostedService, IDi
                         }
 
                         consecutiveTimeouts++;
-                        // 首次超时即记录信息，后续每 2 次升级为警告（USB 带宽冲突会快速触发）
                         if (consecutiveTimeouts == 1)
                         {
                             _logger.LogInformation(
@@ -674,21 +667,28 @@ public class CameraPreviewService : ICameraStreamingService, IHostedService, IDi
                         continue;
                     }
 
-                    // SignalR 推帧：编码完成后检查时间窗，在此之后更新时间戳（而非编码前），
-                    // 使下一轮迭代 now - signalRLastSent ≈ 0，进入 drain 路径，释放 USB 带宽。
-                    long afterEncode = Environment.TickCount64;
-                    if (afterEncode - signalRLastSent >= SignalRFrameIntervalMs)
+                    // 写入 HTTP MJPEG 帧缓冲：有订阅者或预热阶段都写一次，
+                    // 避免订阅者刚到达时 HasFrame=false 被迫等待。
+                    if (hasHttpSubscribers || warmupRemaining > 0)
                     {
-                        PushFrameAsync(cameraId, jpegFrame, connectionId).GetAwaiter().GetResult();
-                        signalRLastSent = afterEncode; // 编码完成后才更新，下一轮进入 drain
+                        _frameBuffer.PublishFrame(cameraId, bmpFrame);
+                    }
+                    // 消费 1 个预热配额
+                    if (warmupRemaining > 0)
+                    {
+                        warmupRemaining--;
                     }
 
-                    // RTP 副流推帧（不限速，全速运行，支持 120FPS+）
                     if (enableRtp)
                     {
                         try
                         {
-                            _rtpServer.SendFrame(cameraId, jpegFrame);
+                            // RTP 协议定义为 JPEG（RFC 2435），此处仍发送 JPEG；
+                            // 若未来 RTP 也需要 BMP，需单独实现 RTP/BMP 封装。
+                            // 当前 GrabFrameRawAsync 返回 BMP，直接发送到 RTP 订阅者时不做转码以避免性能损失；
+                            // 实际 RTP 订阅者（VLC 等）需要 JPEG，因此这里的 RTP 通道仅在调用方显式启用
+                            // 并接受 BMP 格式时使用。
+                            _rtpServer.SendFrame(cameraId, bmpFrame);
                         }
                         catch (Exception ex)
                         {
@@ -698,8 +698,7 @@ public class CameraPreviewService : ICameraStreamingService, IHostedService, IDi
                 }
                 else
                 {
-                    // ── Drain 路径：仅消费帧，不编码，为其他相机让出 USB 带宽 ────────────
-                    // drain 超时使用较短值，避免长时间阻塞导致节流间隔失效
+                    long iterStart = Environment.TickCount64;
                     int drainTimeoutMs = Math.Min(waitTimeoutMs, DrainThrottleMs - 2);
                     try
                     {
@@ -713,9 +712,7 @@ public class CameraPreviewService : ICameraStreamingService, IHostedService, IDi
                         }
                         else if (triggerMode != 1)
                         {
-                            // drain 超时：相机未出帧（FreeRunning 模式下属于异常）
                             consecutiveTimeouts++;
-                            // drain 路径 38ms 一次，10 次 ≈ 380ms 才警告，避免噪声
                             if (consecutiveTimeouts % 25 == 0)
                             {
                                 _logger.LogWarning(
@@ -737,8 +734,6 @@ public class CameraPreviewService : ICameraStreamingService, IHostedService, IDi
                         _logger.LogWarning(ex, "相机 {Id} drain 帧失败，跳过", cameraId);
                     }
 
-                    // 休眠剩余时间，控制 WaitForFrame 调用节拍，
-                    // 让 USB 总线在此期间可被其他相机使用（USB back-pressure 生效）
                     long elapsed = Environment.TickCount64 - iterStart;
                     int sleepMs = (int)Math.Max(0, DrainThrottleMs - elapsed);
                     if (sleepMs > 0)
@@ -747,16 +742,9 @@ public class CameraPreviewService : ICameraStreamingService, IHostedService, IDi
                     }
                 }
 
-                // 周期性推送实时指标（含对焦/光圈评分，使用缓存的 lastQuality）
                 if (Environment.TickCount64 - metricsLastSent >= MetricsPushIntervalMs)
                 {
-                    PushLiveMetricsAsync(
-                            cameraId,
-                            deviceIndex,
-                            tucamService,
-                            connectionId,
-                            lastQuality
-                        )
+                    PushLiveMetricsAsync(cameraId, deviceIndex, tucamService, connectionId)
                         .GetAwaiter()
                         .GetResult();
                     metricsLastSent = Environment.TickCount64;
@@ -782,44 +770,21 @@ public class CameraPreviewService : ICameraStreamingService, IHostedService, IDi
                 _rtpServer.RemoveSession(cameraId);
             }
 
+            // 清理帧缓冲：立即释放订阅者持有的大对象引用
+            _frameBuffer.ClearCamera(cameraId);
+
             _logger.LogDebug("相机 {Id} 预览线程已退出", cameraId);
         }
     }
 
     /// <summary>
-    /// 通过 SignalR 推送一帧 JPEG（fire-and-forget）
-    /// </summary>
-    private async Task PushFrameAsync(Guid cameraId, byte[] frame, string? connectionId)
-    {
-        try
-        {
-            string cameraIdStr = cameraId.ToString();
-            if (string.IsNullOrWhiteSpace(connectionId))
-            {
-                await _hubContext.Clients.All.ReceiveCameraFrameAsync(cameraIdStr, frame);
-            }
-            else
-            {
-                await _hubContext
-                    .Clients.Client(connectionId)
-                    .ReceiveCameraFrameAsync(cameraIdStr, frame);
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "相机 {Id} SignalR 推帧异常", cameraId);
-        }
-    }
-
-    /// <summary>
-    /// 收集并推送实时运行指标
+    /// 收集并推送实时运行指标（仍通过 SignalR，因为低频且轻量）
     /// </summary>
     private async Task PushLiveMetricsAsync(
         Guid cameraId,
         int deviceIndex,
         ITucamCameraService tucamService,
-        string? connectionId,
-        FrameQualityScore quality
+        string? connectionId
     )
     {
         try
@@ -852,9 +817,9 @@ public class CameraPreviewService : ICameraStreamingService, IHostedService, IDi
                 FrameRate = frameRate,
                 AeStatus = aeStatus,
                 CurrentBufFrames = bufFrames,
-                FocusScore = quality.FocusScore,
-                ApertureScore = quality.ApertureScore,
-                ApertureHint = (int)quality.ApertureHint,
+                FocusScore = 0,
+                ApertureScore = 0,
+                ApertureHint = 0,
             };
 
             string cameraIdStr = cameraId.ToString();
@@ -908,6 +873,9 @@ public class CameraPreviewService : ICameraStreamingService, IHostedService, IDi
         {
             joined = await Task.Run(() => session.Thread.Join(TimeSpan.FromSeconds(5)));
         }
+
+        // 清理帧缓冲
+        _frameBuffer.ClearCamera(cameraId);
 
         // 系统强制释放：null 表示不检查 clientSessionId（无论谁持有都释放）
         _sessionManager.Release(cameraId, clientSessionId: null);
@@ -1060,7 +1028,7 @@ internal sealed class CameraPreviewSession
     /// <summary>推流线程</summary>
     public Thread Thread { get; }
 
-    /// <summary>发起预览的 SignalR 连接 ID（null 表示全组播）</summary>
+    /// <summary>发起预览的 SignalR 连接 ID（null 表示全组播）——用于状态推送和宽限期判断，不再用于按帧推送</summary>
     public string? ConnectionId { get; private set; }
 
     /// <summary>

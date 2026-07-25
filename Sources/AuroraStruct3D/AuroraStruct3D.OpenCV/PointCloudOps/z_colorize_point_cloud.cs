@@ -200,7 +200,7 @@ public class z_colorize_point_cloud : IOperator
         using Mat colorized = new();
         Cv2.ApplyColorMap(normalized, colorized, ResolveColorMap(_colorMap));
 
-        Mat colors = new Mat(pointCount, 3, MatType.CV_8UC3);
+        Mat colors = new Mat(pointCount, 3, MatType.CV_8UC1);
         for (int i = 0; i < pointCount; i++)
         {
             Vec3b color = colorized.Get<Vec3b>(i, 0);

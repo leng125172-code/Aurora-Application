@@ -26,4 +26,25 @@ public interface ICalibPointCloudAppService : IApplicationService
     /// GET /api/app/calib-point-cloud/status/{calibProjectId}
     /// </summary>
     Task<PointCloudStatusDto> GetStatusAsync(Guid calibProjectId);
+
+    /// <summary>
+    /// 下载点云 PLY 文件。
+    /// GET /api/app/calib-point-cloud/download/{calibProjectId}
+    /// </summary>
+    Task<byte[]> DownloadPlyAsync(Guid calibProjectId);
+
+    /// <summary>
+    /// 增量点云生成（在线扫描时每轮调用）。
+    /// POST /api/app/calib-point-cloud/generate-incremental
+    /// </summary>
+    Task GenerateIncrementalPointCloudAsync(
+        Guid calibProjectId,
+        long roundIndex,
+        int patternCount);
+
+    /// <summary>
+    /// 完成增量点云模式，合并所有累积的点云数据。
+    /// POST /api/app/calib-point-cloud/complete-incremental
+    /// </summary>
+    Task CompleteIncrementalPointCloudAsync(Guid calibProjectId);
 }

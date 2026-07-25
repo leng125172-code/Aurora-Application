@@ -265,15 +265,15 @@ public interface ITucamCameraService
     // ─── 原始帧抓取（用于单帧快照/RTP推流）──────────────────────────────────
 
     /// <summary>
-    /// 抓取一帧并编码为 JPEG 字节数组（连续采集模式下调用）
+    /// 抓取一帧并编码为 BMP 字节数组（连续采集模式下调用）
     /// </summary>
     /// <param name="cameraIndex">相机索引</param>
     /// <param name="timeoutMs">超时毫秒数，默认3000</param>
-    /// <param name="maxWidth">JPEG 输出最大宽度，0 表示保持原始宽度</param>
-    /// <param name="jpegQuality">JPEG 编码质量，范围 1-100</param>
+    /// <param name="maxWidth">BMP 输出最大宽度，0 表示保持原始宽度</param>
+    /// <param name="jpegQuality">未使用（保留参数兼容性）</param>
     /// <param name="imageRotationAngle">图像顺时针旋转角度（度，支持 0/90/180/270）</param>
-    /// <returns>JPEG 字节数组及对应帧的图像质量评分</returns>
-    Task<(byte[] JpegBytes, FrameQualityScore Quality)> GrabFrameRawAsync(
+    /// <returns>BMP 字节数组</returns>
+    Task<byte[]> GrabFrameRawAsync(
         int cameraIndex,
         int timeoutMs = 3000,
         int maxWidth = 0,
@@ -282,7 +282,7 @@ public interface ITucamCameraService
     );
 
     /// <summary>
-    /// 仅抓取并丢弃一帧（不进行 JPEG 编码或质量评分），用于快速清空 SDK 环形缓冲区。
+    /// 仅抓取并丢弃一帧（不进行 BMP 编码或质量评分），用于快速清空 SDK 环形缓冲区。
     /// 当预览循环不需要推送新帧时调用，防止环形缓冲区溢出（Ring buffer full）导致
     /// USB 总线被单台相机打满、其他相机无法获得带宽。
     /// </summary>

@@ -57,6 +57,27 @@ public class point_to_plane_distance : IOperator
                 ParameterType = typeof(string),
                 ControlType = PortControlType.Download,
             },
+            new VisionParameter<double>
+            {
+                ParameterName = "flatness",
+                DisplayName = "平面度(PV)",
+                ParameterType = typeof(double),
+                ControlType = PortControlType.Download,
+            },
+            new VisionParameter<double>
+            {
+                ParameterName = "max_absolute_distance",
+                DisplayName = "最大绝对偏差",
+                ParameterType = typeof(double),
+                ControlType = PortControlType.Download,
+            },
+            new VisionParameter<bool>
+            {
+                ParameterName = "is_ok",
+                DisplayName = "是否合格",
+                ParameterType = typeof(bool),
+                ControlType = PortControlType.Download,
+            },
         };
 
     public static List<IConfigParameter>? ConfigParameters =>
@@ -152,6 +173,8 @@ public class point_to_plane_distance : IOperator
         // 计算每个点到平面的有符号距离
         Mat distances = new Mat(pointCount, 1, MatType.CV_64FC1);
         double maxDist = 0;
+        double minSignedDist = double.MaxValue;
+        double maxSignedDist = double.MinValue;
         double sumDist = 0;
         int defectCount = 0;
 
@@ -164,6 +187,8 @@ public class point_to_plane_distance : IOperator
             // 有符号距离：a·x + b·y + c·z + d
             double signedDist = a * x + b * y + c * z + d;
             double absDist = Math.Abs(signedDist);
+            minSignedDist = Math.Min(minSignedDist, signedDist);
+            maxSignedDist = Math.Max(maxSignedDist, signedDist);
 
             distances.Set(i, 0, absDist);
             sumDist += absDist;
@@ -193,6 +218,8 @@ public class point_to_plane_distance : IOperator
         );
 
         // 统计信息
+        double flatness = maxSignedDist - minSignedDist;
+        bool isOk = flatness <= _distanceThreshold;
         var stats = new DistanceStats
         {
             PointCount = pointCount,
@@ -202,6 +229,10 @@ public class point_to_plane_distance : IOperator
             DefectCount = defectCount,
             DefectRatio = pointCount > 0 ? (double)defectCount / pointCount : 0,
             Threshold = _distanceThreshold,
+            MinSignedDistance = minSignedDist,
+            MaxSignedDistance = maxSignedDist,
+            Flatness = flatness,
+            IsOk = isOk,
         };
 
         string statsJson = JsonSerializer.Serialize(stats, JsonOptions);
@@ -209,6 +240,9 @@ public class point_to_plane_distance : IOperator
         context.Set("distance_mat", distances);
         context.Set("distance_image", distanceImage);
         context.Set("stats_json", statsJson);
+        context.Set("flatness", flatness);
+        context.Set("max_absolute_distance", maxDist);
+        context.Set("is_ok", isOk);
     }
 
     /// <summary>
@@ -312,5 +346,9 @@ public class point_to_plane_distance : IOperator
         public int DefectCount { get; set; }
         public double DefectRatio { get; set; }
         public double Threshold { get; set; }
+        public double MinSignedDistance { get; set; }
+        public double MaxSignedDistance { get; set; }
+        public double Flatness { get; set; }
+        public bool IsOk { get; set; }
     }
 }

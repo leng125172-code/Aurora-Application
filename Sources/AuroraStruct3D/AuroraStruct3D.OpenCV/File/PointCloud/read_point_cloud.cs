@@ -6,6 +6,7 @@ namespace AuroraStruct3D.OpenCV.File.PointCloud;
 /// 支持的点云格式：
 /// <list type="bullet">
 ///   <item><description>PLY - Polygon File Format</description></item>
+///   <item><description>OBJ - Wavefront 网格顶点（读取 v 记录为参考点云）</description></item>
 ///   <item><description>PCD - Point Cloud Data</description></item>
 ///   <item><description>XYZ - 简单文本格式</description></item>
 ///   <item><description>TXT - 文本格式</description></item>
@@ -91,11 +92,12 @@ public class read_point_cloud : IOperator
         (Mat pointCloud, Mat? colors) = extension switch
         {
             ".ply" => ReadPlyFile(filePath),
+            ".obj" => ReadObjFile(filePath),
             ".pcd" => ReadPcdFile(filePath),
             ".xyz" or ".txt" or ".asc" => ReadXyzFile(filePath),
             ".pts" => ReadPtsFile(filePath),
             _ => throw new InvalidOperationException(
-                $"不支持的点云文件格式：{extension}。支持的格式：.ply, .pcd, .xyz, .txt, .asc, .pts"
+                $"不支持的点云文件格式：{extension}。支持的格式：.ply, .obj, .pcd, .xyz, .txt, .asc, .pts"
             ),
         };
 
@@ -113,6 +115,52 @@ public class read_point_cloud : IOperator
         result.SetColors(colors);
 
         context.Set("output_point_cloud", result);
+    }
+
+    private static (Mat, Mat?) ReadObjFile(string filePath)
+    {
+        List<float[]> points = [];
+        foreach (string rawLine in System.IO.File.ReadLines(filePath))
+        {
+            string line = rawLine.Trim();
+            if (!line.StartsWith("v ", StringComparison.Ordinal))
+                continue;
+            string[] parts = line.Split(
+                (char[]?)null,
+                StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries
+            );
+            if (
+                parts.Length >= 4
+                && float.TryParse(
+                    parts[1],
+                    System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    out float x
+                )
+                && float.TryParse(
+                    parts[2],
+                    System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    out float y
+                )
+                && float.TryParse(
+                    parts[3],
+                    System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    out float z
+                )
+            )
+                points.Add([x, y, z]);
+        }
+
+        Mat result = new(points.Count, 3, MatType.CV_32FC1);
+        for (int i = 0; i < points.Count; i++)
+        {
+            result.Set(i, 0, points[i][0]);
+            result.Set(i, 1, points[i][1]);
+            result.Set(i, 2, points[i][2]);
+        }
+        return (result, null);
     }
 
     /// <summary>
@@ -405,7 +453,7 @@ public class read_point_cloud : IOperator
         if (colors.Count == 0)
             return new Mat();
 
-        Mat mat = new Mat(colors.Count, 3, MatType.CV_8UC3);
+        Mat mat = new Mat(colors.Count, 3, MatType.CV_8UC1);
 
         for (int i = 0; i < colors.Count; i++)
         {

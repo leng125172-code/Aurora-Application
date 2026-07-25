@@ -89,7 +89,7 @@ public class statistical_outlier_removal : IOperator
 
         Mat result = new Mat(pointCount, colCount, MatType.CV_32FC1);
         Mat? colors = input.HasColors && input.Colors != null
-            ? new Mat(pointCount, 3, MatType.CV_8UC3)
+            ? new Mat(pointCount, 3, MatType.CV_8UC1)
             : null;
 
         int outCount = 0;

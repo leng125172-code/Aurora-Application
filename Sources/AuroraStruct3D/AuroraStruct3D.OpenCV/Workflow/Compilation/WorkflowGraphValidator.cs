@@ -201,7 +201,10 @@ public sealed class WorkflowGraphValidator
         switch (node.Type)
         {
             case NodeTypeTokens.StartNode:
+                return;
+
             case NodeTypeTokens.EndNode:
+                ValidateEndNode(node, symbols, diagnostics);
                 return;
 
             case NodeTypeTokens.Assign:
@@ -234,6 +237,46 @@ public sealed class WorkflowGraphValidator
                     );
                 }
                 return;
+        }
+    }
+
+    private void ValidateEndNode(
+        NodeModel node,
+        Dictionary<string, string?> symbols,
+        List<WorkflowDiagnostic> diagnostics
+    )
+    {
+        Dictionary<string, string>? bindings = node.Properties?.InputBindings;
+        if (bindings is null || bindings.Count == 0)
+        {
+            diagnostics.Add(ErrorDiag(node.Id, "inputBindings", "结束节点至少需要配置一个输出变量。"));
+            return;
+        }
+
+        foreach ((string portName, string variableName) in bindings)
+        {
+            if (
+                !BindingSource.TryResolveSource(
+                    node.Properties?.InputBindingSources,
+                    portName,
+                    out bool isVariable,
+                    out string sourceError
+                )
+            )
+            {
+                diagnostics.Add(
+                    ErrorDiag(node.Id, portName, $"结束节点输出 source 无效：{sourceError}")
+                );
+                continue;
+            }
+
+            if (!isVariable)
+            {
+                diagnostics.Add(ErrorDiag(node.Id, portName, "结束节点输出必须绑定运行时变量。"));
+                continue;
+            }
+
+            CheckRead(node.Id, portName, variableName, symbols, diagnostics);
         }
     }
 
@@ -486,6 +529,72 @@ public sealed class WorkflowGraphValidator
         );
 
         NodePropertiesModel props = node.Properties ?? new();
+
+        if (descriptor is not null)
+        {
+            HashSet<string> knownInputs = descriptor
+                .Inputs.Where(x => !string.IsNullOrWhiteSpace(x.ParameterName))
+                .Select(x => x.ParameterName!)
+                .ToHashSet(StringComparer.Ordinal);
+            HashSet<string> knownOutputs = descriptor
+                .Outputs.Where(x => !string.IsNullOrWhiteSpace(x.ParameterName))
+                .Select(x => x.ParameterName!)
+                .ToHashSet(StringComparer.Ordinal);
+            HashSet<string> knownConfig = descriptor
+                .Config.Select(x => x.Name)
+                .ToHashSet(StringComparer.Ordinal);
+
+            foreach (
+                string portName in props.InputBindings?.Keys ?? Enumerable.Empty<string>()
+            )
+            {
+                if (!knownInputs.Contains(portName))
+                {
+                    diagnostics.Add(
+                        ErrorDiag(node.Id, portName, $"算子不存在输入端口 '{portName}'。")
+                    );
+                }
+            }
+
+            foreach (
+                string portName in props.OutputBindings?.Keys ?? Enumerable.Empty<string>()
+            )
+            {
+                if (!knownOutputs.Contains(portName))
+                {
+                    diagnostics.Add(
+                        ErrorDiag(node.Id, portName, $"算子不存在输出端口 '{portName}'。")
+                    );
+                }
+            }
+
+            foreach (string configName in props.Params?.Keys ?? Enumerable.Empty<string>())
+            {
+                if (!knownConfig.Contains(configName))
+                {
+                    diagnostics.Add(
+                        ErrorDiag(node.Id, configName, $"算子不存在配置参数 '{configName}'。")
+                    );
+                }
+            }
+
+            if (descriptor.Inputs.Count > 0 && (props.InputBindings?.Count ?? 0) == 0)
+            {
+                diagnostics.Add(
+                    ErrorDiag(node.Id, "inputBindings", "算子声明了输入端口，但节点未配置任何输入绑定。")
+                );
+            }
+
+            foreach (ConfigParameterDescriptor config in descriptor.Config.Where(x => x.Required))
+            {
+                if (!(props.Params?.ContainsKey(config.Name) ?? false))
+                {
+                    diagnostics.Add(
+                        ErrorDiag(node.Id, config.Name, $"缺少必填配置参数 '{config.Name}'。")
+                    );
+                }
+            }
+        }
 
         // ① 输入端口绑定：读变量（写前读）+ 类型兼容。
         if (props.InputBindings is { } inputs)

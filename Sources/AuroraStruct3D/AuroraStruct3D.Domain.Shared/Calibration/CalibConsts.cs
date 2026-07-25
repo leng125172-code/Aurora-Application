@@ -48,8 +48,11 @@ public static class CalibConsts
     /// </summary>
     public const double MaxCircleBoardReprojectionError = 2.0d;
 
-    /// <summary>双目标定允许的最大重投影误差（像素）</summary>
-    public const double MaxStereoReprojectionError = 0.1d;
+    /// <summary>
+    /// 双目标定允许的最大重投影误差（像素）。
+    /// 按项目规范：双目 RMS 应 ≤ 0.2 px，超过才需要重新采集。
+    /// </summary>
+    public const double MaxStereoReprojectionError = 0.2d;
 
     /// <summary>内外参矩阵 JSON 最大长度</summary>
     public const int MaxCalibResultJsonLength = 2048;

@@ -51,6 +51,13 @@ public class contour_analysis : IOperator
                 ParameterType = typeof(int),
                 ControlType = PortControlType.Download,
             },
+            new VisionParameter<bool>
+            {
+                ParameterName = "is_ok",
+                DisplayName = "轮廓数量是否合格",
+                ParameterType = typeof(bool),
+                ControlType = PortControlType.Download,
+            },
         };
 
     public static List<IConfigParameter>? ConfigParameters =>
@@ -83,11 +90,31 @@ public class contour_analysis : IOperator
                 Required = false,
                 ControlType = PortControlType.Input,
             },
+            new ConfigParameter
+            {
+                Name = "minCount",
+                DisplayName = "最少轮廓数",
+                ParameterType = typeof(int),
+                DefaultValue = "0",
+                Required = false,
+                ControlType = PortControlType.Input,
+            },
+            new ConfigParameter
+            {
+                Name = "maxCount",
+                DisplayName = "最多轮廓数",
+                ParameterType = typeof(int),
+                DefaultValue = "2147483647",
+                Required = false,
+                ControlType = PortControlType.Input,
+            },
         };
 
     private readonly double _minArea;
     private readonly double _maxArea;
     private readonly double _epsilonFactor;
+    private readonly int _minCount;
+    private readonly int _maxCount;
     private bool _disposed;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -102,11 +129,19 @@ public class contour_analysis : IOperator
     /// <param name="minArea">最小面积阈值，小于此值的轮廓被过滤（0 表示不过滤）。</param>
     /// <param name="maxArea">最大面积阈值，大于此值的轮廓被过滤（0 表示不过滤）。</param>
     /// <param name="epsilonFactor">轮廓近似精度系数，乘以轮廓周长得到近似距离。</param>
-    public contour_analysis(double minArea = 0, double maxArea = 0, double epsilonFactor = 0.01)
+    public contour_analysis(
+        double minArea = 0,
+        double maxArea = 0,
+        double epsilonFactor = 0.01,
+        int minCount = 0,
+        int maxCount = int.MaxValue
+    )
     {
         _minArea = minArea;
         _maxArea = maxArea;
         _epsilonFactor = epsilonFactor;
+        _minCount = minCount;
+        _maxCount = maxCount;
     }
 
     /// <inheritdoc/>
@@ -231,6 +266,10 @@ public class contour_analysis : IOperator
             string json = JsonSerializer.Serialize(features, JsonOptions);
             context.Set("contours_json", json);
             context.Set("contour_count", features.Count);
+            context.Set(
+                "is_ok",
+                features.Count >= _minCount && features.Count <= _maxCount
+            );
         }
         finally
         {

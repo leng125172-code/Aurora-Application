@@ -746,7 +746,9 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
         Mat[] tvecArray;
         try
         {
-            reprojError = Cv2.CalibrateCamera(
+            // P0 优化：迭代剔除单帧误差 > max(2*mean, mean+2*stddev) 的离群帧后重新求解
+            // 最多 3 轮，最小保留 10 帧；剔除帧的 PhotoId 和误差会写入日志
+            reprojError = CalibrateCameraWithOutlierRejection(
                 objectMats,
                 imageMats,
                 imageSize,
@@ -754,7 +756,10 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
                 distCoeffs,
                 out rvecArray,
                 out tvecArray,
-                CalibrationFlags.None
+                photos: intrinsicPhotos,
+                minSamples: 10,
+                maxIterations: 3,
+                logPrefix: "[内参标定]"
             );
         }
         finally
@@ -805,7 +810,16 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
             await _cameraParamRepo.InsertAsync(newParam);
         }
 
-        _logger.LogInformation("[内参标定] 完成，重投影误差 {Error:F4} px", reprojError);
+        _logger.LogInformation(
+            "[内参标定] 完成，重投影误差 {Error:F4} px（阈值 {Threshold:F2} px），fx={Fx:F3}, fy={Fy:F3}, cx={Cx:F3}, cy={Cy:F3}, 畸变={Dist}",
+            reprojError,
+            maxReprojError,
+            cameraMatrix.At<double>(0, 0),
+            cameraMatrix.At<double>(1, 1),
+            cameraMatrix.At<double>(0, 2),
+            cameraMatrix.At<double>(1, 2),
+            FormatDistCoeffsForLog(distCoeffs)
+        );
 
         return new CalibComputeResultDto
         {
@@ -1274,7 +1288,11 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
         Mat[] tvecArray = [];
         try
         {
-            reprojError = Cv2.CalibrateCamera(
+            // P0 优化：迭代剔除单帧误差 > max(2*mean, mean+2*stddev) 的离群帧后重新求解
+            // 最多 3 轮，最小保留 10 帧；剔除帧的 PhotoId 和误差会写入日志
+            // 注：若 CollectIntrinsicPointMatsAsync 跳过了失败帧导致 objectMats.Count < intrinsicPhotos.Count，
+            //     方法内部会自动降级为仅记录原索引（不记录 PhotoId/FileName），避免索引错位
+            reprojError = CalibrateCameraWithOutlierRejection(
                 objectMats,
                 imageMats,
                 imageSize,
@@ -1282,7 +1300,10 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
                 distCoeffs,
                 out rvecArray,
                 out tvecArray,
-                CalibrationFlags.None
+                photos: intrinsicPhotos,
+                minSamples: 10,
+                maxIterations: 3,
+                logPrefix: "[单目标定]"
             );
         }
         finally
@@ -1835,8 +1856,8 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
             long blobMs = phaseSwS.ElapsedMilliseconds;
 
             // 直接加载为灰度（计算路径不需要彩色数据）
-            // 注意：拍照阶段 GrabFrameRawAsync → EncodeToJpeg 已通过 RotateInterleavedPixels
-            //       将旋转烘焙进 JPEG 像素，Blob 中保存的 JPEG 已是旋转后的图像。
+            // 注意：拍照阶段 GrabFrameRawAsync → EncodeToBmp 已通过 RotateInterleavedPixels
+            //       将旋转烘焙进 BMP 像素，Blob 中保存的 BMP 已是旋转后的图像。
             //       计算阶段若再次调用 LoadGrayMatWithRotation 会产生"二次旋转"，导致左右相机
             //       坐标系错乱，双目重投误差可达 100px+。故此处使用不旋转的 LoadGrayMat。
             phaseSwS.Restart();
@@ -2242,6 +2263,347 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
     // ─── 私有辅助方法 ─────────────────────────────────────────────────────────────
 
     /// <summary>
+    /// 内参标定：迭代剔除高重投影误差帧后重新求解（P0 优化）。
+    /// 每轮调用 <see cref="Cv2.CalibrateCamera"/> 后用 <see cref="Cv2.ProjectPoints"/> 计算每帧 RMS 误差，
+    /// 剔除误差 &gt; max(2*mean, mean+2*stddev) 的帧，重新求解，最多迭代 3 轮。
+    /// 不释放输入的 objectMats/imageMats（由调用方在 finally 中释放）；
+    /// 每轮产生的 rvec/tvec 在迭代中释放，仅最终轮返回给调用方。
+    /// </summary>
+    /// <param name="objectMats">世界坐标点 Mat 列表（每帧一个 Mat，CV_32FC3）</param>
+    /// <param name="imageMats">图像坐标点 Mat 列表（每帧一个 Mat，CV_32FC2）</param>
+    /// <param name="imageSize">图像分辨率</param>
+    /// <param name="cameraMatrix">输出相机内参矩阵</param>
+    /// <param name="distCoeffs">输出畸变系数</param>
+    /// <param name="rvecArray">输出每帧旋转向量</param>
+    /// <param name="tvecArray">输出每帧平移向量</param>
+    /// <param name="photos">对应照片记录列表，用于日志记录被剔除帧的 ID 和文件名（可选）</param>
+    /// <param name="minSamples">最小保留帧数，剔除后低于此值则停止（默认 10）</param>
+    /// <param name="maxIterations">最大迭代轮数（默认 3）</param>
+    /// <param name="logPrefix">日志前缀（如"[内参标定]"）</param>
+    /// <returns>最终整体 RMS 重投影误差</returns>
+    private double CalibrateCameraWithOutlierRejection(
+        List<Mat> objectMats,
+        List<Mat> imageMats,
+        Size imageSize,
+        Mat cameraMatrix,
+        Mat distCoeffs,
+        out Mat[] rvecArray,
+        out Mat[] tvecArray,
+        List<CalibPhotoRecord>? photos = null,
+        int minSamples = 10,
+        int maxIterations = 3,
+        string logPrefix = "[内参标定]"
+    )
+    {
+        if (objectMats.Count != imageMats.Count)
+            throw new ArgumentException("objectMats 和 imageMats 数量不一致");
+        if (objectMats.Count == 0)
+            throw new ArgumentException("objectMats 不能为空");
+
+        // 当前保留的索引（指向原始 objectMats/imageMats）
+        List<int> keptIndices = Enumerable.Range(0, objectMats.Count).ToList();
+        double lastError = 0;
+        rvecArray = Array.Empty<Mat>();
+        tvecArray = Array.Empty<Mat>();
+
+        for (int iter = 0; iter < maxIterations; iter++)
+        {
+            // 构建子集（直接引用原 Mat，不 Clone，避免内存翻倍）
+            List<Mat> subsetObjects = new(keptIndices.Count);
+            List<Mat> subsetImages = new(keptIndices.Count);
+            foreach (int idx in keptIndices)
+            {
+                subsetObjects.Add(objectMats[idx]);
+                subsetImages.Add(imageMats[idx]);
+            }
+
+            // 释放上一轮的 rvec/tvec（最终轮返回给调用方）
+            if (rvecArray.Length > 0)
+            {
+                foreach (Mat m in rvecArray)
+                    m.Dispose();
+                foreach (Mat m in tvecArray)
+                    m.Dispose();
+                rvecArray = Array.Empty<Mat>();
+                tvecArray = Array.Empty<Mat>();
+            }
+
+            try
+            {
+                lastError = Cv2.CalibrateCamera(
+                    subsetObjects,
+                    subsetImages,
+                    imageSize,
+                    cameraMatrix,
+                    distCoeffs,
+                    out rvecArray,
+                    out tvecArray,
+                    CalibrationFlags.None
+                );
+            }
+            catch
+            {
+                if (iter > 0)
+                {
+                    _logger.LogWarning(
+                        "{Prefix} 第 {Iter} 轮 CalibrateCamera 失败，回退到上一轮结果",
+                        logPrefix,
+                        iter + 1
+                    );
+                    return lastError;
+                }
+                throw;
+            }
+
+            // 用 ProjectPoints 重投影每帧角点，计算每帧 RMS 误差
+            double[] perViewErrors = ComputePerViewReprojectionErrors(
+                subsetObjects,
+                subsetImages,
+                cameraMatrix,
+                distCoeffs,
+                rvecArray,
+                tvecArray
+            );
+
+            // 输出内参矩阵与畸变系数，方便排查不同轮次之间的变化
+            double fx = cameraMatrix.At<double>(0, 0);
+            double fy = cameraMatrix.At<double>(1, 1);
+            double cx = cameraMatrix.At<double>(0, 2);
+            double cy = cameraMatrix.At<double>(1, 2);
+            string distStr = FormatDistCoeffsForLog(distCoeffs);
+
+            _logger.LogInformation(
+                "{Prefix} 第 {Iter} 轮标定完成 — 保留 {Count} 帧，整体 RMS={Error:F4} px，"
+                    + "单帧误差 min={Min:F4} max={Max:F4} mean={Mean:F4}; 内参 fx={Fx:F3}, fy={Fy:F3}, cx={Cx:F3}, cy={Cy:F3}; 畸变={Dist}",
+                logPrefix,
+                iter + 1,
+                keptIndices.Count,
+                lastError,
+                perViewErrors.Min(),
+                perViewErrors.Max(),
+                perViewErrors.Average(),
+                fx,
+                fy,
+                cx,
+                cy,
+                distStr
+            );
+
+            // 输出每帧误差明细（按原始索引顺序），便于定位具体哪几张图差
+            LogPerViewErrors(logPrefix, iter + 1, keptIndices, perViewErrors, photos);
+
+            // 最后一轮或样本数已不足，停止迭代
+            if (iter == maxIterations - 1 || keptIndices.Count <= minSamples)
+                break;
+
+            // 计算均值与标准差，确定剔除阈值
+            // 阈值取 max(2*mean, mean+2*stddev)，可同时应对：
+            //   1) 所有帧误差相近时（stddev 小），用 2*mean 避免误剔
+            //   2) 存在极端离群帧时（mean 被拉高），用 mean+2*stddev 才能剔掉最差的
+            double mean = perViewErrors.Average();
+            double stddev = Math.Sqrt(perViewErrors.Select(e => (e - mean) * (e - mean)).Average());
+            double threshold = Math.Max(2.0 * mean, mean + 2.0 * stddev);
+
+            _logger.LogInformation(
+                "{Prefix} 第 {Iter} 轮阈值明细 — mean={Mean:F4}, stddev={Stddev:F4}, 2*mean={TwoMean:F4}, mean+2*stddev={MeanTwoStd:F4}, 最终阈值={Threshold:F4}",
+                logPrefix,
+                iter + 1,
+                mean,
+                stddev,
+                2.0 * mean,
+                mean + 2.0 * stddev,
+                threshold
+            );
+
+            // 找出超阈值的索引
+            List<(int KeptIdx, int OrigIdx, double Err)> toReject = new();
+            for (int i = 0; i < perViewErrors.Length; i++)
+            {
+                if (perViewErrors[i] > threshold)
+                    toReject.Add((i, keptIndices[i], perViewErrors[i]));
+            }
+
+            if (toReject.Count == 0)
+            {
+                _logger.LogInformation(
+                    "{Prefix} 第 {Iter} 轮未发现离群帧，迭代结束",
+                    logPrefix,
+                    iter + 1
+                );
+                break;
+            }
+
+            // 检查剔除后是否仍满足最小样本数
+            if (keptIndices.Count - toReject.Count < minSamples)
+            {
+                _logger.LogWarning(
+                    "{Prefix} 第 {Iter} 轮发现 {RejectCount} 个离群帧，但剔除后剩余 {RemainCount} < {MinSamples}，停止剔除",
+                    logPrefix,
+                    iter + 1,
+                    toReject.Count,
+                    keptIndices.Count - toReject.Count,
+                    minSamples
+                );
+                break;
+            }
+
+            // 记录被剔除帧的日志（便于后续分析是否为相机硬件问题）
+            // 仅当 photos 与 objectMats 数量一致时才记录 PhotoId/BlobKey，避免索引错位
+            bool canMapPhotos = photos != null && photos.Count == objectMats.Count;
+            foreach (var r in toReject)
+            {
+                Guid? photoId = canMapPhotos ? photos![r.OrigIdx].Id : null;
+                string? blobKey = canMapPhotos ? photos![r.OrigIdx].BlobKey : null;
+                _logger.LogWarning(
+                    "{Prefix} 第 {Iter} 轮剔除离群帧 — 原索引={OrigIdx}, PhotoId={PhotoId}, BlobKey={BlobKey}, 误差={Err:F4} px, 阈值={Thr:F4} px",
+                    logPrefix,
+                    iter + 1,
+                    r.OrigIdx,
+                    photoId,
+                    blobKey,
+                    r.Err,
+                    threshold
+                );
+            }
+
+            // 从 keptIndices 中移除被剔除的（按 KeptIdx 倒序删除，避免索引错位）
+            foreach (var r in toReject.OrderByDescending(x => x.KeptIdx))
+            {
+                keptIndices.RemoveAt(r.KeptIdx);
+            }
+        }
+
+        return lastError;
+    }
+
+    /// <summary>
+    /// 用 <see cref="Cv2.ProjectPoints"/> 重投影每帧角点，计算每帧 RMS 重投影误差。
+    /// 用于迭代剔除离群帧的判定依据。
+    /// </summary>
+    private static double[] ComputePerViewReprojectionErrors(
+        List<Mat> objectMats,
+        List<Mat> imageMats,
+        Mat cameraMatrix,
+        Mat distCoeffs,
+        Mat[] rvecArray,
+        Mat[] tvecArray
+    )
+    {
+        double[] errors = new double[objectMats.Count];
+        for (int i = 0; i < objectMats.Count; i++)
+        {
+            using Mat projected = new();
+            Cv2.ProjectPoints(
+                objectMats[i],
+                rvecArray[i],
+                tvecArray[i],
+                cameraMatrix,
+                distCoeffs,
+                projected
+            );
+
+            // projected 与 imageMats[i] 均为 N×1 的 CV_32FC2 矩阵，逐元素访问计算误差
+            int n = (int)imageMats[i].Total();
+            double errSum = 0;
+            for (int j = 0; j < n; j++)
+            {
+                Vec2f proj = projected.At<Vec2f>(0, j);
+                Vec2f obs = imageMats[i].At<Vec2f>(0, j);
+                double dx = proj.Item0 - obs.Item0;
+                double dy = proj.Item1 - obs.Item1;
+                errSum += (dx * dx) + (dy * dy);
+            }
+            errors[i] = Math.Sqrt(errSum / n);
+        }
+        return errors;
+    }
+
+    /// <summary>
+    /// 将畸变系数 Mat 格式化为日志字符串（最多 8 个系数）。
+    /// </summary>
+    private static string FormatDistCoeffsForLog(Mat distCoeffs)
+    {
+        if (distCoeffs.Empty() || distCoeffs.Total() == 0)
+            return "[]";
+
+        int count = (int)distCoeffs.Total();
+        StringBuilder sb = new StringBuilder("[");
+        for (int i = 0; i < count; i++)
+        {
+            if (i > 0)
+                sb.Append(", ");
+            sb.Append(
+                distCoeffs
+                    .At<double>(0, i)
+                    .ToString("F6", System.Globalization.CultureInfo.InvariantCulture)
+            );
+        }
+        sb.Append(']');
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// 记录每帧重投影误差明细，并按误差从大到小输出 top N，便于排查具体哪几张图较差。
+    /// </summary>
+    private void LogPerViewErrors(
+        string logPrefix,
+        int iteration,
+        List<int> keptIndices,
+        double[] perViewErrors,
+        List<CalibPhotoRecord>? photos
+    )
+    {
+        bool canMapPhotos = photos != null && photos.Count >= keptIndices.Max() + 1;
+
+        // 全部明细（按原始索引升序）
+        StringBuilder detailSb = new StringBuilder();
+        detailSb.Append($"{logPrefix} 第 {iteration} 轮单帧误差明细 — ");
+        for (int i = 0; i < perViewErrors.Length; i++)
+        {
+            int origIdx = keptIndices[i];
+            Guid? photoId = canMapPhotos ? photos![origIdx].Id : null;
+            if (i > 0)
+                detailSb.Append("; ");
+            detailSb.Append($"[{origIdx}]");
+            if (photoId.HasValue)
+                detailSb.Append($"PhotoId={photoId.Value:N}");
+            detailSb.Append($"Err={perViewErrors[i]:F4}");
+        }
+        _logger.LogInformation(detailSb.ToString());
+
+        // 按误差从大到小取 top 5
+        var ordered = perViewErrors
+            .Select(
+                (err, keptIdx) =>
+                    new
+                    {
+                        KeptIdx = keptIdx,
+                        OrigIdx = keptIndices[keptIdx],
+                        Err = err,
+                    }
+            )
+            .OrderByDescending(x => x.Err)
+            .Take(5)
+            .ToList();
+
+        StringBuilder topSb = new StringBuilder();
+        topSb.Append($"{logPrefix} 第 {iteration} 轮 TOP5 最差帧 — ");
+        for (int i = 0; i < ordered.Count; i++)
+        {
+            var item = ordered[i];
+            Guid? photoId = canMapPhotos ? photos![item.OrigIdx].Id : null;
+            string? blobKey = canMapPhotos ? photos![item.OrigIdx].BlobKey : null;
+            if (i > 0)
+                topSb.Append("; ");
+            topSb.Append($"[{item.OrigIdx}]");
+            if (photoId.HasValue)
+                topSb.Append($"PhotoId={photoId.Value:N},");
+            topSb.Append($"BlobKey={blobKey ?? "N/A"},Err={item.Err:F4}");
+        }
+        _logger.LogInformation(topSb.ToString());
+    }
+
+    /// <summary>
     /// 标定拍照专用帧抓取方法。
     /// 流程：读取并保存当前触发模式 → 切换到目标模式 →
     ///         StartCapture（获取单活锁）→ 必要时发软件触发 → GrabFrame → StopCapture（释放锁）→ 恢复触发模式。
@@ -2335,7 +2697,7 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
                         );
                     }
 
-                    (byte[] jpegBytes, _) = await _tucamService.GrabFrameRawAsync(
+                    byte[] jpegBytes = await _tucamService.GrabFrameRawAsync(
                         idx,
                         timeoutMs,
                         imageRotationAngle: imageRotationAngle
@@ -2551,7 +2913,7 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
             long blobMs = sw?.ElapsedMilliseconds ?? 0;
 
             sw?.Restart();
-            // Blob 中的 JPEG 已在拍照阶段（GrabFrameRawAsync → EncodeToJpeg）应用过旋转，
+            // Blob 中的 BMP 已在拍照阶段（GrabFrameRawAsync → EncodeToBmp）应用过旋转，
             // 此处不再二次旋转，避免坐标系错乱导致标定误差激增。
             using Mat mat = CalibImageUtils.LoadGrayMat(bytes);
             long loadMs = sw?.ElapsedMilliseconds ?? 0;

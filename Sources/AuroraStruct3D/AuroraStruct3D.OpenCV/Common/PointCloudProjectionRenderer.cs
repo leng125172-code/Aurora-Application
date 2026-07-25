@@ -147,23 +147,38 @@ public static class PointCloudProjectionRenderer
             }
         }
 
-        using Mat gray = new Mat();
-        Cv2.CvtColor(image, gray, ColorConversionCodes.BGRA2GRAY);
-        using Mat mask = new Mat();
-        Cv2.Threshold(gray, mask, 1, 255, ThresholdTypes.Binary);
-
-        Cv2.GaussianBlur(image, image, new Size(7, 7), 0);
-
-        using Mat kernel = Cv2.GetStructuringElement(MorphShapes.Ellipse, new Size(3, 3));
-        Cv2.MorphologyEx(image, image, MorphTypes.Close, kernel);
+        // 不能在平滑后再套用原始的单像素占用掩膜，否则体素下采样产生的规则采样点
+        // 会被原样保留成网格/点阵。依据投影密度自适应扩展有效区域，再进行平滑，
+        // 既连接同一表面的相邻采样点，也避免跨越过大的真实空洞。
+        using Mat alphaMask = new Mat();
+        Cv2.ExtractChannel(image, alphaMask, 3);
+        int occupiedPixels = Cv2.CountNonZero(alphaMask);
+        double meanSpacing =
+            occupiedPixels > 0 ? Math.Sqrt((double)(width * height) / occupiedPixels) : 1d;
+        int fillRadius = Math.Clamp((int)Math.Ceiling(meanSpacing * 0.6d), 1, 5);
+        int kernelSize = fillRadius * 2 + 1;
+        using Mat fillKernel = Cv2.GetStructuringElement(
+            MorphShapes.Ellipse,
+            new Size(kernelSize, kernelSize)
+        );
+        using Mat filledMask = new Mat();
+        Cv2.Dilate(alphaMask, filledMask, fillKernel);
+        Cv2.Dilate(image, image, fillKernel);
+        Cv2.GaussianBlur(image, image, new Size(5, 5), 0);
 
         for (int y = 0; y < height; y++)
         {
             for (int x = 0; x < width; x++)
             {
-                if (mask.Get<byte>(y, x) == 0)
+                if (filledMask.Get<byte>(y, x) == 0)
                 {
                     image.Set(y, x, new Vec4b(0, 0, 0, 0));
+                }
+                else
+                {
+                    Vec4b pixel = image.Get<Vec4b>(y, x);
+                    pixel.Item3 = byte.MaxValue;
+                    image.Set(y, x, pixel);
                 }
             }
         }

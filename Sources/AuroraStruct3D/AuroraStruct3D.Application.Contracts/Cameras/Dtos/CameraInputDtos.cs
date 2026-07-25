@@ -208,11 +208,11 @@ public class CameraLiveMetricsDto
 /// </summary>
 public class StartCameraPreviewDto
 {
-    /// <summary>SignalR 连接 ID（用于精准推送给请求方）</summary>
+    /// <summary>SignalR 连接 ID（用于状态/指标精准推送和宽限期判断，不再用于按帧推送）</summary>
     public string? ConnectionId { get; set; }
 
     /// <summary>是否同时启动 RTP/MJPEG UDP 流</summary>
-    public bool EnableRtp { get; set; } = true;
+    public bool EnableRtp { get; set; } = false;
 }
 
 /// <summary>

@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n'
 import Button from 'primevue/button'
 import InputNumber from 'primevue/inputnumber'
 import Select from 'primevue/select'
-import { AlertCircle, Loader2 } from '@lucide/vue'
+import { AlertCircle, Loader2, Save } from '@lucide/vue'
 import type { ProjectorDeviceDto } from '@/api/projectors'
 
 interface FringeImageData {
@@ -25,6 +25,7 @@ const props = defineProps<{
     fringe3PeriodCount: number
     fringe3ImageCount: number
     fringe3PhaseShift: number
+    horizontalPaddingPosition: 'start' | 'end'
     fringe3PeriodError: string | null
     fringe3PhaseError: string | null
     fringe3CanGenerate: boolean
@@ -36,6 +37,7 @@ const props = defineProps<{
     fetchProjectorResolution: () => Promise<void>
     generateFringeImages: () => Promise<void>
     triggerFringeDownload: () => Promise<void>
+    saveConfig: () => Promise<void>
 }>()
 
 const emit = defineEmits<{
@@ -47,6 +49,7 @@ const emit = defineEmits<{
     'update:fringe3PeriodCount': [value: number]
     'update:fringe3ImageCount': [value: number]
     'update:fringe3PhaseShift': [value: number]
+    'update:horizontalPaddingPosition': [value: 'start' | 'end']
     'update:selectedFringeImageIdx': [value: number]
 }>()
 
@@ -83,6 +86,16 @@ const fringe3PhaseShiftModel = computed({
     get: () => props.fringe3PhaseShift,
     set: (value: number | null) => emit('update:fringe3PhaseShift', value ?? 0),
 })
+
+const horizontalPaddingPositionModel = computed({
+    get: () => props.horizontalPaddingPosition,
+    set: (value: 'start' | 'end') => emit('update:horizontalPaddingPosition', value),
+})
+
+const horizontalPaddingOptions = computed(() => [
+    { value: 'end' as const, label: t('calib.step3HorizontalPaddingEnd') },
+    { value: 'start' as const, label: t('calib.step3HorizontalPaddingStart') },
+])
 
 const selectedFringeImageIdxModel = computed({
     get: () => props.selectedFringeImageIdx,
@@ -316,9 +329,39 @@ watch(
                             {{ props.fringe3PhaseError }}
                         </p>
                     </div>
+
+                    <div>
+                        <label class="block text-xs text-muted-foreground mb-1">
+                            {{ t('calib.step3HorizontalPaddingPosition') }}
+                        </label>
+                        <Select
+                            v-model="horizontalPaddingPositionModel"
+                            :options="horizontalPaddingOptions"
+                            option-label="label"
+                            option-value="value"
+                            size="small"
+                            class="w-full !text-xs"
+                            :pt="{
+                                root: { class: '!py-0 !px-2 !h-7 !flex !items-center' },
+                                label: { class: '!text-xs !py-0' },
+                            }"
+                        />
+                        <p class="text-[10px] text-muted-foreground mt-1">
+                            {{ t('calib.step3HorizontalPaddingHint') }}
+                        </p>
+                    </div>
                 </div>
 
                 <div class="flex gap-2">
+                    <Button
+                        size="small"
+                        :disabled="!props.selectedProjectorId"
+                        class="!text-xs"
+                        @click="void props.saveConfig()"
+                    >
+                        <Save class="size-3 mr-1.5" />
+                        {{ t('calib.step3SaveConfig') }}
+                    </Button>
                     <Button
                         size="small"
                         :disabled="!props.fringe3CanGenerate || props.generatingFringe"

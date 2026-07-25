@@ -193,6 +193,10 @@ export interface TriggerProjectorDto {
     endGray?: number
 }
 
+export interface NextProjectorFrameDto {
+    projectorDeviceId: string
+}
+
 export interface WriteProjectorRegisterDto {
     projectorDeviceId: string
     address: number
@@ -311,6 +315,12 @@ export async function triggerProjectorOnce(dto: TriggerProjectorDto): Promise<bo
     return data
 }
 
+/** 单帧触发模式下切换到下一张条纹（发送 N 指令） */
+export async function nextFrameProjector(dto: NextProjectorFrameDto): Promise<boolean> {
+    const { data } = await httpClient.post<boolean>(`${BASE}/next-frame`, dto)
+    return data
+}
+
 // ─── 高级 ────────────────────────────────────────────────────────────────────
 
 /** 软复位 */
@@ -361,6 +371,9 @@ export type FringeMode = 'horizontal' | 'vertical'
 /** 条纹类型：bw=黑白（首色黑）wb=白黑（首色白） */
 export type FringeType = 'bw' | 'wb'
 
+/** 横条纹填充位置：end=后置黑色填充（默认），start=前置黑色填充 */
+export type HorizontalPaddingPosition = 'start' | 'end'
+
 /** 下载条纹图像到光机 Flash 的输入参数 */
 export interface DownloadFringePatternInput {
     projectorId: string
@@ -378,6 +391,8 @@ export interface DownloadFringePatternInput {
     imageCount: number
     /** 每张图相对上一张的像素相移量（0 < phaseShift < periodCount，整数） */
     phaseShift: number
+    /** 横条纹帧黑色填充位置（调试用，默认 end） */
+    horizontalPaddingPosition?: HorizontalPaddingPosition
 }
 
 export interface FringePreviewImageDto {

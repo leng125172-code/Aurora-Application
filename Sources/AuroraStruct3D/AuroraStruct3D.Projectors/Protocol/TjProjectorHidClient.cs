@@ -137,8 +137,9 @@ public sealed class TjProjectorHidClient : IDisposable
         try
         {
             EnsureConnected();
-            WriteToDevice(command);
-            _logger.LogDebug("{Tag} HID TX: {Cmd}", LogTag, command.TrimEnd('\r', '\n'));
+            string normalizedCmd = EnsureTerminator(command);
+            WriteToDevice(normalizedCmd);
+            _logger.LogTrace("{Tag} HID TX: {Cmd}", LogTag, normalizedCmd.TrimEnd('\r', '\n'));
             return true;
         }
         catch (Exception ex)
@@ -174,11 +175,12 @@ public sealed class TjProjectorHidClient : IDisposable
             // 发送命令前先排空缓冲区，避免读到上一条命令的残留响应
             DrainInputBuffer();
 
-            WriteToDevice(command);
-            _logger.LogDebug("{Tag} HID TX: {Cmd}", LogTag, command.TrimEnd('\r', '\n'));
+            string normalizedCmd = EnsureTerminator(command);
+            WriteToDevice(normalizedCmd);
+            _logger.LogTrace("{Tag} HID TX: {Cmd}", LogTag, normalizedCmd.TrimEnd('\r', '\n'));
 
             string? response = ReadFromDevice();
-            _logger.LogDebug("{Tag} HID RX: {Response}", LogTag, response);
+            _logger.LogTrace("{Tag} HID RX: {Response}", LogTag, response);
             return response;
         }
         catch (Exception ex)
@@ -208,7 +210,7 @@ public sealed class TjProjectorHidClient : IDisposable
         {
             EnsureConnected();
             string? response = ReadFromDevice();
-            _logger.LogDebug("{Tag} HID Page-write ACK: {Response}", LogTag, response);
+            _logger.LogTrace("{Tag} HID Page-write ACK: {Response}", LogTag, response);
             return response;
         }
         catch (Exception ex)
@@ -307,6 +309,20 @@ public sealed class TjProjectorHidClient : IDisposable
             throw new InvalidOperationException(
                 $"{LogTag} HID device is not connected. Call ConnectAsync first."
             );
+    }
+
+    /// <summary>
+    /// 确保命令以 \r\n 结尾，防止 TCP 粘包或固件解析失败。
+    /// </summary>
+    private static string EnsureTerminator(string command)
+    {
+        if (command.EndsWith("\r\n", StringComparison.Ordinal))
+            return command;
+        if (command.EndsWith('\n'))
+            return command.TrimEnd('\n') + "\r\n";
+        if (command.EndsWith('\r'))
+            return command.TrimEnd('\r') + "\r\n";
+        return command + "\r\n";
     }
 
     /// <inheritdoc/>

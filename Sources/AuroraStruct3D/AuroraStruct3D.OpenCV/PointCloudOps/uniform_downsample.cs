@@ -82,7 +82,7 @@ public class uniform_downsample : IOperator
 
         if (input.HasColors && input.Colors != null)
         {
-            Mat colors = new Mat(sampledCount, 3, MatType.CV_8UC3);
+            Mat colors = new Mat(sampledCount, 3, MatType.CV_8UC1);
             dstIdx = 0;
             for (int srcIdx = 0; srcIdx < pointCount; srcIdx += _step)
             {

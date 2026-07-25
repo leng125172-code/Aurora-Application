@@ -51,6 +51,14 @@ public class voxel_downsample : IOperator
 
     public voxel_downsample(double voxelSize = 0.05)
     {
+        if (!double.IsFinite(voxelSize) || voxelSize <= 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(voxelSize),
+                voxelSize,
+                "体素尺寸必须是大于 0 的有限数值。"
+            );
+        }
         _voxelSize = voxelSize;
     }
 
@@ -142,7 +150,10 @@ public class voxel_downsample : IOperator
 
         if (sampledColors.Count > 0)
         {
-            Mat colors = new Mat(sampledColors.Count, 3, MatType.CV_8UC3);
+            // 颜色统一采用 N×3、CV_8UC1；PointCloudData 及投影算子均按
+            // Colors.Get<byte>(row, channel) 读取。CV_8UC3 会变成每个单元三通道，
+            // 与该矩阵布局约定冲突并造成颜色错位。
+            Mat colors = new Mat(sampledColors.Count, 3, MatType.CV_8UC1);
             for (int i = 0; i < sampledColors.Count; i++)
             for (int c = 0; c < 3; c++)
                 colors.Set<byte>(i, c, sampledColors[i][c]);

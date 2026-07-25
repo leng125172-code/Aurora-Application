@@ -7,6 +7,7 @@ using AuroraStruct3D.OpenCV.Workflow.Compilation;
 using AuroraStruct3D.OpenCV.Workflow.Compilation.Model;
 using AuroraStruct3D.OpenCV.Workflow.Values;
 using AuroraStruct3D.OperatorFile;
+using AuroraStruct3D.ProductModels;
 using AuroraStruct3D.Variables;
 using AuroraStruct3D.Variables.Dtos;
 using AuroraStruct3D.Workflow.Dtos;
@@ -33,13 +34,17 @@ public class WorkflowExecutionAppService : AuroraStruct3DAppService, IWorkflowEx
     private readonly IWorkflowVariableBridge _bridge;
     private readonly IOnlineVariablePoolAppService _onlineVariablePool;
     private readonly IBlobContainer<OperatorFileBlobContainer> _operatorFileBlobContainer;
+    private readonly IRepository<ProductModel, Guid> _productModelRepository;
+    private readonly IBlobContainer<ProductModelBlobContainer> _productModelBlobContainer;
 
     public WorkflowExecutionAppService(
         IRepository<WorkflowDefinition, Guid> repository,
         IOperatorRegistry registry,
         IWorkflowVariableBridge bridge,
         IOnlineVariablePoolAppService onlineVariablePool,
-        IBlobContainer<OperatorFileBlobContainer> operatorFileBlobContainer
+        IBlobContainer<OperatorFileBlobContainer> operatorFileBlobContainer,
+        IRepository<ProductModel, Guid> productModelRepository,
+        IBlobContainer<ProductModelBlobContainer> productModelBlobContainer
     )
     {
         _repository = repository;
@@ -47,6 +52,8 @@ public class WorkflowExecutionAppService : AuroraStruct3DAppService, IWorkflowEx
         _bridge = bridge;
         _onlineVariablePool = onlineVariablePool;
         _operatorFileBlobContainer = operatorFileBlobContainer;
+        _productModelRepository = productModelRepository;
+        _productModelBlobContainer = productModelBlobContainer;
     }
 
     /// <inheritdoc/>
@@ -364,9 +371,26 @@ public class WorkflowExecutionAppService : AuroraStruct3DAppService, IWorkflowEx
 
     private IDisposable CreateOperatorFileBlobStoreScope()
     {
-        return OperatorFileBlobStoreAmbient.Push(
-            new WorkflowOperatorFileBlobStore(_operatorFileBlobContainer)
+        return new CombinedScope(
+            OperatorFileBlobStoreAmbient.Push(
+                new WorkflowOperatorFileBlobStore(_operatorFileBlobContainer)
+            ),
+            ProductModelStoreAmbient.Push(
+                new WorkflowProductModelPointCloudStore(
+                    _productModelRepository,
+                    _productModelBlobContainer
+                )
+            )
         );
+    }
+
+    private sealed class CombinedScope(params IDisposable[] scopes) : IDisposable
+    {
+        public void Dispose()
+        {
+            for (int i = scopes.Length - 1; i >= 0; i--)
+                scopes[i].Dispose();
+        }
     }
 
     private class HeightDiffResultDto

@@ -267,19 +267,17 @@ public interface IDlpProjectorService
 
     /// <summary>
     /// 将条纹图案数据写入投影仪内部 Flash。
-    /// 流程：开灯(LN) → 设置幅数(MB) → 擦除Flash(FE,等F0) → 写方向位图(MF) → 循环写列数据(FW,每256列等待page写入应答)
+    /// 流程：设置方向位图(MF) → 设置幅数(MB) → 保存参数(MS/Ms) → 擦除Flash(FE,等F0) → 循环写数据(FW,标准两参数模式) → 软复位(X)
+    /// 标准模式下FW使用全局连续列索引（从1开始），每帧固定 1280 列：
+    /// 竖条纹帧数据长度为 1280；横条纹帧实际条纹数据长度为 HeightPixels(720)，需补 560 列黑色到 1280 列。
     /// </summary>
-    /// <param name="imageCount">图像总幅数</param>
-    /// <param name="columnGrayValues">
-    /// 列灰度值数组，长度 = imageCount × widthPixels。
-    /// 索引 [i * widthPixels + c] 对应第 i 幅图像第 c 列的灰度值（0~255）。
-    /// </param>
+    /// <param name="frames">各帧一维像素数据数组；横条纹帧实际条纹长度为 HeightPixels(720)，竖条纹帧长度为 1280。</param>
+    /// <param name="horizontalPaddingPosition">横条纹填充位置：start=前置黑色填充，end=后置黑色填充（默认）。</param>
     /// <param name="onProgress">进度回调（0~100），异步方法，返回 Task；为 null 时忽略</param>
     /// <param name="cancellationToken">取消令牌</param>
     Task DownloadFringePatternAsync(
-        int imageCount,
-        byte[] columnGrayValues,
-        bool isHorizontal,
+        byte[][] frames,
+        string horizontalPaddingPosition = "end",
         Func<int, Task>? onProgress = null,
         CancellationToken cancellationToken = default
     );

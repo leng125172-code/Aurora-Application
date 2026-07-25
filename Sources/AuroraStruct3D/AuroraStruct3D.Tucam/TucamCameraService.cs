@@ -1,5 +1,8 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Drawing;
+using System.Drawing.Imaging;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using AuroraStruct3D.Cameras;
 using AuroraStruct3D.Tucam.GenICam;
@@ -1308,6 +1311,17 @@ public class TucamCameraService : ITucamCameraService, IDisposable
                 captureState.StopRequested = false;
                 captureState.HoldsCapStartLock = true;
                 capStartLockAcquired = false; // 单活锁转移给 StopCaptureAsync 持有并释放
+
+                // 缓存像素格式信息，避免每帧调用 GenICam 读取
+                captureState.CachedPixelFormat = GenICamGetString(handle, "PixelFormat");
+                captureState.CachedPixelFormatValue = GenICamGetInt(handle, "PixelFormat");
+                captureState.CachedPixelSize = GenICamGetInt(handle, "PixelSize");
+                captureState.CachedBitDepth = ResolveFrameBitDepth(
+                    frame,
+                    captureState.CachedPixelFormat,
+                    captureState.CachedPixelFormatValue,
+                    captureState.CachedPixelSize
+                );
             }
 
             // 部分 GenICam 设备需要显式发送 AcquisitionStart 命令才能真正开始出帧
@@ -1486,7 +1500,7 @@ public class TucamCameraService : ITucamCameraService, IDisposable
     {
         ThrowIfDisposed();
         IntPtr handle = GetHandle(cameraIndex);
-        TUCamFrame frame = BeginFrameWait(cameraIndex, out CameraCaptureState captureState);
+        ref TUCamFrame frame = ref BeginFrameWait(cameraIndex, out CameraCaptureState captureState);
         byte[] imageData;
 
         try
@@ -1515,14 +1529,14 @@ public class TucamCameraService : ITucamCameraService, IDisposable
             EndFrameWait(captureState, frame);
         }
 
-        string? pixelFormat = GenICamGetString(handle, "PixelFormat");
-        long? pixelFormatValue = GenICamGetInt(handle, "PixelFormat");
-        long? pixelSize = GenICamGetInt(handle, "PixelSize");
+        // PixelFormat 描述的是传感器/GenICam 输出模式，而 SDK 可能把该模式转换为
+        // 8bit 三通道显示帧后再交给应用。必须结合本次帧的实际布局重新解析位深，
+        // 否则 BayGB12Packed 的显示帧会被再次当作 Packed Bayer 解包。
         int resolvedBitDepth = ResolveFrameBitDepth(
             frame,
-            pixelFormat,
-            pixelFormatValue,
-            pixelSize
+            captureState.CachedPixelFormat,
+            captureState.CachedPixelFormatValue,
+            captureState.CachedPixelSize
         );
 
         var frameData = new CameraFrameData
@@ -1954,7 +1968,7 @@ public class TucamCameraService : ITucamCameraService, IDisposable
     // ─── 原始帧抓取（用于单帧快照 / RTP 推流）────────────────────────────────
 
     /// <inheritdoc/>
-    public Task<(byte[] JpegBytes, FrameQualityScore Quality)> GrabFrameRawAsync(
+    public Task<byte[]> GrabFrameRawAsync(
         int cameraIndex,
         int timeoutMs = 3000,
         int maxWidth = 0,
@@ -1964,7 +1978,7 @@ public class TucamCameraService : ITucamCameraService, IDisposable
     {
         ThrowIfDisposed();
         IntPtr handle = GetHandle(cameraIndex);
-        TUCamFrame frame = BeginFrameWait(cameraIndex, out CameraCaptureState captureState);
+        ref TUCamFrame frame = ref BeginFrameWait(cameraIndex, out CameraCaptureState captureState);
         int width;
         int height;
         int channels;
@@ -2014,9 +2028,21 @@ public class TucamCameraService : ITucamCameraService, IDisposable
         }
 
         // 查询像素格式（用于区分 BayGB12Packed 与 16bit 容器格式）
-        string? pixelFormat = GenICamGetString(handle, "PixelFormat");
-        long? pixelFormatValue = GenICamGetInt(handle, "PixelFormat");
-        long? pixelSize = GenICamGetInt(handle, "PixelSize");
+        // 使用缓存的像素格式信息，避免每帧调用 GenICam 读取
+        string? pixelFormat = captureState.CachedPixelFormat;
+        long? pixelFormatValue = captureState.CachedPixelFormatValue;
+        long? pixelSize = captureState.CachedPixelSize;
+        if (
+            pixelFormat is null
+            && !pixelFormatValue.HasValue
+            && !pixelSize.HasValue
+        )
+        {
+            pixelFormat = GenICamGetString(handle, "PixelFormat");
+            pixelFormatValue = GenICamGetInt(handle, "PixelFormat");
+            pixelSize = GenICamGetInt(handle, "PixelSize");
+        }
+        // 节点信息可以缓存，但位深必须针对本次 SDK 帧的实际内存布局解析。
         int bitDepth = ResolveFrameBitDepth(frame, pixelFormat, pixelFormatValue, pixelSize);
 
         _logger.LogDebug(
@@ -2038,8 +2064,8 @@ public class TucamCameraService : ITucamCameraService, IDisposable
             pixelFormat ?? "N/A"
         );
 
-        // 编码为 JPEG（含 Bayer 解包 + 双线性插值解马赛克 + 质量评分）
-        (byte[] jpegBytes, FrameQualityScore quality) = EncodeToJpeg(
+        // 编码为 BMP（含 Bayer 解包 + 双线性插值解马赛克）
+        byte[] bmpBytes = EncodeToBmp(
             rawData,
             width,
             height,
@@ -2053,7 +2079,7 @@ public class TucamCameraService : ITucamCameraService, IDisposable
             jpegQuality,
             imageRotationAngle
         );
-        return Task.FromResult((jpegBytes, quality));
+        return Task.FromResult(bmpBytes);
     }
 
     /// <inheritdoc/>
@@ -2074,7 +2100,7 @@ public class TucamCameraService : ITucamCameraService, IDisposable
             );
         }
 
-        TUCamFrame frame = BeginFrameWait(cameraIndex, out CameraCaptureState captureState);
+        ref TUCamFrame frame = ref BeginFrameWait(cameraIndex, out CameraCaptureState captureState);
         try
         {
             TUCamRet ret = TUCamNative.TUCAM_Buf_WaitForFrame(handle, ref frame, timeoutMs);
@@ -2696,7 +2722,7 @@ public class TucamCameraService : ITucamCameraService, IDisposable
     }
 
     /// <summary>
-    /// 将原始像素数据编码为 JPEG 字节数组（使用 SkiaSharp）。
+    /// 将原始像素数据编码为 BMP 字节数组。
     /// 支持 BayGB8（Bayer GBRG 8bit）、BayGB12Packed（Packed 12bit Bayer）及预解马赛克 RGB 格式。
     /// Bayer 单通道数据通过双线性插值解马赛克输出全分辨率彩色图像。
     /// </summary>
@@ -2709,10 +2735,10 @@ public class TucamCameraService : ITucamCameraService, IDisposable
     /// <param name="pixelFormat">GenICam PixelFormat 字符串（用于区分 Packed 格式；null 时按位深推断）</param>
     /// <param name="pixelFormatValue">GenICam PixelFormat 枚举值</param>
     /// <param name="pixelSize">GenICam PixelSize 枚举值，0 表示 HighDepth12bit，1 表示 Speed8bit</param>
-    /// <param name="maxOutputWidth">JPEG 输出最大宽度，0 表示保持原始宽度</param>
-    /// <param name="jpegQuality">JPEG 编码质量，范围 1-100</param>
+    /// <param name="maxOutputWidth">BMP 输出最大宽度，0 表示保持原始宽度</param>
+    /// <param name="jpegQuality">未使用（保留参数兼容性）</param>
     /// <param name="imageRotationAngle">图像顺时针旋转角度（度，支持 0/90/180/270）</param>
-    private static (byte[] JpegBytes, FrameQualityScore Quality) EncodeToJpeg(
+    private static byte[] EncodeToBmp(
         byte[] rawData,
         int width,
         int height,
@@ -2727,11 +2753,39 @@ public class TucamCameraService : ITucamCameraService, IDisposable
         int imageRotationAngle = 0
     )
     {
+        // 快速路径：三通道数据 + 不需要旋转 + 不需要缩放 + 非 Bayer
+        bool isThreeChannelFast = channels >= 3;
+        bool isWindows = OperatingSystem.IsWindows();
         int normalizedRotationAngle = NormalizeImageRotationAngle(imageRotationAngle);
         bool isPacked =
             IsPackedPixelFormat(pixelFormat, pixelFormatValue)
             || (pixelSize == 0 && bitDepth > 8 && channels <= 1);
-        bool isBayer = channels <= 1; // ucChannels=0 或 1 均视为 Bayer 单通道
+        // PixelFormat 可能仍是 BayGB12Packed，但 TUCam SDK 实际返回的已经是
+        // 三通道显示帧。实际通道数优先，只有单通道帧才需要 Bayer 解码。
+        bool isBayer = channels <= 1;
+
+        // 快速路径只在不需要缩放和旋转时启用，且不是 Bayer 格式（即使是 Packed 只要是三通道也可以用快速路径）
+        if (
+            isThreeChannelFast
+            && !isBayer
+            && normalizedRotationAngle == 0
+            && (maxOutputWidth <= 0 || width <= maxOutputWidth)
+        )
+        {
+            // 直接用原始数据写 BMP，跳过所有中间步骤！
+            bool isBgrFast = isWindows;
+            int srcBytesPerRow = widthStep > 0 ? widthStep : width * 3 * (bitDepth > 8 ? 2 : 1);
+            byte[] result = EncodeThreeChannelToBmpFromRaw(
+                rawData,
+                width,
+                height,
+                isBgrFast,
+                srcBytesPerRow,
+                bitDepth
+            );
+            return result;
+        }
+
         int outputWidth = width;
         int outputHeight = height;
         BayerPattern bayerPattern = BayerPattern.Gbrg;
@@ -2747,12 +2801,10 @@ public class TucamCameraService : ITucamCameraService, IDisposable
         }
         else if (isBayer)
         {
-            // BayGB8（1字节/像素）或非 Packed 高位深（16bit LE 容器 → 百分位拉伸 8bit）
             int srcBytesPerRow = widthStep > 0 ? widthStep : width * (bitDepth > 8 ? 2 : 1);
             decoded = new byte[width * height];
             if (bitDepth <= 8)
             {
-                // 8bit：逐行 BlockCopy 去行填充
                 for (int row = 0; row < height; row++)
                 {
                     int srcStart = row * srcBytesPerRow;
@@ -2765,7 +2817,6 @@ public class TucamCameraService : ITucamCameraService, IDisposable
             }
             else
             {
-                // 高位深（16bit 容器）：uint16 LE → 百分位拉伸 8bit
                 var highDepthValues = new ushort[width * height];
                 for (int row = 0; row < height; row++)
                 {
@@ -2787,7 +2838,6 @@ public class TucamCameraService : ITucamCameraService, IDisposable
         }
         else
         {
-            // SDK 已完成解马赛克，通常输出 3 通道 BGR（ucChannels=3），逐行去行步长填充
             int srcBytesPerRow = widthStep > 0 ? widthStep : width * 3 * (bitDepth > 8 ? 2 : 1);
             int dstBytesPerRow = width * 3;
             decoded = new byte[width * height * 3];
@@ -2878,76 +2928,522 @@ public class TucamCameraService : ITucamCameraService, IDisposable
             }
         }
 
-        byte[] colorPixels =
-            outChannels == 1
-                ? DemosaicBayer(decoded, outputWidth, outputHeight, bayerPattern)
-                : decoded;
-
-        // ── 步骤 C：帧质量评分（对焦清晰度 + 曝光质量） ──────────────────────────────
-        // 在缩放/JPEG 之前基于原始分辨率像素计算，结果更精确。
-        FrameQualityScore frameQuality = ComputeFrameQuality(
-            colorPixels,
-            outputWidth,
-            outputHeight,
-            decodedIsBgr
-        );
-
-        // ── 步骤 D：颜色数据 → SkiaSharp Bgra8888 + JPEG 编码 ───────────────────
-        // SDK 三通道帧按 BGR 处理；自行解马赛克得到的是 RGB。
-        // SkiaSharp Bgra8888 内存布局为 [B, G, R, A]
-        // 注意：使用 Marshal.Copy 将数据复制到 SKBitmap 的内部缓冲区，
-        // 避免 SetPixels 持有托管数组指针后 fixed 块退出导致的悬空指针崩溃（0xC0000005）
-        byte[] skPixels = new byte[outputWidth * outputHeight * 4];
-        for (int i = 0, src = 0; i < skPixels.Length; i += 4, src += 3)
+        if (maxOutputWidth > 0 && outputWidth > maxOutputWidth && outChannels == 3)
         {
-            if (decodedIsBgr)
-            {
-                skPixels[i + 0] = colorPixels[src + 0];
-                skPixels[i + 1] = colorPixels[src + 1];
-                skPixels[i + 2] = colorPixels[src + 2];
-            }
-            else
-            {
-                skPixels[i + 0] = colorPixels[src + 2];
-                skPixels[i + 1] = colorPixels[src + 1];
-                skPixels[i + 2] = colorPixels[src + 0];
-            }
-            skPixels[i + 3] = 255; // A
+            int scaledWidth = maxOutputWidth;
+            int scaledHeight = Math.Max(
+                1,
+                (int)Math.Round(outputHeight * (scaledWidth / (double)outputWidth))
+            );
+            decoded = ScaleThreeChannelNearest(
+                decoded,
+                outputWidth,
+                outputHeight,
+                scaledWidth,
+                scaledHeight
+            );
+            outputWidth = scaledWidth;
+            outputHeight = scaledHeight;
         }
 
+        // 对于三通道数据，直接保存为 BMP 格式，不做任何压缩
+        if (outChannels == 3)
+        {
+            byte[] result = EncodeThreeChannelToBmp(
+                decoded,
+                outputWidth,
+                outputHeight,
+                decodedIsBgr
+            );
+            return result;
+        }
+
+        // ── 步骤 D：颜色数据 → SkiaSharp Bgra8888 + BMP 编码 ───────────────────
+        // 对于 Bayer 单通道：直接解马赛克并填充到 Bgra8888 缓冲区
         using SKBitmap bitmap = new SKBitmap(
             outputWidth,
             outputHeight,
             SKColorType.Bgra8888,
             SKAlphaType.Opaque
         );
-        IntPtr dst = bitmap.GetPixels();
-        if (dst == IntPtr.Zero)
+        IntPtr bitmapPtr = bitmap.GetPixels();
+        if (bitmapPtr == IntPtr.Zero)
         {
             throw new InvalidOperationException(
                 $"Failed to allocate SkiaSharp bitmap buffer ({outputWidth}x{outputHeight})"
             );
         }
-        Marshal.Copy(skPixels, 0, dst, skPixels.Length);
+
+        DemosaicBayerToBgra8888(decoded, outputWidth, outputHeight, bayerPattern, bitmapPtr);
+
+        int quality = Math.Clamp(jpegQuality, 1, 100);
 
         using SKBitmap? scaledBitmap = ScaleBitmap(bitmap, maxOutputWidth);
         SKBitmap outputBitmap = scaledBitmap ?? bitmap;
-        int quality = Math.Clamp(jpegQuality, 1, 100);
+        return EncodeBitmap(outputBitmap, quality, outputBitmap.Width, outputBitmap.Height);
+    }
 
-        using SKImage image = SKImage.FromBitmap(outputBitmap);
-        using SKData? encoded = image.Encode(SKEncodedImageFormat.Jpeg, quality);
-        if (encoded is not null)
+    /// <summary>
+    /// 缩放紧凑排列的三通道预览帧。预览优先吞吐和低延迟，使用最近邻采样，
+    /// 避免为每帧构造额外的图像编解码对象。
+    /// </summary>
+    private static byte[] ScaleThreeChannelNearest(
+        byte[] source,
+        int sourceWidth,
+        int sourceHeight,
+        int targetWidth,
+        int targetHeight
+    )
+    {
+        byte[] target = new byte[targetWidth * targetHeight * 3];
+
+        for (int targetY = 0; targetY < targetHeight; targetY++)
         {
-            return (encoded.ToArray(), frameQuality);
+            int sourceY = (int)((long)targetY * sourceHeight / targetHeight);
+            int sourceRow = sourceY * sourceWidth * 3;
+            int targetRow = targetY * targetWidth * 3;
+
+            for (int targetX = 0; targetX < targetWidth; targetX++)
+            {
+                int sourceX = (int)((long)targetX * sourceWidth / targetWidth);
+                int sourceIndex = sourceRow + sourceX * 3;
+                int targetIndex = targetRow + targetX * 3;
+                target[targetIndex] = source[sourceIndex];
+                target[targetIndex + 1] = source[sourceIndex + 1];
+                target[targetIndex + 2] = source[sourceIndex + 2];
+            }
         }
 
-        // 降级路径：部分平台 JPEG 编码返回 null，转换为 Rgba8888 后重新编码
-        using SKBitmap converted = outputBitmap.Copy(SKColorType.Rgba8888);
+        return target;
+    }
+
+    /// <summary>
+    /// 直接从原始数据（包含行步长填充）写 BMP，不做任何中间复制！
+    /// 最快速度路径，跳过所有解包、复制步骤
+    /// </summary>
+    private static byte[] EncodeThreeChannelToBmpFromRaw(
+        byte[] rawData,
+        int width,
+        int height,
+        bool isBgr,
+        int srcBytesPerRow,
+        int bitDepth
+    )
+    {
+        // 计算 BMP 所需大小
+        int padding = (4 - (width * 3) % 4) % 4; // 行对齐到 4 字节
+        int fileSize = 14 + 40 + (width * 3 + padding) * height;
+
+        byte[] bmp = new byte[fileSize];
+
+        // 写 BMP 文件头 (14字节)
+        bmp[0] = (byte)'B';
+        bmp[1] = (byte)'M';
+        WriteInt32(bmp, 2, fileSize);
+        WriteInt16(bmp, 6, 0);
+        WriteInt16(bmp, 8, 0);
+        WriteInt32(bmp, 10, 54); // 像素数据偏移
+
+        // 写 BMP 信息头 (40字节)
+        WriteInt32(bmp, 14, 40); // 信息头大小
+        WriteInt32(bmp, 18, width); // 宽度
+        WriteInt32(bmp, 22, -height); // 高度（负数表示从上到下）
+        WriteInt16(bmp, 26, 1); // 平面数
+        WriteInt16(bmp, 28, 24); // 24位色
+        WriteInt32(bmp, 30, 0); // 无压缩
+        WriteInt32(bmp, 34, (width * 3 + padding) * height); // 像素数据大小
+        WriteInt32(bmp, 38, 2835); // 水平分辨率
+        WriteInt32(bmp, 42, 2835); // 垂直分辨率
+        WriteInt32(bmp, 46, 0); // 颜色数
+        WriteInt32(bmp, 50, 0); // 重要颜色数
+
+        // 写像素数据（直接从原始数据处理）
+        int dstOffset = 54;
+        int rowSize = width * 3;
+
+        // 只用安全的 Span<T>，100% 安全
+        Span<byte> rawSpan = rawData.AsSpan();
+        Span<byte> bmpSpan = bmp.AsSpan();
+
+        if (bitDepth <= 8)
+        {
+            // 8bit 版本：直接逐行复制
+            for (int row = 0; row < height; row++)
+            {
+                int srcRowOffset = row * srcBytesPerRow;
+                int dstRowOffset = dstOffset;
+
+                // 直接复制一行像素（8bit）
+                int copyLength = Math.Min(rowSize, rawData.Length - srcRowOffset);
+                if (copyLength > 0)
+                {
+                    rawSpan.Slice(srcRowOffset, copyLength).CopyTo(bmpSpan.Slice(dstRowOffset));
+                }
+                // 如果不够，填充0
+                if (copyLength < rowSize)
+                {
+                    bmpSpan.Slice(dstRowOffset + copyLength, rowSize - copyLength).Clear();
+                }
+
+                // 添加行对齐填充
+                if (padding > 0)
+                {
+                    bmpSpan.Slice(dstRowOffset + rowSize, padding).Clear();
+                }
+
+                dstOffset += rowSize + padding;
+            }
+        }
+        else
+        {
+            // 12bit/16bit 版本：使用 unsafe 指针大幅提高性能
+            unsafe
+            {
+                fixed (byte* rawPtr = rawData)
+                fixed (byte* bmpPtr = bmp)
+                {
+                    byte* srcBase = rawPtr;
+                    byte* dstBase = bmpPtr + 54;
+
+                    for (int row = 0; row < height; row++)
+                    {
+                        byte* srcRow = srcBase + row * srcBytesPerRow;
+                        byte* dstRow = dstBase + row * (rowSize + padding);
+
+                        int srcPixelCount = width * 3;
+                        int srcEnd = row * srcBytesPerRow + srcPixelCount * 2;
+                        int availablePixels = Math.Min(
+                            srcPixelCount,
+                            srcEnd <= rawData.Length
+                                ? srcPixelCount
+                                : (rawData.Length - row * srcBytesPerRow - 1) / 2
+                        );
+
+                        // 高性能版本：使用指针配合循环展开，最大化性能
+                        // 一次处理 8 个像素，减少循环开销
+                        int i = 0;
+
+                        // 主体部分：循环展开处理
+                        for (; i <= availablePixels - 8; i += 8)
+                        {
+                            // 一次处理 8 个像素
+                            dstRow[i + 0] = srcRow[(i + 0) * 2 + 1];
+                            dstRow[i + 1] = srcRow[(i + 1) * 2 + 1];
+                            dstRow[i + 2] = srcRow[(i + 2) * 2 + 1];
+                            dstRow[i + 3] = srcRow[(i + 3) * 2 + 1];
+                            dstRow[i + 4] = srcRow[(i + 4) * 2 + 1];
+                            dstRow[i + 5] = srcRow[(i + 5) * 2 + 1];
+                            dstRow[i + 6] = srcRow[(i + 6) * 2 + 1];
+                            dstRow[i + 7] = srcRow[(i + 7) * 2 + 1];
+                        }
+
+                        // 处理剩余的像素
+                        for (; i < availablePixels; i++)
+                        {
+                            dstRow[i] = srcRow[i * 2 + 1];
+                        }
+
+                        // 填充剩下的像素为0
+                        if (availablePixels < srcPixelCount)
+                        {
+                            Unsafe.InitBlockUnaligned(
+                                dstRow + availablePixels,
+                                0,
+                                (uint)(srcPixelCount - availablePixels)
+                            );
+                        }
+
+                        // 添加行对齐填充
+                        if (padding > 0)
+                        {
+                            Unsafe.InitBlockUnaligned(dstRow + rowSize, 0, (uint)padding);
+                        }
+                    }
+                }
+            }
+        }
+
+        return bmp;
+    }
+
+    /// <summary>
+    /// 直接将三通道 RGB/BGR 数据编码为 BMP，不做任何压缩
+    /// 优化：直接写 BMP 文件头，跳过 System.Drawing，最快速度
+    /// </summary>
+    private static byte[] EncodeThreeChannelToBmp(byte[] data, int width, int height, bool isBgr)
+    {
+        // 计算 BMP 所需大小
+        int padding = (4 - (width * 3) % 4) % 4; // 行对齐到 4 字节
+        int fileSize = 14 + 40 + (width * 3 + padding) * height;
+
+        byte[] bmp = new byte[fileSize];
+
+        // 写 BMP 文件头 (14字节)
+        bmp[0] = (byte)'B';
+        bmp[1] = (byte)'M';
+        WriteInt32(bmp, 2, fileSize);
+        WriteInt16(bmp, 6, 0);
+        WriteInt16(bmp, 8, 0);
+        WriteInt32(bmp, 10, 54); // 像素数据偏移
+
+        // 写 BMP 信息头 (40字节)
+        WriteInt32(bmp, 14, 40); // 信息头大小
+        WriteInt32(bmp, 18, width); // 宽度
+        WriteInt32(bmp, 22, -height); // 高度（负数表示从上到下）
+        WriteInt16(bmp, 26, 1); // 平面数
+        WriteInt16(bmp, 28, 24); // 24位色
+        WriteInt32(bmp, 30, 0); // 无压缩
+        WriteInt32(bmp, 34, (width * 3 + padding) * height); // 像素数据大小
+        WriteInt32(bmp, 38, 2835); // 水平分辨率
+        WriteInt32(bmp, 42, 2835); // 垂直分辨率
+        WriteInt32(bmp, 46, 0); // 颜色数
+        WriteInt32(bmp, 50, 0); // 重要颜色数
+
+        // 写像素数据
+        int dstOffset = 54;
+        int srcStride = width * 3;
+        int dstStride = width * 3 + padding;
+
+        for (int y = 0; y < height; y++)
+        {
+            int srcIdx = y * srcStride;
+
+            for (int x = 0; x < width; x++)
+            {
+                if (isBgr)
+                {
+                    // 已经是 BGR，直接写
+                    bmp[dstOffset + x * 3 + 0] = data[srcIdx + x * 3 + 0];
+                    bmp[dstOffset + x * 3 + 1] = data[srcIdx + x * 3 + 1];
+                    bmp[dstOffset + x * 3 + 2] = data[srcIdx + x * 3 + 2];
+                }
+                else
+                {
+                    // RGB → BGR 转换
+                    bmp[dstOffset + x * 3 + 0] = data[srcIdx + x * 3 + 2];
+                    bmp[dstOffset + x * 3 + 1] = data[srcIdx + x * 3 + 1];
+                    bmp[dstOffset + x * 3 + 2] = data[srcIdx + x * 3 + 0];
+                }
+            }
+
+            // 填充 padding
+            for (int p = 0; p < padding; p++)
+            {
+                bmp[dstOffset + width * 3 + p] = 0;
+            }
+
+            dstOffset += dstStride;
+        }
+
+        return bmp;
+    }
+
+    private static void WriteInt16(byte[] buffer, int offset, short value)
+    {
+        buffer[offset + 0] = (byte)(value & 0xFF);
+        buffer[offset + 1] = (byte)(value >> 8);
+    }
+
+    private static void WriteInt32(byte[] buffer, int offset, int value)
+    {
+        buffer[offset + 0] = (byte)(value & 0xFF);
+        buffer[offset + 1] = (byte)((value >> 8) & 0xFF);
+        buffer[offset + 2] = (byte)((value >> 16) & 0xFF);
+        buffer[offset + 3] = (byte)(value >> 24);
+    }
+
+    /// <summary>
+    /// 将位图编码为 BMP。使用 System.Drawing 进行编码，性能更高。
+    /// </summary>
+    private static byte[] EncodeBitmap(SKBitmap bitmap, int quality, int width, int height)
+    {
+        try
+        {
+            return EncodeWithSystemDrawing(bitmap);
+        }
+        catch
+        {
+            return EncodeWithSkiaSharp(bitmap, width, height);
+        }
+    }
+
+    /// <summary>
+    /// 使用 System.Drawing 进行 BMP 编码（更快）
+    /// 优化：直接使用指针复制像素数据，避免 SKColor[] 分配
+    /// </summary>
+    private static byte[] EncodeWithSystemDrawing(SKBitmap bitmap)
+    {
+        using MemoryStream ms = new();
+        using Bitmap bmp = new(
+            bitmap.Width,
+            bitmap.Height,
+            System.Drawing.Imaging.PixelFormat.Format24bppRgb
+        );
+
+        BitmapData bmpData = bmp.LockBits(
+            new System.Drawing.Rectangle(0, 0, bitmap.Width, bitmap.Height),
+            ImageLockMode.WriteOnly,
+            PixelFormat.Format24bppRgb
+        );
+
+        int srcWidth = bitmap.Width;
+        int srcHeight = bitmap.Height;
+        IntPtr srcPtr = bitmap.GetPixels();
+
+        unsafe
+        {
+            byte* src = (byte*)srcPtr.ToPointer();
+            byte* dest = (byte*)bmpData.Scan0.ToPointer();
+            int destStride = bmpData.Stride;
+
+            for (int y = 0; y < srcHeight; y++)
+            {
+                byte* srcRow = src + y * srcWidth * 4;
+                byte* dstRow = dest + y * destStride;
+
+                for (int x = 0; x < srcWidth; x++)
+                {
+                    // SKBitmap 是 BGRA 8888 格式
+                    // System.Drawing 24bpp RGB 格式
+                    dstRow[x * 3 + 2] = srcRow[x * 4 + 0]; // B → R
+                    dstRow[x * 3 + 1] = srcRow[x * 4 + 1]; // G → G
+                    dstRow[x * 3 + 0] = srcRow[x * 4 + 2]; // R → B
+                    // 忽略 Alpha 通道
+                }
+            }
+        }
+
+        bmp.UnlockBits(bmpData);
+
+        bmp.Save(ms, ImageFormat.Bmp);
+
+        return ms.ToArray();
+    }
+
+    private static ImageCodecInfo? GetEncoder(ImageFormat format)
+    {
+        ImageCodecInfo[] codecs = ImageCodecInfo.GetImageEncoders();
+        foreach (ImageCodecInfo codec in codecs)
+        {
+            if (codec.FormatID == format.Guid)
+            {
+                return codec;
+            }
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// 使用 SkiaSharp 进行 BMP 编码（降级路径）
+    /// </summary>
+    private static byte[] EncodeWithSkiaSharp(SKBitmap bitmap, int width, int height)
+    {
+        using SKImage image = SKImage.FromBitmap(bitmap);
+        using SKData? encoded = image.Encode(SKEncodedImageFormat.Bmp, 100);
+        if (encoded is not null)
+        {
+            return encoded.ToArray();
+        }
+
+        using SKBitmap converted = bitmap.Copy(SKColorType.Rgba8888);
         using SKImage convertedImage = SKImage.FromBitmap(converted);
         using SKData fallback =
-            convertedImage.Encode(SKEncodedImageFormat.Jpeg, quality)
-            ?? throw new InvalidOperationException($"JPEG 编码失败：{outputWidth}x{outputHeight}");
-        return (fallback.ToArray(), frameQuality);
+            convertedImage.Encode(SKEncodedImageFormat.Bmp, 100)
+            ?? throw new InvalidOperationException($"BMP 编码失败：{width}x{height}");
+        return fallback.ToArray();
+    }
+
+    /// <summary>
+    /// 快速缩放 Bayer 数据（使用整数运算，避免浮点运算开销）。
+    /// </summary>
+    private static byte[] ScaleBayerFast(
+        byte[] bayer,
+        int srcWidth,
+        int srcHeight,
+        int dstWidth,
+        int dstHeight
+    )
+    {
+        byte[] result = new byte[dstWidth * dstHeight];
+        int srcY = 0;
+        int yStep = (srcHeight << 16) / dstHeight;
+
+        for (int dstY = 0; dstY < dstHeight; dstY++)
+        {
+            int srcY0 = srcY >> 16;
+            int srcY1 = Math.Min(srcY0 + 1, srcHeight - 1);
+            int yFrac = srcY & 0xFFFF;
+            srcY += yStep;
+
+            int srcX = 0;
+            int xStep = (srcWidth << 16) / dstWidth;
+
+            for (int dstX = 0; dstX < dstWidth; dstX++)
+            {
+                int srcX0 = srcX >> 16;
+                int srcX1 = Math.Min(srcX0 + 1, srcWidth - 1);
+                int xFrac = srcX & 0xFFFF;
+                srcX += xStep;
+
+                int tl = bayer[srcY0 * srcWidth + srcX0];
+                int tr = bayer[srcY0 * srcWidth + srcX1];
+                int bl = bayer[srcY1 * srcWidth + srcX0];
+                int br = bayer[srcY1 * srcWidth + srcX1];
+
+                int top = tl + ((tr - tl) * xFrac >> 16);
+                int bottom = bl + ((br - bl) * xFrac >> 16);
+                int val = top + ((bottom - top) * yFrac >> 16);
+
+                result[dstY * dstWidth + dstX] = (byte)Math.Clamp(val, 0, 255);
+            }
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// 缩放单通道 Bayer 数据（性能优化：先缩放再解马赛克）。
+    /// 使用简单的平均缩放，对于 Bayer 数据足够精确，且比后续解马赛克+缩放快得多。
+    /// </summary>
+    private static byte[] ScaleBayer(
+        byte[] bayer,
+        int srcWidth,
+        int srcHeight,
+        int dstWidth,
+        int dstHeight
+    )
+    {
+        byte[] result = new byte[dstWidth * dstHeight];
+        float xScale = (float)srcWidth / dstWidth;
+        float yScale = (float)srcHeight / dstHeight;
+
+        for (int dstY = 0; dstY < dstHeight; dstY++)
+        {
+            int srcY0 = (int)(dstY * yScale);
+            int srcY1 = Math.Min(srcY0 + 1, srcHeight - 1);
+            float yFrac = (dstY * yScale) - srcY0;
+
+            for (int dstX = 0; dstX < dstWidth; dstX++)
+            {
+                int srcX0 = (int)(dstX * xScale);
+                int srcX1 = Math.Min(srcX0 + 1, srcWidth - 1);
+                float xFrac = (dstX * xScale) - srcX0;
+
+                // 双线性插值
+                float tl = bayer[srcY0 * srcWidth + srcX0];
+                float tr = bayer[srcY0 * srcWidth + srcX1];
+                float bl = bayer[srcY1 * srcWidth + srcX0];
+                float br = bayer[srcY1 * srcWidth + srcX1];
+
+                float top = tl * (1 - xFrac) + tr * xFrac;
+                float bottom = bl * (1 - xFrac) + br * xFrac;
+                float val = top * (1 - yFrac) + bottom * yFrac;
+
+                result[dstY * dstWidth + dstX] = (byte)Math.Clamp(val, 0, 255);
+            }
+        }
+
+        return result;
     }
 
     /// <summary>
@@ -3266,6 +3762,123 @@ public class TucamCameraService : ITucamCameraService, IDisposable
     }
 
     /// <summary>
+    /// 对 Bayer 单通道图像执行双线性插值解马赛克，直接输出到 Bgra8888 缓冲区。
+    /// 避免中间 RGB 数组，减少一次内存分配和复制。
+    /// </summary>
+    private static unsafe void DemosaicBayerToBgra8888(
+        byte[] bayer,
+        int width,
+        int height,
+        BayerPattern bayerPattern,
+        IntPtr dstPtr
+    )
+    {
+        byte* dst = (byte*)dstPtr.ToPointer();
+        int dstStride = width * 4;
+
+        for (int y = 0; y < height; y++)
+        {
+            byte* rowDst = dst + y * dstStride;
+
+            for (int x = 0; x < width; x++)
+            {
+                int idx = y * width + x;
+                bool evenRow = (y & 1) == 0;
+                bool evenCol = (x & 1) == 0;
+
+                byte r,
+                    g,
+                    b;
+
+                if (bayerPattern == BayerPattern.Gbrg)
+                {
+                    if (evenRow)
+                    {
+                        if (evenCol)
+                        {
+                            b = bayer[idx];
+                            g = (byte)(
+                                (
+                                    bayer[idx - 1]
+                                    + bayer[idx + 1]
+                                    + bayer[idx - width]
+                                    + bayer[idx + width]
+                                ) >> 2
+                            );
+                            r = (byte)(
+                                (
+                                    bayer[idx - width - 1]
+                                    + bayer[idx - width + 1]
+                                    + bayer[idx + width - 1]
+                                    + bayer[idx + width + 1]
+                                ) >> 2
+                            );
+                        }
+                        else
+                        {
+                            r = bayer[idx];
+                            g = (byte)(
+                                (
+                                    bayer[idx - 1]
+                                    + bayer[idx + 1]
+                                    + bayer[idx - width]
+                                    + bayer[idx + width]
+                                ) >> 2
+                            );
+                            b = (byte)(
+                                (
+                                    bayer[idx - width - 1]
+                                    + bayer[idx - width + 1]
+                                    + bayer[idx + width - 1]
+                                    + bayer[idx + width + 1]
+                                ) >> 2
+                            );
+                        }
+                    }
+                    else
+                    {
+                        if (evenCol)
+                        {
+                            r = bayer[idx];
+                            g = (byte)(
+                                (
+                                    bayer[idx - 1]
+                                    + bayer[idx + 1]
+                                    + bayer[idx - width]
+                                    + bayer[idx + width]
+                                ) >> 2
+                            );
+                            b = (byte)(
+                                (
+                                    bayer[idx - width - 1]
+                                    + bayer[idx - width + 1]
+                                    + bayer[idx + width - 1]
+                                    + bayer[idx + width + 1]
+                                ) >> 2
+                            );
+                        }
+                        else
+                        {
+                            g = bayer[idx];
+                            r = (byte)((bayer[idx - 1] + bayer[idx + 1]) >> 1);
+                            b = (byte)((bayer[idx - width] + bayer[idx + width]) >> 1);
+                        }
+                    }
+                }
+                else
+                {
+                    r = g = b = bayer[idx];
+                }
+
+                rowDst[x * 4] = b;
+                rowDst[x * 4 + 1] = g;
+                rowDst[x * 4 + 2] = r;
+                rowDst[x * 4 + 3] = 255;
+            }
+        }
+    }
+
+    /// <summary>
     /// 对 Bayer 单通道图像执行双线性插值解马赛克，输出全分辨率 RGB 三通道图像。
     /// </summary>
     private static byte[] DemosaicBayer(
@@ -3486,9 +4099,10 @@ public class TucamCameraService : ITucamCameraService, IDisposable
     }
 
     /// <summary>
-    /// 开始一次帧等待，登记等待者并返回 SDK 分配的帧结构体。
+    /// 开始一次帧等待，登记等待者并返回 SDK 分配的帧结构体的引用。
+    /// 使用 ref 返回避免值拷贝，确保 TUCAM_Buf_WaitForFrame 直接修改原始数据。
     /// </summary>
-    private TUCamFrame BeginFrameWait(int cameraIndex, out CameraCaptureState captureState)
+    private ref TUCamFrame BeginFrameWait(int cameraIndex, out CameraCaptureState captureState)
     {
         captureState = GetCaptureState(cameraIndex);
         lock (captureState.SyncRoot)
@@ -3505,7 +4119,7 @@ public class TucamCameraService : ITucamCameraService, IDisposable
             }
 
             captureState.ActiveWaiters++;
-            return captureState.Frame;
+            return ref captureState.Frame;
         }
     }
 
@@ -3543,13 +4157,24 @@ public class TucamCameraService : ITucamCameraService, IDisposable
 
         public int ActiveWaiters { get; set; }
 
-        public TUCamFrame Frame { get; set; }
+        public TUCamFrame Frame;
 
         /// <summary>
         /// 当前相机是否持有进程级单活 Cap_Start 锁（_capStartActiveLock）。
         /// StartCaptureAsync 成功后置 true，StopCaptureAsync 释放锁时置 false。
         /// </summary>
         public bool HoldsCapStartLock { get; set; }
+
+        /// <summary>
+        /// 缓存的像素格式信息，避免每帧调用 GenICam 读取
+        /// </summary>
+        public string? CachedPixelFormat { get; set; }
+
+        public long? CachedPixelFormatValue { get; set; }
+
+        public long? CachedPixelSize { get; set; }
+
+        public int CachedBitDepth { get; set; }
     }
 
     /// <summary>
@@ -4193,6 +4818,10 @@ public class TucamCameraService : ITucamCameraService, IDisposable
             await _globalSdkLock.WaitAsync().ConfigureAwait(false);
             try
             {
+                // 关键：TUCam SDK 的 GenICam 节点必须在至少一次采集启动后才能正确读取
+                // 参考 SDK 示例：先调用 startcapture() 后才能调用 getallelementattr()
+                InitGenICamNodeMap(handle);
+
                 Stopwatch sw = Stopwatch.StartNew();
                 GenICamNodeMap map = TucamGenICamEnumerator.Enumerate(handle, _logger);
                 GenICamDependencyGraph graph = TucamGenICamDependencyProber.Probe(
@@ -4222,6 +4851,60 @@ public class TucamCameraService : ITucamCameraService, IDisposable
         finally
         {
             semaphore.Release();
+        }
+    }
+
+    /// <summary>
+    /// 启动一次快速采集以初始化 GenICam NodeMap
+    /// TUCam SDK 的 GenICam 节点必须在至少一次采集启动后才能正确读取
+    /// 参考 SDK 示例代码：先 startcapture() 后才能 getallelementattr()
+    /// </summary>
+    private void InitGenICamNodeMap(IntPtr handle)
+    {
+        try
+        {
+            var frame = new TUCamFrame { uiRsdSize = 1 };
+            TUCamRet ret = TUCamNative.TUCAM_Buf_Alloc(handle, ref frame);
+            if (ret != TUCamRet.Success)
+            {
+                _logger.LogWarning(
+                    "{Tag} InitGenICamNodeMap: TUCAM_Buf_Alloc failed: {RetCode}",
+                    LogTag,
+                    ret
+                );
+                return;
+            }
+
+            ret = TUCamNative.TUCAM_Cap_Start(handle, (uint)TUCamCaptureMode.Sequence);
+            if (ret != TUCamRet.Success)
+            {
+                _logger.LogWarning(
+                    "{Tag} InitGenICamNodeMap: TUCAM_Cap_Start failed: {RetCode}",
+                    LogTag,
+                    ret
+                );
+                TUCamNative.TUCAM_Buf_Release(handle);
+                return;
+            }
+
+            ret = TUCamNative.TUCAM_Buf_WaitForFrame(handle, ref frame, 1000);
+            if (ret != TUCamRet.Success)
+            {
+                _logger.LogWarning(
+                    "{Tag} InitGenICamNodeMap: TUCAM_Buf_WaitForFrame failed: {RetCode}",
+                    LogTag,
+                    ret
+                );
+            }
+
+            TUCamNative.TUCAM_Cap_Stop(handle);
+            TUCamNative.TUCAM_Buf_Release(handle);
+
+            _logger.LogInformation("{Tag} InitGenICamNodeMap: GenICam NodeMap 初始化完成", LogTag);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "{Tag} InitGenICamNodeMap 异常，继续执行", LogTag);
         }
     }
 }

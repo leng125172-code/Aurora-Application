@@ -364,7 +364,7 @@ public class point_cloud_crop : IOperator
         // 保留颜色信息
         if (input.HasColors && input.Colors != null)
         {
-            Mat colors = new Mat(inlierIndices.Count, 3, MatType.CV_8UC3);
+            Mat colors = new Mat(inlierIndices.Count, 3, MatType.CV_8UC1);
             for (int i = 0; i < inlierIndices.Count; i++)
             for (int c = 0; c < 3; c++)
                 colors.Set<byte>(i, c, input.Colors.Get<byte>(inlierIndices[i], c));

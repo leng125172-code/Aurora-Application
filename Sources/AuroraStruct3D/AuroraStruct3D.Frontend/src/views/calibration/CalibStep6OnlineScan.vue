@@ -15,6 +15,8 @@ import {
     stopCalibScan,
     type CalibScanStatusDto,
 } from '@/api/calib-scan'
+import PointCloudViewer from '@/components/PointCloudViewer.vue'
+import { parsePlyHeader, parsePlyData } from '@/utils/ply-parser'
 
 const props = defineProps<{
     project: CalibProjectDto
@@ -32,7 +34,14 @@ const conflictHint = ref<string | null>(null)
 const mainImageUrl = ref<string | null>(null)
 const secondaryImageUrl = ref<string | null>(null)
 
+// 增量点云实时预览状态
+const pointCloudData = ref<Float32Array | null>(null)
+const pointCloudHasColor = ref(false)
+const incrementalPointCount = ref(0)
+const totalPointCount = ref(0)
+
 let hubConnection: signalR.HubConnection | null = null
+const previewControllers = new Map<number, AbortController>()
 
 const stateText = computed(() => {
     switch (status.value?.state) {
@@ -73,20 +82,6 @@ const canStop = computed(() => {
 
 const metrics = computed(() => status.value?.latestMetrics ?? null)
 
-/**
- * 将 SignalR 推送的 JPEG 字节转换为 Blob URL 供 <img> 显示。
- * 调用方需在覆盖前 revoke 旧 URL，避免内存泄漏。
- */
-function bytesToImageUrl(bytes: Uint8Array): string {
-    // MessagePack 协议下 byte[] 会以 Uint8Array 形式到达。
-    // 复制到独立的 ArrayBuffer，避免 TS 5.7+ 严格类型下 Uint8Array<ArrayBufferLike>
-    // 与 BlobPart（要求 ArrayBuffer，不允许 SharedArrayBuffer）类型不兼容问题。
-    const buffer = new ArrayBuffer(bytes.byteLength)
-    new Uint8Array(buffer).set(bytes)
-    const blob = new Blob([buffer], { type: 'image/jpeg' })
-    return URL.createObjectURL(blob)
-}
-
 function revokeUrl(slot: 'main' | 'secondary'): void {
     if (slot === 'main' && mainImageUrl.value) {
         URL.revokeObjectURL(mainImageUrl.value)
@@ -96,6 +91,104 @@ function revokeUrl(slot: 'main' | 'secondary'): void {
         URL.revokeObjectURL(secondaryImageUrl.value)
         secondaryImageUrl.value = null
     }
+}
+
+function indexOfBytes(source: Uint8Array, pattern: Uint8Array, start = 0): number {
+    outer: for (let i = start; i <= source.length - pattern.length; i++) {
+        for (let j = 0; j < pattern.length; j++) {
+            if (source[i + j] !== pattern[j]) continue outer
+        }
+        return i
+    }
+    return -1
+}
+
+function appendBytes(
+    left: Uint8Array<ArrayBufferLike>,
+    right: Uint8Array<ArrayBufferLike>
+): Uint8Array<ArrayBuffer> {
+    const merged = new Uint8Array(left.length + right.length)
+    merged.set(left)
+    merged.set(right, left.length)
+    return merged
+}
+
+/** 通过 HTTP Multipart BMP 流读取 Step6 主/从相机图像。 */
+async function startPreviewStream(cameraRole: CalibScanCameraRole): Promise<void> {
+    previewControllers.get(cameraRole)?.abort()
+    const controller = new AbortController()
+    previewControllers.set(cameraRole, controller)
+
+    try {
+        const response = await fetch(
+            `/api/streaming/calibration/${props.project.id}/cameras/${cameraRole}/preview?t=${Date.now()}`,
+            { signal: controller.signal, cache: 'no-store' }
+        )
+        if (!response.ok || !response.body) {
+            throw new Error(`在线标定预览流连接失败：HTTP ${response.status}`)
+        }
+
+        const contentType = response.headers.get('Content-Type') ?? ''
+        const boundaryMatch = /boundary\s*=\s*"?([^";]+)"?/i.exec(contentType)
+        if (!boundaryMatch) throw new Error('在线标定预览流缺少 boundary')
+
+        const encoder = new TextEncoder()
+        const decoder = new TextDecoder('ascii')
+        const separator = encoder.encode(`--${boundaryMatch[1]}\r\n`)
+        const headerEnd = encoder.encode('\r\n\r\n')
+        const frameMime = response.headers.get('X-Frame-Content-Type') ?? 'image/bmp'
+        const reader = response.body.getReader()
+        let buffer = new Uint8Array(0)
+
+        while (true) {
+            const { done, value } = await reader.read()
+            if (done) break
+            if (value?.length) buffer = appendBytes(buffer, value)
+
+            while (true) {
+                const separatorIndex = indexOfBytes(buffer, separator)
+                if (separatorIndex < 0) break
+                const headersStart = separatorIndex + separator.length
+                const headersEnd = indexOfBytes(buffer, headerEnd, headersStart)
+                if (headersEnd < 0) break
+
+                const headers = decoder.decode(buffer.subarray(headersStart, headersEnd))
+                const lengthMatch = /^Content-Length:\s*(\d+)\s*$/im.exec(headers)
+                if (!lengthMatch) {
+                    buffer = buffer.subarray(headersStart)
+                    continue
+                }
+
+                const payloadStart = headersEnd + headerEnd.length
+                const payloadEnd = payloadStart + Number(lengthMatch[1])
+                if (buffer.length < payloadEnd) break
+
+                const frame = buffer.slice(payloadStart, payloadEnd)
+                const url = URL.createObjectURL(new Blob([frame], { type: frameMime }))
+                if (cameraRole === CalibScanCameraRole.Main) {
+                    revokeUrl('main')
+                    mainImageUrl.value = url
+                } else {
+                    revokeUrl('secondary')
+                    secondaryImageUrl.value = url
+                }
+                buffer = buffer.subarray(payloadEnd)
+            }
+        }
+    } catch (e) {
+        if ((e as { name?: string })?.name !== 'AbortError') {
+            console.warn(`在线标定相机角色 ${cameraRole} 预览流异常`, e)
+        }
+    } finally {
+        if (previewControllers.get(cameraRole) === controller) {
+            previewControllers.delete(cameraRole)
+        }
+    }
+}
+
+function stopPreviewStreams(): void {
+    for (const controller of previewControllers.values()) controller.abort()
+    previewControllers.clear()
 }
 
 async function startHub(): Promise<void> {
@@ -160,25 +253,37 @@ async function startHub(): Promise<void> {
         }
     )
 
-    // 接收主/从相机原图 JPEG 二进制，更新对应槽位的 Blob URL
     hubConnection.on(
-        'ReceiveCalibScanFrameAsync',
+        'ReceiveIncrementalPointCloudAsync',
         (
             projectId: string,
-            cameraRole: number,
-            jpegBytes: Uint8Array,
-            _roundIndex: number,
-            _frameIndexInRound: number
+            pointCloudBytes: Uint8Array,
+            pointCount: number,
+            totalPoint: number
         ) => {
-            if (projectId !== props.project.id || !jpegBytes || jpegBytes.byteLength === 0) {
+            if (projectId !== props.project.id || !pointCloudBytes || pointCloudBytes.length === 0) {
                 return
             }
-            if (cameraRole === CalibScanCameraRole.Main) {
-                revokeUrl('main')
-                mainImageUrl.value = bytesToImageUrl(jpegBytes)
-            } else if (cameraRole === CalibScanCameraRole.Secondary) {
-                revokeUrl('secondary')
-                secondaryImageUrl.value = bytesToImageUrl(jpegBytes)
+
+            try {
+                const header = parsePlyHeader(pointCloudBytes)
+                const data = parsePlyData(pointCloudBytes, header)
+
+                if (pointCloudData.value) {
+                    const newLength = pointCloudData.value.length + data.length
+                    const merged = new Float32Array(newLength)
+                    merged.set(pointCloudData.value)
+                    merged.set(data, pointCloudData.value.length)
+                    pointCloudData.value = merged
+                } else {
+                    pointCloudData.value = data
+                }
+
+                pointCloudHasColor.value = header.hasColor
+                incrementalPointCount.value = pointCount
+                totalPointCount.value = totalPoint
+            } catch (e) {
+                console.error('解析增量点云失败:', e)
             }
         }
     )
@@ -263,9 +368,12 @@ async function onStop(): Promise<void> {
 onMounted(async () => {
     await startHub()
     await refreshStatus(true)
+    void startPreviewStream(CalibScanCameraRole.Main)
+    void startPreviewStream(CalibScanCameraRole.Secondary)
 })
 
 onUnmounted(async () => {
+    stopPreviewStreams()
     await stopHub()
     // 组件卸载时释放所有 Blob URL，避免内存泄漏
     revokeUrl('main')
@@ -393,6 +501,32 @@ onUnmounted(async () => {
                     <div v-else class="flex h-full items-center justify-center text-xs text-muted-foreground">
                         暂无图像，请启动扫描并等待首帧推送
                     </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="rounded-xl border border-border/60 bg-card/40 p-4">
+            <div class="mb-3 flex items-center justify-between">
+                <h4 class="text-sm font-semibold">点云实时预览</h4>
+                <div class="flex items-center gap-2">
+                    <Tag
+                        :severity="pointCloudData ? 'success' : 'secondary'"
+                        :value="pointCloudData ? '已生成' : '等待中'"
+                    />
+                    <span class="text-xs text-muted-foreground">
+                        新增 {{ incrementalPointCount }} 点 / 累计 {{ totalPointCount.toLocaleString() }} 点
+                    </span>
+                </div>
+            </div>
+            <div class="h-80 w-full overflow-hidden rounded bg-black/70">
+                <PointCloudViewer
+                    v-if="pointCloudData"
+                    :point-data="pointCloudData"
+                    :has-color="pointCloudHasColor"
+                    class="h-full w-full"
+                />
+                <div v-else class="flex h-full items-center justify-center text-xs text-muted-foreground">
+                    暂无点云数据，启动扫描后将实时生成点云预览
                 </div>
             </div>
         </div>

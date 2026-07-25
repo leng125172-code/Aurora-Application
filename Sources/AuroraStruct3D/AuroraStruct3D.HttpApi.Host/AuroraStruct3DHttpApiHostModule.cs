@@ -92,6 +92,9 @@ namespace AuroraStruct3D
 
             // 注册 RTP/MJPEG UDP 推流服务器（单例）
             context.Services.AddSingleton<RtpMjpegServer>();
+            // 注册 HTTP MJPEG 流帧缓冲服务（单例）
+            context.Services.AddSingleton<CameraFrameBufferService>();
+            context.Services.AddSingleton<CalibScanFrameBufferService>();
             // 注册相机实时预览服务（同时实现 ICameraStreamingService 和 IHostedService）
             context.Services.AddSingleton<CameraPreviewService>();
             context.Services.AddSingleton<ICameraStreamingService>(sp =>
@@ -109,8 +112,8 @@ namespace AuroraStruct3D
 
             // 为 SignalR 启用 MessagePack 协议（在 AddAbpProSignalR 之后调用）
             // 配置 MaximumReceiveMessageSize=10MB 以支持 Step6 扫描原图二进制推送（2448×2048 JPEG 约 1-2MB/帧）
-            context.Services
-                .AddSignalR(o => o.MaximumReceiveMessageSize = 10 * 1024 * 1024)
+            context
+                .Services.AddSignalR(o => o.MaximumReceiveMessageSize = 10 * 1024 * 1024)
                 .AddMessagePackProtocol();
         }
 
@@ -150,6 +153,8 @@ namespace AuroraStruct3D
                 endpoints.MapSystemInfoApi();
                 // 注册 MiniProfiler 自定义查询 API（全量会话列表和详情）
                 endpoints.MapProfilerApi();
+                // 注册相机 MJPEG HTTP 流端点
+                endpoints.MapCameraStreamingApi();
                 // 直接映射 DashboardHub，无需依赖 AbpAspNetCoreSignalRModule
                 endpoints.MapHub<DashboardHub>("/signalr-hubs/dashboard");
                 // 映射设备状态实时推送 Hub（允许匿名访问，登录前后均可连接）

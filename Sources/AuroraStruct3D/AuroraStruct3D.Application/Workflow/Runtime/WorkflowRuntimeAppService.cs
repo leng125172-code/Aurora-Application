@@ -14,6 +14,7 @@ using AuroraStruct3D.OpenCV.Workflow.Compilation.Model;
 using AuroraStruct3D.OpenCV.Workflow.Statements;
 using AuroraStruct3D.OpenCV.Workflow.Values;
 using AuroraStruct3D.OperatorFile;
+using AuroraStruct3D.ProductModels;
 using AuroraStruct3D.Variables;
 using AuroraStruct3D.Variables.Dtos;
 using AuroraStruct3D.Workflow.Dtos;
@@ -62,6 +63,8 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
     private readonly IRepository<VariableDefinition, Guid> _variableDefinitionRepository;
     private readonly IBlobContainer<OperatorFileBlobContainer> _operatorFileBlobContainer;
     private readonly IOperatorFileRecordRepository _operatorFileRecordRepository;
+    private readonly IRepository<ProductModel, Guid> _productModelRepository;
+    private readonly IBlobContainer<ProductModelBlobContainer> _productModelBlobContainer;
 
     private static readonly HashSet<string> UploadedFileExtensions = new(
         StringComparer.OrdinalIgnoreCase
@@ -102,7 +105,9 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
         IRepository<WorkflowProjectRun, Guid> runRepository,
         IRepository<VariableDefinition, Guid> variableDefinitionRepository,
         IBlobContainer<OperatorFileBlobContainer> operatorFileBlobContainer,
-        IOperatorFileRecordRepository operatorFileRecordRepository
+        IOperatorFileRecordRepository operatorFileRecordRepository,
+        IRepository<ProductModel, Guid> productModelRepository,
+        IBlobContainer<ProductModelBlobContainer> productModelBlobContainer
     )
     {
         _repository = repository;
@@ -122,6 +127,8 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
         _variableDefinitionRepository = variableDefinitionRepository;
         _operatorFileBlobContainer = operatorFileBlobContainer;
         _operatorFileRecordRepository = operatorFileRecordRepository;
+        _productModelRepository = productModelRepository;
+        _productModelBlobContainer = productModelBlobContainer;
     }
 
     /// <inheritdoc/>
@@ -1834,10 +1841,10 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
         foreach (Guid id in workflowIds)
         {
             WorkflowDefinition entity = await _repository.GetAsync(id);
-            if (string.IsNullOrWhiteSpace(entity.OutputVariables))
+            if (ResolveOutputVariableNames(entity).Count == 0)
             {
                 throw new UserFriendlyException(
-                    $"工作流「{entity.Name}」尚未配置输出变量，请先配置后再运行。"
+                    $"工作流「{entity.Name}」的结束节点尚未绑定输出变量，请先配置后再运行。"
                 );
             }
         }
@@ -1848,10 +1855,10 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
     /// </summary>
     private static void ValidateSingleWorkflowOutputConfig(WorkflowDefinition entity)
     {
-        if (string.IsNullOrWhiteSpace(entity.OutputVariables))
+        if (ResolveOutputVariableNames(entity).Count == 0)
         {
             throw new UserFriendlyException(
-                $"工作流「{entity.Name}」尚未配置输出变量，请先配置后再运行。"
+                $"工作流「{entity.Name}」的结束节点尚未绑定输出变量，请先配置后再运行。"
             );
         }
     }
@@ -2615,9 +2622,26 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
 
     private IDisposable CreateOperatorFileBlobStoreScope()
     {
-        return OperatorFileBlobStoreAmbient.Push(
-            new WorkflowOperatorFileBlobStore(_operatorFileBlobContainer)
+        return new CombinedScope(
+            OperatorFileBlobStoreAmbient.Push(
+                new WorkflowOperatorFileBlobStore(_operatorFileBlobContainer)
+            ),
+            ProductModelStoreAmbient.Push(
+                new WorkflowProductModelPointCloudStore(
+                    _productModelRepository,
+                    _productModelBlobContainer
+                )
+            )
         );
+    }
+
+    private sealed class CombinedScope(params IDisposable[] scopes) : IDisposable
+    {
+        public void Dispose()
+        {
+            for (int i = scopes.Length - 1; i >= 0; i--)
+                scopes[i].Dispose();
+        }
     }
 
     private static IEnumerable<string> ExtractBlobNameCandidatesFromText(string text)
@@ -2751,9 +2775,9 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
     )
     {
         WorkflowDefinition entity = await _repository.GetAsync(session.WorkflowId);
-        List<string>? outputVariableNames = ParseOutputVariablesJson(entity.OutputVariables);
+        List<string> outputVariableNames = ResolveOutputVariableNames(entity);
 
-        if (outputVariableNames == null || outputVariableNames.Count == 0)
+        if (outputVariableNames.Count == 0)
         {
             return new List<WorkflowVariableResultDto>();
         }
@@ -2815,6 +2839,24 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
         catch (JsonException)
         {
             return null;
+        }
+    }
+
+    private static List<string> ResolveOutputVariableNames(WorkflowDefinition entity)
+    {
+        List<string>? configured = ParseOutputVariablesJson(entity.OutputVariables);
+        if (configured is { Count: > 0 })
+        {
+            return configured;
+        }
+
+        try
+        {
+            return WorkflowSignatureExtractor.Extract(entity.GraphData).Outputs.ToList();
+        }
+        catch
+        {
+            return [];
         }
     }
 

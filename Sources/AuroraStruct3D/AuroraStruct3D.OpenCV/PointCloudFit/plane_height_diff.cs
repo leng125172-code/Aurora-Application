@@ -49,6 +49,12 @@ public class plane_height_diff : IOperator
             {
                 ParameterName = "abs_diff",
                 ParameterType = typeof(string),
+                DisplayName = "绝对差值明细（兼容）",
+            },
+            new VisionParameter<double>
+            {
+                ParameterName = "abs_diff_value",
+                ParameterType = typeof(double),
                 DisplayName = "绝对差值",
             },
             new VisionParameter<bool>
@@ -120,6 +126,8 @@ public class plane_height_diff : IOperator
         double maxDiff = 0.5
     )
     {
+        if (!double.IsFinite(minDiff) || !double.IsFinite(maxDiff) || minDiff > maxDiff)
+            throw new ArgumentException("高度差阈值必须为有限数值，且最小值不能大于最大值。");
         _refRegionName = refRegionName;
         _targetRegionName = targetRegionName;
         _minDiff = minDiff;
@@ -263,6 +271,7 @@ public class plane_height_diff : IOperator
 
         context.Set("signed_diff", signedDiff);
         context.Set("abs_diff", JsonSerializer.Serialize(absDiffResult));
+        context.Set("abs_diff_value", absDiff);
         context.Set("is_ok", isOk);
         context.Set("result_json", JsonSerializer.Serialize(result));
     }

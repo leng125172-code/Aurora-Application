@@ -161,6 +161,11 @@ async function onTriggerOnce() {
     await run(() => store.triggerOnce({ projectorDeviceId: deviceId.value }))
 }
 
+// ─── 下一帧（仅在单帧触发模式下有效） ─────────────────────────────────────
+async function onNextFrame() {
+    await run(() => store.nextFrame({ projectorDeviceId: deviceId.value }))
+}
+
 // ─── 高级操作 ─────────────────────────────────────────────────────────────
 function onSoftReset() {
     confirm.require({
@@ -286,6 +291,16 @@ watch(device, (d) => {
                         <div class="flex flex-wrap gap-2">
                             <Button size="small" :disabled="!isConnected || busy" @click="onTriggerOnce">
                                 {{ t('projector.triggerOnce') }}
+                            </Button>
+                            <Button
+                                v-if="device.triggerMode === ProjectorTriggerMode.SingleFrame"
+                                size="small"
+                                severity="secondary"
+                                outlined
+                                :disabled="!isConnected || busy"
+                                @click="onNextFrame"
+                            >
+                                {{ t('projector.triggerNextFrame') }}
                             </Button>
                             <Button
                                 size="small"

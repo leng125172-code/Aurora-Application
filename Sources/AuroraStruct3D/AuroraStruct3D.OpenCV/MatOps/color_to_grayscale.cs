@@ -101,18 +101,17 @@ public class color_to_grayscale : IOperator
 
     private Mat ConvertPointCloudColorsToGrayscale(Mat colors)
     {
-        if (colors.Channels() == 1)
-            return colors.Clone();
-
-        if (colors.Channels() != 3)
+        if (colors.Channels() != 1 || colors.Cols < 3)
         {
             throw new InvalidOperationException(
-                "点云颜色数据必须是 3 通道（BGR）格式。"
+                "点云颜色数据必须是 N×3、CV_8UC1 的 BGR 列矩阵。"
             );
         }
 
         int pointCount = colors.Rows;
-        Mat gray = new Mat(pointCount, 1, MatType.CV_8UC1);
+        // PointCloudData 的颜色契约始终为 N×3 BGR。灰度点云仍复制到 B/G/R
+        // 三列，避免输出 N×1 后被下游判定为“无有效颜色”。
+        Mat gray = new Mat(pointCount, 3, MatType.CV_8UC1);
 
         for (int i = 0; i < pointCount; i++)
         {
@@ -122,6 +121,8 @@ public class color_to_grayscale : IOperator
 
             byte grayValue = (byte)(0.114 * b + 0.587 * g + 0.299 * r);
             gray.Set(i, 0, grayValue);
+            gray.Set(i, 1, grayValue);
+            gray.Set(i, 2, grayValue);
         }
 
         return gray;

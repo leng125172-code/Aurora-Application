@@ -30,6 +30,36 @@ public class cloud_compare : IOperator
                 ParameterType = typeof(string),
                 ControlType = PortControlType.Download,
             },
+            new VisionParameter<bool>
+            {
+                ParameterName = "is_ok",
+                DisplayName = "是否OK",
+                ParameterType = typeof(bool),
+            },
+            new VisionParameter<double>
+            {
+                ParameterName = "max_distance",
+                DisplayName = "最大偏差",
+                ParameterType = typeof(double),
+            },
+            new VisionParameter<double>
+            {
+                ParameterName = "mean_distance",
+                DisplayName = "平均偏差",
+                ParameterType = typeof(double),
+            },
+            new VisionParameter<double>
+            {
+                ParameterName = "defect_ratio",
+                DisplayName = "超差点比例",
+                ParameterType = typeof(double),
+            },
+            new VisionParameter<double>
+            {
+                ParameterName = "missing_ratio",
+                DisplayName = "缺失点比例",
+                ParameterType = typeof(double),
+            },
         };
 
     public static List<IConfigParameter>? ConfigParameters =>
@@ -101,6 +131,33 @@ public class cloud_compare : IOperator
                 Required = false,
                 ControlType = PortControlType.Input,
             },
+            new ConfigParameter
+            {
+                Name = "maxDefectRatio",
+                DisplayName = "最大超差点比例",
+                ParameterType = typeof(double),
+                DefaultValue = "0",
+                Required = false,
+                ControlType = PortControlType.Input,
+            },
+            new ConfigParameter
+            {
+                Name = "maxMeanDistance",
+                DisplayName = "最大平均偏差",
+                ParameterType = typeof(double),
+                DefaultValue = "1.7976931348623157E+308",
+                Required = false,
+                ControlType = PortControlType.Input,
+            },
+            new ConfigParameter
+            {
+                Name = "maxMissingRatio",
+                DisplayName = "最大缺失点比例",
+                ParameterType = typeof(double),
+                DefaultValue = "0",
+                Required = false,
+                ControlType = PortControlType.Input,
+            },
         };
 
     private readonly bool _useCoarseRegistration;
@@ -110,6 +167,9 @@ public class cloud_compare : IOperator
     private readonly double _distanceThreshold;
     private readonly int _imageResolution;
     private readonly double _voxelSize;
+    private readonly double _maxDefectRatio;
+    private readonly double _maxMeanDistance;
+    private readonly double _maxMissingRatio;
     private bool _disposed;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -125,7 +185,10 @@ public class cloud_compare : IOperator
         double maxCorrespondenceDistance = 0.1,
         double distanceThreshold = 0.05,
         int imageResolution = 512,
-        double voxelSize = 0
+        double voxelSize = 0,
+        double maxDefectRatio = 0,
+        double maxMeanDistance = double.MaxValue,
+        double maxMissingRatio = 0
     )
     {
         _useCoarseRegistration = useCoarseRegistration;
@@ -135,6 +198,20 @@ public class cloud_compare : IOperator
         _distanceThreshold = distanceThreshold;
         _imageResolution = imageResolution;
         _voxelSize = voxelSize;
+        if (
+            !double.IsFinite(distanceThreshold)
+            || distanceThreshold <= 0
+            || maxDefectRatio < 0
+            || maxDefectRatio > 1
+            || maxMissingRatio < 0
+            || maxMissingRatio > 1
+            || double.IsNaN(maxMeanDistance)
+            || maxMeanDistance <= 0
+        )
+            throw new ArgumentException("3D比较阈值配置无效。");
+        _maxDefectRatio = maxDefectRatio;
+        _maxMeanDistance = maxMeanDistance;
+        _maxMissingRatio = maxMissingRatio;
     }
 
     public void Execute(IWorkflowContext context)
@@ -202,10 +279,14 @@ public class cloud_compare : IOperator
 
         double[] accumR = { 1, 0, 0, 0, 1, 0, 0, 0, 1 };
         double[] accumT = { 0, 0, 0 };
+        double[] coarseR = (double[])accumR.Clone();
+        double[] coarseT = (double[])accumT.Clone();
 
         if (_useCoarseRegistration)
         {
             (accumR, accumT) = CoarseRegistration(srcX, srcY, srcZ, tgtX, tgtY, tgtZ);
+            coarseR = (double[])accumR.Clone();
+            coarseT = (double[])accumT.Clone();
 
             for (int i = 0; i < sourceCount; i++)
             {
@@ -239,6 +320,10 @@ public class cloud_compare : IOperator
             srcZ[i] = (float)(accumR[6] * x + accumR[7] * y + accumR[8] * z + accumT[2]);
         }
 
+        // 点坐标已经依次应用粗、精变换；输出矩阵则组合为针对原始扫描点的一次变换。
+        if (_useCoarseRegistration)
+            (accumR, accumT) = ComposeTransform(accumR, accumT, coarseR, coarseT);
+
         Mat alignedCloud = new Mat(sourceCount, 3, MatType.CV_32FC1);
         for (int i = 0; i < sourceCount; i++)
         {
@@ -258,6 +343,17 @@ public class cloud_compare : IOperator
         var (distances, maxDist, meanDist, stdDev, defectCount) = ComputeCloudToCloudDistance(
             srcX, srcY, srcZ, tgtX, tgtY, tgtZ, _maxCorrespondenceDistance, _distanceThreshold
         );
+        var (reverseDistances, _, _, _, missingCount) = ComputeCloudToCloudDistance(
+            tgtX,
+            tgtY,
+            tgtZ,
+            srcX,
+            srcY,
+            srcZ,
+            _maxCorrespondenceDistance,
+            _distanceThreshold
+        );
+        reverseDistances.Dispose();
 
         Mat distanceImage = GenerateDistanceHeatmap(
             alignedCloud, distances, _imageResolution, maxDist
@@ -276,6 +372,12 @@ public class cloud_compare : IOperator
                 minDist = d;
         }
         if (minDist == double.MaxValue) minDist = 0;
+        double defectRatio = sourceCount > 0 ? (double)defectCount / sourceCount : 1;
+        double missingRatio = targetCount > 0 ? (double)missingCount / targetCount : 1;
+        bool isOk =
+            defectRatio <= _maxDefectRatio
+            && missingRatio <= _maxMissingRatio
+            && meanDist <= _maxMeanDistance;
 
         var result = new CloudCompareResult
         {
@@ -288,7 +390,7 @@ public class cloud_compare : IOperator
                 StdDev = stdDev,
                 MinDistance = minDist,
                 DefectCount = defectCount,
-                DefectRatio = sourceCount > 0 ? (double)defectCount / sourceCount : 0,
+                DefectRatio = defectRatio,
                 Threshold = _distanceThreshold,
             },
             PositionDifference = new PositionDifferenceStats
@@ -302,6 +404,11 @@ public class cloud_compare : IOperator
             },
             RegistrationMethod = _registrationMethod,
             UsedCoarseRegistration = _useCoarseRegistration,
+            IsOk = isOk,
+            MaxDefectRatio = _maxDefectRatio,
+            MaxMeanDistance = _maxMeanDistance,
+            MissingRatio = missingRatio,
+            MaxMissingRatio = _maxMissingRatio,
         };
 
         string resultJson = JsonSerializer.Serialize(result, JsonOptions);
@@ -316,6 +423,34 @@ public class cloud_compare : IOperator
         context.Set("distance_mat", distances);
         context.Set("distance_image", distanceImage);
         context.Set("result_json", resultJson);
+        context.Set("is_ok", isOk);
+        context.Set("max_distance", maxDist);
+        context.Set("mean_distance", meanDist);
+        context.Set("defect_ratio", defectRatio);
+        context.Set("missing_ratio", missingRatio);
+    }
+
+    private static (double[] R, double[] T) ComposeTransform(
+        double[] fineR,
+        double[] fineT,
+        double[] coarseR,
+        double[] coarseT
+    )
+    {
+        double[] resultR = new double[9];
+        for (int r = 0; r < 3; r++)
+        for (int c = 0; c < 3; c++)
+            resultR[r * 3 + c] =
+                fineR[r * 3] * coarseR[c]
+                + fineR[r * 3 + 1] * coarseR[3 + c]
+                + fineR[r * 3 + 2] * coarseR[6 + c];
+        double[] resultT =
+        [
+            fineR[0] * coarseT[0] + fineR[1] * coarseT[1] + fineR[2] * coarseT[2] + fineT[0],
+            fineR[3] * coarseT[0] + fineR[4] * coarseT[1] + fineR[5] * coarseT[2] + fineT[1],
+            fineR[6] * coarseT[0] + fineR[7] * coarseT[1] + fineR[8] * coarseT[2] + fineT[2],
+        ];
+        return (resultR, resultT);
     }
 
     private static Mat VoxelDownsample(Mat pointCloud, double voxelSize)
@@ -713,6 +848,7 @@ public class cloud_compare : IOperator
         Mat distances = new Mat(srcCount, 1, MatType.CV_64FC1);
         double maxDist = 0, sumDist = 0;
         int defectCount = 0;
+        int validCount = 0;
 
         for (int i = 0; i < srcCount; i++)
         {
@@ -731,20 +867,21 @@ public class cloud_compare : IOperator
                 dist = -1;
             }
 
-            if (dist > 0)
+            if (dist >= 0)
             {
                 distances.Set(i, 0, dist);
                 sumDist += dist;
+                validCount++;
                 if (dist > maxDist) maxDist = dist;
                 if (dist > distanceThreshold) defectCount++;
             }
             else
             {
                 distances.Set(i, 0, double.MaxValue);
+                defectCount++;
             }
         }
 
-        int validCount = srcCount - defectCount;
         double meanDist = validCount > 0 ? sumDist / validCount : 0;
 
         double sumSq = 0;
@@ -1170,6 +1307,11 @@ public class cloud_compare : IOperator
         public PositionDifferenceStats PositionDifference { get; set; } = new();
         public string RegistrationMethod { get; set; } = string.Empty;
         public bool UsedCoarseRegistration { get; set; }
+        public bool IsOk { get; set; }
+        public double MaxDefectRatio { get; set; }
+        public double MaxMeanDistance { get; set; }
+        public double MissingRatio { get; set; }
+        public double MaxMissingRatio { get; set; }
     }
 
     public class HeightDifferenceStats

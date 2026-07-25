@@ -22,6 +22,7 @@ import {
     type SetProjectorCheckerboardDto,
     type SetProjectorRgbDto,
     type TriggerProjectorDto,
+    type NextProjectorFrameDto,
     type WriteProjectorRegisterDto,
     getProjectorList,
     getProjector,
@@ -40,6 +41,7 @@ import {
     setProjectorCheckerboard,
     setProjectorRgb,
     triggerProjectorOnce,
+    nextFrameProjector,
     projectorSoftReset,
     projectorSaveParams,
     readProjectorRegister,
@@ -253,6 +255,10 @@ export const useProjectorStore = defineStore('projector', () => {
         return await triggerProjectorOnce(dto)
     }
 
+    async function nextFrame(dto: NextProjectorFrameDto): Promise<boolean> {
+        return await nextFrameProjector(dto)
+    }
+
     // ─── 高级 ─────────────────────────────────────────────────────────────────
 
     async function softReset(id: string): Promise<boolean> {
@@ -304,6 +310,7 @@ export const useProjectorStore = defineStore('projector', () => {
         setRgb,
         // 触发
         triggerOnce,
+        nextFrame,
         // 高级
         softReset,
         saveParams,

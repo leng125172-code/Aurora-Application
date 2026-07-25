@@ -49,27 +49,27 @@ export interface SaveCalibProjectorParamInput {
 /**
  * 获取指定标定项目的投影仪参数配置。
  * 若数据库中尚无记录则返回 null，由前端使用默认值。
- * GET /api/app/calib-projector-param/{calibProjectId}
+ * GET /api/app/calib-projector-param?calibProjectId={calibProjectId}
  */
 export async function getCalibProjectorParam(
     calibProjectId: string,
 ): Promise<CalibProjectorParamDto | null> {
     const response = await httpClient.get<CalibProjectorParamDto | null>(
-        `/api/app/calib-projector-param/${calibProjectId}`,
+        `/api/app/calib-projector-param?calibProjectId=${calibProjectId}`,
     )
     return response.data
 }
 
 /**
  * 保存（Upsert）投影仪参数配置。
- * PUT /api/app/calib-projector-param/{calibProjectId}
+ * PUT /api/app/calib-projector-param?calibProjectId={calibProjectId}
  */
 export async function updateCalibProjectorParam(
     calibProjectId: string,
     input: SaveCalibProjectorParamInput,
 ): Promise<CalibProjectorParamDto> {
     const response = await httpClient.put<CalibProjectorParamDto>(
-        `/api/app/calib-projector-param/${calibProjectId}`,
+        `/api/app/calib-projector-param?calibProjectId=${calibProjectId}`,
         input,
     )
     return response.data

@@ -139,7 +139,7 @@ public class conditional_removal : IOperator
 
         if (inlierColors.Count > 0)
         {
-            Mat colors = new Mat(inlierColors.Count, 3, MatType.CV_8UC3);
+            Mat colors = new Mat(inlierColors.Count, 3, MatType.CV_8UC1);
             for (int i = 0; i < inlierColors.Count; i++)
             for (int c = 0; c < 3; c++)
                 colors.Set<byte>(i, c, inlierColors[i][c]);

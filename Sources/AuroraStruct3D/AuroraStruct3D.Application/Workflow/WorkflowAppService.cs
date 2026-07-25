@@ -74,6 +74,11 @@ public class WorkflowAppService : AuroraStruct3DAppService, IWorkflowAppService
             name,
             graphData
         );
+        workflow.UpdateOutputVariables(
+            SerializeOutputVariables(
+                WorkflowSignatureExtractor.Extract(graph).Outputs.ToList()
+            )
+        );
 
         await _repository.InsertAsync(workflow, autoSave: true);
 
@@ -100,6 +105,11 @@ public class WorkflowAppService : AuroraStruct3DAppService, IWorkflowAppService
         await ValidateBeforeSaveAsync(projectId, workflow.Id, graph);
 
         workflow.Update(name, graphData);
+        workflow.UpdateOutputVariables(
+            SerializeOutputVariables(
+                WorkflowSignatureExtractor.Extract(graph).Outputs.ToList()
+            )
+        );
 
         await _repository.UpdateAsync(workflow, autoSave: true);
 
@@ -224,7 +234,16 @@ public class WorkflowAppService : AuroraStruct3DAppService, IWorkflowAppService
     {
         WorkflowDefinition workflow = await _repository.GetAsync(id);
 
-        string outputVariablesJson = SerializeOutputVariables(input.OutputVariables);
+        WorkflowSignature signature = WorkflowSignatureExtractor.Extract(workflow.GraphData);
+        List<string> derivedOutputs = signature.Outputs.ToList();
+        if (!derivedOutputs.SequenceEqual(input.OutputVariables, StringComparer.Ordinal))
+        {
+            throw new UserFriendlyException(
+                "输出变量由结束节点自动生成，请在工作流结束节点中调整输出绑定后保存。"
+            );
+        }
+
+        string outputVariablesJson = SerializeOutputVariables(derivedOutputs);
         workflow.UpdateOutputVariables(outputVariablesJson);
 
         await _repository.UpdateAsync(workflow, autoSave: true);
@@ -232,7 +251,7 @@ public class WorkflowAppService : AuroraStruct3DAppService, IWorkflowAppService
         return new WorkflowOutputConfigDto
         {
             WorkflowId = id,
-            OutputVariables = input.OutputVariables,
+            OutputVariables = derivedOutputs,
         };
     }
 

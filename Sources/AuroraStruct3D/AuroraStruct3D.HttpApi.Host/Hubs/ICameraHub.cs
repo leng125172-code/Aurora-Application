@@ -55,23 +55,21 @@ public interface ICameraHub
     Task ReceiveCalibScanMetricsAsync(string calibProjectId, CalibScanMetricsDto metrics);
 
     /// <summary>
-    /// 推送 Step6 扫描单帧主/从相机原图（JPEG 二进制，MessagePack 原生传输）。
-    /// </summary>
-    /// <param name="calibProjectId">标定项目 ID</param>
-    /// <param name="cameraRole">相机角色（0=主相机, 1=从相机）</param>
-    /// <param name="jpegBytes">JPEG 原图二进制数据</param>
-    /// <param name="roundIndex">当前轮次序号</param>
-    /// <param name="frameIndexInRound">当前轮内帧序号</param>
-    Task ReceiveCalibScanFrameAsync(
-        string calibProjectId,
-        int cameraRole,
-        byte[] jpegBytes,
-        long roundIndex,
-        int frameIndexInRound
-    );
-
-    /// <summary>
     /// 推送 Step7 点云生成状态变更（含进度）。
     /// </summary>
     Task ReceivePointCloudStatusAsync(PointCloudStatusDto status);
+
+    /// <summary>
+    /// 推送增量点云数据（实时迭代）。
+    /// </summary>
+    /// <param name="calibProjectId">标定项目 ID</param>
+    /// <param name="pointCloudBytes">点云数据（压缩后的字节数组）</param>
+    /// <param name="pointCount">新增点数量</param>
+    /// <param name="totalPointCount">累积总点数量</param>
+    Task ReceiveIncrementalPointCloudAsync(
+        string calibProjectId,
+        byte[] pointCloudBytes,
+        int pointCount,
+        int totalPointCount
+    );
 }

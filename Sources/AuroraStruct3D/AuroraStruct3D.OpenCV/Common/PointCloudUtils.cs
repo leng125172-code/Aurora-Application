@@ -33,7 +33,7 @@ public static class PointCloudUtils
         Mat? colors = null;
         if (input.HasColors && input.Colors != null)
         {
-            colors = new Mat(indices.Count, 3, MatType.CV_8UC3);
+            colors = new Mat(indices.Count, 3, MatType.CV_8UC1);
             for (int i = 0; i < indices.Count; i++)
             {
                 int srcIdx = indices[i];

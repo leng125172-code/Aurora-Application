@@ -90,6 +90,9 @@ internal static class TjProjectorCommands
     /// <summary>保存参数到内部 Flash 命令（MS = Make Save）</summary>
     public const string SaveParams = "MS";
 
+    /// <summary>保存条纹参数到内部 Flash 命令（Ms = Make Save fringe）</summary>
+    public const string SaveFringeParams = "Ms";
+
     /// <summary>读寄存器命令前缀（完整命令如 "pr 3"）</summary>
     public const string ReadRegisterPrefix = "pr ";
 
@@ -104,7 +107,16 @@ internal static class TjProjectorCommands
     public const string ReadPixelMode = "Fp";
 
     /// <summary>
-    /// 设置总图像幅数命令前缀（完整命令如 "MB 3"）
+    /// 设置图像重复参数命令前缀（完整命令如 "MA 1 18 0 0"）。
+    /// 参数1：图片重复出现的数量（固定为1，同一种图触发次数）；
+    /// 参数2：保存条纹数量（参考官方 TJEasy USB Demo 直接传入实际幅数）；
+    /// 参数3：固定为0；参数4：固定为0。
+    /// </summary>
+    public const string SetImageRepeatPrefix = "MA ";
+
+    /// <summary>
+    /// 设置总图像幅数命令前缀（完整命令如 "MB 3"）。
+    /// 参考官方 TJEasy USB Demo，直接传入实际存储的条纹幅数。
     /// </summary>
     public const string SetImageCountPrefix = "MB ";
 
@@ -126,18 +138,27 @@ internal static class TjProjectorCommands
     public const string SetFringeDirectionPrefix = "MD ";
 
     /// <summary>
-    /// 配置每幅条纹的横竖方向位图（完整命令如 "MF0 41 0 0 0"）。
-    /// 第一个参数块索引范围 0~3，每块覆盖 32 幅图；后四个参数为 4 个字节位图。
+    /// 配置每幅条纹的横竖方向位图命令前缀（完整命令如 "MF 0 85 85 85 85"）。
+    /// 第一个参数块索引范围 0~3（MF 与块索引之间有空格），每块覆盖 32 幅图；后四个参数为 4 个字节位图。
     /// 每幅图占 1bit：0=竖条纹，1=横条纹。
+    /// 字节内采用 LSB first（低位在前）：每块中第1幅图→byte0的bit0，第8幅图→byte0的bit7，第9幅→byte1的bit0...
+    /// 1-2-1-2 横竖交替模式（横为1）每个字节为 0x55（01010101b=85）。
     /// </summary>
-    public const string SetFringeOrientationBitmapPrefix = "MF";
+    public const string SetFringeOrientationBitmapPrefix = "MF ";
 
     /// <summary>
-    /// 写 Flash 像素列命令前缀（完整命令如 "FW 128 200"）。
+    /// 写 Flash 像素列命令前缀（完整命令如 "FW128 200"）。
     /// 第一个参数：当前像素列全局索引；第二个参数：该列灰度值（0~255）。
-    /// 每写入 256 个数据后需等待光机 page 写入完成的应答，再继续写入。
+    /// 参考官方 TJEasy USB Demo，发送后无需等待应答。
     /// </summary>
     public const string WriteFlashPixelPrefix = "FW";
+
+    /// <summary>
+    /// 写 Flash 像素列命令前缀（一次写入8个像素，完整命令如 "FF0 255 0 255 0 255 0 255"）。
+    /// 参数1：当前像素列全局索引（从0开始）；参数2~9：8个像素列的灰度值（0~255）。
+    /// 每写入 32 个数据组（32×8=256像素列）后需等待光机 page 写入完成的应答。
+    /// </summary>
+    public const string WriteFlashPixelBatchPrefix = "FF";
 }
 
 /// <summary>

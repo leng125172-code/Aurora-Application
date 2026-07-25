@@ -573,14 +573,7 @@ public class ProjectorDeviceAppService : AuroraStruct3DAppService, IProjectorDev
     /// <inheritdoc/>
     public Task DownloadFringePatternAsync(DownloadFringePatternInputDto input)
     {
-        bool isVertical = input.FringeMode.Equals("vertical", StringComparison.OrdinalIgnoreCase);
         byte[][] images = BuildFringeImagePixels(input);
-        int pixelCount = images[0].Length;
-        byte[] columnGrayValues = new byte[input.ImageCount * pixelCount];
-        for (int i = 0; i < images.Length; i++)
-        {
-            Buffer.BlockCopy(images[i], 0, columnGrayValues, i * pixelCount, pixelCount);
-        }
 
         if (
             !_fringeDownloadStateStore.TryStart(
@@ -624,9 +617,8 @@ public class ProjectorDeviceAppService : AuroraStruct3DAppService, IProjectorDev
                 }
 
                 await svc.DownloadFringePatternAsync(
-                        input.ImageCount,
-                        columnGrayValues,
-                        !isVertical,
+                        images,
+                        input.HorizontalPaddingPosition,
                         reportProgress
                     )
                     .ConfigureAwait(false);
@@ -669,20 +661,29 @@ public class ProjectorDeviceAppService : AuroraStruct3DAppService, IProjectorDev
 
     /// <summary>
     /// 按与设备下载完全一致的规则生成条纹图一维像素数据。
-    /// Step3 固定按 1-2-1-2（横-竖）交替方向生成；像素序列统一按 WidthPixels 长度构建。
+    /// Step3 固定按 1-2-1-2（横-竖）交替方向生成；
+    /// ImageCount 表示每个方向的相移步数，因此实际生成 2×ImageCount 幅图像。
+    /// 投影仪 Flash 地址空间为 1280×1280：
+    /// 竖条纹沿水平方向变化，数据长度为 1280（= WidthPixels），每行宽度 = 1280 / PeriodCount；
+    /// 横条纹沿垂直方向变化，实际投影高度为 HeightPixels（通常为 720），每行高度 = HeightPixels / PeriodCount，
+    /// 下载时由 DlpProjectorService 补 560 列黑色填充到 1280 列。
+    /// 周期 PeriodCount 表示总行数（如 40 行 = 20 白行 + 20 黑行）。
     /// </summary>
     private static byte[][] BuildFringeImagePixels(DownloadFringePatternInputDto input)
     {
-        int pixelCount = input.WidthPixels;
-
-        if (pixelCount <= 0)
+        if (input.WidthPixels <= 0 || input.HeightPixels <= 0)
         {
-            throw new UserFriendlyException("条纹像素数无效，无法生成预览图像。");
+            throw new UserFriendlyException("条纹分辨率无效，无法生成预览图像。");
         }
 
-        if (pixelCount % input.PeriodCount != 0)
+        if (input.WidthPixels % input.PeriodCount != 0)
         {
-            throw new UserFriendlyException("条纹周期数必须能整除有效像素数。");
+            throw new UserFriendlyException("条纹周期数必须能整除投影宽度像素数。");
+        }
+
+        if (input.HeightPixels % input.PeriodCount != 0)
+        {
+            throw new UserFriendlyException("条纹周期数必须能整除投影高度像素数。");
         }
 
         if (input.PhaseShift <= 0 || input.PhaseShift >= input.PeriodCount)
@@ -690,24 +691,49 @@ public class ProjectorDeviceAppService : AuroraStruct3DAppService, IProjectorDev
             throw new UserFriendlyException("相移量必须大于 0 且小于周期数。");
         }
 
-        int stripeWidth = pixelCount / input.PeriodCount;
+        int horizontalStripeWidth = input.WidthPixels / input.PeriodCount;
+        int verticalStripeHeight = input.HeightPixels / input.PeriodCount;
+
         byte firstColor = input.FringeType.Equals("wb", StringComparison.OrdinalIgnoreCase)
             ? (byte)255
             : (byte)0;
         byte secondColor = (byte)(255 - firstColor);
 
-        byte[][] images = new byte[input.ImageCount][];
-        for (int i = 0; i < input.ImageCount; i++)
+        // Step3 固定 1-2-1-2 横竖交替：H0, V0, H1, V1, ...
+        int totalFrameCount = input.ImageCount * 2;
+        byte[][] images = new byte[totalFrameCount][];
+        for (int i = 0; i < totalFrameCount; i++)
         {
-            byte[] pixels = new byte[pixelCount];
-            int offset = i * input.PhaseShift;
-            for (int pos = 0; pos < pixelCount; pos++)
+            bool isHorizontalFrame = i % 2 == 0;
+            int directionIndex = i / 2;
+            int offset = directionIndex * input.PhaseShift;
+
+            if (isHorizontalFrame)
             {
-                int shifted = (pos + offset) % pixelCount;
-                int stripeIdx = (shifted / stripeWidth) % 2;
-                pixels[pos] = stripeIdx == 0 ? firstColor : secondColor;
+                // 横条纹：同一列内灰度沿 Y 变化，数据长度为 HeightPixels。
+                byte[] pixels = new byte[input.HeightPixels];
+                for (int y = 0; y < input.HeightPixels; y++)
+                {
+                    int shifted = (y + offset) % input.HeightPixels;
+                    int stripeIdx = (shifted / verticalStripeHeight) % 2;
+                    pixels[y] = stripeIdx == 0 ? firstColor : secondColor;
+                }
+
+                images[i] = pixels;
             }
-            images[i] = pixels;
+            else
+            {
+                // 竖条纹：同一行内灰度沿 X 变化，数据长度为 WidthPixels。
+                byte[] pixels = new byte[input.WidthPixels];
+                for (int x = 0; x < input.WidthPixels; x++)
+                {
+                    int shifted = (x + offset) % input.WidthPixels;
+                    int stripeIdx = (shifted / horizontalStripeWidth) % 2;
+                    pixels[x] = stripeIdx == 0 ? firstColor : secondColor;
+                }
+
+                images[i] = pixels;
+            }
         }
 
         return images;

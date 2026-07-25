@@ -127,7 +127,9 @@ public class colorize_point_cloud_by_roi : IOperator
             throw new InvalidOperationException("ROI元数据中未找到投影映射。");
 
         int pointCount = pointCloud.Rows;
-        Mat outputColors = input.HasColors ? input.Colors!.Clone() : new Mat(pointCount, 3, MatType.CV_8UC3);
+        Mat outputColors = input.HasColors
+            ? input.Colors!.Clone()
+            : new Mat(pointCount, 3, MatType.CV_8UC1);
 
         int maskWidth = mask.Width;
         int maskHeight = mask.Height;

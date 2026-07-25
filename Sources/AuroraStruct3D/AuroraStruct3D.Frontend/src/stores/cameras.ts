@@ -4,8 +4,10 @@
  * 负责：
  *  1. 维护相机设备列表响应式数据
  *  2. 通过 SignalR Hub（/signalr-hubs/camera，MessagePack 协议）
- *     接收实时状态推送、JPEG 帧、运行指标
- *  3. 封装所有手动控制操作
+ *     接收实时状态推送、运行指标、GenICam 节点变更通知
+ *  3. 相机帧预览：使用 HTTP MJPEG 流（Multipart/x-mixed-replace），
+ *     路由 /api/streaming/cameras/{id}/preview，浏览器原生 <img> 播放
+ *  4. 封装所有手动控制操作
  */
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
@@ -62,8 +64,15 @@ export const useCameraStore = defineStore('camera', () => {
     const loading = ref(false)
     /** SignalR 连接状态 */
     const hubConnected = ref(false)
-    /** 实时 JPEG 预览帧 ObjectURL，key 为相机 ID */
+    /**
+     * 实时预览 URL，key 为相机 ID。
+     * 值为 Blob URL（`blob:` 开头）：由 fetch ReadableStream 自行解析 multipart/BMP
+     * 后 URL.createObjectURL 产生，赋给 <img :src> 由浏览器原生解码 BMP。
+     * （Chrome 的原生 MJPEG multipart 解析器只支持 JPEG，因此必须自行分帧。）
+     */
     const previewFrames = ref<Map<string, string>>(new Map())
+    /** 预览流控制器，key 为相机 ID；停止预览或切换时 abort() 断开底层 fetch 连接 */
+    const _streamAbortCtrls = new Map<string, AbortController>()
     /** 实时运行指标，key 为相机 ID */
     const liveMetrics = ref<Map<string, CameraLiveMetricsDto>>(new Map())
     /** 实时相机状态（CameraStateDto），key 为相机 ID */
@@ -129,21 +138,182 @@ export const useCameraStore = defineStore('camera', () => {
         }
     }
 
-    function normalizeFrameBytes(frame: Uint8Array | ArrayBuffer | number[] | ArrayLike<number>): Uint8Array {
-        if (frame instanceof Uint8Array) return Uint8Array.from(frame)
-        if (frame instanceof ArrayBuffer) return new Uint8Array(frame.slice(0))
-        if (Array.isArray(frame)) return Uint8Array.from(frame)
-        if (ArrayBuffer.isView(frame)) {
-            const view = frame as ArrayBufferView
-            return new Uint8Array(view.buffer.slice(view.byteOffset, view.byteOffset + view.byteLength))
+    // ─── HTTP MJPEG 流：multipart 解析工具 ──────────────────────────────────
+
+    /** Part 分隔符（短横前缀 + 后端常量值），与 CameraStreamingEndpoints.cs 保持一致 */
+    const MJPEG_BOUNDARY = '--auroraframe7f3d9a2b'
+    const MJPEG_SEP = MJPEG_BOUNDARY + '\r\n'
+    const MJPEG_HEADERS_END = '\r\n\r\n'
+
+    /**
+     * 文本编码工具：用于在 Uint8Array 缓冲区中查找 ASCII 分隔符序列（Content-Length、boundary 等）
+     */
+    const _enc = new TextEncoder()
+    const _dec = new TextDecoder('ascii')
+    const SEP_BYTES = _enc.encode(MJPEG_SEP)
+    const HEADERS_END_BYTES = _enc.encode(MJPEG_HEADERS_END)
+
+    /** 在 haystack 缓冲区 [start,end) 内查找 pattern 字节序列，返回起始位置；找不到返回 -1 */
+    function _indexOfBytes(haystack: Uint8Array, pattern: Uint8Array, start = 0, end = haystack.length): number {
+        const hEnd = Math.min(end, haystack.length)
+        if (pattern.length === 0 || hEnd - start < pattern.length) return -1
+        outer: for (let i = start; i <= hEnd - pattern.length; i++) {
+            for (let j = 0; j < pattern.length; j++) {
+                if (haystack[i + j] !== pattern[j]) continue outer
+            }
+            return i
         }
-        return Uint8Array.from(frame)
+        return -1
     }
 
-    function toBlobArrayBuffer(bytes: Uint8Array): ArrayBuffer {
-        const copy = new Uint8Array(bytes.byteLength)
-        copy.set(bytes)
-        return copy.buffer
+    /**
+     * 启动某台相机的 HTTP MJPEG 流读取 + multipart 解析协程：
+     *  1. fetch('/api/streaming/cameras/{id}/preview') 获取 ReadableStream
+     *  2. 按 MJPEG_SEP 切分出每个 Part
+     *  3. 在 Part 头部解析 Content-Length → 读取指定长度 BMP 字节 → Blob + ObjectURL → 写入 previewFrames
+     *  4. 下一帧写入前自动 revoke 上一帧 Blob URL，防止内存泄漏
+     */
+    async function _startStreamReader(id: string): Promise<void> {
+        // 若已有老连接，先关闭再开新连接
+        const oldCtrl = _streamAbortCtrls.get(id)
+        if (oldCtrl) {
+            try { oldCtrl.abort() } catch { /* ignore */ }
+            _streamAbortCtrls.delete(id)
+            const prevUrl = previewFrames.value.get(id)
+            if (prevUrl) {
+                URL.revokeObjectURL(prevUrl)
+                previewFrames.value.delete(id)
+            }
+        }
+
+        const ctrl = new AbortController()
+        _streamAbortCtrls.set(id, ctrl)
+
+        try {
+            const resp = await fetch(`/api/streaming/cameras/${id}/preview?t=${Date.now()}`, {
+                signal: ctrl.signal,
+                cache: 'no-store',
+            })
+            if (!resp.ok || !resp.body) {
+                console.warn(
+                    `[cameras] 相机 ${id} MJPEG 流连接失败 status=${resp.status}`
+                )
+                return
+            }
+
+            // 从响应头或默认值获取帧 MIME
+            const frameContentType = resp.headers.get('X-Frame-Content-Type') ?? 'image/bmp'
+
+            const reader = resp.body.getReader()
+            let buffer = new Uint8Array(0)
+            let lastBlobUrl: string | null = null
+
+            try {
+                while (true) {
+                    // 1. 读取下一块并追加到 buffer
+                    const { done, value } = await reader.read()
+                    if (done) break
+                    if (value && value.length > 0) {
+                        const merged = new Uint8Array(buffer.length + value.length)
+                        merged.set(buffer, 0)
+                        merged.set(value, buffer.length)
+                        buffer = merged
+                    }
+
+                    // 2. 尝试解析出所有完整 Part
+                    //    一个完整 Part 在 buffer 中应该形如：
+                    //    {MJPEG_SEP} Content-Length: NNN \r\n ... \r\n\r\n <NNN bytes of BMP>
+                    while (true) {
+                        const sepIdx = _indexOfBytes(buffer, SEP_BYTES)
+                        if (sepIdx === -1) break // 还没凑齐分隔符
+
+                        const headersStart = sepIdx + SEP_BYTES.length
+
+                        // 寻找 Part headers 的结束标记
+                        const headersEnd = _indexOfBytes(buffer, HEADERS_END_BYTES, headersStart)
+                        if (headersEnd === -1) break // headers 还没凑齐，等下一个 read
+
+                        // 解析 headers（ASCII），主要是 Content-Length
+                        let contentLen = -1
+                        const headersText = _dec.decode(buffer.subarray(headersStart, headersEnd))
+                        for (const line of headersText.split(/\r?\n/)) {
+                            const t = line.trim()
+                            if (t.length === 0) continue
+                            const colon = t.indexOf(':')
+                            if (colon <= 0) continue
+                            const key = t.slice(0, colon).trim().toLowerCase()
+                            const val = t.slice(colon + 1).trim()
+                            if (key === 'content-length') {
+                                contentLen = parseInt(val, 10)
+                                if (isNaN(contentLen)) contentLen = -1
+                            }
+                        }
+
+                        if (contentLen <= 0) {
+                            // 非法 part：没有 Content-Length，丢弃该分隔符后重试
+                            console.warn('[cameras] MJPEG part 缺少合法 Content-Length，跳过')
+                            buffer = buffer.subarray(headersStart)
+                            continue
+                        }
+
+                        const payloadStart = headersEnd + HEADERS_END_BYTES.length
+                        const needTotal = payloadStart + contentLen
+                        if (buffer.length < needTotal) {
+                            // 帧体尚未收齐，等下一个 read
+                            break
+                        }
+
+                        // 3. 完整帧到手 → 组装 Blob → 赋给 store
+                        const frameBytes = buffer.subarray(payloadStart, payloadStart + contentLen)
+                        const blob = new Blob([frameBytes], { type: frameContentType })
+                        const url = URL.createObjectURL(blob)
+
+                        previewFrames.value.set(id, url)
+
+                        // 释放上一帧（不干扰已 set 的新 url）
+                        if (lastBlobUrl) URL.revokeObjectURL(lastBlobUrl)
+                        lastBlobUrl = url
+
+                        // buffer 消费到 payloadStart + contentLen 之后，继续 while 解下一帧
+                        buffer = buffer.subarray(payloadStart + contentLen)
+                    }
+                }
+            } finally {
+                try { reader.releaseLock() } catch { /* ignore */ }
+                if (lastBlobUrl) URL.revokeObjectURL(lastBlobUrl)
+            }
+        } catch (err: unknown) {
+            if (
+                (err instanceof Error && err.name === 'AbortError') ||
+                (typeof (err as { name?: string })?.name === 'string' && (err as { name: string }).name === 'AbortError')
+            ) {
+                // 正常停止，静默
+            } else {
+                console.warn(`[cameras] 相机 ${id} MJPEG 流读取异常：`, err)
+            }
+        } finally {
+            if (_streamAbortCtrls.get(id) === ctrl) _streamAbortCtrls.delete(id)
+            // 断开连接后清除预览帧
+            const cur = previewFrames.value.get(id)
+            if (cur) {
+                URL.revokeObjectURL(cur)
+                previewFrames.value.delete(id)
+            }
+        }
+    }
+
+    /** 立即停止某台相机的 HTTP MJPEG 流读取（abort fetch），并释放 Blob URL */
+    function _stopStreamReader(id: string) {
+        const ctrl = _streamAbortCtrls.get(id)
+        if (ctrl) {
+            try { ctrl.abort() } catch { /* ignore */ }
+            _streamAbortCtrls.delete(id)
+        }
+        const cur = previewFrames.value.get(id)
+        if (cur) {
+            URL.revokeObjectURL(cur)
+            previewFrames.value.delete(id)
+        }
     }
 
     /** 用最新数据更新列表中某台相机 */
@@ -186,7 +356,7 @@ export const useCameraStore = defineStore('camera', () => {
         }
     }
 
-    /** 启动 SignalR Hub 连接（使用 MessagePack 协议，二进制帧无 base64 开销） */
+    /** 启动 SignalR Hub 连接（使用 MessagePack 协议，用于状态/指标推送，不再按帧推送） */
     async function startHub() {
         if (connection?.state === signalR.HubConnectionState.Connected) {
             hubConnected.value = true
@@ -205,7 +375,7 @@ export const useCameraStore = defineStore('camera', () => {
                 .configureLogging(signalR.LogLevel.Warning)
                 .build()
 
-            // 接收相机状态推送（连接时及状态变化时触发，已迁移到 CameraStateDto 单参数）
+            // 接收相机状态推送（连接时及状态变化时触发）
             connection.on('ReceiveCameraStateAsync', (state: CameraStateDto) => {
                 if (!state || !state.cameraId) return
                 cameraStates.value.set(state.cameraId, state)
@@ -213,26 +383,7 @@ export const useCameraStore = defineStore('camera', () => {
                 void refreshCamera(state.cameraId)
             })
 
-            // 接收 JPEG 预览帧（30FPS 限速）
-            connection.on('ReceiveCameraFrameAsync', (cameraId: string, frame: Uint8Array | ArrayBuffer | number[]) => {
-                try {
-                    const bytes = normalizeFrameBytes(frame)
-                    if (bytes.byteLength === 0) return
-
-                    const oldUrl = previewFrames.value.get(cameraId)
-                    const blob = new Blob([toBlobArrayBuffer(bytes)], { type: 'image/jpeg' })
-                    const url = URL.createObjectURL(blob)
-                    previewFrames.value.set(cameraId, url)
-
-                    if (oldUrl) {
-                        window.setTimeout(() => URL.revokeObjectURL(oldUrl), 1000)
-                    }
-                } catch (error) {
-                    console.warn('接收相机预览帧失败', error)
-                }
-            })
-
-            // 接收实时运行指标（每 2 秒推送）
+            // 接收实时运行指标（每 500ms 推送）
             connection.on('ReceiveLiveMetricsAsync', (cameraId: string, metrics: LiveMetricsWire) => {
                 liveMetrics.value.set(cameraId, normalizeLiveMetrics(metrics))
             })
@@ -292,9 +443,10 @@ export const useCameraStore = defineStore('camera', () => {
             connection = null
             hubConnected.value = false
         }
-        // 释放所有 ObjectURL
-        previewFrames.value.forEach((url) => URL.revokeObjectURL(url))
-        previewFrames.value.clear()
+        // 关闭所有相机 MJPEG 流读取器 + 释放 Blob URL
+        for (const id of [..._streamAbortCtrls.keys()]) {
+            _stopStreamReader(id)
+        }
     }
 
     // ─── 查询 ─────────────────────────────────────────────────────────────────
@@ -368,23 +520,30 @@ export const useCameraStore = defineStore('camera', () => {
         return await takeSnapshot(id)
     }
 
+    /**
+     * 启动相机预览：
+     *  1. 确保 SignalR 已连接（用于状态/指标推送和宽限期续约）
+     *  2. 调用 REST API 启动采集（相机线程开始抓帧并写入帧缓冲）
+     *  3. 启动 fetch + ReadableStream 读取器：自行按 boundary 分帧，组装 BMP Blob URL 写入 previewFrames
+     */
     async function startCameraPreview(id: string, dto: StartCameraPreviewDto): Promise<void> {
         await startHub()
         const connectionId = connection?.connectionId ?? dto.connectionId
-        if (!connectionId) {
-            throw new Error('相机实时连接未就绪，无法启动预览')
-        }
 
         await startPreview(id, { ...dto, connectionId })
+        // 启动 HTTP MJPEG 流读取器（异步，不阻塞这里）
+        void _startStreamReader(id)
         await refreshCamera(id)
     }
 
+    /**
+     * 停止相机预览：
+     *  1. 调用 REST API 停止采集
+     *  2. Abort() 底层 fetch 连接 + revoke 当前 Blob URL
+     */
     async function stopCameraPreview(id: string): Promise<void> {
         await stopPreview(id)
-        // 清除对应相机的预览帧
-        const url = previewFrames.value.get(id)
-        if (url) URL.revokeObjectURL(url)
-        previewFrames.value.delete(id)
+        _stopStreamReader(id)
         await refreshCamera(id)
     }
 
@@ -479,6 +638,9 @@ export const useCameraStore = defineStore('camera', () => {
      * 页面刷新/路由返回/SignalR 重连后调用：
      * 一次往返拉取相机完整运行状态快照，恢复 NodeMap 缓存、预览状态等 UI 状态。
      * 同时向 Hub 发送 ReattachPreview，续约宽限期内的预览会话。
+     *
+     * 注意：若相机在预览中，这里也会同步设置 HTTP MJPEG 预览 URL，
+     * 避免刷新后画面丢失。
      */
     async function loadCameraSnapshotState(id: string): Promise<CameraSnapshotStateDto> {
         await startHub()
@@ -497,6 +659,11 @@ export const useCameraStore = defineStore('camera', () => {
         // 恢复 NodeMap 缓存
         if (snapshot.nodeMap) {
             nodeMaps.value.set(id, normalizeNodeMap(snapshot.nodeMap))
+        }
+
+        // 若快照显示正在预览，立即启动 MJPEG 流读取器
+        if (snapshot.isPreviewing) {
+            void _startStreamReader(id)
         }
 
         // 记录订阅，持久化以便重连时批量恢复

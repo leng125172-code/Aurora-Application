@@ -29,7 +29,10 @@ public class NullCalibScanNotifier : ICalibScanNotifier, ISingletonDependency
         int cameraRole,
         byte[] jpegBytes,
         long roundIndex,
-        int frameIndexInRound
+        int frameIndexInRound,
+        int totalFrameCountPerRound,
+        long accumulatedFrameCount,
+        bool isCrosshairDetected
     )
     {
         return Task.CompletedTask;

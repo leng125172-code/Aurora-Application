@@ -13,7 +13,7 @@ namespace AuroraStruct3D.OpenCV.VisionParameters;
 /// </list>
 /// </para>
 /// <para>
-/// 颜色数据单独存储在 <see cref="Colors"/> 属性中，类型为 <c>Mat(N, 3, CV_8UC3)</c>，
+/// 颜色数据单独存储在 <see cref="Colors"/> 属性中，类型为 <c>Mat(N, 3, CV_8UC1)</c>，
 /// 每行代表一个点的 BGR 颜色值（与 OpenCV 图像通道顺序一致）。
 /// </para>
 /// </summary>
@@ -95,18 +95,33 @@ public class PointCloudData : IVisionParameter
     public Mat? PointCloud => _pointCloud;
 
     /// <summary>
-    /// 获取颜色数据 <see cref="Mat"/> 对象，类型为 <c>Mat(N, 3, CV_8UC3)</c>，
+    /// 获取颜色数据 <see cref="Mat"/> 对象，类型为 <c>Mat(N, 3, CV_8UC1)</c>，
     /// 每行代表一个点的 BGR 颜色值。
     /// 若点云无颜色信息则返回 <see langword="null"/>。
     /// </summary>
     public Mat? Colors => _colors;
 
     /// <summary>
-    /// 设置颜色数据，类型必须为 <c>Mat(N, 3, CV_8UC3)</c>。
+    /// 设置颜色数据，类型必须为 <c>Mat(N, 3, CV_8UC1)</c>。
     /// </summary>
     /// <param name="colors">颜色数据 Mat。</param>
     public void SetColors(Mat? colors)
     {
+        if (
+            colors is not null
+            && (
+                colors.Empty()
+                || colors.Type() != MatType.CV_8UC1
+                || colors.Cols != 3
+                || (_pointCloud is not null && colors.Rows != _pointCloud.Rows)
+            )
+        )
+        {
+            throw new ArgumentException(
+                "点云颜色必须是与点数一致的 N×3、CV_8UC1 BGR 矩阵。",
+                nameof(colors)
+            );
+        }
         _colors?.Dispose();
         _colors = colors;
     }

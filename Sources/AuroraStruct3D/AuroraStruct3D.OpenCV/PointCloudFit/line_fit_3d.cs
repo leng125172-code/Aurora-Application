@@ -1,4 +1,5 @@
 using AuroraStruct3D.OpenCV.Common;
+using System.Text.Json;
 
 namespace AuroraStruct3D.OpenCV.PointCloudFit;
 
@@ -39,6 +40,34 @@ public class line_fit_3d : IOperator
             new PointCloudData() { ParameterName = "inlier_points", DisplayName = "内点点云" },
             new PointCloudData() { ParameterName = "outlier_points", DisplayName = "外点点云" },
             new MatImg() { ParameterName = "fitting_error", DisplayName = "拟合误差" },
+            new VisionParameter<double>
+            {
+                ParameterName = "fitting_error_value",
+                DisplayName = "拟合误差值",
+                ParameterType = typeof(double),
+                ControlType = PortControlType.Download,
+            },
+            new VisionParameter<double>
+            {
+                ParameterName = "angle_degrees",
+                DisplayName = "相对基准轴角度",
+                ParameterType = typeof(double),
+                ControlType = PortControlType.Download,
+            },
+            new VisionParameter<bool>
+            {
+                ParameterName = "is_ok",
+                DisplayName = "角度是否合格",
+                ParameterType = typeof(bool),
+                ControlType = PortControlType.Download,
+            },
+            new VisionParameter<string>
+            {
+                ParameterName = "result_json",
+                DisplayName = "直线检测结果",
+                ParameterType = typeof(string),
+                ControlType = PortControlType.Download,
+            },
         };
 
     public static List<IConfigParameter>? ConfigParameters =>
@@ -72,22 +101,59 @@ public class line_fit_3d : IOperator
                 Required = false,
                 ControlType = PortControlType.Input,
             },
+            new ConfigParameter
+            {
+                Name = "referenceAxis",
+                DisplayName = "角度基准轴",
+                ParameterType = typeof(string),
+                DefaultValue = "x",
+                ValueLimit = new[] { "x", "y", "z" },
+                Required = false,
+                ControlType = PortControlType.Select,
+            },
+            new ConfigParameter
+            {
+                Name = "minAngle",
+                DisplayName = "最小角度(度)",
+                ParameterType = typeof(double),
+                DefaultValue = "0",
+                Required = false,
+                ControlType = PortControlType.Input,
+            },
+            new ConfigParameter
+            {
+                Name = "maxAngle",
+                DisplayName = "最大角度(度)",
+                ParameterType = typeof(double),
+                DefaultValue = "180",
+                Required = false,
+                ControlType = PortControlType.Input,
+            },
         };
 
     private readonly double _distanceThreshold;
     private readonly int _maxIterations;
     private readonly double _probability;
+    private readonly string _referenceAxis;
+    private readonly double _minAngle;
+    private readonly double _maxAngle;
     private bool _disposed;
 
     public line_fit_3d(
         double distanceThreshold = 0.01,
         int maxIterations = 1000,
-        double probability = 0.99
+        double probability = 0.99,
+        string referenceAxis = "x",
+        double minAngle = 0,
+        double maxAngle = 180
     )
     {
         _distanceThreshold = distanceThreshold;
         _maxIterations = maxIterations;
         _probability = probability;
+        _referenceAxis = referenceAxis;
+        _minAngle = minAngle;
+        _maxAngle = maxAngle;
     }
 
     public void Execute(IWorkflowContext context)
@@ -144,6 +210,8 @@ public class line_fit_3d : IOperator
         }
 
         double rmse = inlierIdx.Count > 0 ? Math.Sqrt(sumSq / inlierIdx.Count) : 0;
+        double angleDegrees = CalculateAxisAngle(dir, _referenceAxis);
+        bool isOk = angleDegrees >= _minAngle && angleDegrees <= _maxAngle;
 
         // ④ 输出
         Mat lineParams = new Mat(6, 1, MatType.CV_64FC1);
@@ -163,6 +231,38 @@ public class line_fit_3d : IOperator
         context.Set("inlier_points", PointCloudUtils.BuildCloud(inPts, inColors));
         context.Set("outlier_points", PointCloudUtils.BuildCloud(outPts, outColors));
         context.Set("fitting_error", errorMat);
+        context.Set("fitting_error_value", rmse);
+        context.Set("angle_degrees", angleDegrees);
+        context.Set("is_ok", isOk);
+        context.Set(
+            "result_json",
+            JsonSerializer.Serialize(
+                new
+                {
+                    angleDegrees,
+                    referenceAxis = _referenceAxis,
+                    minAngle = _minAngle,
+                    maxAngle = _maxAngle,
+                    rmse,
+                    isOk,
+                }
+            )
+        );
+    }
+
+    private static double CalculateAxisAngle(double[] direction, string axis)
+    {
+        double component = axis.Trim().ToLowerInvariant() switch
+        {
+            "y" => direction[1],
+            "z" => direction[2],
+            _ => direction[0],
+        };
+        // 直线方向正负等价，返回相对基准轴的锐角（0~90°）。
+        return Math.Round(
+            Math.Acos(Math.Clamp(Math.Abs(component), 0d, 1d)) * 180d / Math.PI,
+            6
+        );
     }
 
     private List<int> RansacInliers(float[] xs, float[] ys, float[] zs, int n)

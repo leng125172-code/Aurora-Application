@@ -21,7 +21,7 @@ public class SignalRCalibPointCloudNotifier : ICalibPointCloudNotifier, ISinglet
 
     private static string BuildProjectGroup(Guid calibProjectId)
     {
-        return $"calib-point-cloud:{calibProjectId:N}";
+        return $"calib-scan:{calibProjectId:N}";
     }
 
     /// <inheritdoc/>
@@ -30,5 +30,23 @@ public class SignalRCalibPointCloudNotifier : ICalibPointCloudNotifier, ISinglet
         return _hubContext
             .Clients.Group(BuildProjectGroup(status.CalibProjectId))
             .ReceivePointCloudStatusAsync(status);
+    }
+
+    /// <inheritdoc/>
+    public Task NotifyIncrementalPointCloudAsync(
+        Guid calibProjectId,
+        byte[] pointCloudBytes,
+        int pointCount,
+        int totalPointCount
+    )
+    {
+        return _hubContext
+            .Clients.Group(BuildProjectGroup(calibProjectId))
+            .ReceiveIncrementalPointCloudAsync(
+                calibProjectId.ToString(),
+                pointCloudBytes,
+                pointCount,
+                totalPointCount
+            );
     }
 }

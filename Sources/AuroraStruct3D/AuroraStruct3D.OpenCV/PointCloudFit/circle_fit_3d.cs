@@ -1,4 +1,5 @@
 using AuroraStruct3D.OpenCV.Common;
+using System.Text.Json;
 
 namespace AuroraStruct3D.OpenCV.PointCloudFit;
 
@@ -43,6 +44,34 @@ public class circle_fit_3d : IOperator
             new PointCloudData() { ParameterName = "inlier_points", DisplayName = "内点点云" },
             new PointCloudData() { ParameterName = "outlier_points", DisplayName = "外点点云" },
             new MatImg() { ParameterName = "fitting_error", DisplayName = "拟合误差" },
+            new VisionParameter<double>
+            {
+                ParameterName = "fitting_error_value",
+                DisplayName = "拟合误差值",
+                ParameterType = typeof(double),
+                ControlType = PortControlType.Download,
+            },
+            new VisionParameter<double>
+            {
+                ParameterName = "radius",
+                DisplayName = "圆半径",
+                ParameterType = typeof(double),
+                ControlType = PortControlType.Download,
+            },
+            new VisionParameter<bool>
+            {
+                ParameterName = "is_ok",
+                DisplayName = "半径是否合格",
+                ParameterType = typeof(bool),
+                ControlType = PortControlType.Download,
+            },
+            new VisionParameter<string>
+            {
+                ParameterName = "result_json",
+                DisplayName = "圆检测结果",
+                ParameterType = typeof(string),
+                ControlType = PortControlType.Download,
+            },
         };
 
     public static List<IConfigParameter>? ConfigParameters =>
@@ -76,22 +105,46 @@ public class circle_fit_3d : IOperator
                 Required = false,
                 ControlType = PortControlType.Input,
             },
+            new ConfigParameter
+            {
+                Name = "minRadius",
+                DisplayName = "最小半径",
+                ParameterType = typeof(double),
+                DefaultValue = "0",
+                Required = false,
+                ControlType = PortControlType.Input,
+            },
+            new ConfigParameter
+            {
+                Name = "maxRadius",
+                DisplayName = "最大半径",
+                ParameterType = typeof(double),
+                DefaultValue = "1.7976931348623157E+308",
+                Required = false,
+                ControlType = PortControlType.Input,
+            },
         };
 
     private readonly double _distanceThreshold;
     private readonly int _maxIterations;
     private readonly double _probability;
+    private readonly double _minRadius;
+    private readonly double _maxRadius;
     private bool _disposed;
 
     public circle_fit_3d(
         double distanceThreshold = 0.01,
         int maxIterations = 1000,
-        double probability = 0.99
+        double probability = 0.99,
+        double minRadius = 0,
+        double maxRadius = double.MaxValue
     )
     {
         _distanceThreshold = distanceThreshold;
         _maxIterations = maxIterations;
         _probability = probability;
+        _minRadius = minRadius;
+        _maxRadius = maxRadius;
     }
 
     public void Execute(IWorkflowContext context)
@@ -188,6 +241,8 @@ public class circle_fit_3d : IOperator
         }
 
         double rmse = inlierIdx.Count > 0 ? Math.Sqrt(sumSq / inlierIdx.Count) : 0;
+        double radius = refined.R;
+        bool isOk = radius >= _minRadius && radius <= _maxRadius;
 
         // ④ 输出
         Mat circleParams = new Mat(7, 1, MatType.CV_64FC1);
@@ -209,6 +264,22 @@ public class circle_fit_3d : IOperator
         context.Set("inlier_points", PointCloudUtils.BuildCloud(inPts, inColors));
         context.Set("outlier_points", PointCloudUtils.BuildCloud(outPts, outColors));
         context.Set("fitting_error", errorMat);
+        context.Set("fitting_error_value", rmse);
+        context.Set("radius", radius);
+        context.Set("is_ok", isOk);
+        context.Set(
+            "result_json",
+            JsonSerializer.Serialize(
+                new
+                {
+                    radius,
+                    minRadius = _minRadius,
+                    maxRadius = _maxRadius,
+                    rmse,
+                    isOk,
+                }
+            )
+        );
     }
 
     private readonly struct Circle

@@ -18,6 +18,11 @@ public class PointCloudSessionState
     public string? ErrorMessage { get; set; }
     public string? PlyDownloadUrl { get; set; }
     public long? PlyFileSizeBytes { get; set; }
+    public string? PlyBlobKey { get; set; }
+
+    public bool IsIncrementalMode { get; set; }
+    public int TotalPointCount { get; set; }
+    public List<byte[]> AccumulatedPointCloudChunks { get; } = new();
 
     public PointCloudStatusDto ToDto() =>
         new()
@@ -125,7 +130,8 @@ public class CalibPointCloudStateStore
     public PointCloudStatusDto Complete(
         Guid calibProjectId,
         string plyDownloadUrl,
-        long fileSizeBytes
+        long fileSizeBytes,
+        string? plyBlobKey = null
     )
     {
         _runningJobs.TryRemove(calibProjectId, out _);
@@ -143,6 +149,7 @@ public class CalibPointCloudStateStore
                 LastUpdatedAt = now,
                 PlyDownloadUrl = plyDownloadUrl,
                 PlyFileSizeBytes = fileSizeBytes,
+                PlyBlobKey = plyBlobKey,
             },
             (_, old) =>
             {
@@ -153,6 +160,7 @@ public class CalibPointCloudStateStore
                 old.LastUpdatedAt = now;
                 old.PlyDownloadUrl = plyDownloadUrl;
                 old.PlyFileSizeBytes = fileSizeBytes;
+                old.PlyBlobKey = plyBlobKey;
                 return old;
             }
         );
@@ -215,5 +223,100 @@ public class CalibPointCloudStateStore
         }
 
         return true;
+    }
+
+    /// <summary>初始化增量点云模式。</summary>
+    public PointCloudSessionState StartIncrementalMode(Guid calibProjectId)
+    {
+        DateTime now = DateTime.UtcNow;
+        return _sessions.AddOrUpdate(
+            calibProjectId,
+            _ => new PointCloudSessionState
+            {
+                CalibProjectId = calibProjectId,
+                State = PointCloudRunState.Running,
+                IsRunning = true,
+                IsIncrementalMode = true,
+                Progress = 0,
+                ProgressMessage = "增量点云模式已启动",
+                StartedAt = now,
+                LastUpdatedAt = now,
+                TotalPointCount = 0,
+            },
+            (_, old) =>
+            {
+                old.State = PointCloudRunState.Running;
+                old.IsRunning = true;
+                old.IsIncrementalMode = true;
+                old.Progress = 0;
+                old.ProgressMessage = "增量点云模式已启动";
+                old.StartedAt = now;
+                old.LastUpdatedAt = now;
+                old.TotalPointCount = 0;
+                old.AccumulatedPointCloudChunks.Clear();
+                return old;
+            }
+        );
+    }
+
+    /// <summary>添加增量点云数据块。</summary>
+    public bool AddIncrementalPointCloud(Guid calibProjectId, byte[] chunkBytes, int pointCount)
+    {
+        if (!_sessions.TryGetValue(calibProjectId, out PointCloudSessionState? session))
+        {
+            return false;
+        }
+
+        if (!session.IsIncrementalMode)
+        {
+            return false;
+        }
+
+        session.AccumulatedPointCloudChunks.Add(chunkBytes);
+        session.TotalPointCount += pointCount;
+        session.LastUpdatedAt = DateTime.UtcNow;
+        return true;
+    }
+
+    /// <summary>完成增量点云模式，保存最终合并后的 PLY 文件。</summary>
+    public PointCloudSessionState? CompleteIncrementalMode(Guid calibProjectId)
+    {
+        if (!_sessions.TryGetValue(calibProjectId, out PointCloudSessionState? session))
+        {
+            return null;
+        }
+
+        session.State = PointCloudRunState.Completed;
+        session.IsRunning = false;
+        session.IsIncrementalMode = false;
+        session.Progress = 100;
+        session.ProgressMessage = "增量点云生成完成";
+        session.LastUpdatedAt = DateTime.UtcNow;
+        return session;
+    }
+
+    /// <summary>检查是否处于增量模式。</summary>
+    public bool IsIncrementalModeActive(Guid calibProjectId)
+    {
+        return _sessions.TryGetValue(calibProjectId, out PointCloudSessionState? session)
+            && session.IsIncrementalMode;
+    }
+
+    /// <summary>获取增量模式下的累积点云块。</summary>
+    public List<byte[]> GetAccumulatedPointCloudChunks(Guid calibProjectId)
+    {
+        if (!_sessions.TryGetValue(calibProjectId, out PointCloudSessionState? session))
+        {
+            return new List<byte[]>();
+        }
+        return session.AccumulatedPointCloudChunks.ToList();
+    }
+
+    /// <summary>获取当前累积的总点数量。</summary>
+    public int GetTotalPointCount(Guid calibProjectId)
+    {
+        return _sessions.TryGetValue(calibProjectId, out PointCloudSessionState? session)
+            ? session.TotalPointCount
+            : 0;
     }
 }

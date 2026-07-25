@@ -550,19 +550,17 @@ public class CalibBoardDetector : ITransientDependency
                 if (markedKeypoints.Length == 0)
                     return null;
 
-                // 利用 keypoint.Size 估算先验像素半径，对粗略圆心做边缘亚像素精化
+                // 利用 keypoint.Size 估算先验像素半径
                 float estimatedRadius = EstimateMedianRadiusPx(markedKeypoints);
                 Point2f[] markedCenters = markedKeypoints
                     .Select(x => new Point2f(x.Pt.X, x.Pt.Y))
                     .ToArray();
-                if (estimatedRadius >= 3f)
-                {
-                    markedCenters = RefineCircleCentersByEdge(
-                        inputGray,
-                        markedCenters,
-                        estimatedRadius
-                    );
-                }
+
+                // 边缘亚像素精化临时关闭，待算法优化后再启用
+                _logger.LogDebug(
+                    "圆心边缘精化已关闭 — 保留原始 SimpleBlobDetector 圆心，数量={Count}",
+                    markedCenters.Length
+                );
 
                 bool markedOk = TryBuildOrderedCircleGrid(
                     markedCenters,
@@ -630,19 +628,17 @@ public class CalibBoardDetector : ITransientDependency
                 if (keypoints.Length == 0)
                     return null;
 
-                // 利用 keypoint.Size 估算先验像素半径，对粗略圆心做边缘亚像素精化
+                // 利用 keypoint.Size 估算先验像素半径
                 float estimatedRadius = EstimateMedianRadiusPx(keypoints);
                 Point2f[] blobCenters = keypoints
                     .Select(x => new Point2f(x.Pt.X, x.Pt.Y))
                     .ToArray();
-                if (estimatedRadius >= 3f)
-                {
-                    blobCenters = RefineCircleCentersByEdge(
-                        inputGray,
-                        blobCenters,
-                        estimatedRadius
-                    );
-                }
+
+                // 边缘亚像素精化临时关闭，待算法优化后再启用
+                _logger.LogDebug(
+                    "圆心边缘精化已关闭 — 保留原始 SimpleBlobDetector 圆心，数量={Count}",
+                    blobCenters.Length
+                );
 
                 bool orderedOk = TryBuildOrderedCircleGrid(
                     blobCenters,
@@ -735,7 +731,7 @@ public class CalibBoardDetector : ITransientDependency
     /// <param name="roughCenters">SimpleBlobDetector 给出的粗略圆心</param>
     /// <param name="estimatedRadiusPx">先验像素半径（来自 keypoint.Size 中位数）</param>
     /// <returns>精化后的圆心数组；精化失败的位置回退为原始圆心</returns>
-    private static Point2f[] RefineCircleCentersByEdge(
+    private Point2f[] RefineCircleCentersByEdge(
         Mat gray,
         Point2f[] roughCenters,
         float estimatedRadiusPx
@@ -765,6 +761,11 @@ public class CalibBoardDetector : ITransientDependency
         const float MinEdgeGradient = 30f; // 过滤弱响应，避免噪声干扰
 
         Point2f[] refined = new Point2f[roughCenters.Length];
+        int refineCount = 0;
+        int fallbackCount = 0;
+        double totalShift = 0;
+        double maxShift = 0;
+        double totalEdgePoints = 0;
         for (int i = 0; i < roughCenters.Length; i++)
         {
             double cx = roughCenters[i].X;
@@ -808,6 +809,8 @@ public class CalibBoardDetector : ITransientDependency
                 }
             }
 
+            totalEdgePoints += edgePoints.Count;
+
             // 至少需要 5 个有效边缘点才能稳定拟合椭圆
             if (edgePoints.Count >= 5)
             {
@@ -826,6 +829,10 @@ public class CalibBoardDetector : ITransientDependency
                     if (shift < estimatedRadiusPx * 0.5)
                     {
                         refined[i] = new Point2f(ellipse.Center.X, ellipse.Center.Y);
+                        refineCount++;
+                        totalShift += shift;
+                        if (shift > maxShift)
+                            maxShift = shift;
                         continue;
                     }
                 }
@@ -837,7 +844,20 @@ public class CalibBoardDetector : ITransientDependency
 
             // 回退：使用原始粗略圆心
             refined[i] = roughCenters[i];
+            fallbackCount++;
         }
+
+        _logger.LogInformation(
+            "圆心边缘精化统计 — 总数={Total}, 精化={Refined}, 回退={Fallback}, "
+                + "平均边缘点数={AvgEdgePoints:F1}/32, 平均偏移={AvgShift:F3}px, 最大偏移={MaxShift:F3}px, 先验半径={Radius:F2}px",
+            roughCenters.Length,
+            refineCount,
+            fallbackCount,
+            roughCenters.Length > 0 ? totalEdgePoints / roughCenters.Length : 0,
+            refineCount > 0 ? totalShift / refineCount : 0,
+            maxShift,
+            estimatedRadiusPx
+        );
 
         return refined;
     }

@@ -69,7 +69,7 @@ public class label_colorize_point_cloud : IOperator
         }
 
         int pointCount = pointCloud.Rows;
-        Mat colors = new(pointCount, 3, MatType.CV_8UC3);
+        Mat colors = new(pointCount, 3, MatType.CV_8UC1);
         for (int i = 0; i < pointCount; i++)
         {
             int label = (int)Math.Round(pointCloud.Get<float>(i, 3));

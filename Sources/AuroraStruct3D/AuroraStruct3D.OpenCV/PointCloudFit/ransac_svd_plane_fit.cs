@@ -90,6 +90,18 @@ public class ransac_svd_plane_fit : IOperator
         double probability = 0.99
     )
     {
+        if (!double.IsFinite(distanceThreshold) || distanceThreshold <= 0)
+            throw new ArgumentOutOfRangeException(
+                nameof(distanceThreshold),
+                "距离阈值必须是大于 0 的有限数值。"
+            );
+        if (maxIterations <= 0)
+            throw new ArgumentOutOfRangeException(nameof(maxIterations), "最大迭代次数必须大于 0。");
+        if (!double.IsFinite(probability) || probability <= 0 || probability >= 1)
+            throw new ArgumentOutOfRangeException(
+                nameof(probability),
+                "置信概率必须位于 (0, 1) 区间。"
+            );
         _distanceThreshold = distanceThreshold;
         _maxIterations = maxIterations;
         _probability = probability;
@@ -147,18 +159,19 @@ public class ransac_svd_plane_fit : IOperator
         // ==========================================
         double[] refinedPlane = SvdRefinePlane(inlierCloud, inlierIndices.Count);
 
-        // 计算精拟合 RMSE（基于所有原始点）
+        // 拟合误差应基于用于精拟合的内点。把已被 RANSAC 判定为外点的数据计入
+        // RMSE 会让“平面拟合误差”被离群点主导，与算子描述和标准拟合误差定义不符。
         double sumSqDist = 0;
-        for (int i = 0; i < pointCount; i++)
+        for (int i = 0; i < inlierIndices.Count; i++)
         {
-            double x = pointCloud.Get<float>(i, 0);
-            double y = pointCloud.Get<float>(i, 1);
-            double z = pointCloud.Get<float>(i, 2);
+            double x = inlierCloud.Get<float>(i, 0);
+            double y = inlierCloud.Get<float>(i, 1);
+            double z = inlierCloud.Get<float>(i, 2);
             double dist =
                 refinedPlane[0] * x + refinedPlane[1] * y + refinedPlane[2] * z + refinedPlane[3];
             sumSqDist += dist * dist;
         }
-        double rmse = Math.Sqrt(sumSqDist / pointCount);
+        double rmse = Math.Sqrt(sumSqDist / inlierIndices.Count);
 
         // ==========================================
         // 输出结果

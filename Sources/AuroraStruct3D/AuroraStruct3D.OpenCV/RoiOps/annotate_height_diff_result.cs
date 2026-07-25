@@ -10,6 +10,41 @@ public class annotate_height_diff_result : IOperator
         new()
         {
             new MatImg { ParameterName = "input_mat", DisplayName = "输入图像" },
+            new VisionParameter<string>
+            {
+                ParameterName = "roi_metadata_a",
+                ParameterType = typeof(string),
+                DisplayName = "区域A元数据",
+                ControlType = PortControlType.Variable,
+            },
+            new VisionParameter<string>
+            {
+                ParameterName = "roi_metadata_b",
+                ParameterType = typeof(string),
+                DisplayName = "区域B元数据",
+                ControlType = PortControlType.Variable,
+            },
+            new VisionParameter<double>
+            {
+                ParameterName = "height_a",
+                ParameterType = typeof(double),
+                DisplayName = "区域A高度",
+                ControlType = PortControlType.Variable,
+            },
+            new VisionParameter<double>
+            {
+                ParameterName = "height_b",
+                ParameterType = typeof(double),
+                DisplayName = "区域B高度",
+                ControlType = PortControlType.Variable,
+            },
+            new VisionParameter<double>
+            {
+                ParameterName = "signed_diff",
+                ParameterType = typeof(double),
+                DisplayName = "有符号高度差",
+                ControlType = PortControlType.Variable,
+            },
             new VisionParameter<bool>
             {
                 ParameterName = "is_ok",

@@ -321,11 +321,19 @@ public class DownloadFringePatternInputDto
     [Range(1, 100)]
     public int PeriodCount { get; set; }
 
-    /// <summary>生成图片数量</summary>
-    [Range(1, 128)]
+    /// <summary>每个方向的相移步数（实际生成并下载 2×ImageCount 幅横竖交替条纹）</summary>
+    [Range(1, 64)]
     public int ImageCount { get; set; }
 
     /// <summary>每张图相对上一张的像素相移量（整数，0 &lt; phaseShift &lt; periodCount）</summary>
     [Range(1, 4096)]
     public int PhaseShift { get; set; }
+
+    /// <summary>
+    /// 横条纹帧不足 1280 列时，剩余黑色填充区域的位置。
+    /// 前端实际投影宽度通常为 720，地址空间为 1280，因此横条纹需补 560 列黑色。
+    /// start=填充放在条纹数据前面（左侧），end=填充放在条纹数据后面（右侧，默认）。
+    /// </summary>
+    [MaxLength(16)]
+    public string HorizontalPaddingPosition { get; set; } = "end";
 }

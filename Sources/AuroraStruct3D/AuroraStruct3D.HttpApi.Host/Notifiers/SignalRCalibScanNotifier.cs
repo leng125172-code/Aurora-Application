@@ -1,6 +1,7 @@
 using AuroraStruct3D.Calibration;
 using AuroraStruct3D.Calibration.Dtos;
 using AuroraStruct3D.Hubs;
+using AuroraStruct3D.Streaming;
 using Microsoft.AspNetCore.SignalR;
 using Volo.Abp.DependencyInjection;
 
@@ -13,15 +14,20 @@ namespace AuroraStruct3D.Notifiers;
 public class SignalRCalibScanNotifier : ICalibScanNotifier, ISingletonDependency
 {
     private readonly IHubContext<CameraHub, ICameraHub> _hubContext;
+    private readonly CalibScanFrameBufferService _frameBuffer;
 
     private static string BuildProjectGroup(Guid calibProjectId)
     {
         return $"calib-scan:{calibProjectId:N}";
     }
 
-    public SignalRCalibScanNotifier(IHubContext<CameraHub, ICameraHub> hubContext)
+    public SignalRCalibScanNotifier(
+        IHubContext<CameraHub, ICameraHub> hubContext,
+        CalibScanFrameBufferService frameBuffer
+    )
     {
         _hubContext = hubContext;
+        _frameBuffer = frameBuffer;
     }
 
     /// <inheritdoc/>
@@ -46,17 +52,13 @@ public class SignalRCalibScanNotifier : ICalibScanNotifier, ISingletonDependency
         int cameraRole,
         byte[] jpegBytes,
         long roundIndex,
-        int frameIndexInRound
+        int frameIndexInRound,
+        int totalFrameCountPerRound,
+        long accumulatedFrameCount,
+        bool isCrosshairDetected
     )
     {
-        return _hubContext
-            .Clients.Group(BuildProjectGroup(calibProjectId))
-            .ReceiveCalibScanFrameAsync(
-                calibProjectId.ToString(),
-                cameraRole,
-                jpegBytes,
-                roundIndex,
-                frameIndexInRound
-            );
+        _frameBuffer.PublishFrame(calibProjectId, cameraRole, jpegBytes);
+        return Task.CompletedTask;
     }
 }
