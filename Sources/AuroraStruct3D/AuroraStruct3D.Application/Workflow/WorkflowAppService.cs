@@ -1,13 +1,20 @@
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using AuroraStruct3D.OpenCV.Registry;
 using AuroraStruct3D.OpenCV.Workflow.Compilation;
 using AuroraStruct3D.OpenCV.Workflow.Compilation.Model;
+using AuroraStruct3D.OpenCV.Workflow.Scripting;
 using AuroraStruct3D.Variables;
 using AuroraStruct3D.Variables.Dtos;
 using AuroraStruct3D.Workflow.Dtos;
+using AuroraStruct3D.Workflow.Runtime;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using Volo.Abp;
 using Volo.Abp.Domain.Repositories;
+using Volo.Abp.Data;
 
 namespace AuroraStruct3D.Workflow;
 
@@ -19,24 +26,32 @@ namespace AuroraStruct3D.Workflow;
 /// 端点使用 ABP 约定式路由。
 /// </summary>
 [Authorize]
+[Route("api/app/workflow")]
 public class WorkflowAppService : AuroraStruct3DAppService, IWorkflowAppService
 {
     private readonly IRepository<WorkflowDefinition, Guid> _repository;
     private readonly IOperatorRegistry _operatorRegistry;
     private readonly IOfflineVariableLibraryAppService _offlineVariableLibrary;
+    private readonly IWorkflowProgramCache _programCache;
+    private readonly IRepository<WorkflowSourceVersion, Guid> _sourceVersionRepository;
 
     public WorkflowAppService(
         IRepository<WorkflowDefinition, Guid> repository,
         IOperatorRegistry operatorRegistry,
-        IOfflineVariableLibraryAppService offlineVariableLibrary
+        IOfflineVariableLibraryAppService offlineVariableLibrary,
+        IWorkflowProgramCache programCache,
+        IRepository<WorkflowSourceVersion, Guid> sourceVersionRepository
     )
     {
         _repository = repository;
         _operatorRegistry = operatorRegistry;
         _offlineVariableLibrary = offlineVariableLibrary;
+        _programCache = programCache;
+        _sourceVersionRepository = sourceVersionRepository;
     }
 
     /// <inheritdoc/>
+    [HttpGet]
     public async Task<List<WorkflowBriefDto>> GetListAsync(Guid projectId)
     {
         IQueryable<WorkflowDefinition> queryable = await _repository.GetQueryableAsync();
@@ -59,6 +74,7 @@ public class WorkflowAppService : AuroraStruct3DAppService, IWorkflowAppService
     }
 
     /// <inheritdoc/>
+    [HttpPost]
     public async Task<WorkflowDto> CreateAsync(CreateWorkflowInput input)
     {
         (Guid projectId, string name, string graphData, GraphDataModel graph) = ReadPayload(input);
@@ -74,6 +90,19 @@ public class WorkflowAppService : AuroraStruct3DAppService, IWorkflowAppService
             name,
             graphData
         );
+        string sourceCode = CSharpWorkflowScript.Generate(name, graph);
+        (string sourceHash, string programHash) = ComputeSourceHashes(sourceCode);
+        await _programCache.GetOrAddAsync(programHash, sourceCode);
+        workflow.UpdateSource(
+            name,
+            sourceCode,
+            graphData,
+            sourceHash,
+            programHash,
+            CSharpWorkflowScript.LanguageVersion,
+            WorkflowProgramHash.ComputeSemanticHash(sourceCode),
+            WorkflowProgramHash.ComputeOperatorContractHash()
+        );
         workflow.UpdateOutputVariables(
             SerializeOutputVariables(
                 WorkflowSignatureExtractor.Extract(graph).Outputs.ToList()
@@ -81,11 +110,13 @@ public class WorkflowAppService : AuroraStruct3DAppService, IWorkflowAppService
         );
 
         await _repository.InsertAsync(workflow, autoSave: true);
+        await CreateSourceVersionAsync(workflow);
 
         return MapToDto(workflow);
     }
 
     /// <inheritdoc/>
+    [HttpGet("{id:guid}")]
     public async Task<WorkflowDto> GetAsync(Guid id)
     {
         WorkflowDefinition workflow = await _repository.GetAsync(id);
@@ -94,6 +125,7 @@ public class WorkflowAppService : AuroraStruct3DAppService, IWorkflowAppService
     }
 
     /// <inheritdoc/>
+    [HttpPut("{id:guid}")]
     public async Task<WorkflowDto> UpdateAsync(Guid id, UpdateWorkflowInput input)
     {
         (Guid projectId, string name, string graphData, GraphDataModel graph) = ReadPayload(input);
@@ -104,7 +136,19 @@ public class WorkflowAppService : AuroraStruct3DAppService, IWorkflowAppService
         // MOD: 更新同样要求先通过离线变量编译。
         await ValidateBeforeSaveAsync(projectId, workflow.Id, graph);
 
-        workflow.Update(name, graphData);
+        string sourceCode = CSharpWorkflowScript.Generate(name, graph);
+        (string sourceHash, string programHash) = ComputeSourceHashes(sourceCode);
+        await _programCache.GetOrAddAsync(programHash, sourceCode);
+        workflow.UpdateSource(
+            name,
+            sourceCode,
+            graphData,
+            sourceHash,
+            programHash,
+            CSharpWorkflowScript.LanguageVersion,
+            WorkflowProgramHash.ComputeSemanticHash(sourceCode),
+            WorkflowProgramHash.ComputeOperatorContractHash()
+        );
         workflow.UpdateOutputVariables(
             SerializeOutputVariables(
                 WorkflowSignatureExtractor.Extract(graph).Outputs.ToList()
@@ -112,11 +156,13 @@ public class WorkflowAppService : AuroraStruct3DAppService, IWorkflowAppService
         );
 
         await _repository.UpdateAsync(workflow, autoSave: true);
+        await CreateSourceVersionAsync(workflow);
 
         return MapToDto(workflow);
     }
 
     /// <inheritdoc/>
+    [HttpDelete("{id:guid}")]
     public async Task DeleteAsync(Guid id)
     {
         WorkflowDefinition workflow = await _repository.GetAsync(id);
@@ -125,6 +171,7 @@ public class WorkflowAppService : AuroraStruct3DAppService, IWorkflowAppService
     }
 
     /// <inheritdoc/>
+    [HttpPost("{id:guid}/validate")]
     public async Task<WorkflowValidateResultDto> ValidateAsync(Guid id)
     {
         WorkflowDefinition workflow = await _repository.GetAsync(id);
@@ -162,6 +209,7 @@ public class WorkflowAppService : AuroraStruct3DAppService, IWorkflowAppService
     }
 
     /// <inheritdoc/>
+    [HttpPost("{id:guid}/simulate")]
     public async Task<WorkflowDataFlowReportDto> SimulateAsync(Guid id)
     {
         WorkflowDefinition workflow = await _repository.GetAsync(id);
@@ -218,6 +266,7 @@ public class WorkflowAppService : AuroraStruct3DAppService, IWorkflowAppService
     }
 
     /// <inheritdoc/>
+    [HttpGet("{id:guid}/output-config")]
     public async Task<WorkflowOutputConfigDto> GetOutputConfigAsync(Guid id)
     {
         WorkflowDefinition workflow = await _repository.GetAsync(id);
@@ -227,6 +276,270 @@ public class WorkflowAppService : AuroraStruct3DAppService, IWorkflowAppService
     }
 
     /// <inheritdoc/>
+    [HttpGet("{id:guid}/output-paths")]
+    public async Task<WorkflowOutputPathListDto> GetOutputPathsAsync(
+        Guid id,
+        string variableName
+    )
+    {
+        if (string.IsNullOrWhiteSpace(variableName))
+        {
+            throw new UserFriendlyException("VariableName 不能为空。");
+        }
+
+        string rootVariableName = GetOutputRootVariableName(variableName.Trim());
+        WorkflowDefinition workflow = await _repository.GetAsync(id);
+        (_, GraphDataModel graph) = WorkflowGraphCompiler.ParseContent(workflow.GraphData);
+
+        (Guid OperatorId, string PortName)? producer = FindOutputProducer(
+            graph,
+            rootVariableName
+        );
+        if (producer is null)
+        {
+            throw new UserFriendlyException($"未找到变量 '{rootVariableName}' 的产出端口。");
+        }
+
+        OperatorParametersDescriptor? descriptor = await _operatorRegistry.GetParametersAsync(
+            producer.Value.OperatorId
+        );
+        ParameterDescriptor? output = descriptor?.Outputs.FirstOrDefault(x =>
+            string.Equals(x.ParameterName, producer.Value.PortName, StringComparison.Ordinal)
+        );
+        if (output is null)
+        {
+            throw new UserFriendlyException($"变量 '{rootVariableName}' 缺少输出类型元数据。");
+        }
+
+        List<WorkflowOutputPathDto> items =
+        [
+            new()
+            {
+                Path = rootVariableName,
+                Name = rootVariableName,
+                DisplayName = output.DisplayName,
+                ValueType = ToFrontendValueType(output.ParameterTypeName),
+                IsLeaf = string.IsNullOrWhiteSpace(output.JsonSchema),
+                IsArray = false,
+                Depth = 0,
+            },
+        ];
+
+        if (!string.IsNullOrWhiteSpace(output.JsonSchema))
+        {
+            try
+            {
+                JsonNode? schema = JsonNode.Parse(output.JsonSchema);
+                AppendSchemaPaths(schema, rootVariableName, 1, items);
+                items[0].IsLeaf = items.Count == 1;
+            }
+            catch (JsonException ex)
+            {
+                throw new UserFriendlyException(
+                    $"变量 '{rootVariableName}' 的输出 Schema 无效：{ex.Message}"
+                );
+            }
+        }
+
+        return new WorkflowOutputPathListDto
+        {
+            WorkflowId = id,
+            VariableName = rootVariableName,
+            ValueType = items[0].ValueType,
+            Items = items,
+        };
+    }
+
+    [HttpGet("{id:guid}/source")]
+    public async Task<WorkflowSourceDto> GetSourceAsync(Guid id)
+    {
+        WorkflowDefinition workflow = await _repository.GetAsync(id);
+        string source =
+            workflow.SourceCode
+            ?? CSharpWorkflowScript.Generate(
+                workflow.Name,
+                WorkflowGraphCompiler.ParseContent(workflow.GraphData).Graph
+            );
+        (string sourceHash, string programHash) = ComputeSourceHashes(source);
+        return MapSourceDto(workflow, source, sourceHash, programHash);
+    }
+
+    [HttpPut("{id:guid}/source")]
+    public async Task<WorkflowSourceDto> UpdateSourceAsync(
+        Guid id,
+        UpdateWorkflowSourceInput input
+    )
+    {
+        WorkflowDefinition workflow = await _repository.GetAsync(id);
+        if (
+            input.ExpectedRevision.HasValue
+            && input.ExpectedRevision.Value != workflow.SourceRevision
+        )
+        {
+            throw CreateConcurrencyException(workflow);
+        }
+        if (
+            !string.IsNullOrWhiteSpace(input.ConcurrencyStamp)
+            && !string.Equals(
+                input.ConcurrencyStamp,
+                workflow.ConcurrencyStamp,
+                StringComparison.Ordinal
+            )
+        )
+        {
+            throw CreateConcurrencyException(workflow);
+        }
+
+        (string name, GraphDataModel graph) = CSharpWorkflowScript.Parse(input.SourceCode);
+        await ValidateBeforeSaveAsync(workflow.ProjectId, workflow.Id, graph);
+        string graphData = JsonSerializer.Serialize(graph, GraphJson.Options);
+        (string sourceHash, string programHash) = ComputeSourceHashes(input.SourceCode);
+        string semanticHash = WorkflowProgramHash.ComputeSemanticHash(input.SourceCode);
+        string operatorContractHash = WorkflowProgramHash.ComputeOperatorContractHash();
+        await _programCache.GetOrAddAsync(programHash, input.SourceCode);
+        workflow.UpdateSource(
+            name,
+            input.SourceCode,
+            graphData,
+            sourceHash,
+            programHash,
+            CSharpWorkflowScript.LanguageVersion,
+            semanticHash,
+            operatorContractHash
+        );
+        workflow.UpdateOutputVariables(
+            SerializeOutputVariables(WorkflowSignatureExtractor.Extract(graph).Outputs.ToList())
+        );
+        await _repository.UpdateAsync(workflow, autoSave: true);
+        await CreateSourceVersionAsync(workflow);
+        return MapSourceDto(workflow, input.SourceCode, sourceHash, programHash);
+    }
+
+    [HttpPost("source/validate")]
+    public async Task<WorkflowSourceValidationDto> ValidateSourceAsync(
+        WorkflowSourceParseInput input
+    )
+    {
+        WorkflowSourceValidationDto result = new();
+        try
+        {
+            (string name, GraphDataModel graph) = CSharpWorkflowScript.Parse(input.SourceCode);
+            WorkflowValidationResult validation = await new WorkflowGraphValidator(
+                _operatorRegistry
+            ).ValidateAsync(graph);
+            result.Name = name;
+            result.Errors = validation.Errors.Select(x => x.Message).ToList();
+            result.Diagnostics = validation.Diagnostics
+                .Select(x => new WorkflowSourceDiagnosticDto
+                {
+                    Code =
+                        x.Severity == WorkflowDiagnosticSeverity.Error
+                            ? "WFC2001"
+                            : "WFC2002",
+                    Severity = x.Severity.ToString().ToLowerInvariant(),
+                    Message = x.Message,
+                    Line = 0,
+                    Column = 0,
+                    NodeId = x.NodeId,
+                })
+                .ToList();
+            result.IsValid = result.Errors.Count == 0;
+            (result.SourceHash, result.ProgramHash) = ComputeSourceHashes(input.SourceCode);
+        }
+        catch (WorkflowScriptException ex)
+        {
+            result.Errors.Add(ex.Message);
+            result.Diagnostics.Add(
+                new WorkflowSourceDiagnosticDto
+                {
+                    Code = ex.Code,
+                    Message = ex.Message,
+                    Line = ex.Line,
+                    Column = ex.Column,
+                    NodeId = ex.NodeId,
+                }
+            );
+        }
+        catch (Exception ex) when (ex is FormatException or JsonException)
+        {
+            result.Errors.Add(ex.Message);
+            result.Diagnostics.Add(
+                new WorkflowSourceDiagnosticDto
+                {
+                    Code = "WFS1000",
+                    Message = ex.Message,
+                    Line = 0,
+                    Column = 0,
+                }
+            );
+        }
+        return result;
+    }
+
+    [HttpPost("graph/to-source")]
+    public Task<string> ConvertGraphToSourceAsync(WorkflowSourceConversionInput input)
+    {
+        GraphDataModel graph =
+            input.GraphData.Deserialize<GraphDataModel>(GraphJson.Options) ?? new();
+        return Task.FromResult(CSharpWorkflowScript.Generate(input.Name, graph));
+    }
+
+    [HttpPost("source/to-graph")]
+    public Task<JsonElement> ConvertSourceToGraphAsync(WorkflowSourceParseInput input)
+    {
+        (_, GraphDataModel graph) = CSharpWorkflowScript.Parse(input.SourceCode);
+        return Task.FromResult(
+            JsonSerializer.SerializeToElement(graph, GraphJson.Options)
+        );
+    }
+
+    [HttpPost("source/migrate-legacy")]
+    public async Task<WorkflowSourceMigrationResultDto> MigrateLegacySourcesAsync(
+        int batchSize = 100
+    )
+    {
+        batchSize = Math.Clamp(batchSize, 1, 1000);
+        List<WorkflowDefinition> workflows = await AsyncExecuter.ToListAsync(
+            (await _repository.GetQueryableAsync())
+                .Where(x => x.SourceCode == null || x.SourceCode == string.Empty)
+                .OrderBy(x => x.CreationTime)
+                .Take(batchSize)
+        );
+        WorkflowSourceMigrationResultDto result = new() { ScannedCount = workflows.Count };
+        foreach (WorkflowDefinition workflow in workflows)
+        {
+            try
+            {
+                (_, GraphDataModel graph) = WorkflowGraphCompiler.ParseContent(
+                    workflow.GraphData
+                );
+                string source = CSharpWorkflowScript.Generate(workflow.Name, graph);
+                (string sourceHash, string programHash) = ComputeSourceHashes(source);
+                await _programCache.GetOrAddAsync(programHash, source);
+                workflow.UpdateSource(
+                    workflow.Name,
+                    source,
+                    workflow.GraphData,
+                    sourceHash,
+                    programHash,
+                    CSharpWorkflowScript.LanguageVersion,
+                    WorkflowProgramHash.ComputeSemanticHash(source),
+                    WorkflowProgramHash.ComputeOperatorContractHash()
+                );
+                await _repository.UpdateAsync(workflow, autoSave: true);
+                result.MigratedCount++;
+            }
+            catch
+            {
+                result.FailedWorkflowIds.Add(workflow.Id);
+            }
+        }
+        return result;
+    }
+
+    /// <inheritdoc/>
+    [Obsolete("输出变量由结束节点自动生成，请修改工作流图后调用 CreateAsync/UpdateAsync。")]
+    [HttpPut("{id:guid}/output-config")]
     public async Task<WorkflowOutputConfigDto> UpdateOutputConfigAsync(
         Guid id,
         WorkflowOutputConfigDto input
@@ -256,6 +569,208 @@ public class WorkflowAppService : AuroraStruct3DAppService, IWorkflowAppService
     }
 
     // ─────────────────────────── 私有辅助 ───────────────────────────
+
+    private async Task CreateSourceVersionAsync(WorkflowDefinition workflow)
+    {
+        var version = new WorkflowSourceVersion(
+            GuidGenerator.Create(),
+            workflow.Id,
+            workflow.SourceRevision,
+            workflow.SourceCode!,
+            workflow.GraphData,
+            workflow.SourceHash!,
+            workflow.SemanticHash!,
+            workflow.ProgramHash!
+        );
+        await _sourceVersionRepository.InsertAsync(version, autoSave: true);
+    }
+
+    private static (Guid OperatorId, string PortName)? FindOutputProducer(
+        GraphDataModel graph,
+        string variableName
+    )
+    {
+        foreach (NodeModel node in graph.Nodes)
+        {
+            if (
+                Guid.TryParse(node.Type, out Guid operatorId)
+                && node.Properties?.OutputBindings is { } bindings
+            )
+            {
+                foreach ((string portName, string boundVariableName) in bindings)
+                {
+                    if (string.Equals(boundVariableName, variableName, StringComparison.Ordinal))
+                    {
+                        return (operatorId, portName);
+                    }
+                }
+            }
+
+            if (node.Properties?.InnerGraphData is { } innerGraph)
+            {
+                (Guid OperatorId, string PortName)? inner = FindOutputProducer(
+                    innerGraph,
+                    variableName
+                );
+                if (inner is not null)
+                {
+                    return inner;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private static (string SourceHash, string ProgramHash) ComputeSourceHashes(string source)
+        => (
+            WorkflowProgramHash.ComputeSourceHash(source),
+            WorkflowProgramHash.ComputeProgramHash(source)
+        );
+
+    private static AbpDbConcurrencyException CreateConcurrencyException(
+        WorkflowDefinition workflow
+    )
+    {
+        AbpDbConcurrencyException exception = new(
+            $"工作流已被其他操作修改，服务器修订号为 {workflow.SourceRevision}。"
+        );
+        exception.Data["serverRevision"] = workflow.SourceRevision;
+        exception.Data["contentHash"] = workflow.SourceHash ?? string.Empty;
+        exception.Data["semanticHash"] = workflow.SemanticHash ?? string.Empty;
+        exception.Data["programHash"] = workflow.ProgramHash ?? string.Empty;
+        return exception;
+    }
+
+    private static WorkflowSourceDto MapSourceDto(
+        WorkflowDefinition workflow,
+        string source,
+        string sourceHash,
+        string programHash
+    )
+    {
+        using JsonDocument graph = JsonDocument.Parse(workflow.GraphData);
+        return new WorkflowSourceDto
+        {
+            WorkflowId = workflow.Id,
+            Name = workflow.Name,
+            SourceCode = source,
+            SourceHash = sourceHash,
+            ContentHash = sourceHash,
+            SemanticHash = workflow.SemanticHash
+                ?? WorkflowProgramHash.ComputeSemanticHash(source),
+            ProgramHash = programHash,
+            OperatorContractHash = workflow.OperatorContractHash
+                ?? WorkflowProgramHash.ComputeOperatorContractHash(),
+            LanguageVersion = CSharpWorkflowScript.LanguageVersion,
+            Revision = workflow.SourceRevision,
+            ConcurrencyStamp = workflow.ConcurrencyStamp,
+            GraphData = graph.RootElement.Clone(),
+        };
+    }
+
+    private static void AppendSchemaPaths(
+        JsonNode? schema,
+        string parentPath,
+        int depth,
+        ICollection<WorkflowOutputPathDto> result
+    )
+    {
+        if (schema is not JsonObject schemaObject)
+        {
+            return;
+        }
+
+        string type = schemaObject["type"]?.GetValue<string>() ?? "object";
+        if (type == "array")
+        {
+            JsonNode? itemsSchema = schemaObject["items"];
+            string itemPath = parentPath + "[0]";
+            result.Add(
+                new WorkflowOutputPathDto
+                {
+                    Path = itemPath,
+                    SchemaPath = parentPath + "[]",
+                    Name = "[0]",
+                    DisplayName = itemsSchema?["title"]?.GetValue<string>() ?? "数组元素",
+                    ValueType = GetSchemaValueType(itemsSchema),
+                    IsLeaf = !SchemaHasChildren(itemsSchema),
+                    IsArray = false,
+                    IsNullable = IsNullableSchema(itemsSchema),
+                    Depth = depth,
+                }
+            );
+            AppendSchemaPaths(itemsSchema, itemPath, depth + 1, result);
+            return;
+        }
+
+        if (schemaObject["properties"] is not JsonObject properties)
+        {
+            return;
+        }
+
+        foreach ((string propertyName, JsonNode? propertySchema) in properties)
+        {
+            string path = parentPath + "." + propertyName;
+            bool isArray = string.Equals(
+                propertySchema?["type"]?.GetValue<string>(),
+                "array",
+                StringComparison.Ordinal
+            );
+            result.Add(
+                new WorkflowOutputPathDto
+                {
+                    Path = path,
+                    SchemaPath = path,
+                    Name = propertyName,
+                    DisplayName = propertySchema?["title"]?.GetValue<string>(),
+                    ValueType = GetSchemaValueType(propertySchema),
+                    IsLeaf = !SchemaHasChildren(propertySchema),
+                    IsArray = isArray,
+                    IsNullable = IsNullableSchema(propertySchema),
+                    Depth = depth,
+                }
+            );
+            AppendSchemaPaths(propertySchema, path, depth + 1, result);
+        }
+    }
+
+    private static bool SchemaHasChildren(JsonNode? schema) =>
+        schema is JsonObject obj
+        && (
+            obj["properties"] is JsonObject properties && properties.Count > 0
+            || obj["type"]?.GetValue<string>() == "array" && obj["items"] is not null
+        );
+
+    private static bool IsNullableSchema(JsonNode? schema) =>
+        schema is JsonObject obj
+        && (
+            obj["nullable"]?.GetValue<bool>() == true
+            || obj["type"] is JsonArray types
+                && types.Any(x => x?.GetValue<string>() == "null")
+        );
+
+    private static string GetSchemaValueType(JsonNode? schema) =>
+        schema?["type"]?.GetValue<string>() switch
+        {
+            "boolean" => "bool",
+            "integer" => "long",
+            "number" => "double",
+            "array" => "array",
+            "object" => "object",
+            "null" => "null",
+            _ => "string",
+        };
+
+    private static string ToFrontendValueType(string clrTypeName) =>
+        clrTypeName switch
+        {
+            "System.Boolean" => "bool",
+            "System.Int16" or "System.Int32" or "System.Int64" => "long",
+            "System.Single" or "System.Double" or "System.Decimal" => "double",
+            "System.String" => "string",
+            _ => clrTypeName,
+        };
 
     /// <summary>
     /// 从 WorkflowPayload 中解析 projectId / name，并提取 graphData 作为入库内容。
@@ -481,6 +996,10 @@ public class WorkflowAppService : AuroraStruct3DAppService, IWorkflowAppService
                 }
 
                 string variableName = variableNameRaw.Trim();
+                if (node.Type == "end-node")
+                {
+                    variableName = GetOutputRootVariableName(variableName);
+                }
                 if (string.IsNullOrWhiteSpace(variableName))
                 {
                     throw new UserFriendlyException(
@@ -695,6 +1214,17 @@ public class WorkflowAppService : AuroraStruct3DAppService, IWorkflowAppService
             DeletionTime = workflow.DeletionTime,
             DeleterId = workflow.DeleterId,
         };
+    }
+
+    private static string GetOutputRootVariableName(string outputPath)
+    {
+        int dotIndex = outputPath.IndexOf('.');
+        int bracketIndex = outputPath.IndexOf('[');
+        int separatorIndex =
+            dotIndex < 0 ? bracketIndex
+            : bracketIndex < 0 ? dotIndex
+            : Math.Min(dotIndex, bracketIndex);
+        return separatorIndex < 0 ? outputPath : outputPath[..separatorIndex];
     }
 
     private static List<string> ParseOutputVariablesJson(string? json)

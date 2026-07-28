@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -224,31 +225,40 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
     /// <inheritdoc/>
     public async Task<CalibPhotoDto> TakeIntrinsicPhotoAsync(TakeIntrinsicPhotoInput input)
     {
+        Stopwatch totalSw = Stopwatch.StartNew();
         CalibProject project = await _projectRepo.GetAsync(input.CalibProjectId);
         CameraDevice camera = await _cameraDeviceRepository.GetAsync(input.CameraDeviceId);
+        long metadataMs = totalSw.ElapsedMilliseconds;
 
         EnsureBoardConfigValid(project, isProjectedBoard: false);
 
+        Stopwatch phaseSw = Stopwatch.StartNew();
         byte[] jpegBytes = await GrabCalibFrameRawAsync(
             input.CameraDeviceId,
             targetTriggerMode: 2,
             imageRotationAngle: camera.ImageRotationAngle
         );
+        long captureMs = phaseSw.ElapsedMilliseconds;
 
+        phaseSw.Restart();
         (bool isValid, int cornerCount) = _boardDetector.DetectBoardFeaturePoints(
             jpegBytes,
             project,
             isProjectedBoard: false
         );
+        long detectionMs = phaseSw.ElapsedMilliseconds;
 
         string blobKey = BuildBlobKey(
             input.CalibProjectId,
             input.CameraDeviceId,
             CalibPhotoType.Intrinsic
         );
+        phaseSw.Restart();
         await _blobContainer.SaveAsync(blobKey, jpegBytes, overrideExisting: false);
+        long blobSaveMs = phaseSw.ElapsedMilliseconds;
 
-        string imageBase64 = $"data:image/jpeg;base64,{Convert.ToBase64String(jpegBytes)}";
+        phaseSw.Restart();
+        string imageBase64 = CreateThumbnailBase64(jpegBytes);
 
         CalibPhotoRecord record = new(
             GuidGenerator.Create(),
@@ -261,6 +271,19 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
             imageBase64
         );
         await _photoRepo.InsertAsync(record);
+        long recordSaveMs = phaseSw.ElapsedMilliseconds;
+
+        _logger.LogInformation(
+            "内参拍照耗时: Metadata={MetadataMs}ms, Capture={CaptureMs}ms, Detect={DetectionMs}ms, BlobSave={BlobSaveMs}ms, RecordAndBase64={RecordSaveMs}ms, Total={TotalMs}ms, ImageBytes={ImageBytes}, Valid={Valid}",
+            metadataMs,
+            captureMs,
+            detectionMs,
+            blobSaveMs,
+            recordSaveMs,
+            totalSw.ElapsedMilliseconds,
+            jpegBytes.Length,
+            isValid
+        );
 
         return ToPhotoDto(record);
     }
@@ -315,7 +338,7 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
         );
         await _blobContainer.SaveAsync(blobKey, photoBytes, overrideExisting: false);
 
-        string imageBase64 = $"data:image/jpeg;base64,{Convert.ToBase64String(photoBytes)}";
+        string imageBase64 = CreateThumbnailBase64(photoBytes);
 
         CalibPhotoRecord record = new(
             GuidGenerator.Create(),
@@ -445,7 +468,7 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
         );
         await _blobContainer.SaveAsync(blobKey, photoBytes, overrideExisting: false);
 
-        string imageBase64 = $"data:image/jpeg;base64,{Convert.ToBase64String(photoBytes)}";
+        string imageBase64 = CreateThumbnailBase64(photoBytes);
 
         CalibPhotoRecord record = new(
             GuidGenerator.Create(),
@@ -539,9 +562,8 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
         await _blobContainer.SaveAsync(mainBlobKey, mainBytes, overrideExisting: false);
         await _blobContainer.SaveAsync(secondaryBlobKey, secondaryBytes, overrideExisting: false);
 
-        string mainImageBase64 = $"data:image/jpeg;base64,{Convert.ToBase64String(mainBytes)}";
-        string secondaryImageBase64 =
-            $"data:image/jpeg;base64,{Convert.ToBase64String(secondaryBytes)}";
+        string mainImageBase64 = CreateThumbnailBase64(mainBytes);
+        string secondaryImageBase64 = CreateThumbnailBase64(secondaryBytes);
 
         CalibPhotoRecord mainRecord = new(
             GuidGenerator.Create(),
@@ -596,9 +618,32 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
             query = query.Where(x => x.PhotoType == photoType.Value);
         }
         query = query.OrderBy(x => x.CapturedAt);
+        List<CalibPhotoRecord> records = await AsyncExecuter.ToListAsync(query);
+        return records.Select(x => ToPhotoDto(x, compressLegacyThumbnail: true)).ToList();
+    }
 
-        List<CalibPhotoRecord> items = await AsyncExecuter.ToListAsync(query);
-        return items.Select(ToPhotoDto).ToList();
+    /// <inheritdoc/>
+    public async Task<IRemoteStreamContent> GetOriginalPhotoAsync(string blobKey)
+    {
+        if (string.IsNullOrWhiteSpace(blobKey))
+            throw new UserFriendlyException("图片 Blob Key 不能为空");
+
+        // Blob Key 必须属于现有标定照片，禁止利用该接口读取容器内任意文件。
+        IQueryable<CalibPhotoRecord> query = await _photoRepo.GetQueryableAsync();
+        bool exists = await AsyncExecuter.AnyAsync(query.Where(x => x.BlobKey == blobKey));
+        if (!exists)
+            throw new UserFriendlyException("标定原图不存在");
+
+        byte[] bytes = await _blobContainer.GetAllBytesAsync(blobKey);
+        bool isBmp =
+            bytes.Length >= 2 && bytes[0] == (byte)'B' && bytes[1] == (byte)'M';
+        string contentType = isBmp ? "image/bmp" : "image/jpeg";
+        string extension = isBmp ? "bmp" : "jpg";
+        return new RemoteStreamContent(
+            new MemoryStream(bytes, writable: false),
+            $"calib-photo-original.{extension}",
+            contentType
+        );
     }
 
     /// <inheritdoc/>
@@ -2865,8 +2910,30 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
         };
     }
 
-    private static CalibPhotoDto ToPhotoDto(CalibPhotoRecord record)
+    private static CalibPhotoDto ToPhotoDto(
+        CalibPhotoRecord record,
+        bool compressLegacyThumbnail = false
+    )
     {
+        string? thumbnail = record.ThumbnailBase64;
+        if (
+            compressLegacyThumbnail
+            && !string.IsNullOrEmpty(thumbnail)
+            && thumbnail.Length > 300_000
+        )
+        {
+            int separator = thumbnail.IndexOf(',');
+            string encoded = separator >= 0 ? thumbnail[(separator + 1)..] : thumbnail;
+            try
+            {
+                thumbnail = CreateThumbnailBase64(Convert.FromBase64String(encoded));
+            }
+            catch (FormatException)
+            {
+                thumbnail = null;
+            }
+        }
+
         return new CalibPhotoDto
         {
             Id = record.Id,
@@ -2874,7 +2941,8 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
             IsValid = record.IsValid,
             CornerCountDetected = record.CornerCountDetected,
             CapturedAt = record.CapturedAt,
-            ThumbnailBase64 = record.ThumbnailBase64,
+            ThumbnailBase64 = thumbnail,
+            BlobKey = record.BlobKey,
             PairGroupId = record.PairGroupId,
             StereoRole = record.StereoRole,
             ExtrinsicPhase = record.ExtrinsicPhase.HasValue
@@ -2883,6 +2951,43 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
             ImageDiffScore = record.ImageDiffScore,
             ImageDiffSignificant = record.ImageDiffSignificant,
         };
+    }
+
+    private static string CreateThumbnailBase64(byte[] imageBytes)
+    {
+        using Mat source = Cv2.ImDecode(imageBytes, ImreadModes.Color);
+        if (source.Empty())
+            return string.Empty;
+
+        const int maxSide = 480;
+        double scale = Math.Min(1.0, (double)maxSide / Math.Max(source.Cols, source.Rows));
+        using Mat thumbnail = new();
+        if (scale < 1.0)
+        {
+            Cv2.Resize(
+                source,
+                thumbnail,
+                new Size(
+                    Math.Max(1, (int)Math.Round(source.Cols * scale)),
+                    Math.Max(1, (int)Math.Round(source.Rows * scale))
+                ),
+                0,
+                0,
+                InterpolationFlags.Area
+            );
+        }
+        else
+        {
+            source.CopyTo(thumbnail);
+        }
+
+        Cv2.ImEncode(
+            ".jpg",
+            thumbnail,
+            out byte[] encoded,
+            new ImageEncodingParam(ImwriteFlags.JpegQuality, 70)
+        );
+        return $"data:image/jpeg;base64,{Convert.ToBase64String(encoded)}";
     }
 
     private async Task<(

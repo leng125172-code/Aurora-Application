@@ -72,4 +72,14 @@ public interface ICameraHub
         int pointCount,
         int totalPointCount
     );
+
+    /// <summary>推送 Step6 二维深度质量拟合图。</summary>
+    Task ReceiveDepthQualityMapAsync(
+        string calibProjectId,
+        byte[] pngBytes,
+        int validPointCount,
+        int totalPointCount,
+        double minimumDepthMm,
+        double maximumDepthMm
+    );
 }

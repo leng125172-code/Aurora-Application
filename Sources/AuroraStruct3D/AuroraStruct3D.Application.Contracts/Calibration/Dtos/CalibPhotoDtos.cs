@@ -213,8 +213,11 @@ public class CalibPhotoDto
     /// <summary>拍摄时间</summary>
     public DateTime CapturedAt { get; set; }
 
-    /// <summary>原图 Base64（JPEG，不压缩，用于前端预览）</summary>
+    /// <summary>压缩缩略图 Base64（用于照片列表预览）</summary>
     public string? ThumbnailBase64 { get; set; }
+
+    /// <summary>原图 Blob 查询 Key，用于按需查看原图。</summary>
+    public string? BlobKey { get; set; }
 
     /// <summary>双目成对拍照分组ID（仅 StereoExtrinsicPair 有值）</summary>
     public Guid? PairGroupId { get; set; }

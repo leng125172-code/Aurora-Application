@@ -116,6 +116,13 @@ public interface IWorkflowRuntimeAppService : IApplicationService
     /// <returns>触发结果与当前状态快照。</returns>
     Task<WorkflowExecutionTriggerResultDto> ExecuteAsync(WorkflowExecutionTriggerInput input);
 
+    Task<WorkflowExecutionTriggerResultDto> DebugSavedSourceAsync(
+        Guid id,
+        WorkflowExecutionTriggerInput input
+    );
+
+    Task<WorkflowExecutionTriggerResultDto> DebugSourceAsync(WorkflowSourceDebugInput input);
+
     /// <summary>
     /// 生成 ROI 编辑底图（预运行到目标 ROI 节点的祖先子图，只执行其真正依赖的上游算子）。
     /// 用于替代上传阶段的 XY/XZ/YZ 底图：ROI 底图与实际裁剪的数据严格同源同尺寸。
@@ -134,6 +141,23 @@ public interface IWorkflowRuntimeAppService : IApplicationService
         Guid executionId,
         WorkflowExecutionStepInput input
     );
+
+    Task<WorkflowBreakpointListDto> SetBreakpointsAsync(
+        Guid executionId,
+        WorkflowBreakpointListDto input
+    );
+    Task<WorkflowExecutionStatusDto> ContinueAsync(Guid executionId);
+    Task<WorkflowExecutionStatusDto> PauseAsync(Guid executionId);
+    Task<WorkflowExecutionStatusDto> RunToAsync(Guid executionId, WorkflowRunToInput input);
+    Task<List<WorkflowStackFrameDto>> GetStackAsync(Guid executionId);
+    Task<List<WorkflowVariableResultDto>> GetVariablesAsync(Guid executionId);
+    Task<List<WorkflowWatchResultDto>> WatchAsync(Guid executionId, WorkflowWatchInput input);
+    Task<List<WorkflowTraceEventDto>> GetTraceAsync(Guid executionId);
+    Task<WorkflowExecutionStatusDto> StepIntoAsync(Guid executionId);
+    Task<WorkflowExecutionStatusDto> StepOverAsync(Guid executionId);
+    Task<WorkflowExecutionStatusDto> StepOutAsync(Guid executionId);
+    Task<WorkflowTracePageDto> GetTracePageAsync(Guid executionId, WorkflowTraceQueryDto input);
+    Task<List<WorkflowNodePerformanceDto>> GetPerformanceAsync(Guid executionId);
 
     /// <summary>
     /// 查询调试会话列表。

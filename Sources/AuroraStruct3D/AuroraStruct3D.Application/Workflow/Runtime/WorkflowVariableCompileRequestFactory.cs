@@ -137,6 +137,10 @@ public sealed class WorkflowVariableCompileRequestFactory : ITransientDependency
                 }
 
                 string variableName = variableNameRaw.Trim();
+                if (node.Type == "end-node")
+                {
+                    variableName = GetOutputRootVariableName(variableName);
+                }
                 if (string.IsNullOrWhiteSpace(variableName))
                 {
                     throw new UserFriendlyException(
@@ -274,6 +278,17 @@ public sealed class WorkflowVariableCompileRequestFactory : ITransientDependency
             DefUseAnalysisMode = defUseMode,
             SuppressedDiagnosticCodes = [],
         };
+    }
+
+    private static string GetOutputRootVariableName(string outputPath)
+    {
+        int dotIndex = outputPath.IndexOf('.');
+        int bracketIndex = outputPath.IndexOf('[');
+        int separatorIndex =
+            dotIndex < 0 ? bracketIndex
+            : bracketIndex < 0 ? dotIndex
+            : Math.Min(dotIndex, bracketIndex);
+        return separatorIndex < 0 ? outputPath : outputPath[..separatorIndex];
     }
 
     private static string? NormalizeExpectedTypeName(string? expectedTypeName)

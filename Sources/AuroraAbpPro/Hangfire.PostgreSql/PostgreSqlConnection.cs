@@ -258,9 +258,11 @@ namespace Hangfire.PostgreSql
                 {
                     Name = sqlState.Name,
                     Reason = sqlState.Reason,
-                    Data = SerializationHelper.Deserialize<Dictionary<string, string>>(
-                        sqlState.Data
-                    ),
+                    Data = string.IsNullOrEmpty(sqlState.Data)
+                        ? new Dictionary<string, string>()
+                        : SerializationHelper.Deserialize<Dictionary<string, string>>(
+                            sqlState.Data
+                        ),
                 };
         }
 

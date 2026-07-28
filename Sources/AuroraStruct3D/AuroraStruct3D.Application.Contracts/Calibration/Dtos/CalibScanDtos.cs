@@ -10,6 +10,12 @@ public class StartCalibScanInput
     /// <summary>标定项目 ID</summary>
     [Required]
     public Guid CalibProjectId { get; set; }
+
+    /// <summary>
+    /// 是否屏蔽投影仪控制。启用时仅打开投影仪灯光，不切换显示/触发模式，
+    /// 不发送 T/N 指令，扫描按普通双目采集运行。
+    /// </summary>
+    public bool SuppressProjectorControl { get; set; }
 }
 
 /// <summary>

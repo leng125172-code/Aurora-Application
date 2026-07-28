@@ -105,6 +105,14 @@ public class OpenCvOperatorInventoryContractTests
 
         global::AuroraStruct3D.Workflow.Dtos.NodePaletteDto palette = await appService.GetAsync();
 
+        Dictionary<string, string?> overlayModes = palette
+            .Categories.SelectMany(x => x.Nodes ?? [])
+            .Where(x => x.OverlayMode is not null)
+            .ToDictionary(x => x.Id, x => x.OverlayMode, StringComparer.OrdinalIgnoreCase);
+        Assert.Equal("plane", overlayModes["c38e27a6-8d49-4c41-96a0-a53f30c23101"]);
+        Assert.Equal("region", overlayModes["d420473b-76f1-455a-83e4-492809c23102"]);
+        Assert.Equal("none", overlayModes["e15fb284-2abe-477c-bd47-3cfde9c23103"]);
+
         Assert.Equal(
             3 + inventory.Select(x => x.Category).Distinct(StringComparer.Ordinal).Count(),
             palette.Categories.Count

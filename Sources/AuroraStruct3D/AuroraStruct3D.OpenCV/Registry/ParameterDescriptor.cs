@@ -30,6 +30,9 @@ public sealed class ParameterDescriptor
     /// </summary>
     public object? ValueLimit { get; init; }
 
+    /// <summary>结构化 JSON 输出的 JSON Schema。</summary>
+    public string? JsonSchema { get; init; }
+
     /// <summary>是否在赋值时进行合法性校验。</summary>
     public bool ErrorCheck { get; init; }
 

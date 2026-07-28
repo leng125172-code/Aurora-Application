@@ -276,8 +276,25 @@ public sealed class WorkflowGraphValidator
                 continue;
             }
 
-            CheckRead(node.Id, portName, variableName, symbols, diagnostics);
+            CheckRead(
+                node.Id,
+                portName,
+                GetOutputRootVariableName(variableName),
+                symbols,
+                diagnostics
+            );
         }
+    }
+
+    private static string GetOutputRootVariableName(string outputPath)
+    {
+        int dotIndex = outputPath.IndexOf('.');
+        int bracketIndex = outputPath.IndexOf('[');
+        int separatorIndex =
+            dotIndex < 0 ? bracketIndex
+            : bracketIndex < 0 ? dotIndex
+            : Math.Min(dotIndex, bracketIndex);
+        return separatorIndex < 0 ? outputPath : outputPath[..separatorIndex];
     }
 
     private void ValidateAssign(

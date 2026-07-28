@@ -168,6 +168,7 @@ namespace AuroraStruct3D
                 endpoints.MapHub<ProductModelHub>("/signalr-hubs/product-model");
                 // AI 模型转换进度推送 Hub
                 endpoints.MapHub<AiModelConversionHub>("/signalr-hubs/ai-model-conversion");
+                endpoints.MapHub<WorkflowDebugHub>("/signalr-hubs/workflow-debug");
                 endpoints.MapFallback(async httpContext =>
                 {
                     var path = httpContext.Request.Path.Value ?? string.Empty;

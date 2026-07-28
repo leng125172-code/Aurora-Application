@@ -1,9 +1,11 @@
+using System.Globalization;
+
 namespace AuroraStruct3D.OpenCV.RoiOps;
 
 [Guid("1d6498c5-8d95-41ab-8801-c3f8e20d7301")]
 [Category("2D预处理")]
 [DisplayName("高度差结果标注")]
-[Description("在 2D 结果图上绘制多个 ROI 轮廓和 OK/NG 判定。详细测量数据通过接口返回。")]
+[Description("在 2D 结果图上绘制 OK/NG 判定、区域高度和有符号高度差。")]
 public class annotate_height_diff_result : IOperator
 {
     public static List<IVisionParameter>? InputVisionParameters =>
@@ -108,10 +110,13 @@ public class annotate_height_diff_result : IOperator
         }
 
         bool isOk = context.Get<bool>("is_ok");
+        double heightA = context.Get<double>("height_a");
+        double heightB = context.Get<double>("height_b");
+        double signedDiff = context.Get<double>("signed_diff");
 
         Mat output = EnsureBgra(inputMat);
 
-        // 仅绘制整体 OK/NG 状态（轮廓和标签由 render_plane_outlines 负责）
+        // ROI 半透明区域、轮廓和名称由 overlay_roi_markers 负责。
         Scalar statusColor = isOk ? new Scalar(80, 200, 120, 255) : new Scalar(60, 60, 255, 255);
         string statusText = isOk ? _okText : _ngText;
         Cv2.PutText(
@@ -122,6 +127,13 @@ public class annotate_height_diff_result : IOperator
             0.9,
             statusColor,
             3
+        );
+        DrawMeasurementText(output, $"A: {heightA.ToString("F3", CultureInfo.InvariantCulture)}", 64);
+        DrawMeasurementText(output, $"B: {heightB.ToString("F3", CultureInfo.InvariantCulture)}", 88);
+        DrawMeasurementText(
+            output,
+            $"dH(A-B): {signedDiff.ToString("F3", CultureInfo.InvariantCulture)}",
+            112
         );
 
         context.Set("output_mat", output);
@@ -149,6 +161,19 @@ public class annotate_height_diff_result : IOperator
                 Cv2.CvtColor(inputMat, output, ColorConversionCodes.GRAY2BGRA);
                 return output;
         }
+    }
+
+    private static void DrawMeasurementText(Mat output, string text, int y)
+    {
+        Cv2.PutText(
+            output,
+            text,
+            new Point(16, y),
+            HersheyFonts.HersheySimplex,
+            0.55,
+            new Scalar(255, 255, 255, 255),
+            2
+        );
     }
 
     /// <summary>

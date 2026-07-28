@@ -68,6 +68,11 @@ public interface ICalibPhotoAppService : IApplicationService
     );
 
     /// <summary>
+    /// 按列表返回的 Blob Key 获取原图。
+    /// </summary>
+    Task<IRemoteStreamContent> GetOriginalPhotoAsync(string blobKey);
+
+    /// <summary>
     /// 删除一张照片（同时删除 BLOB 文件）——ABP 自动生成 DELETE /api/app/calib-photo/{id}
     /// </summary>
     Task DeleteAsync(Guid id);

@@ -17,6 +17,7 @@ import {
     Cpu,
     Box,
     ScanLine,
+    GitBranch,
     ChevronDown,
     ChevronRight,
 } from '@lucide/vue'
@@ -25,6 +26,7 @@ import { cn } from '@/lib/utils'
 const route = useRoute()
 const router = useRouter()
 const { t } = useI18n()
+const workflowDebugEnabled = __WORKFLOW_DEBUG__
 
 // 展开状态：CAP 和 Hangfire 默认展开（若当前路由匹配）
 const capExpanded = ref(route.path.startsWith('/embed/cap'))
@@ -85,6 +87,22 @@ function navigate(path: string, tab?: string): void {
             >
                 <LayoutDashboard class="size-4 shrink-0" />
                 {{ t('menu.dashboard') }}
+            </button>
+
+            <button
+                v-if="workflowDebugEnabled"
+                :class="
+                    cn(
+                        'flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors text-left',
+                        isExactActive('/workflow-ide')
+                            ? 'bg-accent text-accent-foreground'
+                            : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                    )
+                "
+                @click="navigate('/workflow-ide')"
+            >
+                <GitBranch class="size-4 shrink-0" />
+                工作流调试
             </button>
 
             <!-- Swagger -->

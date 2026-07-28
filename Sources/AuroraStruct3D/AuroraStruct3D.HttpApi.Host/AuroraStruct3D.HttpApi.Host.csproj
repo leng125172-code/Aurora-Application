@@ -72,7 +72,7 @@
     <!--
        先执行 npm ci 安装依赖，再执行 npm run build 更新 wwwroot
     -->
-    <Target Name="BuildSpa" BeforeTargets="BeforeBuild">
+    <Target Name="BuildSpa" BeforeTargets="BeforeBuild" Condition="'$(SkipSpaBuild)' != 'true'">
         <Message Importance="high" Text="正在构建前端 SPA（AuroraStruct3D.Frontend）..." />
         <Exec
             WorkingDirectory="$(SpaRoot)"
@@ -82,7 +82,14 @@
         />
         <Exec
             WorkingDirectory="$(SpaRoot)"
-            Command="chcp 65001 > nul &amp;&amp; npm run build"
+            Command="chcp 65001 > nul &amp;&amp; npm run build:release"
+            Condition="'$(Configuration)' == 'Release'"
+            EnvironmentVariables="NO_COLOR=1;FORCE_COLOR=0"
+        />
+        <Exec
+            WorkingDirectory="$(SpaRoot)"
+            Command="chcp 65001 > nul &amp;&amp; npm run build:debug"
+            Condition="'$(Configuration)' != 'Release'"
             EnvironmentVariables="NO_COLOR=1;FORCE_COLOR=0"
         />
     </Target>

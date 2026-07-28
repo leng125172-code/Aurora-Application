@@ -93,7 +93,8 @@ public static class StereoReconstructionUtils
         Mat disparity,
         Mat projectionP1,
         Mat projectionP2,
-        double baselineMm = 100.0)
+        double baselineMm = 100.0,
+        int disparitySign = 1)
     {
         int rows = disparity.Rows;
         int cols = disparity.Cols;
@@ -107,9 +108,10 @@ public static class StereoReconstructionUtils
             for (int x = 0; x < cols; x++)
             {
                 double disp = disparity.At<double>(y, x);
-                if (disp > 0.1)
+                double signedDisparity = disp * disparitySign;
+                if (signedDisparity > 0.1)
                 {
-                    double z = fx * baselineMm / disp;
+                    double z = fx * Math.Abs(baselineMm) / signedDisparity;
                     depth.Set(y, x, z);
                 }
                 else
@@ -122,11 +124,35 @@ public static class StereoReconstructionUtils
         return depth;
     }
 
+    /// <summary>
+    /// 根据整平后的投影矩阵判断有效视差的符号。
+    /// 标准 P2(0,3)=-fx*B 时右相机中心位于左相机右侧，视差为正；
+    /// 若标定时主从顺序相反，则有效视差为负。
+    /// </summary>
+    public static int ComputeDisparitySign(Mat projectionP1, Mat projectionP2)
+    {
+        double fx1 = projectionP1.At<double>(0, 0);
+        double fx2 = projectionP2.At<double>(0, 0);
+        if (Math.Abs(fx1) < double.Epsilon || Math.Abs(fx2) < double.Epsilon)
+        {
+            throw new ArgumentException("双目投影矩阵焦距无效，无法判断视差方向。");
+        }
+
+        double centerX1 = -projectionP1.At<double>(0, 3) / fx1;
+        double centerX2 = -projectionP2.At<double>(0, 3) / fx2;
+        return centerX2 >= centerX1 ? 1 : -1;
+    }
+
     public static (Mat pointCloud, Mat colors) GeneratePointCloud(
         Mat depth,
         Mat leftImage,
-        Mat projectionP1)
+        Mat projectionP1,
+        int sampleStep = 2,
+        double maxDepth = 100000d)
     {
+        if (sampleStep <= 0)
+            throw new ArgumentOutOfRangeException(nameof(sampleStep));
+
         int rows = depth.Rows;
         int cols = depth.Cols;
 
@@ -138,12 +164,12 @@ public static class StereoReconstructionUtils
         double cx = projectionP1.At<double>(0, 2);
         double cy = projectionP1.At<double>(1, 2);
 
-        for (int y = 0; y < rows; y += 2)
+        for (int y = 0; y < rows; y += sampleStep)
         {
-            for (int x = 0; x < cols; x += 2)
+            for (int x = 0; x < cols; x += sampleStep)
             {
                 double z = depth.At<double>(y, x);
-                if (double.IsNaN(z) || z <= 0)
+                if (!double.IsFinite(z) || z <= 0 || z > maxDepth)
                     continue;
 
                 double px = (x - cx) * z / fx;
@@ -156,8 +182,10 @@ public static class StereoReconstructionUtils
             }
         }
 
-        Mat pointCloudMat = new(points.Count, 3, MatType.CV_32FC3);
-        Mat colorsMat = new(colors.Count, 3, MatType.CV_8UC3);
+        // 使用 N×3 单通道矩阵。此前使用 CV_32FC3/CV_8UC3 的同时又创建
+        // 3 列，实际布局变成每个单元3通道，和 WritePly 的标量访问不一致。
+        Mat pointCloudMat = new(points.Count, 3, MatType.CV_32FC1);
+        Mat colorsMat = new(colors.Count, 3, MatType.CV_8UC1);
 
         for (int i = 0; i < points.Count; i++)
         {
@@ -221,28 +249,32 @@ public static class StereoReconstructionUtils
         Mat projectionP1,
         Mat projectionP2)
     {
-        Mat baseline = new(3, 1, MatType.CV_64FC1);
+        if (
+            projectionP1.Rows != 3
+            || projectionP1.Cols != 4
+            || projectionP2.Rows != 3
+            || projectionP2.Cols != 4
+        )
+        {
+            throw new ArgumentException(
+                $"双目投影矩阵必须为3×4，实际 P1={projectionP1.Rows}×{projectionP1.Cols}，"
+                + $"P2={projectionP2.Rows}×{projectionP2.Cols}"
+            );
+        }
 
-        Mat p1 = projectionP1[new Rect(0, 0, 3, 3)];
-        Mat p2 = projectionP2[new Rect(0, 0, 3, 3)];
+        double fx1 = projectionP1.At<double>(0, 0);
+        double fx2 = projectionP2.At<double>(0, 0);
+        if (Math.Abs(fx1) < 1e-12 || Math.Abs(fx2) < 1e-12)
+        {
+            throw new InvalidOperationException("双目投影矩阵焦距无效，无法计算基线");
+        }
 
-        Mat p1Inv = p1.Inv();
-        Mat p2Inv = p2.Inv();
-
-        Mat t1 = new();
-        Mat t2 = new();
-        Cv2.Gemm(p1Inv, projectionP1[new Rect(3, 0, 1, 3)].T(), 1.0, null, 0.0, t1);
-        Cv2.Gemm(p2Inv, projectionP2[new Rect(3, 0, 1, 3)].T(), 1.0, null, 0.0, t2);
-
-        Cv2.Subtract(t2, t1, baseline);
-
-        p1.Dispose();
-        p2.Dispose();
-        p1Inv.Dispose();
-        p2Inv.Dispose();
-        t1.Dispose();
-        t2.Dispose();
-
+        // StereoRectify 输出的标准投影矩阵满足 P(0,3) = -fx * Cx。
+        // 直接计算两个整平相机中心的 X 差值，避免不必要的矩阵求逆/Gemm。
+        double centerX1 = -projectionP1.At<double>(0, 3) / fx1;
+        double centerX2 = -projectionP2.At<double>(0, 3) / fx2;
+        Mat baseline = Mat.Zeros(3, 1, MatType.CV_64FC1).ToMat();
+        baseline.Set(0, 0, centerX2 - centerX1);
         return baseline;
     }
 

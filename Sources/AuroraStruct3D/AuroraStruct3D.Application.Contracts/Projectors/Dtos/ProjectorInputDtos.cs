@@ -317,15 +317,15 @@ public class DownloadFringePatternInputDto
     [Range(1, 4096)]
     public int HeightPixels { get; set; }
 
-    /// <summary>条纹周期数（宽度或高度必须能被整除）</summary>
+    /// <summary>兼容旧接口；固定条纹配置下不参与图像计算</summary>
     [Range(1, 100)]
     public int PeriodCount { get; set; }
 
-    /// <summary>每个方向的相移步数（实际生成并下载 2×ImageCount 幅横竖交替条纹）</summary>
+    /// <summary>兼容旧接口；固定条纹配置下不参与图像计算</summary>
     [Range(1, 64)]
     public int ImageCount { get; set; }
 
-    /// <summary>每张图相对上一张的像素相移量（整数，0 &lt; phaseShift &lt; periodCount）</summary>
+    /// <summary>兼容旧接口；固定条纹配置下不参与计算，互补图直接逐像素取反</summary>
     [Range(1, 4096)]
     public int PhaseShift { get; set; }
 

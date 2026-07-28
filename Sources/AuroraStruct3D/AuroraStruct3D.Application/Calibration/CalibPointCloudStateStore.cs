@@ -8,6 +8,7 @@ namespace AuroraStruct3D.Calibration;
 /// </summary>
 public class PointCloudSessionState
 {
+    internal object SyncRoot { get; } = new();
     public Guid CalibProjectId { get; set; }
     public PointCloudRunState State { get; set; } = PointCloudRunState.Idle;
     public bool IsRunning { get; set; }
@@ -245,15 +246,18 @@ public class CalibPointCloudStateStore
             },
             (_, old) =>
             {
-                old.State = PointCloudRunState.Running;
-                old.IsRunning = true;
-                old.IsIncrementalMode = true;
-                old.Progress = 0;
-                old.ProgressMessage = "增量点云模式已启动";
-                old.StartedAt = now;
-                old.LastUpdatedAt = now;
-                old.TotalPointCount = 0;
-                old.AccumulatedPointCloudChunks.Clear();
+                lock (old.SyncRoot)
+                {
+                    old.State = PointCloudRunState.Running;
+                    old.IsRunning = true;
+                    old.IsIncrementalMode = true;
+                    old.Progress = 0;
+                    old.ProgressMessage = "增量点云模式已启动";
+                    old.StartedAt = now;
+                    old.LastUpdatedAt = now;
+                    old.TotalPointCount = 0;
+                    old.AccumulatedPointCloudChunks.Clear();
+                }
                 return old;
             }
         );
@@ -267,14 +271,17 @@ public class CalibPointCloudStateStore
             return false;
         }
 
-        if (!session.IsIncrementalMode)
+        lock (session.SyncRoot)
         {
-            return false;
-        }
+            if (!session.IsIncrementalMode)
+            {
+                return false;
+            }
 
-        session.AccumulatedPointCloudChunks.Add(chunkBytes);
-        session.TotalPointCount += pointCount;
-        session.LastUpdatedAt = DateTime.UtcNow;
+            session.AccumulatedPointCloudChunks.Add(chunkBytes);
+            session.TotalPointCount += pointCount;
+            session.LastUpdatedAt = DateTime.UtcNow;
+        }
         return true;
     }
 
@@ -286,12 +293,15 @@ public class CalibPointCloudStateStore
             return null;
         }
 
-        session.State = PointCloudRunState.Completed;
-        session.IsRunning = false;
-        session.IsIncrementalMode = false;
-        session.Progress = 100;
-        session.ProgressMessage = "增量点云生成完成";
-        session.LastUpdatedAt = DateTime.UtcNow;
+        lock (session.SyncRoot)
+        {
+            session.State = PointCloudRunState.Completed;
+            session.IsRunning = false;
+            session.IsIncrementalMode = false;
+            session.Progress = 100;
+            session.ProgressMessage = "增量点云生成完成";
+            session.LastUpdatedAt = DateTime.UtcNow;
+        }
         return session;
     }
 
@@ -309,14 +319,23 @@ public class CalibPointCloudStateStore
         {
             return new List<byte[]>();
         }
-        return session.AccumulatedPointCloudChunks.ToList();
+        lock (session.SyncRoot)
+        {
+            return session.AccumulatedPointCloudChunks.ToList();
+        }
     }
 
     /// <summary>获取当前累积的总点数量。</summary>
     public int GetTotalPointCount(Guid calibProjectId)
     {
-        return _sessions.TryGetValue(calibProjectId, out PointCloudSessionState? session)
-            ? session.TotalPointCount
-            : 0;
+        if (!_sessions.TryGetValue(calibProjectId, out PointCloudSessionState? session))
+        {
+            return 0;
+        }
+
+        lock (session.SyncRoot)
+        {
+            return session.TotalPointCount;
+        }
     }
 }

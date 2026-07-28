@@ -54,7 +54,7 @@ public class overlay_roi_markers : IOperator
                 Name = "borderThickness",
                 DisplayName = "边框粗细",
                 ParameterType = typeof(int),
-                DefaultValue = "2",
+                DefaultValue = "1",
                 Required = false,
                 ControlType = PortControlType.Input,
             },
@@ -85,7 +85,7 @@ public class overlay_roi_markers : IOperator
     /// </summary>
     public overlay_roi_markers(
         double overlayAlpha = 0.35,
-        int borderThickness = 2,
+        int borderThickness = 1,
         bool showLabel = true
     )
     {
@@ -124,24 +124,25 @@ public class overlay_roi_markers : IOperator
 
         for (int i = 0; i < roiCount; i++)
         {
-            Scalar color = ResolveColor(i);
+            Scalar fillColor = ResolveColor(i);
+            Scalar annotationColor = new(0, 0, 0, 255);
             Mat? mask = roiMasks is not null && i < roiMasks.Count ? roiMasks[i] : null;
             RoiMetadata? roi = metadata is not null && i < metadata.Rois.Count ? metadata.Rois[i] : null;
 
             if (mask is not null)
             {
                 ValidateMaskSize(mask, output.Size(), i);
-                BlendMask(output, mask, color);
-                DrawMaskOutline(output, mask, color);
+                BlendMask(output, mask, fillColor);
+                DrawMaskOutline(output, mask, annotationColor);
             }
 
             if (roi is not null)
             {
-                DrawMetadata(output, roi, color);
+                DrawMetadata(output, roi, annotationColor);
             }
             else if (_showLabel && mask is not null)
             {
-                DrawFallbackLabel(output, mask, $"ROI-{i + 1}", color);
+                DrawFallbackLabel(output, mask, $"ROI-{i + 1}", annotationColor);
             }
         }
 
@@ -250,7 +251,7 @@ public class overlay_roi_markers : IOperator
             HersheyFonts.HersheySimplex,
             0.55,
             color,
-            2
+            1
         );
     }
 
@@ -281,7 +282,7 @@ public class overlay_roi_markers : IOperator
             HersheyFonts.HersheySimplex,
             0.55,
             color,
-            2
+            1
         );
     }
 

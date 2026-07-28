@@ -14,6 +14,9 @@ public interface IVisionParameter
 
     object? ValueLimit { get; }
 
+    /// <summary>字符串承载结构化 JSON 时的 JSON Schema；普通标量可为空。</summary>
+    string? JsonSchema => null;
+
     bool ErrorCheck { get; }
 
     PortControlType ControlType { get; }

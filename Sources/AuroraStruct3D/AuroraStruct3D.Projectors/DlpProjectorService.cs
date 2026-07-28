@@ -330,6 +330,19 @@ public class DlpProjectorService : IDlpProjectorService, IDisposable
             mode
         );
 
+        // 固件在 B1/B2 触发播放状态下不会响应 S0~S7。
+        // 先切回 B0，让当前触发播放退出，再切换内置显示模式。
+        bool stopped = await SetTriggerModeAsync(
+                ProjectorTriggerMode.Normal,
+                cancellationToken
+            )
+            .ConfigureAwait(false);
+        if (!stopped)
+        {
+            return false;
+        }
+        await Task.Delay(100, cancellationToken).ConfigureAwait(false);
+
         // 模式命令：'S' + ('0' + mode) + '\r' + '\n'（源码：TJSTPrjSetMode）
         char modeChar = (char)(TjProjectorCommands.SetModeOffsetBase + (byte)mode);
         string cmd = $"S{modeChar}\r\n";
@@ -889,6 +902,7 @@ public class DlpProjectorService : IDlpProjectorService, IDisposable
     /// <inheritdoc/>
     public async Task DownloadFringePatternAsync(
         byte[][] frames,
+        int horizontalFrameCount,
         string horizontalPaddingPosition = "end",
         Func<int, Task>? onProgress = null,
         CancellationToken cancellationToken = default
@@ -897,8 +911,10 @@ public class DlpProjectorService : IDlpProjectorService, IDisposable
         EnsureClient();
 
         int imageCount = frames.Length;
+        if (horizontalFrameCount < 0 || horizontalFrameCount > imageCount)
+            throw new ArgumentOutOfRangeException(nameof(horizontalFrameCount));
 
-        // 标准模式下每帧统一为 WidthPixels 列（1280），横条纹帧需补 560 列黑色（0）到 1280
+        // 标准模式下每帧统一为 WidthPixels 列（1280），横条纹帧按厂商格式补 560 列白色（255）到 1280
         int frameStride = frames.Max(f => f.Length);
         int totalWrites = imageCount * frameStride;
 
@@ -912,28 +928,17 @@ public class DlpProjectorService : IDlpProjectorService, IDisposable
         );
 
         const string NewLine = "\r\n";
-        const int WriteDelayMs = 25;
+        // 厂商 V1.2 文档建议约 40ms；过短会出现白条、灰阶异常或末尾数据丢失。
+        const int WriteDelayMs = 40;
         const int MaxEraseRetries = 5;
 
-        // 1. 使用 MF 位图配置每一幅条纹的横竖方向：固定 1-2-1-2...（横-竖交替）
-        //    新型光机：block=0 对应 0~31 幅图；其他旧型号：block=1 对应 0~31 幅图。
-        //    当前按用户要求统一使用新型光机行为（block=0），后续如需兼容旧型号可改为按设备型号自动判断。
-        //    命令格式：MF {block} byte0 byte1 byte2 byte3\r\n
-        //    字节内采用 LSB first（低位在前）：第1幅图→byte0的bit0，第8幅→byte0的bit7，第9幅→byte1的bit0...
-        //    0=竖条纹，1=横条纹。
-        string mfCmd = BuildFringeOrientationCommand(imageCount, 0);
-        _logger.LogDebug(
-            "{Tag} [Device {Device}] MF orientation: cmd={Cmd}",
-            LogTag,
-            DeviceId,
-            mfCmd.TrimEnd('\r', '\n')
-        );
-        await SendCommandAndReadCoreAsync(mfCmd, cancellationToken).ConfigureAwait(false);
+        // 1. 开灯并设置下载图像幅数。下载阶段的 MB 参数是实际分配幅数；
+        //    MA 的“保存条纹数量”才使用末帧索引语义。混用会导致最后一幅空间不足。
+        await SendCommandCoreAsync(TjProjectorCommands.LedOn + NewLine, cancellationToken)
+            .ConfigureAwait(false);
         await Task.Delay(50, cancellationToken).ConfigureAwait(false);
 
-        // 2. 设置总图像幅数（MB N\r\n），发送后读取响应并等待 500ms（参考官方 Windows Demo）
-        //    N = imageCount - 1，硬件期望的是索引值而非数量（如4张图传入3）
-        string mbCmd = $"{TjProjectorCommands.SetImageCountPrefix}{imageCount - 1}{NewLine}";
+        string mbCmd = $"{TjProjectorCommands.SetImageCountPrefix}{imageCount}{NewLine}";
         _logger.LogDebug(
             "{Tag} [Device {Device}] Set image count: cmd={Cmd}",
             LogTag,
@@ -943,29 +948,40 @@ public class DlpProjectorService : IDlpProjectorService, IDisposable
         await SendCommandAndReadCoreAsync(mbCmd, cancellationToken).ConfigureAwait(false);
         await Task.Delay(500, cancellationToken).ConfigureAwait(false);
 
-        // 2.5 设置图像重复参数（MA repeat count 0 0\r\n）：repeat=59, count=实际幅数-1（硬件期望索引值）
-        //    实际投射帧率 = 光机帧率/(1+repeat) = 120/(1+59) = 2fps，即 0.5秒/张图
-        string maCmd = $"{TjProjectorCommands.SetImageRepeatPrefix}59 {imageCount - 1} 0 0{NewLine}";
+        // MA 参数1是“额外重复次数”，0 表示每幅只显示一次；
+        // 参数2是末帧索引而不是图片数量，下载 N 幅时必须写 N-1。
+        string maCmd =
+            $"{TjProjectorCommands.SetImageRepeatPrefix}0 {imageCount - 1} 0 0{NewLine}";
         _logger.LogDebug(
-            "{Tag} [Device {Device}] Set image repeat: cmd={Cmd}",
+            "{Tag} [Device {Device}] Set image range: cmd={Cmd}, images={Count}, lastIndex={LastIndex}",
             LogTag,
             DeviceId,
-            maCmd.TrimEnd('\r', '\n')
+            maCmd.TrimEnd('\r', '\n'),
+            imageCount,
+            imageCount - 1
         );
         await SendCommandAndReadCoreAsync(maCmd, cancellationToken).ConfigureAwait(false);
         await Task.Delay(100, cancellationToken).ConfigureAwait(false);
 
-        // 3. 保存参数到Flash（MS\r\n）和保存条纹参数（Ms\r\n）
-        _logger.LogDebug("{Tag} [Device {Device}] Saving params (MS/Ms)...", LogTag, DeviceId);
-        await SendCommandAndReadCoreAsync(TjProjectorCommands.SaveParams + NewLine, cancellationToken)
-            .ConfigureAwait(false);
-        await Task.Delay(100, cancellationToken).ConfigureAwait(false);
+        // 2. MD 参数表示序列开头连续的横条纹数量，其余帧全部为竖条纹。
+        //    不再使用 MF 方向位图命令。
+        string mdCmd =
+            $"{TjProjectorCommands.SetFringeDirectionPrefix}{horizontalFrameCount}{NewLine}";
+        _logger.LogDebug(
+            "{Tag} [Device {Device}] MD horizontal frame count: cmd={Cmd}",
+            LogTag,
+            DeviceId,
+            mdCmd.TrimEnd('\r', '\n')
+        );
+        await SendCommandAndReadCoreAsync(mdCmd, cancellationToken).ConfigureAwait(false);
+        await Task.Delay(50, cancellationToken).ConfigureAwait(false);
+
+        // 方向配置单独持久化；不要在下载时用 MA 覆盖 B2 单帧触发参数。
         await SendCommandAndReadCoreAsync(TjProjectorCommands.SaveFringeParams + NewLine, cancellationToken)
             .ConfigureAwait(false);
         await Task.Delay(100, cancellationToken).ConfigureAwait(false);
 
-        // 4. 擦除 Flash（FE\r\n），需发送两次：每次收到 F0 后等待 5 秒
-        //    第一次 FE 收到 F0 → 等待 5S → 第二次 FE 收到 F0 → 等待 5S → 开始写数据
+        // 3. 擦除 Flash。协议只要求一次成功的 FE/F0；重复擦除会增加耗时和 Flash 风险。
         async Task<bool> SendFeAndWaitAsync(int attemptNum)
         {
             for (int attempt = 0; attempt < MaxEraseRetries; attempt++)
@@ -1007,50 +1023,42 @@ public class DlpProjectorService : IDlpProjectorService, IDisposable
         if (!await SendFeAndWaitAsync(1).ConfigureAwait(false))
         {
             throw new InvalidOperationException(
-                $"[{LogTag}] First FE erase failed after {MaxEraseRetries} attempts."
+                $"[{LogTag}] FE erase failed after {MaxEraseRetries} attempts."
             );
         }
 
         await Task.Delay(5000, cancellationToken).ConfigureAwait(false);
 
-        if (!await SendFeAndWaitAsync(2).ConfigureAwait(false))
-        {
-            throw new InvalidOperationException(
-                $"[{LogTag}] Second FE erase failed after {MaxEraseRetries} attempts."
-            );
-        }
-
-        await Task.Delay(5000, cancellationToken).ConfigureAwait(false);
-
-        // 5. 循环写数据（标准模式：FW{globalCol} {gray}，全局连续列索引从1开始）。
+        // 4. 循环写数据（标准模式：FW{globalCol} {gray}，全局连续列索引从0开始）。
         //    标准两参数 FW 格式（参考官方说明书）：
         //      FW{全局列号} {灰度值}\r\n；
-        //      全局列号从1开始连续计数，每帧固定 frameStride(1280) 列；
-        //      横条纹帧：前 HeightPixels(720) 列为条纹数据，后 frameStride-HeightPixels(560) 列填0（黑色空白）；
+        //      全局列号从0开始连续计数，每帧固定 frameStride(1280) 列；
+        //      横条纹帧：前 HeightPixels(720) 列为条纹数据，后 frameStride-HeightPixels(560) 列填255（白色补齐）；
         //      竖条纹帧：全部 frameStride(1280) 列为条纹数据；
-        //      Flash 采取 page 编程模式，每写入256个数据（globalCol%256==0）后等待page写入应答。
+        //      Flash 采取 page 编程模式，每写入256个数据后等待page写入应答。
         //    例：2幅(横-竖，1280*720，周期2数量1相移1)：
-        //      帧0(H): 全局列1~1280（前720列条纹数据 + 后560列填0黑色）
-        //      帧1(V): 全局列1281~2560（1280列条纹数据）
+        //      帧0(H): 全局列0~1279（前720列条纹数据 + 后560列填255）
+        //      帧1(V): 全局列1280~2559（1280列条纹数据）
         int lastReportedProgress = 0;
         int writtenCount = 0;
         if (onProgress != null)
             await onProgress(0).ConfigureAwait(false);
 
-        int globalCol = 1; // 全局列索引从1开始
+        int globalCol = 0; // 厂商下载 Demo 与页边界均采用 0-based 列索引
 
         for (int frameIdx = 0; frameIdx < imageCount; frameIdx++)
         {
             byte[] frame = frames[frameIdx];
-            bool isHorizontal = frameIdx % 2 == 0;
+            bool isHorizontal = frameIdx < horizontalFrameCount;
 
-            // 横条纹帧实际条纹数据长度可能为 720，地址空间为 1280，需补 560 列黑色。
+            // 横条纹帧实际条纹数据长度为 720，地址空间为 1280，需按厂商格式补 560 列白色。
             // horizontalPaddingPosition 控制填充位置：end=后置（右侧，默认），start=前置（左侧）。
             byte[] frameData;
             if (frame.Length < frameStride)
             {
                 frameData = new byte[frameStride];
-                Array.Fill(frameData, (byte)0); // 空白区域填充黑色
+                // 腾聚横条纹文件格式及原厂横条纹样例均使用 0xFF 补齐到 1280 字节。
+                Array.Fill(frameData, byte.MaxValue);
                 bool padAtStart = horizontalPaddingPosition
                     .Equals("start", StringComparison.OrdinalIgnoreCase);
                 if (padAtStart)
@@ -1091,10 +1099,18 @@ public class DlpProjectorService : IDlpProjectorService, IDisposable
                 await SendCommandCoreAsync(fwCmd, cancellationToken).ConfigureAwait(false);
                 await Task.Delay(WriteDelayMs, cancellationToken).ConfigureAwait(false);
 
-                // 每写入256个数据（globalCol为256的倍数时）等待page写入应答
-                if (globalCol % 256 == 0)
+                // 每写入256个数据后必须收到 page 写入应答；不能把超时当作成功，
+                // 否则常表现为最后一幅只有前半幅或缺少整块。
+                if ((globalCol + 1) % 256 == 0)
                 {
-                    await ReadResponseCoreAsync(cancellationToken).ConfigureAwait(false);
+                    string? pageReply = await ReadResponseCoreAsync(cancellationToken)
+                        .ConfigureAwait(false);
+                    if (string.IsNullOrWhiteSpace(pageReply))
+                    {
+                        throw new IOException(
+                            $"[{LogTag}] Flash page ACK timeout at column {globalCol}."
+                        );
+                    }
                 }
 
                 globalCol++;
@@ -1111,7 +1127,7 @@ public class DlpProjectorService : IDlpProjectorService, IDisposable
         }
 
         // 所有 FW 数据写完后，等待 500ms 确保最后一批数据被固件处理
-        await Task.Delay(500, cancellationToken).ConfigureAwait(false);
+        await Task.Delay(1000, cancellationToken).ConfigureAwait(false);
 
         // 6. 软复位（X\r\n）：不断电情况下让固件重新加载 Flash 中的条纹数据和方向配置
         _logger.LogInformation(
@@ -1127,7 +1143,7 @@ public class DlpProjectorService : IDlpProjectorService, IDisposable
         await Task.Delay(2000, cancellationToken).ConfigureAwait(false);
 
         _logger.LogInformation(
-            "{Tag} [Device {Device}] Fringe download complete: {Total} values written (standard 2-param FW mode, globalCol 1~{End})",
+            "{Tag} [Device {Device}] Fringe download complete: {Total} values written (standard 2-param FW mode, globalCol 0~{End})",
             LogTag,
             DeviceId,
             totalWrites,
@@ -1143,8 +1159,12 @@ public class DlpProjectorService : IDlpProjectorService, IDisposable
     /// <returns>完整 MF 命令字符串（含 \r\n 结尾）</returns>
     internal static string BuildFringeOrientationCommand(int imageCount, int blockIndex)
     {
+        if (blockIndex is < 0 or > 3)
+            throw new ArgumentOutOfRangeException(nameof(blockIndex));
+
         byte[] bits = BuildAlternatingFringeOrientationBits(imageCount);
-        return $"{TjProjectorCommands.SetFringeOrientationBitmapPrefix}{blockIndex} {bits[0]} {bits[1]} {bits[2]} {bits[3]}\r\n";
+        int offset = blockIndex * 4;
+        return $"{TjProjectorCommands.SetFringeOrientationBitmapPrefix}{blockIndex} {bits[offset]} {bits[offset + 1]} {bits[offset + 2]} {bits[offset + 3]}\r\n";
     }
 
     private static byte[] BuildAlternatingFringeOrientationBits(int imageCount)

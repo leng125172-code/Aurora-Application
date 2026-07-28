@@ -1,3 +1,4 @@
+using System.Text.Json;
 using AuroraStruct3D.Workflow.Dtos;
 using Volo.Abp.Application.Services;
 
@@ -75,10 +76,30 @@ public interface IWorkflowAppService : IApplicationService
     Task<WorkflowOutputConfigDto> GetOutputConfigAsync(Guid id);
 
     /// <summary>
+    /// 查询变量可下探选择的输出路径。
+    /// Route: GET {id}/output-paths?variableName={variableName}
+    /// </summary>
+    Task<WorkflowOutputPathListDto> GetOutputPathsAsync(Guid id, string variableName);
+
+    Task<WorkflowSourceDto> GetSourceAsync(Guid id);
+
+    Task<WorkflowSourceDto> UpdateSourceAsync(Guid id, UpdateWorkflowSourceInput input);
+
+    Task<WorkflowSourceValidationDto> ValidateSourceAsync(WorkflowSourceParseInput input);
+
+    Task<string> ConvertGraphToSourceAsync(WorkflowSourceConversionInput input);
+
+    Task<JsonElement> ConvertSourceToGraphAsync(WorkflowSourceParseInput input);
+
+    Task<WorkflowSourceMigrationResultDto> MigrateLegacySourcesAsync(int batchSize = 100);
+
+    /// <summary>
     /// 保存工作流输出变量配置。
     /// Route: PUT {id}/output-config
+    /// 已弃用：输出变量由 end-node.inputBindings 推导，应通过创建/更新工作流保存。
     /// </summary>
     /// <param name="id">工作流 ID。</param>
     /// <param name="input">输出变量配置。</param>
+    [Obsolete("输出变量由结束节点自动生成，请修改工作流图后调用 CreateAsync/UpdateAsync。")]
     Task<WorkflowOutputConfigDto> UpdateOutputConfigAsync(Guid id, WorkflowOutputConfigDto input);
 }

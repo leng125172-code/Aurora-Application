@@ -156,12 +156,12 @@ public class WorkflowProjectRunJob : ITransientDependency
         _runtimeVariablePool.InitializeFromFrozen(frozenVariables);
 
         // 冻结图字典：WorkflowId -> GraphData。
-        Dictionary<Guid, string> frozenGraphs = (
+        Dictionary<Guid, WorkflowProjectFrozenGraph> frozenGraphs = (
             Deserialize<List<WorkflowProjectFrozenGraph>>(deployment.FrozenGraphsJson) ?? []
         )
             .Where(x => x.WorkflowId != Guid.Empty)
             .GroupBy(x => x.WorkflowId)
-            .ToDictionary(x => x.Key, x => x.Last().GraphData);
+            .ToDictionary(x => x.Key, x => x.Last());
 
         List<WorkflowProjectRunItemResult> items = DeserializeItems(run.ResultsJson);
         Dictionary<Guid, WorkflowProjectRunItemResult> itemMap = items.ToDictionary(
@@ -221,8 +221,14 @@ public class WorkflowProjectRunJob : ITransientDependency
             }
 
             if (
-                !frozenGraphs.TryGetValue(workflowId, out string? graphData)
-                || string.IsNullOrWhiteSpace(graphData)
+                !frozenGraphs.TryGetValue(
+                    workflowId,
+                    out WorkflowProjectFrozenGraph? frozenGraph
+                )
+                || (
+                    string.IsNullOrWhiteSpace(frozenGraph.SourceCode)
+                    && string.IsNullOrWhiteSpace(frozenGraph.GraphData)
+                )
             )
             {
                 item.Status = WorkflowProjectRunItemStatus.Failed;
@@ -253,7 +259,10 @@ public class WorkflowProjectRunJob : ITransientDependency
                         run.ProjectId,
                         runId,
                         workflowId,
-                        graphData
+                        frozenGraph.GraphData,
+                        string.IsNullOrWhiteSpace(frozenGraph.SourceCode)
+                            ? null
+                            : frozenGraph.SourceCode
                     );
 
                 if (result.Error)

@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
 namespace AuroraStruct3D.Workflow.Dtos;
 
@@ -88,6 +89,13 @@ public class WorkflowExecutionTriggerInput
     public int VariableReadTimeoutMs { get; set; } = 5000;
 }
 
+/// <summary>直接调试未保存的受限 C# 工作流脚本。</summary>
+public class WorkflowSourceDebugInput : WorkflowExecutionTriggerInput
+{
+    [Required]
+    public string SourceCode { get; set; } = string.Empty;
+}
+
 /// <summary>
 /// 单步步进请求。
 /// </summary>
@@ -103,6 +111,92 @@ public class WorkflowExecutionStepInput
     /// 是否返回变量快照。
     /// </summary>
     public bool IncludeVariables { get; set; } = true;
+}
+
+public class WorkflowBreakpointDto
+{
+    public string? StatementId { get; set; }
+    public string? NodeId { get; set; }
+    public int? Line { get; set; }
+    public bool Enabled { get; set; } = true;
+    public string? Condition { get; set; }
+    public int? HitCount { get; set; }
+    public string? LogMessage { get; set; }
+}
+
+public class WorkflowBreakpointListDto
+{
+    public List<WorkflowBreakpointDto> Breakpoints { get; set; } = [];
+}
+
+public class WorkflowRunToInput
+{
+    public string? StatementId { get; set; }
+    public string? NodeId { get; set; }
+}
+
+public class WorkflowWatchInput
+{
+    public List<string> Expressions { get; set; } = [];
+}
+
+public class WorkflowWatchResultDto
+{
+    public string Expression { get; set; } = string.Empty;
+    public bool Found { get; set; }
+    public object? Value { get; set; }
+    public string? RuntimeType { get; set; }
+    public string? Error { get; set; }
+    public bool IsSummary { get; set; }
+    public string? Handle { get; set; }
+}
+
+public class WorkflowStackFrameDto
+{
+    public int Index { get; set; }
+    public string? NodeId { get; set; }
+    public string? StatementId { get; set; }
+    public string? DisplayName { get; set; }
+}
+
+public class WorkflowTraceEventDto
+{
+    public int Step { get; set; }
+    public string? NodeId { get; set; }
+    public string? StatementId { get; set; }
+    public DateTime StartedAt { get; set; }
+    public long DurationMs { get; set; }
+    public string Status { get; set; } = "completed";
+    public string? Error { get; set; }
+    public string EventType { get; set; } = "statement-completed";
+    public long QueueDurationMs { get; set; }
+    public string? OutputSummary { get; set; }
+}
+
+public class WorkflowTraceQueryDto
+{
+    public int SkipCount { get; set; }
+    public int MaxResultCount { get; set; } = 200;
+    public string? NodeId { get; set; }
+    public string? EventType { get; set; }
+}
+
+public class WorkflowTracePageDto
+{
+    public int TotalCount { get; set; }
+    public List<WorkflowTraceEventDto> Items { get; set; } = [];
+}
+
+public class WorkflowNodePerformanceDto
+{
+    public string? NodeId { get; set; }
+    public int Count { get; set; }
+    public long TotalDurationMs { get; set; }
+    public long MaxDurationMs { get; set; }
+    public double AverageDurationMs { get; set; }
+    public long P95DurationMs { get; set; }
+    public bool IsSlow { get; set; }
+    public int FaultCount { get; set; }
 }
 
 /// <summary>
@@ -440,6 +534,8 @@ public class WorkflowExecutionStatusDto
 {
     /// <summary>执行会话 ID。</summary>
     public Guid ExecutionId { get; set; }
+    public bool IsPaused { get; set; }
+    public string? CurrentStatementId { get; set; }
 
     /// <summary>运行 ID（运行调试场景下返回）。</summary>
     public Guid? RunId { get; set; }
@@ -490,5 +586,6 @@ public class WorkflowExecutionStatusDto
     public long DurationMs { get; set; }
 
     /// <summary>变量快照。</summary>
-    public List<WorkflowVariableResultDto> Variables { get; set; } = new();
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<WorkflowVariableResultDto>? Variables { get; set; }
 }

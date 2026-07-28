@@ -15,6 +15,8 @@ using Lion.AbpPro.ImportExportManagement;
 using Lion.AbpPro.MasterDataManagement;
 using Lion.AbpPro.TemplateManagement;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Configuration;
+using AuroraStruct3D.Workflow.Runtime;
 
 namespace AuroraStruct3D
 {
@@ -37,6 +39,14 @@ namespace AuroraStruct3D
     {
         public override void ConfigureServices(ServiceConfigurationContext context)
         {
+            IConfiguration configuration = context.Services.GetConfiguration();
+            context.Services.Configure<WorkflowRuntimeSafetyOptions>(
+                configuration.GetSection("Workflow:RuntimeSafety")
+            );
+            context.Services.Configure<WorkflowProgramCacheOptions>(
+                configuration.GetSection("Workflow:ProgramCache")
+            );
+
             // 注册 OpenCV 算子注册表服务（IOperatorRegistry + Redis 缓存 + 启动时自动扫描算子）
             // 依赖：IDistributedCache（Redis）须已在 HttpApi.Host 完成注册
             context.Services.AddOpenCVServices();

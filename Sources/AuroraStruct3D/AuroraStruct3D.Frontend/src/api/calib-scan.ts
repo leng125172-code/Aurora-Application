@@ -34,6 +34,8 @@ export enum CalibScanCameraRole {
 /** 启动扫描输入 */
 export interface StartCalibScanInput {
     calibProjectId: string
+    /** 仅打开投影仪灯光，不发送显示模式、B2、T、N 等控制命令 */
+    suppressProjectorControl?: boolean
 }
 
 /** 停止扫描输入 */

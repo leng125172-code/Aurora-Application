@@ -2,7 +2,6 @@
 import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Button from 'primevue/button'
-import InputNumber from 'primevue/inputnumber'
 import Select from 'primevue/select'
 import { AlertCircle, Loader2, Save } from '@lucide/vue'
 import type { ProjectorDeviceDto } from '@/api/projectors'
@@ -62,31 +61,6 @@ const selectedProjectorIdModel = computed({
     set: (value: string | null) => emit('update:selectedProjectorId', value),
 })
 
-const fringeTypeModel = computed({
-    get: () => props.fringeType,
-    set: (value: 'bw' | 'wb') => emit('update:fringeType', value),
-})
-
-const projectorHeightInputModel = computed({
-    get: () => props.projectorHeightInput,
-    set: (value: number | null) => emit('update:projectorHeightInput', value ?? 0),
-})
-
-const fringe3PeriodCountModel = computed({
-    get: () => props.fringe3PeriodCount,
-    set: (value: number | null) => emit('update:fringe3PeriodCount', value ?? 0),
-})
-
-const fringe3ImageCountModel = computed({
-    get: () => props.fringe3ImageCount,
-    set: (value: number | null) => emit('update:fringe3ImageCount', value ?? 0),
-})
-
-const fringe3PhaseShiftModel = computed({
-    get: () => props.fringe3PhaseShift,
-    set: (value: number | null) => emit('update:fringe3PhaseShift', value ?? 0),
-})
-
 const horizontalPaddingPositionModel = computed({
     get: () => props.horizontalPaddingPosition,
     set: (value: 'start' | 'end') => emit('update:horizontalPaddingPosition', value),
@@ -119,7 +93,7 @@ function renderFringePreview(): void {
     const imageData = ctx.createImageData(width, height)
     const data = imageData.data
 
-    const isHorizontalFrame = img.index % 2 === 0
+    const isHorizontalFrame = img.index < 10
     if (!isHorizontalFrame) {
         for (let x = 0; x < width; x++) {
             const gray = pixels[Math.min(x, pixels.length - 1)]
@@ -188,6 +162,7 @@ watch(
                         option-value="id"
                         size="small"
                         class="w-full !text-xs"
+                        disabled
                         :pt="{
                             root: { class: '!py-0 !px-2 !h-7 !flex !items-center' },
                             label: { class: '!text-xs !py-0' },
@@ -207,7 +182,7 @@ watch(
                         <div
                             class="h-7 flex items-center text-xs px-2 rounded border border-border/40 bg-muted/20 text-muted-foreground"
                         >
-                            1-2-1-2（{{ t('calib.step3FringeModeH') }} / {{ t('calib.step3FringeModeV') }}）
+                            {{ t('calib.step3FringeModeH') }} → {{ t('calib.step3FringeModeV') }}
                         </div>
                     </div>
 
@@ -215,23 +190,10 @@ watch(
                         <label class="block text-xs text-muted-foreground mb-1">
                             {{ t('calib.step3FringeType') }}
                         </label>
-                        <div class="flex gap-1.5">
-                            <Button
-                                :severity="fringeTypeModel === 'bw' ? 'primary' : 'secondary'"
-                                size="small"
-                                class="!text-xs flex-1"
-                                @click="fringeTypeModel = 'bw'"
-                            >
-                                {{ t('calib.step3FringeTypeBW') }}
-                            </Button>
-                            <Button
-                                :severity="fringeTypeModel === 'wb' ? 'primary' : 'secondary'"
-                                size="small"
-                                class="!text-xs flex-1"
-                                @click="fringeTypeModel = 'wb'"
-                            >
-                                {{ t('calib.step3FringeTypeWB') }}
-                            </Button>
+                        <div
+                            class="h-7 flex items-center text-xs px-2 rounded border border-border/40 bg-muted/20 text-muted-foreground"
+                        >
+                            多尺度二值条纹（每种宽度原图 + 互补图）
                         </div>
                     </div>
 
@@ -243,24 +205,8 @@ watch(
                             <div
                                 class="flex-1 h-7 flex items-center text-xs px-2 rounded border border-border/40 bg-muted/20 text-muted-foreground"
                             >
-                                {{ props.projectorWidthPixels != null ? `${props.projectorWidthPixels} px` : '—' }}
+                                1280 px
                             </div>
-                            <Button
-                                severity="secondary"
-                                outlined
-                                size="small"
-                                :disabled="!props.selectedProjectorId || props.projectorReading"
-                                class="!text-xs shrink-0"
-                                @click="void props.fetchProjectorResolution()"
-                            >
-                                <Loader2 v-if="props.projectorReading" class="size-3 animate-spin mr-1" />
-                                {{
-                                    props.projectorReading ? t('calib.step3Reading') : t('calib.step3GetFromProjector')
-                                }}
-                            </Button>
-                        </div>
-                        <div v-if="props.projectorPixelMode" class="text-[10px] text-muted-foreground mt-1">
-                            {{ t('calib.step3PixelMode') }}: {{ props.projectorPixelMode }}
                         </div>
                     </div>
 
@@ -268,66 +214,55 @@ watch(
                         <label class="block text-xs text-muted-foreground mb-1">
                             {{ t('calib.step3HeightPixels') }}
                         </label>
-                        <InputNumber
-                            v-model="projectorHeightInputModel"
-                            :min="1"
-                            :max="10000"
-                            :max-fraction-digits="0"
-                            size="small"
-                            class="w-full"
-                            :input-class="'!text-xs !h-7 !py-0'"
-                        />
+                        <div
+                            class="h-7 flex items-center text-xs px-2 rounded border border-border/40 bg-muted/20 text-muted-foreground"
+                        >
+                            720 px
+                        </div>
                     </div>
 
                     <div>
                         <label class="block text-xs text-muted-foreground mb-1">
-                            {{ t('calib.step3PeriodCount') }}
+                            横向编码
                         </label>
-                        <InputNumber
-                            v-model="fringe3PeriodCountModel"
-                            :min="1"
-                            :max="1000"
-                            :max-fraction-digits="0"
-                            size="small"
-                            class="w-full"
-                            :input-class="'!text-xs !h-7 !py-0'"
-                        />
-                        <p v-if="props.fringe3PeriodError" class="text-[10px] text-red-400 mt-1">
-                            {{ props.fringe3PeriodError }}
-                        </p>
+                        <div
+                            class="h-7 flex items-center text-xs px-2 rounded border border-border/40 bg-muted/20 text-muted-foreground"
+                        >
+                            3、6、12、24、48 px，共 10 张
+                        </div>
                     </div>
 
                     <div>
                         <label class="block text-xs text-muted-foreground mb-1">
-                            {{ t('calib.step3ImageCount') }}
+                            竖向编码
                         </label>
-                        <InputNumber
-                            v-model="fringe3ImageCountModel"
-                            :min="1"
-                            :max="128"
-                            :max-fraction-digits="0"
-                            size="small"
-                            class="w-full"
-                            :input-class="'!text-xs !h-7 !py-0'"
-                        />
+                        <div
+                            class="h-7 flex items-center text-xs px-2 rounded border border-border/40 bg-muted/20 text-muted-foreground"
+                        >
+                            4、8、16、32、64 px，共 10 张
+                        </div>
                     </div>
 
                     <div>
                         <label class="block text-xs text-muted-foreground mb-1">
-                            {{ t('calib.step3PhaseShift') }}
+                            图像顺序
                         </label>
-                        <InputNumber
-                            v-model="fringe3PhaseShiftModel"
-                            :min="1"
-                            :max="props.fringe3PeriodCount - 1"
-                            :max-fraction-digits="0"
-                            size="small"
-                            class="w-full"
-                            :input-class="'!text-xs !h-7 !py-0'"
-                        />
-                        <p v-if="props.fringe3PhaseError" class="text-[10px] text-red-400 mt-1">
-                            {{ props.fringe3PhaseError }}
-                        </p>
+                        <div
+                            class="h-7 flex items-center text-xs px-2 rounded border border-border/40 bg-muted/20 text-muted-foreground"
+                        >
+                            前 10 张横条纹，后 10 张竖条纹（共 20 张）
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs text-muted-foreground mb-1">
+                            互补方式
+                        </label>
+                        <div
+                            class="h-7 flex items-center text-xs px-2 rounded border border-border/40 bg-muted/20 text-muted-foreground"
+                        >
+                            原图逐像素取反（无偏移）
+                        </div>
                     </div>
 
                     <div>

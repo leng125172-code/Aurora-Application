@@ -6,6 +6,17 @@
  */
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 
+const workflowDebugRoutes: RouteRecordRaw[] = __WORKFLOW_DEBUG__
+    ? [
+          {
+              path: 'workflow-ide',
+              name: 'WorkflowIde',
+              component: () => import('@/views/workflow/WorkflowIdePage.vue'),
+              meta: { requiresAuth: true, title: '工作流调试' },
+          },
+      ]
+    : []
+
 const routes: RouteRecordRaw[] = [
     {
         path: '/login',
@@ -60,6 +71,7 @@ const routes: RouteRecordRaw[] = [
                 component: () => import('@/views/system/SystemInfoPage.vue'),
                 meta: { requiresAuth: true, title: 'menu.systemInfo' },
             },
+            ...workflowDebugRoutes,
             {
                 path: 'device-state/faults',
                 name: 'FaultHistory',

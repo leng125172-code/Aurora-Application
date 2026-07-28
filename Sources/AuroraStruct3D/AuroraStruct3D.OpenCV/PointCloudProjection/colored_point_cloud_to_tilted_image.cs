@@ -71,6 +71,42 @@ public class colored_point_cloud_to_tilted_image : IOperator
             },
             new ConfigParameter
             {
+                Name = "outputWidth",
+                DisplayName = "输出宽度(0=自动)",
+                ParameterType = typeof(int),
+                DefaultValue = "0",
+                Required = false,
+                ControlType = PortControlType.Input,
+            },
+            new ConfigParameter
+            {
+                Name = "outputHeight",
+                DisplayName = "输出高度(0=自动)",
+                ParameterType = typeof(int),
+                DefaultValue = "0",
+                Required = false,
+                ControlType = PortControlType.Input,
+            },
+            new ConfigParameter
+            {
+                Name = "backgroundColor",
+                DisplayName = "背景颜色",
+                ParameterType = typeof(string),
+                DefaultValue = "#00000000",
+                Required = false,
+                ControlType = PortControlType.Color,
+            },
+            new ConfigParameter
+            {
+                Name = "autoFit",
+                DisplayName = "自动适配画布",
+                ParameterType = typeof(bool),
+                DefaultValue = "true",
+                Required = false,
+                ControlType = PortControlType.Switch,
+            },
+            new ConfigParameter
+            {
                 Name = "imageResolution",
                 DisplayName = "图像分辨率",
                 ParameterType = typeof(int),
@@ -85,6 +121,10 @@ public class colored_point_cloud_to_tilted_image : IOperator
     private readonly double _tiltAngleXDeg;
     private readonly double _tiltAngleZDeg;
     private readonly int _imageResolution;
+    private readonly int _outputWidth;
+    private readonly int _outputHeight;
+    private readonly Scalar _background;
+    private readonly bool _autoFit;
     private bool _disposed;
 
     /// <summary>
@@ -98,13 +138,31 @@ public class colored_point_cloud_to_tilted_image : IOperator
         double tiltAngleY = 30,
         double tiltAngleX = 30,
         double tiltAngleZ = 0,
+        int outputWidth = 0,
+        int outputHeight = 0,
+        string backgroundColor = "#00000000",
+        bool autoFit = true,
         int imageResolution = 512
     )
     {
+        ValidateAngle(tiltAngleY, nameof(tiltAngleY));
+        ValidateAngle(tiltAngleX, nameof(tiltAngleX));
+        ValidateAngle(tiltAngleZ, nameof(tiltAngleZ));
+        if (imageResolution is < 1 or > 8192)
+            throw new ArgumentOutOfRangeException(nameof(imageResolution), "图像分辨率必须为 1～8192。");
+        if (outputWidth is < 0 or > 8192)
+            throw new ArgumentOutOfRangeException(nameof(outputWidth), "输出宽度必须为 0～8192。");
+        if (outputHeight is < 0 or > 8192)
+            throw new ArgumentOutOfRangeException(nameof(outputHeight), "输出高度必须为 0～8192。");
+
         _tiltAngleYDeg = tiltAngleY;
         _tiltAngleXDeg = tiltAngleX;
         _tiltAngleZDeg = tiltAngleZ;
         _imageResolution = imageResolution;
+        _outputWidth = outputWidth;
+        _outputHeight = outputHeight;
+        _background = ParseBackgroundColor(backgroundColor);
+        _autoFit = autoFit;
     }
 
     /// <inheritdoc/>
@@ -196,7 +254,12 @@ public class colored_point_cloud_to_tilted_image : IOperator
         // 计算输出图像尺寸（保持长宽比）
         int width;
         int height;
-        if (rangeX >= rangeY)
+        if (!_autoFit && _outputWidth > 0 && _outputHeight > 0)
+        {
+            width = _outputWidth;
+            height = _outputHeight;
+        }
+        else if (rangeX >= rangeY)
         {
             width = res;
             height = Math.Max(1, (int)Math.Round(res * (rangeY / rangeX)));
@@ -250,7 +313,7 @@ public class colored_point_cloud_to_tilted_image : IOperator
             count.Set(py, px, count.Get<int>(py, px) + 1);
         }
 
-        Mat image = new Mat(height, width, MatType.CV_8UC4, new Scalar(0, 0, 0, 0));
+        Mat image = new Mat(height, width, MatType.CV_8UC4, _background);
         for (int y = 0; y < height; y++)
         {
             for (int x = 0; x < width; x++)
@@ -282,7 +345,16 @@ public class colored_point_cloud_to_tilted_image : IOperator
             {
                 if (mask.Get<byte>(y, x) == 0)
                 {
-                    image.Set(y, x, new Vec4b(0, 0, 0, 0));
+                    image.Set(
+                        y,
+                        x,
+                        new Vec4b(
+                            (byte)_background.Val0,
+                            (byte)_background.Val1,
+                            (byte)_background.Val2,
+                            (byte)_background.Val3
+                        )
+                    );
                 }
             }
         }
@@ -312,5 +384,27 @@ public class colored_point_cloud_to_tilted_image : IOperator
             return;
         _disposed = true;
         GC.SuppressFinalize(this);
+    }
+
+    private static void ValidateAngle(double angle, string parameterName)
+    {
+        if (!double.IsFinite(angle) || angle is < -180 or > 180)
+            throw new ArgumentOutOfRangeException(parameterName, "旋转角度必须为 -180°～180°。");
+    }
+
+    private static Scalar ParseBackgroundColor(string value)
+    {
+        string text = (value ?? string.Empty).Trim().TrimStart('#');
+        if (text.Length is not (6 or 8) || !uint.TryParse(text, System.Globalization.NumberStyles.HexNumber, null, out uint rgba))
+            throw new ArgumentException("背景颜色必须为 #RRGGBB 或 #RRGGBBAA。", nameof(value));
+
+        if (text.Length == 6)
+            rgba = (rgba << 8) | 0xFF;
+
+        byte r = (byte)(rgba >> 24);
+        byte g = (byte)(rgba >> 16);
+        byte b = (byte)(rgba >> 8);
+        byte a = (byte)rgba;
+        return new Scalar(b, g, r, a);
     }
 }

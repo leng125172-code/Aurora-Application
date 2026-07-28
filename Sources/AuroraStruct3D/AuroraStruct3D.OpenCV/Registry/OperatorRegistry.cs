@@ -348,6 +348,7 @@ internal sealed class OperatorRegistry : IOperatorRegistry
                     ParameterTypeName = p.ParameterType.FullName ?? p.ParameterType.Name,
                     DefaultValue = p.DefaultValue,
                     ValueLimit = p.ValueLimit,
+                    JsonSchema = p.JsonSchema,
                     ErrorCheck = p.ErrorCheck,
                     ControlType = p.ControlType,
                     MatType = matType,

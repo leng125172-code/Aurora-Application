@@ -2,7 +2,9 @@ using AuroraStruct3D.OpenCV.File.Images;
 using AuroraStruct3D.OpenCV.PointCloudOps;
 using AuroraStruct3D.OpenCV.RoiOps;
 using AuroraStruct3D.OpenCV.VisionParameters;
+using AuroraStruct3D.OpenCV.Workflow;
 using AuroraStruct3D.Workflow;
+using OpenCvSharp;
 using Xunit;
 
 namespace AuroraStruct3D.Application.Tests.Workflow;
@@ -53,6 +55,27 @@ public class HeightDiffWorkflowOperatorsTests
         Assert.Equal("output_mat", outputs[0].ParameterName);
         Assert.Contains(configs!, config => config.Name == "okText");
         Assert.Contains(configs!, config => config.Name == "ngText");
+    }
+
+    [Fact]
+    public void AnnotateHeightDiffResult_Should_Render_Status_And_Measurements()
+    {
+        using Mat input = Mat.Zeros(160, 320, MatType.CV_8UC3);
+        using WorkflowContext context = new();
+        context.Set("input_mat", input);
+        context.Set("height_a", 12.345);
+        context.Set("height_b", 10.125);
+        context.Set("signed_diff", 2.22);
+        context.Set("is_ok", false);
+
+        using var annotate = new annotate_height_diff_result();
+        annotate.Execute(context);
+
+        Mat output = Assert.IsType<Mat>(context.Get<Mat>("output_mat"));
+        Assert.Equal(4, output.Channels());
+        using Mat gray = new();
+        Cv2.CvtColor(output, gray, ColorConversionCodes.BGRA2GRAY);
+        Assert.True(Cv2.CountNonZero(gray) > 0);
     }
 
     [Fact]

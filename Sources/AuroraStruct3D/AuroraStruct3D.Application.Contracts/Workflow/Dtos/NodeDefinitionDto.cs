@@ -45,6 +45,14 @@ public sealed class NodeDefinitionDto
     /// </summary>
     public bool IsBoundary { get; init; }
 
+    /// <summary>
+    /// 最终结果预览中的 ROI 叠加语义。
+    /// <c>plane</c>：高亮完整平面；<c>region</c>：仅高亮面内区域；
+    /// <c>none</c>：不生成 ROI 叠加层。
+    /// 非 ROI 算子为 null。
+    /// </summary>
+    public string? OverlayMode { get; init; }
+
     /// <summary>输入端口列表，顺序与算子 InputVisionParameters 定义一致。</summary>
     public required IReadOnlyList<NodePortDto> InputPorts { get; init; }
 

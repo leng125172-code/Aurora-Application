@@ -9,7 +9,7 @@ namespace AuroraStruct3D.Calibration;
 public class CalibScanStateStore
 {
     private readonly ConcurrentDictionary<Guid, CalibScanSessionState> _sessions = new();
-    private readonly ConcurrentDictionary<Guid, CancellationTokenSource> _scanLoops = new();
+    private readonly ConcurrentDictionary<Guid, ScanLoopHandle> _scanLoops = new();
 
     /// <summary>
     /// 获取指定项目会话状态。
@@ -55,7 +55,9 @@ public class CalibScanStateStore
                 old.PatternCount = totalFrameCount;
                 old.CurrentRoundIndex = 0;
                 old.CurrentFrameIndexInRound = 0;
-                old.LatestMetrics ??= BuildInitialMetrics(now, totalFrameCount);
+                // 每次启动都必须建立一份新的指标快照。保留上一次会话的
+                // LatestMetrics 会导致前端持续显示旧的 0/0 或上一轮帧号。
+                old.LatestMetrics = BuildInitialMetrics(now, totalFrameCount);
                 return old;
             }
         );
@@ -66,26 +68,31 @@ public class CalibScanStateStore
     /// <summary>
     /// 停止指定项目会话；若不存在则返回 null。
     /// </summary>
-    public CalibScanSessionState? Stop(Guid calibProjectId)
+    public async Task<CalibScanSessionState?> StopAsync(Guid calibProjectId)
     {
         if (!_sessions.TryGetValue(calibProjectId, out CalibScanSessionState? session))
         {
             return null;
         }
 
-        if (_scanLoops.TryRemove(calibProjectId, out CancellationTokenSource? cts))
+        if (_scanLoops.TryRemove(calibProjectId, out ScanLoopHandle? handle))
         {
             try
             {
-                cts.Cancel();
+                await handle.CancellationTokenSource.CancelAsync();
+                await handle.Completion;
+            }
+            catch (OperationCanceledException)
+            {
+                // 扫描循环按约定响应取消。
             }
             catch
             {
-                // 忽略取消异常
+                // 循环体异常由应用服务记录；停止清理仍继续。
             }
             finally
             {
-                cts.Dispose();
+                handle.CancellationTokenSource.Dispose();
             }
         }
 
@@ -156,44 +163,54 @@ public class CalibScanStateStore
     /// </param>
     public void StartScanLoop(Guid calibProjectId, Func<CancellationToken, Task> scanLoopAsync)
     {
-        if (_scanLoops.TryRemove(calibProjectId, out CancellationTokenSource? oldCts))
+        if (_scanLoops.TryRemove(calibProjectId, out ScanLoopHandle? oldHandle))
         {
             try
             {
-                oldCts.Cancel();
+                oldHandle.CancellationTokenSource.Cancel();
             }
             catch
             {
                 // 忽略
             }
-            finally
-            {
-                oldCts.Dispose();
-            }
         }
 
         CancellationTokenSource cts = new();
-        _scanLoops[calibProjectId] = cts;
+        Task completion;
 
-        _ = Task.Run(async () =>
+        // Task.Run 默认会捕获当前 HTTP 请求的 ExecutionContext，其中包含 ABP
+        // Ambient UnitOfWork。请求结束后该工作单元及 DbContext 会被释放，后台
+        // 扫描若继续继承它，后续仓储查询就会访问 disposed DbContext。
+        // 后台循环拥有独立 DI Scope，各应用服务调用应自行创建工作单元。
+        using (ExecutionContext.SuppressFlow())
         {
-            try
+            completion = Task.Run(async () =>
             {
-                await scanLoopAsync(cts.Token);
-            }
-            catch (OperationCanceledException)
-            {
-                // 正常取消，忽略
-            }
-            catch (Exception)
-            {
-                // 循环体异常由调用方自行记录日志并标记会话失败
-            }
-            finally
-            {
-                _scanLoops.TryRemove(calibProjectId, out _);
-            }
-        });
+                try
+                {
+                    await scanLoopAsync(cts.Token);
+                }
+                catch (OperationCanceledException)
+                {
+                    // 正常取消，忽略
+                }
+                catch (Exception)
+                {
+                    // 循环体异常由调用方自行记录日志并标记会话失败
+                }
+                finally
+                {
+                    if (
+                        _scanLoops.TryGetValue(calibProjectId, out ScanLoopHandle? current)
+                        && ReferenceEquals(current.CancellationTokenSource, cts)
+                    )
+                    {
+                        _scanLoops.TryRemove(calibProjectId, out _);
+                    }
+                }
+            });
+        }
+        _scanLoops[calibProjectId] = new ScanLoopHandle(cts, completion);
     }
 
     private static CalibScanMetricsDto BuildInitialMetrics(DateTime now, int patternCount)
@@ -211,6 +228,11 @@ public class CalibScanStateStore
             IsCrosshairDetected = false,
         };
     }
+
+    private sealed record ScanLoopHandle(
+        CancellationTokenSource CancellationTokenSource,
+        Task Completion
+    );
 }
 
 /// <summary>

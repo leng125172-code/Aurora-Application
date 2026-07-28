@@ -224,6 +224,7 @@ public class WorkflowNodePaletteAppService
             DisplayName = op.DisplayName,
             Description = op.Description,
             HasBody = false,
+            OverlayMode = ResolveOverlayMode(op.Id),
             InputPorts =
                 ports?.Inputs.Select(MapPort).ToList().AsReadOnly()
                 ?? (IReadOnlyList<NodePortDto>)Array.Empty<NodePortDto>(),
@@ -233,6 +234,15 @@ public class WorkflowNodePaletteAppService
             ConfigFields =
                 ports?.Config.Select(MapConfig).ToList().AsReadOnly()
                 ?? (IReadOnlyList<NodeConfigFieldDto>)Array.Empty<NodeConfigFieldDto>(),
+        };
+
+    private static string? ResolveOverlayMode(Guid operatorId) =>
+        operatorId.ToString("D") switch
+        {
+            "c38e27a6-8d49-4c41-96a0-a53f30c23101" => "plane",
+            "d420473b-76f1-455a-83e4-492809c23102" => "region",
+            "e15fb284-2abe-477c-bd47-3cfde9c23103" => "none",
+            _ => null,
         };
 
     private static NodePortDto MapPort(ParameterDescriptor p) =>

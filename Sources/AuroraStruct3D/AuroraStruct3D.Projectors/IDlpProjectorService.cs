@@ -267,7 +267,7 @@ public interface IDlpProjectorService
 
     /// <summary>
     /// 将条纹图案数据写入投影仪内部 Flash。
-    /// 流程：设置方向位图(MF) → 设置幅数(MB) → 保存参数(MS/Ms) → 擦除Flash(FE,等F0) → 循环写数据(FW,标准两参数模式) → 软复位(X)
+    /// 流程：设置横条纹数量(MD) → 设置幅数(MB) → 保存参数(MS/Ms) → 擦除Flash(FE,等F0) → 循环写数据(FW,标准两参数模式) → 软复位(X)
     /// 标准模式下FW使用全局连续列索引（从1开始），每帧固定 1280 列：
     /// 竖条纹帧数据长度为 1280；横条纹帧实际条纹数据长度为 HeightPixels(720)，需补 560 列黑色到 1280 列。
     /// </summary>
@@ -277,6 +277,7 @@ public interface IDlpProjectorService
     /// <param name="cancellationToken">取消令牌</param>
     Task DownloadFringePatternAsync(
         byte[][] frames,
+        int horizontalFrameCount,
         string horizontalPaddingPosition = "end",
         Func<int, Task>? onProgress = null,
         CancellationToken cancellationToken = default
