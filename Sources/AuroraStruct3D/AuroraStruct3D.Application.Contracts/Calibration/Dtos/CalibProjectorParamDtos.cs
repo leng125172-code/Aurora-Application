@@ -34,7 +34,7 @@ public class CalibProjectorParamDto
     /// <summary>条纹类型：bw=黑白，wb=白黑</summary>
     public string FringeType { get; set; } = "bw";
 
-    /// <summary>图案数量（相移步数）</summary>
+    /// <summary>固定条纹布局的总帧数</summary>
     public int PatternCount { get; set; }
 
     /// <summary>相位偏移量</summary>
@@ -79,7 +79,7 @@ public class SaveCalibProjectorParamInput
     [MaxLength(8)]
     public string FringeType { get; set; } = "bw";
 
-    /// <summary>图案数量（相移步数）</summary>
+    /// <summary>固定条纹布局的总帧数；服务端会按当前布局归一化</summary>
     [Range(1, 128)]
     public int PatternCount { get; set; }
 

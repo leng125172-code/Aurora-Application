@@ -12,6 +12,7 @@ using AuroraStruct3D.Workflow.Dtos;
 using AuroraStruct3D.Workflow.Runtime;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 using Volo.Abp;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Data;
@@ -34,13 +35,15 @@ public class WorkflowAppService : AuroraStruct3DAppService, IWorkflowAppService
     private readonly IOfflineVariableLibraryAppService _offlineVariableLibrary;
     private readonly IWorkflowProgramCache _programCache;
     private readonly IRepository<WorkflowSourceVersion, Guid> _sourceVersionRepository;
+    private readonly WorkflowVariableCompileRequestFactory _compileRequestFactory;
 
     public WorkflowAppService(
         IRepository<WorkflowDefinition, Guid> repository,
         IOperatorRegistry operatorRegistry,
         IOfflineVariableLibraryAppService offlineVariableLibrary,
         IWorkflowProgramCache programCache,
-        IRepository<WorkflowSourceVersion, Guid> sourceVersionRepository
+        IRepository<WorkflowSourceVersion, Guid> sourceVersionRepository,
+        WorkflowVariableCompileRequestFactory compileRequestFactory
     )
     {
         _repository = repository;
@@ -48,10 +51,10 @@ public class WorkflowAppService : AuroraStruct3DAppService, IWorkflowAppService
         _offlineVariableLibrary = offlineVariableLibrary;
         _programCache = programCache;
         _sourceVersionRepository = sourceVersionRepository;
+        _compileRequestFactory = compileRequestFactory;
     }
 
     /// <inheritdoc/>
-    [HttpGet]
     public async Task<List<WorkflowBriefDto>> GetListAsync(Guid projectId)
     {
         IQueryable<WorkflowDefinition> queryable = await _repository.GetQueryableAsync();
@@ -74,7 +77,6 @@ public class WorkflowAppService : AuroraStruct3DAppService, IWorkflowAppService
     }
 
     /// <inheritdoc/>
-    [HttpPost]
     public async Task<WorkflowDto> CreateAsync(CreateWorkflowInput input)
     {
         (Guid projectId, string name, string graphData, GraphDataModel graph) = ReadPayload(input);
@@ -116,7 +118,6 @@ public class WorkflowAppService : AuroraStruct3DAppService, IWorkflowAppService
     }
 
     /// <inheritdoc/>
-    [HttpGet("{id:guid}")]
     public async Task<WorkflowDto> GetAsync(Guid id)
     {
         WorkflowDefinition workflow = await _repository.GetAsync(id);
@@ -125,7 +126,6 @@ public class WorkflowAppService : AuroraStruct3DAppService, IWorkflowAppService
     }
 
     /// <inheritdoc/>
-    [HttpPut("{id:guid}")]
     public async Task<WorkflowDto> UpdateAsync(Guid id, UpdateWorkflowInput input)
     {
         (Guid projectId, string name, string graphData, GraphDataModel graph) = ReadPayload(input);
@@ -155,14 +155,31 @@ public class WorkflowAppService : AuroraStruct3DAppService, IWorkflowAppService
             )
         );
 
-        await _repository.UpdateAsync(workflow, autoSave: true);
-        await CreateSourceVersionAsync(workflow);
+        try
+        {
+            await _repository.UpdateAsync(workflow, autoSave: true);
+            await CreateSourceVersionAsync(workflow);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(
+                ex,
+                "工作流更新持久化异常：ProjectId={ProjectId}, WorkflowId={WorkflowId}, "
+                    + "Revision={Revision}, Name={WorkflowName}",
+                projectId,
+                workflow.Id,
+                workflow.SourceRevision,
+                name
+            );
+            throw new UserFriendlyException(
+                $"工作流更新持久化异常（{ex.GetType().Name}）：{ex.Message}"
+            );
+        }
 
         return MapToDto(workflow);
     }
 
     /// <inheritdoc/>
-    [HttpDelete("{id:guid}")]
     public async Task DeleteAsync(Guid id)
     {
         WorkflowDefinition workflow = await _repository.GetAsync(id);
@@ -171,7 +188,6 @@ public class WorkflowAppService : AuroraStruct3DAppService, IWorkflowAppService
     }
 
     /// <inheritdoc/>
-    [HttpPost("{id:guid}/validate")]
     public async Task<WorkflowValidateResultDto> ValidateAsync(Guid id)
     {
         WorkflowDefinition workflow = await _repository.GetAsync(id);
@@ -209,7 +225,6 @@ public class WorkflowAppService : AuroraStruct3DAppService, IWorkflowAppService
     }
 
     /// <inheritdoc/>
-    [HttpPost("{id:guid}/simulate")]
     public async Task<WorkflowDataFlowReportDto> SimulateAsync(Guid id)
     {
         WorkflowDefinition workflow = await _repository.GetAsync(id);
@@ -878,16 +893,34 @@ public class WorkflowAppService : AuroraStruct3DAppService, IWorkflowAppService
             );
         }
 
-        VariableCompileRequestDto variableCompileRequest = await BuildVariableCompileRequestAsync(
+        VariableCompileRequestDto variableCompileRequest = await _compileRequestFactory.BuildAsync(
             projectId,
             workflowId,
             graph,
             defUseAnalysisMode
         );
 
-        VariableCompileResultDto compileResult = await _offlineVariableLibrary.CompileAsync(
-            variableCompileRequest
-        );
+        VariableCompileResultDto compileResult;
+        try
+        {
+            compileResult = await _offlineVariableLibrary.CompileAsync(variableCompileRequest);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(
+                ex,
+                "工作流离线变量编译异常：ProjectId={ProjectId}, WorkflowId={WorkflowId}, "
+                    + "Declarations={DeclarationCount}, Reads={ReadCount}, Writes={WriteCount}",
+                projectId,
+                workflowId,
+                variableCompileRequest.Declarations.Count,
+                variableCompileRequest.Reads.Count,
+                variableCompileRequest.Writes.Count
+            );
+            throw new UserFriendlyException(
+                $"离线变量编译异常（{ex.GetType().Name}）：{ex.Message}"
+            );
+        }
 
         if (!compileResult.CanPublish)
         {

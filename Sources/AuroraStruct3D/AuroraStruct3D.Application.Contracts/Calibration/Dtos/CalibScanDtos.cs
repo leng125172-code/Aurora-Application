@@ -57,7 +57,7 @@ public class CalibScanMetricsDto
     /// <summary>当前轮内帧序号（0~PatternCount-1，PatternCount 为每轮总帧数）</summary>
     public int FrameIndexInRound { get; set; }
 
-    /// <summary>每轮总帧数（等于 Step3 CalibProjectorParam.PatternCount 的 2 倍，因横竖交替）</summary>
+    /// <summary>每轮总帧数（已包含横条纹和竖条纹全部帧）</summary>
     public int PatternCount { get; set; }
 
     /// <summary>十字图检测结果（混合模式确认用，true 表示检测到十字图）</summary>

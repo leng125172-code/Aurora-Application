@@ -1885,6 +1885,8 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
         List<Mat> objectPoints = [];
         List<Mat> imagePointsMain = [];
         List<Mat> imagePointsSecondary = [];
+        List<Point2f[]> detectedPointsMain = [];
+        List<Point2f[]> detectedPointsSecondary = [];
         Size imageSize = default;
 
         System.Diagnostics.Stopwatch phaseSwS = new();
@@ -1976,6 +1978,8 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
             objectPoints.Add(Mat.FromArray(worldCorners));
             imagePointsMain.Add(Mat.FromArray(mainCorners));
             imagePointsSecondary.Add(Mat.FromArray(secondaryCorners));
+            detectedPointsMain.Add(mainCorners);
+            detectedPointsSecondary.Add(secondaryCorners);
         }
 
         if (objectPoints.Count < CalibConsts.MinValidPhotoCount)
@@ -2113,6 +2117,103 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
             p2,
             q
         );
+
+        double translationNorm = Math.Sqrt(
+            Math.Pow(t.At<double>(0), 2)
+                + Math.Pow(t.At<double>(1), 2)
+                + Math.Pow(t.At<double>(2), 2)
+        );
+        using Mat projectionBaseline =
+            StereoReconstructionUtils.ComputeBaselineFromStereoResult(p1, p2);
+        double projectionBaselineNorm =
+            StereoReconstructionUtils.ComputeBaselineDistance(projectionBaseline);
+        double rectifiedCx1 = p1.At<double>(0, 2);
+        double rectifiedCx2 = p2.At<double>(0, 2);
+        int disparitySign = StereoReconstructionUtils.ComputeDisparitySign(p1, p2);
+
+        _logger.LogInformation(
+            "[双目标定] 联合外参 — R={R}, T={T}, RotationAngle={RotationAngle:F3}deg, TranslationNorm={TranslationNorm:F3}mm",
+            CalibImageUtils.SerializeMatToJson(r),
+            CalibImageUtils.SerializeVecToJson(t),
+            Math.Acos(Math.Clamp((Cv2.Trace(r).Val0 - 1d) / 2d, -1d, 1d))
+                * 180d
+                / Math.PI,
+            translationNorm
+        );
+        _logger.LogInformation(
+            "[双目标定] 整平投影矩阵 — P1={P1}, P2={P2}, Q={Q}",
+            CalibImageUtils.SerializeMatToJson(p1),
+            CalibImageUtils.SerializeMatToJson(p2),
+            CalibImageUtils.SerializeMatToJson(q)
+        );
+        _logger.LogInformation(
+            "[双目标定] 几何一致性 — TranslationBaseline={TranslationBaseline:F3}mm, ProjectionBaseline={ProjectionBaseline:F3}mm, Difference={Difference:F3}mm, "
+                + "RectifiedFx={Fx:F3}, Cx1={Cx1:F3}, Cx2={Cx2:F3}, CxDifference={CxDifference:F3}, DisparityDirection={Direction}",
+            translationNorm,
+            projectionBaselineNorm,
+            Math.Abs(translationNorm - projectionBaselineNorm),
+            p1.At<double>(0, 0),
+            rectifiedCx1,
+            rectifiedCx2,
+            rectifiedCx1 - rectifiedCx2,
+            disparitySign > 0 ? "Positive" : "Negative"
+        );
+
+        List<double> verticalErrors = [];
+        List<double> horizontalDisparities = [];
+        for (int pairIndex = 0; pairIndex < detectedPointsMain.Count; pairIndex++)
+        {
+            using Mat rectifiedMainPoints = new();
+            using Mat rectifiedSecondaryPoints = new();
+            Cv2.UndistortPoints(
+                InputArray.Create(detectedPointsMain[pairIndex]),
+                rectifiedMainPoints,
+                mainCameraMatrix,
+                mainDistCoeffs,
+                r1,
+                p1
+            );
+            Cv2.UndistortPoints(
+                InputArray.Create(detectedPointsSecondary[pairIndex]),
+                rectifiedSecondaryPoints,
+                secondaryCameraMatrix,
+                secondaryDistCoeffs,
+                r2,
+                p2
+            );
+            rectifiedMainPoints.GetArray(out Point2f[] mainRectified);
+            rectifiedSecondaryPoints.GetArray(out Point2f[] secondaryRectified);
+            int pointCount = Math.Min(mainRectified.Length, secondaryRectified.Length);
+            for (int pointIndex = 0; pointIndex < pointCount; pointIndex++)
+            {
+                verticalErrors.Add(
+                    Math.Abs(mainRectified[pointIndex].Y - secondaryRectified[pointIndex].Y)
+                );
+                horizontalDisparities.Add(
+                    mainRectified[pointIndex].X - secondaryRectified[pointIndex].X
+                );
+            }
+        }
+
+        if (verticalErrors.Count > 0)
+        {
+            verticalErrors.Sort();
+            horizontalDisparities.Sort();
+            int p95Index = Math.Min(
+                verticalErrors.Count - 1,
+                (int)Math.Ceiling(verticalErrors.Count * 0.95d) - 1
+            );
+            _logger.LogInformation(
+                "[双目标定] 整平极线验收 — Points={Points}, VerticalErrorMean={Mean:F4}px, P95={P95:F4}px, Max={Max:F4}px, "
+                    + "HorizontalDisparityRange=[{MinDisparity:F3},{MaxDisparity:F3}]",
+                verticalErrors.Count,
+                verticalErrors.Average(),
+                verticalErrors[p95Index],
+                verticalErrors[^1],
+                horizontalDisparities[0],
+                horizontalDisparities[^1]
+            );
+        }
 
         if (stereoError > CalibConsts.MaxStereoReprojectionError)
         {

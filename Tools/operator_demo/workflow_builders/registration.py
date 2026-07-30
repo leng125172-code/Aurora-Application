@@ -2,6 +2,7 @@ from utils import node, edge, make_properties, new_uuid
 from constants import (
     OP_READ_POINT_CLOUD,
     OP_VOXEL_DOWNSAMPLE,
+    OP_FEATURE_COARSE_REGISTRATION,
     OP_ICP_REGISTRATION,
     OP_APPLY_TRANSFORM,
     OP_Z_COLORIZE_POINT_CLOUD,
@@ -18,6 +19,7 @@ def build_3d_registration_graph(reference_point_cloud_path, target_point_cloud_p
     id_read_target = new_uuid()
     id_downsample1 = new_uuid()
     id_downsample2 = new_uuid()
+    id_coarse = new_uuid()
     id_icp = new_uuid()
     id_apply_transform = new_uuid()
     id_colorize_aligned = new_uuid()
@@ -85,11 +87,49 @@ def build_3d_registration_graph(reference_point_cloud_path, target_point_cloud_p
             ),
         ),
         node(
+            id_coarse,
+            OP_FEATURE_COARSE_REGISTRATION,
+            560,
+            280,
+            "特征粗配准（处理初始角度差）",
+            make_properties(
+                params={
+                    "normalK": 20,
+                    "featureRadius": 0.05,
+                    "maxIterations": 1000,
+                    "sampleCount": 300,
+                    "distanceThreshold": 0.05,
+                },
+                param_sources={
+                    "normalK": "literal",
+                    "featureRadius": "literal",
+                    "maxIterations": "literal",
+                    "sampleCount": "literal",
+                    "distanceThreshold": "literal",
+                },
+                input_bindings={
+                    "source_cloud": "target_downsampled",
+                    "target_cloud": "reference_downsampled",
+                },
+                input_sources={"source_cloud": "variable", "target_cloud": "variable"},
+                output_bindings={
+                    "aligned_cloud": "coarse_aligned_cloud",
+                    "transform_matrix": "coarse_transform_matrix",
+                    "stats_json": "coarse_registration_result",
+                },
+                output_sources={
+                    "aligned_cloud": "variable",
+                    "transform_matrix": "variable",
+                    "stats_json": "variable",
+                },
+            ),
+        ),
+        node(
             id_icp,
             OP_ICP_REGISTRATION,
             560,
-            300,
-            "ICP配准",
+            380,
+            "ICP精配准",
             make_properties(
                 params={"maxCorrespondenceDistance": 0.1, "maxIterations": 50},
                 param_sources={
@@ -97,7 +137,7 @@ def build_3d_registration_graph(reference_point_cloud_path, target_point_cloud_p
                     "maxIterations": "literal",
                 },
                 input_bindings={
-                    "source_cloud": "target_downsampled",
+                    "source_cloud": "coarse_aligned_cloud",
                     "target_cloud": "reference_downsampled",
                 },
                 input_sources={"source_cloud": "variable", "target_cloud": "variable"},
@@ -117,11 +157,11 @@ def build_3d_registration_graph(reference_point_cloud_path, target_point_cloud_p
             id_apply_transform,
             OP_APPLY_TRANSFORM,
             560,
-            400,
-            "应用变换",
+            480,
+            "应用精配准变换",
             make_properties(
                 input_bindings={
-                    "input_point_cloud": "target_downsampled",
+                    "input_point_cloud": "coarse_aligned_cloud",
                     "transform_matrix": "transform_matrix",
                 },
                 input_sources={
@@ -218,8 +258,9 @@ def build_3d_registration_graph(reference_point_cloud_path, target_point_cloud_p
         edge(id_read, id_downsample1),
         edge(id_start, id_read_target),
         edge(id_read_target, id_downsample2),
-        edge(id_downsample1, id_icp),
-        edge(id_downsample2, id_icp),
+        edge(id_downsample1, id_coarse),
+        edge(id_downsample2, id_coarse),
+        edge(id_coarse, id_icp),
         edge(id_icp, id_apply_transform),
         edge(id_apply_transform, id_colorize_aligned),
         edge(id_colorize_aligned, id_preview_aligned),

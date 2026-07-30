@@ -25,6 +25,7 @@
 import argparse
 import sys
 import os
+import re
 
 # Add current directory to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -46,6 +47,7 @@ from workflow_builders.point_cloud_processing import (
     build_split_3d_point_cloud_graphs,
 )
 from workflow_builders.registration import build_3d_registration_graph
+from workflow_builders.workflow_inspection import build_workflow_inspection_graph
 from workflow_builders.height_diff import build_height_diff_graph
 from workflow_builders.installation_angle import build_installation_angle_graph
 from constants import (
@@ -63,6 +65,9 @@ from constants import (
     OP_SAVE_IMAGE_BLOB,
     OP_READ_POINT_CLOUD,
     OP_SELECT_FITTED_PLANE,
+    OP_SHAPE_INSPECTION,
+    OP_DIMENSION_ANGLE_INSPECTION,
+    OP_FLATNESS_INSPECTION,
 )
 
 
@@ -100,10 +105,12 @@ def get_output_variables(graph_data):
     """
     从唯一的 end-node 输入绑定中提取工作流对外输出变量。
 
-    end-node 的 inputBindings 结构为：
-        { "对外端口名": "运行时变量名" }
+    end-node 的输出结构为：
+        inputBindings: { "稳定端口键": "运行时变量名" }
+        inputBindingDisplayNames: { "稳定端口键": "Display 名称" }
 
     后端在保存整个工作流时直接从这里推导输出，不再调用 /output-config PUT。
+    Display 名称为空时，接口回退为运行时变量名。
     """
     end_nodes = [
         node for node in graph_data.get("nodes", []) if node.get("type") == "end-node"
@@ -158,14 +165,156 @@ def validate_graph_contracts(graph_data, contracts):
             if unknown:
                 errors.append(f"{title}: 未知{label}键 {', '.join(unknown)}")
 
+        input_bindings = properties.get("inputBindings") or {}
+        invalid_input_types = sorted(
+            name
+            for name, value in input_bindings.items()
+            if not isinstance(value, str)
+        )
+        if invalid_input_types:
+            errors.append(
+                f"{title}: 输入绑定值必须是字符串，类型错误端口 "
+                + ", ".join(invalid_input_types)
+            )
+
+        source_maps = (
+            ("配置", properties.get("params") or {}, properties.get("paramSources") or {}),
+            (
+                "输入",
+                properties.get("inputBindings") or {},
+                properties.get("inputBindingSources") or {},
+            ),
+            (
+                "输出",
+                properties.get("outputBindings") or {},
+                properties.get("outputBindingSources") or {},
+            ),
+        )
+        for label, bindings, sources in source_maps:
+            missing_sources = sorted(set(bindings) - set(sources))
+            unknown_sources = sorted(set(sources) - set(bindings))
+            if missing_sources:
+                errors.append(
+                    f"{title}: {label} source map 缺少键 {', '.join(missing_sources)}"
+                )
+            if unknown_sources:
+                errors.append(
+                    f"{title}: {label} source map 存在多余键 {', '.join(unknown_sources)}"
+                )
+
+        output_bindings = properties.get("outputBindings") or {}
+        missing_outputs = sorted(contract["outputs"] - set(output_bindings))
+        if missing_outputs:
+            errors.append(f"{title}: 缺少输出绑定 {', '.join(missing_outputs)}")
+
     if errors:
         raise ValueError("工作流与当前服务算子契约不一致：\n  - " + "\n  - ".join(errors))
+
+
+def complete_graph_output_bindings(graph_data, contracts):
+    """为服务端新增但 demo 尚未使用的输出端口补充稳定变量。"""
+    used_variables = set()
+    for graph_node in graph_data.get("nodes", []):
+        properties = graph_node.get("properties") or {}
+        used_variables.update(
+            value
+            for value in (properties.get("outputBindings") or {}).values()
+            if isinstance(value, str) and value
+        )
+
+    additions = []
+    operator_occurrences = {}
+    for graph_node in graph_data.get("nodes", []):
+        operator_id = str(graph_node.get("type") or "").lower()
+        contract = contracts.get(operator_id)
+        if contract is None:
+            continue
+
+        properties = graph_node.setdefault("properties", {})
+        output_bindings = properties.setdefault("outputBindings", {})
+        output_sources = properties.setdefault("outputBindingSources", {})
+        occurrence = operator_occurrences.get(operator_id, 0) + 1
+        operator_occurrences[operator_id] = occurrence
+        operator_suffix = re.sub(r"[^A-Za-z0-9_]", "_", operator_id).strip("_")
+        node_suffix = f"{operator_suffix[:8] or 'operator'}_{occurrence}"
+        title = (graph_node.get("text") or {}).get("value") or graph_node.get("id")
+
+        for output_name in sorted(contract["outputs"] - set(output_bindings)):
+            variable_base = re.sub(r"[^A-Za-z0-9_]", "_", output_name).strip("_")
+            if not variable_base or variable_base[0].isdigit():
+                variable_base = f"output_{variable_base}"
+            variable_name = f"{variable_base}_{node_suffix}"
+            sequence = 2
+            while variable_name in used_variables:
+                variable_name = f"{variable_base}_{node_suffix}_{sequence}"
+                sequence += 1
+
+            output_bindings[output_name] = variable_name
+            output_sources[output_name] = "variable"
+            used_variables.add(variable_name)
+            additions.append(f"{title}.{output_name} → {variable_name}")
+
+    if additions:
+        print(f"      ✓ 自动补齐 {len(additions)} 个新增输出绑定")
+        for addition in additions:
+            print(f"        - {addition}")
 
 
 def report_output_variables(graph_data):
     """输出变量由结束节点绑定声明，并在工作流保存时由后端自动同步。"""
     output_variables = get_output_variables(graph_data)
     print(f"      ✓ 结束节点输出：{', '.join(output_variables)}")
+
+
+def generate_and_validate_v2_source(workflow_name, graph_data):
+    """使用目标服务的正式生成器生成 V2 源码，并在保存前阻止旧语法进入数据库。"""
+    source = api_client.api_post(
+        "/api/app/workflow/graph/to-source",
+        {
+            "name": workflow_name,
+            "graphData": graph_data,
+        },
+    )
+    if not isinstance(source, str) or not source.strip():
+        raise RuntimeError(f"{workflow_name}: 服务端未返回工作流源码")
+
+    problems = []
+    if not re.search(
+        r'^\s*Workflow\("(?:\\.|[^"\\])*",\s*2\);\s*$',
+        source,
+        re.MULTILINE,
+    ):
+        problems.append("缺少 Workflow(name, 2) 声明")
+    if "GraphBegin(" in source or "\n    Node(" in source or "\n    Edge(" in source:
+        problems.append("仍包含 V1 Graph/Node/Edge 序列化语句")
+    if "_null" in source:
+        problems.append("包含旧版错误占位变量 _null")
+    if "Return(" not in source:
+        problems.append("缺少 Return(...) 输出声明")
+    if problems:
+        raise RuntimeError(
+            f"{workflow_name}: 服务端生成的脚本不是有效 V2："
+            + "；".join(problems)
+        )
+
+    print(
+        f"      ✓ V2 脚本预检通过："
+        f"{len(source.splitlines())} 行，{len(source.encode('utf-8'))} bytes"
+    )
+    return source
+
+
+def verify_saved_workflow_source(workflow_id, workflow_name):
+    """保存后回读源码，确认旧 demo 已真正被 V2 覆盖。"""
+    saved = api_client.api_get(f"/api/app/workflow/{workflow_id}/source")
+    source = saved.get("sourceCode") or ""
+    language_version = saved.get("languageVersion")
+    if language_version != 2 or "_null" in source or "GraphBegin(" in source:
+        raise RuntimeError(
+            f"{workflow_name}: 保存后源码校验失败，"
+            f"languageVersion={language_version}"
+        )
+    print(f"      ✓ 保存后 V2 源码回读确认，revision={saved.get('revision')}")
 
 
 def create_project():
@@ -204,7 +353,9 @@ def create_project():
 
 def create_workflow(project_id, workflow_name, graph_data, contracts):
     print(f"      创建工作流：{workflow_name} ...")
+    complete_graph_output_bindings(graph_data, contracts)
     validate_graph_contracts(graph_data, contracts)
+    generate_and_validate_v2_source(workflow_name, graph_data)
 
     payload = {
         "projectId": project_id,
@@ -287,6 +438,7 @@ def create_workflow(project_id, workflow_name, graph_data, contracts):
             raise RuntimeError("命中已存在工作流但缺少 id，无法更新")
         result = api_client.api_put(f"/api/app/workflow/{workflow_id}", payload)
         print(f"      ✓ 命中已有工作流，已更新，ID：{workflow_id}")
+        verify_saved_workflow_source(workflow_id, workflow_name)
         report_output_variables(graph_data)
         return result
 
@@ -295,6 +447,7 @@ def create_workflow(project_id, workflow_name, graph_data, contracts):
     if not workflow_id:
         raise RuntimeError("工作流创建响应缺少 id")
     print(f"      ✓ 工作流创建成功，ID：{workflow_id}")
+    verify_saved_workflow_source(workflow_id, workflow_name)
     report_output_variables(graph_data)
     return result
 
@@ -432,6 +585,24 @@ def main():
             build_3d_registration_graph(point_cloud_path, target_point_cloud_path),
             contracts,
         )
+        inspection_operator_ids = {
+            OP_SHAPE_INSPECTION,
+            OP_DIMENSION_ANGLE_INSPECTION,
+            OP_FLATNESS_INSPECTION,
+        }
+        inspection_demo_created = inspection_operator_ids.issubset(contracts)
+        if inspection_demo_created:
+            create_workflow(
+                project_id,
+                "工作流检测判定演示",
+                build_workflow_inspection_graph(),
+                contracts,
+            )
+        else:
+            print(
+                "      ! 当前服务尚未部署全部工作流检测判定算子，"
+                "已跳过形状、尺寸角度和平面度判定演示。"
+            )
         create_workflow(
             project_id,
             "高度差检测演示",
@@ -506,12 +677,21 @@ def main():
         print("=" * 60)
         print("  创建完成！")
         print(f"  项目 ID：{project_id}")
-        workflow_count = 3 + len(split_3d_graphs) + int(installation_created)
+        workflow_count = (
+            3
+            + len(split_3d_graphs)
+            + int(inspection_demo_created)
+            + int(installation_created)
+        )
         print(f"  已创建/更新 {workflow_count} 个工作流：")
         print("  - 2D图像处理演示")
         for workflow_name in split_3d_graphs:
             print(f"  - {workflow_name}")
         print("  - 3D配准演示")
+        if inspection_demo_created:
+            print("  - 工作流检测判定演示")
+        else:
+            print("  - 工作流检测判定演示：已跳过（服务端算子版本较旧）")
         print("  - 高度差检测演示")
         if installation_created:
             print("  - 安装角度检测演示（平面、轴线、Twist）")

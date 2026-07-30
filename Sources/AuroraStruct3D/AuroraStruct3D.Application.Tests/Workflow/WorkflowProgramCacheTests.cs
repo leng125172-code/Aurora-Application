@@ -3,6 +3,9 @@ using AuroraStruct3D.OpenCV.Workflow.Compilation.Model;
 using AuroraStruct3D.OpenCV.Workflow.Scripting;
 using AuroraStruct3D.Workflow.Runtime;
 using System.Text.Json;
+using AuroraStruct3D.OpenCV.File.PointCloud;
+using AuroraStruct3D.OpenCV.VisionParameters;
+using OpenCvSharp;
 using Xunit;
 
 namespace AuroraStruct3D.Workflow;
@@ -21,6 +24,15 @@ public class WorkflowProgramCacheTests
         );
 
         Assert.All(programs, program => Assert.Same(programs[0], program));
+        Assert.Equal("结果点云", programs[0].OutputDisplayNames["result"]);
+
+        NodeModel end = Assert.Single(graph.Nodes, x => x.Type == "end-node");
+        end.Properties!.InputBindingDisplayNames = null;
+        WorkflowCompiledProgram fallbackProgram = await cache.GetOrAddAsync(
+            "HASH-WITHOUT-DISPLAY",
+            CSharpWorkflowScript.Generate("cache-test-fallback", graph)
+        );
+        Assert.Equal("result", fallbackProgram.OutputDisplayNames["result"]);
     }
 
     [Fact]
@@ -39,6 +51,18 @@ public class WorkflowProgramCacheTests
         Assert.Equal("A", value!.ToString());
     }
 
+    [Fact]
+    public void Output_accessor_should_not_serialize_mat_pointer_properties()
+    {
+        WorkflowOutputAccessor accessor = WorkflowOutputAccessor.Compile("image.DataPointer");
+        using Mat mat = new(1, 1, MatType.CV_8UC1, Scalar.Black);
+
+        bool found = accessor.TryGetValue(mat, out object? value);
+
+        Assert.False(found);
+        Assert.Same(mat, value);
+    }
+
     private static GraphDataModel BoundaryGraph() =>
         new()
         {
@@ -51,26 +75,25 @@ public class WorkflowProgramCacheTests
                 },
                 new NodeModel
                 {
+                    Id = "read",
+                    Type = "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+                    Properties = new NodePropertiesModel
+                    {
+                        InputBindings = new() { ["point_cloud_path"] = "test.ply" },
+                        InputBindingSources = new() { ["point_cloud_path"] = "literal" },
+                        OutputBindings = new() { ["output_point_cloud"] = "result" },
+                        OutputBindingSources = new() { ["output_point_cloud"] = "variable" },
+                    },
+                },
+                new NodeModel
+                {
                     Id = "end",
                     Type = "end-node",
                     Properties = new NodePropertiesModel
                     {
                         InputBindings = new() { ["result"] = "result" },
                         InputBindingSources = new() { ["result"] = "variable" },
-                    },
-                },
-                new NodeModel
-                {
-                    Id = "assign",
-                    Type = "builtin::assign",
-                    Properties = new NodePropertiesModel
-                    {
-                        Params = new()
-                        {
-                            ["variableName"] = JsonSerializer.SerializeToElement("result"),
-                            ["value"] = JsonSerializer.SerializeToElement(1),
-                        },
-                        ParamSources = new() { ["value"] = "literal" },
+                        InputBindingDisplayNames = new() { ["result"] = "结果点云" },
                     },
                 },
             ],
@@ -80,12 +103,12 @@ public class WorkflowProgramCacheTests
                 {
                     Id = "edge-1",
                     SourceNodeId = "start",
-                    TargetNodeId = "assign",
+                    TargetNodeId = "read",
                 },
                 new EdgeModel
                 {
                     Id = "edge-2",
-                    SourceNodeId = "assign",
+                    SourceNodeId = "read",
                     TargetNodeId = "end",
                 },
             ],
@@ -100,11 +123,38 @@ public class WorkflowProgramCacheTests
         public Task<OperatorParametersDescriptor?> GetParametersAsync(
             Guid operatorId,
             CancellationToken cancellationToken = default
-        ) => Task.FromResult<OperatorParametersDescriptor?>(null);
+        ) => Task.FromResult<OperatorParametersDescriptor?>(
+            operatorId == Guid.Parse("a1b2c3d4-e5f6-7890-abcd-ef1234567890")
+                ? new OperatorParametersDescriptor
+                {
+                    OperatorId = operatorId,
+                    Inputs =
+                    [
+                        new ParameterDescriptor
+                        {
+                            ParameterName = "point_cloud_path",
+                            DisplayName = "Path",
+                            ParameterTypeName = typeof(string).FullName!,
+                        },
+                    ],
+                    Outputs =
+                    [
+                        new ParameterDescriptor
+                        {
+                            ParameterName = "output_point_cloud",
+                            DisplayName = "Cloud",
+                            ParameterTypeName = typeof(PointCloudData).FullName!,
+                        },
+                    ],
+                }
+                : null);
 
         public Task<Type?> GetOperatorTypeAsync(
             Guid operatorId,
             CancellationToken cancellationToken = default
-        ) => Task.FromResult<Type?>(null);
+        ) => Task.FromResult<Type?>(
+            operatorId == Guid.Parse("a1b2c3d4-e5f6-7890-abcd-ef1234567890")
+                ? typeof(read_point_cloud)
+                : null);
     }
 }

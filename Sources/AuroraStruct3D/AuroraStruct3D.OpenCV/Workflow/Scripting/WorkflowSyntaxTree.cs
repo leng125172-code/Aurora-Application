@@ -66,9 +66,16 @@ public static partial class WorkflowSyntaxParser
     [GeneratedRegex(@"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*\(([\s\S]*)\)\s*;\s*$")]
     private static partial Regex CallPattern();
 
+    [GeneratedRegex(@"^\s*(?:(?:var\s+[A-Za-z_][A-Za-z0-9_]*|var\s*\([^)]*\))\s*=\s*)?([A-Za-z_][A-Za-z0-9_]*)\s*\(([\s\S]*)\)\s*;\s*$")]
+    private static partial Regex V2CallPattern();
+
     public static WorkflowSyntaxTree Parse(string source)
     {
         source ??= string.Empty;
+        bool isV2 = Regex.IsMatch(
+            source,
+            @"Workflow\s*\(\s*""(?:\\.|[^""])*""\s*,\s*2\s*\)",
+            RegexOptions.Singleline);
         List<WorkflowSyntaxStatement> statements = [];
         List<WorkflowSyntaxDiagnostic> diagnostics = [];
         int graphDepth = 0;
@@ -83,10 +90,10 @@ public static partial class WorkflowSyntaxParser
         foreach ((int start, int end) in SplitStatements(source))
         {
             int codeStart = FindCodeStart(source, start, end);
-            string text = source[codeStart..end];
-            if (string.IsNullOrWhiteSpace(RemoveLineComments(text)))
+            string callText = source[codeStart..end];
+            if (string.IsNullOrWhiteSpace(RemoveLineComments(callText)))
                 continue;
-            Match match = CallPattern().Match(text);
+            Match match = (isV2 ? V2CallPattern() : CallPattern()).Match(callText);
             if (!match.Success)
             {
                 diagnostics.Add(Diagnostic("WFS1001", "需要白名单方法调用语句并以分号结束。", source, codeStart, end));
@@ -94,7 +101,7 @@ public static partial class WorkflowSyntaxParser
             }
 
             string method = match.Groups[1].Value;
-            if (!CSharpWorkflowScript.AllowedMethods.Contains(method))
+            if (!isV2 && !CSharpWorkflowScript.AllowedMethods.Contains(method))
             {
                 diagnostics.Add(Diagnostic("WFS1002", $"不允许的语句 '{method}'。", source, codeStart, end));
             }
@@ -118,11 +125,18 @@ public static partial class WorkflowSyntaxParser
                     diagnostics.Add(Diagnostic("WFS0004", "JSON 参数深度超过 64 层限制。", source, codeStart, end));
                 }
             }
-            string? nodeId = method switch
-            {
-                "Node" or "Input" or "Output" or "Param" => ReadString(arguments.FirstOrDefault()),
-                _ => null,
-            };
+            string? nodeId = isV2
+                ? ReadV2NodeId(source, codeStart)
+                : method switch
+                {
+                    "Node" or "Input" or "Output" or "Param" =>
+                        ReadString(arguments.FirstOrDefault()),
+                    _ => null,
+                };
+            int syntaxStart = isV2 && nodeId is not null
+                ? FindV2MetadataStart(source, codeStart)
+                : codeStart;
+            string text = source[syntaxStart..end];
             string statementId = CreateStatementId(method, nodeId, arguments, text, statements.Count);
             statements.Add(
                 new WorkflowSyntaxStatement
@@ -130,7 +144,7 @@ public static partial class WorkflowSyntaxParser
                     StatementId = statementId,
                     Method = method,
                     Text = text,
-                    Span = Span(source, codeStart, end),
+                    Span = Span(source, syntaxStart, end),
                     NodeId = nodeId,
                     Arguments = arguments,
                 }
@@ -139,6 +153,30 @@ public static partial class WorkflowSyntaxParser
             {
                 diagnostics.Add(Diagnostic("WFS0002", "脚本语句数超过 10,000 条限制。", source, start, end));
                 break;
+            }
+        }
+
+        if (isV2 && !diagnostics.Any(x => x.Severity == "error"))
+        {
+            try
+            {
+                CSharpWorkflowScript.Parse(source);
+            }
+            catch (WorkflowScriptException ex)
+            {
+                int offset = OffsetAtLineColumn(source, ex.Line, ex.Column);
+                diagnostics.Add(
+                    new WorkflowSyntaxDiagnostic(
+                        ex.Code,
+                        "error",
+                        ex.Message,
+                        Span(source, offset, Math.Min(source.Length, offset + 1)),
+                        ex.NodeId));
+            }
+            catch (FormatException ex)
+            {
+                diagnostics.Add(
+                    Diagnostic("WFS1000", ex.Message, source, 0, Math.Min(1, source.Length)));
             }
         }
 
@@ -187,7 +225,8 @@ public static partial class WorkflowSyntaxParser
                     "WFS3002",
                     "嵌套图新增语句无法唯一确定插入容器，请刷新基线或改用脚本编辑。",
                     1);
-            WorkflowSyntaxStatement? graphEnd = original.Statements.LastOrDefault(x => x.Method == "GraphEnd");
+            WorkflowSyntaxStatement? graphEnd = original.Statements.LastOrDefault(x =>
+                x.Method is "GraphEnd" or "Return");
             int insertion = graphEnd?.Span.Start.Offset ?? originalSource.Length;
             string added = string.Join(
                 Environment.NewLine,
@@ -213,7 +252,7 @@ public static partial class WorkflowSyntaxParser
 
         (string name, GraphDataModel graph) = CSharpWorkflowScript.Parse(source);
         Dictionary<string, WorkflowTextSpan> spans = syntax.Statements
-            .Where(x => x.Method == "Node" && !string.IsNullOrWhiteSpace(x.NodeId))
+            .Where(x => !string.IsNullOrWhiteSpace(x.NodeId))
             .GroupBy(x => x.NodeId!, StringComparer.Ordinal)
             .ToDictionary(x => x.Key, x => x.First().Span, StringComparer.Ordinal);
         return new WorkflowIntermediateRepresentation
@@ -223,6 +262,53 @@ public static partial class WorkflowSyntaxParser
             SyntaxTree = syntax,
             NodeSpans = spans,
         };
+    }
+
+    private static string? ReadV2NodeId(string source, int statementStart)
+    {
+        int searchStart = Math.Max(0, source.LastIndexOf(';', Math.Max(0, statementStart - 1)) + 1);
+        string prefix = source[searchStart..statementStart];
+        Match match = Regex.Match(
+            prefix,
+            @"//\s*@node\s+(?<json>\{[^\r\n]*\})\s*$",
+            RegexOptions.Multiline);
+        if (!match.Success)
+            return null;
+        try
+        {
+            using JsonDocument document = JsonDocument.Parse(match.Groups["json"].Value);
+            return document.RootElement.TryGetProperty("id", out JsonElement id)
+                ? id.GetString()
+                : null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    private static int FindV2MetadataStart(string source, int statementStart)
+    {
+        int lineStart = source.LastIndexOf('\n', Math.Max(0, statementStart - 1)) + 1;
+        int previousLineEnd = Math.Max(0, lineStart - 1);
+        int previousLineStart =
+            source.LastIndexOf('\n', Math.Max(0, previousLineEnd - 1)) + 1;
+        string previousLine = source[previousLineStart..previousLineEnd].Trim();
+        return previousLine.StartsWith("// @node ", StringComparison.Ordinal)
+            ? previousLineStart
+            : statementStart;
+    }
+
+    private static int OffsetAtLineColumn(string source, int line, int column)
+    {
+        int currentLine = 1;
+        int offset = 0;
+        while (offset < source.Length && currentLine < line)
+        {
+            if (source[offset++] == '\n')
+                currentLine++;
+        }
+        return Math.Min(source.Length, offset + Math.Max(0, column - 1));
     }
 
     public static string Format(string source)
@@ -339,7 +425,9 @@ public static partial class WorkflowSyntaxParser
         };
         string identity = nodeId is null
             ? $"{method}:{discriminator}:{ordinal}"
-            : $"{method}:{nodeId}:{discriminator}";
+            : method is "Input" or "Output" or "Param"
+                ? $"{method}:{nodeId}:{discriminator}"
+                : $"Node:{nodeId}";
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(identity)))[..16];
     }
 

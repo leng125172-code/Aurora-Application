@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using AuroraStruct3D.OpenCV.Registry;
+using AuroraStruct3D.OpenCV.Workflow.Values;
 using AuroraStruct3D.OpenCV.Workflow.Compilation;
 using AuroraStruct3D.OpenCV.Workflow.Compilation.Model;
 using AuroraStruct3D.OpenCV.Workflow.Scripting;
@@ -82,17 +83,22 @@ public sealed class WorkflowOutputAccessor
         if (_segments.Count == 0)
             return true;
         JsonNode? current;
-        try
+        if (rootValue is string text)
         {
-            current = rootValue switch
+            try
             {
-                null => null,
-                JsonNode node => node,
-                string text => JsonNode.Parse(text),
-                _ => JsonSerializer.SerializeToNode(rootValue),
-            };
+                current = JsonNode.Parse(text);
+            }
+            catch (JsonException)
+            {
+                return false;
+            }
         }
-        catch (JsonException)
+        else if (rootValue is JsonNode node)
+        {
+            current = node;
+        }
+        else if (!WorkflowValueSerializer.TrySerializeToJsonNode(rootValue, out current))
         {
             return false;
         }
@@ -283,9 +289,14 @@ public sealed class WorkflowProgramCache : IWorkflowProgramCache, ISingletonDepe
                     && node.Properties?.InputBindings is { } bindings
                 )
                 {
-                    foreach ((string displayName, string path) in bindings)
+                    foreach ((string portName, string path) in bindings)
                         if (!string.IsNullOrWhiteSpace(path))
-                            target[path] = displayName;
+                            target[path] =
+                                node.Properties.InputBindingDisplayNames?.GetValueOrDefault(portName)
+                                    ?.Trim()
+                                is { Length: > 0 } displayName
+                                    ? displayName
+                                    : path;
                 }
                 if (node.Properties?.InnerGraphData is { } inner)
                     Collect(inner, target);

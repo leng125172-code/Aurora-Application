@@ -78,6 +78,12 @@ public sealed class NodePropertiesModel
     /// </summary>
     public Dictionary<string, string>? InputBindingSources { get; set; }
 
+    /// <summary>
+    /// 输入绑定显示名称：端口名 → 面向用户/调用方的显示名称。
+    /// 当前仅由 <c>end-node</c> 用于描述正式输出；缺失或空白时回退为变量名。
+    /// </summary>
+    public Dictionary<string, string>? InputBindingDisplayNames { get; set; }
+
     /// <summary>输出端口绑定：端口名 → 本节点产出变量名。</summary>
     public Dictionary<string, string>? OutputBindings { get; set; }
 

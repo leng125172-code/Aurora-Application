@@ -183,7 +183,11 @@ public sealed class WorkflowExecutionKernel : ITransientDependency
     /// </summary>
     /// <param name="session">会话。</param>
     /// <param name="steps">步数。</param>
-    public void ExecuteSteps(WorkflowExecutionSession session, int steps)
+    public void ExecuteSteps(
+        WorkflowExecutionSession session,
+        int steps,
+        bool markCompleted = true
+    )
     {
         if (steps <= 0)
         {
@@ -200,9 +204,15 @@ public sealed class WorkflowExecutionKernel : ITransientDependency
                     $"[WORKFLOW_TIMEOUT] 工作流执行超过 {_options.WorkflowTimeout.TotalSeconds:0} 秒。"
                 );
             session.Touch();
-            if (session.PauseRequested)
+            if (session.StopRequested)
             {
-                session.PauseRequested = false;
+                session.StopRequested = false;
+                session.MarkStopped();
+                session.ProgressChanged?.Invoke("session-stopped", session);
+                return;
+            }
+            if (session.ConsumePauseRequest())
+            {
                 session.Trace.Add(new WorkflowTraceEventDto
                 {
                     Step = session.ExecutedSteps,
@@ -217,7 +227,13 @@ public sealed class WorkflowExecutionKernel : ITransientDependency
             string? nodeId =
                 index < session.StatementNodeIds.Count ? session.StatementNodeIds[index] : null;
 
+            if (session.LastPausedNodeId == nodeId)
+            {
+                session.LastPausedNodeId = null;
+            }
             session.CurrentNodeId = nodeId;
+            session.CurrentNodeStartedAt = DateTime.UtcNow;
+            session.ProgressChanged?.Invoke("node-started", session);
             DateTime startedAt = DateTime.UtcNow;
             Stopwatch statementTimer = Stopwatch.StartNew();
             try
@@ -244,6 +260,8 @@ public sealed class WorkflowExecutionKernel : ITransientDependency
                         DurationMs = statementTimer.ElapsedMilliseconds,
                     }
                 );
+                session.LastNodeDurationMs = statementTimer.ElapsedMilliseconds;
+                session.ProgressChanged?.Invoke("node-completed", session);
             }
             catch (Exception ex)
             {
@@ -269,7 +287,7 @@ public sealed class WorkflowExecutionKernel : ITransientDependency
             }
         }
 
-        if (session.StepCursor >= session.RuntimeWorkflow.Statements.Count)
+        if (markCompleted && session.StepCursor >= session.RuntimeWorkflow.Statements.Count)
         {
             session.MarkCompleted();
         }
@@ -285,7 +303,11 @@ public sealed class WorkflowExecutionKernel : ITransientDependency
         ExecuteSteps(session, Math.Max(remaining, 0));
     }
 
-    public void Continue(WorkflowExecutionSession session, string? runToNodeId = null)
+    public void Continue(
+        WorkflowExecutionSession session,
+        string? runToNodeId = null,
+        bool markCompleted = true
+    )
     {
         EnsureCanRun(session);
         while (session.StepCursor < session.RuntimeWorkflow.Statements.Count)
@@ -294,7 +316,15 @@ public sealed class WorkflowExecutionKernel : ITransientDependency
                 ? session.StatementNodeIds[session.StepCursor]
                 : null;
             bool shouldPause = !string.IsNullOrWhiteSpace(runToNodeId) && nextNodeId == runToNodeId;
-            if (nextNodeId is not null && session.Breakpoints.TryGetValue(nextNodeId, out WorkflowBreakpointState? breakpoint))
+            bool resumesPausedNode = session.LastPausedNodeId == nextNodeId;
+            if (
+                !resumesPausedNode
+                && nextNodeId is not null
+                && session.Breakpoints.TryGetValue(
+                    nextNodeId,
+                    out WorkflowBreakpointState? breakpoint
+                )
+            )
             {
                 breakpoint.CurrentHitCount++;
                 bool hitCountReached = !breakpoint.Definition.HitCount.HasValue
@@ -320,16 +350,19 @@ public sealed class WorkflowExecutionKernel : ITransientDependency
             {
                 session.CurrentNodeId = nextNodeId;
                 session.LastPausedNodeId = nextNodeId;
+                session.ProgressChanged?.Invoke(
+                    string.IsNullOrWhiteSpace(runToNodeId) ? "breakpoint-hit" : "paused",
+                    session
+                );
                 return;
             }
 
-            if (session.LastPausedNodeId == nextNodeId)
-            {
-                session.LastPausedNodeId = null;
-            }
-
-            ExecuteSteps(session, 1);
-            if (session.PauseRequested)
+            int cursorBeforeStep = session.StepCursor;
+            ExecuteSteps(session, 1, markCompleted);
+            if (
+                session.Status != WorkflowExecutionStatus.Running
+                || session.StepCursor == cursorBeforeStep
+            )
                 return;
         }
     }
@@ -387,12 +420,16 @@ public sealed class WorkflowNodeExecutionException : Exception
 public sealed class WorkflowExecutionSession : IDisposable
 {
     private readonly Stopwatch _stopwatch = new();
+    private readonly object _commandStateLock = new();
+    private long _executionCommandId;
+    private long _pauseRequestedCommandId;
+    private long _statusVersion;
 
     /// <summary>执行会话锁。</summary>
     public SemaphoreSlim Gate { get; } = new(1, 1);
     public DateTime CreatedAt { get; } = DateTime.UtcNow;
     public DateTime LastAccessAt { get; private set; } = DateTime.UtcNow;
-    public volatile bool PauseRequested;
+    public volatile bool StopRequested;
 
     /// <summary>执行会话 ID。</summary>
     public Guid ExecutionId { get; init; }
@@ -466,6 +503,72 @@ public sealed class WorkflowExecutionSession : IDisposable
 
     public List<WorkflowTraceEventDto> Trace { get; } = [];
 
+    /// <summary>调试命令当前是否正在执行节点。</summary>
+    public volatile bool IsExecuting;
+
+    /// <summary>开始一次继续、步进或运行到节点命令。</summary>
+    public void BeginExecutionCommand()
+    {
+        lock (_commandStateLock)
+        {
+            _executionCommandId++;
+            _pauseRequestedCommandId = 0;
+            IsExecuting = true;
+        }
+    }
+
+    /// <summary>结束当前调试命令，并清除该命令尚未消费的暂停请求。</summary>
+    public void EndExecutionCommand()
+    {
+        lock (_commandStateLock)
+        {
+            IsExecuting = false;
+            _pauseRequestedCommandId = 0;
+        }
+    }
+
+    /// <summary>仅为当前正在执行的命令登记暂停请求。</summary>
+    public bool RequestPause()
+    {
+        lock (_commandStateLock)
+        {
+            if (!IsExecuting)
+            {
+                return false;
+            }
+
+            _pauseRequestedCommandId = _executionCommandId;
+            return true;
+        }
+    }
+
+    /// <summary>由执行内核消费属于当前命令的暂停请求。</summary>
+    public bool ConsumePauseRequest()
+    {
+        lock (_commandStateLock)
+        {
+            if (
+                _pauseRequestedCommandId == 0
+                || _pauseRequestedCommandId != _executionCommandId
+            )
+            {
+                return false;
+            }
+
+            _pauseRequestedCommandId = 0;
+            return true;
+        }
+    }
+
+    /// <summary>当前节点开始时间。</summary>
+    public DateTime? CurrentNodeStartedAt { get; set; }
+
+    /// <summary>最近完成节点耗时。</summary>
+    public long LastNodeDurationMs { get; set; }
+
+    /// <summary>调试节点进度回调。</summary>
+    public Action<string, WorkflowExecutionSession>? ProgressChanged { get; set; }
+
     /// <summary>故障节点 ID。</summary>
     public string? FaultNodeId { get; set; }
 
@@ -496,6 +599,9 @@ public sealed class WorkflowExecutionSession : IDisposable
     }
 
     public void Touch() => LastAccessAt = DateTime.UtcNow;
+
+    /// <summary>生成会话内单调递增的状态快照版本。</summary>
+    public long NextStatusVersion() => Interlocked.Increment(ref _statusVersion);
 
     /// <summary>
     /// 标记完成。

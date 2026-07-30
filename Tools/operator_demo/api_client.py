@@ -9,6 +9,17 @@ _session = None
 _base_url = None
 
 
+def _read_response_body(response):
+    """按 Content-Type 读取响应，兼容工作流源码等 text/plain 返回值。"""
+    if response.status_code == 204 or not response.content:
+        return None
+
+    content_type = (response.headers.get("Content-Type") or "").lower()
+    if "json" in content_type:
+        return response.json()
+    return response.text
+
+
 def _debug_event(hypothesis_id, location, msg, data=None, run_id="pre-fix"):
     # #region debug-point D:report-http-evidence
     _env_path = os.path.join(
@@ -147,9 +158,7 @@ def api_post(path, body):
         {"path": path, "statusCode": resp.status_code},
     )
     
-    if resp.status_code == 204 or not resp.content:
-        return None
-    return resp.json()
+    return _read_response_body(resp)
 
 
 def api_get(path, params=None):
@@ -161,7 +170,7 @@ def api_get(path, params=None):
     url = f"{_base_url}{path}"
     resp = session.get(url, params=params, timeout=30)
     resp.raise_for_status()
-    return resp.json()
+    return _read_response_body(resp)
 
 
 def api_put(path, body):
@@ -190,9 +199,7 @@ def api_put(path, body):
         print(f"  状态码：{resp.status_code}")
         print(f"  响应内容：{resp.text or '<空响应>'}")
         raise
-    if resp.status_code == 204 or not resp.content:
-        return None
-    return resp.json()
+    return _read_response_body(resp)
 
 
 def upload_operator_file(project_id, operator_id, file_path):

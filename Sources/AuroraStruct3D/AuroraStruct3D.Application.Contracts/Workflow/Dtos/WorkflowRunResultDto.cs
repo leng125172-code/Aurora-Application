@@ -14,7 +14,10 @@ public class WorkflowVariableResultDto
     /// <summary>显示名称。</summary>
     public string? DisplayName { get; set; }
 
-    /// <summary>值类型令牌（string/int/long/double/bool/Mat/PointCloudData）。</summary>
+    /// <summary>
+    /// 值类型令牌（int/long/float/double/decimal/bool/string/blob/object/array/datetime/guid）。
+    /// 原始 Mat/PointCloudData 仅用于提示调用方先存 Blob。
+    /// </summary>
     public string ValueType { get; set; } = string.Empty;
 
     /// <summary>
@@ -68,8 +71,39 @@ public class WorkflowVariableResultDto
                 )
                     ? doubleValue
                     : scalarValue;
+            case "float":
+                return float.TryParse(
+                    scalarValue,
+                    NumberStyles.Float,
+                    CultureInfo.InvariantCulture,
+                    out float floatValue
+                )
+                    ? floatValue
+                    : scalarValue;
+            case "decimal":
+                return decimal.TryParse(
+                    scalarValue,
+                    NumberStyles.Float,
+                    CultureInfo.InvariantCulture,
+                    out decimal decimalValue
+                )
+                    ? decimalValue
+                    : scalarValue;
             case "bool":
                 return bool.TryParse(scalarValue, out bool boolValue) ? boolValue : scalarValue;
+            case "object":
+            case "array":
+                try
+                {
+                    return JsonNode.Parse(scalarValue);
+                }
+                catch (JsonException)
+                {
+                    return scalarValue;
+                }
+            case "datetime":
+            case "guid":
+                return scalarValue;
         }
 
         if (valueType == "string")

@@ -17,5 +17,5 @@ public sealed class SignalRWorkflowDebugNotifier : IWorkflowDebugNotifier, ISing
 
     public Task NotifyAsync(Guid executionId, string eventType, WorkflowExecutionStatusDto status) =>
         _hub.Clients.Group(WorkflowDebugHub.Group(executionId))
-            .DebugStateChangedAsync(executionId, eventType, DateTime.UtcNow);
+            .DebugStateChangedAsync(executionId, eventType, DateTime.UtcNow, status);
 }

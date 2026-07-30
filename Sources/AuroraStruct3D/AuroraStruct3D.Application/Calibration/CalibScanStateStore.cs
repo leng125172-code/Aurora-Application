@@ -256,7 +256,7 @@ public class CalibScanSessionState
 
     public CalibScanMetricsDto? LatestMetrics { get; set; }
 
-    /// <summary>每轮总帧数（来自 Step3 CalibProjectorParam.PatternCount）</summary>
+    /// <summary>每轮总帧数（来自当前固定条纹布局）</summary>
     public int PatternCount { get; set; }
 
     /// <summary>当前轮次序号</summary>

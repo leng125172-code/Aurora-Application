@@ -54,7 +54,9 @@ PROJECTION_BOUNDS = {"minX": -80.0, "maxX": 80.0, "minY": -60.0, "maxY": 60.0}
 IMAGE_RESOLUTION = 512
 
 REGISTRATION_METHOD = "point_to_plane"
-USE_COARSE_REGISTRATION = False
+# 模型与扫描点云通常不在同一初始姿态；默认先粗配准，避免 ICP
+# 因旋转角度或平移差异较大而落入错误的局部最优。
+USE_COARSE_REGISTRATION = True
 MAX_ITERATIONS = 50
 MAX_CORRESPONDENCE_DISTANCE = 0.1
 DISTANCE_THRESHOLD = 0.05
@@ -184,7 +186,20 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--project-name", default=PROJECT["name"])
     parser.add_argument("--project-code", default=PROJECT["projectCode"])
     parser.add_argument("--registration-method", default=REGISTRATION_METHOD)
-    parser.add_argument("--use-coarse", action="store_true", default=USE_COARSE_REGISTRATION)
+    coarse_group = parser.add_mutually_exclusive_group()
+    coarse_group.add_argument(
+        "--use-coarse",
+        dest="use_coarse",
+        action="store_true",
+        help="启用粗配准（默认），用于模型与扫描点云初始角度不一致的情况",
+    )
+    coarse_group.add_argument(
+        "--no-coarse",
+        dest="use_coarse",
+        action="store_false",
+        help="关闭粗配准，仅在两片点云初始姿态已基本一致时使用",
+    )
+    parser.set_defaults(use_coarse=USE_COARSE_REGISTRATION)
     parser.add_argument("--max-iterations", type=int, default=MAX_ITERATIONS)
     parser.add_argument("--max-correspondence-distance", type=float, default=MAX_CORRESPONDENCE_DISTANCE)
     parser.add_argument("--distance-threshold", type=float, default=DISTANCE_THRESHOLD)

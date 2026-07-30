@@ -96,7 +96,33 @@ internal static class WorkflowExecutionTypeNormalizer
             return WorkflowValueTypes.PointCloud;
         }
 
-        return resolved.FullName ?? resolved.Name;
+        return GetCanonicalTypeName(resolved);
+    }
+
+    private static string GetCanonicalTypeName(Type type)
+    {
+        if (type.IsArray)
+        {
+            return GetCanonicalTypeName(type.GetElementType()!) + "[]";
+        }
+
+        if (!type.IsGenericType)
+        {
+            return type.FullName ?? type.Name;
+        }
+
+        Type definition = type.GetGenericTypeDefinition();
+        string definitionName = definition.FullName ?? definition.Name;
+        int aritySeparator = definitionName.IndexOf('`');
+        if (aritySeparator >= 0)
+        {
+            definitionName = definitionName[..aritySeparator];
+        }
+
+        return definitionName
+            + "<"
+            + string.Join(",", type.GetGenericArguments().Select(GetCanonicalTypeName))
+            + ">";
     }
 
     /// <summary>
@@ -111,8 +137,36 @@ internal static class WorkflowExecutionTypeNormalizer
             return string.Empty;
         }
 
+        if (value is string)
+        {
+            return "System.String";
+        }
+
+        if (value is bool)
+        {
+            return "System.Boolean";
+        }
+
+        if (value is int)
+        {
+            return "System.Int32";
+        }
+
+        if (value is long)
+        {
+            return "System.Int64";
+        }
+
+        if (value is float or double)
+        {
+            return "System.Double";
+        }
+
         string token = WorkflowValueSerializer.InferValueType(value);
-        if (AliasMap.TryGetValue(token, out string? alias))
+        if (
+            token is WorkflowValueTypes.Mat or WorkflowValueTypes.PointCloud
+            && AliasMap.TryGetValue(token, out string? alias)
+        )
         {
             return alias;
         }

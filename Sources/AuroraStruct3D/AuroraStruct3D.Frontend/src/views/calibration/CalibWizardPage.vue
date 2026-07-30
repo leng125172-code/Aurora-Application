@@ -527,7 +527,7 @@ async function saveProjectorConfigAsync(): Promise<void> {
             resolutionHeight: projectorHeightInput.value,
             periodCount: fringe3PeriodCount.value,
             fringeType: fringeType.value,
-            patternCount: 20,
+            patternCount: 16,
             phaseShift: fringe3PhaseShift.value,
         }
         await updateCalibProjectorParam(projectId, input)
@@ -561,7 +561,7 @@ const projectorReading = ref(false)
 const fringeType = ref<'bw' | 'wb'>('bw')
 const projectorHeightInput = ref<number>(720)
 const fringe3PeriodCount = ref<number>(8)
-const fringe3ImageCount = ref<number>(20)
+const fringe3ImageCount = ref<number>(16)
 const fringe3PhaseShift = ref<number>(2)
 const horizontalPaddingPosition = ref<'start' | 'end'>('end')
 
@@ -605,7 +605,7 @@ const fringe3CanGenerate = computed(() => {
     return (
         projectorWidthPixels.value === 1280
         && projectorHeightInput.value === 720
-        && fringe3ImageCount.value === 20
+        && fringe3ImageCount.value === 16
     )
 })
 
@@ -660,7 +660,7 @@ async function initStep3(): Promise<void> {
                     if (saved.periodCount > 0) {
                         fringe3PeriodCount.value = saved.periodCount
                     }
-                    fringe3ImageCount.value = 20
+                    fringe3ImageCount.value = 16
                     if (saved.phaseShift != null && saved.phaseShift > 0) {
                         fringe3PhaseShift.value = saved.phaseShift
                     }

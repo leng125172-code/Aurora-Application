@@ -92,15 +92,57 @@ export interface IdeDocument {
 
 export interface DebugStatus {
     executionId: string
+    updatedAt?: string
+    stateVersion?: number
     workflowId: string
     workflowName: string
     status: number
     isPaused: boolean
+    debugState?: 'ready' | 'running' | 'paused' | 'completed' | 'faulted' | 'stopped'
+    isTerminal?: boolean
+    canContinue?: boolean
+    canStep?: boolean
+    canPause?: boolean
+    canStop?: boolean
     currentNodeId?: string
+    currentNodeName?: string
+    currentNodeDurationMs?: number
     currentStatementId?: string
+    faultNodeId?: string
+    errorMessage?: string
     executedSteps: number
     totalSteps: number
+    durationMs?: number
     variables: Array<Record<string, unknown>>
+    configuredOutputs?: Array<{
+        name: string
+        displayName?: string
+        valueType?: string
+        hasValue: boolean
+    }>
+    outputs?: Array<Record<string, unknown>>
+}
+
+export interface DebugTriggerResult {
+    error: boolean
+    errorCode?: string
+    message?: string
+    executionId: string
+    status: DebugStatus
+}
+
+export interface DebugRunTriggerResult {
+    error: boolean
+    errorCode?: string
+    message?: string
+    executionId: string
+}
+
+export interface DebugExecutionResult {
+    name: string
+    displayName: string
+    valueType: string
+    value: unknown
 }
 
 export async function listWorkflows(projectId: string): Promise<WorkflowBrief[]> {
@@ -150,6 +192,17 @@ export async function completions(input: IdeDocument) {
     ).data
 }
 
+export async function signatureHelp(input: IdeDocument) {
+    return (
+        await httpClient.post<{
+            documentVersion: number
+            label?: string
+            activeParameter: number
+            parameters: string[]
+        }>(`${BASE}/source/signature-help`, input)
+    ).data
+}
+
 export async function hover(input: IdeDocument) {
     return (
         await httpClient.post<{ documentVersion: number; markdown?: string; range?: IdeRange }>(
@@ -188,12 +241,46 @@ export async function patchGraph(source: WorkflowSource, graph: WorkflowGraph, d
 
 export async function debugSource(projectId: string, source: WorkflowSource) {
     return (
-        await httpClient.post<{ executionId: string; status: DebugStatus }>(`${BASE}/source/debug`, {
+        await httpClient.post<DebugTriggerResult>(`${BASE}/source/debug`, {
             projectId,
             workflowId: source.workflowId,
             sourceCode: source.sourceCode,
             mode: 1,
             loopCount: 1,
+        })
+    ).data
+}
+
+export async function debugAndRunSource(
+    projectId: string,
+    source: WorkflowSource,
+    breakpointNodeIds: string[],
+) {
+    return (
+        await httpClient.post<DebugRunTriggerResult>(`${BASE}/source/debug-run`, {
+            projectId,
+            workflowId: source.workflowId,
+            sourceCode: source.sourceCode,
+            mode: 1,
+            loopCount: 1,
+            breakpointNodeIds,
+        })
+    ).data
+}
+
+export async function getDebugResult(executionId: string): Promise<DebugExecutionResult[]> {
+    return (
+        await httpClient.get<DebugExecutionResult[]>(`${BASE}/executions/${executionId}/result`)
+    ).data
+}
+
+export async function getDebugStatus(
+    executionId: string,
+    includeVariables = true,
+): Promise<DebugStatus> {
+    return (
+        await httpClient.get<DebugStatus>(`${BASE}/executions/${executionId}`, {
+            params: { includeVariables },
         })
     ).data
 }
@@ -249,6 +336,25 @@ export async function getPerformance(executionId: string) {
             `${BASE}/executions/${executionId}/performance`
         )
     ).data
+}
+
+export async function getDebugSessions(projectId: string): Promise<DebugStatus[]> {
+    return (
+        await httpClient.get<DebugStatus[]>(`${BASE}/executions`, {
+            params: { projectId, includeVariables: true },
+        })
+    ).data
+}
+
+export async function getBreakpoints(executionId: string): Promise<string[]> {
+    const result = (
+        await httpClient.get<{ breakpoints?: Array<{ nodeId?: string; enabled?: boolean }> }>(
+            `${BASE}/executions/${executionId}/breakpoints`,
+        )
+    ).data
+    return (result.breakpoints ?? [])
+        .filter((item) => item.enabled !== false && !!item.nodeId)
+        .map((item) => item.nodeId!)
 }
 
 export async function stopDebug(executionId: string) {

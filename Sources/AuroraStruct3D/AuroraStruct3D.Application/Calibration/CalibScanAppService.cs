@@ -81,13 +81,14 @@ public class CalibScanAppService : AuroraStruct3DAppService, ICalibScanAppServic
         if (input.SuppressProjectorControl && !suppressProjectorControl)
         {
             _logger.LogWarning(
-                "Step6 已忽略屏蔽投影仪控制参数：ProjectId={ProjectId}, Mode={Mode}。当前配置强制使用 20 帧结构光流程。",
+                "Step6 已忽略屏蔽投影仪控制参数：ProjectId={ProjectId}, Mode={Mode}。当前配置强制使用 {FrameCount} 帧结构光流程。",
                 project.Id,
-                mode
+                mode,
+                GrayCodePatternLayout.TotalFrameCount
             );
         }
 
-        // 投影图案固定为 20 帧多尺度互补条纹，数据库中的旧 PatternCount 不再参与帧数计算。
+        // 投影图案固定为多尺度互补条纹，数据库中的旧 PatternCount 不再参与帧数计算。
         int patternCount = 0;
         int totalFrameCount = 0;
         IDlpProjectorService? projectorService = null;
@@ -184,7 +185,7 @@ public class CalibScanAppService : AuroraStruct3DAppService, ICalibScanAppServic
     /// 条纹采集结束后直接进入纹理采集与重建，不检测十字图。
     /// 无投影仪模式：直接循环抓拍主从相机推送。
     /// </summary>
-    /// <param name="totalFrameCount">每轮总帧数；多尺度互补条纹固定为 20</param>
+    /// <param name="totalFrameCount">每轮总帧数；使用当前固定多尺度互补条纹布局</param>
     /// <param name="patternCount">兼容状态字段，结构光模式下等于总帧数</param>
     private async Task ScanLoopAsync(
         CalibProject project,
@@ -812,6 +813,14 @@ public class CalibScanAppService : AuroraStruct3DAppService, ICalibScanAppServic
         if (param == null)
         {
             throw new UserFriendlyException("请先在 Step3 完成投影仪参数配置");
+        }
+        if (param.PatternCount != GrayCodePatternLayout.TotalFrameCount)
+        {
+            throw new UserFriendlyException(
+                $"当前项目保存的条纹数量为 {param.PatternCount}，"
+                + $"当前配置要求 {GrayCodePatternLayout.TotalFrameCount} 张。"
+                + "请在 Step3 重新保存配置并重新下载条纹到投影仪。"
+            );
         }
 
         return param;

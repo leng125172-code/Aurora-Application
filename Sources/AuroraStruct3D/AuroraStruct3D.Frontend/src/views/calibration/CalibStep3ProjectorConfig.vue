@@ -93,7 +93,7 @@ function renderFringePreview(): void {
     const imageData = ctx.createImageData(width, height)
     const data = imageData.data
 
-    const isHorizontalFrame = img.index < 10
+    const isHorizontalFrame = img.index < 8
     if (!isHorizontalFrame) {
         for (let x = 0; x < width; x++) {
             const gray = pixels[Math.min(x, pixels.length - 1)]
@@ -228,7 +228,7 @@ watch(
                         <div
                             class="h-7 flex items-center text-xs px-2 rounded border border-border/40 bg-muted/20 text-muted-foreground"
                         >
-                            3、6、12、24、48 px，共 10 张
+                            6、12、24、48 px，共 8 张
                         </div>
                     </div>
 
@@ -239,7 +239,7 @@ watch(
                         <div
                             class="h-7 flex items-center text-xs px-2 rounded border border-border/40 bg-muted/20 text-muted-foreground"
                         >
-                            4、8、16、32、64 px，共 10 张
+                            8、16、32、64 px，共 8 张
                         </div>
                     </div>
 
@@ -250,7 +250,7 @@ watch(
                         <div
                             class="h-7 flex items-center text-xs px-2 rounded border border-border/40 bg-muted/20 text-muted-foreground"
                         >
-                            前 10 张横条纹，后 10 张竖条纹（共 20 张）
+                            前 8 张横条纹，后 8 张竖条纹（共 16 张，MD 8）
                         </div>
                     </div>
 

@@ -137,6 +137,12 @@ def make_properties(
 
 
 def node(node_id, node_type, x, y, title, properties):
+    if node_type == "end-node":
+        input_bindings = properties.get("inputBindings") or {}
+        display_names = properties.setdefault("inputBindingDisplayNames", {})
+        for port_name, variable_name in input_bindings.items():
+            if isinstance(variable_name, str) and variable_name.strip():
+                display_names.setdefault(port_name, variable_name.strip())
     return {
         "id": node_id,
         "type": node_type,

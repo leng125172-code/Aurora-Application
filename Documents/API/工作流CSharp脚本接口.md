@@ -69,10 +69,28 @@ retstatus.regions[0].name
 - `PUT /api/app/workflow/executions/{id}/breakpoints`
 - `POST /api/app/workflow/executions/{id}/continue`
 - `POST /api/app/workflow/executions/{id}/pause`
+- `POST /api/app/workflow/executions/{id}/step-into`
+- `POST /api/app/workflow/executions/{id}/step-over`
+- `POST /api/app/workflow/executions/{id}/step-out`
 - `POST /api/app/workflow/executions/{id}/run-to`
 - `GET /api/app/workflow/executions/{id}/stack`
 - `GET /api/app/workflow/executions/{id}/variables`
 - `POST /api/app/workflow/executions/{id}/watch`
 - `GET /api/app/workflow/executions/{id}/trace`
+- `GET /api/app/workflow/executions/{id}/performance`
 
 Watch 仅接受变量名、对象属性和数组下标，不支持方法调用。
+
+`continue` 运行到下一个断点；没有断点时运行到结束。当前运行时以顶层算子节点为
+最小调试单位，没有子工作流调用栈，因此 `step-into` 与 `step-over` 都只执行当前
+节点，`step-out` 在顶层运行到工作流结束。断点 PUT 为全量替换，前端应在取得有效
+的非零 `executionId` 后再提交断点集合。
+
+每个算子输出端口必须绑定独立变量。输出变量重复或类型与算子契约不一致时，编译
+阶段会直接拒绝，前端应展示服务端返回的节点、端口和变量信息。
+
+调试状态响应提供 `debugState`、`isTerminal`、`canContinue`、`canStep`、
+`canPause` 和 `canStop`。`debugState` 取值为 `ready`、`running`、`paused`、
+`completed`、`faulted` 或 `stopped`。前端必须优先使用这些字段驱动状态栏和按钮，
+不能仅凭 `currentNodeId` 判断是否执行完成。后端会在节点执行前推送 `running`，
+并在命令结束后推送 `paused`、`faulted` 或 `session-ended`。

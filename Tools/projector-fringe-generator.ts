@@ -2,20 +2,20 @@
  * 1280×720 固定多尺度二值条纹生成脚本，可直接交给前端使用。
  *
  * 帧序：
- * - 0~9：横条纹，宽度 3、6、12、24、48 px，每种原图 + 互补图
- * - 10~19：竖条纹，宽度 4、8、16、32、64 px，每种原图 + 互补图
+ * - 0~7：横条纹，宽度 6、12、24、48 px，每种原图 + 互补图
+ * - 8~15：竖条纹，宽度 8、16、32、64 px，每种原图 + 互补图
  * - 互补图直接逐像素取反，不做偏移
- * - 投影仪方向指令：MD 10
+ * - 投影仪方向指令：MD 8
  */
 
 export const PROJECTOR_FRINGE_CONFIG = {
     width: 1280,
     height: 720,
-    horizontalStripeWidths: [3, 6, 12, 24, 48],
-    verticalStripeWidths: [4, 8, 16, 32, 64],
-    horizontalFrameCount: 10,
-    totalFrameCount: 20,
-    mdCommand: 'MD 10\r\n',
+    horizontalStripeWidths: [6, 12, 24, 48],
+    verticalStripeWidths: [8, 16, 32, 64],
+    horizontalFrameCount: 8,
+    totalFrameCount: 16,
+    mdCommand: 'MD 8\r\n',
 } as const
 
 export type ProjectorFringeOrientation = 'horizontal' | 'vertical'

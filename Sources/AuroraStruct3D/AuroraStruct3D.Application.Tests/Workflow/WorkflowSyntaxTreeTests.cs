@@ -6,6 +6,62 @@ namespace AuroraStruct3D.Workflow;
 public class WorkflowSyntaxTreeTests
 {
     [Fact]
+    public void V2_syntax_tree_should_recognize_operator_tuple_and_node_metadata()
+    {
+        string source =
+            """
+            Workflow("registration", 2);
+            // @node {"id":"icp","x":10,"y":20,"title":"ICP"}
+            var (alignedCloud, transformMatrix, stats) = icp_registration(
+                sourceCloud,
+                targetCloud,
+                maxIterations: 50
+            );
+            Return(stats);
+            """;
+
+        WorkflowSyntaxTree tree = WorkflowSyntaxParser.Parse(source);
+
+        // The undefined external variables are semantic errors, but the V2 statement
+        // and its stable canvas identity must still be recognized.
+        WorkflowSyntaxStatement statement = Assert.Single(
+            tree.Statements,
+            x => x.Method == "icp_registration");
+        Assert.Equal("icp", statement.NodeId);
+        Assert.Contains("// @node", statement.Text);
+        Assert.Equal(2, statement.Span.Start.Line);
+    }
+
+    [Fact]
+    public void V2_graph_patch_should_replace_operator_metadata_and_keep_document_comment()
+    {
+        string original =
+            """
+            // document comment
+            Workflow("demo", 2);
+            // @node {"id":"read","x":10,"y":20,"title":"Old"}
+            var cloud = read_point_cloud("a.ply");
+            // @node {"id":"end","x":10,"y":120,"title":"End"}
+            Return(cloud);
+            """;
+        string candidate =
+            """
+            Workflow("demo", 2);
+            // @node {"id":"read","x":50,"y":60,"title":"New"}
+            var cloud = read_point_cloud("b.ply");
+            // @node {"id":"end","x":10,"y":120,"title":"End"}
+            Return(cloud);
+            """;
+
+        string patched = WorkflowSyntaxParser.PatchPreservingTrivia(original, candidate);
+
+        Assert.Contains("// document comment", patched);
+        Assert.Contains("\"title\":\"New\"", patched);
+        Assert.Contains("\"b.ply\"", patched);
+        Assert.DoesNotContain("\"title\":\"Old\"", patched);
+    }
+
+    [Fact]
     public void Syntax_tree_should_preserve_spans_comments_and_stable_node_statement_ids()
     {
         string source =

@@ -14,9 +14,10 @@ namespace AuroraStruct3D.Calibration;
 [Authorize]
 public class CalibPointCloudAppService : AuroraStruct3DAppService, ICalibPointCloudAppService
 {
-    // 当前设备基线约 164mm、焦距约 3026px，近距离扫描视差会显著超过 127px。
-    // 1024px 对应约 0.48m 的最小深度，覆盖当前结构光工作距离。
-    private const double MaxStructuredLightDisparity = 1024d;
+    // 当前设备基线约 164mm、焦距约 3026px，约 250~300mm 的近距离工作区
+    // 对应约 1650~2000px 视差。允许覆盖完整 2048px 相机画幅，实际候选仍受
+    // 极线方向、同码匹配和连续性约束，避免旧 1024px 上限误删全部近距离点。
+    private const double MaxStructuredLightDisparity = 2048d;
     private const int MinimumReliableStructuredLightMatches = 500;
 
     private readonly IRepository<CalibProject, Guid> _projectRepository;
@@ -224,7 +225,7 @@ public class CalibPointCloudAppService : AuroraStruct3DAppService, ICalibPointCl
             {
                 throw new InvalidOperationException(
                     $"第 {roundIndex} 轮多尺度条纹未找到有效双目对应点；"
-                    + "请检查 20 帧顺序、投影曝光、相机同步和双目极线矫正。"
+                    + $"请检查 {GrayCodePatternLayout.TotalFrameCount} 帧顺序、投影曝光、相机同步和双目极线矫正。"
                 );
             }
 
@@ -235,7 +236,25 @@ public class CalibPointCloudAppService : AuroraStruct3DAppService, ICalibPointCl
                 calibrationData.BaselineMm,
                 disparitySign
             );
-            DepthQualityPreview depthPreview = BuildDepthQualityPreview(depth);
+            byte[] qualityTextureBytes =
+                scanImages.TextureImage is { Length: > 0 } capturedTexture
+                    ? capturedTexture
+                    : scanImages.MainImages[0];
+            using Mat qualityTextureSource =
+                CalibImageUtils.LoadBgrMat(qualityTextureBytes);
+            using Mat qualityTextureRectified = new();
+            Cv2.Remap(
+                qualityTextureSource,
+                qualityTextureRectified,
+                calibrationData.Map1x,
+                calibrationData.Map1y,
+                InterpolationFlags.Linear
+            );
+            DepthQualityPreview depthPreview = BuildDepthQualityPreview(
+                depth,
+                mainCode.Valid,
+                qualityTextureRectified
+            );
             await _notifier.NotifyDepthQualityMapAsync(
                 calibProjectId,
                 depthPreview.PngBytes,
@@ -564,7 +583,10 @@ public class CalibPointCloudAppService : AuroraStruct3DAppService, ICalibPointCl
                     calibrationData.BaselineMm,
                     disparitySign
                 );
-                DepthQualityPreview depthPreview = BuildDepthQualityPreview(depth);
+                DepthQualityPreview depthPreview = BuildDepthQualityPreview(
+                    depth,
+                    textureImage: rectifiedMain
+                );
                 await _notifier.NotifyDepthQualityMapAsync(
                     calibProjectId,
                     depthPreview.PngBytes,
@@ -977,7 +999,9 @@ public class CalibPointCloudAppService : AuroraStruct3DAppService, ICalibPointCl
                     continue;
                 }
 
-                int key = (secondary.ProjectorY[index] << 5) | secondary.ProjectorX[index];
+                int key =
+                    (secondary.ProjectorY[index] << GrayCodePatternLayout.VerticalBitCount)
+                    | secondary.ProjectorX[index];
                 if (secondaryByPatternCode.TryGetValue(key, out List<int>? candidates))
                 {
                     candidates.Add(x);
@@ -992,6 +1016,11 @@ public class CalibPointCloudAppService : AuroraStruct3DAppService, ICalibPointCl
                 rowsWithSecondaryCodes++;
             }
 
+            // 当前竖条纹编码每 128px 重复一次，单个像素通常会命中多个周期候选。
+            // 结构光物体在同一条极线上的视差应当连续，因此用上一有效点的视差
+            // 维持同一周期分支。每行的第一个点优先选择较大的合法视差，符合当前
+            // 近距离设备布局；后续点再按连续性跟踪，避免逐像素跳到不同周期。
+            double previousSignedDisparity = double.NaN;
             for (int x = 0; x < main.Width; x++)
             {
                 int index = rowOffset + x;
@@ -1001,7 +1030,9 @@ public class CalibPointCloudAppService : AuroraStruct3DAppService, ICalibPointCl
                 }
                 mainValidPixels++;
 
-                int key = (main.ProjectorY[index] << 5) | main.ProjectorX[index];
+                int key =
+                    (main.ProjectorY[index] << GrayCodePatternLayout.VerticalBitCount)
+                    | main.ProjectorX[index];
                 if (!secondaryByPatternCode.TryGetValue(key, out List<int>? candidates))
                 {
                     continue;
@@ -1010,7 +1041,8 @@ public class CalibPointCloudAppService : AuroraStruct3DAppService, ICalibPointCl
                 candidateCount += candidates.Count;
 
                 double bestDisparity = double.NaN;
-                double bestMagnitude = double.MaxValue;
+                double bestContinuityCost = double.PositiveInfinity;
+                double bestSignedDisparity = double.NaN;
                 int admissibleCandidateCount = 0;
                 foreach (int secondaryX in candidates)
                 {
@@ -1029,28 +1061,37 @@ public class CalibPointCloudAppService : AuroraStruct3DAppService, ICalibPointCl
                         continue;
                     }
                     admissibleCandidateCount++;
-                    if (signed >= bestMagnitude)
+
+                    double continuityCost = double.IsFinite(previousSignedDisparity)
+                        ? Math.Abs(signed - previousSignedDisparity)
+                        : MaxStructuredLightDisparity - signed;
+                    if (continuityCost > bestContinuityCost)
+                    {
+                        continue;
+                    }
+                    if (continuityCost == bestContinuityCost
+                        && double.IsFinite(bestSignedDisparity)
+                        && signed <= bestSignedDisparity)
                     {
                         continue;
                     }
 
                     bestDisparity = candidateDisparity;
-                    bestMagnitude = signed;
+                    bestSignedDisparity = signed;
+                    bestContinuityCost = continuityCost;
                 }
 
-                // 当前 5 位竖条纹编码每 128px 重复一次。若同一极线上有多个合法
-                // 候选，任取“最小视差”会生成与真实物体无关的周期别名点云。
                 if (admissibleCandidateCount > 1)
                 {
                     ambiguousPixelCount++;
-                    continue;
                 }
-                if (admissibleCandidateCount != 1 || !double.IsFinite(bestDisparity))
+                if (admissibleCandidateCount == 0 || !double.IsFinite(bestDisparity))
                 {
                     continue;
                 }
 
                 disparities[index] = bestDisparity;
+                previousSignedDisparity = bestSignedDisparity;
                 matchedPixelCount++;
             }
         }
@@ -1340,6 +1381,40 @@ public class CalibPointCloudAppService : AuroraStruct3DAppService, ICalibPointCl
 
         using Mat baseline = StereoReconstructionUtils.ComputeBaselineFromStereoResult(projectionP1, projectionP2);
         double baselineMm = StereoReconstructionUtils.ComputeBaselineDistance(baseline);
+        using Mat translationT = CalibImageUtils.DeserializeVector(
+            stereoResult.TranslationVectorJson
+        );
+        double translationBaselineMm = Math.Sqrt(
+            Math.Pow(translationT.At<double>(0), 2)
+                + Math.Pow(translationT.At<double>(1), 2)
+                + Math.Pow(translationT.At<double>(2), 2)
+        );
+
+        _logger.LogInformation(
+            "双目标定参数加载诊断：ProjectId={ProjectId}, StereoError={StereoError:F4}px, "
+                + "TranslationT=[{Tx:F4},{Ty:F4},{Tz:F4}], TranslationBaseline={TranslationBaseline:F3}mm, "
+                + "ProjectionBaseline={ProjectionBaseline:F3}mm, Difference={Difference:F3}mm, "
+                + "P1Fx={P1Fx:F3}, P2Fx={P2Fx:F3}, P1Cx={P1Cx:F3}, P2Cx={P2Cx:F3}, "
+                + "CxDifference={CxDifference:F3}, P1Tx={P1Tx:F3}, P2Tx={P2Tx:F3}, Direction={Direction}",
+            project.Id,
+            stereoResult.StereoReprojectionError,
+            translationT.At<double>(0),
+            translationT.At<double>(1),
+            translationT.At<double>(2),
+            translationBaselineMm,
+            baselineMm,
+            Math.Abs(translationBaselineMm - baselineMm),
+            projectionP1.At<double>(0, 0),
+            projectionP2.At<double>(0, 0),
+            projectionP1.At<double>(0, 2),
+            projectionP2.At<double>(0, 2),
+            projectionP1.At<double>(0, 2) - projectionP2.At<double>(0, 2),
+            projectionP1.At<double>(0, 3),
+            projectionP2.At<double>(0, 3),
+            StereoReconstructionUtils.ComputeDisparitySign(projectionP1, projectionP2) > 0
+                ? "Positive"
+                : "Negative"
+        );
 
         if (stereoResult.RectifyMapWidth <= 0 || stereoResult.RectifyMapHeight <= 0)
         {
@@ -1487,6 +1562,26 @@ public class CalibPointCloudAppService : AuroraStruct3DAppService, ICalibPointCl
             );
         }
 
+        (double map1Coverage, double map2Coverage, double overlapCoverage) =
+            ComputeRectificationMapCoverage(
+                map1x,
+                map1y,
+                map2x,
+                map2y,
+                stereoResult.RectifyMapWidth,
+                stereoResult.RectifyMapHeight
+            );
+        _logger.LogInformation(
+            "双目标定矫正映射覆盖率：ProjectId={ProjectId}, MapSize={Width}x{Height}, "
+                + "MainValid={MainValid:F2}%, SecondaryValid={SecondaryValid:F2}%, CommonOverlap={CommonOverlap:F2}%",
+            project.Id,
+            stereoResult.RectifyMapWidth,
+            stereoResult.RectifyMapHeight,
+            map1Coverage,
+            map2Coverage,
+            overlapCoverage
+        );
+
         return new CalibrationData
         {
             ProjectionP1 = projectionP1.Clone(),
@@ -1509,6 +1604,61 @@ public class CalibPointCloudAppService : AuroraStruct3DAppService, ICalibPointCl
         byte[] bytes = new byte[byteCount];
         System.Runtime.InteropServices.Marshal.Copy(map.Data, bytes, 0, byteCount);
         return bytes;
+    }
+
+    private static (double MainPercent, double SecondaryPercent, double OverlapPercent)
+        ComputeRectificationMapCoverage(
+            Mat map1x,
+            Mat map1y,
+            Mat map2x,
+            Mat map2y,
+            int sourceWidth,
+            int sourceHeight
+        )
+    {
+        const int sampleStep = 8;
+        int mapRows = map1x.Rows;
+        int mapCols = map1x.Cols;
+        long sampled = 0;
+        long mainValid = 0;
+        long secondaryValid = 0;
+        long overlapValid = 0;
+        for (int y = 0; y < mapRows; y += sampleStep)
+        {
+            for (int x = 0; x < mapCols; x += sampleStep)
+            {
+                sampled++;
+                float mainX = map1x.At<float>(y, x);
+                float mainY = map1y.At<float>(y, x);
+                float secondaryX = map2x.At<float>(y, x);
+                float secondaryY = map2y.At<float>(y, x);
+                bool mainInside =
+                    mainX >= 0
+                    && mainX < sourceWidth - 1
+                    && mainY >= 0
+                    && mainY < sourceHeight - 1;
+                bool secondaryInside =
+                    secondaryX >= 0
+                    && secondaryX < sourceWidth - 1
+                    && secondaryY >= 0
+                    && secondaryY < sourceHeight - 1;
+                if (mainInside)
+                    mainValid++;
+                if (secondaryInside)
+                    secondaryValid++;
+                if (mainInside && secondaryInside)
+                    overlapValid++;
+            }
+        }
+
+        if (sampled == 0)
+            return (0, 0, 0);
+
+        return (
+            mainValid * 100d / sampled,
+            secondaryValid * 100d / sampled,
+            overlapValid * 100d / sampled
+        );
     }
 
     private async Task<ScanImages> LoadScanImagesAsync(
@@ -1644,15 +1794,30 @@ public class CalibPointCloudAppService : AuroraStruct3DAppService, ICalibPointCl
     }
 
     /// <summary>
-    /// 将完整深度矩阵压缩为二维质量拟合图。
+    /// 将深度矩阵压缩为二维质量拟合图。
+    /// 结构光模式根据解码有效掩码裁剪到最大的投影覆盖区域，避免相机画幅外围
+    /// 未被投影仪照亮的区域占据预览和有效率统计。
     /// 红色表示该采样块没有有效深度；有效块按有效像素占比从黄色渐变到绿色。
+    /// 质量色以 80% 不透明度覆盖在整平后的主相机纹理图上，保留 20% 底图，
+    /// 便于同时观察物体轮廓和深度质量。
     /// </summary>
-    private static DepthQualityPreview BuildDepthQualityPreview(Mat depth)
+    private static DepthQualityPreview BuildDepthQualityPreview(
+        Mat depth,
+        byte[]? projectedCoverageMask = null,
+        Mat? textureImage = null)
     {
         const int maximumPreviewWidth = 640;
-        int sampleStep = Math.Max(1, (int)Math.Ceiling(depth.Cols / (double)maximumPreviewWidth));
-        int previewWidth = (depth.Cols + sampleStep - 1) / sampleStep;
-        int previewHeight = (depth.Rows + sampleStep - 1) / sampleStep;
+        Rect coverage = FindProjectedCoverageRect(
+            projectedCoverageMask,
+            depth.Cols,
+            depth.Rows
+        );
+        int sampleStep = Math.Max(
+            1,
+            (int)Math.Ceiling(coverage.Width / (double)maximumPreviewWidth)
+        );
+        int previewWidth = (coverage.Width + sampleStep - 1) / sampleStep;
+        int previewHeight = (coverage.Height + sampleStep - 1) / sampleStep;
         int validPointCount = 0;
         double minimumDepth = double.PositiveInfinity;
         double maximumDepth = double.NegativeInfinity;
@@ -1660,19 +1825,41 @@ public class CalibPointCloudAppService : AuroraStruct3DAppService, ICalibPointCl
         using Mat preview = new(previewHeight, previewWidth, MatType.CV_8UC3);
         for (int previewY = 0; previewY < previewHeight; previewY++)
         {
-            int sourceYStart = previewY * sampleStep;
-            int sourceYEnd = Math.Min(sourceYStart + sampleStep, depth.Rows);
+            int sourceYStart = coverage.Y + previewY * sampleStep;
+            int sourceYEnd = Math.Min(
+                sourceYStart + sampleStep,
+                coverage.Bottom
+            );
             for (int previewX = 0; previewX < previewWidth; previewX++)
             {
-                int sourceXStart = previewX * sampleStep;
-                int sourceXEnd = Math.Min(sourceXStart + sampleStep, depth.Cols);
+                int sourceXStart = coverage.X + previewX * sampleStep;
+                int sourceXEnd = Math.Min(
+                    sourceXStart + sampleStep,
+                    coverage.Right
+                );
                 int blockValidCount = 0;
                 int blockTotalCount = (sourceYEnd - sourceYStart) * (sourceXEnd - sourceXStart);
+                long textureBlueSum = 0;
+                long textureGreenSum = 0;
+                long textureRedSum = 0;
 
                 for (int sourceY = sourceYStart; sourceY < sourceYEnd; sourceY++)
                 {
                     for (int sourceX = sourceXStart; sourceX < sourceXEnd; sourceX++)
                     {
+                        if (
+                            textureImage is not null
+                            && !textureImage.Empty()
+                            && sourceY < textureImage.Rows
+                            && sourceX < textureImage.Cols
+                        )
+                        {
+                            Vec3b texturePixel = textureImage.At<Vec3b>(sourceY, sourceX);
+                            textureBlueSum += texturePixel.Item0;
+                            textureGreenSum += texturePixel.Item1;
+                            textureRedSum += texturePixel.Item2;
+                        }
+
                         double value = depth.At<double>(sourceY, sourceX);
                         if (!double.IsFinite(value) || value <= 0)
                         {
@@ -1686,19 +1873,55 @@ public class CalibPointCloudAppService : AuroraStruct3DAppService, ICalibPointCl
                     }
                 }
 
+                Vec3b qualityColor;
                 if (blockValidCount == 0)
                 {
                     // RGB #ef4444（OpenCV 使用 BGR）
-                    preview.Set(previewY, previewX, new Vec3b(68, 68, 239));
+                    qualityColor = new Vec3b(68, 68, 239);
+                }
+                else
+                {
+                    double score = blockValidCount / (double)blockTotalCount;
+                    // 低分黄色 #facc15 -> 高分绿色 #22c55e。
+                    byte red = (byte)Math.Round(250 + (34 - 250) * score);
+                    byte green = (byte)Math.Round(204 + (197 - 204) * score);
+                    byte blue = (byte)Math.Round(21 + (94 - 21) * score);
+                    qualityColor = new Vec3b(blue, green, red);
+                }
+
+                if (textureImage is null || textureImage.Empty())
+                {
+                    preview.Set(previewY, previewX, qualityColor);
                     continue;
                 }
 
-                double score = blockValidCount / (double)blockTotalCount;
-                // 低分黄色 #facc15 -> 高分绿色 #22c55e。
-                byte red = (byte)Math.Round(250 + (34 - 250) * score);
-                byte green = (byte)Math.Round(204 + (197 - 204) * score);
-                byte blue = (byte)Math.Round(21 + (94 - 21) * score);
-                preview.Set(previewY, previewX, new Vec3b(blue, green, red));
+                Vec3b textureColor = new(
+                    (byte)(textureBlueSum / blockTotalCount),
+                    (byte)(textureGreenSum / blockTotalCount),
+                    (byte)(textureRedSum / blockTotalCount)
+                );
+                const double qualityOpacity = 0.80d;
+                const double textureOpacity = 1d - qualityOpacity;
+                preview.Set(
+                    previewY,
+                    previewX,
+                    new Vec3b(
+                        BlendColor(textureColor.Item0, qualityColor.Item0),
+                        BlendColor(textureColor.Item1, qualityColor.Item1),
+                        BlendColor(textureColor.Item2, qualityColor.Item2)
+                    )
+                );
+
+                static byte BlendColor(byte texture, byte quality)
+                {
+                    return (byte)Math.Clamp(
+                        Math.Round(
+                            texture * textureOpacity + quality * qualityOpacity
+                        ),
+                        byte.MinValue,
+                        byte.MaxValue
+                    );
+                }
             }
         }
 
@@ -1706,10 +1929,126 @@ public class CalibPointCloudAppService : AuroraStruct3DAppService, ICalibPointCl
         return new DepthQualityPreview(
             pngBytes,
             validPointCount,
-            checked(depth.Rows * depth.Cols),
+            checked(coverage.Width * coverage.Height),
             double.IsFinite(minimumDepth) ? minimumDepth : 0,
             double.IsFinite(maximumDepth) ? maximumDepth : 0
         );
+    }
+
+    private static Rect FindProjectedCoverageRect(
+        byte[]? coverageMask,
+        int width,
+        int height)
+    {
+        if (coverageMask is null || coverageMask.Length != checked(width * height))
+        {
+            return new Rect(0, 0, width, height);
+        }
+
+        const int tileSize = 32;
+        int tileColumns = (width + tileSize - 1) / tileSize;
+        int tileRows = (height + tileSize - 1) / tileSize;
+        bool[] occupied = new bool[checked(tileColumns * tileRows)];
+        for (int tileY = 0; tileY < tileRows; tileY++)
+        {
+            int y0 = tileY * tileSize;
+            int y1 = Math.Min(y0 + tileSize, height);
+            for (int tileX = 0; tileX < tileColumns; tileX++)
+            {
+                int x0 = tileX * tileSize;
+                int x1 = Math.Min(x0 + tileSize, width);
+                int validCount = 0;
+                int minimumValidCount = Math.Max(8, (x1 - x0) * (y1 - y0) / 100);
+                for (int y = y0; y < y1 && validCount < minimumValidCount; y++)
+                {
+                    int rowOffset = y * width;
+                    for (int x = x0; x < x1; x++)
+                    {
+                        if (coverageMask[rowOffset + x] != 0)
+                        {
+                            validCount++;
+                            if (validCount >= minimumValidCount)
+                            {
+                                break;
+                            }
+                        }
+                    }
+                }
+                occupied[tileY * tileColumns + tileX] =
+                    validCount >= minimumValidCount;
+            }
+        }
+
+        bool[] visited = new bool[occupied.Length];
+        List<(int X, int Y)> largestComponent = [];
+        int[] neighborX = [-1, 1, 0, 0];
+        int[] neighborY = [0, 0, -1, 1];
+        for (int tileY = 0; tileY < tileRows; tileY++)
+        {
+            for (int tileX = 0; tileX < tileColumns; tileX++)
+            {
+                int startIndex = tileY * tileColumns + tileX;
+                if (!occupied[startIndex] || visited[startIndex])
+                {
+                    continue;
+                }
+
+                List<(int X, int Y)> component = [];
+                Queue<(int X, int Y)> queue = new();
+                queue.Enqueue((tileX, tileY));
+                visited[startIndex] = true;
+                while (queue.Count > 0)
+                {
+                    (int currentX, int currentY) = queue.Dequeue();
+                    component.Add((currentX, currentY));
+                    for (int neighbor = 0; neighbor < neighborX.Length; neighbor++)
+                    {
+                        int nextX = currentX + neighborX[neighbor];
+                        int nextY = currentY + neighborY[neighbor];
+                        if (nextX < 0 || nextX >= tileColumns
+                            || nextY < 0 || nextY >= tileRows)
+                        {
+                            continue;
+                        }
+
+                        int nextIndex = nextY * tileColumns + nextX;
+                        if (!occupied[nextIndex] || visited[nextIndex])
+                        {
+                            continue;
+                        }
+
+                        visited[nextIndex] = true;
+                        queue.Enqueue((nextX, nextY));
+                    }
+                }
+
+                if (component.Count > largestComponent.Count)
+                {
+                    largestComponent = component;
+                }
+            }
+        }
+
+        if (largestComponent.Count == 0)
+        {
+            return new Rect(0, 0, width, height);
+        }
+
+        int minimumTileX = largestComponent.Min(tile => tile.X);
+        int maximumTileX = largestComponent.Max(tile => tile.X);
+        int minimumTileY = largestComponent.Min(tile => tile.Y);
+        int maximumTileY = largestComponent.Max(tile => tile.Y);
+        const int paddingTiles = 1;
+        minimumTileX = Math.Max(0, minimumTileX - paddingTiles);
+        maximumTileX = Math.Min(tileColumns - 1, maximumTileX + paddingTiles);
+        minimumTileY = Math.Max(0, minimumTileY - paddingTiles);
+        maximumTileY = Math.Min(tileRows - 1, maximumTileY + paddingTiles);
+
+        int left = minimumTileX * tileSize;
+        int top = minimumTileY * tileSize;
+        int right = Math.Min(width, (maximumTileX + 1) * tileSize);
+        int bottom = Math.Min(height, (maximumTileY + 1) * tileSize);
+        return new Rect(left, top, right - left, bottom - top);
     }
 
     private void LogStructuredLightMatchDiagnostics(

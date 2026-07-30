@@ -494,7 +494,6 @@ def build_height_diff_graph(point_cloud_path, extended_annotation=True):
                 input_bindings={
                     "cloudUrl": "cloud_url",
                     "resultImageBlobName": "result_image_blob_name",
-                    "resultImageUrl": "result_image_url",
                     "heightDiffResult": "height_diff_result",
                     "referenceHeight": "reference_height",
                     "measureHeight": "measure_height",
@@ -505,7 +504,6 @@ def build_height_diff_graph(point_cloud_path, extended_annotation=True):
                 input_sources={
                     "cloudUrl": "variable",
                     "resultImageBlobName": "variable",
-                    "resultImageUrl": "variable",
                     "heightDiffResult": "variable",
                     "referenceHeight": "variable",
                     "measureHeight": "variable",

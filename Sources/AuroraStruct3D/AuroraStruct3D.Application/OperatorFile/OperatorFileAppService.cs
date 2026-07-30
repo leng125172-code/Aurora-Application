@@ -210,7 +210,8 @@ public class OperatorFileAppService : AuroraStruct3DAppService, IOperatorFileApp
             throw new UserFriendlyException($"预览图不存在或已过期：{blobName}");
         }
 
-        return new RemoteStreamContent(stream, blobName, "image/png");
+        string fileName = Path.GetFileName(blobName);
+        return new RemoteStreamContent(stream, fileName, ResolveContentType(fileName));
     }
 
     /// <inheritdoc/>

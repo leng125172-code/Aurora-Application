@@ -122,6 +122,18 @@ public interface IWorkflowRuntimeAppService : IApplicationService
     );
 
     Task<WorkflowExecutionTriggerResultDto> DebugSourceAsync(WorkflowSourceDebugInput input);
+    Task<WorkflowDebugRunTriggerResultDto> DebugAndRunSourceAsync(WorkflowSourceDebugInput input);
+    Task<WorkflowDebugRunTriggerResultDto> DebugAndRunSavedSourceAsync(
+        Guid id,
+        WorkflowDebugRunInput input
+    );
+
+    /// <summary>
+    /// 查询已完成的调试运行正式输出。
+    /// </summary>
+    /// <param name="executionId">执行会话 ID。</param>
+    /// <returns>结束节点选中的输出列表。</returns>
+    Task<List<WorkflowExecutionOutputResultDto>> GetDebugResultAsync(Guid executionId);
 
     /// <summary>
     /// 生成 ROI 编辑底图（预运行到目标 ROI 节点的祖先子图，只执行其真正依赖的上游算子）。
@@ -146,6 +158,7 @@ public interface IWorkflowRuntimeAppService : IApplicationService
         Guid executionId,
         WorkflowBreakpointListDto input
     );
+    Task<WorkflowBreakpointListDto> GetBreakpointsAsync(Guid executionId);
     Task<WorkflowExecutionStatusDto> ContinueAsync(Guid executionId);
     Task<WorkflowExecutionStatusDto> PauseAsync(Guid executionId);
     Task<WorkflowExecutionStatusDto> RunToAsync(Guid executionId, WorkflowRunToInput input);

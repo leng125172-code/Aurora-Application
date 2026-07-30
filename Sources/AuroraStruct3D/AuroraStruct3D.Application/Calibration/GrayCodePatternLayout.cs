@@ -8,10 +8,10 @@ internal static class GrayCodePatternLayout
 {
     public const int ProjectorWidth = 1280;
     public const int ProjectorHeight = 720;
-    public static readonly int[] HorizontalStripeWidths = [3, 6, 12, 24, 48];
-    public static readonly int[] VerticalStripeWidths = [4, 8, 16, 32, 64];
-    public const int HorizontalBitCount = 5;
-    public const int VerticalBitCount = 5;
+    public static readonly int[] HorizontalStripeWidths = [6, 12, 24, 48];
+    public static readonly int[] VerticalStripeWidths = [8, 16, 32, 64];
+    public const int HorizontalBitCount = 4;
+    public const int VerticalBitCount = 4;
     public const int HorizontalFrameCount = HorizontalBitCount * 2;
     public const int VerticalFrameCount = VerticalBitCount * 2;
     public const int TotalFrameCount = HorizontalFrameCount + VerticalFrameCount;

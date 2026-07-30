@@ -20,13 +20,7 @@ public sealed class WorkflowIdeAppService : ApplicationService
         new Dictionary<string, string[]>(StringComparer.Ordinal)
         {
             ["Workflow"] = ["name", "languageVersion"],
-            ["GraphBegin"] = ["ownerNodeId"],
-            ["GraphEnd"] = [],
-            ["Node"] = ["id", "type", "x", "y", "text", "textX", "textY"],
-            ["Input"] = ["nodeId", "port", "value", "source"],
-            ["Output"] = ["nodeId", "port", "value", "source"],
-            ["Param"] = ["nodeId", "name", "value", "source"],
-            ["Edge"] = ["id", "sourceNodeId", "targetNodeId", "sourceAnchor", "targetAnchor", "branch"],
+            ["Return"] = ["outputs"],
         };
 
     private readonly IOperatorRegistry _registry;
@@ -106,28 +100,53 @@ public sealed class WorkflowIdeAppService : ApplicationService
     [HttpPost("completions")]
     public async Task<WorkflowIdeCompletionListDto> CompletionsAsync(WorkflowIdeDocumentInput input)
     {
-        List<WorkflowIdeCompletionDto> items = Signatures.Select(x =>
-            new WorkflowIdeCompletionDto
+        List<WorkflowIdeCompletionDto> items =
+        [
+            new()
             {
-                Label = x.Key,
+                Label = "Workflow",
                 Kind = "method",
-                InsertText = $"{x.Key}({string.Join(", ", x.Value.Select((_, i) => $"${{{i + 1}}}"))});",
-                Detail = $"Workflow DSL · {x.Value.Length} parameters",
-                Documentation = string.Join(", ", x.Value),
-            }
-        ).ToList();
+                InsertText = "Workflow(\"${1:name}\", 2);",
+                Detail = "Workflow declaration",
+                Documentation = "Declares the workflow name and V2 language version.",
+            },
+            new()
+            {
+                Label = "Return",
+                Kind = "method",
+                InsertText = "Return(${1:output});",
+                Detail = "Workflow outputs",
+                Documentation = "Returns one or more workflow variables.",
+            },
+        ];
         foreach (OperatorDescriptor descriptor in await _registry.GetAllOperatorsAsync())
+        {
+            OperatorParametersDescriptor? parameters =
+                await _registry.GetParametersAsync(descriptor.Id);
+            string className = descriptor.TypeFullName.Split('.').Last();
+            items.Add(
+                new WorkflowIdeCompletionDto
+                {
+                    Label = className,
+                    Kind = "operator",
+                    InsertText = BuildOperatorCompletion(className, parameters),
+                    Detail = $"{descriptor.Category} · {descriptor.DisplayName}",
+                    Documentation = BuildOperatorDocumentation(descriptor, parameters),
+                }
+            );
+        }
+
+        foreach (string variable in ReadDeclaredVariables(input.SourceCode))
         {
             items.Add(
                 new WorkflowIdeCompletionDto
                 {
-                    Label = descriptor.DisplayName,
-                    Kind = "operator",
-                    InsertText = descriptor.Id.ToString(),
-                    Detail = descriptor.Category,
-                    Documentation = descriptor.Description,
-                }
-            );
+                    Label = variable,
+                    Kind = "variable",
+                    InsertText = variable,
+                    Detail = "Workflow variable",
+                    Documentation = "Variable declared by an earlier operator output.",
+                });
         }
         return new() { DocumentVersion = input.DocumentVersion, Items = items };
     }
@@ -150,26 +169,50 @@ public sealed class WorkflowIdeAppService : ApplicationService
     }
 
     [HttpPost("signature-help")]
-    public Task<WorkflowIdeSignatureDto> SignatureHelpAsync(WorkflowIdeDocumentInput input)
+    public async Task<WorkflowIdeSignatureDto> SignatureHelpAsync(WorkflowIdeDocumentInput input)
     {
         WorkflowSyntaxStatement? statement = WorkflowSyntaxParser.Parse(input.SourceCode).FindAt(input.Offset);
-        string[] parameters = statement is not null && Signatures.TryGetValue(statement.Method, out string[]? found) ? found : [];
-        return Task.FromResult(
-            new WorkflowIdeSignatureDto
+        string[] parameters = statement is not null
+            && Signatures.TryGetValue(statement.Method, out string[]? found)
+                ? found
+                : [];
+        if (statement is not null && parameters.Length == 0)
+        {
+            OperatorDescriptor? descriptor = (await _registry.GetAllOperatorsAsync())
+                .FirstOrDefault(x =>
+                    x.TypeFullName.EndsWith(
+                        "." + statement.Method,
+                        StringComparison.Ordinal)
+                    || x.TypeFullName == statement.Method);
+            if (descriptor is not null)
             {
-                DocumentVersion = input.DocumentVersion,
-                Label = statement is null ? null : $"{statement.Method}({string.Join(", ", parameters)})",
-                Parameters = parameters.ToList(),
-                ActiveParameter = statement?.Arguments.Count == 0 ? 0 : Math.Max(0, statement!.Arguments.Count - 1),
+                OperatorParametersDescriptor? contract =
+                    await _registry.GetParametersAsync(descriptor.Id);
+                parameters =
+                [
+                    .. (contract?.Inputs ?? []).Select(x => x.ParameterName ?? "input"),
+                    .. (contract?.Config ?? []).Select(x => x.Name),
+                ];
             }
-        );
+        }
+        return new WorkflowIdeSignatureDto
+        {
+            DocumentVersion = input.DocumentVersion,
+            Label = statement is null
+                ? null
+                : $"{statement.Method}({string.Join(", ", parameters)})",
+            Parameters = parameters.ToList(),
+            ActiveParameter = statement?.Arguments.Count == 0
+                ? 0
+                : Math.Max(0, statement!.Arguments.Count - 1),
+        };
     }
 
     [HttpPost("document-symbols")]
     public Task<WorkflowIdeSymbolsDto> DocumentSymbolsAsync(WorkflowIdeDocumentInput input)
     {
         List<WorkflowIdeSymbolDto> symbols = WorkflowSyntaxParser.Parse(input.SourceCode).Statements
-            .Where(x => x.Method is "Workflow" or "GraphBegin" or "Node")
+            .Where(x => x.Method == "Workflow" || x.NodeId is not null)
             .Select(x => MapSymbol(x, x.NodeId ?? x.Method))
             .ToList();
         return Task.FromResult(new WorkflowIdeSymbolsDto { DocumentVersion = input.DocumentVersion, Symbols = symbols });
@@ -386,6 +429,117 @@ public sealed class WorkflowIdeAppService : ApplicationService
             DocumentVersion = input.DocumentVersion,
             Locations = statements.Select(x => MapSymbol(x, nodeId!)).ToList(),
         });
+    }
+
+    private static string BuildOperatorCompletion(
+        string className,
+        OperatorParametersDescriptor? parameters)
+    {
+        IReadOnlyList<ParameterDescriptor> inputs = parameters?.Inputs ?? [];
+        IReadOnlyList<ParameterDescriptor> outputs = parameters?.Outputs ?? [];
+        IReadOnlyList<ConfigParameterDescriptor> config = parameters?.Config ?? [];
+        int placeholder = 1;
+        string assignment = outputs.Count switch
+        {
+            0 => string.Empty,
+            1 => $"var ${{{placeholder++}:{CompletionName(outputs[0].ParameterName, "output")}}} = ",
+            _ => "var (" + string.Join(
+                    ", ",
+                    outputs.Select(x =>
+                        $"${{{placeholder++}:{CompletionName(x.ParameterName, "output")}}}"))
+                + ") = ",
+        };
+        List<string> arguments = [];
+        arguments.AddRange(
+            inputs.Select(x =>
+                $"${{{placeholder++}:{CompletionName(x.ParameterName, "input")}}}"));
+        arguments.AddRange(
+            config.Select(x =>
+                $"{x.Name}: ${{{placeholder++}:{CompletionDefault(x)}}}"));
+        if (arguments.Count == 0)
+            return $"{assignment}{className}();";
+        return $"{assignment}{className}(\n    "
+            + string.Join(",\n    ", arguments)
+            + "\n);";
+    }
+
+    private static string BuildOperatorDocumentation(
+        OperatorDescriptor descriptor,
+        OperatorParametersDescriptor? parameters)
+    {
+        List<string> lines = [];
+        if (!string.IsNullOrWhiteSpace(descriptor.Description))
+            lines.Add(descriptor.Description);
+        if (parameters is not null)
+        {
+            lines.Add(
+                $"Inputs: {string.Join(", ", parameters.Inputs.Select(x => x.ParameterName))}");
+            lines.Add(
+                $"Outputs: {string.Join(", ", parameters.Outputs.Select(x => x.ParameterName))}");
+            if (parameters.Config.Count > 0)
+                lines.Add(
+                    $"Config: {string.Join(", ", parameters.Config.Select(x => x.Name))}");
+        }
+        return string.Join(Environment.NewLine, lines);
+    }
+
+    private static string CompletionName(string? name, string fallback)
+    {
+        string value = string.IsNullOrWhiteSpace(name) ? fallback : name;
+        return Regex.Replace(value, @"[^A-Za-z0-9_]", "_");
+    }
+
+    private static string CompletionDefault(ConfigParameterDescriptor parameter)
+    {
+        string value = Convert.ToString(
+            parameter.DefaultValue,
+            System.Globalization.CultureInfo.InvariantCulture) ?? "value";
+        if (parameter.ParameterTypeName == typeof(string).FullName
+            && !(value.StartsWith('"') && value.EndsWith('"')))
+            value = JsonSerializer.Serialize(value);
+        return value.Replace("$", "\\$", StringComparison.Ordinal)
+            .Replace("}", "\\}", StringComparison.Ordinal);
+    }
+
+    private static IReadOnlyList<string> ReadDeclaredVariables(string source)
+    {
+        HashSet<string> variables = new(StringComparer.Ordinal);
+        foreach (Match match in Regex.Matches(
+                     source,
+                     @"\bvar\s+(?<single>[A-Za-z_][A-Za-z0-9_]*)\s*=|\bvar\s*\((?<tuple>[^)]*)\)\s*=",
+                     RegexOptions.Multiline))
+        {
+            if (match.Groups["single"].Success)
+                variables.Add(match.Groups["single"].Value);
+            else
+            {
+                foreach (string item in match.Groups["tuple"].Value.Split(','))
+                {
+                    string variable = item.Trim();
+                    if (Regex.IsMatch(variable, @"^[A-Za-z_][A-Za-z0-9_]*$"))
+                        variables.Add(variable);
+                }
+            }
+        }
+        foreach (Match metadata in Regex.Matches(
+                     source,
+                     @"""externalInputs""\s*:\s*\[(?<items>[^\]]*)\]",
+                     RegexOptions.Multiline))
+        {
+            try
+            {
+                using JsonDocument document = JsonDocument.Parse(
+                    "[" + metadata.Groups["items"].Value + "]");
+                foreach (JsonElement item in document.RootElement.EnumerateArray())
+                {
+                    string? variable = item.GetString();
+                    if (!string.IsNullOrWhiteSpace(variable))
+                        variables.Add(variable);
+                }
+            }
+            catch (JsonException) { }
+        }
+        return variables.Order(StringComparer.Ordinal).ToList();
     }
 
     private static WorkflowIdeDiagnosticDto MapDiagnostic(WorkflowSyntaxDiagnostic x)

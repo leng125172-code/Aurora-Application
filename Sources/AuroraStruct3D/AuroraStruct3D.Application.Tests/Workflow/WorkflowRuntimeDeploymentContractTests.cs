@@ -2,6 +2,7 @@ using System.Reflection;
 using AuroraStruct3D.Workflow;
 using AuroraStruct3D.Workflow.Dtos;
 using AuroraStruct3D.Workflow.Runtime;
+using Microsoft.AspNetCore.Mvc;
 using Xunit;
 
 namespace AuroraStruct3D.Application.Tests.Workflow;
@@ -118,6 +119,53 @@ public class WorkflowRuntimeDeploymentContractTests
         Assert.Equal(typeof(string), stepErrorCodeProperty.PropertyType);
         Assert.Equal(typeof(string), stepMessageProperty.PropertyType);
         Assert.Equal(typeof(string), statusErrorMessageProperty.PropertyType);
+    }
+
+    [Fact]
+    public void Debug_Run_Should_Return_Minimal_Trigger_And_Result_Query_Should_Return_Only_Outputs()
+    {
+        string[] triggerProperties = typeof(WorkflowDebugRunTriggerResultDto)
+            .GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .Select(x => x.Name)
+            .OrderBy(x => x, StringComparer.Ordinal)
+            .ToArray();
+        Assert.Equal(
+            new[] { "Error", "ErrorCode", "ExecutionId", "Message" },
+            triggerProperties
+        );
+
+        MethodInfo interfaceTrigger = typeof(IWorkflowRuntimeAppService).GetMethod(
+            nameof(IWorkflowRuntimeAppService.DebugAndRunSourceAsync)
+        )!;
+        MethodInfo interfaceResult = typeof(IWorkflowRuntimeAppService).GetMethod(
+            nameof(IWorkflowRuntimeAppService.GetDebugResultAsync)
+        )!;
+        Assert.Equal(
+            typeof(Task<WorkflowDebugRunTriggerResultDto>),
+            interfaceTrigger.ReturnType
+        );
+        Assert.Equal(
+            typeof(Task<List<WorkflowExecutionOutputResultDto>>),
+            interfaceResult.ReturnType
+        );
+
+        string[] outputProperties = typeof(WorkflowExecutionOutputResultDto)
+            .GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .Select(x => x.Name)
+            .OrderBy(x => x, StringComparer.Ordinal)
+            .ToArray();
+        Assert.Equal(
+            new[] { "DisplayName", "Name", "Value", "ValueType" },
+            outputProperties
+        );
+
+        MethodInfo resultMethod = typeof(WorkflowRuntimeAppService).GetMethod(
+            nameof(WorkflowRuntimeAppService.GetDebugResultAsync)
+        )!;
+        HttpGetAttribute route = Assert.IsType<HttpGetAttribute>(
+            resultMethod.GetCustomAttribute<HttpGetAttribute>()
+        );
+        Assert.Equal("executions/{executionId:guid}/result", route.Template);
     }
 
     private static WorkflowProjectDeployment CreatePublishedDeployment()

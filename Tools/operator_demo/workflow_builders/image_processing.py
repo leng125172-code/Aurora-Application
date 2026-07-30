@@ -73,8 +73,14 @@ def build_2d_image_processing_graph(image_path, include_angle_feature=False):
             make_properties(
                 input_bindings={"input_mat": "raw_image"},
                 input_sources={"input_mat": "variable"},
-                output_bindings={"gray_mat": "gray_image"},
-                output_sources={"gray_mat": "variable"},
+                output_bindings={
+                    "gray_mat": "gray_image",
+                    "output_point_cloud": "gray_point_cloud",
+                },
+                output_sources={
+                    "gray_mat": "variable",
+                    "output_point_cloud": "variable",
+                },
             ),
         ),
         node(
@@ -122,8 +128,14 @@ def build_2d_image_processing_graph(image_path, include_angle_feature=False):
                 param_sources={"maxValue": "literal"},
                 input_bindings={"input_mat": "gray_image"},
                 input_sources={"input_mat": "variable"},
-                output_bindings={"output_mat": "threshold_image"},
-                output_sources={"output_mat": "variable"},
+                output_bindings={
+                    "output_mat": "threshold_image",
+                    "threshold_value": "otsu_threshold_value",
+                },
+                output_sources={
+                    "output_mat": "variable",
+                    "threshold_value": "variable",
+                },
             ),
         ),
         node(
@@ -172,8 +184,14 @@ def build_2d_image_processing_graph(image_path, include_angle_feature=False):
                 param_sources={"fileName": "literal"},
                 input_bindings={"input_mat": "edge_image"},
                 input_sources={"input_mat": "variable"},
-                output_bindings={"download_url": "edge_image_url"},
-                output_sources={"download_url": "variable"},
+                output_bindings={
+                    "download_url": "edge_image_url",
+                    "blob_name": "edge_image_blob_name",
+                },
+                output_sources={
+                    "download_url": "variable",
+                    "blob_name": "variable",
+                },
             ),
         ),
         node(
@@ -260,8 +278,14 @@ def build_2d_image_processing_graph(image_path, include_angle_feature=False):
                         param_sources={"fileName": "literal"},
                         input_bindings={"input_mat": "angle_result_image"},
                         input_sources={"input_mat": "variable"},
-                        output_bindings={"download_url": "angle_result_image_url"},
-                        output_sources={"download_url": "variable"},
+                        output_bindings={
+                            "download_url": "angle_result_image_url",
+                            "blob_name": "angle_result_image_blob_name",
+                        },
+                        output_sources={
+                            "download_url": "variable",
+                            "blob_name": "variable",
+                        },
                     ),
                 ),
             ]
@@ -271,7 +295,7 @@ def build_2d_image_processing_graph(image_path, include_angle_feature=False):
         )
         end_properties["inputBindings"].update(
             {
-                "angleResultImageUrl": "angle_result_image_url",
+                "angleResultImageBlobName": "angle_result_image_blob_name",
                 "angleStatus": "angle_status",
                 "measuredAngle": "angle_measured",
                 "angleDeviation": "angle_deviation",
@@ -280,7 +304,7 @@ def build_2d_image_processing_graph(image_path, include_angle_feature=False):
         )
         end_properties["inputBindingSources"].update(
             {
-                "angleResultImageUrl": "variable",
+                "angleResultImageBlobName": "variable",
                 "angleStatus": "variable",
                 "measuredAngle": "variable",
                 "angleDeviation": "variable",

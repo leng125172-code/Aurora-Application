@@ -115,7 +115,6 @@ public sealed class WorkflowVariableCompileRequestFactory : ITransientDependency
             Dictionary<string, JsonElement> @params = properties.Params ?? [];
             Dictionary<string, string> paramSources = properties.ParamSources ?? [];
             Dictionary<string, string> outputBindings = properties.OutputBindings ?? [];
-            Dictionary<string, string> outputBindingSources = properties.OutputBindingSources ?? [];
 
             OperatorParametersDescriptor? parameters = null;
             if (Guid.TryParse(node.Type, out Guid operatorId))
@@ -200,17 +199,6 @@ public sealed class WorkflowVariableCompileRequestFactory : ITransientDependency
 
             foreach ((string key, string variableNameRaw) in outputBindings)
             {
-                if (
-                    !string.Equals(
-                        outputBindingSources.GetValueOrDefault(key),
-                        "variable",
-                        StringComparison.Ordinal
-                    )
-                )
-                {
-                    continue;
-                }
-
                 string variableName = variableNameRaw.Trim();
                 if (string.IsNullOrWhiteSpace(variableName))
                 {

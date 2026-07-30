@@ -23,6 +23,8 @@ using AuroraStruct3D.Workflow.Runtime.Jobs;
 using Hangfire;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using OpenCvSharp;
 using Volo.Abp;
@@ -47,6 +49,8 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
     private const string ExecutionErrorCodeFault = "EXECUTION_FAULT";
     private const string ExecutionErrorCodeLoopFault = "EXECUTION_LOOP_FAULT";
     private const string ExecutionErrorCodeStepInvalidInput = "STEP_INVALID_INPUT";
+    private const string ExecutionErrorCodeNotCompleted = "EXECUTION_NOT_COMPLETED";
+    private const string ExecutionErrorCodeStopped = "EXECUTION_STOPPED";
 
     private readonly IRepository<WorkflowDefinition, Guid> _repository;
     private readonly IOperatorRegistry _registry;
@@ -69,6 +73,7 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
     private readonly IOperatorFileRecordRepository _operatorFileRecordRepository;
     private readonly IRepository<ProductModel, Guid> _productModelRepository;
     private readonly IBlobContainer<ProductModelBlobContainer> _productModelBlobContainer;
+    private readonly IServiceScopeFactory _serviceScopeFactory;
     private readonly WorkflowRuntimeSafetyOptions _safetyOptions;
 
     private static readonly HashSet<string> UploadedFileExtensions = new(
@@ -115,6 +120,7 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
         IOperatorFileRecordRepository operatorFileRecordRepository,
         IRepository<ProductModel, Guid> productModelRepository,
         IBlobContainer<ProductModelBlobContainer> productModelBlobContainer,
+        IServiceScopeFactory serviceScopeFactory,
         IOptions<WorkflowRuntimeSafetyOptions>? safetyOptions = null
     )
     {
@@ -139,6 +145,7 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
         _operatorFileRecordRepository = operatorFileRecordRepository;
         _productModelRepository = productModelRepository;
         _productModelBlobContainer = productModelBlobContainer;
+        _serviceScopeFactory = serviceScopeFactory;
         _safetyOptions = safetyOptions?.Value ?? new WorkflowRuntimeSafetyOptions();
     }
 
@@ -1309,6 +1316,18 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
         return ExecuteAsync(input);
     }
 
+    [HttpPost("{id:guid}/source/debug-run")]
+    [DisableValidation]
+    public async Task<WorkflowDebugRunTriggerResultDto> DebugAndRunSavedSourceAsync(
+        Guid id,
+        WorkflowDebugRunInput input
+    )
+    {
+        input ??= new WorkflowDebugRunInput();
+        WorkflowExecutionTriggerResultDto result = await DebugSavedSourceAsync(id, input);
+        return await StartBackgroundDebugAsync(result, input.BreakpointNodeIds);
+    }
+
     [HttpPost("source/debug")]
     [DisableValidation]
     public async Task<WorkflowExecutionTriggerResultDto> DebugSourceAsync(
@@ -1334,6 +1353,80 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
         {
             return CreateExecutionTriggerErrorResult(ex.Message, ExecutionErrorCodeUnhandled);
         }
+    }
+
+    /// <summary>
+    /// 创建调试会话并立即在后台运行；供 F5 使用。
+    /// </summary>
+    [HttpPost("source/debug-run")]
+    [DisableValidation]
+    public async Task<WorkflowDebugRunTriggerResultDto> DebugAndRunSourceAsync(
+        WorkflowSourceDebugInput input
+    )
+    {
+        input ??= new WorkflowSourceDebugInput();
+        WorkflowExecutionTriggerResultDto result = await DebugSourceAsync(input);
+        return await StartBackgroundDebugAsync(result, input.BreakpointNodeIds);
+    }
+
+    private async Task<WorkflowDebugRunTriggerResultDto> StartBackgroundDebugAsync(
+        WorkflowExecutionTriggerResultDto result,
+        IEnumerable<string> breakpointNodeIds
+    )
+    {
+        if (result.Error || result.ExecutionId == Guid.Empty)
+        {
+            return new WorkflowDebugRunTriggerResultDto
+            {
+                Error = true,
+                ErrorCode = result.ErrorCode,
+                Message = result.Message,
+                ExecutionId = result.ExecutionId,
+            };
+        }
+
+        WorkflowExecutionSession session = _sessionStore.Get(result.ExecutionId);
+        foreach (
+            string nodeId in (breakpointNodeIds ?? [])
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+        )
+        {
+            session.BreakpointNodeIds.Add(nodeId);
+            session.Breakpoints[nodeId] = new WorkflowBreakpointState
+            {
+                Definition = new WorkflowBreakpointDto { NodeId = nodeId, Enabled = true },
+            };
+        }
+
+        await NotifyDebugStateSafelyAsync(
+            session.ExecutionId,
+            "session-started",
+            BuildStatusDto(session, includeVariables: false)
+        );
+
+        using (ExecutionContext.SuppressFlow())
+        {
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await using AsyncServiceScope scope = _serviceScopeFactory.CreateAsyncScope();
+                    WorkflowRuntimeAppService runtime =
+                        scope.ServiceProvider.GetRequiredService<WorkflowRuntimeAppService>();
+                    await runtime.ContinueAsync(session.ExecutionId);
+                }
+                catch (Exception ex)
+                {
+                    await MarkBackgroundDebugFaultedAsync(session, ex);
+                }
+            });
+        }
+
+        return new WorkflowDebugRunTriggerResultDto
+        {
+            Error = false,
+            ExecutionId = session.ExecutionId,
+        };
     }
 
     internal static Mat RenderPlaneRoiBaseImage(
@@ -1788,9 +1881,22 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
 
                 try
                 {
+                    session.BeginExecutionCommand();
+                    await NotifyDebugStateSafelyAsync(
+                        executionId,
+                        "running",
+                        BuildStatusDto(session, input.IncludeVariables)
+                    );
                     using IDisposable blobStoreScope = CreateOperatorFileBlobStoreScope();
-                    _kernel.ExecuteSteps(session, input.Steps);
-                    if (session.Status == WorkflowExecutionStatus.Completed)
+                    _kernel.ExecuteSteps(session, input.Steps, markCompleted: false);
+                    if (
+                        session.Status == WorkflowExecutionStatus.Running
+                        && session.StepCursor < session.StatementNodeIds.Count
+                    )
+                    {
+                        session.CurrentNodeId = session.StatementNodeIds[session.StepCursor];
+                    }
+                    if (session.StepCursor >= session.RuntimeWorkflow.Statements.Count)
                     {
                         PersistOutputs(session);
                         session.FrozenVariables = session.VariablePool.Snapshot(
@@ -1798,6 +1904,7 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
                             session.OutputStagedKeys
                         );
                         session.VariablePool.Clear(session.Context);
+                        session.MarkCompleted();
                     }
                 }
                 catch (WorkflowNodeExecutionException ex)
@@ -1806,13 +1913,44 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
                     session.FrozenVariables = session.VariablePool.Snapshot(session.Context);
                     session.VariablePool.Clear(session.Context);
                 }
+                catch (Exception ex)
+                {
+                    session.MarkFaulted(
+                        session.CurrentNodeId,
+                        ex.GetBaseException().Message
+                    );
+                    FreezeSessionVariables(session);
+                }
+                finally
+                {
+                    session.EndExecutionCommand();
+                }
 
+                WorkflowExecutionStatusDto stepStatus = BuildStatusDto(
+                    session,
+                    input.IncludeVariables
+                );
+                await NotifyDebugStateSafelyAsync(
+                    executionId,
+                    session.Status switch
+                    {
+                        WorkflowExecutionStatus.Completed => "session-completed",
+                        WorkflowExecutionStatus.Faulted => "session-faulted",
+                        WorkflowExecutionStatus.Stopped => "session-stopped",
+                        _ => "paused",
+                    },
+                    stepStatus
+                );
                 return new WorkflowExecutionStepResultDto
                 {
-                    Error = false,
+                    Error = session.Status == WorkflowExecutionStatus.Faulted,
+                    ErrorCode =
+                        session.Status == WorkflowExecutionStatus.Faulted
+                            ? ExecutionErrorCodeFault
+                            : null,
                     Message = session.ErrorMessage,
                     ExecutionId = executionId,
-                    Status = BuildStatusDto(session, input.IncludeVariables),
+                    Status = stepStatus,
                 };
             }
             finally
@@ -1866,6 +2004,35 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
         finally { session.Gate.Release(); }
     }
 
+    [HttpGet("executions/{executionId:guid}/breakpoints")]
+    public async Task<WorkflowBreakpointListDto> GetBreakpointsAsync(Guid executionId)
+    {
+        WorkflowExecutionSession session = _sessionStore.Get(executionId);
+        await session.Gate.WaitAsync();
+        try
+        {
+            return new WorkflowBreakpointListDto
+            {
+                Breakpoints = session.Breakpoints.Select(x => new WorkflowBreakpointDto
+                {
+                    NodeId = x.Key,
+                    StatementId =
+                        x.Value.Definition.StatementId
+                        ?? WorkflowSyntaxParser.GetNodeStatementId(x.Key),
+                    Line = x.Value.Definition.Line,
+                    Enabled = x.Value.Definition.Enabled,
+                    Condition = x.Value.Definition.Condition,
+                    HitCount = x.Value.Definition.HitCount,
+                    LogMessage = x.Value.Definition.LogMessage,
+                }).ToList(),
+            };
+        }
+        finally
+        {
+            session.Gate.Release();
+        }
+    }
+
     [HttpPost("executions/{executionId:guid}/continue")]
     public async Task<WorkflowExecutionStatusDto> ContinueAsync(Guid executionId)
     {
@@ -1873,32 +2040,78 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
         await session.Gate.WaitAsync();
         try
         {
-            using IDisposable blobStoreScope = CreateOperatorFileBlobStoreScope();
-            _kernel.Continue(session);
-            if (session.Status == WorkflowExecutionStatus.Completed)
-                PersistOutputs(session);
-            WorkflowExecutionStatusDto status = BuildStatusDto(session, includeVariables: true);
-            await _debugNotifier.NotifyAsync(
+            session.BeginExecutionCommand();
+            await NotifyDebugStateSafelyAsync(
                 executionId,
-                session.Status == WorkflowExecutionStatus.Completed ? "session-ended" : "paused",
+                "running",
+                BuildStatusDto(session, includeVariables: true)
+            );
+            using IDisposable blobStoreScope = CreateOperatorFileBlobStoreScope();
+            _kernel.Continue(session, markCompleted: false);
+            if (session.StepCursor >= session.RuntimeWorkflow.Statements.Count)
+            {
+                PersistOutputs(session);
+                FreezeSessionVariables(session);
+                session.MarkCompleted();
+            }
+            else if (session.Status == WorkflowExecutionStatus.Stopped)
+            {
+                FreezeSessionVariables(session);
+            }
+            session.EndExecutionCommand();
+            WorkflowExecutionStatusDto status = BuildStatusDto(session, includeVariables: true);
+            await NotifyDebugStateSafelyAsync(
+                executionId,
+                session.Status switch
+                {
+                    WorkflowExecutionStatus.Completed => "session-completed",
+                    WorkflowExecutionStatus.Stopped => "session-stopped",
+                    _ => "paused",
+                },
                 status);
             return status;
         }
         catch (WorkflowNodeExecutionException ex)
         {
             session.MarkFaulted(ex.NodeId, ex.InnerException?.Message ?? ex.Message);
-            return BuildStatusDto(session, includeVariables: true);
+            FreezeSessionVariables(session);
+            session.EndExecutionCommand();
+            WorkflowExecutionStatusDto status = BuildStatusDto(session, includeVariables: true);
+            await NotifyDebugStateSafelyAsync(executionId, "session-faulted", status);
+            return status;
         }
-        finally { session.Gate.Release(); }
+        catch (Exception ex)
+        {
+            session.MarkFaulted(session.CurrentNodeId, ex.GetBaseException().Message);
+            FreezeSessionVariables(session);
+            session.EndExecutionCommand();
+            WorkflowExecutionStatusDto status = BuildStatusDto(session, includeVariables: true);
+            Logger.LogError(
+                ex,
+                "调试继续执行失败。ExecutionId={ExecutionId}, NodeId={NodeId}",
+                executionId,
+                session.CurrentNodeId
+            );
+            await NotifyDebugStateSafelyAsync(executionId, "session-faulted", status);
+            return status;
+        }
+        finally
+        {
+            session.EndExecutionCommand();
+            session.Gate.Release();
+        }
     }
 
     [HttpPost("executions/{executionId:guid}/pause")]
     public async Task<WorkflowExecutionStatusDto> PauseAsync(Guid executionId)
     {
         WorkflowExecutionSession session = _sessionStore.Get(executionId);
-        session.PauseRequested = true;
+        bool pauseRequested = session.RequestPause();
         WorkflowExecutionStatusDto status = BuildStatusDto(session, includeVariables: true);
-        await _debugNotifier.NotifyAsync(executionId, "pause-requested", status);
+        if (pauseRequested)
+        {
+            await NotifyDebugStateSafelyAsync(executionId, "pause-requested", status);
+        }
         return status;
     }
 
@@ -1917,11 +2130,67 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
         await session.Gate.WaitAsync();
         try
         {
+            session.BeginExecutionCommand();
+            await NotifyDebugStateSafelyAsync(
+                executionId,
+                "running",
+                BuildStatusDto(session, includeVariables: true)
+            );
             using IDisposable blobStoreScope = CreateOperatorFileBlobStoreScope();
-            _kernel.Continue(session, nodeId);
-            return BuildStatusDto(session, includeVariables: true);
+            _kernel.Continue(session, nodeId, markCompleted: false);
+            if (session.StepCursor >= session.RuntimeWorkflow.Statements.Count)
+            {
+                PersistOutputs(session);
+                FreezeSessionVariables(session);
+                session.MarkCompleted();
+            }
+            else if (session.Status == WorkflowExecutionStatus.Stopped)
+            {
+                FreezeSessionVariables(session);
+            }
+            session.EndExecutionCommand();
+            WorkflowExecutionStatusDto status = BuildStatusDto(session, includeVariables: true);
+            await NotifyDebugStateSafelyAsync(
+                executionId,
+                session.Status switch
+                {
+                    WorkflowExecutionStatus.Completed => "session-completed",
+                    WorkflowExecutionStatus.Stopped => "session-stopped",
+                    _ => "paused",
+                },
+                status
+            );
+            return status;
         }
-        finally { session.Gate.Release(); }
+        catch (WorkflowNodeExecutionException ex)
+        {
+            session.MarkFaulted(ex.NodeId, ex.InnerException?.Message ?? ex.Message);
+            FreezeSessionVariables(session);
+            session.EndExecutionCommand();
+            WorkflowExecutionStatusDto status = BuildStatusDto(session, includeVariables: true);
+            await NotifyDebugStateSafelyAsync(executionId, "session-faulted", status);
+            return status;
+        }
+        catch (Exception ex)
+        {
+            session.MarkFaulted(session.CurrentNodeId, ex.GetBaseException().Message);
+            FreezeSessionVariables(session);
+            session.EndExecutionCommand();
+            WorkflowExecutionStatusDto status = BuildStatusDto(session, includeVariables: true);
+            Logger.LogError(
+                ex,
+                "运行到节点失败。ExecutionId={ExecutionId}, NodeId={NodeId}",
+                executionId,
+                session.CurrentNodeId
+            );
+            await NotifyDebugStateSafelyAsync(executionId, "session-faulted", status);
+            return status;
+        }
+        finally
+        {
+            session.EndExecutionCommand();
+            session.Gate.Release();
+        }
     }
 
     [HttpGet("executions/{executionId:guid}/stack")]
@@ -1967,11 +2236,39 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
                     : null;
                 bool found = accessor.TryGetValue(root, out object? value);
                 bool summarize = ShouldSummarizeWatchValue(value);
+                object? watchValue = null;
+                if (found)
+                {
+                    if (summarize)
+                    {
+                        watchValue = SummarizeWatchValue(value);
+                    }
+                    else if (
+                        value is null or string or ValueType or JsonNode or JsonElement
+                    )
+                    {
+                        watchValue = value;
+                    }
+                    else if (
+                        !WorkflowValueSerializer.TrySerializeToJsonNode(
+                            value,
+                            out JsonNode? safeNode
+                        )
+                    )
+                    {
+                        summarize = true;
+                        watchValue = SummarizeWatchValue(value);
+                    }
+                    else
+                    {
+                        watchValue = safeNode;
+                    }
+                }
                 result.Add(new WorkflowWatchResultDto
                 {
                     Expression = expression,
                     Found = found,
-                    Value = found ? (summarize ? SummarizeWatchValue(value) : value) : null,
+                    Value = watchValue,
                     RuntimeType = value?.GetType().FullName,
                     IsSummary = summarize,
                     Handle = summarize ? $"{executionId:N}:{Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(expression)))[..12]}" : null,
@@ -2040,7 +2337,7 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
     {
         WorkflowExecutionStatusDto status = (await StepAsync(
             executionId, new WorkflowExecutionStepInput { Steps = steps })).Status;
-        await _debugNotifier.NotifyAsync(executionId, eventType, status);
+        await NotifyDebugStateSafelyAsync(executionId, eventType, status);
         return status;
     }
 
@@ -2116,28 +2413,37 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
         List<WorkflowExecutionStatusDto> result = new();
         foreach (WorkflowExecutionSession session in sessions)
         {
-            await session.Gate.WaitAsync();
-            try
+            WorkflowExecutionStatusDto dto;
+            if (session.IsExecuting)
             {
-                WorkflowExecutionStatusDto dto = BuildStatusDto(session, includeVariables);
-                if (runWorkflowIds.Count > 0)
+                dto = BuildStatusDto(session, includeVariables: false);
+            }
+            else
+            {
+                await session.Gate.WaitAsync();
+                try
                 {
-                    dto.WorkflowOrderNo = Math.Max(
-                        runWorkflowIds.IndexOf(session.WorkflowId) + 1,
-                        0
-                    );
-                    dto.CurrentNodeOrderNo =
-                        session.ExecutedSteps > 0
-                            ? session.ExecutedSteps
-                            : (string.IsNullOrWhiteSpace(session.CurrentNodeId) ? 0 : 1);
+                    dto = BuildStatusDto(session, includeVariables);
                 }
+                finally
+                {
+                    session.Gate.Release();
+                }
+            }
 
-                result.Add(dto);
-            }
-            finally
+            if (runWorkflowIds.Count > 0)
             {
-                session.Gate.Release();
+                dto.WorkflowOrderNo = Math.Max(
+                    runWorkflowIds.IndexOf(session.WorkflowId) + 1,
+                    0
+                );
+                dto.CurrentNodeOrderNo =
+                    session.ExecutedSteps > 0
+                        ? session.ExecutedSteps
+                        : (string.IsNullOrWhiteSpace(session.CurrentNodeId) ? 0 : 1);
             }
+
+            result.Add(dto);
         }
 
         if (runId != Guid.Empty && result.Count > 1)
@@ -2161,6 +2467,10 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
     )
     {
         WorkflowExecutionSession session = _sessionStore.Get(executionId);
+        if (session.IsExecuting)
+        {
+            return BuildStatusDto(session, includeVariables: false);
+        }
         await session.Gate.WaitAsync();
         try
         {
@@ -2173,25 +2483,185 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
     }
 
     /// <inheritdoc/>
-    [HttpDelete("executions/{executionId:guid}")]
-    public async Task StopDebugAsync(Guid executionId)
+    [HttpGet("executions/{executionId:guid}/result")]
+    public async Task<List<WorkflowExecutionOutputResultDto>> GetDebugResultAsync(Guid executionId)
     {
         WorkflowExecutionSession session = _sessionStore.Get(executionId);
         await session.Gate.WaitAsync();
         try
         {
+            if (session.Status != WorkflowExecutionStatus.Completed)
+            {
+                string code = session.Status switch
+                {
+                    WorkflowExecutionStatus.Faulted => ExecutionErrorCodeFault,
+                    WorkflowExecutionStatus.Stopped => ExecutionErrorCodeStopped,
+                    _ => ExecutionErrorCodeNotCompleted,
+                };
+                string message = session.Status switch
+                {
+                    WorkflowExecutionStatus.Faulted =>
+                        session.ErrorMessage ?? "调试执行失败，不能查询完成结果。",
+                    WorkflowExecutionStatus.Stopped => "调试执行已停止，不能查询完成结果。",
+                    _ => "调试执行尚未完成，请在状态为 completed 后再查询结果。",
+                };
+                throw new BusinessException(code, message);
+            }
+
+            List<WorkflowVariableResultDto> outputs = await ResolveOutputVariables(session);
+            HashSet<string> blobOutputVariables = new(StringComparer.Ordinal);
+            CollectBlobOutputVariables(
+                session.RuntimeWorkflow.Statements,
+                blobOutputVariables
+            );
+            List<WorkflowExecutionOutputResultDto> results = new(outputs.Count);
+            foreach (WorkflowVariableResultDto output in outputs)
+            {
+                bool isBlobOutput = blobOutputVariables.Contains(
+                    GetOutputRootVariableName(output.Name)
+                );
+                object? resultValue = isBlobOutput
+                    ? NormalizeExecutionResultValue(output.Value)
+                    : output.Value;
+                string valueType = NormalizeExecutionResultValueType(
+                    output.ValueType,
+                    resultValue
+                );
+                if (isBlobOutput && resultValue is string)
+                {
+                    valueType = WorkflowValueTypes.Blob;
+                }
+
+                results.Add(
+                    new WorkflowExecutionOutputResultDto
+                    {
+                        Name = output.Name,
+                        DisplayName =
+                            session.OutputDisplayNames.GetValueOrDefault(output.Name)
+                            ?? output.Name,
+                        ValueType = valueType,
+                        Value = resultValue,
+                    }
+                );
+            }
+            return results;
+        }
+        finally
+        {
+            session.Gate.Release();
+        }
+    }
+
+    private static string NormalizeExecutionResultValueType(
+        string? storedValueType,
+        object? value
+    )
+    {
+        if (value is JsonObject)
+        {
+            return WorkflowValueTypes.Object;
+        }
+        if (value is JsonArray)
+        {
+            return WorkflowValueTypes.Array;
+        }
+
+        string type = storedValueType?.Trim() ?? string.Empty;
+        return type.ToLowerInvariant() switch
+        {
+            "system.int32" or "int32" or "int" => WorkflowValueTypes.Int,
+            "system.int64" or "int64" or "long" => WorkflowValueTypes.Long,
+            "system.single" or "single" or "float" => WorkflowValueTypes.Float,
+            "system.double" or "double" => WorkflowValueTypes.Double,
+            "system.decimal" or "decimal" => WorkflowValueTypes.Decimal,
+            "system.boolean" or "boolean" or "bool" => WorkflowValueTypes.Bool,
+            "system.string" or "string" => WorkflowValueTypes.String,
+            "blob" => WorkflowValueTypes.Blob,
+            "system.datetime"
+            or "system.datetimeoffset"
+            or "datetime"
+            or "datetimeoffset" => WorkflowValueTypes.DateTime,
+            "system.guid" or "guid" => WorkflowValueTypes.Guid,
+            "object" => WorkflowValueTypes.Object,
+            "array" => WorkflowValueTypes.Array,
+            "mat" or "opencvsharp.mat" => WorkflowValueTypes.Mat,
+            "pointclouddata" or "aurorastruct3d.pointclouddata" =>
+                WorkflowValueTypes.PointCloud,
+            _ when value is not null => WorkflowValueSerializer.InferValueType(value),
+            _ => WorkflowValueTypes.String,
+        };
+    }
+
+    /// <summary>
+    /// 兼容历史工作流中绑定 download_url/preview_url 的情况。
+    /// 结果接口只返回 Blob Key，不返回由后端拼接的访问 URL。
+    /// </summary>
+    internal static object? NormalizeExecutionResultValue(object? value)
+    {
+        if (value is not string text || string.IsNullOrWhiteSpace(text))
+        {
+            return value;
+        }
+
+        if (
+            !text.Contains(
+                "/api/app/operator-file/preview?",
+                StringComparison.OrdinalIgnoreCase
+            )
+            && !text.Contains(
+                "/api/app/operator-file/download?",
+                StringComparison.OrdinalIgnoreCase
+            )
+        )
+        {
+            return value;
+        }
+
+        const string parameter = "blobName=";
+        int parameterStart = text.IndexOf(parameter, StringComparison.OrdinalIgnoreCase);
+        if (parameterStart < 0)
+        {
+            return value;
+        }
+
+        int valueStart = parameterStart + parameter.Length;
+        int valueEnd = text.IndexOf('&', valueStart);
+        string encodedBlobName =
+            valueEnd < 0 ? text[valueStart..] : text[valueStart..valueEnd];
+        return string.IsNullOrWhiteSpace(encodedBlobName)
+            ? value
+            : Uri.UnescapeDataString(encodedBlobName);
+    }
+
+    /// <inheritdoc/>
+    [HttpDelete("executions/{executionId:guid}")]
+    public async Task StopDebugAsync(Guid executionId)
+    {
+        WorkflowExecutionSession session = _sessionStore.Get(executionId);
+        session.StopRequested = true;
+        if (session.IsExecuting)
+        {
+            await NotifyDebugStateSafelyAsync(
+                executionId,
+                "stop-requested",
+                BuildStatusDto(session, includeVariables: false)
+            );
+            return;
+        }
+
+        await session.Gate.WaitAsync();
+        try
+        {
             session.MarkStopped();
-            session.VariablePool.Clear(session.Context);
-            session.FrozenVariables = [];
+            FreezeSessionVariables(session);
         }
         finally
         {
             session.Gate.Release();
         }
 
-        await _debugNotifier.NotifyAsync(
-            executionId, "session-ended", BuildStatusDto(session, includeVariables: false));
-        _sessionStore.Remove(executionId);
+        await NotifyDebugStateSafelyAsync(
+            executionId, "session-stopped", BuildStatusDto(session, includeVariables: false));
     }
 
     private async Task<WorkflowExecutionTriggerResultDto> StartDebugSessionAsync(
@@ -2733,27 +3203,100 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
         }
     }
 
+    private static void FreezeSessionVariables(WorkflowExecutionSession session)
+    {
+        if (session.FrozenVariables.Count == 0)
+        {
+            session.FrozenVariables = session.VariablePool.Snapshot(
+                session.Context,
+                session.OutputStagedKeys
+            );
+        }
+        session.VariablePool.Clear(session.Context);
+    }
+
+    private async Task MarkBackgroundDebugFaultedAsync(
+        WorkflowExecutionSession session,
+        Exception exception
+    )
+    {
+        await session.Gate.WaitAsync();
+        WorkflowExecutionStatusDto status;
+        try
+        {
+            if (
+                session.Status
+                is WorkflowExecutionStatus.Completed
+                    or WorkflowExecutionStatus.Faulted
+                    or WorkflowExecutionStatus.Stopped
+            )
+            {
+                return;
+            }
+
+            session.EndExecutionCommand();
+            session.MarkFaulted(session.CurrentNodeId, exception.GetBaseException().Message);
+            FreezeSessionVariables(session);
+            status = BuildStatusDto(session, includeVariables: true);
+        }
+        finally
+        {
+            session.Gate.Release();
+        }
+
+        Logger.LogError(
+            exception,
+            "后台调试执行失败。ExecutionId={ExecutionId}, NodeId={NodeId}",
+            session.ExecutionId,
+            session.CurrentNodeId
+        );
+        await NotifyDebugStateSafelyAsync(session.ExecutionId, "session-faulted", status);
+    }
+
+    private async Task NotifyDebugStateSafelyAsync(
+        Guid executionId,
+        string eventType,
+        WorkflowExecutionStatusDto status
+    )
+    {
+        try
+        {
+            await _debugNotifier.NotifyAsync(executionId, eventType, status);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(
+                ex,
+                "推送调试状态失败，已忽略。ExecutionId={ExecutionId}, EventType={EventType}",
+                executionId,
+                eventType
+            );
+        }
+    }
+
     private void EnsureOutputSize(string variableName, object? value)
     {
         if (value is null || _safetyOptions.MaxOutputBytes <= 0)
             return;
 
         string valueType = WorkflowValueSerializer.InferValueType(value);
-        if (valueType is "Image" or "PointCloud" or "Region")
+        if (
+            valueType
+            is WorkflowValueTypes.Mat
+                or WorkflowValueTypes.PointCloud
+                or "Image"
+                or "PointCloud"
+                or "Region"
+        )
             return;
 
-        try
+        if (WorkflowValueSerializer.TryGetJsonUtf8ByteCount(value, out long bytes))
         {
-            long bytes = JsonSerializer.SerializeToUtf8Bytes(value).LongLength;
             if (bytes > _safetyOptions.MaxOutputBytes)
                 throw new UserFriendlyException(
                     $"[WORKFLOW_OUTPUT_TOO_LARGE] 输出 {variableName} 为 {bytes} 字节，"
                     + $"超过限制 {_safetyOptions.MaxOutputBytes} 字节。"
                 );
-        }
-        catch (NotSupportedException)
-        {
-            // 视觉对象和设备句柄不通过调试/运行响应序列化，沿用现有文件或对象存储通道。
         }
     }
 
@@ -2775,7 +3318,7 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
             context.Set(key, value);
         }
 
-        return new WorkflowExecutionSession
+        WorkflowExecutionSession session = new()
         {
             ExecutionId = GuidGenerator.Create(),
             RunId = bootstrap.RunId,
@@ -2794,6 +3337,13 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
             VariablePool = variablePool,
             OutputBindings = bootstrap.OutputBindings,
         };
+        session.ProgressChanged = (eventType, current) =>
+            NotifyDebugStateSafelyAsync(
+                current.ExecutionId,
+                eventType,
+                BuildStatusDto(current, includeVariables: false)
+            ).GetAwaiter().GetResult();
+        return session;
     }
 
     private async Task<WorkflowExecutionBootstrap> MaterializeUploadedFileReferencesAsync(
@@ -3490,29 +4040,10 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
         string? stagedKey
     )
     {
-        JsonNode? node = value switch
-        {
-            null => null,
-            JsonNode jsonNode => jsonNode,
-            _ => JsonSerializer.SerializeToNode(value),
-        };
-
-        string valueType = node switch
-        {
-            JsonObject or JsonArray => "string",
-            JsonValue jsonValue when jsonValue.TryGetValue<bool>(out _) => "bool",
-            JsonValue jsonValue when jsonValue.TryGetValue<int>(out _) => "int",
-            JsonValue jsonValue when jsonValue.TryGetValue<long>(out _) => "long",
-            JsonValue jsonValue when jsonValue.TryGetValue<double>(out _) => "double",
-            _ => "string",
-        };
-
-        string? scalarValue = node switch
-        {
-            null => null,
-            JsonValue jsonValue when jsonValue.TryGetValue<string>(out string? text) => text,
-            _ => node.ToJsonString(),
-        };
+        string valueType = WorkflowValueSerializer.InferValueType(value);
+        string? scalarValue = WorkflowValueTypes.IsScalar(valueType)
+            ? WorkflowValueSerializer.ScalarToString(value)
+            : null;
 
         return new WorkflowVariableResultDto
         {
@@ -3538,17 +4069,22 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
         }
 
         JsonNode? current;
-        try
+        if (rootValue is string text)
         {
-            current = rootValue switch
+            try
             {
-                null => null,
-                JsonNode node => node,
-                string text => JsonNode.Parse(text),
-                _ => JsonSerializer.SerializeToNode(rootValue),
-            };
+                current = JsonNode.Parse(text);
+            }
+            catch (JsonException)
+            {
+                return false;
+            }
         }
-        catch (JsonException)
+        else if (rootValue is JsonNode node)
+        {
+            current = node;
+        }
+        else if (!WorkflowValueSerializer.TrySerializeToJsonNode(rootValue, out current))
         {
             return false;
         }
@@ -3648,7 +4184,10 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
                     ParameterDescriptor? output = descriptor.Outputs.FirstOrDefault(x =>
                         string.Equals(x.ParameterName, portName, StringComparison.Ordinal)
                     );
-                    if (!string.IsNullOrWhiteSpace(output?.DisplayName))
+                    if (
+                        !result.ContainsKey(variableName)
+                        && !string.IsNullOrWhiteSpace(output?.DisplayName)
+                    )
                     {
                         result[variableName] = output.DisplayName;
                     }
@@ -3672,14 +4211,16 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
                 && node.Properties?.InputBindings is not null
             )
             {
-                foreach ((string outputName, string variableName) in node.Properties.InputBindings)
+                foreach ((string portName, string variableName) in node.Properties.InputBindings)
                 {
-                    if (
-                        !string.IsNullOrWhiteSpace(outputName)
-                        && !string.IsNullOrWhiteSpace(variableName)
-                    )
+                    if (!string.IsNullOrWhiteSpace(variableName))
                     {
-                        result[variableName] = outputName;
+                        result[variableName] =
+                            node.Properties.InputBindingDisplayNames?.GetValueOrDefault(portName)
+                                ?.Trim()
+                            is { Length: > 0 } displayName
+                                ? displayName
+                                : variableName;
                     }
                 }
             }
@@ -3797,11 +4338,69 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
         }
     }
 
+    /// <summary>
+    /// 根据工作流输出来源识别 Blob Key。不能仅凭字符串内容或扩展名推断，
+    /// 否则普通的 ".png" 文本会被误判为文件。
+    /// </summary>
+    internal static void CollectBlobOutputVariables(
+        IReadOnlyList<IWorkflowStatement> statements,
+        HashSet<string> variableNames
+    )
+    {
+        foreach (IWorkflowStatement statement in statements)
+        {
+            switch (statement)
+            {
+                case OperatorCallStatement operatorCall
+                    when operatorCall.OperatorType == typeof(save_image_to_blob)
+                        || operatorCall.OperatorType == typeof(save_point_cloud_to_blob):
+                    foreach (string portName in new[] { "blob_name", "download_url" })
+                    {
+                        if (
+                            operatorCall.OutputBindings.TryGetValue(
+                                portName,
+                                out OutputBinding? binding
+                            )
+                            && !string.IsNullOrWhiteSpace(binding.VariableName)
+                        )
+                        {
+                            variableNames.Add(binding.VariableName);
+                        }
+                    }
+                    break;
+                case ForLoopStatement forLoop:
+                    CollectBlobOutputVariables(forLoop.Body, variableNames);
+                    break;
+                case IfElseStatement ifElse:
+                    CollectBlobOutputVariables(ifElse.ThenBody, variableNames);
+                    CollectBlobOutputVariables(ifElse.ElseBody, variableNames);
+                    break;
+            }
+        }
+    }
+
     private static WorkflowExecutionStatusDto BuildStatusDtoStatic(
         WorkflowExecutionSession session,
         bool includeVariables
     )
     {
+        bool terminal =
+            session.Status
+            is WorkflowExecutionStatus.Completed
+                or WorkflowExecutionStatus.Faulted
+                or WorkflowExecutionStatus.Stopped;
+        string debugState = session.Status switch
+        {
+            WorkflowExecutionStatus.Completed => "completed",
+            WorkflowExecutionStatus.Faulted => "faulted",
+            WorkflowExecutionStatus.Stopped => "stopped",
+            _ when session.IsExecuting => "running",
+            WorkflowExecutionStatus.Pending => "ready",
+            _ => "paused",
+        };
+        bool canRun = session.Mode == WorkflowExecutionMode.DebugStep && !terminal
+            && !session.IsExecuting;
+
         List<WorkflowVariableResultDto>? variables = includeVariables
             ? (
                 session.Status
@@ -3812,16 +4411,48 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
                     : session.VariablePool.Snapshot(session.Context, session.OutputStagedKeys)
             )
             : null;
+        List<WorkflowVariableResultDto> outputVariables = BuildOutputSnapshot(
+            session,
+            variables
+        );
+        Dictionary<string, WorkflowVariableResultDto> outputMap = outputVariables.ToDictionary(
+            x => x.Name,
+            StringComparer.Ordinal
+        );
 
         return new WorkflowExecutionStatusDto
         {
             ExecutionId = session.ExecutionId,
+            UpdatedAt = DateTime.UtcNow,
+            StateVersion = session.NextStatusVersion(),
             IsPaused =
                 session.Mode == WorkflowExecutionMode.DebugStep
-                && session.Status == WorkflowExecutionStatus.Running,
+                && (debugState is "ready" or "paused"),
+            DebugState = debugState,
+            IsTerminal = terminal,
+            CanContinue = canRun,
+            CanStep = canRun,
+            CanPause =
+                session.Mode == WorkflowExecutionMode.DebugStep
+                && session.IsExecuting
+                && !terminal,
+            CanStop = session.Mode == WorkflowExecutionMode.DebugStep && !terminal,
             CurrentStatementId = string.IsNullOrWhiteSpace(session.CurrentNodeId)
                 ? null
                 : WorkflowSyntaxParser.GetNodeStatementId(session.CurrentNodeId),
+            CurrentNodeName =
+                !string.IsNullOrWhiteSpace(session.CurrentNodeId)
+                && session.NodeDisplayNames.TryGetValue(session.CurrentNodeId, out string? nodeName)
+                    ? nodeName
+                    : session.CurrentNodeId,
+            CurrentNodeDurationMs =
+                session.IsExecuting && session.CurrentNodeStartedAt.HasValue
+                    ? Math.Max(
+                        0,
+                        (long)(DateTime.UtcNow - session.CurrentNodeStartedAt.Value)
+                            .TotalMilliseconds
+                    )
+                    : session.LastNodeDurationMs,
             RunId = session.RunId,
             ProjectId = session.ProjectId,
             WorkflowId = session.WorkflowId,
@@ -3841,8 +4472,57 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
             CompletedLoops = session.CompletedLoops,
             ErrorMessage = session.ErrorMessage,
             DurationMs = session.DurationMs,
+            ConfiguredOutputs = session.ConfiguredOutputNames.Select(name =>
+            {
+                outputMap.TryGetValue(name, out WorkflowVariableResultDto? value);
+                return new WorkflowConfiguredOutputDto
+                {
+                    Name = name,
+                    DisplayName = session.OutputDisplayNames.GetValueOrDefault(name),
+                    ValueType = value?.ValueType,
+                    HasValue = value?.Value is not null || !string.IsNullOrWhiteSpace(value?.StagedKey),
+                };
+            }).ToList(),
+            Outputs = outputVariables,
             Variables = variables,
         };
+    }
+
+    private static List<WorkflowVariableResultDto> BuildOutputSnapshot(
+        WorkflowExecutionSession session,
+        List<WorkflowVariableResultDto>? suppliedVariables
+    )
+    {
+        if (session.ConfiguredOutputNames.Count == 0)
+        {
+            return [];
+        }
+
+        List<WorkflowVariableResultDto> variables = suppliedVariables
+            ?? (
+                session.Status
+                    is WorkflowExecutionStatus.Completed
+                        or WorkflowExecutionStatus.Faulted
+                        or WorkflowExecutionStatus.Stopped
+                    ? session.FrozenVariables
+                    : []
+            );
+        Dictionary<string, WorkflowVariableResultDto> byName = variables.ToDictionary(
+            x => x.Name,
+            StringComparer.Ordinal
+        );
+        List<WorkflowVariableResultDto> result = [];
+        foreach (string name in session.ConfiguredOutputNames)
+        {
+            if (!byName.TryGetValue(name, out WorkflowVariableResultDto? variable))
+            {
+                continue;
+            }
+            variable.DisplayName = session.OutputDisplayNames.GetValueOrDefault(name)
+                ?? variable.DisplayName;
+            result.Add(variable);
+        }
+        return result;
     }
 
     private async Task PreheatRunDependenciesAsync(

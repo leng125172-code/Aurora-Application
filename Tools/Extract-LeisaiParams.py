@@ -1,5 +1,5 @@
 """
-从 Documents/电机命令2.htm 提取雷赛伺服 Pr0-Pr9 全部参数。
+从 Documents/09-厂商资料/电机命令2.htm 提取雷赛伺服 Pr0-Pr9 全部参数。
 策略：扫描所有 <table>，识别含 0x???? 地址 + Pr?.?? 编号的行。
 输出 Tools/leisai-params.json。
 """
