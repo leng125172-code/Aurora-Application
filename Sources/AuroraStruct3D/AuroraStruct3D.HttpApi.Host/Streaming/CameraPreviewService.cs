@@ -75,6 +75,11 @@ public class CameraPreviewService : ICameraStreamingService, IHostedService, IDi
     /// </summary>
     private readonly ConcurrentDictionary<Guid, SemaphoreSlim> _cameraLocks = new();
 
+    // Coordinates a preview switch across cameras.  Until a model capability
+    // profile explicitly permits it, two cameras of the same model share one
+    // preview lane; different models remain concurrent by default.
+    private readonly SemaphoreSlim _previewConcurrencyLock = new(1, 1);
+
     /// <summary>客户端断开后保留预览的宽限期（毫秒）</summary>
     private const int DisconnectGracePeriodMs = 30_000;
 
@@ -138,6 +143,9 @@ public class CameraPreviewService : ICameraStreamingService, IHostedService, IDi
         bool forceSession = false
     )
     {
+        await _previewConcurrencyLock.WaitAsync();
+        try
+        {
         // per-camera 互斥：防止并发 Start/Stop 造成 TUCAM_Buf_Alloc: Excluded。
         // 不同相机使用各自的信号量，两台相机可同时采集。
         SemaphoreSlim cameraLock = GetCameraLock(cameraId);
@@ -156,6 +164,11 @@ public class CameraPreviewService : ICameraStreamingService, IHostedService, IDi
         finally
         {
             cameraLock.Release();
+        }
+        }
+        finally
+        {
+            _previewConcurrencyLock.Release();
         }
     }
 
@@ -198,6 +211,8 @@ public class CameraPreviewService : ICameraStreamingService, IHostedService, IDi
                 $"相机 {cameraId} 找不到对应的 DeviceIndex，预览无法启动"
             );
         }
+
+        await StopIncompatibleSameModelPreviewsAsync(scope, cameraId).ConfigureAwait(false);
 
         bool ownsCapture = !tucamService.IsCapturing(deviceIndex);
         try
@@ -251,6 +266,24 @@ public class CameraPreviewService : ICameraStreamingService, IHostedService, IDi
             enableRtp,
             connectionId ?? "广播"
         );
+    }
+
+    private async Task StopIncompatibleSameModelPreviewsAsync(IServiceScope scope, Guid requestedCameraId)
+    {
+        ICameraDeviceRepository repo = scope.ServiceProvider.GetRequiredService<ICameraDeviceRepository>();
+        CameraDevice requested = await repo.GetAsync(requestedCameraId).ConfigureAwait(false);
+        if (string.IsNullOrWhiteSpace(requested.Model))
+            return;
+
+        foreach (Guid activeCameraId in _sessions.Keys.Where(x => x != requestedCameraId).ToList())
+        {
+            CameraDevice active = await repo.GetAsync(activeCameraId).ConfigureAwait(false);
+            if (string.Equals(active.Model, requested.Model, StringComparison.OrdinalIgnoreCase))
+            {
+                _logger.LogInformation("相机 {NewCamera} 启动预览前停止同型号相机 {ActiveCamera} 的预览。", requestedCameraId, activeCameraId);
+                await StopPreviewAsync(activeCameraId).ConfigureAwait(false);
+            }
+        }
     }
 
     /// <inheritdoc/>

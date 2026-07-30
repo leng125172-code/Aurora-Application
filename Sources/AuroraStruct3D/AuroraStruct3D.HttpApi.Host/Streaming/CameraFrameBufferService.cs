@@ -29,11 +29,12 @@ public class CameraFrameBufferService
     /// <summary>相机 ID → 帧槽位</summary>
     private readonly ConcurrentDictionary<Guid, FrameSlot> _slots = new();
 
-    /// <summary>相机 ID → 订阅者唤醒事件集合（有新帧时 Set 通知）</summary>
-    private readonly ConcurrentDictionary<
-        Guid,
-        ConcurrentBag<WeakReference<SemaphoreSlim>>
-    > _waiters = new();
+    /// <summary>
+    /// 相机 ID → 活跃订阅者唤醒事件集合。
+    /// 必须可在断线时立即移除，不能使用只增不减的 ConcurrentBag，否则长时间运行会让
+    /// 每帧通知遍历历史订阅者。
+    /// </summary>
+    private readonly ConcurrentDictionary<Guid, ConcurrentDictionary<SemaphoreSlim, byte>> _waiters = new();
 
     /// <summary>相机 ID → 当前活跃的 HTTP MJPEG 订阅者数量</summary>
     private readonly ConcurrentDictionary<Guid, int> _subscriberCounts = new();
@@ -57,22 +58,18 @@ public class CameraFrameBufferService
         Interlocked.Increment(ref slot.Version);
 
         // 唤醒所有该相机的订阅者（已断开的订阅者 Semaphore 会在 GC 后被自动清理）
-        if (_waiters.TryGetValue(cameraId, out ConcurrentBag<WeakReference<SemaphoreSlim>>? bag))
+        if (_waiters.TryGetValue(cameraId, out ConcurrentDictionary<SemaphoreSlim, byte>? waiters))
         {
-            foreach (WeakReference<SemaphoreSlim> wr in bag)
+            foreach (SemaphoreSlim sem in waiters.Keys)
             {
-                if (wr.TryGetTarget(out SemaphoreSlim? sem))
+                try
                 {
-                    try
-                    {
-                        // 只释放 1 个等待者即可：若有多个订阅者，下一个 PublishFrame 会继续唤醒
-                        if (sem.CurrentCount == 0)
-                            sem.Release();
-                    }
-                    catch (ObjectDisposedException)
-                    {
-                        // 订阅者已停止，忽略
-                    }
+                    if (sem.CurrentCount == 0)
+                        sem.Release();
+                }
+                catch (ObjectDisposedException)
+                {
+                    waiters.TryRemove(sem, out _);
                 }
             }
         }
@@ -108,11 +105,11 @@ public class CameraFrameBufferService
     public SemaphoreSlim RegisterWaiter(Guid cameraId)
     {
         SemaphoreSlim sem = new SemaphoreSlim(0, 1);
-        ConcurrentBag<WeakReference<SemaphoreSlim>> bag = _waiters.GetOrAdd(
+        ConcurrentDictionary<SemaphoreSlim, byte> waiters = _waiters.GetOrAdd(
             cameraId,
-            _ => new ConcurrentBag<WeakReference<SemaphoreSlim>>()
+            _ => new ConcurrentDictionary<SemaphoreSlim, byte>()
         );
-        bag.Add(new WeakReference<SemaphoreSlim>(sem));
+        waiters.TryAdd(sem, 0);
         _subscriberCounts.AddOrUpdate(cameraId, 1, (_, old) => old + 1);
         return sem;
     }
@@ -123,6 +120,12 @@ public class CameraFrameBufferService
     /// </summary>
     public void UnregisterWaiter(Guid cameraId, SemaphoreSlim sem)
     {
+        if (_waiters.TryGetValue(cameraId, out ConcurrentDictionary<SemaphoreSlim, byte>? waiters))
+        {
+            waiters.TryRemove(sem, out _);
+            if (waiters.IsEmpty)
+                _waiters.TryRemove(new KeyValuePair<Guid, ConcurrentDictionary<SemaphoreSlim, byte>>(cameraId, waiters));
+        }
         sem.Dispose();
         _subscriberCounts.AddOrUpdate(cameraId, 0, (_, old) => Math.Max(0, old - 1));
     }

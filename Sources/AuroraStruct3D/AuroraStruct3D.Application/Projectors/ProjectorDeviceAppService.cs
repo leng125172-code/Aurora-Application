@@ -101,30 +101,57 @@ public class ProjectorDeviceAppService : AuroraStruct3DAppService, IProjectorDev
             ProjectorConsts.HidProductId
         );
 
-        // 对每个检测到的 HID 索引，确保数据库中存在对应记录
+        List<ProjectorDevice> configured = await _projectorDeviceRepository.GetListOrderedAsync();
+        Dictionary<int, ProjectorDevice> configuredByHardwareId = configured
+            .Where(x => x.ConnectionType == ProjectorConnectionType.UsbHid && x.DeviceHardwareId is >= 1 and <= 255)
+            .GroupBy(x => x.DeviceHardwareId)
+            .Where(x => x.Count() == 1)
+            .ToDictionary(x => x.Key, x => x.Single());
+
+        HashSet<int> duplicateConfiguredIds = configured
+            .Where(x => x.ConnectionType == ProjectorConnectionType.UsbHid && x.DeviceHardwareId is >= 1 and <= 255)
+            .GroupBy(x => x.DeviceHardwareId)
+            .Where(x => x.Count() > 1)
+            .Select(x => x.Key)
+            .ToHashSet();
+
+        // HID index is volatile. Probe register 0 and only bind devices that
+        // have a unique, explicitly configured user-storage identity.
         for (int i = 0; i < count; i++)
         {
-            ProjectorDevice? existing = await _projectorDeviceRepository.FindByHidAsync(i);
-            if (existing == null)
+            try
             {
-                // 新设备：取当前设备数作为 DeviceIndex
-                List<ProjectorDevice> all = await _projectorDeviceRepository.GetListOrderedAsync();
-                int nextIndex = all.Count;
-                ProjectorDevice device = new(
-                    GuidGenerator.Create(),
-                    $"投影仪 {i}",
-                    nextIndex,
-                    i,
-                    ProjectorConsts.DefaultConnectTimeoutMs
-                );
-                await _projectorDeviceRepository.InsertAsync(device);
+                await _dlpProjectorService.ConnectHidAsync(ProjectorConsts.HidVendorId, ProjectorConsts.HidProductId, i);
+                string? rawId = await _dlpProjectorService.ReadRegisterAsync(0);
+                if (!int.TryParse(rawId?.Trim(), out int hardwareId) || hardwareId is < 1 or > 255 || duplicateConfiguredIds.Contains(hardwareId))
+                {
+                    Logger.LogWarning("[Projector] HID index {Index} has unassigned, unreadable or duplicate identity '{Identity}', ignored.", i, rawId);
+                    continue;
+                }
+
+                if (!configuredByHardwareId.TryGetValue(hardwareId, out ProjectorDevice? device))
+                {
+                    Logger.LogWarning("[Projector] HID index {Index} identity {Identity} is not registered, ignored.", i, hardwareId);
+                    continue;
+                }
+
+                device.SetHidDeviceIndex(i);
+                await _projectorDeviceRepository.UpdateAsync(device);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning(ex, "[Projector] Failed probing USB HID projector at index {Index}; it will not be bound.", i);
+            }
+            finally
+            {
+                await _dlpProjectorService.DisconnectAsync();
             }
         }
 
         // 重建并传播 HidDeviceIndex -> ProjectorDevice.Id 映射
         List<ProjectorDevice> devices = await _projectorDeviceRepository.GetListOrderedAsync();
         Dictionary<int, Guid> mapping = devices
-            .Where(d => d.ConnectionType == ProjectorConnectionType.UsbHid)
+            .Where(d => d.ConnectionType == ProjectorConnectionType.UsbHid && d.DeviceHardwareId is >= 1 and <= 255)
             .ToDictionary(d => d.HidDeviceIndex, d => d.Id);
         _dlpProjectorService.SetProjectorDeviceIdMapping(mapping);
 
@@ -138,6 +165,12 @@ public class ProjectorDeviceAppService : AuroraStruct3DAppService, IProjectorDev
         ProjectorDevice device = await _projectorDeviceRepository.GetAsync(id);
         device.SetName(input.Name);
         device.SetDescription(input.Description);
+        if (input.DeviceHardwareId.HasValue)
+        {
+            if (device.ConnectionType != ProjectorConnectionType.UsbHid)
+                throw new UserFriendlyException("仅 USB HID 光机可以配置寄存器身份 ID。");
+            device.UpdateDeviceInfo(input.DeviceHardwareId.Value);
+        }
         if (input.IsEnabled)
             device.Enable();
         else
@@ -170,6 +203,14 @@ public class ProjectorDeviceAppService : AuroraStruct3DAppService, IProjectorDev
                     ProjectorConsts.HidProductId,
                     device.HidDeviceIndex
                 );
+                string? rawIdentity = await svc.ReadRegisterAsync(0);
+                if (!int.TryParse(rawIdentity?.Trim(), out int identity) || identity != device.DeviceHardwareId)
+                {
+                    await svc.DisconnectAsync();
+                    throw new UserFriendlyException(
+                        $"USB 光机身份校验失败：期望 {device.DeviceHardwareId}，实际 {rawIdentity ?? "无响应"}。请先执行设备扫描/编号。"
+                    );
+                }
             }
         }
         catch (Exception ex)
@@ -492,6 +533,8 @@ public class ProjectorDeviceAppService : AuroraStruct3DAppService, IProjectorDev
         EnsureManualOrMaintenanceMode();
         await EnsureOrAcquireSessionAsync(input.ProjectorDeviceId, DeviceType.Projector);
         IDlpProjectorService svc = GetConnectedService(input.ProjectorDeviceId);
+        if (input.Address == 0 && input.Value == 0)
+            throw new UserFriendlyException("寄存器 0 是设备稳定身份，不能写入 0。请使用 1~255，且仅在设备单独连接时配置。");
         return await svc.WriteRegisterAsync(input.Address, input.Value);
     }
 

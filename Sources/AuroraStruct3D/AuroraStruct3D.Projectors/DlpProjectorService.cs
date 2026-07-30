@@ -17,6 +17,11 @@ public class DlpProjectorService : IDlpProjectorService, IDisposable
 
     private readonly ILogger<DlpProjectorService> _logger;
     private readonly IServiceScopeFactory? _serviceScopeFactory;
+    // The wire protocol is stateful.  Keep one operation lane per pooled
+    // projector so a reconnect, a manual command and a multi-command download
+    // cannot corrupt each other's request/response sequence.
+    private readonly SemaphoreSlim _operationLock = new(1, 1);
+    private readonly AsyncLocal<int> _operationDepth = new();
 
     // ── TCP 客户端状态 ────────────────────────────────────────────
     private TjProjectorTcpClient? _tcpClient;
@@ -91,10 +96,19 @@ public class DlpProjectorService : IDlpProjectorService, IDisposable
     }
 
     /// <inheritdoc/>
-    public async Task ConnectAsync(
+    public Task ConnectAsync(
         string ip,
         int port,
         CancellationToken cancellationToken = default
+    )
+    {
+        return ExecuteOperationAsync(() => ConnectCoreAsync(ip, port, cancellationToken), cancellationToken);
+    }
+
+    private async Task ConnectCoreAsync(
+        string ip,
+        int port,
+        CancellationToken cancellationToken
     )
     {
         if (
@@ -124,11 +138,24 @@ public class DlpProjectorService : IDlpProjectorService, IDisposable
     }
 
     /// <inheritdoc/>
-    public async Task ConnectHidAsync(
+    public Task ConnectHidAsync(
         int vendorId = 0x0483,
         int productId = 0x5750,
         int deviceIndex = 0,
         CancellationToken cancellationToken = default
+    )
+    {
+        return ExecuteOperationAsync(
+            () => ConnectHidCoreAsync(vendorId, productId, deviceIndex, cancellationToken),
+            cancellationToken
+        );
+    }
+
+    private async Task ConnectHidCoreAsync(
+        int vendorId,
+        int productId,
+        int deviceIndex,
+        CancellationToken cancellationToken
     )
     {
         if (
@@ -188,7 +215,12 @@ public class DlpProjectorService : IDlpProjectorService, IDisposable
     }
 
     /// <inheritdoc/>
-    public async Task DisconnectAsync()
+    public Task DisconnectAsync()
+    {
+        return ExecuteOperationAsync(DisconnectCoreAsync, CancellationToken.None);
+    }
+
+    private async Task DisconnectCoreAsync()
     {
         await CloseCurrentClientAsync().ConfigureAwait(false);
         _logger.LogInformation(
@@ -609,6 +641,11 @@ public class DlpProjectorService : IDlpProjectorService, IDisposable
     /// <summary>向当前激活连接发送命令（不读取响应）</summary>
     private Task<bool> SendCommandCoreAsync(string command, CancellationToken ct)
     {
+        return ExecuteOperationAsync(() => SendCommandCoreUnsafeAsync(command, ct), ct);
+    }
+
+    private Task<bool> SendCommandCoreUnsafeAsync(string command, CancellationToken ct)
+    {
         if (_useHid)
             return _hidClient!.SendCommandAsync(command, ct);
         return _tcpClient!.SendCommandAsync(command, ct);
@@ -616,6 +653,11 @@ public class DlpProjectorService : IDlpProjectorService, IDisposable
 
     /// <summary>向当前激活连接发送命令并读取一行响应</summary>
     private Task<string?> SendCommandAndReadCoreAsync(string command, CancellationToken ct)
+    {
+        return ExecuteOperationAsync(() => SendCommandAndReadCoreUnsafeAsync(command, ct), ct);
+    }
+
+    private Task<string?> SendCommandAndReadCoreUnsafeAsync(string command, CancellationToken ct)
     {
         if (_useHid)
             return _hidClient!.SendCommandAndReadAsync(command, ct);
@@ -625,9 +667,53 @@ public class DlpProjectorService : IDlpProjectorService, IDisposable
     /// <summary>仅读取一行响应，不发送任何命令（用于等待 Flash page 写入应答）</summary>
     private Task<string?> ReadResponseCoreAsync(CancellationToken ct)
     {
+        return ExecuteOperationAsync(() => ReadResponseCoreUnsafeAsync(ct), ct);
+    }
+
+    private Task<string?> ReadResponseCoreUnsafeAsync(CancellationToken ct)
+    {
         if (_useHid)
             return _hidClient!.ReadResponseAsync(ct);
         return _tcpClient!.ReadResponseAsync(ct);
+    }
+
+    private async Task<T> ExecuteOperationAsync<T>(Func<Task<T>> operation, CancellationToken ct)
+    {
+        if (_operationDepth.Value > 0)
+            return await operation().ConfigureAwait(false);
+
+        await _operationLock.WaitAsync(ct).ConfigureAwait(false);
+        _operationDepth.Value = 1;
+        try
+        {
+            return await operation().ConfigureAwait(false);
+        }
+        finally
+        {
+            _operationDepth.Value = 0;
+            _operationLock.Release();
+        }
+    }
+
+    private async Task ExecuteOperationAsync(Func<Task> operation, CancellationToken ct)
+    {
+        if (_operationDepth.Value > 0)
+        {
+            await operation().ConfigureAwait(false);
+            return;
+        }
+
+        await _operationLock.WaitAsync(ct).ConfigureAwait(false);
+        _operationDepth.Value = 1;
+        try
+        {
+            await operation().ConfigureAwait(false);
+        }
+        finally
+        {
+            _operationDepth.Value = 0;
+            _operationLock.Release();
+        }
     }
 
     /// <summary>当前连接的设备标识符（用于日志）</summary>
@@ -900,12 +986,28 @@ public class DlpProjectorService : IDlpProjectorService, IDisposable
     }
 
     /// <inheritdoc/>
-    public async Task DownloadFringePatternAsync(
+    public Task DownloadFringePatternAsync(
         byte[][] frames,
         int horizontalFrameCount,
         string horizontalPaddingPosition = "end",
         Func<int, Task>? onProgress = null,
         CancellationToken cancellationToken = default
+    )
+    {
+        return ExecuteOperationAsync(
+            () => DownloadFringePatternCoreAsync(
+                frames, horizontalFrameCount, horizontalPaddingPosition, onProgress, cancellationToken
+            ),
+            cancellationToken
+        );
+    }
+
+    private async Task DownloadFringePatternCoreAsync(
+        byte[][] frames,
+        int horizontalFrameCount,
+        string horizontalPaddingPosition,
+        Func<int, Task>? onProgress,
+        CancellationToken cancellationToken
     )
     {
         EnsureClient();

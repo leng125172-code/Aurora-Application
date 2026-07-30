@@ -1308,6 +1308,8 @@ public class TucamCameraService : ITucamCameraService, IDisposable
 
                 captureState.Frame = frame;
                 captureState.IsCapturing = true;
+                captureState.Faulted = false;
+                captureState.FaultReason = null;
                 captureState.StopRequested = false;
                 captureState.HoldsCapStartLock = true;
                 capStartLockAcquired = false; // 单活锁转移给 StopCaptureAsync 持有并释放
@@ -1469,6 +1471,13 @@ public class TucamCameraService : ITucamCameraService, IDisposable
         {
             lock (captureState.SyncRoot)
             {
+                // 超时或底层 Stop 失败后采集状态不可再视为有效。否则下一次 Start 会
+                // 因幂等检查直接返回，既不会重分配缓冲区也不会恢复 SDK 采集状态。
+                // 后续 StartCaptureAsync 会执行既有的防御性 Buf_Release 后重新启动。
+                captureState.IsCapturing = false;
+                captureState.Frame = default;
+                captureState.Faulted = true;
+                captureState.FaultReason = ex.Message;
                 captureState.StopRequested = false;
                 // 即使 Stop 失败也释放单活锁，避免系统永久阻塞
                 if (captureState.HoldsCapStartLock)
@@ -4164,6 +4173,12 @@ public class TucamCameraService : ITucamCameraService, IDisposable
         /// StartCaptureAsync 成功后置 true，StopCaptureAsync 释放锁时置 false。
         /// </summary>
         public bool HoldsCapStartLock { get; set; }
+
+        /// <summary>上一次停止失败后，底层采集状态是否不可再信任。</summary>
+        public bool Faulted { get; set; }
+
+        /// <summary>最近一次不可恢复停止失败的诊断信息。</summary>
+        public string? FaultReason { get; set; }
 
         /// <summary>
         /// 缓存的像素格式信息，避免每帧调用 GenICam 读取

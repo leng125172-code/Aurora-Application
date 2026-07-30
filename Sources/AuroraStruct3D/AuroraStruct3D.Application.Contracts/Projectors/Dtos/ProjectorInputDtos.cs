@@ -89,6 +89,10 @@ public class UpdateProjectorDeviceDto
     /// <summary>连接超时（毫秒）</summary>
     [Range(500, 30000)]
     public int ConnectTimeoutMs { get; set; } = 5000;
+
+    /// <summary>USB 光机用户寄存器 0 中预先写入的稳定身份（1~255）。</summary>
+    [Range(1, 255)]
+    public int? DeviceHardwareId { get; set; }
 }
 
 /// <summary>
@@ -236,10 +240,11 @@ public class NextProjectorFrameDto : ProjectorControlDto { }
 public class WriteProjectorRegisterDto : ProjectorControlDto
 {
     /// <summary>寄存器地址</summary>
-    [Range(0, 255)]
+    [Range(0, 200)]
     public int Address { get; set; }
 
     /// <summary>写入值</summary>
+    [Range(0, 255)]
     public int Value { get; set; }
 }
 

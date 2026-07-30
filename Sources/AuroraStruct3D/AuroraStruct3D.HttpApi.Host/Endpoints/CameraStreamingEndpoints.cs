@@ -115,7 +115,7 @@ public static class CameraStreamingEndpoints
         }
         finally
         {
-            CalibScanFrameBufferService.UnregisterWaiter(waiter);
+            buffer.UnregisterWaiter(projectId, cameraRole, waiter);
         }
     }
 
