@@ -43,6 +43,11 @@ public interface ICalibPointCloudAppService : IApplicationService
         int patternCount);
 
     /// <summary>
+    /// 使用同一轮的一组普通双目图像生成增量点云（不依赖投影条纹）。
+    /// </summary>
+    Task GenerateIncrementalStereoPointCloudAsync(Guid calibProjectId, long roundIndex);
+
+    /// <summary>
     /// 完成增量点云模式，合并所有累积的点云数据。
     /// POST /api/app/calib-point-cloud/complete-incremental
     /// </summary>

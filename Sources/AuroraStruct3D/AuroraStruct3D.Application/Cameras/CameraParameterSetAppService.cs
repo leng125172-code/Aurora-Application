@@ -1,6 +1,6 @@
 using AuroraStruct3D.Cameras.Dtos;
-using AuroraStruct3D.Tucam;
-using AuroraStruct3D.Tucam.Interop;
+using AuroraStruct3D.Cameras.Tucam;
+using AuroraStruct3D.Cameras.Tucam.Interop;
 using Microsoft.Extensions.Logging;
 using Volo.Abp;
 using Volo.Abp.Domain.Entities;
@@ -15,17 +15,17 @@ public class CameraParameterSetAppService : AuroraStruct3DAppService, ICameraPar
 {
     private readonly ICameraParameterSetRepository _parameterSetRepository;
     private readonly ICameraDeviceRepository _cameraDeviceRepository;
-    private readonly ITucamCameraService _tucamService;
+    private readonly ICameraDriverRegistry _cameraDrivers;
 
     public CameraParameterSetAppService(
         ICameraParameterSetRepository parameterSetRepository,
         ICameraDeviceRepository cameraDeviceRepository,
-        ITucamCameraService tucamService
+        ICameraDriverRegistry cameraDrivers
     )
     {
         _parameterSetRepository = parameterSetRepository;
         _cameraDeviceRepository = cameraDeviceRepository;
-        _tucamService = tucamService;
+        _cameraDrivers = cameraDrivers;
     }
 
     /// <inheritdoc/>
@@ -124,8 +124,17 @@ public class CameraParameterSetAppService : AuroraStruct3DAppService, ICameraPar
     )
     {
         CameraDevice camera = await _cameraDeviceRepository.GetAsync(cameraDeviceId);
+        if (string.IsNullOrWhiteSpace(camera.HardwareId))
+            throw new UserFriendlyException("相机尚未绑定稳定硬件标识，请重新扫描");
+        ICameraDriver driver = _cameraDrivers.GetRequired(camera.DriverId);
+        ITucamCameraService tucamService = driver as ITucamCameraService
+            ?? throw new UserFriendlyException(
+                $"相机驱动 [{camera.DriverId}] 不支持 Tucam 参数集格式"
+            );
+        if (!driver.TryGetRuntimeIndex(camera.HardwareId, out int runtimeIndex))
+            throw new UserFriendlyException("相机当前离线，请重新扫描");
 
-        if (!_tucamService.IsCameraOpen(camera.DeviceIndex))
+        if (!tucamService.IsCameraOpen(runtimeIndex))
         {
             throw new UserFriendlyException("相机未打开，无法读取当前参数，请先打开相机");
         }
@@ -134,25 +143,25 @@ public class CameraParameterSetAppService : AuroraStruct3DAppService, ICameraPar
         set.SetDescription($"从硬件读取于 {Clock.Now:yyyy-MM-dd HH:mm:ss}");
 
         // 读取常用属性值并存储
-        await ReadAndSavePropertyAsync(set, camera.DeviceIndex, TUCamIdProp.ExposureTime);
-        await ReadAndSavePropertyAsync(set, camera.DeviceIndex, TUCamIdProp.GlobalGain);
-        await ReadAndSavePropertyAsync(set, camera.DeviceIndex, TUCamIdProp.Gamma);
-        await ReadAndSavePropertyAsync(set, camera.DeviceIndex, TUCamIdProp.Contrast);
-        await ReadAndSavePropertyAsync(set, camera.DeviceIndex, TUCamIdProp.Saturation);
-        await ReadAndSavePropertyAsync(set, camera.DeviceIndex, TUCamIdProp.Sharpness);
-        await ReadAndSavePropertyAsync(set, camera.DeviceIndex, TUCamIdProp.FrameRate);
-        await ReadAndSavePropertyAsync(set, camera.DeviceIndex, TUCamIdProp.BlackLevel);
-        await ReadAndSavePropertyAsync(set, camera.DeviceIndex, TUCamIdProp.Temperature);
-        await ReadAndSavePropertyAsync(set, camera.DeviceIndex, TUCamIdProp.ColorTemperature);
+        await ReadAndSavePropertyAsync(tucamService, set, runtimeIndex, TUCamIdProp.ExposureTime);
+        await ReadAndSavePropertyAsync(tucamService, set, runtimeIndex, TUCamIdProp.GlobalGain);
+        await ReadAndSavePropertyAsync(tucamService, set, runtimeIndex, TUCamIdProp.Gamma);
+        await ReadAndSavePropertyAsync(tucamService, set, runtimeIndex, TUCamIdProp.Contrast);
+        await ReadAndSavePropertyAsync(tucamService, set, runtimeIndex, TUCamIdProp.Saturation);
+        await ReadAndSavePropertyAsync(tucamService, set, runtimeIndex, TUCamIdProp.Sharpness);
+        await ReadAndSavePropertyAsync(tucamService, set, runtimeIndex, TUCamIdProp.FrameRate);
+        await ReadAndSavePropertyAsync(tucamService, set, runtimeIndex, TUCamIdProp.BlackLevel);
+        await ReadAndSavePropertyAsync(tucamService, set, runtimeIndex, TUCamIdProp.Temperature);
+        await ReadAndSavePropertyAsync(tucamService, set, runtimeIndex, TUCamIdProp.ColorTemperature);
 
         // 读取常用能力值并存储
-        await ReadAndSaveCapabilityAsync(set, camera.DeviceIndex, TUCamIdCapa.BitOfDepth);
-        await ReadAndSaveCapabilityAsync(set, camera.DeviceIndex, TUCamIdCapa.Resolution);
-        await ReadAndSaveCapabilityAsync(set, camera.DeviceIndex, TUCamIdCapa.AutoExposure);
-        await ReadAndSaveCapabilityAsync(set, camera.DeviceIndex, TUCamIdCapa.Horizontal);
-        await ReadAndSaveCapabilityAsync(set, camera.DeviceIndex, TUCamIdCapa.Vertical);
-        await ReadAndSaveCapabilityAsync(set, camera.DeviceIndex, TUCamIdCapa.EnableGamma);
-        await ReadAndSaveCapabilityAsync(set, camera.DeviceIndex, TUCamIdCapa.Shutter);
+        await ReadAndSaveCapabilityAsync(tucamService, set, runtimeIndex, TUCamIdCapa.BitOfDepth);
+        await ReadAndSaveCapabilityAsync(tucamService, set, runtimeIndex, TUCamIdCapa.Resolution);
+        await ReadAndSaveCapabilityAsync(tucamService, set, runtimeIndex, TUCamIdCapa.AutoExposure);
+        await ReadAndSaveCapabilityAsync(tucamService, set, runtimeIndex, TUCamIdCapa.Horizontal);
+        await ReadAndSaveCapabilityAsync(tucamService, set, runtimeIndex, TUCamIdCapa.Vertical);
+        await ReadAndSaveCapabilityAsync(tucamService, set, runtimeIndex, TUCamIdCapa.EnableGamma);
+        await ReadAndSaveCapabilityAsync(tucamService, set, runtimeIndex, TUCamIdCapa.Shutter);
 
         await _parameterSetRepository.InsertAsync(set);
         Logger.LogInformation(
@@ -190,6 +199,7 @@ public class CameraParameterSetAppService : AuroraStruct3DAppService, ICameraPar
     /// 读取属性值并保存到参数集
     /// </summary>
     private async Task ReadAndSavePropertyAsync(
+        ITucamCameraService tucamService,
         CameraParameterSet set,
         int deviceIndex,
         TUCamIdProp propId
@@ -197,7 +207,7 @@ public class CameraParameterSetAppService : AuroraStruct3DAppService, ICameraPar
     {
         try
         {
-            double value = await _tucamService.GetPropertyValueAsync(deviceIndex, propId);
+            double value = await tucamService.GetPropertyValueAsync(deviceIndex, propId);
             set.SetParameter(
                 propId.ToString(),
                 CameraParameterType.Property,
@@ -214,6 +224,7 @@ public class CameraParameterSetAppService : AuroraStruct3DAppService, ICameraPar
     /// 读取能力值并保存到参数集
     /// </summary>
     private async Task ReadAndSaveCapabilityAsync(
+        ITucamCameraService tucamService,
         CameraParameterSet set,
         int deviceIndex,
         TUCamIdCapa capaId
@@ -221,7 +232,7 @@ public class CameraParameterSetAppService : AuroraStruct3DAppService, ICameraPar
     {
         try
         {
-            int value = await _tucamService.GetCapabilityValueAsync(deviceIndex, capaId);
+            int value = await tucamService.GetCapabilityValueAsync(deviceIndex, capaId);
             set.SetParameter(
                 capaId.ToString(),
                 CameraParameterType.Capability,

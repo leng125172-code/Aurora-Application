@@ -64,6 +64,8 @@ export default {
         operationLogs: '操作记录',
         serialPortManage: '485 串口管理',
         motorDeviceManage: '485 电机管理',
+        plcManage: 'PLC 通讯管理',
+        plcControl: 'PLC 点位控制',
         productModelManage: '三维数模管理',
         productModelLogs: '三维数模操作记录',
         aiModelManage: 'AI 模型管理',

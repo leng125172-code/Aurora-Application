@@ -1,8 +1,12 @@
+using System.Text.Json;
 using AuroraStruct3D.OpenCV.File.Images;
+using AuroraStruct3D.OpenCV.PointCloudFit;
 using AuroraStruct3D.OpenCV.PointCloudOps;
 using AuroraStruct3D.OpenCV.RoiOps;
 using AuroraStruct3D.OpenCV.VisionParameters;
+using AuroraStruct3D.OpenCV.Workflow;
 using AuroraStruct3D.Workflow;
+using OpenCvSharp;
 using Xunit;
 
 namespace AuroraStruct3D.Application.Tests.Workflow;
@@ -56,6 +60,125 @@ public class HeightDiffWorkflowOperatorsTests
     }
 
     [Fact]
+    public void AnnotateHeightDiffResult_Should_Render_Status_And_Measurements()
+    {
+        using Mat input = Mat.Zeros(160, 320, MatType.CV_8UC3);
+        using WorkflowContext context = new();
+        context.Set("input_mat", input);
+        context.Set("height_a", 12.345);
+        context.Set("height_b", 10.125);
+        context.Set("signed_diff", 2.22);
+        context.Set("is_ok", false);
+        context.Set(
+            "roi_metadata_a",
+            """{"rois":[{"name":"b","index":0}]}"""
+        );
+        context.Set(
+            "roi_metadata_b",
+            """{"rois":[{"name":"a","index":0}]}"""
+        );
+
+        using var annotate = new annotate_height_diff_result();
+        annotate.Execute(context);
+
+        Mat output = Assert.IsType<Mat>(context.Get<Mat>("output_mat"));
+        Assert.Equal(4, output.Channels());
+        using Mat gray = new();
+        Cv2.CvtColor(output, gray, ColorConversionCodes.BGRA2GRAY);
+        Assert.True(Cv2.CountNonZero(gray) > 0);
+    }
+
+    [Fact]
+    public void AnnotateHeightDiffResult_Should_Report_Invalid_Metadata_Input()
+    {
+        using Mat input = Mat.Zeros(160, 320, MatType.CV_8UC3);
+        using WorkflowContext context = new();
+        context.Set("input_mat", input);
+        context.Set("roi_metadata_a", "{invalid");
+        context.Set("height_a", 1d);
+        context.Set("height_b", 0d);
+        context.Set("signed_diff", 1d);
+        context.Set("is_ok", true);
+
+        using var annotate = new annotate_height_diff_result();
+        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(
+            () => annotate.Execute(context)
+        );
+
+        Assert.Contains("roi_metadata_a", exception.Message);
+        Assert.Contains("JSON 解析失败", exception.Message);
+    }
+
+    [Fact]
+    public void PlaneHeightDiff_Should_Prefer_Metadata_Names_And_Fallback_To_Config()
+    {
+        Assert.Equal(4, plane_height_diff.InputVisionParameters!.Count);
+        Assert.Contains(
+            plane_height_diff.ConfigParameters!,
+            parameter => parameter.Name == "refRoiMetadata" && parameter.Required == false
+        );
+        Assert.Contains(
+            plane_height_diff.ConfigParameters!,
+            parameter => parameter.Name == "targetRoiMetadata" && parameter.Required == false
+        );
+
+        using Mat refPlane = CreatePlane(0);
+        using Mat targetPlane = CreatePlane(-2);
+        PointCloudData refCloud = CreateCloud(0);
+        PointCloudData targetCloud = CreateCloud(2);
+
+        using WorkflowContext metadataContext = CreatePlaneHeightContext(
+            refPlane,
+            targetPlane,
+            refCloud,
+            targetCloud
+        );
+
+        using var withMetadata = new plane_height_diff(
+            "配置基准",
+            "配置目标",
+            -5,
+            5,
+            """{"rois":[{"name":"基准 区域","index":0}]}""",
+            """{"rois":[{"name":"Target-b","index":0}]}"""
+        );
+        withMetadata.Execute(metadataContext);
+
+        using JsonDocument metadataResult = JsonDocument.Parse(
+            Assert.IsType<string>(metadataContext.Get<string>("result_json"))
+        );
+        Assert.Equal(
+            "基准 区域",
+            metadataResult.RootElement.GetProperty("refRegion").GetProperty("name").GetString()
+        );
+        Assert.Equal(
+            "Target-b",
+            metadataResult.RootElement.GetProperty("targetRegion").GetProperty("name").GetString()
+        );
+
+        using WorkflowContext fallbackContext = CreatePlaneHeightContext(
+            refPlane,
+            targetPlane,
+            refCloud,
+            targetCloud
+        );
+        using var withoutMetadata = new plane_height_diff("配置基准", "配置目标", -5, 5);
+        withoutMetadata.Execute(fallbackContext);
+
+        using JsonDocument fallbackResult = JsonDocument.Parse(
+            Assert.IsType<string>(fallbackContext.Get<string>("result_json"))
+        );
+        Assert.Equal(
+            "配置基准",
+            fallbackResult.RootElement.GetProperty("refRegion").GetProperty("name").GetString()
+        );
+        Assert.Equal(
+            "配置目标",
+            fallbackResult.RootElement.GetProperty("targetRegion").GetProperty("name").GetString()
+        );
+    }
+
+    [Fact]
     public void SaveImageToBlob_Should_Expose_Image_Input_And_Download_Outputs()
     {
         List<IVisionParameter>? inputs = save_image_to_blob.InputVisionParameters;
@@ -70,5 +193,42 @@ public class HeightDiffWorkflowOperatorsTests
             output => Assert.Equal("blob_name", output.ParameterName),
             output => Assert.Equal("download_url", output.ParameterName)
         );
+    }
+
+    private static Mat CreatePlane(double d)
+    {
+        Mat plane = new(4, 1, MatType.CV_64FC1);
+        plane.Set(0, 0, 0d);
+        plane.Set(1, 0, 0d);
+        plane.Set(2, 0, 1d);
+        plane.Set(3, 0, d);
+        return plane;
+    }
+
+    private static PointCloudData CreateCloud(float z)
+    {
+        Mat points = new(2, 3, MatType.CV_32FC1);
+        points.Set(0, 0, 0f);
+        points.Set(0, 1, 0f);
+        points.Set(0, 2, z);
+        points.Set(1, 0, 1f);
+        points.Set(1, 1, 1f);
+        points.Set(1, 2, z);
+        return new PointCloudData { Value = points };
+    }
+
+    private static WorkflowContext CreatePlaneHeightContext(
+        Mat refPlane,
+        Mat targetPlane,
+        PointCloudData refCloud,
+        PointCloudData targetCloud
+    )
+    {
+        WorkflowContext context = new();
+        context.Set("ref_plane_params", refPlane);
+        context.Set("target_plane_params", targetPlane);
+        context.Set("ref_cloud", refCloud);
+        context.Set("target_cloud", targetCloud);
+        return context;
     }
 }

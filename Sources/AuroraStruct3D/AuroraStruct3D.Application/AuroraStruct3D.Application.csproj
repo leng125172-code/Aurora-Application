@@ -12,7 +12,8 @@
         <ProjectReference Include="..\AuroraStruct3D.DeviceStateManagement\AuroraStruct3D.DeviceStateManagement.csproj" />
         <ProjectReference Include="..\AuroraStruct3D.Projectors\AuroraStruct3D.Projectors.csproj" />
         <ProjectReference Include="..\AuroraStruct3D.RS485\AuroraStruct3D.RS485.csproj" />
-        <ProjectReference Include="..\AuroraStruct3D.Tucam\AuroraStruct3D.Tucam.csproj" />
+        <ProjectReference Include="..\AuroraStruct3D.Cameras\AuroraStruct3D.Cameras.csproj" />
+        <ProjectReference Include="..\AuroraStruct3D.Plc\AuroraStruct3D.Plc.csproj" />
         <ProjectReference Include="..\AuroraStruct3D.OpenCV\AuroraStruct3D.OpenCV.csproj" />
     </ItemGroup>
 

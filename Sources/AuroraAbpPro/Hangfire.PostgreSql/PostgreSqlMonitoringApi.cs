@@ -316,7 +316,11 @@ namespace Hangfire.PostgreSql
                         CreatedAt = x.CreatedAt,
                         Reason = x.Reason,
                         Data = new SafeDictionary<string, string>(
-                            SerializationHelper.Deserialize<Dictionary<string, string>>(x.Data),
+                            string.IsNullOrEmpty(x.Data)
+                                ? new Dictionary<string, string>()
+                                : SerializationHelper.Deserialize<Dictionary<string, string>>(
+                                    x.Data
+                                ),
                             StringComparer.OrdinalIgnoreCase
                         ),
                     })

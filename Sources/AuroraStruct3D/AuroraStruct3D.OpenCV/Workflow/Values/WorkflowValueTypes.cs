@@ -9,17 +9,38 @@ public static class WorkflowValueTypes
     /// <summary>字符串。</summary>
     public const string String = "string";
 
+    /// <summary>OperatorFile Blob 键；文件子类型由键的扩展名确定。</summary>
+    public const string Blob = "blob";
+
     /// <summary>32 位整数。</summary>
     public const string Int = "int";
 
     /// <summary>64 位整数。</summary>
     public const string Long = "long";
 
-    /// <summary>双精度浮点（含 float 归一到此）。</summary>
+    /// <summary>双精度浮点。</summary>
     public const string Double = "double";
+
+    /// <summary>单精度浮点。</summary>
+    public const string Float = "float";
+
+    /// <summary>高精度十进制数。</summary>
+    public const string Decimal = "decimal";
 
     /// <summary>布尔。</summary>
     public const string Bool = "bool";
+
+    /// <summary>JSON 对象。</summary>
+    public const string Object = "object";
+
+    /// <summary>JSON 数组。</summary>
+    public const string Array = "array";
+
+    /// <summary>日期时间，值使用 ISO 8601 字符串。</summary>
+    public const string DateTime = "datetime";
+
+    /// <summary>GUID，值使用标准字符串。</summary>
+    public const string Guid = "guid";
 
     /// <summary>OpenCvSharp 图像矩阵（原始二进制）。</summary>
     public const string Mat = "Mat";
@@ -29,5 +50,17 @@ public static class WorkflowValueTypes
 
     /// <summary>判断是否为标量类型（非 Mat / 点云）。</summary>
     public static bool IsScalar(string valueType) =>
-        valueType is String or Int or Long or Double or Bool;
+        valueType
+            is String
+                or Blob
+                or Int
+                or Long
+                or Float
+                or Double
+                or Decimal
+                or Bool
+                or Object
+                or Array
+                or DateTime
+                or Guid;
 }

@@ -197,6 +197,35 @@ public static class CalibImageUtils
         return mat;
     }
 
+    /// <summary>
+    /// 按明确形状反序列化矩阵。投影矩阵包含 12 个元素，不能使用平方根推断，
+    /// 否则会被错误还原为 4×3；OpenCV 的 P1/P2 固定为 3×4。
+    /// </summary>
+    public static Mat DeserializeMatrix(string json, int rows, int cols)
+    {
+        if (rows <= 0 || cols <= 0)
+            throw new ArgumentOutOfRangeException(nameof(rows));
+
+        double[]? data = JsonSerializer.Deserialize<double[]>(json);
+        if (data is null || data.Length != rows * cols)
+        {
+            throw new InvalidOperationException(
+                $"矩阵数据长度无效：期望 {rows * cols}，实际 {data?.Length ?? 0}"
+            );
+        }
+
+        Mat mat = new(rows, cols, MatType.CV_64F);
+        for (int row = 0; row < rows; row++)
+        {
+            for (int col = 0; col < cols; col++)
+            {
+                mat.Set(row, col, data[row * cols + col]);
+            }
+        }
+
+        return mat;
+    }
+
     public static Mat DeserializeVector(string json)
     {
         if (string.IsNullOrWhiteSpace(json))

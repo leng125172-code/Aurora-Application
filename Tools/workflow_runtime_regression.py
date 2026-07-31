@@ -2,7 +2,7 @@
 """Workflow runtime regression test script.
 
 This script validates the task and execution endpoints documented in
-Documents/工作流任务列表接口清单.md against a target Aurora service.
+Documents/03-工作流与算子/工作流任务列表接口清单.md against a target Aurora service.
 
 Example:
   python Tools/workflow_runtime_regression.py \

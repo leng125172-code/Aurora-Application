@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using AuroraStruct3D.OpenCV.File.PointCloud;
 using AuroraStruct3D.OpenCV.Registry;
@@ -6,6 +8,7 @@ using AuroraStruct3D.OpenCV.Workflow;
 using AuroraStruct3D.OpenCV.Workflow.Compilation;
 using AuroraStruct3D.OpenCV.Workflow.Compilation.Model;
 using AuroraStruct3D.OpenCV.Workflow.Values;
+using AuroraStruct3D.OpenCV.Workflow.Scripting;
 using AuroraStruct3D.OperatorFile;
 using AuroraStruct3D.ProductModels;
 using AuroraStruct3D.Variables;
@@ -16,6 +19,7 @@ using Volo.Abp;
 using Volo.Abp.BlobStoring;
 using Volo.Abp.Domain.Repositories;
 using RuntimeWorkflow = AuroraStruct3D.OpenCV.Workflow.WorkflowDefinition;
+using AuroraStruct3D.Workflow.Runtime;
 
 namespace AuroraStruct3D.Workflow;
 
@@ -31,6 +35,7 @@ public class WorkflowExecutionAppService : AuroraStruct3DAppService, IWorkflowEx
     // 运行时模型用别名 RuntimeWorkflow 区分。
     private readonly IRepository<WorkflowDefinition, Guid> _repository;
     private readonly IOperatorRegistry _registry;
+    private readonly IWorkflowProgramCache _programCache;
     private readonly IWorkflowVariableBridge _bridge;
     private readonly IOnlineVariablePoolAppService _onlineVariablePool;
     private readonly IBlobContainer<OperatorFileBlobContainer> _operatorFileBlobContainer;
@@ -40,6 +45,7 @@ public class WorkflowExecutionAppService : AuroraStruct3DAppService, IWorkflowEx
     public WorkflowExecutionAppService(
         IRepository<WorkflowDefinition, Guid> repository,
         IOperatorRegistry registry,
+        IWorkflowProgramCache programCache,
         IWorkflowVariableBridge bridge,
         IOnlineVariablePoolAppService onlineVariablePool,
         IBlobContainer<OperatorFileBlobContainer> operatorFileBlobContainer,
@@ -49,6 +55,7 @@ public class WorkflowExecutionAppService : AuroraStruct3DAppService, IWorkflowEx
     {
         _repository = repository;
         _registry = registry;
+        _programCache = programCache;
         _bridge = bridge;
         _onlineVariablePool = onlineVariablePool;
         _operatorFileBlobContainer = operatorFileBlobContainer;
@@ -64,14 +71,27 @@ public class WorkflowExecutionAppService : AuroraStruct3DAppService, IWorkflowEx
         if (entity.ProjectId != input.ProjectId)
             throw new UserFriendlyException("工作流不存在或不属于该项目。");
 
-        // ② 解析（一次）→ 编译为可执行语句。
+        // ② 从脚本程序缓存加载。旧数据只在首次迁移时解析一次 GraphData。
         RuntimeWorkflow compiled;
         GraphDataModel graph;
         try
         {
-            string name;
-            (name, graph) = WorkflowGraphCompiler.ParseContent(entity.GraphData);
-            compiled = await new WorkflowGraphCompiler(_registry).CompileAsync(graph, name);
+            string sourceCode;
+            string programHash;
+            if (string.IsNullOrWhiteSpace(entity.SourceCode)
+                || string.IsNullOrWhiteSpace(entity.ProgramHash))
+                throw new UserFriendlyException(
+                    "工作流尚未迁移为脚本程序，正式执行已禁止从 GraphData 临时编译；请先执行工作流迁移并重新保存。"
+                );
+            sourceCode = entity.SourceCode;
+            programHash = entity.ProgramHash;
+
+            WorkflowCompiledProgram program = await _programCache.GetOrAddAsync(
+                programHash,
+                sourceCode
+            );
+            graph = program.Graph;
+            compiled = program.Workflow;
         }
         catch (WorkflowCompilationException ex)
         {
@@ -202,6 +222,9 @@ public class WorkflowExecutionAppService : AuroraStruct3DAppService, IWorkflowEx
             context.Dispose();
         }
     }
+
+    private static string ComputeProgramHash(string source) =>
+        WorkflowProgramHash.ComputeProgramHash(source);
 
     /// <summary>
     /// 从在线变量池读取工作流初始变量并反序列化为执行上下文字典。

@@ -94,6 +94,21 @@ public sealed class OperatorCallStatement : IWorkflowStatement
             .AsReadOnly();
         InputBindings = inputBindings ?? new Dictionary<string, InputBinding>().AsReadOnly();
         OutputBindings = outputBindings ?? new Dictionary<string, OutputBinding>().AsReadOnly();
+
+        string[] duplicateOutputVariables = OutputBindings
+            .Values.GroupBy(x => x.VariableName, StringComparer.Ordinal)
+            .Where(group => group.Count() > 1)
+            .Select(group => group.Key)
+            .ToArray();
+        if (duplicateOutputVariables.Length > 0)
+        {
+            throw new ArgumentException(
+                $"算子 {operatorType.Name} 的多个输出端口绑定到同一变量："
+                    + string.Join(", ", duplicateOutputVariables)
+                    + "。每个输出端口必须使用独立变量。",
+                nameof(outputBindings)
+            );
+        }
     }
 
     /// <summary>
@@ -105,11 +120,11 @@ public sealed class OperatorCallStatement : IWorkflowStatement
         Console.WriteLine($"[OperatorCall] ========== 开始调用算子: {operatorName} ==========");
 
         // 记录执行前已存在的端口变量，避免清理时误删上游创建的工作流变量
-        HashSet<string> existingPortVars = new();
+        Dictionary<string, object?> existingPortValues = new(StringComparer.Ordinal);
         foreach (string portName in InputBindings.Keys)
         {
             if (context.Contains(portName))
-                existingPortVars.Add(portName);
+                existingPortValues[portName] = context.Get(portName);
         }
 
         // ① 将输入绑定解析后写入上下文的端口变量（端口变量名 = ParameterName）
@@ -203,10 +218,11 @@ public sealed class OperatorCallStatement : IWorkflowStatement
                     );
                     continue;
                 }
-                if (existingPortVars.Contains(portName))
+                if (existingPortValues.TryGetValue(portName, out object? previousValue))
                 {
+                    context.Set(portName, previousValue);
                     Console.WriteLine(
-                        $"[OperatorCall] [{operatorName}]   跳过清理 '{portName}' (执行前已存在)"
+                        $"[OperatorCall] [{operatorName}]   恢复输入端口同名变量 '{portName}'"
                     );
                     continue;
                 }

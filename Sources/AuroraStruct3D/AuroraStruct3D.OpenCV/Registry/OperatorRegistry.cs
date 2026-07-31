@@ -94,7 +94,15 @@ internal sealed class OperatorRegistry : IOperatorRegistry
             _logger.LogWarning(ex, "读取算子 {OperatorId} 端口描述缓存失败", operatorId);
         }
 
-        return null;
+        Type? operatorType = EnsureTypeMap().GetValueOrDefault(operatorId);
+        if (operatorType is null)
+            return null;
+
+        // 参数缓存可能因 Redis 重启、单键淘汰或首次写入失败而缺失。与算子列表一样，
+        // 必须能够从程序集回源，不能让节点面板得到“有节点、无端口”的不完整状态。
+        OperatorParametersDescriptor parameters = BuildParametersDescriptor(operatorType, operatorId);
+        await TryCacheParametersDescriptorAsync(parameters, cancellationToken);
+        return parameters;
     }
 
     /// <summary>
@@ -149,7 +157,14 @@ internal sealed class OperatorRegistry : IOperatorRegistry
                     if (guidAttr is null || !Guid.TryParse(guidAttr.Value, out Guid id))
                         continue;
 
-                    map[id] = type;
+                    if (map.TryGetValue(id, out Type? existing))
+                    {
+                        throw new InvalidOperationException(
+                            $"算子 GUID {id} 同时被 {existing.FullName} 和 {type.FullName} 使用。"
+                        );
+                    }
+
+                    map.Add(id, type);
                 }
             }
 
@@ -179,6 +194,7 @@ internal sealed class OperatorRegistry : IOperatorRegistry
     )
     {
         var operators = new List<OperatorDescriptor>();
+        var registeredTypes = new Dictionary<Guid, Type>();
 
         foreach (Assembly assembly in _assemblies)
         {
@@ -208,6 +224,14 @@ internal sealed class OperatorRegistry : IOperatorRegistry
                 if (descriptor is null)
                     continue;
 
+                if (registeredTypes.TryGetValue(descriptor.Id, out Type? existing))
+                {
+                    throw new InvalidOperationException(
+                        $"算子 GUID {descriptor.Id} 同时被 {existing.FullName} 和 {type.FullName} 使用。"
+                    );
+                }
+
+                registeredTypes.Add(descriptor.Id, type);
                 operators.Add(descriptor);
                 await TryCacheParametersAsync(type, descriptor.Id, cancellationToken);
             }
@@ -283,30 +307,43 @@ internal sealed class OperatorRegistry : IOperatorRegistry
     {
         try
         {
-            IReadOnlyList<ParameterDescriptor> inputs = ReadStaticParameters(
-                operatorType,
-                "InputVisionParameters"
+            await TryCacheParametersDescriptorAsync(
+                BuildParametersDescriptor(operatorType, operatorId),
+                cancellationToken
             );
-            IReadOnlyList<ParameterDescriptor> outputs = ReadStaticParameters(
-                operatorType,
-                "OutputVisionParameters"
-            );
-
-            var paramsDescriptor = new OperatorParametersDescriptor
-            {
-                OperatorId = operatorId,
-                Inputs = inputs,
-                Outputs = outputs,
-                Config = ReadConfigParameters(operatorType),
-            };
-
-            string key = string.Format(ParamsCacheKeyFmt, operatorId);
-            byte[] data = JsonSerializer.SerializeToUtf8Bytes(paramsDescriptor, JsonOptions);
-            await _cache.SetAsync(key, data, NeverExpire, cancellationToken);
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "缓存算子 {TypeName} 端口描述失败", operatorType.FullName);
+        }
+    }
+
+    private static OperatorParametersDescriptor BuildParametersDescriptor(
+        Type operatorType,
+        Guid operatorId
+    ) =>
+        new()
+        {
+            OperatorId = operatorId,
+            Inputs = ReadStaticParameters(operatorType, "InputVisionParameters"),
+            Outputs = ReadStaticParameters(operatorType, "OutputVisionParameters"),
+            Config = ReadConfigParameters(operatorType),
+        };
+
+    private async Task TryCacheParametersDescriptorAsync(
+        OperatorParametersDescriptor parameters,
+        CancellationToken cancellationToken
+    )
+    {
+        try
+        {
+            string key = string.Format(ParamsCacheKeyFmt, parameters.OperatorId);
+            byte[] data = JsonSerializer.SerializeToUtf8Bytes(parameters, JsonOptions);
+            await _cache.SetAsync(key, data, NeverExpire, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "写入算子 {OperatorId} 端口描述缓存失败", parameters.OperatorId);
         }
     }
 
@@ -348,6 +385,7 @@ internal sealed class OperatorRegistry : IOperatorRegistry
                     ParameterTypeName = p.ParameterType.FullName ?? p.ParameterType.Name,
                     DefaultValue = p.DefaultValue,
                     ValueLimit = p.ValueLimit,
+                    JsonSchema = p.JsonSchema,
                     ErrorCheck = p.ErrorCheck,
                     ControlType = p.ControlType,
                     MatType = matType,

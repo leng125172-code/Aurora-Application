@@ -18,7 +18,7 @@ public class plane_area_measure : IOperator
                 ParameterName = "contour_json",
                 DisplayName = "轮廓点",
                 ParameterType = typeof(string),
-                ControlType = PortControlType.Download,
+                ControlType = PortControlType.Input,
             },
         };
 

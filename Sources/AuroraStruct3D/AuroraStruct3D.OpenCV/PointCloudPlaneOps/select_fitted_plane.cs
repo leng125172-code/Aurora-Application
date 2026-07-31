@@ -3,7 +3,7 @@ namespace AuroraStruct3D.OpenCV.PointCloudPlaneOps;
 [Guid("c38e27a6-8d49-4c41-96a0-a53f30c23101")]
 [Category("3D平面处理")]
 [DisplayName("选择拟合平面")]
-[Description("从 A/B/C 三个拟合平面中选择一个，输出统一的平面参数和内点。")]
+[Description("从输入槽位 A/B/C 的三个拟合平面中选择一个，输出统一的平面参数和内点。")]
 public sealed class select_fitted_plane : IOperator
 {
     public static List<IVisionParameter>? InputVisionParameters =>
@@ -37,7 +37,7 @@ public sealed class select_fitted_plane : IOperator
             new ConfigParameter
             {
                 Name = "planeName",
-                DisplayName = "选择平面",
+                DisplayName = "选择输入槽位",
                 ParameterType = typeof(string),
                 DefaultValue = "A",
                 ValueLimit = new[] { "A", "B", "C" },

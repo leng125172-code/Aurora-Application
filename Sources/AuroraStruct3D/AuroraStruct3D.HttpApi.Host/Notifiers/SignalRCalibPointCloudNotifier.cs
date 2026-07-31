@@ -49,4 +49,26 @@ public class SignalRCalibPointCloudNotifier : ICalibPointCloudNotifier, ISinglet
                 totalPointCount
             );
     }
+
+    /// <inheritdoc/>
+    public Task NotifyDepthQualityMapAsync(
+        Guid calibProjectId,
+        byte[] pngBytes,
+        int validPointCount,
+        int totalPointCount,
+        double minimumDepthMm,
+        double maximumDepthMm
+    )
+    {
+        return _hubContext
+            .Clients.Group(BuildProjectGroup(calibProjectId))
+            .ReceiveDepthQualityMapAsync(
+                calibProjectId.ToString(),
+                pngBytes,
+                validPointCount,
+                totalPointCount,
+                minimumDepthMm,
+                maximumDepthMm
+            );
+    }
 }

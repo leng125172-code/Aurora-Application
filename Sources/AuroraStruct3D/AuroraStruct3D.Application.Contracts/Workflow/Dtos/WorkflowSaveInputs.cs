@@ -111,6 +111,9 @@ public class WorkflowNodePropertiesDto
     /// <summary>输入绑定来源：端口名 -> literal/variable。</summary>
     public Dictionary<string, string>? InputBindingSources { get; set; }
 
+    /// <summary>输入绑定显示名称：端口名 -> 显示名称；空白时回退为变量名。</summary>
+    public Dictionary<string, string>? InputBindingDisplayNames { get; set; }
+
     /// <summary>输出绑定：端口名 -> 变量名。</summary>
     public Dictionary<string, string>? OutputBindings { get; set; }
 

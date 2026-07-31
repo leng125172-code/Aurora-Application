@@ -37,8 +37,8 @@ public interface ICameraDeviceAppService : IApplicationService
     /// <summary>
     /// 扫描并同步SDK中的相机设备（自动创建或更新型号/序列号）
     /// </summary>
-    /// <returns>检测到的相机数量</returns>
-    Task<int> ScanCamerasAsync();
+    /// <returns>按驱动分组的发现、绑定、冲突和失败结果</returns>
+    Task<CameraScanResultDto> ScanCamerasAsync();
 
     /// <summary>
     /// 打开指定相机（调用SDK建立连接）

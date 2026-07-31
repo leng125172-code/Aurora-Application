@@ -17,10 +17,7 @@ public sealed class CalibScanFrameBufferService
     }
 
     private readonly ConcurrentDictionary<FrameKey, FrameSlot> _slots = new();
-    private readonly ConcurrentDictionary<
-        FrameKey,
-        ConcurrentBag<WeakReference<SemaphoreSlim>>
-    > _waiters = new();
+    private readonly ConcurrentDictionary<FrameKey, ConcurrentDictionary<SemaphoreSlim, byte>> _waiters = new();
 
     public void PublishFrame(Guid projectId, int cameraRole, byte[] frame)
     {
@@ -34,23 +31,20 @@ public sealed class CalibScanFrameBufferService
         Volatile.Write(ref slot.Frame, frame);
         Interlocked.Increment(ref slot.Version);
 
-        if (_waiters.TryGetValue(key, out var waiters))
+        if (_waiters.TryGetValue(key, out ConcurrentDictionary<SemaphoreSlim, byte>? waiters))
         {
-            foreach (WeakReference<SemaphoreSlim> reference in waiters)
+            foreach (SemaphoreSlim waiter in waiters.Keys)
             {
-                if (reference.TryGetTarget(out SemaphoreSlim? waiter))
+                try
                 {
-                    try
+                    if (waiter.CurrentCount == 0)
                     {
-                        if (waiter.CurrentCount == 0)
-                        {
-                            waiter.Release();
-                        }
+                        waiter.Release();
                     }
-                    catch (ObjectDisposedException)
-                    {
-                        // HTTP 订阅者已断开。
-                    }
+                }
+                catch (ObjectDisposedException)
+                {
+                    waiters.TryRemove(waiter, out _);
                 }
             }
         }
@@ -79,17 +73,20 @@ public sealed class CalibScanFrameBufferService
     {
         FrameKey key = new(projectId, cameraRole);
         SemaphoreSlim waiter = new(0, 1);
-        _waiters
-            .GetOrAdd(
-                key,
-                static _ => new ConcurrentBag<WeakReference<SemaphoreSlim>>()
-            )
-            .Add(new WeakReference<SemaphoreSlim>(waiter));
+        _waiters.GetOrAdd(key, static _ => new ConcurrentDictionary<SemaphoreSlim, byte>())
+            .TryAdd(waiter, 0);
         return waiter;
     }
 
-    public static void UnregisterWaiter(SemaphoreSlim waiter)
+    public void UnregisterWaiter(Guid projectId, int cameraRole, SemaphoreSlim waiter)
     {
+        FrameKey key = new(projectId, cameraRole);
+        if (_waiters.TryGetValue(key, out ConcurrentDictionary<SemaphoreSlim, byte>? waiters))
+        {
+            waiters.TryRemove(waiter, out _);
+            if (waiters.IsEmpty)
+                _waiters.TryRemove(new KeyValuePair<FrameKey, ConcurrentDictionary<SemaphoreSlim, byte>>(key, waiters));
+        }
         waiter.Dispose();
     }
 }

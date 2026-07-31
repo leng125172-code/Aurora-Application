@@ -1,4 +1,3 @@
-using System.Reflection;
 using AuroraStruct3D.Cameras;
 using Xunit;
 
@@ -7,46 +6,43 @@ namespace AuroraStruct3D.Application.Tests.Cameras;
 public class CameraScanMatchingTests
 {
     [Fact]
-    public void Index_Fallback_Should_Be_Disabled_When_Serial_Match_Exists()
+    public void Stable_identity_is_driver_and_hardware_id_not_runtime_index()
     {
-        MethodInfo method = GetCanUseIndexFallbackMethod();
-        CameraDevice indexCamera = new(Guid.NewGuid(), "Camera #0", 0);
-        CameraDevice matchedBySerial = new(Guid.NewGuid(), "Camera #1", 1);
+        var first = new CameraDevice(Guid.NewGuid(), "USB", 0);
+        first.UpdateDriverBinding("tucam", "SERIAL-1", "USB index 0", CameraCapability.Preview);
+        var second = new CameraDevice(Guid.NewGuid(), "GigE", 0);
+        second.UpdateDriverBinding("dahua-gige", "SERIAL-1", "192.168.1.10", CameraCapability.Preview);
 
-        bool canFallback = (bool)method.Invoke(null, [matchedBySerial, indexCamera])!;
-
-        Assert.False(canFallback);
+        Assert.Equal(first.DeviceIndex, second.DeviceIndex);
+        Assert.NotEqual(first.DriverId, second.DriverId);
+        Assert.Equal(first.HardwareId, second.HardwareId);
     }
 
     [Fact]
-    public void Index_Fallback_Should_Be_Disabled_When_Index_Record_Has_Serial()
+    public void Empty_hardware_id_remains_unbound()
     {
-        MethodInfo method = GetCanUseIndexFallbackMethod();
-        CameraDevice indexCamera = new(Guid.NewGuid(), "Camera #0", 0);
-        indexCamera.UpdateDeviceSerialNumber("SN-EXISTING");
+        var camera = new CameraDevice(Guid.NewGuid(), "Legacy", 0);
 
-        bool canFallback = (bool)method.Invoke(null, [null, indexCamera])!;
+        camera.UpdateDriverBinding("tucam", "  ", null, CameraCapability.None);
 
-        Assert.False(canFallback);
+        Assert.Null(camera.HardwareId);
+        Assert.Equal(CameraCapability.None, camera.Capabilities);
     }
 
     [Fact]
-    public void Index_Fallback_Should_Be_Enabled_When_Index_Record_Has_No_Serial()
+    public void Binding_refresh_always_replaces_capability_snapshot()
     {
-        MethodInfo method = GetCanUseIndexFallbackMethod();
-        CameraDevice indexCamera = new(Guid.NewGuid(), "Camera #0", 0);
-        indexCamera.UpdateDeviceSerialNumber(null);
+        var camera = new CameraDevice(Guid.NewGuid(), "Camera", 0);
+        camera.UpdateDriverBinding("tucam", "SERIAL", "USB index 0", CameraCapability.Preview);
 
-        bool canFallback = (bool)method.Invoke(null, [null, indexCamera])!;
+        camera.UpdateDriverBinding(
+            "tucam",
+            "SERIAL",
+            "USB index 1",
+            CameraCapability.Preview | CameraCapability.Snapshot
+        );
 
-        Assert.True(canFallback);
-    }
-
-    private static MethodInfo GetCanUseIndexFallbackMethod()
-    {
-        return typeof(CameraDeviceAppService).GetMethod(
-                "CanUseIndexFallback",
-                BindingFlags.NonPublic | BindingFlags.Static
-            ) ?? throw new InvalidOperationException("CanUseIndexFallback method not found.");
+        Assert.Equal("USB index 1", camera.ConnectionSummary);
+        Assert.True((camera.Capabilities & CameraCapability.Snapshot) != 0);
     }
 }

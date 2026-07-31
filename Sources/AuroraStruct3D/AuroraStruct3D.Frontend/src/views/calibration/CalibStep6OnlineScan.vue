@@ -15,8 +15,6 @@ import {
     stopCalibScan,
     type CalibScanStatusDto,
 } from '@/api/calib-scan'
-import PointCloudViewer from '@/components/PointCloudViewer.vue'
-import { parsePlyHeader, parsePlyData } from '@/utils/ply-parser'
 
 const props = defineProps<{
     project: CalibProjectDto
@@ -29,18 +27,23 @@ const status = ref<CalibScanStatusDto | null>(null)
 const hubConnected = ref(false)
 const reconnecting = ref(false)
 const conflictHint = ref<string | null>(null)
+const suppressProjectorControl = false
 
 // 主/从相机原图 Blob URL（每帧覆盖，旧 URL 在更新前 revoke）
 const mainImageUrl = ref<string | null>(null)
 const secondaryImageUrl = ref<string | null>(null)
 
-// 增量点云实时预览状态
-const pointCloudData = ref<Float32Array | null>(null)
-const pointCloudHasColor = ref(false)
-const incrementalPointCount = ref(0)
-const totalPointCount = ref(0)
+// 二维深度质量拟合图状态
+const depthQualityMapUrl = ref<string | null>(null)
+const validDepthPointCount = ref(0)
+const depthMapPointCount = ref(0)
+const minimumDepthMm = ref(0)
+const maximumDepthMm = ref(0)
+const reconstructionMessage = ref('等待首轮采集')
+const reconstructionError = ref<string | null>(null)
 
 let hubConnection: signalR.HubConnection | null = null
+let statusPollTimer: ReturnType<typeof setInterval> | null = null
 const previewControllers = new Map<number, AbortController>()
 
 const stateText = computed(() => {
@@ -210,6 +213,7 @@ async function startHub(): Promise<void> {
     hubConnection.onreconnecting(() => {
         reconnecting.value = true
         hubConnected.value = false
+        reconcileStatusPolling()
     })
 
     hubConnection.onreconnected(async () => {
@@ -220,12 +224,14 @@ async function startHub(): Promise<void> {
         } catch {
             // 忽略分组恢复失败
         }
-        void refreshStatus(false)
+        await refreshStatus(false)
+        reconcileStatusPolling()
     })
 
     hubConnection.onclose(() => {
         reconnecting.value = false
         hubConnected.value = false
+        reconcileStatusPolling()
     })
 
     hubConnection.on('ReceiveCalibScanStateAsync', (next: CalibScanStatusDto) => {
@@ -233,6 +239,7 @@ async function startHub(): Promise<void> {
             return
         }
         status.value = next
+        reconcileStatusPolling()
     })
 
     hubConnection.on(
@@ -254,37 +261,47 @@ async function startHub(): Promise<void> {
     )
 
     hubConnection.on(
-        'ReceiveIncrementalPointCloudAsync',
+        'ReceiveDepthQualityMapAsync',
         (
             projectId: string,
-            pointCloudBytes: Uint8Array,
-            pointCount: number,
-            totalPoint: number
+            pngBytes: Uint8Array,
+            validPointCount: number,
+            totalPointCount: number,
+            minDepthMm: number,
+            maxDepthMm: number
         ) => {
-            if (projectId !== props.project.id || !pointCloudBytes || pointCloudBytes.length === 0) {
+            if (projectId !== props.project.id || !pngBytes || pngBytes.length === 0) {
                 return
             }
 
-            try {
-                const header = parsePlyHeader(pointCloudBytes)
-                const data = parsePlyData(pointCloudBytes, header)
-
-                if (pointCloudData.value) {
-                    const newLength = pointCloudData.value.length + data.length
-                    const merged = new Float32Array(newLength)
-                    merged.set(pointCloudData.value)
-                    merged.set(data, pointCloudData.value.length)
-                    pointCloudData.value = merged
-                } else {
-                    pointCloudData.value = data
-                }
-
-                pointCloudHasColor.value = header.hasColor
-                incrementalPointCount.value = pointCount
-                totalPointCount.value = totalPoint
-            } catch (e) {
-                console.error('解析增量点云失败:', e)
+            if (depthQualityMapUrl.value) {
+                URL.revokeObjectURL(depthQualityMapUrl.value)
             }
+            depthQualityMapUrl.value = URL.createObjectURL(
+                new Blob([Uint8Array.from(pngBytes).buffer], { type: 'image/png' })
+            )
+            validDepthPointCount.value = validPointCount
+            depthMapPointCount.value = totalPointCount
+            minimumDepthMm.value = minDepthMm
+            maximumDepthMm.value = maxDepthMm
+            reconstructionMessage.value =
+                `有效深度 ${validPointCount.toLocaleString()} / ${totalPointCount.toLocaleString()}`
+            reconstructionError.value = null
+        }
+    )
+
+    hubConnection.on(
+        'ReceivePointCloudStatusAsync',
+        (
+            next: {
+                calibProjectId: string
+                progressMessage?: string | null
+                errorMessage?: string | null
+            }
+        ) => {
+            if (!next || next.calibProjectId !== props.project.id) return
+            if (next.progressMessage) reconstructionMessage.value = next.progressMessage
+            reconstructionError.value = next.errorMessage ?? null
         }
     )
 
@@ -320,6 +337,7 @@ async function refreshStatus(showLoading = true): Promise<void> {
     try {
         const res = await getCalibScanStatus(props.project.id)
         status.value = res
+        reconcileStatusPolling()
     } catch (e) {
         showErrorToastOnce(e)
     } finally {
@@ -329,14 +347,55 @@ async function refreshStatus(showLoading = true): Promise<void> {
     }
 }
 
+function startStatusPolling(): void {
+    if (statusPollTimer) return
+    statusPollTimer = setInterval(() => {
+        // 仅在扫描处于活动状态且 SignalR 不可用时，以 HTTP 作为状态兜底。
+        void refreshStatus(false)
+    }, 1000)
+}
+
+function stopStatusPolling(): void {
+    if (!statusPollTimer) return
+    clearInterval(statusPollTimer)
+    statusPollTimer = null
+}
+
+function isActiveScanState(): boolean {
+    return (
+        status.value?.state === CalibScanRunState.Starting ||
+        status.value?.state === CalibScanRunState.Running ||
+        status.value?.state === CalibScanRunState.Stopping
+    )
+}
+
+function reconcileStatusPolling(): void {
+    if (isActiveScanState() && !hubConnected.value) {
+        startStatusPolling()
+        return
+    }
+    stopStatusPolling()
+}
+
 async function onStart(): Promise<void> {
     loading.value = true
     conflictHint.value = null
     try {
         const res = await startCalibScan({
             calibProjectId: props.project.id,
+            suppressProjectorControl: false,
         })
         status.value = res
+        if (depthQualityMapUrl.value) URL.revokeObjectURL(depthQualityMapUrl.value)
+        depthQualityMapUrl.value = null
+        validDepthPointCount.value = 0
+        depthMapPointCount.value = 0
+        minimumDepthMm.value = 0
+        maximumDepthMm.value = 0
+        reconstructionMessage.value = '正在串行采集首轮条纹'
+        reconstructionError.value = null
+        reconcileStatusPolling()
+        void refreshStatus(false)
         toastSuccess('已启动在线扫描会话')
     } catch (e) {
         const code = (e as { response?: { data?: { error?: { code?: string } } } })?.response?.data?.error?.code
@@ -357,6 +416,7 @@ async function onStop(): Promise<void> {
     try {
         const res = await stopCalibScan({ calibProjectId: props.project.id })
         status.value = res
+        stopStatusPolling()
         toastSuccess('已停止在线扫描会话')
     } catch (e) {
         showErrorToastOnce(e)
@@ -368,16 +428,19 @@ async function onStop(): Promise<void> {
 onMounted(async () => {
     await startHub()
     await refreshStatus(true)
+    reconcileStatusPolling()
     void startPreviewStream(CalibScanCameraRole.Main)
     void startPreviewStream(CalibScanCameraRole.Secondary)
 })
 
 onUnmounted(async () => {
+    stopStatusPolling()
     stopPreviewStreams()
     await stopHub()
     // 组件卸载时释放所有 Blob URL，避免内存泄漏
     revokeUrl('main')
     revokeUrl('secondary')
+    if (depthQualityMapUrl.value) URL.revokeObjectURL(depthQualityMapUrl.value)
 })
 </script>
 
@@ -427,7 +490,12 @@ onUnmounted(async () => {
             </p>
             <p v-if="conflictHint" class="mt-2 text-sm text-amber-300">会话冲突：{{ conflictHint }}</p>
             <p class="mt-2 text-sm text-muted-foreground">
-                投影仪按 Step3 周期参数循环播放条纹图，主/从相机软件触发同步抓拍；检测到十字图即本轮结束，自动进入下一轮采集。
+                <template v-if="suppressProjectorControl">
+                    当前仅打开投影仪灯光，不操作显示模式或发送 T/N 指令；主、从相机进行普通双目采集。
+                </template>
+                <template v-else>
+                    主、从相机按条纹逐帧串行触发；每轮完成后采集白光纹理帧并生成准实时彩色点云。
+                </template>
             </p>
         </div>
 
@@ -452,11 +520,11 @@ onUnmounted(async () => {
                     <div class="text-lg font-semibold">{{ metrics?.frameIndex ?? 0 }}</div>
                 </div>
                 <div class="rounded-lg border border-border/50 p-3">
-                    <div class="text-xs text-muted-foreground">十字图检测</div>
+                    <div class="text-xs text-muted-foreground">重建状态</div>
                     <div class="text-lg font-semibold">
                         <Tag
-                            :severity="metrics?.isCrosshairDetected ? 'success' : 'secondary'"
-                            :value="metrics?.isCrosshairDetected ? '已检测' : '未检测'"
+                            :severity="depthQualityMapUrl ? 'success' : 'secondary'"
+                            :value="depthQualityMapUrl ? '已有深度图' : '等待中'"
                         />
                     </div>
                 </div>
@@ -470,8 +538,8 @@ onUnmounted(async () => {
         <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div class="rounded-xl border border-border/60 bg-card/40 p-4">
                 <div class="mb-3 flex items-center justify-between">
-                    <h4 class="text-sm font-semibold">主相机原图</h4>
-                    <Tag severity="info" value="Main" />
+                    <h4 class="text-sm font-semibold">主相机最近抓拍</h4>
+                    <Tag severity="info" value="串行快照 / 纹理源" />
                 </div>
                 <div class="aspect-video w-full overflow-hidden rounded bg-black/70">
                     <img
@@ -488,8 +556,8 @@ onUnmounted(async () => {
 
             <div class="rounded-xl border border-border/60 bg-card/40 p-4">
                 <div class="mb-3 flex items-center justify-between">
-                    <h4 class="text-sm font-semibold">从相机原图</h4>
-                    <Tag severity="info" value="Secondary" />
+                    <h4 class="text-sm font-semibold">从相机最近抓拍</h4>
+                    <Tag severity="info" value="串行快照" />
                 </div>
                 <div class="aspect-video w-full overflow-hidden rounded bg-black/70">
                     <img
@@ -507,26 +575,43 @@ onUnmounted(async () => {
 
         <div class="rounded-xl border border-border/60 bg-card/40 p-4">
             <div class="mb-3 flex items-center justify-between">
-                <h4 class="text-sm font-semibold">点云实时预览</h4>
+                <h4 class="text-sm font-semibold">二维深度质量拟合图</h4>
                 <div class="flex items-center gap-2">
                     <Tag
-                        :severity="pointCloudData ? 'success' : 'secondary'"
-                        :value="pointCloudData ? '已生成' : '等待中'"
+                        :severity="depthQualityMapUrl ? 'success' : 'secondary'"
+                        :value="depthQualityMapUrl ? '已更新' : '等待中'"
                     />
                     <span class="text-xs text-muted-foreground">
-                        新增 {{ incrementalPointCount }} 点 / 累计 {{ totalPointCount.toLocaleString() }} 点
+                        有效 {{ validDepthPointCount.toLocaleString() }} /
+                        {{ depthMapPointCount.toLocaleString() }} 点
                     </span>
                 </div>
             </div>
+            <p class="mb-3 text-xs text-muted-foreground">{{ reconstructionMessage }}</p>
+            <p v-if="reconstructionError" class="mb-3 text-xs text-red-400">
+                {{ reconstructionError }}
+            </p>
+            <div class="mb-3 flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
+                <span class="flex items-center gap-1.5">
+                    <i class="h-2.5 w-2.5 rounded-full bg-red-500"></i>无效区域
+                </span>
+                <span class="flex items-center gap-1.5">
+                    <i class="h-2.5 w-16 rounded-full bg-gradient-to-r from-yellow-400 to-green-500"></i>
+                    有效区域：低分 → 高分
+                </span>
+                <span v-if="depthQualityMapUrl">
+                    深度范围 {{ minimumDepthMm.toFixed(1) }}–{{ maximumDepthMm.toFixed(1) }} mm
+                </span>
+            </div>
             <div class="h-80 w-full overflow-hidden rounded bg-black/70">
-                <PointCloudViewer
-                    v-if="pointCloudData"
-                    :point-data="pointCloudData"
-                    :has-color="pointCloudHasColor"
-                    class="h-full w-full"
+                <img
+                    v-if="depthQualityMapUrl"
+                    :src="depthQualityMapUrl"
+                    alt="二维深度质量拟合图"
+                    class="h-full w-full object-contain [image-rendering:pixelated]"
                 />
                 <div v-else class="flex h-full items-center justify-center text-xs text-muted-foreground">
-                    暂无点云数据，启动扫描后将实时生成点云预览
+                    暂无深度数据，完成一轮扫描后生成二维质量拟合图
                 </div>
             </div>
         </div>

@@ -1,7 +1,7 @@
 """
 AppUpdateClient.py
-功能：在 Windows 开发机上执行一键发布并部署到 RK3588。
-      流程：dotnet publish → 打 tar.gz 压缩包 → 分块并行上传 → 服务端合并/校验/解压。
+功能：在 Windows 开发机上将发布文件部署到 RK3588。
+      默认直接推送已有 Publish 目录；可选重新发布后再推送。
 
 特性：
     - 分块上传（默认每块 8 MB），多线程并行发送
@@ -10,9 +10,15 @@ AppUpdateClient.py
     - 四阶段进度条：发布 / 压缩 / 上传 / 解压
 
 用法：
-    python AppUpdateClient.py [--host 10.127.135.143] [--port 9211]
+    python AppUpdateClient.py [-dr | -rr]
+                              [--host 10.127.135.143] [--port 9211]
                               [--projects AuroraStruct3D.HttpApi.Host,AuroraStruct3D.DbMigrator]
-                              [--sync-only] [--workers 4] [--chunk-mb 8]
+                              [--workers 4] [--chunk-mb 8]
+
+发布模式：
+    无参数  不重新发布，直接打包并推送已有 Publish 目录
+    -dr     以 Debug 配置重新发布，然后推送
+    -rr     以 Release 配置重新发布，然后推送
 
 依赖：
     pip install tqdm
@@ -168,7 +174,9 @@ def scan_for_servers(timeout: float = 2.0) -> list[dict]:
     return results
 
 
-def publish_project(project_name: str, index: int, total: int) -> None:
+def publish_project(
+    project_name: str, index: int, total: int, configuration: str
+) -> None:
     """对指定项目执行 dotnet publish，实时输出编译日志，并按类别统计错误/警告。"""
     csproj = (
         WORKSPACE_ROOT
@@ -189,7 +197,7 @@ def publish_project(project_name: str, index: int, total: int) -> None:
         "publish",
         str(csproj),
         "-c",
-        "Debug",
+        configuration,
         "-r",
         RUNTIME,
         "--self-contained",
@@ -569,10 +577,25 @@ def main() -> None:
         default=",".join(DEFAULT_PROJECTS),
         help="要发布的项目名，逗号分隔",
     )
-    parser.add_argument(
+    publish_mode = parser.add_mutually_exclusive_group()
+    publish_mode.add_argument(
+        "-dr",
+        dest="configuration",
+        action="store_const",
+        const="Debug",
+        help="以 Debug 配置重新发布，然后推送",
+    )
+    publish_mode.add_argument(
+        "-rr",
+        dest="configuration",
+        action="store_const",
+        const="Release",
+        help="以 Release 配置重新发布，然后推送",
+    )
+    publish_mode.add_argument(
         "--sync-only",
         action="store_true",
-        help="跳过 dotnet publish，仅将已有 Publish 目录打包上传",
+        help=argparse.SUPPRESS,
     )
     parser.add_argument(
         "--workers",
@@ -624,17 +647,26 @@ def main() -> None:
 
     print("=" * 60)
     print(f"  目标服务器 : {host}:{port}")
-    if args.sync_only:
-        print("  模式       : 仅同步（跳过 dotnet publish）")
+    if args.configuration is None:
+        print("  模式       : 直接推送（不执行 dotnet publish）")
     else:
+        print(f"  模式       : {args.configuration} 重新发布并推送")
         print(f"  发布项目   : {', '.join(projects)}")
-        print(f"  运行时     : {RUNTIME} / {FRAMEWORK} / Debug / self-contained")
+        print(
+            f"  运行时     : {RUNTIME} / {FRAMEWORK} / "
+            f"{args.configuration} / framework-dependent"
+        )
     print(f"  上传线程   : {args.workers}  分块大小: {args.chunk_mb} MB")
     print("=" * 60)
 
-    if not args.sync_only:
+    if args.configuration is not None:
         for idx, project in enumerate(projects, start=1):
-            publish_project(project, idx, len(projects))
+            publish_project(
+                project,
+                idx,
+                len(projects),
+                args.configuration,
+            )
 
     if not publish_dir.exists():
         print(f"[错误] Publish 目录不存在：{publish_dir}", file=sys.stderr)

@@ -1,4 +1,4 @@
-﻿// Copyright (c) .NET Core Community. All rights reserved.
+// Copyright (c) .NET Core Community. All rights reserved.
 // Licensed under the MIT License. See License.txt in the project root for license information.
 
 using System;
@@ -130,7 +130,7 @@ SELECT
             new NpgsqlParameter("@Group", queryDto.Group ?? string.Empty),
             new NpgsqlParameter("@Name", queryDto.Name ?? string.Empty),
             new NpgsqlParameter("@Content", $"%{queryDto.Content}%"),
-            new NpgsqlParameter("@Offset", queryDto.CurrentPage * queryDto.PageSize),
+            new NpgsqlParameter("@Offset", Math.Max(0, queryDto.CurrentPage) * queryDto.PageSize),
             new NpgsqlParameter("@Limit", queryDto.PageSize),
         };
 

@@ -11,4 +11,7 @@ public enum DeviceType
 
     /// <summary>伺服电机（RS-485）</summary>
     Motor,
+
+    /// <summary>可编程逻辑控制器</summary>
+    PLC,
 }

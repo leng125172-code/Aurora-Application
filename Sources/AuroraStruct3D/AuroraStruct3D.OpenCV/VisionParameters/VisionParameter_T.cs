@@ -47,6 +47,9 @@ public class VisionParameter<T> : IVisionParameter
     /// <summary>值范围约束，无约束时为 null。</summary>
     public object? ValueLimit { get; set; }
 
+    /// <summary>字符串承载结构化 JSON 时的 JSON Schema。</summary>
+    public string? JsonSchema { get; set; }
+
     /// <summary>是否在赋值时进行类型校验。</summary>
     public bool ErrorCheck { get; set; }
 

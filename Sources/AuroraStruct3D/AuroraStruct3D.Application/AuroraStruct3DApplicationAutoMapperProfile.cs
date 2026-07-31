@@ -25,6 +25,13 @@ public static class CameraObjectMapperExtensions
             DeleterId = entity.DeleterId,
             Name = entity.Name,
             Model = entity.Model,
+            DriverId = entity.DriverId,
+            HardwareId = entity.HardwareId,
+            ConnectionSummary = entity.ConnectionSummary,
+            Capabilities = entity.Capabilities,
+            IsOnline =
+                !string.IsNullOrWhiteSpace(entity.HardwareId)
+                && entity.Status != CameraStatus.Error,
             DeviceSerialNumber = entity.DeviceSerialNumber,
             DeviceIndex = entity.DeviceIndex,
             Status = entity.Status,

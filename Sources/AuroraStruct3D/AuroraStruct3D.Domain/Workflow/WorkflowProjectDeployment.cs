@@ -223,6 +223,15 @@ public class WorkflowProjectFrozenGraph
 
     /// <summary>冻结的工作流画布数据 JSON（GraphData 原文）。</summary>
     public string GraphData { get; set; } = string.Empty;
+
+    /// <summary>冻结的受限 C# 工作流脚本。</summary>
+    public string SourceCode { get; set; } = string.Empty;
+
+    /// <summary>冻结脚本的编译程序哈希。</summary>
+    public string ProgramHash { get; set; } = string.Empty;
+
+    /// <summary>脚本语言版本。</summary>
+    public int LanguageVersion { get; set; } = 1;
 }
 
 /// <summary>

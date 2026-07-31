@@ -37,6 +37,25 @@ public sealed class combine_inspection_results : IOperator
                 ParameterName = "result_json",
                 DisplayName = "检测汇总结果",
                 ParameterType = typeof(string),
+                JsonSchema =
+                    """
+                    {
+                      "type": "object",
+                      "properties": {
+                        "isOk": { "type": "boolean", "title": "整体是否合格" },
+                        "resultCode": { "type": "string", "title": "结果代码" },
+                        "measurements": {
+                          "type": "object",
+                          "title": "测量结果",
+                          "properties": {
+                            "flatness": { "type": "object", "title": "平面度" },
+                            "line": { "type": "object", "title": "角度" },
+                            "circle": { "type": "object", "title": "圆形" }
+                          }
+                        }
+                      }
+                    }
+                    """,
                 ControlType = PortControlType.Download,
             },
         };

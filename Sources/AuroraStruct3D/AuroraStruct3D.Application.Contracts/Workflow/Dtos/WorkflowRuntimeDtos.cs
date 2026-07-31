@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
 namespace AuroraStruct3D.Workflow.Dtos;
 
@@ -88,6 +89,21 @@ public class WorkflowExecutionTriggerInput
     public int VariableReadTimeoutMs { get; set; } = 5000;
 }
 
+/// <summary>直接调试未保存的受限 C# 工作流脚本。</summary>
+public class WorkflowSourceDebugInput : WorkflowExecutionTriggerInput
+{
+    [Required]
+    public string SourceCode { get; set; } = string.Empty;
+
+    /// <summary>启动前写入的断点节点 ID。</summary>
+    public List<string> BreakpointNodeIds { get; set; } = new();
+}
+
+public class WorkflowDebugRunInput : WorkflowExecutionTriggerInput
+{
+    public List<string> BreakpointNodeIds { get; set; } = new();
+}
+
 /// <summary>
 /// 单步步进请求。
 /// </summary>
@@ -103,6 +119,92 @@ public class WorkflowExecutionStepInput
     /// 是否返回变量快照。
     /// </summary>
     public bool IncludeVariables { get; set; } = true;
+}
+
+public class WorkflowBreakpointDto
+{
+    public string? StatementId { get; set; }
+    public string? NodeId { get; set; }
+    public int? Line { get; set; }
+    public bool Enabled { get; set; } = true;
+    public string? Condition { get; set; }
+    public int? HitCount { get; set; }
+    public string? LogMessage { get; set; }
+}
+
+public class WorkflowBreakpointListDto
+{
+    public List<WorkflowBreakpointDto> Breakpoints { get; set; } = [];
+}
+
+public class WorkflowRunToInput
+{
+    public string? StatementId { get; set; }
+    public string? NodeId { get; set; }
+}
+
+public class WorkflowWatchInput
+{
+    public List<string> Expressions { get; set; } = [];
+}
+
+public class WorkflowWatchResultDto
+{
+    public string Expression { get; set; } = string.Empty;
+    public bool Found { get; set; }
+    public object? Value { get; set; }
+    public string? RuntimeType { get; set; }
+    public string? Error { get; set; }
+    public bool IsSummary { get; set; }
+    public string? Handle { get; set; }
+}
+
+public class WorkflowStackFrameDto
+{
+    public int Index { get; set; }
+    public string? NodeId { get; set; }
+    public string? StatementId { get; set; }
+    public string? DisplayName { get; set; }
+}
+
+public class WorkflowTraceEventDto
+{
+    public int Step { get; set; }
+    public string? NodeId { get; set; }
+    public string? StatementId { get; set; }
+    public DateTime StartedAt { get; set; }
+    public long DurationMs { get; set; }
+    public string Status { get; set; } = "completed";
+    public string? Error { get; set; }
+    public string EventType { get; set; } = "statement-completed";
+    public long QueueDurationMs { get; set; }
+    public string? OutputSummary { get; set; }
+}
+
+public class WorkflowTraceQueryDto
+{
+    public int SkipCount { get; set; }
+    public int MaxResultCount { get; set; } = 200;
+    public string? NodeId { get; set; }
+    public string? EventType { get; set; }
+}
+
+public class WorkflowTracePageDto
+{
+    public int TotalCount { get; set; }
+    public List<WorkflowTraceEventDto> Items { get; set; } = [];
+}
+
+public class WorkflowNodePerformanceDto
+{
+    public string? NodeId { get; set; }
+    public int Count { get; set; }
+    public long TotalDurationMs { get; set; }
+    public long MaxDurationMs { get; set; }
+    public double AverageDurationMs { get; set; }
+    public long P95DurationMs { get; set; }
+    public bool IsSlow { get; set; }
+    public int FaultCount { get; set; }
 }
 
 /// <summary>
@@ -413,6 +515,69 @@ public class WorkflowExecutionTriggerResultDto
 }
 
 /// <summary>
+/// 调试运行启动结果。debug-run 仅负责创建并触发后台会话，
+/// 结束节点正式输出通过 executions/{executionId}/result 单独查询。
+/// </summary>
+public class WorkflowDebugRunTriggerResultDto
+{
+    /// <summary>是否启动失败。</summary>
+    public bool Error { get; set; }
+
+    /// <summary>机器可识别的错误码；成功时为空。</summary>
+    public string? ErrorCode { get; set; }
+
+    /// <summary>启动结果消息；失败时为错误信息。</summary>
+    public string? Message { get; set; }
+
+    /// <summary>已创建的执行会话 ID。</summary>
+    public Guid ExecutionId { get; set; }
+}
+
+/// <summary>
+/// 执行完成后由结束节点声明的单个正式输出。
+/// </summary>
+public class WorkflowExecutionOutputResultDto
+{
+    private object? _value;
+
+    /// <summary>运行时变量名称或变量路径。</summary>
+    public string Name { get; set; } = string.Empty;
+
+    /// <summary>显示名称；结束节点未设置时等于变量名称。</summary>
+    public string DisplayName { get; set; } = string.Empty;
+
+    /// <summary>
+    /// 稳定值类型令牌（int/long/float/double/decimal/bool/string/blob/object/array/datetime/guid）。
+    /// 原始 Mat/PointCloudData 仅用于提示调用方先存 Blob。
+    /// </summary>
+    public string ValueType { get; set; } = string.Empty;
+
+    /// <summary>
+    /// 原生 JSON 值。文件类输出的 valueType 为 blob，此处直接返回 Blob Key。
+    /// 原始 Mat/PointCloudData 始终返回 null，避免序列化非托管指针及大型数据。
+    /// </summary>
+    public object? Value
+    {
+        get =>
+            string.Equals(ValueType, "Mat", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(
+                ValueType,
+                "OpenCvSharp.Mat",
+                StringComparison.OrdinalIgnoreCase
+            )
+            || string.Equals(ValueType, "PointCloudData", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(
+                ValueType,
+                "AuroraStruct3D.PointCloudData",
+                StringComparison.OrdinalIgnoreCase
+            )
+                ? null
+                : _value;
+        set => _value = value;
+    }
+}
+
+/// <summary>
 /// 单步步进结果。
 /// </summary>
 public class WorkflowExecutionStepResultDto
@@ -440,6 +605,42 @@ public class WorkflowExecutionStatusDto
 {
     /// <summary>执行会话 ID。</summary>
     public Guid ExecutionId { get; set; }
+
+    /// <summary>本状态快照的服务端生成时间，用于丢弃乱序状态。</summary>
+    public DateTime UpdatedAt { get; set; }
+
+    /// <summary>会话内单调递增的状态快照版本。</summary>
+    public long StateVersion { get; set; }
+
+    public bool IsPaused { get; set; }
+
+    /// <summary>
+    /// 面向调试器 UI 的明确阶段：ready、running、paused、completed、faulted、stopped。
+    /// </summary>
+    public string DebugState { get; set; } = "ready";
+
+    /// <summary>是否已经进入不可继续的终态。</summary>
+    public bool IsTerminal { get; set; }
+
+    /// <summary>当前是否允许继续或运行到节点。</summary>
+    public bool CanContinue { get; set; }
+
+    /// <summary>当前是否允许单步。</summary>
+    public bool CanStep { get; set; }
+
+    /// <summary>当前是否允许请求暂停。</summary>
+    public bool CanPause { get; set; }
+
+    /// <summary>当前是否允许停止会话。</summary>
+    public bool CanStop { get; set; }
+
+    public string? CurrentStatementId { get; set; }
+
+    /// <summary>当前节点显示名称。</summary>
+    public string? CurrentNodeName { get; set; }
+
+    /// <summary>当前节点已经执行的毫秒数。</summary>
+    public long CurrentNodeDurationMs { get; set; }
 
     /// <summary>运行 ID（运行调试场景下返回）。</summary>
     public Guid? RunId { get; set; }
@@ -489,6 +690,22 @@ public class WorkflowExecutionStatusDto
     /// <summary>耗时毫秒。</summary>
     public long DurationMs { get; set; }
 
+    /// <summary>结束节点声明的正式输出。</summary>
+    public List<WorkflowConfiguredOutputDto> ConfiguredOutputs { get; set; } = new();
+
+    /// <summary>当前可读取的正式输出；终态时为冻结快照。</summary>
+    public List<WorkflowVariableResultDto> Outputs { get; set; } = new();
+
     /// <summary>变量快照。</summary>
-    public List<WorkflowVariableResultDto> Variables { get; set; } = new();
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<WorkflowVariableResultDto>? Variables { get; set; }
+}
+
+/// <summary>工作流结束输出声明。</summary>
+public class WorkflowConfiguredOutputDto
+{
+    public string Name { get; set; } = string.Empty;
+    public string? DisplayName { get; set; }
+    public string? ValueType { get; set; }
+    public bool HasValue { get; set; }
 }

@@ -26,4 +26,14 @@ public interface ICalibPointCloudNotifier
         int pointCount,
         int totalPointCount
     );
+
+    /// <summary>推送 Step6 二维深度质量拟合图。</summary>
+    Task NotifyDepthQualityMapAsync(
+        Guid calibProjectId,
+        byte[] pngBytes,
+        int validPointCount,
+        int totalPointCount,
+        double minimumDepthMm,
+        double maximumDepthMm
+    );
 }

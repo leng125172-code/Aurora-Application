@@ -115,7 +115,6 @@ public sealed class WorkflowVariableCompileRequestFactory : ITransientDependency
             Dictionary<string, JsonElement> @params = properties.Params ?? [];
             Dictionary<string, string> paramSources = properties.ParamSources ?? [];
             Dictionary<string, string> outputBindings = properties.OutputBindings ?? [];
-            Dictionary<string, string> outputBindingSources = properties.OutputBindingSources ?? [];
 
             OperatorParametersDescriptor? parameters = null;
             if (Guid.TryParse(node.Type, out Guid operatorId))
@@ -137,6 +136,10 @@ public sealed class WorkflowVariableCompileRequestFactory : ITransientDependency
                 }
 
                 string variableName = variableNameRaw.Trim();
+                if (node.Type == "end-node")
+                {
+                    variableName = GetOutputRootVariableName(variableName);
+                }
                 if (string.IsNullOrWhiteSpace(variableName))
                 {
                     throw new UserFriendlyException(
@@ -196,17 +199,6 @@ public sealed class WorkflowVariableCompileRequestFactory : ITransientDependency
 
             foreach ((string key, string variableNameRaw) in outputBindings)
             {
-                if (
-                    !string.Equals(
-                        outputBindingSources.GetValueOrDefault(key),
-                        "variable",
-                        StringComparison.Ordinal
-                    )
-                )
-                {
-                    continue;
-                }
-
                 string variableName = variableNameRaw.Trim();
                 if (string.IsNullOrWhiteSpace(variableName))
                 {
@@ -274,6 +266,17 @@ public sealed class WorkflowVariableCompileRequestFactory : ITransientDependency
             DefUseAnalysisMode = defUseMode,
             SuppressedDiagnosticCodes = [],
         };
+    }
+
+    private static string GetOutputRootVariableName(string outputPath)
+    {
+        int dotIndex = outputPath.IndexOf('.');
+        int bracketIndex = outputPath.IndexOf('[');
+        int separatorIndex =
+            dotIndex < 0 ? bracketIndex
+            : bracketIndex < 0 ? dotIndex
+            : Math.Min(dotIndex, bracketIndex);
+        return separatorIndex < 0 ? outputPath : outputPath[..separatorIndex];
     }
 
     private static string? NormalizeExpectedTypeName(string? expectedTypeName)

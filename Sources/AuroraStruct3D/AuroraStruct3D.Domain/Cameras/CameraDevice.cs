@@ -16,6 +16,18 @@ public class CameraDevice : FullAuditedAggregateRoot<Guid>
     /// <summary>相机型号（从SDK读取）</summary>
     public string? Model { get; private set; }
 
+    /// <summary>提供当前设备的相机驱动标识，例如 tucam / huawei-gige。</summary>
+    public string DriverId { get; private set; } = "tucam";
+
+    /// <summary>驱动提供的稳定硬件标识；当前 Tucam 使用设备序列号。</summary>
+    public string? HardwareId { get; private set; }
+
+    /// <summary>驱动连接摘要（IP、网卡或 USB 路径），仅用于展示与诊断。</summary>
+    public string? ConnectionSummary { get; private set; }
+
+    /// <summary>驱动扫描到的能力快照。</summary>
+    public CameraCapability Capabilities { get; private set; }
+
     /// <summary>设备序列号（来自 DeviceControl/DeviceSerialNumber）</summary>
     public string? DeviceSerialNumber { get; private set; }
 
@@ -76,6 +88,26 @@ public class CameraDevice : FullAuditedAggregateRoot<Guid>
             Check.Length(model, nameof(model), CameraConsts.MaxNameLength);
         }
         Model = model;
+        return this;
+    }
+
+    public CameraDevice UpdateDriverBinding(
+        string driverId,
+        string? hardwareId,
+        string? connectionSummary,
+        CameraCapability capabilities
+    )
+    {
+        DriverId = Check.NotNullOrWhiteSpace(driverId, nameof(driverId), 64);
+        HardwareId = string.IsNullOrWhiteSpace(hardwareId) ? null : hardwareId.Trim();
+        if (HardwareId != null)
+            Check.Length(HardwareId, nameof(hardwareId), CameraConsts.MaxSerialNumberLength);
+        ConnectionSummary = string.IsNullOrWhiteSpace(connectionSummary)
+            ? null
+            : connectionSummary.Trim();
+        if (ConnectionSummary != null)
+            Check.Length(ConnectionSummary, nameof(connectionSummary), 256);
+        Capabilities = capabilities;
         return this;
     }
 

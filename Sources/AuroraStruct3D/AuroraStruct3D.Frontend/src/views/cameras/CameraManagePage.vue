@@ -10,7 +10,7 @@ import Dialog from 'primevue/dialog'
 import InputText from 'primevue/inputtext'
 import ToggleSwitch from 'primevue/toggleswitch'
 import { useCameraStore } from '@/stores/cameras'
-import { type UpdateCameraDeviceDto, CameraStatus } from '@/api/cameras'
+import { type UpdateCameraDeviceDto, CameraCapability, CameraStatus } from '@/api/cameras'
 import { useAppToast } from '@/composables/useAppToast'
 import { AppCard } from '@/components/primevue'
 
@@ -57,8 +57,15 @@ async function handleClose(id: string) {
 async function handleScan() {
     scanning.value = true
     try {
-        const count = await store.scan()
-        toast.success(t('camera.scanSuccess', { count }))
+        const result = await store.scan()
+        const failedDrivers = result.drivers.filter((driver) => driver.error)
+        if (failedDrivers.length > 0 || result.conflicts > 0) {
+            toast.warning(
+                `扫描到 ${result.totalDiscovered} 台，冲突 ${result.conflicts} 台，驱动失败 ${failedDrivers.length} 个`,
+            )
+        } else {
+            toast.success(t('camera.scanSuccess', { count: result.totalDiscovered }))
+        }
     } catch {
         // 忽略
     } finally {
@@ -102,6 +109,22 @@ async function handleEdit() {
 function goToControl(id: string) {
     store.selectCamera(id)
     void router.push({ name: 'CameraControl', params: { id } })
+}
+
+const capabilityNames: Array<[CameraCapability, string]> = [
+    [CameraCapability.Preview, '预览'],
+    [CameraCapability.Snapshot, '快照'],
+    [CameraCapability.SoftwareTrigger, '软触发'],
+    [CameraCapability.ExternalTrigger, '外触发'],
+    [CameraCapability.ParameterNodes, '参数节点'],
+    [CameraCapability.Temperature, '温度'],
+    [CameraCapability.RtpStream, 'RTP'],
+]
+
+function cameraCapabilities(capabilities: CameraCapability): string[] {
+    return capabilityNames
+        .filter(([flag]) => (capabilities & flag) !== 0)
+        .map(([, name]) => name)
 }
 
 function statusClass(status: CameraStatus): string {
@@ -214,6 +237,34 @@ onMounted(() => {
                         <span class="text-xs text-muted-foreground">{{ data.model ?? '—' }}</span>
                     </template>
                 </Column>
+                <Column header="驱动 / 设备标识" style="min-width: 11rem">
+                    <template #body="{ data }">
+                        <div class="space-y-0.5 text-xs">
+                            <div>{{ data.driverId }}</div>
+                            <div class="text-muted-foreground">{{ data.hardwareId ?? '待重新绑定' }}</div>
+                            <div class="text-muted-foreground">{{ data.connectionSummary ?? '—' }}</div>
+                        </div>
+                    </template>
+                </Column>
+                <Column header="能力" style="min-width: 12rem">
+                    <template #body="{ data }">
+                        <div class="flex flex-wrap gap-1">
+                            <span
+                                v-for="capability in cameraCapabilities(data.capabilities)"
+                                :key="capability"
+                                class="rounded bg-muted px-1.5 py-0.5 text-[11px]"
+                            >
+                                {{ capability }}
+                            </span>
+                            <span
+                                v-if="cameraCapabilities(data.capabilities).length === 0"
+                                class="text-xs text-amber-600"
+                            >
+                                待扫描
+                            </span>
+                        </div>
+                    </template>
+                </Column>
                 <Column :header="t('camera.enabled')" style="min-width: 5rem">
                     <template #body="{ data }">
                         <span :class="data.isEnabled ? 'text-green-600' : 'text-muted-foreground'">
@@ -237,6 +288,7 @@ onMounted(() => {
                                 severity="success"
                                 size="small"
                                 outlined
+                                :disabled="!data.isOnline || !data.hardwareId"
                                 @click="handleOpen(data.id)"
                             >
                                 {{ t('camera.open') }}
@@ -337,7 +389,10 @@ onMounted(() => {
                         </span>
                     </div>
                     <div class="text-xs text-muted-foreground">
-                        <div>{{ t('camera.index') }}：{{ cam.deviceIndex }}</div>
+                        <div>驱动：{{ cam.driverId }}</div>
+                        <div>设备标识：{{ cam.hardwareId ?? '待重新绑定' }}</div>
+                        <div>连接：{{ cam.connectionSummary ?? '—' }}</div>
+                        <div>能力：{{ cameraCapabilities(cam.capabilities).join('、') || '待扫描' }}</div>
                         <div v-if="cam.description" class="truncate">
                             {{ t('camera.description') }}：{{ cam.description }}
                         </div>
@@ -351,6 +406,7 @@ onMounted(() => {
                             severity="success"
                             size="small"
                             outlined
+                            :disabled="!cam.isOnline || !cam.hardwareId"
                             @click="handleOpen(cam.id)"
                         >
                             {{ t('camera.open') }}

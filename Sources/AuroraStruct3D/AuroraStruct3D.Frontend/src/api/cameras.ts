@@ -16,6 +16,8 @@ export enum CameraStatus {
     Closed = 4,
 }
 
+export enum CameraCapability { Preview = 1 << 0, Snapshot = 1 << 1, SoftwareTrigger = 1 << 2, ExternalTrigger = 1 << 3, ParameterNodes = 1 << 4, Temperature = 1 << 5, RtpStream = 1 << 6, ConcurrentPreview = 1 << 7, ConcurrentTrigger = 1 << 8 }
+
 export enum CameraAutoExposureMode {
     Off = 0,
     Once = 1,
@@ -63,6 +65,29 @@ export interface CameraDeviceDto {
     readonly imageRotationAngle: number
 
     readonly model: string | null
+    readonly driverId: string
+    readonly hardwareId: string | null
+    readonly connectionSummary: string | null
+    readonly capabilities: CameraCapability
+    readonly isOnline: boolean
+}
+
+export interface CameraDriverScanResultDto {
+    readonly driverId: string
+    readonly displayName: string
+    readonly discovered: number
+    readonly bound: number
+    readonly conflicts: number
+    readonly error: string | null
+}
+
+export interface CameraScanResultDto {
+    readonly totalDiscovered: number
+    readonly created: number
+    readonly updated: number
+    readonly offline: number
+    readonly conflicts: number
+    readonly drivers: CameraDriverScanResultDto[]
 }
 
 // ─── 管理用输入 DTO ──────────────────────────────────────────────────────────
@@ -87,8 +112,8 @@ export interface CameraDeviceInfoDto {
     readonly serialNumber: string
     readonly firmwareVersion: string
     readonly fpgaVersion: string
-    readonly fpgaTemperature: number
-    readonly sensorTemperature: number
+    readonly fpgaTemperature: number | null
+    readonly sensorTemperature: number | null
     readonly currentWidth: number
     readonly currentHeight: number
 }
@@ -147,8 +172,8 @@ export async function updateCamera(id: string, dto: UpdateCameraDeviceDto): Prom
 }
 
 /** 扫描相机（同步SDK与数据库） */
-export async function scanCameras(): Promise<number> {
-    const { data } = await httpClient.post<number>(`${BASE}/scan-cameras`)
+export async function scanCameras(): Promise<CameraScanResultDto> {
+    const { data } = await httpClient.post<CameraScanResultDto>(`${BASE}/scan-cameras`)
     return data
 }
 

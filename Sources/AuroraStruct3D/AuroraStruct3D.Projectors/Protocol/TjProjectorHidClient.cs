@@ -299,8 +299,14 @@ public sealed class TjProjectorHidClient : IDisposable
         if (bytesRead <= 1)
             return null;
 
-        // 跳过 buf[0]（报告 ID），从 buf[1] 开始解析 ASCII
-        return Encoding.ASCII.GetString(buf, 1, bytesRead - 1).TrimEnd('\0', '\r', '\n');
+        // 跳过 buf[0]（报告 ID）。新固件会复用 64 字节输入报告，当前响应结束后的
+        // 填充区可能仍包含上一条响应；因此必须在第一个 NUL/CR/LF 处截止，不能只 TrimEnd。
+        ReadOnlySpan<byte> payload = buf.AsSpan(1, bytesRead - 1);
+        int terminator = payload.IndexOfAny((byte)0, (byte)'\r', (byte)'\n');
+        if (terminator >= 0)
+            payload = payload[..terminator];
+
+        return payload.IsEmpty ? null : Encoding.ASCII.GetString(payload);
     }
 
     private void EnsureConnected()

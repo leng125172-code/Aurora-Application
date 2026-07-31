@@ -10,6 +10,12 @@ public class StartCalibScanInput
     /// <summary>标定项目 ID</summary>
     [Required]
     public Guid CalibProjectId { get; set; }
+
+    /// <summary>
+    /// 是否屏蔽投影仪控制。启用时仅打开投影仪灯光，不切换显示/触发模式，
+    /// 不发送 T/N 指令，扫描按普通双目采集运行。
+    /// </summary>
+    public bool SuppressProjectorControl { get; set; }
 }
 
 /// <summary>
@@ -51,7 +57,7 @@ public class CalibScanMetricsDto
     /// <summary>当前轮内帧序号（0~PatternCount-1，PatternCount 为每轮总帧数）</summary>
     public int FrameIndexInRound { get; set; }
 
-    /// <summary>每轮总帧数（等于 Step3 CalibProjectorParam.PatternCount 的 2 倍，因横竖交替）</summary>
+    /// <summary>每轮总帧数（已包含横条纹和竖条纹全部帧）</summary>
     public int PatternCount { get; set; }
 
     /// <summary>十字图检测结果（混合模式确认用，true 表示检测到十字图）</summary>

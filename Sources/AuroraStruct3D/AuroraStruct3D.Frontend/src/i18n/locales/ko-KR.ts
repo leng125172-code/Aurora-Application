@@ -56,6 +56,8 @@ export default {
         stateLog: '상태 로그',
         serialPortManage: 'RS485 포트',
         motorDeviceManage: 'RS485 모터',
+        plcManage: 'PLC 통신',
+        plcControl: 'PLC 태그 제어',
         productModelManage: '3D 모델 관리',
         productModelLogs: '3D 모델 작업 기록',
         aiModelManage: 'AI 모델 관리',

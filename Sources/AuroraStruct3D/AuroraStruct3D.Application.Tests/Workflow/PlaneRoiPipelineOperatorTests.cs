@@ -3,6 +3,7 @@ using AuroraStruct3D.OpenCV.PointCloudPlaneOps;
 using AuroraStruct3D.OpenCV.VisionParameters;
 using AuroraStruct3D.OpenCV.Workflow;
 using AuroraStruct3D.Workflow;
+using AuroraStruct3D.Workflow.Runtime;
 using OpenCvSharp;
 using Xunit;
 
@@ -16,7 +17,10 @@ public class PlaneRoiPipelineOperatorTests
         Assert.Equal(6, select_fitted_plane.InputVisionParameters!.Count);
         Assert.Contains(
             select_fitted_plane.ConfigParameters!,
-            parameter => parameter.Name == "planeName" && parameter.ControlType == PortControlType.Select
+            parameter =>
+                parameter.Name == "planeName"
+                && parameter.DisplayName == "选择输入槽位"
+                && parameter.ControlType == PortControlType.Select
         );
         Assert.Contains(
             define_plane_roi.ConfigParameters!,
@@ -94,6 +98,33 @@ public class PlaneRoiPipelineOperatorTests
         Assert.Equal(2, remaining.PointCloud!.Rows);
         Assert.True(selected.HasColors);
         Assert.Equal(2, selected.Colors!.Rows);
+    }
+
+    [Fact]
+    public void Unified_Roi_Base_Image_Should_Render_Plane_Points_In_Uv_Coordinates()
+    {
+        using Mat plane = CreatePlane(0);
+        PointCloudData cloud = CreateCloud(
+            [[-2, -1, 0], [2, -1, 0], [2, 1, 0], [-2, 1, 0], [0, 0, 0]]
+        );
+
+        using Mat image = WorkflowRuntimeAppService.RenderPlaneRoiBaseImage(
+            plane,
+            cloud.PointCloud!,
+            out var mapping
+        );
+
+        Assert.False(image.Empty());
+        Assert.Equal("UV", mapping.ViewLabel);
+        Assert.Equal(image.Width, mapping.ImageWidth);
+        Assert.Equal(image.Height, mapping.ImageHeight);
+        Assert.True(mapping.WorldMaxX > mapping.WorldMinX);
+        Assert.True(mapping.WorldMaxY > mapping.WorldMinY);
+        using Mat gray = new();
+        Cv2.CvtColor(image, gray, ColorConversionCodes.BGR2GRAY);
+        using Mat brightPoints = new();
+        Cv2.Threshold(gray, brightPoints, 100, 255, ThresholdTypes.Binary);
+        Assert.True(Cv2.CountNonZero(brightPoints) > 0);
     }
 
     private static Mat CreatePlane(double z)

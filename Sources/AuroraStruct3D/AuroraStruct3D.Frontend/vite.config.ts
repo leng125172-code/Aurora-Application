@@ -185,6 +185,9 @@ export default defineConfig(({ mode }) => {
         },
         define: {
             __APP_VERSION__: JSON.stringify(process.env.npm_package_version),
+            __WORKFLOW_DEBUG__: JSON.stringify(
+                env.VITE_ENABLE_WORKFLOW_DEBUG === "true" || mode === "debug",
+            ),
         },
     };
 });

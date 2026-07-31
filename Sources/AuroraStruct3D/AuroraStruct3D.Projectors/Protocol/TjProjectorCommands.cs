@@ -107,16 +107,16 @@ internal static class TjProjectorCommands
     public const string ReadPixelMode = "Fp";
 
     /// <summary>
-    /// 设置图像重复参数命令前缀（完整命令如 "MA 1 18 0 0"）。
-    /// 参数1：图片重复出现的数量（固定为1，同一种图触发次数）；
-    /// 参数2：保存条纹数量（参考官方 TJEasy USB Demo 直接传入实际幅数）；
+    /// 设置图像重复参数命令前缀（20幅图、每幅显示一次的完整命令为 "MA 0 19 0 0"）。
+    /// 参数1：每幅图片的额外重复次数（0 表示只显示一次）；
+    /// 参数2：末帧索引，图片从0开始编号，因此必须传入实际幅数减1；
     /// 参数3：固定为0；参数4：固定为0。
     /// </summary>
     public const string SetImageRepeatPrefix = "MA ";
 
     /// <summary>
-    /// 设置总图像幅数命令前缀（完整命令如 "MB 3"）。
-    /// 参考官方 TJEasy USB Demo，直接传入实际存储的条纹幅数。
+    /// 设置下载时分配的总图像幅数（完整命令如 "MB 4"）。
+    /// 下载阶段直接传入实际条纹幅数；不要套用 MA 参数2的末帧索引语义。
     /// </summary>
     public const string SetImageCountPrefix = "MB ";
 
@@ -133,7 +133,7 @@ internal static class TjProjectorCommands
 
     /// <summary>
     /// 设置条纹方向命令前缀（完整命令如 "MD 3" 或 "MD 0"）。
-    /// 横条纹时传入图像幅数；竖条纹时传入 0。
+    /// 参数表示序列开头连续的横条纹幅数，后续图像全部为竖条纹；0 表示全部为竖条纹。
     /// </summary>
     public const string SetFringeDirectionPrefix = "MD ";
 

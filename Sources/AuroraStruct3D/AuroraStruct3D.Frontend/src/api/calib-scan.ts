@@ -34,6 +34,8 @@ export enum CalibScanCameraRole {
 /** 启动扫描输入 */
 export interface StartCalibScanInput {
     calibProjectId: string
+    /** 仅打开投影仪灯光，不发送显示模式、B2、T、N 等控制命令 */
+    suppressProjectorControl?: boolean
 }
 
 /** 停止扫描输入 */
@@ -57,7 +59,7 @@ export interface CalibScanMetricsDto {
     roundIndex: number
     /** 当前轮内帧序号（0~patternCount-1） */
     frameIndexInRound: number
-    /** 每轮总帧数（来自 Step3 CalibProjectorParam.PatternCount） */
+    /** 每轮总帧数（已包含横条纹和竖条纹全部帧） */
     patternCount: number
     /** 十字图检测结果（true 表示检测到十字图，本轮播放完毕） */
     isCrosshairDetected: boolean

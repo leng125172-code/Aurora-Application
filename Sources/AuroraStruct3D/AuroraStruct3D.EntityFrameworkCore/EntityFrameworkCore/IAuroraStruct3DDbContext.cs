@@ -2,6 +2,7 @@ using AuroraStruct3D.AI;
 using AuroraStruct3D.Cameras;
 using AuroraStruct3D.DeviceState;
 using AuroraStruct3D.Motors;
+using AuroraStruct3D.Plcs;
 using AuroraStruct3D.ProductModels;
 using AuroraStruct3D.Projectors;
 using AuroraStruct3D.Projects;
@@ -24,6 +25,11 @@ namespace AuroraStruct3D.EntityFrameworkCore
 
         /// <summary>相机操作日志集合</summary>
         DbSet<CameraOperationLog> CameraOperationLogs { get; }
+
+        DbSet<PlcDevice> PlcDevices { get; }
+        DbSet<PlcTag> PlcTags { get; }
+        DbSet<PlcOperationLog> PlcOperationLogs { get; }
+        DbSet<PlcTrustedCertificate> PlcTrustedCertificates { get; }
 
         // ── 电机模块 ──────────────────────────────────────────────────────────────
 

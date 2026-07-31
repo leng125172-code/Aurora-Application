@@ -385,11 +385,11 @@ export interface DownloadFringePatternInput {
     widthPixels: number
     /** 投影高度像素（用户设置） */
     heightPixels: number
-    /** 周期数（宽度或高度像素必须能被整除） */
+    /** 兼容旧接口；固定条纹配置下不参与图像计算 */
     periodCount: number
-    /** 生成图片数量 */
+    /** 兼容旧接口；固定条纹配置下不参与图像计算 */
     imageCount: number
-    /** 每张图相对上一张的像素相移量（0 < phaseShift < periodCount，整数） */
+    /** 兼容旧接口；固定配置下不参与计算，互补图直接逐像素取反 */
     phaseShift: number
     /** 横条纹帧黑色填充位置（调试用，默认 end） */
     horizontalPaddingPosition?: HorizontalPaddingPosition

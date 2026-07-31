@@ -1,4 +1,5 @@
 using System.Text.Json;
+using AuroraStruct3D.OpenCV.RoiOps;
 
 namespace AuroraStruct3D.OpenCV.PointCloudFit;
 
@@ -111,19 +112,41 @@ public class plane_height_diff : IOperator
                 Required = false,
                 ControlType = PortControlType.Input,
             },
+            new ConfigParameter
+            {
+                Name = "refRoiMetadata",
+                DisplayName = "基准区域元数据（可选）",
+                ParameterType = typeof(string),
+                DefaultValue = "",
+                Required = false,
+                ControlType = PortControlType.Input,
+            },
+            new ConfigParameter
+            {
+                Name = "targetRoiMetadata",
+                DisplayName = "目标区域元数据（可选）",
+                ParameterType = typeof(string),
+                DefaultValue = "",
+                Required = false,
+                ControlType = PortControlType.Input,
+            },
         };
 
     private readonly string _refRegionName;
     private readonly string _targetRegionName;
     private readonly double _minDiff;
     private readonly double _maxDiff;
+    private readonly string _refRoiMetadata;
+    private readonly string _targetRoiMetadata;
     private bool _disposed;
 
     public plane_height_diff(
         string refRegionName = "A",
         string targetRegionName = "B",
         double minDiff = -0.5,
-        double maxDiff = 0.5
+        double maxDiff = 0.5,
+        string refRoiMetadata = "",
+        string targetRoiMetadata = ""
     )
     {
         if (!double.IsFinite(minDiff) || !double.IsFinite(maxDiff) || minDiff > maxDiff)
@@ -132,6 +155,8 @@ public class plane_height_diff : IOperator
         _targetRegionName = targetRegionName;
         _minDiff = minDiff;
         _maxDiff = maxDiff;
+        _refRoiMetadata = refRoiMetadata;
+        _targetRoiMetadata = targetRoiMetadata;
     }
 
     public void Execute(IWorkflowContext context)
@@ -236,11 +261,21 @@ public class plane_height_diff : IOperator
         double signedDiff = Math.Round(aRef * cx + bRef * cy + cRef * cz + dRef, 6);
         double absDiff = Math.Round(Math.Abs(signedDiff), 6);
         bool isOk = signedDiff >= _minDiff && signedDiff <= _maxDiff;
+        string refRegionName = RoiMetadataNameResolver.Resolve(
+            _refRoiMetadata,
+            _refRegionName,
+            "refRoiMetadata"
+        );
+        string targetRegionName = RoiMetadataNameResolver.Resolve(
+            _targetRoiMetadata,
+            _targetRegionName,
+            "targetRoiMetadata"
+        );
 
         var absDiffResult = new
         {
-            refRegion = _refRegionName,
-            targetRegion = _targetRegionName,
+            refRegion = refRegionName,
+            targetRegion = targetRegionName,
             x = Math.Round(cx, 4),
             y = Math.Round(cy, 4),
             heightDiff = absDiff,
@@ -250,14 +285,14 @@ public class plane_height_diff : IOperator
         {
             refRegion = new
             {
-                name = _refRegionName,
+                name = refRegionName,
                 x = Math.Round(refCx, 4),
                 y = Math.Round(refCy, 4),
                 z = Math.Round(refCz, 4),
             },
             targetRegion = new
             {
-                name = _targetRegionName,
+                name = targetRegionName,
                 x = Math.Round(cx, 4),
                 y = Math.Round(cy, 4),
                 z = Math.Round(cz, 4),

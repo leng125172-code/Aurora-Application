@@ -4,12 +4,42 @@ using AuroraStruct3D.OpenCV.Workflow.Compilation.Model;
 using AuroraStruct3D.OpenCV.Workflow.Values;
 using AuroraStruct3D.Workflow;
 using AuroraStruct3D.Workflow.Runtime;
+using OpenCvSharp;
 using Xunit;
 
 namespace AuroraStruct3D.Application.Tests.Workflow;
 
 public class WorkflowVariableCompileRequestFactoryTests
 {
+    [Fact]
+    public void NormalizeDeclaredType_Should_Shorten_Generic_Clr_Type_Name()
+    {
+        string fullName = typeof(List<Mat>).FullName!;
+
+        string normalized = WorkflowExecutionTypeNormalizer.NormalizeDeclaredType(fullName);
+
+        Assert.Equal("System.Collections.Generic.List<OpenCvSharp.Mat>", normalized);
+        Assert.True(normalized.Length <= 128);
+    }
+
+    [Fact]
+    public void NormalizeRuntimeValueType_Should_Preserve_ListOfMat_Type()
+    {
+        using Mat first = new(2, 2, MatType.CV_8UC1);
+        using Mat second = new(2, 2, MatType.CV_8UC1);
+        List<Mat> masks = [first, second];
+
+        string normalized = WorkflowExecutionTypeNormalizer.NormalizeRuntimeValueType(masks);
+
+        Assert.Equal("System.Collections.Generic.List<OpenCvSharp.Mat>", normalized);
+        Assert.True(
+            WorkflowExecutionTypeNormalizer.IsCompatible(
+                typeof(List<Mat>).FullName!,
+                normalized
+            )
+        );
+    }
+
     [Fact]
     public async Task BuildAsync_Should_Declare_PointCloud_Output_As_PointCloudData()
     {

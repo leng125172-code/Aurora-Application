@@ -9,7 +9,7 @@ namespace AuroraStruct3D.Projectors;
 /// 内部使用 <see cref="ConcurrentDictionary{TKey,TValue}"/> 维护每台设备的独立连接实例，
 /// 解决单例 IDlpProjectorService 无法管理多设备的问题。
 /// </summary>
-public sealed class ProjectorConnectionPool : IProjectorConnectionPool, IDisposable
+public sealed class ProjectorConnectionPool : IProjectorConnectionPool, IDisposable, IAsyncDisposable
 {
     private readonly IServiceScopeFactory _serviceScopeFactory;
     private readonly ILoggerFactory _loggerFactory;
@@ -82,17 +82,16 @@ public sealed class ProjectorConnectionPool : IProjectorConnectionPool, IDisposa
             return;
         _disposed = true;
 
-        foreach (KeyValuePair<Guid, DlpProjectorService> kv in _pool)
+        // 不能在下载或命令执行中直接 Dispose 传输对象。同步 DI 释放场景
+        // 无法 await，因此安排与 RemoveAsync 相同的优雅关闭路径。
+        _ = DisposeAsync().AsTask();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        foreach (Guid deviceId in _pool.Keys.ToList())
         {
-            try
-            {
-                kv.Value.Dispose();
-            }
-            catch
-            {
-                // 忽略释放时的异常
-            }
+            await RemoveAsync(deviceId).ConfigureAwait(false);
         }
-        _pool.Clear();
     }
 }

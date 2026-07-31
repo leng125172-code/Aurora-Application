@@ -395,11 +395,14 @@ public class roi_partition : IOperator
 
         string metadataJson = JsonSerializer.Serialize(metadata, JsonOptions);
 
-        // ⑤ 输出结果：每个 ROI 的独立掩膜列表 + 元数据 JSON
-        if (roiMasks.Count == 1)
-        {
-            context.Set("primary_mask", roiMasks[0].Clone());
-        }
+        // ⑤ 输出结果：主掩膜 + 每个 ROI 的独立掩膜列表 + 元数据 JSON
+        int primaryMaskIndex = ResolvePrimaryMaskIndex(
+            roiMasks,
+            metadataList,
+            imageWidth,
+            imageHeight
+        );
+        context.Set("primary_mask", roiMasks[primaryMaskIndex].Clone());
 
         context.Set("output_masks", roiMasks);
         context.Set("roi_metadata", metadataJson);
@@ -415,6 +418,42 @@ public class roi_partition : IOperator
     }
 
     // ── 私有方法 ────────────────────────────────────────────────────────────────
+
+    private int ResolvePrimaryMaskIndex(
+        IReadOnlyList<Mat> roiMasks,
+        IReadOnlyList<RoiMetadata> metadata,
+        int imageWidth,
+        int imageHeight
+    )
+    {
+        if (string.Equals(_partitionStrategy, "largest", StringComparison.OrdinalIgnoreCase))
+        {
+            return Enumerable
+                .Range(0, roiMasks.Count)
+                .OrderByDescending(index => Cv2.CountNonZero(roiMasks[index]))
+                .First();
+        }
+
+        if (!string.Equals(_partitionStrategy, "center", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"不支持的 ROI 分区选择策略：{_partitionStrategy}。支持的策略：center、largest。"
+            );
+        }
+
+        double imageCenterX = imageWidth / 2.0;
+        double imageCenterY = imageHeight / 2.0;
+        return Enumerable
+            .Range(0, metadata.Count)
+            .OrderBy(index =>
+            {
+                RoiRect bounds = metadata[index].BoundingRect;
+                double deltaX = bounds.X + bounds.Width / 2.0 - imageCenterX;
+                double deltaY = bounds.Y + bounds.Height / 2.0 - imageCenterY;
+                return deltaX * deltaX + deltaY * deltaY;
+            })
+            .First();
+    }
 
     /// <summary>
     /// 根据 ROI 类型分发生成对应掩膜。
@@ -826,7 +865,7 @@ public class roi_partition : IOperator
             startY = 0;
 
         string normalized = System.Text.RegularExpressions.Regex.Replace(
-            d.Trim(),
+            d.Trim().Replace(',', ' '),
             @"([a-zA-Z])",
             " $1 "
         );
@@ -847,6 +886,14 @@ public class roi_partition : IOperator
             {
                 if (args.Count > 0 && currentCommand != ' ')
                 {
+                    throw new InvalidOperationException(
+                        $"SVG Path 命令 {currentCommand} 的参数数量不足。"
+                    );
+                }
+                currentCommand = token[0];
+                i++;
+                if (currentCommand is 'Z' or 'z')
+                {
                     ApplyCommand(
                         currentCommand,
                         args,
@@ -856,14 +903,28 @@ public class roi_partition : IOperator
                         ref startY,
                         points
                     );
-                    args.Clear();
                 }
-                currentCommand = token[0];
-                i++;
             }
             else
             {
-                args.Add(double.Parse(token, CultureInfo.InvariantCulture));
+                if (currentCommand == ' ')
+                {
+                    throw new InvalidOperationException("SVG Path 数值参数前缺少路径命令。");
+                }
+
+                if (
+                    !double.TryParse(
+                        token,
+                        NumberStyles.Float,
+                        CultureInfo.InvariantCulture,
+                        out double value
+                    )
+                )
+                {
+                    throw new InvalidOperationException($"SVG Path 包含无效数值：{token}。");
+                }
+
+                args.Add(value);
                 i++;
 
                 int expectedArgs = currentCommand switch
@@ -893,7 +954,7 @@ public class roi_partition : IOperator
 
         if (args.Count > 0 && currentCommand != ' ')
         {
-            ApplyCommand(currentCommand, args, ref curX, ref curY, ref startX, ref startY, points);
+            throw new InvalidOperationException($"SVG Path 命令 {currentCommand} 的参数数量不足。");
         }
 
         return points;

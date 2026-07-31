@@ -1,4 +1,5 @@
 using AuroraStruct3D.DeviceState;
+using AuroraStruct3D.Calibration;
 using AuroraStruct3D.Projectors.Dtos;
 using AuroraStruct3D.Sessions;
 using Microsoft.Extensions.Logging;
@@ -100,30 +101,57 @@ public class ProjectorDeviceAppService : AuroraStruct3DAppService, IProjectorDev
             ProjectorConsts.HidProductId
         );
 
-        // 对每个检测到的 HID 索引，确保数据库中存在对应记录
+        List<ProjectorDevice> configured = await _projectorDeviceRepository.GetListOrderedAsync();
+        Dictionary<int, ProjectorDevice> configuredByHardwareId = configured
+            .Where(x => x.ConnectionType == ProjectorConnectionType.UsbHid && x.DeviceHardwareId is >= 1 and <= 255)
+            .GroupBy(x => x.DeviceHardwareId)
+            .Where(x => x.Count() == 1)
+            .ToDictionary(x => x.Key, x => x.Single());
+
+        HashSet<int> duplicateConfiguredIds = configured
+            .Where(x => x.ConnectionType == ProjectorConnectionType.UsbHid && x.DeviceHardwareId is >= 1 and <= 255)
+            .GroupBy(x => x.DeviceHardwareId)
+            .Where(x => x.Count() > 1)
+            .Select(x => x.Key)
+            .ToHashSet();
+
+        // HID index is volatile. Probe register 0 and only bind devices that
+        // have a unique, explicitly configured user-storage identity.
         for (int i = 0; i < count; i++)
         {
-            ProjectorDevice? existing = await _projectorDeviceRepository.FindByHidAsync(i);
-            if (existing == null)
+            try
             {
-                // 新设备：取当前设备数作为 DeviceIndex
-                List<ProjectorDevice> all = await _projectorDeviceRepository.GetListOrderedAsync();
-                int nextIndex = all.Count;
-                ProjectorDevice device = new(
-                    GuidGenerator.Create(),
-                    $"投影仪 {i}",
-                    nextIndex,
-                    i,
-                    ProjectorConsts.DefaultConnectTimeoutMs
-                );
-                await _projectorDeviceRepository.InsertAsync(device);
+                await _dlpProjectorService.ConnectHidAsync(ProjectorConsts.HidVendorId, ProjectorConsts.HidProductId, i);
+                string? rawId = await _dlpProjectorService.ReadRegisterAsync(0);
+                if (!int.TryParse(rawId?.Trim(), out int hardwareId) || hardwareId is < 1 or > 255 || duplicateConfiguredIds.Contains(hardwareId))
+                {
+                    Logger.LogWarning("[Projector] HID index {Index} has unassigned, unreadable or duplicate identity '{Identity}', ignored.", i, rawId);
+                    continue;
+                }
+
+                if (!configuredByHardwareId.TryGetValue(hardwareId, out ProjectorDevice? device))
+                {
+                    Logger.LogWarning("[Projector] HID index {Index} identity {Identity} is not registered, ignored.", i, hardwareId);
+                    continue;
+                }
+
+                device.SetHidDeviceIndex(i);
+                await _projectorDeviceRepository.UpdateAsync(device);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning(ex, "[Projector] Failed probing USB HID projector at index {Index}; it will not be bound.", i);
+            }
+            finally
+            {
+                await _dlpProjectorService.DisconnectAsync();
             }
         }
 
         // 重建并传播 HidDeviceIndex -> ProjectorDevice.Id 映射
         List<ProjectorDevice> devices = await _projectorDeviceRepository.GetListOrderedAsync();
         Dictionary<int, Guid> mapping = devices
-            .Where(d => d.ConnectionType == ProjectorConnectionType.UsbHid)
+            .Where(d => d.ConnectionType == ProjectorConnectionType.UsbHid && d.DeviceHardwareId is >= 1 and <= 255)
             .ToDictionary(d => d.HidDeviceIndex, d => d.Id);
         _dlpProjectorService.SetProjectorDeviceIdMapping(mapping);
 
@@ -137,6 +165,12 @@ public class ProjectorDeviceAppService : AuroraStruct3DAppService, IProjectorDev
         ProjectorDevice device = await _projectorDeviceRepository.GetAsync(id);
         device.SetName(input.Name);
         device.SetDescription(input.Description);
+        if (input.DeviceHardwareId.HasValue)
+        {
+            if (device.ConnectionType != ProjectorConnectionType.UsbHid)
+                throw new UserFriendlyException("仅 USB HID 光机可以配置寄存器身份 ID。");
+            device.UpdateDeviceInfo(input.DeviceHardwareId.Value);
+        }
         if (input.IsEnabled)
             device.Enable();
         else
@@ -169,6 +203,14 @@ public class ProjectorDeviceAppService : AuroraStruct3DAppService, IProjectorDev
                     ProjectorConsts.HidProductId,
                     device.HidDeviceIndex
                 );
+                string? rawIdentity = await svc.ReadRegisterAsync(0);
+                if (!int.TryParse(rawIdentity?.Trim(), out int identity) || identity != device.DeviceHardwareId)
+                {
+                    await svc.DisconnectAsync();
+                    throw new UserFriendlyException(
+                        $"USB 光机身份校验失败：期望 {device.DeviceHardwareId}，实际 {rawIdentity ?? "无响应"}。请先执行设备扫描/编号。"
+                    );
+                }
             }
         }
         catch (Exception ex)
@@ -320,6 +362,8 @@ public class ProjectorDeviceAppService : AuroraStruct3DAppService, IProjectorDev
                 input.ProjectorDeviceId
             );
             device.UpdateDisplayMode((byte)input.Mode);
+            // 底层显示模式切换会先退出 B1/B2，数据库状态必须同步为 B0。
+            device.UpdateTriggerMode(ProjectorTriggerMode.Normal);
             await _projectorDeviceRepository.UpdateAsync(device);
         }
         return ok;
@@ -489,6 +533,8 @@ public class ProjectorDeviceAppService : AuroraStruct3DAppService, IProjectorDev
         EnsureManualOrMaintenanceMode();
         await EnsureOrAcquireSessionAsync(input.ProjectorDeviceId, DeviceType.Projector);
         IDlpProjectorService svc = GetConnectedService(input.ProjectorDeviceId);
+        if (input.Address == 0 && input.Value == 0)
+            throw new UserFriendlyException("寄存器 0 是设备稳定身份，不能写入 0。请使用 1~255，且仅在设备单独连接时配置。");
         return await svc.WriteRegisterAsync(input.Address, input.Value);
     }
 
@@ -555,7 +601,7 @@ public class ProjectorDeviceAppService : AuroraStruct3DAppService, IProjectorDev
                     new FringePreviewImageDto
                     {
                         Index = index,
-                        Label = $"图像 {index + 1}",
+                        Label = GrayCodePatternLayout.GetFrameLabel(index),
                         Pixels = pixels,
                     }
             )
@@ -618,6 +664,7 @@ public class ProjectorDeviceAppService : AuroraStruct3DAppService, IProjectorDev
 
                 await svc.DownloadFringePatternAsync(
                         images,
+                        GetHorizontalFringeCount(),
                         input.HorizontalPaddingPosition,
                         reportProgress
                     )
@@ -661,83 +708,28 @@ public class ProjectorDeviceAppService : AuroraStruct3DAppService, IProjectorDev
 
     /// <summary>
     /// 按与设备下载完全一致的规则生成条纹图一维像素数据。
-    /// Step3 固定按 1-2-1-2（横-竖）交替方向生成；
-    /// ImageCount 表示每个方向的相移步数，因此实际生成 2×ImageCount 幅图像。
+    /// 固定生成 16 张多尺度二值条纹：横向 6、12、24、48 px，
+    /// 竖向 8、16、32、64 px，每种宽度均为原图和逐像素取反的互补图。
     /// 投影仪 Flash 地址空间为 1280×1280：
-    /// 竖条纹沿水平方向变化，数据长度为 1280（= WidthPixels），每行宽度 = 1280 / PeriodCount；
-    /// 横条纹沿垂直方向变化，实际投影高度为 HeightPixels（通常为 720），每行高度 = HeightPixels / PeriodCount，
+    /// 竖条纹沿水平方向变化，数据长度为 1280；横条纹沿垂直方向变化，数据长度为 720，
     /// 下载时由 DlpProjectorService 补 560 列黑色填充到 1280 列。
-    /// 周期 PeriodCount 表示总行数（如 40 行 = 20 白行 + 20 黑行）。
+    /// 下载参数中的周期、图像数及相移量不参与计算；互补图不做坐标偏移，直接对原图逐像素取反。
     /// </summary>
     private static byte[][] BuildFringeImagePixels(DownloadFringePatternInputDto input)
     {
-        if (input.WidthPixels <= 0 || input.HeightPixels <= 0)
+        if (
+            input.WidthPixels != GrayCodePatternLayout.ProjectorWidth
+            || input.HeightPixels != GrayCodePatternLayout.ProjectorHeight
+        )
         {
-            throw new UserFriendlyException("条纹分辨率无效，无法生成预览图像。");
+            throw new UserFriendlyException("当前投影仪条纹配置固定为 1280×720。");
         }
 
-        if (input.WidthPixels % input.PeriodCount != 0)
-        {
-            throw new UserFriendlyException("条纹周期数必须能整除投影宽度像素数。");
-        }
-
-        if (input.HeightPixels % input.PeriodCount != 0)
-        {
-            throw new UserFriendlyException("条纹周期数必须能整除投影高度像素数。");
-        }
-
-        if (input.PhaseShift <= 0 || input.PhaseShift >= input.PeriodCount)
-        {
-            throw new UserFriendlyException("相移量必须大于 0 且小于周期数。");
-        }
-
-        int horizontalStripeWidth = input.WidthPixels / input.PeriodCount;
-        int verticalStripeHeight = input.HeightPixels / input.PeriodCount;
-
-        byte firstColor = input.FringeType.Equals("wb", StringComparison.OrdinalIgnoreCase)
-            ? (byte)255
-            : (byte)0;
-        byte secondColor = (byte)(255 - firstColor);
-
-        // Step3 固定 1-2-1-2 横竖交替：H0, V0, H1, V1, ...
-        int totalFrameCount = input.ImageCount * 2;
-        byte[][] images = new byte[totalFrameCount][];
-        for (int i = 0; i < totalFrameCount; i++)
-        {
-            bool isHorizontalFrame = i % 2 == 0;
-            int directionIndex = i / 2;
-            int offset = directionIndex * input.PhaseShift;
-
-            if (isHorizontalFrame)
-            {
-                // 横条纹：同一列内灰度沿 Y 变化，数据长度为 HeightPixels。
-                byte[] pixels = new byte[input.HeightPixels];
-                for (int y = 0; y < input.HeightPixels; y++)
-                {
-                    int shifted = (y + offset) % input.HeightPixels;
-                    int stripeIdx = (shifted / verticalStripeHeight) % 2;
-                    pixels[y] = stripeIdx == 0 ? firstColor : secondColor;
-                }
-
-                images[i] = pixels;
-            }
-            else
-            {
-                // 竖条纹：同一行内灰度沿 X 变化，数据长度为 WidthPixels。
-                byte[] pixels = new byte[input.WidthPixels];
-                for (int x = 0; x < input.WidthPixels; x++)
-                {
-                    int shifted = (x + offset) % input.WidthPixels;
-                    int stripeIdx = (shifted / horizontalStripeWidth) % 2;
-                    pixels[x] = stripeIdx == 0 ? firstColor : secondColor;
-                }
-
-                images[i] = pixels;
-            }
-        }
-
-        return images;
+        return GrayCodePatternLayout.BuildFrames();
     }
+
+    private static int GetHorizontalFringeCount() =>
+        GrayCodePatternLayout.HorizontalFrameCount;
 
     // ─── 辅助 ─────────────────────────────────────────────────────────────
 

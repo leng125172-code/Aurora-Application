@@ -5,7 +5,8 @@ using AuroraStruct3D.Leisai;
 using AuroraStruct3D.OpenCV;
 using AuroraStruct3D.Projectors;
 using AuroraStruct3D.RS485;
-using AuroraStruct3D.Tucam;
+using AuroraStruct3D.Cameras;
+using AuroraStruct3D.Plcs;
 // DeviceStateManagement 项目通迁引用，无需单独 using
 using Lion.AbpPro.CacheManagement;
 using Lion.AbpPro.CodeManagement;
@@ -15,6 +16,8 @@ using Lion.AbpPro.ImportExportManagement;
 using Lion.AbpPro.MasterDataManagement;
 using Lion.AbpPro.TemplateManagement;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Configuration;
+using AuroraStruct3D.Workflow.Runtime;
 
 namespace AuroraStruct3D
 {
@@ -37,6 +40,14 @@ namespace AuroraStruct3D
     {
         public override void ConfigureServices(ServiceConfigurationContext context)
         {
+            IConfiguration configuration = context.Services.GetConfiguration();
+            context.Services.Configure<WorkflowRuntimeSafetyOptions>(
+                configuration.GetSection("Workflow:RuntimeSafety")
+            );
+            context.Services.Configure<WorkflowProgramCacheOptions>(
+                configuration.GetSection("Workflow:ProgramCache")
+            );
+
             // 注册 OpenCV 算子注册表服务（IOperatorRegistry + Redis 缓存 + 启动时自动扫描算子）
             // 依赖：IDistributedCache（Redis）须已在 HttpApi.Host 完成注册
             context.Services.AddOpenCVServices();
@@ -45,7 +56,10 @@ namespace AuroraStruct3D
             context.Services.AddAiServices();
 
             // 注册TUCam相机服务为单例
-            context.Services.AddTucamCameraServices();
+        context.Services.AddTucamCameraDriver();
+            context.Services.AddPlcCommunication();
+            context.Services.AddSingleton<IPlcRealtimeNotifier, NullPlcRealtimeNotifier>();
+            context.Services.AddSingleton<IPlcSubscriptionTracker, PlcSubscriptionTracker>();
 
             // 注册RS485电机控制服务为单例
             context.Services.AddRS485MotorServices();

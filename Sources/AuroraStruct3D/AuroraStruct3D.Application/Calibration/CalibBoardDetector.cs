@@ -531,6 +531,70 @@ public class CalibBoardDetector : ITransientDependency
         CalibProject? project
     )
     {
+        // 标定拍照通常为 2K/5MP 图像。圆点组网并不需要全分辨率，
+        // 先在半分辨率完成 Blob 检测可将像素扫描量降至约 1/4；
+        // 快速路径失败时仍回退原图，避免降低困难姿态下的识别率。
+        if (gray.Cols >= 1600 || gray.Rows >= 1600)
+        {
+            int halfWidth = Math.Max(1, gray.Cols / 2);
+            int halfHeight = Math.Max(1, gray.Rows / 2);
+            using Mat half = new();
+            Cv2.Resize(
+                gray,
+                half,
+                new Size(halfWidth, halfHeight),
+                0,
+                0,
+                InterpolationFlags.Area
+            );
+
+            Point2f[]? halfResult = FindCircleGridPointsCore(
+                half,
+                patternSize,
+                boardType,
+                detectorConfig,
+                project,
+                "半分辨率/"
+            );
+            if (halfResult != null)
+            {
+                float scaleX = (float)gray.Cols / halfWidth;
+                float scaleY = (float)gray.Rows / halfHeight;
+                for (int i = 0; i < halfResult.Length; i++)
+                {
+                    halfResult[i].X *= scaleX;
+                    halfResult[i].Y *= scaleY;
+                }
+
+                return halfResult;
+            }
+
+            _logger.LogDebug(
+                "圆点板半分辨率快速检测失败，回退全分辨率: Image={Width}x{Height}",
+                gray.Cols,
+                gray.Rows
+            );
+        }
+
+        return FindCircleGridPointsCore(
+            gray,
+            patternSize,
+            boardType,
+            detectorConfig,
+            project,
+            string.Empty
+        );
+    }
+
+    private Point2f[]? FindCircleGridPointsCore(
+        Mat gray,
+        Size patternSize,
+        CalibrationBoardType boardType,
+        CircleBlobDetectorConfigDto detectorConfig,
+        CalibProject? project,
+        string preprocessingPrefix
+    )
+    {
         bool hasMarkerHole = boardType == CalibrationBoardType.MarkedSymmetricCircleGrid;
         int expectedCount = patternSize.Width * patternSize.Height - (hasMarkerHole ? 1 : 0);
 
@@ -552,14 +616,20 @@ public class CalibBoardDetector : ITransientDependency
 
                 // 利用 keypoint.Size 估算先验像素半径
                 float estimatedRadius = EstimateMedianRadiusPx(markedKeypoints);
-                Point2f[] markedCenters = markedKeypoints
+                KeyPoint[] sizeFiltered = FilterCircleKeypointsBySize(
+                    markedKeypoints,
+                    expectedCount
+                );
+                Point2f[] markedCenters = sizeFiltered
                     .Select(x => new Point2f(x.Pt.X, x.Pt.Y))
                     .ToArray();
 
                 // 边缘亚像素精化临时关闭，待算法优化后再启用
                 _logger.LogDebug(
-                    "圆心边缘精化已关闭 — 保留原始 SimpleBlobDetector 圆心，数量={Count}",
-                    markedCenters.Length
+                    "圆心边缘精化已关闭 — SimpleBlobDetector 候选={RawCount}, 尺寸过滤后={FilteredCount}, 中位半径={Radius:F2}px",
+                    markedKeypoints.Length,
+                    markedCenters.Length,
+                    estimatedRadius
                 );
 
                 bool markedOk = TryBuildOrderedCircleGrid(
@@ -577,7 +647,7 @@ public class CalibBoardDetector : ITransientDependency
                 {
                     _logger.LogInformation(
                         "圆点板检测成功[{Preprocessing}]: BoardType={BoardType}, Pattern={Cols}x{Rows}, 点数={Count}",
-                        preprocessingName,
+                        preprocessingPrefix + preprocessingName,
                         boardType,
                         patternSize.Width,
                         patternSize.Height,
@@ -588,7 +658,7 @@ public class CalibBoardDetector : ITransientDependency
 
                 _logger.LogWarning(
                     "圆点板检测失败[{Preprocessing}]: BoardType={BoardType}, Pattern={Cols}x{Rows}, 原因={FailureReason}",
-                    preprocessingName,
+                    preprocessingPrefix + preprocessingName,
                     boardType,
                     patternSize.Width,
                     patternSize.Height,
@@ -615,7 +685,7 @@ public class CalibBoardDetector : ITransientDependency
                 {
                     _logger.LogInformation(
                         "圆点板检测成功[{Preprocessing}]: BoardType={BoardType}, Pattern={Cols}x{Rows}, 点数={Count}, Method=OpenCV",
-                        preprocessingName,
+                        preprocessingPrefix + preprocessingName,
                         boardType,
                         patternSize.Width,
                         patternSize.Height,
@@ -630,14 +700,17 @@ public class CalibBoardDetector : ITransientDependency
 
                 // 利用 keypoint.Size 估算先验像素半径
                 float estimatedRadius = EstimateMedianRadiusPx(keypoints);
-                Point2f[] blobCenters = keypoints
+                KeyPoint[] sizeFiltered = FilterCircleKeypointsBySize(keypoints, expectedCount);
+                Point2f[] blobCenters = sizeFiltered
                     .Select(x => new Point2f(x.Pt.X, x.Pt.Y))
                     .ToArray();
 
                 // 边缘亚像素精化临时关闭，待算法优化后再启用
                 _logger.LogDebug(
-                    "圆心边缘精化已关闭 — 保留原始 SimpleBlobDetector 圆心，数量={Count}",
-                    blobCenters.Length
+                    "圆心边缘精化已关闭 — SimpleBlobDetector 候选={RawCount}, 尺寸过滤后={FilteredCount}, 中位半径={Radius:F2}px",
+                    keypoints.Length,
+                    blobCenters.Length,
+                    estimatedRadius
                 );
 
                 bool orderedOk = TryBuildOrderedCircleGrid(
@@ -655,7 +728,7 @@ public class CalibBoardDetector : ITransientDependency
                 {
                     _logger.LogInformation(
                         "圆点板检测成功[{Preprocessing}]: BoardType={BoardType}, Pattern={Cols}x{Rows}, 点数={Count}, Method=CustomSort",
-                        preprocessingName,
+                        preprocessingPrefix + preprocessingName,
                         boardType,
                         patternSize.Width,
                         patternSize.Height,
@@ -666,7 +739,7 @@ public class CalibBoardDetector : ITransientDependency
 
                 _logger.LogWarning(
                     "圆点板检测失败[{Preprocessing}]: BoardType={BoardType}, Pattern={Cols}x{Rows}, 原因={FailureReason}, Method=CustomSort",
-                    preprocessingName,
+                    preprocessingPrefix + preprocessingName,
                     boardType,
                     patternSize.Width,
                     patternSize.Height,
@@ -918,6 +991,36 @@ public class CalibBoardDetector : ITransientDependency
         return SimpleBlobDetector.Create(p);
     }
 
+    /// <summary>
+    /// 利用标定板圆点直径应连续变化的特性，剔除明显过小/过大的背景 BLOB。
+    /// 若过滤后不足目标点数则回退原集合，避免激进过滤破坏远近透视较大的图像。
+    /// </summary>
+    private static KeyPoint[] FilterCircleKeypointsBySize(
+        KeyPoint[] keypoints,
+        int expectedCount
+    )
+    {
+        if (keypoints.Length <= expectedCount || keypoints.Length == 0)
+            return keypoints;
+
+        float[] sizes = keypoints
+            .Select(x => x.Size)
+            .Where(x => x > 0)
+            .OrderBy(x => x)
+            .ToArray();
+        if (sizes.Length == 0)
+            return keypoints;
+
+        float median = sizes[sizes.Length / 2];
+        float minSize = median * 0.55f;
+        float maxSize = median * 1.8f;
+        KeyPoint[] filtered = keypoints
+            .Where(x => x.Size >= minSize && x.Size <= maxSize)
+            .ToArray();
+
+        return filtered.Length >= expectedCount ? filtered : keypoints;
+    }
+
     private static bool TryBuildOrderedCircleGrid(
         Point2f[] points,
         int cols,
@@ -978,28 +1081,88 @@ public class CalibBoardDetector : ITransientDependency
             return false;
         }
 
-        List<Point2f> core = new(n);
+        // 真实网格角点至少有两个相邻圆点，边点有三个，内部点更多。
+        // 仅用最近邻距离无法排除板外孤立杂点；增加邻接密度约束后再估计四角。
+        double minNeighborDistance = 0.35 * medianNn;
+        double maxNeighborDistance = 1.8 * medianNn;
+        double minNeighborDistance2 = minNeighborDistance * minNeighborDistance;
+        double maxNeighborDistance2 = maxNeighborDistance * maxNeighborDistance;
+        int[] neighborCounts = new int[n];
+        List<int>[] adjacency = Enumerable.Range(0, n).Select(_ => new List<int>()).ToArray();
         for (int i = 0; i < n; i++)
         {
-            if (nnDist[i] <= 2.0 * medianNn)
-                core.Add(points[i]);
+            for (int j = i + 1; j < n; j++)
+            {
+                double dx = points[i].X - points[j].X;
+                double dy = points[i].Y - points[j].Y;
+                double d2 = (dx * dx) + (dy * dy);
+                if (d2 >= minNeighborDistance2 && d2 <= maxNeighborDistance2)
+                {
+                    neighborCounts[i]++;
+                    neighborCounts[j]++;
+                    adjacency[i].Add(j);
+                    adjacency[j].Add(i);
+                }
+            }
         }
+
+        // 水平板斜拍时近端/远端圆距不同，但整块标定板仍形成最大的连通网格簇。
+        // 先取最大连通分量，可避免图像边缘、支架和反光产生的 BLOB 拉偏四角。
+        bool[] visited = new bool[n];
+        List<int> largestComponent = new();
+        for (int start = 0; start < n; start++)
+        {
+            if (visited[start] || neighborCounts[start] < 2)
+                continue;
+
+            List<int> component = new();
+            Queue<int> queue = new();
+            visited[start] = true;
+            queue.Enqueue(start);
+            while (queue.Count > 0)
+            {
+                int current = queue.Dequeue();
+                component.Add(current);
+                foreach (int next in adjacency[current])
+                {
+                    if (visited[next] || neighborCounts[next] < 2)
+                        continue;
+                    visited[next] = true;
+                    queue.Enqueue(next);
+                }
+            }
+
+            if (component.Count > largestComponent.Count)
+                largestComponent = component;
+        }
+
+        List<int> coreIndices = largestComponent
+            .Where(i => nnDist[i] <= 2.0 * medianNn && neighborCounts[i] >= 2)
+            .ToList();
+        List<Point2f> core = coreIndices.Select(i => points[i]).ToList();
         if (core.Count < expected)
         {
             failureReason = $"core-insufficient:{core.Count}<{expected}";
             return false;
         }
 
-        Point2f tl = core[0],
-            tr = core[0],
-            br = core[0],
-            bl = core[0];
+        // 真正的四角在连通网格中邻接度最低。优先从低邻接度点选角，
+        // 避免斜拍时板外残留点或内部强反光点成为透视四角。
+        List<int> cornerIndices = coreIndices.Where(i => neighborCounts[i] <= 4).ToList();
+        if (cornerIndices.Count < 4)
+            cornerIndices = coreIndices;
+
+        Point2f tl = points[cornerIndices[0]],
+            tr = points[cornerIndices[0]],
+            br = points[cornerIndices[0]],
+            bl = points[cornerIndices[0]];
         double tlv = double.MaxValue,
             brv = double.MinValue,
             trv = double.MinValue,
             blv = double.MaxValue;
-        foreach (Point2f p in core)
+        foreach (int cornerIndex in cornerIndices)
         {
+            Point2f p = points[cornerIndex];
             double sum = p.X + p.Y;
             double diff = p.X - p.Y;
             if (sum < tlv)
@@ -1057,8 +1220,10 @@ public class CalibBoardDetector : ITransientDependency
             failureReason = "degenerate-cell";
             return false;
         }
-        double half = 0.5 * cell;
-        double matchThreshold2 = half * half;
+        // 初始四角来自离散圆心，强透视下中间区域预测会存在累计误差。
+        // 0.72 个单元仍小于相邻点间距，可保持唯一匹配并显著提高斜拍容差。
+        double matchThreshold = 0.72 * cell;
+        double matchThreshold2 = matchThreshold * matchThreshold;
 
         bool[] used = new bool[core.Count];
         Point2f[] ordered = new Point2f[expected];

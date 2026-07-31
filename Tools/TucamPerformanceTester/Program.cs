@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using System.Threading.Channels;
-using AuroraStruct3D.Tucam;
-using AuroraStruct3D.Tucam.Interop;
+using AuroraStruct3D.Cameras.Tucam;
+using AuroraStruct3D.Cameras.Tucam.Interop;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.AspNetCore.SignalR.Protocol;
 using Microsoft.Extensions.Logging;
@@ -13,6 +13,42 @@ class Program
 {
     static async Task Main(string[] args)
     {
+        if (args.Any(x => string.Equals(x, "--regression", StringComparison.OrdinalIgnoreCase)))
+        {
+            using var regressionMutex = new Mutex(
+                initiallyOwned: false,
+                name: "AuroraStruct3D.TucamPerformanceTester.HardwareRegression"
+            );
+            bool lockAcquired;
+            try
+            {
+                lockAcquired = regressionMutex.WaitOne(0);
+            }
+            catch (AbandonedMutexException)
+            {
+                lockAcquired = true;
+            }
+
+            if (!lockAcquired)
+            {
+                Console.Error.WriteLine(
+                    "已有 Tucam 硬件回归进程正在运行。为避免多个进程同时控制相机，本次执行已拒绝。"
+                );
+                Environment.ExitCode = 2;
+                return;
+            }
+
+            try
+            {
+                Environment.ExitCode = await TucamRegressionRunner.RunAsync(args);
+            }
+            finally
+            {
+                regressionMutex.ReleaseMutex();
+            }
+            return;
+        }
+
         Console.WriteLine("======================================");
         Console.WriteLine("  TUCam 摄像头性能调试工具");
         Console.WriteLine("======================================");

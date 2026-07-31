@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -8,7 +9,7 @@ using AuroraStruct3D.Cameras.Dtos;
 using AuroraStruct3D.OpenCV.ImageOps;
 using AuroraStruct3D.Projectors;
 using AuroraStruct3D.Projectors.Dtos;
-using AuroraStruct3D.Tucam;
+using AuroraStruct3D.Cameras.Tucam;
 using Microsoft.Extensions.Logging;
 using OpenCvSharp;
 using SkiaSharp;
@@ -32,7 +33,10 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
     private readonly IRepository<CalibStereoResult, Guid> _stereoResultRepo;
     private readonly IBlobContainer<CalibPhotoBlobContainer> _blobContainer;
     private readonly IRepository<CameraDevice, Guid> _cameraDeviceRepository;
-    private readonly ITucamCameraService _tucamService;
+    private readonly ICameraDriverRegistry _cameraDrivers;
+    private ITucamCameraService _tucamService =>
+        _cameraDrivers.GetRequired("tucam") as ITucamCameraService
+        ?? throw new UserFriendlyException("Tucam 驱动不可用");
     private readonly IProjectorDeviceAppService _projectorService;
     private readonly ILogger<CalibPhotoAppService> _logger;
     private readonly CalibBoardDetector _boardDetector;
@@ -52,7 +56,7 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
         IRepository<CalibStereoResult, Guid> stereoResultRepo,
         IBlobContainer<CalibPhotoBlobContainer> blobContainer,
         IRepository<CameraDevice, Guid> cameraDeviceRepository,
-        ITucamCameraService tucamService,
+        ICameraDriverRegistry cameraDrivers,
         IProjectorDeviceAppService projectorService,
         ILogger<CalibPhotoAppService> logger,
         CalibBoardDetector boardDetector,
@@ -65,7 +69,7 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
         _stereoResultRepo = stereoResultRepo;
         _blobContainer = blobContainer;
         _cameraDeviceRepository = cameraDeviceRepository;
-        _tucamService = tucamService;
+        _cameraDrivers = cameraDrivers;
         _projectorService = projectorService;
         _logger = logger;
         _boardDetector = boardDetector;
@@ -224,31 +228,40 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
     /// <inheritdoc/>
     public async Task<CalibPhotoDto> TakeIntrinsicPhotoAsync(TakeIntrinsicPhotoInput input)
     {
+        Stopwatch totalSw = Stopwatch.StartNew();
         CalibProject project = await _projectRepo.GetAsync(input.CalibProjectId);
         CameraDevice camera = await _cameraDeviceRepository.GetAsync(input.CameraDeviceId);
+        long metadataMs = totalSw.ElapsedMilliseconds;
 
         EnsureBoardConfigValid(project, isProjectedBoard: false);
 
+        Stopwatch phaseSw = Stopwatch.StartNew();
         byte[] jpegBytes = await GrabCalibFrameRawAsync(
             input.CameraDeviceId,
             targetTriggerMode: 2,
             imageRotationAngle: camera.ImageRotationAngle
         );
+        long captureMs = phaseSw.ElapsedMilliseconds;
 
+        phaseSw.Restart();
         (bool isValid, int cornerCount) = _boardDetector.DetectBoardFeaturePoints(
             jpegBytes,
             project,
             isProjectedBoard: false
         );
+        long detectionMs = phaseSw.ElapsedMilliseconds;
 
         string blobKey = BuildBlobKey(
             input.CalibProjectId,
             input.CameraDeviceId,
             CalibPhotoType.Intrinsic
         );
+        phaseSw.Restart();
         await _blobContainer.SaveAsync(blobKey, jpegBytes, overrideExisting: false);
+        long blobSaveMs = phaseSw.ElapsedMilliseconds;
 
-        string imageBase64 = $"data:image/jpeg;base64,{Convert.ToBase64String(jpegBytes)}";
+        phaseSw.Restart();
+        string imageBase64 = CreateThumbnailBase64(jpegBytes);
 
         CalibPhotoRecord record = new(
             GuidGenerator.Create(),
@@ -261,6 +274,19 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
             imageBase64
         );
         await _photoRepo.InsertAsync(record);
+        long recordSaveMs = phaseSw.ElapsedMilliseconds;
+
+        _logger.LogInformation(
+            "内参拍照耗时: Metadata={MetadataMs}ms, Capture={CaptureMs}ms, Detect={DetectionMs}ms, BlobSave={BlobSaveMs}ms, RecordAndBase64={RecordSaveMs}ms, Total={TotalMs}ms, ImageBytes={ImageBytes}, Valid={Valid}",
+            metadataMs,
+            captureMs,
+            detectionMs,
+            blobSaveMs,
+            recordSaveMs,
+            totalSw.ElapsedMilliseconds,
+            jpegBytes.Length,
+            isValid
+        );
 
         return ToPhotoDto(record);
     }
@@ -315,7 +341,7 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
         );
         await _blobContainer.SaveAsync(blobKey, photoBytes, overrideExisting: false);
 
-        string imageBase64 = $"data:image/jpeg;base64,{Convert.ToBase64String(photoBytes)}";
+        string imageBase64 = CreateThumbnailBase64(photoBytes);
 
         CalibPhotoRecord record = new(
             GuidGenerator.Create(),
@@ -445,7 +471,7 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
         );
         await _blobContainer.SaveAsync(blobKey, photoBytes, overrideExisting: false);
 
-        string imageBase64 = $"data:image/jpeg;base64,{Convert.ToBase64String(photoBytes)}";
+        string imageBase64 = CreateThumbnailBase64(photoBytes);
 
         CalibPhotoRecord record = new(
             GuidGenerator.Create(),
@@ -539,9 +565,8 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
         await _blobContainer.SaveAsync(mainBlobKey, mainBytes, overrideExisting: false);
         await _blobContainer.SaveAsync(secondaryBlobKey, secondaryBytes, overrideExisting: false);
 
-        string mainImageBase64 = $"data:image/jpeg;base64,{Convert.ToBase64String(mainBytes)}";
-        string secondaryImageBase64 =
-            $"data:image/jpeg;base64,{Convert.ToBase64String(secondaryBytes)}";
+        string mainImageBase64 = CreateThumbnailBase64(mainBytes);
+        string secondaryImageBase64 = CreateThumbnailBase64(secondaryBytes);
 
         CalibPhotoRecord mainRecord = new(
             GuidGenerator.Create(),
@@ -596,9 +621,32 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
             query = query.Where(x => x.PhotoType == photoType.Value);
         }
         query = query.OrderBy(x => x.CapturedAt);
+        List<CalibPhotoRecord> records = await AsyncExecuter.ToListAsync(query);
+        return records.Select(x => ToPhotoDto(x, compressLegacyThumbnail: true)).ToList();
+    }
 
-        List<CalibPhotoRecord> items = await AsyncExecuter.ToListAsync(query);
-        return items.Select(ToPhotoDto).ToList();
+    /// <inheritdoc/>
+    public async Task<IRemoteStreamContent> GetOriginalPhotoAsync(string blobKey)
+    {
+        if (string.IsNullOrWhiteSpace(blobKey))
+            throw new UserFriendlyException("图片 Blob Key 不能为空");
+
+        // Blob Key 必须属于现有标定照片，禁止利用该接口读取容器内任意文件。
+        IQueryable<CalibPhotoRecord> query = await _photoRepo.GetQueryableAsync();
+        bool exists = await AsyncExecuter.AnyAsync(query.Where(x => x.BlobKey == blobKey));
+        if (!exists)
+            throw new UserFriendlyException("标定原图不存在");
+
+        byte[] bytes = await _blobContainer.GetAllBytesAsync(blobKey);
+        bool isBmp =
+            bytes.Length >= 2 && bytes[0] == (byte)'B' && bytes[1] == (byte)'M';
+        string contentType = isBmp ? "image/bmp" : "image/jpeg";
+        string extension = isBmp ? "bmp" : "jpg";
+        return new RemoteStreamContent(
+            new MemoryStream(bytes, writable: false),
+            $"calib-photo-original.{extension}",
+            contentType
+        );
     }
 
     /// <inheritdoc/>
@@ -1840,6 +1888,8 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
         List<Mat> objectPoints = [];
         List<Mat> imagePointsMain = [];
         List<Mat> imagePointsSecondary = [];
+        List<Point2f[]> detectedPointsMain = [];
+        List<Point2f[]> detectedPointsSecondary = [];
         Size imageSize = default;
 
         System.Diagnostics.Stopwatch phaseSwS = new();
@@ -1931,6 +1981,8 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
             objectPoints.Add(Mat.FromArray(worldCorners));
             imagePointsMain.Add(Mat.FromArray(mainCorners));
             imagePointsSecondary.Add(Mat.FromArray(secondaryCorners));
+            detectedPointsMain.Add(mainCorners);
+            detectedPointsSecondary.Add(secondaryCorners);
         }
 
         if (objectPoints.Count < CalibConsts.MinValidPhotoCount)
@@ -2068,6 +2120,103 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
             p2,
             q
         );
+
+        double translationNorm = Math.Sqrt(
+            Math.Pow(t.At<double>(0), 2)
+                + Math.Pow(t.At<double>(1), 2)
+                + Math.Pow(t.At<double>(2), 2)
+        );
+        using Mat projectionBaseline =
+            StereoReconstructionUtils.ComputeBaselineFromStereoResult(p1, p2);
+        double projectionBaselineNorm =
+            StereoReconstructionUtils.ComputeBaselineDistance(projectionBaseline);
+        double rectifiedCx1 = p1.At<double>(0, 2);
+        double rectifiedCx2 = p2.At<double>(0, 2);
+        int disparitySign = StereoReconstructionUtils.ComputeDisparitySign(p1, p2);
+
+        _logger.LogInformation(
+            "[双目标定] 联合外参 — R={R}, T={T}, RotationAngle={RotationAngle:F3}deg, TranslationNorm={TranslationNorm:F3}mm",
+            CalibImageUtils.SerializeMatToJson(r),
+            CalibImageUtils.SerializeVecToJson(t),
+            Math.Acos(Math.Clamp((Cv2.Trace(r).Val0 - 1d) / 2d, -1d, 1d))
+                * 180d
+                / Math.PI,
+            translationNorm
+        );
+        _logger.LogInformation(
+            "[双目标定] 整平投影矩阵 — P1={P1}, P2={P2}, Q={Q}",
+            CalibImageUtils.SerializeMatToJson(p1),
+            CalibImageUtils.SerializeMatToJson(p2),
+            CalibImageUtils.SerializeMatToJson(q)
+        );
+        _logger.LogInformation(
+            "[双目标定] 几何一致性 — TranslationBaseline={TranslationBaseline:F3}mm, ProjectionBaseline={ProjectionBaseline:F3}mm, Difference={Difference:F3}mm, "
+                + "RectifiedFx={Fx:F3}, Cx1={Cx1:F3}, Cx2={Cx2:F3}, CxDifference={CxDifference:F3}, DisparityDirection={Direction}",
+            translationNorm,
+            projectionBaselineNorm,
+            Math.Abs(translationNorm - projectionBaselineNorm),
+            p1.At<double>(0, 0),
+            rectifiedCx1,
+            rectifiedCx2,
+            rectifiedCx1 - rectifiedCx2,
+            disparitySign > 0 ? "Positive" : "Negative"
+        );
+
+        List<double> verticalErrors = [];
+        List<double> horizontalDisparities = [];
+        for (int pairIndex = 0; pairIndex < detectedPointsMain.Count; pairIndex++)
+        {
+            using Mat rectifiedMainPoints = new();
+            using Mat rectifiedSecondaryPoints = new();
+            Cv2.UndistortPoints(
+                InputArray.Create(detectedPointsMain[pairIndex]),
+                rectifiedMainPoints,
+                mainCameraMatrix,
+                mainDistCoeffs,
+                r1,
+                p1
+            );
+            Cv2.UndistortPoints(
+                InputArray.Create(detectedPointsSecondary[pairIndex]),
+                rectifiedSecondaryPoints,
+                secondaryCameraMatrix,
+                secondaryDistCoeffs,
+                r2,
+                p2
+            );
+            rectifiedMainPoints.GetArray(out Point2f[] mainRectified);
+            rectifiedSecondaryPoints.GetArray(out Point2f[] secondaryRectified);
+            int pointCount = Math.Min(mainRectified.Length, secondaryRectified.Length);
+            for (int pointIndex = 0; pointIndex < pointCount; pointIndex++)
+            {
+                verticalErrors.Add(
+                    Math.Abs(mainRectified[pointIndex].Y - secondaryRectified[pointIndex].Y)
+                );
+                horizontalDisparities.Add(
+                    mainRectified[pointIndex].X - secondaryRectified[pointIndex].X
+                );
+            }
+        }
+
+        if (verticalErrors.Count > 0)
+        {
+            verticalErrors.Sort();
+            horizontalDisparities.Sort();
+            int p95Index = Math.Min(
+                verticalErrors.Count - 1,
+                (int)Math.Ceiling(verticalErrors.Count * 0.95d) - 1
+            );
+            _logger.LogInformation(
+                "[双目标定] 整平极线验收 — Points={Points}, VerticalErrorMean={Mean:F4}px, P95={P95:F4}px, Max={Max:F4}px, "
+                    + "HorizontalDisparityRange=[{MinDisparity:F3},{MaxDisparity:F3}]",
+                verticalErrors.Count,
+                verticalErrors.Average(),
+                verticalErrors[p95Index],
+                verticalErrors[^1],
+                horizontalDisparities[0],
+                horizontalDisparities[^1]
+            );
+        }
 
         if (stereoError > CalibConsts.MaxStereoReprojectionError)
         {
@@ -2618,7 +2767,8 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
     )
     {
         CameraDevice camera = await _cameraDeviceRepository.GetAsync(cameraDeviceId);
-        int idx = camera.DeviceIndex;
+        ITucamCameraService cameraProvider = ResolveTucamCamera(camera);
+        int idx = ResolveRuntimeIndex(camera, cameraProvider);
 
         if (!_tucamService.IsCameraOpen(idx))
         {
@@ -2865,8 +3015,30 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
         };
     }
 
-    private static CalibPhotoDto ToPhotoDto(CalibPhotoRecord record)
+    private static CalibPhotoDto ToPhotoDto(
+        CalibPhotoRecord record,
+        bool compressLegacyThumbnail = false
+    )
     {
+        string? thumbnail = record.ThumbnailBase64;
+        if (
+            compressLegacyThumbnail
+            && !string.IsNullOrEmpty(thumbnail)
+            && thumbnail.Length > 300_000
+        )
+        {
+            int separator = thumbnail.IndexOf(',');
+            string encoded = separator >= 0 ? thumbnail[(separator + 1)..] : thumbnail;
+            try
+            {
+                thumbnail = CreateThumbnailBase64(Convert.FromBase64String(encoded));
+            }
+            catch (FormatException)
+            {
+                thumbnail = null;
+            }
+        }
+
         return new CalibPhotoDto
         {
             Id = record.Id,
@@ -2874,7 +3046,8 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
             IsValid = record.IsValid,
             CornerCountDetected = record.CornerCountDetected,
             CapturedAt = record.CapturedAt,
-            ThumbnailBase64 = record.ThumbnailBase64,
+            ThumbnailBase64 = thumbnail,
+            BlobKey = record.BlobKey,
             PairGroupId = record.PairGroupId,
             StereoRole = record.StereoRole,
             ExtrinsicPhase = record.ExtrinsicPhase.HasValue
@@ -2883,6 +3056,67 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
             ImageDiffScore = record.ImageDiffScore,
             ImageDiffSignificant = record.ImageDiffSignificant,
         };
+    }
+
+    private ITucamCameraService ResolveTucamCamera(CameraDevice camera)
+    {
+        if ((camera.Capabilities & CameraCapability.Snapshot) == 0)
+            throw new UserFriendlyException($"相机 [{camera.Name}] 不支持标定拍照");
+        if (string.IsNullOrWhiteSpace(camera.HardwareId))
+            throw new UserFriendlyException($"相机 [{camera.Name}] 尚未绑定稳定硬件标识");
+        ICameraDriver driver = _cameraDrivers.GetRequired(camera.DriverId);
+        return driver as ITucamCameraService
+            ?? throw new UserFriendlyException(
+                $"相机驱动 [{camera.DriverId}] 尚未提供标定参数适配器"
+            );
+    }
+
+    private static int ResolveRuntimeIndex(
+        CameraDevice camera,
+        ITucamCameraService provider
+    )
+    {
+        ICameraDriver driver = (ICameraDriver)provider;
+        return driver.TryGetRuntimeIndex(camera.HardwareId!, out int index)
+            ? index
+            : throw new UserFriendlyException($"相机 [{camera.Name}] 当前离线");
+    }
+
+    private static string CreateThumbnailBase64(byte[] imageBytes)
+    {
+        using Mat source = Cv2.ImDecode(imageBytes, ImreadModes.Color);
+        if (source.Empty())
+            return string.Empty;
+
+        const int maxSide = 480;
+        double scale = Math.Min(1.0, (double)maxSide / Math.Max(source.Cols, source.Rows));
+        using Mat thumbnail = new();
+        if (scale < 1.0)
+        {
+            Cv2.Resize(
+                source,
+                thumbnail,
+                new Size(
+                    Math.Max(1, (int)Math.Round(source.Cols * scale)),
+                    Math.Max(1, (int)Math.Round(source.Rows * scale))
+                ),
+                0,
+                0,
+                InterpolationFlags.Area
+            );
+        }
+        else
+        {
+            source.CopyTo(thumbnail);
+        }
+
+        Cv2.ImEncode(
+            ".jpg",
+            thumbnail,
+            out byte[] encoded,
+            new ImageEncodingParam(ImwriteFlags.JpegQuality, 70)
+        );
+        return $"data:image/jpeg;base64,{Convert.ToBase64String(encoded)}";
     }
 
     private async Task<(

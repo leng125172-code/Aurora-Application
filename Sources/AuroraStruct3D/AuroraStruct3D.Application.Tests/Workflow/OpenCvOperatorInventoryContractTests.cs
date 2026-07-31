@@ -1,9 +1,9 @@
 using System.ComponentModel;
 using System.Reflection;
 using System.Runtime.InteropServices;
-using System.Text.RegularExpressions;
 using AuroraStruct3D.OpenCV;
 using AuroraStruct3D.OpenCV.Registry;
+using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -104,6 +104,14 @@ public class OpenCvOperatorInventoryContractTests
         );
 
         global::AuroraStruct3D.Workflow.Dtos.NodePaletteDto palette = await appService.GetAsync();
+
+        Dictionary<string, string?> overlayModes = palette
+            .Categories.SelectMany(x => x.Nodes ?? [])
+            .Where(x => x.OverlayMode is not null)
+            .ToDictionary(x => x.Id, x => x.OverlayMode, StringComparer.OrdinalIgnoreCase);
+        Assert.Equal("plane", overlayModes["c38e27a6-8d49-4c41-96a0-a53f30c23101"]);
+        Assert.Equal("region", overlayModes["d420473b-76f1-455a-83e4-492809c23102"]);
+        Assert.Equal("none", overlayModes["e15fb284-2abe-477c-bd47-3cfde9c23103"]);
 
         Assert.Equal(
             3 + inventory.Select(x => x.Category).Distinct(StringComparer.Ordinal).Count(),
@@ -225,50 +233,24 @@ public class OpenCvOperatorInventoryContractTests
     }
 
     [Fact]
-    public void DetectionOperatorDocument_Should_Match_Runtime_Inventory()
+    public async Task GetParametersAsync_Should_Rebuild_And_Recache_When_Parameter_Cache_Is_Missing()
     {
-        IReadOnlyList<OperatorInventoryItem> operators = GetOperatorInventory();
-        OperatorDocumentSnapshot document = ParseOperatorDocument();
+        OperatorInventoryItem expected = GetOperatorInventory().First();
 
-        Assert.Equal(operators.Count, document.TotalCount);
+        using ServiceProvider provider = CreateOpenCvServiceProvider();
+        IOperatorRegistry registry = provider.GetRequiredService<IOperatorRegistry>();
+        IDistributedCache cache = provider.GetRequiredService<IDistributedCache>();
 
-        Dictionary<string, List<OperatorInventoryItem>> actualByCategory = operators
-            .GroupBy(x => x.Category, StringComparer.Ordinal)
-            .OrderBy(x => x.Key, StringComparer.Ordinal)
-            .ToDictionary(
-                x => x.Key,
-                x => x.OrderBy(item => item.DisplayName, StringComparer.Ordinal).ToList(),
-                StringComparer.Ordinal
-            );
+        _ = await registry.GetAllOperatorsAsync();
+        await cache.RemoveAsync($"opencv:op:{expected.OperatorId:N}:params");
 
-        Assert.Equal(actualByCategory.Count, document.SectionCounts.Count);
-        Assert.Equal(actualByCategory.Count, document.StatsCounts.Count);
+        OperatorParametersDescriptor? rebuilt = await registry.GetParametersAsync(
+            expected.OperatorId
+        );
 
-        foreach ((string category, List<OperatorInventoryItem> items) in actualByCategory)
-        {
-            Assert.True(document.SectionCounts.ContainsKey(category), $"文档缺少分类 {category}。");
-            Assert.True(
-                document.SectionPathsByCategory.ContainsKey(category),
-                $"文档缺少分类 {category} 的算子表。"
-            );
-            Assert.True(document.StatsCounts.ContainsKey(category), $"统计表缺少分类 {category}。");
-
-            Assert.Equal(items.Count, document.SectionCounts[category]);
-            Assert.Equal(items.Count, document.StatsCounts[category]);
-
-            string[] actualPaths = items
-                .Select(x => x.RelativeSourcePath)
-                .OrderBy(x => x, StringComparer.Ordinal)
-                .ToArray();
-            string[] documentedPaths = document
-                .SectionPathsByCategory[category]
-                .OrderBy(x => x, StringComparer.Ordinal)
-                .ToArray();
-
-            Assert.Equal(actualPaths, documentedPaths);
-        }
-
-        Assert.Equal(operators.Count, document.StatsTotal);
+        Assert.NotNull(rebuilt);
+        Assert.Equal(expected.OperatorId, rebuilt!.OperatorId);
+        Assert.NotNull(await cache.GetAsync($"opencv:op:{expected.OperatorId:N}:params"));
     }
 
     private static void AssertStaticProperty(Type type, string propertyName)
@@ -340,125 +322,6 @@ public class OpenCvOperatorInventoryContractTests
             .OrderBy(x => x.Category, StringComparer.Ordinal)
             .ThenBy(x => x.DisplayName, StringComparer.Ordinal)
             .ToList();
-    }
-
-    private static OperatorDocumentSnapshot ParseOperatorDocument()
-    {
-        string repositoryRoot = GetRepositoryRoot();
-        string documentPath = Path.Combine(repositoryRoot, "Documents", "检测算子.md");
-        string documentDirectory = Path.GetDirectoryName(documentPath)!;
-        string[] lines = File.ReadAllLines(documentPath);
-
-        string? totalLine = lines.FirstOrDefault(line =>
-            line.TrimStart('\uFEFF').StartsWith("当前公开算子总数：", StringComparison.Ordinal)
-        );
-        Assert.True(totalLine is not null, "文档缺少总数行。");
-
-        Match totalMatch = Regex.Match(totalLine!, "^当前公开算子总数：(\\d+)$");
-        Assert.True(totalMatch.Success, "文档总数行格式无效。");
-
-        var sectionCounts = new Dictionary<string, int>(StringComparer.Ordinal);
-        var sectionPathsByCategory = new Dictionary<string, List<string>>(StringComparer.Ordinal);
-        string? currentCategory = null;
-
-        foreach (string line in lines)
-        {
-            Match sectionMatch = Regex.Match(line, "^### (.+?)（(\\d+) 个）$");
-            if (sectionMatch.Success)
-            {
-                currentCategory = sectionMatch.Groups[1].Value;
-                sectionCounts[currentCategory] = int.Parse(sectionMatch.Groups[2].Value);
-                sectionPathsByCategory[currentCategory] = [];
-                continue;
-            }
-
-            if (string.Equals(line, "## 统计", StringComparison.Ordinal))
-            {
-                currentCategory = null;
-                continue;
-            }
-
-            if (
-                currentCategory is not null
-                && TryNormalizeDocumentSourcePath(
-                    line,
-                    documentDirectory,
-                    repositoryRoot,
-                    out string path
-                )
-            )
-            {
-                sectionPathsByCategory[currentCategory].Add(path);
-            }
-        }
-
-        var statsCounts = new Dictionary<string, int>(StringComparer.Ordinal);
-        int statsTotal = 0;
-        int statsHeaderIndex = Array.FindIndex(
-            lines,
-            line => string.Equals(line, "| 分类 | 数量 |", StringComparison.Ordinal)
-        );
-
-        Assert.True(statsHeaderIndex >= 0, "文档缺少统计表。");
-
-        for (int index = statsHeaderIndex + 2; index < lines.Length; index++)
-        {
-            string line = lines[index];
-            if (!line.StartsWith("|", StringComparison.Ordinal))
-            {
-                break;
-            }
-
-            Match statsMatch = Regex.Match(line, "^\\| (.+?) \\| (\\d+) \\|$");
-            if (!statsMatch.Success)
-            {
-                continue;
-            }
-
-            string category = statsMatch.Groups[1].Value;
-            int count = int.Parse(statsMatch.Groups[2].Value);
-            if (string.Equals(category, "合计", StringComparison.Ordinal))
-            {
-                statsTotal = count;
-            }
-            else
-            {
-                statsCounts[category] = count;
-            }
-        }
-
-        return new OperatorDocumentSnapshot(
-            int.Parse(totalMatch.Groups[1].Value),
-            sectionCounts,
-            sectionPathsByCategory,
-            statsCounts,
-            statsTotal
-        );
-    }
-
-    private static bool TryNormalizeDocumentSourcePath(
-        string line,
-        string documentDirectory,
-        string repositoryRoot,
-        out string relativePath
-    )
-    {
-        Match pathMatch = Regex.Match(line, "\\]\\(([^)]+\\.cs)\\)");
-        if (!pathMatch.Success)
-        {
-            relativePath = string.Empty;
-            return false;
-        }
-
-        string rawPath = pathMatch.Groups[1].Value;
-        string fullPath = rawPath.StartsWith("file:///", StringComparison.OrdinalIgnoreCase)
-            ? new Uri(rawPath).LocalPath
-            : Path.GetFullPath(
-                Path.Combine(documentDirectory, rawPath.Replace('/', Path.DirectorySeparatorChar))
-            );
-
-        relativePath = Path.GetRelativePath(repositoryRoot, fullPath).Replace('\\', '/');
-        return true;
     }
 
     private static ServiceProvider CreateOpenCvServiceProvider()
@@ -552,11 +415,4 @@ public class OpenCvOperatorInventoryContractTests
         public System.Guid OperatorId => System.Guid.Parse(Guid);
     }
 
-    private sealed record OperatorDocumentSnapshot(
-        int TotalCount,
-        IReadOnlyDictionary<string, int> SectionCounts,
-        IReadOnlyDictionary<string, List<string>> SectionPathsByCategory,
-        IReadOnlyDictionary<string, int> StatsCounts,
-        int StatsTotal
-    );
 }

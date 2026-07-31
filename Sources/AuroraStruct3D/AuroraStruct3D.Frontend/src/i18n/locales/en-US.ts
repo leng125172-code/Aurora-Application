@@ -64,6 +64,8 @@ export default {
         operationLogs: 'Operation Logs',
         serialPortManage: 'RS485 Ports',
         motorDeviceManage: 'RS485 Motors',
+        plcManage: 'PLC Communications',
+        plcControl: 'PLC Tag Control',
         productModelManage: '3D Model Library',
         productModelLogs: '3D Model Operation Logs',
         aiModelManage: 'AI Model Management',

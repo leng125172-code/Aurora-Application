@@ -7,12 +7,19 @@ using System.Text;
 using Volo.Abp;
 using Volo.Abp.BlobStoring;
 using Volo.Abp.Domain.Repositories;
+using Volo.Abp.Uow;
 
 namespace AuroraStruct3D.Calibration;
 
 [Authorize]
 public class CalibPointCloudAppService : AuroraStruct3DAppService, ICalibPointCloudAppService
 {
+    // 当前设备基线约 164mm、焦距约 3026px，约 250~300mm 的近距离工作区
+    // 对应约 1650~2000px 视差。允许覆盖完整 2048px 相机画幅，实际候选仍受
+    // 极线方向、同码匹配和连续性约束，避免旧 1024px 上限误删全部近距离点。
+    private const double MaxStructuredLightDisparity = 2048d;
+    private const int MinimumReliableStructuredLightMatches = 500;
+
     private readonly IRepository<CalibProject, Guid> _projectRepository;
     private readonly IRepository<CalibCameraParam, Guid> _cameraParamRepository;
     private readonly IRepository<CalibStereoResult, Guid> _stereoResultRepository;
@@ -22,6 +29,7 @@ public class CalibPointCloudAppService : AuroraStruct3DAppService, ICalibPointCl
     private readonly ICalibPointCloudNotifier _notifier;
     private readonly IBlobContainer<CalibPhotoBlobContainer> _blobContainer;
     private readonly ILogger<CalibPointCloudAppService> _logger;
+    private readonly IUnitOfWorkManager _unitOfWorkManager;
 
     public CalibPointCloudAppService(
         IRepository<CalibProject, Guid> projectRepository,
@@ -32,7 +40,8 @@ public class CalibPointCloudAppService : AuroraStruct3DAppService, ICalibPointCl
         CalibPointCloudStateStore stateStore,
         ICalibPointCloudNotifier notifier,
         IBlobContainer<CalibPhotoBlobContainer> blobContainer,
-        ILogger<CalibPointCloudAppService> logger
+        ILogger<CalibPointCloudAppService> logger,
+        IUnitOfWorkManager unitOfWorkManager
     )
     {
         _projectRepository = projectRepository;
@@ -44,6 +53,7 @@ public class CalibPointCloudAppService : AuroraStruct3DAppService, ICalibPointCl
         _notifier = notifier;
         _blobContainer = blobContainer;
         _logger = logger;
+        _unitOfWorkManager = unitOfWorkManager;
     }
 
     public async Task<PointCloudStatusDto> GenerateAsync(GeneratePointCloudInput input)
@@ -105,8 +115,12 @@ public class CalibPointCloudAppService : AuroraStruct3DAppService, ICalibPointCl
     public async Task GenerateIncrementalPointCloudAsync(
         Guid calibProjectId,
         long roundIndex,
-        int patternCount)
+        int totalFrameCount)
     {
+        using IUnitOfWork unitOfWork = _unitOfWorkManager.Begin(
+            requiresNew: true,
+            isTransactional: false
+        );
         try
         {
             CalibProject project = await _projectRepository.GetAsync(calibProjectId);
@@ -123,60 +137,578 @@ public class CalibPointCloudAppService : AuroraStruct3DAppService, ICalibPointCl
                 return;
             }
 
-            var scanImages = await LoadScanImagesForRoundAsync(project, roundIndex, patternCount);
-            if (scanImages.MainImages.Count == 0 || scanImages.SecondaryImages.Count == 0)
+            int expectedFrameCount = GrayCodePatternLayout.TotalFrameCount;
+            if (totalFrameCount != expectedFrameCount)
             {
-                _logger.LogWarning("Step7 增量点云生成：第 {Round} 轮扫描图像不完整，跳过", roundIndex);
-                return;
+                throw new InvalidOperationException(
+                    $"结构光条纹帧数必须为 {expectedFrameCount}，实际为 {totalFrameCount}"
+                );
             }
 
-            var mainPhase = ComputePhaseForCamera(scanImages.MainImages, patternCount, calibrationData.PeriodCount, CancellationToken.None);
-            var secondaryPhase = ComputePhaseForCamera(scanImages.SecondaryImages, patternCount, calibrationData.PeriodCount, CancellationToken.None);
+            var scanImages = await LoadScanImagesForRoundAsync(
+                project,
+                roundIndex,
+                expectedFrameCount
+            );
+            if (
+                scanImages.MainImages.Count != expectedFrameCount
+                || scanImages.SecondaryImages.Count != expectedFrameCount
+            )
+            {
+                throw new InvalidOperationException(
+                    $"第 {roundIndex} 轮扫描图像不完整："
+                    + $"主相机 {scanImages.MainImages.Count}/{expectedFrameCount}，"
+                    + $"从相机 {scanImages.SecondaryImages.Count}/{expectedFrameCount}"
+                );
+            }
 
-            using Mat disparity = StereoReconstructionUtils.ComputeDisparity(mainPhase, secondaryPhase);
+            if (scanImages.TextureImage is null)
+            {
+                throw new InvalidOperationException(
+                    $"第 {roundIndex} 轮缺少主相机白光纹理帧，无法进行真实色彩还原"
+                );
+            }
+
+            PointCloudStatusDto? reconstructing = _stateStore.UpdateProgress(
+                calibProjectId,
+                50,
+                $"正在重建第 {roundIndex} 轮彩色点云"
+            );
+            if (reconstructing is not null)
+            {
+                await _notifier.NotifyStatusAsync(reconstructing);
+            }
+
+            GrayCodeDecodeResult mainCode = DecodeGrayCodeForCamera(
+                scanImages.MainImages,
+                calibrationData.Map1x,
+                calibrationData.Map1y,
+                CancellationToken.None
+            );
+            GrayCodeDecodeResult secondaryCode = DecodeGrayCodeForCamera(
+                scanImages.SecondaryImages,
+                calibrationData.Map2x,
+                calibrationData.Map2y,
+                CancellationToken.None
+            );
+            LogStructuredLightDiagnostics(
+                calibProjectId,
+                roundIndex,
+                "Main",
+                mainCode
+            );
+            LogStructuredLightDiagnostics(
+                calibProjectId,
+                roundIndex,
+                "Secondary",
+                secondaryCode
+            );
+
+            int disparitySign = StereoReconstructionUtils.ComputeDisparitySign(
+                calibrationData.ProjectionP1,
+                calibrationData.ProjectionP2
+            );
+            using Mat disparity = BuildGrayCodeDisparity(
+                mainCode,
+                secondaryCode,
+                disparitySign,
+                out int matchedPixelCount,
+                out GrayCodeMatchDiagnostics matchDiagnostics
+            );
+            LogStructuredLightMatchDiagnostics(
+                calibProjectId,
+                roundIndex,
+                disparitySign,
+                matchDiagnostics
+            );
+            if (matchedPixelCount == 0)
+            {
+                throw new InvalidOperationException(
+                    $"第 {roundIndex} 轮多尺度条纹未找到有效双目对应点；"
+                    + $"请检查 {GrayCodePatternLayout.TotalFrameCount} 帧顺序、投影曝光、相机同步和双目极线矫正。"
+                );
+            }
+
             using Mat depth = StereoReconstructionUtils.ComputeDepthFromDisparity(
                 disparity,
                 calibrationData.ProjectionP1,
                 calibrationData.ProjectionP2,
-                calibrationData.BaselineMm
+                calibrationData.BaselineMm,
+                disparitySign
+            );
+            byte[] qualityTextureBytes =
+                scanImages.TextureImage is { Length: > 0 } capturedTexture
+                    ? capturedTexture
+                    : scanImages.MainImages[0];
+            using Mat qualityTextureSource =
+                CalibImageUtils.LoadBgrMat(qualityTextureBytes);
+            using Mat qualityTextureRectified = new();
+            Cv2.Remap(
+                qualityTextureSource,
+                qualityTextureRectified,
+                calibrationData.Map1x,
+                calibrationData.Map1y,
+                InterpolationFlags.Linear
+            );
+            DepthQualityPreview depthPreview = BuildDepthQualityPreview(
+                depth,
+                mainCode.Valid,
+                qualityTextureRectified
+            );
+            await _notifier.NotifyDepthQualityMapAsync(
+                calibProjectId,
+                depthPreview.PngBytes,
+                depthPreview.ValidPointCount,
+                depthPreview.TotalPointCount,
+                depthPreview.MinimumDepthMm,
+                depthPreview.MaximumDepthMm
+            );
+            if (matchedPixelCount < MinimumReliableStructuredLightMatches)
+            {
+                throw new InvalidOperationException(
+                    $"第 {roundIndex} 轮结构光匹配点过少：{matchedPixelCount}/"
+                    + $"{MinimumReliableStructuredLightMatches}。二维质量图已保留用于诊断，"
+                    + $"主相机解码有效率={mainCode.ValidCount * 100d / mainCode.Valid.Length:F2}%，"
+                    + $"从相机解码有效率={secondaryCode.ValidCount * 100d / secondaryCode.Valid.Length:F2}%。"
+                    + "请优先改善从相机曝光、对焦和投影覆盖，并确认主从相机采集同一条纹帧。"
+                );
+            }
+
+            _logger.LogInformation(
+                "Step7 多尺度条纹解码匹配完成：ProjectId={ProjectId}, Round={Round}, MainValid={MainValid}, SecondaryValid={SecondaryValid}, Matched={Matched}, Direction={Direction}",
+                calibProjectId,
+                roundIndex,
+                mainCode.ValidCount,
+                secondaryCode.ValidCount,
+                matchedPixelCount,
+                disparitySign > 0 ? "Positive" : "Negative"
             );
 
-            using (Mat rectifiedMain = CalibImageUtils.LoadBgrMat(scanImages.MainImages[0]))
-            using (Mat rectified = new())
+            using (Mat textureMain = CalibImageUtils.LoadBgrMat(scanImages.TextureImage))
+            using (Mat rectifiedTexture = new())
             {
-                Cv2.Remap(rectifiedMain, rectified, calibrationData.Map1x, calibrationData.Map1y, InterpolationFlags.Linear);
+                Cv2.Remap(
+                    textureMain,
+                    rectifiedTexture,
+                    calibrationData.Map1x,
+                    calibrationData.Map1y,
+                    InterpolationFlags.Linear
+                );
 
                 var (pointCloud, colors) = StereoReconstructionUtils.GeneratePointCloud(
                     depth,
-                    rectified,
+                    rectifiedTexture,
                     calibrationData.ProjectionP1
                 );
+                using (pointCloud)
+                using (colors)
+                {
+                    byte[] plyBytes = StereoReconstructionUtils.WritePly(pointCloud, colors);
 
-                byte[] plyBytes = StereoReconstructionUtils.WritePly(pointCloud, colors);
+                    int totalPointCount =
+                        _stateStore.GetTotalPointCount(calibProjectId) + pointCloud.Rows;
+                    _stateStore.AddIncrementalPointCloud(
+                        calibProjectId,
+                        plyBytes,
+                        pointCloud.Rows
+                    );
 
-                int totalPointCount = _stateStore.GetTotalPointCount(calibProjectId) + pointCloud.Rows;
-                _stateStore.AddIncrementalPointCloud(calibProjectId, plyBytes, pointCloud.Rows);
 
-                await _notifier.NotifyIncrementalPointCloudAsync(
-                    calibProjectId,
-                    plyBytes,
-                    pointCloud.Rows,
-                    totalPointCount
-                );
+                    PointCloudStatusDto? waiting = _stateStore.UpdateProgress(
+                        calibProjectId,
+                        0,
+                        $"第 {roundIndex} 轮完成，等待下一轮采集"
+                    );
+                    if (waiting is not null)
+                    {
+                        await _notifier.NotifyStatusAsync(waiting);
+                    }
 
-                _logger.LogInformation(
-                    "Step7 增量点云生成完成：ProjectId={ProjectId}, Round={Round}, PointCount={PointCount}, TotalPointCount={TotalPointCount}",
-                    calibProjectId,
-                    roundIndex,
-                    pointCloud.Rows,
-                    totalPointCount
-                );
+                    _logger.LogInformation(
+                        "Step7 增量彩色点云生成完成：ProjectId={ProjectId}, Round={Round}, PointCount={PointCount}, TotalPointCount={TotalPointCount}",
+                        calibProjectId,
+                        roundIndex,
+                        pointCloud.Rows,
+                        totalPointCount
+                    );
+                }
             }
+
+            await unitOfWork.CompleteAsync();
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Step7 增量点云生成失败：ProjectId={ProjectId}, Round={Round}", calibProjectId, roundIndex);
+            PointCloudStatusDto? failedRound = _stateStore.UpdateProgress(
+                calibProjectId,
+                0,
+                $"第 {roundIndex} 轮重建失败：{ex.Message}"
+            );
+            if (failedRound is not null)
+            {
+                await _notifier.NotifyStatusAsync(failedRound);
+            }
         }
+    }
+
+    public async Task GenerateIncrementalStereoPointCloudAsync(
+        Guid calibProjectId,
+        long roundIndex)
+    {
+        System.Diagnostics.Stopwatch roundTimer = System.Diagnostics.Stopwatch.StartNew();
+        using IUnitOfWork unitOfWork = _unitOfWorkManager.Begin(
+            requiresNew: true,
+            isTransactional: false
+        );
+        try
+        {
+            CalibProject project = await _projectRepository.GetAsync(calibProjectId);
+            if (!project.MainCameraDeviceId.HasValue || !project.SecondaryCameraDeviceId.HasValue)
+            {
+                throw new InvalidOperationException("普通双目点云生成需要绑定主、从两台相机");
+            }
+
+            if (!_stateStore.IsIncrementalModeActive(calibProjectId))
+            {
+                _stateStore.StartIncrementalMode(calibProjectId);
+            }
+
+            CalibrationData? calibrationData = await LoadCalibrationDataAsync(
+                project,
+                CancellationToken.None,
+                requireProjectorParameters: false
+            );
+            if (calibrationData is null)
+            {
+                throw new InvalidOperationException("双目标定数据不完整，无法生成普通双目点云");
+            }
+
+            _logger.LogInformation(
+                "Step7 普通双目重建开始：ProjectId={ProjectId}, Round={Round}, MainCamera={MainCamera}, SecondaryCamera={SecondaryCamera}, "
+                + "Baseline={Baseline:F3}, Fx={Fx:F3}, Fy={Fy:F3}, Cx={Cx:F3}, Cy={Cy:F3}, RectifyMap={MapWidth}x{MapHeight}",
+                calibProjectId,
+                roundIndex,
+                project.MainCameraDeviceId,
+                project.SecondaryCameraDeviceId,
+                calibrationData.BaselineMm,
+                calibrationData.ProjectionP1.At<double>(0, 0),
+                calibrationData.ProjectionP1.At<double>(1, 1),
+                calibrationData.ProjectionP1.At<double>(0, 2),
+                calibrationData.ProjectionP1.At<double>(1, 2),
+                calibrationData.Map1x.Cols,
+                calibrationData.Map1x.Rows
+            );
+
+            string mainKey = CalibScanAppService.BuildScanBlobKey(
+                project.Id,
+                project.MainCameraDeviceId.Value,
+                roundIndex,
+                0,
+                CalibScanCameraRole.Main
+            );
+            string secondaryKey = CalibScanAppService.BuildScanBlobKey(
+                project.Id,
+                project.SecondaryCameraDeviceId.Value,
+                roundIndex,
+                0,
+                CalibScanCameraRole.Secondary
+            );
+            if (
+                !await _blobContainer.ExistsAsync(mainKey)
+                || !await _blobContainer.ExistsAsync(secondaryKey)
+            )
+            {
+                throw new InvalidOperationException($"第 {roundIndex} 轮普通双目图像不完整");
+            }
+
+            byte[] mainBytes = await _blobContainer.GetAllBytesAsync(mainKey);
+            byte[] secondaryBytes = await _blobContainer.GetAllBytesAsync(secondaryKey);
+
+            PointCloudStatusDto? reconstructing = _stateStore.UpdateProgress(
+                calibProjectId,
+                50,
+                $"正在重建第 {roundIndex} 轮普通双目点云"
+            );
+            if (reconstructing is not null)
+            {
+                await _notifier.NotifyStatusAsync(reconstructing);
+            }
+
+            using Mat mainImage = CalibImageUtils.LoadBgrMat(mainBytes);
+            using Mat secondaryImage = CalibImageUtils.LoadBgrMat(secondaryBytes);
+            _logger.LogInformation(
+                "Step7 普通双目图像已加载：ProjectId={ProjectId}, Round={Round}, Main={MainWidth}x{MainHeight}/{MainBytes}Bytes, "
+                + "Secondary={SecondaryWidth}x{SecondaryHeight}/{SecondaryBytes}Bytes",
+                calibProjectId,
+                roundIndex,
+                mainImage.Cols,
+                mainImage.Rows,
+                mainBytes.Length,
+                secondaryImage.Cols,
+                secondaryImage.Rows,
+                secondaryBytes.Length
+            );
+            var (rectifiedMain, rectifiedSecondary) = StereoReconstructionUtils.RectifyImages(
+                mainImage,
+                secondaryImage,
+                calibrationData.Map1x,
+                calibrationData.Map1y,
+                calibrationData.Map2x,
+                calibrationData.Map2y
+            );
+            using (rectifiedMain)
+            using (rectifiedSecondary)
+            using (Mat mainGray = new())
+            using (Mat secondaryGray = new())
+            using (Mat disparity16 = new())
+            using (Mat disparity = new())
+            {
+                Cv2.CvtColor(rectifiedMain, mainGray, ColorConversionCodes.BGR2GRAY);
+                Cv2.CvtColor(rectifiedSecondary, secondaryGray, ColorConversionCodes.BGR2GRAY);
+                var mainStats = CalculateGrayImageStats(mainGray);
+                var secondaryStats = CalculateGrayImageStats(secondaryGray);
+                _logger.LogInformation(
+                    "Step7 普通双目矫正图统计：ProjectId={ProjectId}, Round={Round}, "
+                    + "MainRange=[{MainMin:F0},{MainMax:F0}], MainMean={MainMean:F2}, MainStdDev={MainStdDev:F2}, MainNonBlack={MainNonBlack:P2}; "
+                    + "SecondaryRange=[{SecondaryMin:F0},{SecondaryMax:F0}], SecondaryMean={SecondaryMean:F2}, "
+                    + "SecondaryStdDev={SecondaryStdDev:F2}, SecondaryNonBlack={SecondaryNonBlack:P2}",
+                    calibProjectId,
+                    roundIndex,
+                    mainStats.Min,
+                    mainStats.Max,
+                    mainStats.Mean,
+                    mainStats.StdDev,
+                    mainStats.NonBlackRatio,
+                    secondaryStats.Min,
+                    secondaryStats.Max,
+                    secondaryStats.Mean,
+                    secondaryStats.StdDev,
+                    secondaryStats.NonBlackRatio
+                );
+
+                int disparitySign = StereoReconstructionUtils.ComputeDisparitySign(
+                    calibrationData.ProjectionP1,
+                    calibrationData.ProjectionP2
+                );
+                int minDisparity = disparitySign > 0 ? 0 : -128;
+                _logger.LogInformation(
+                    "Step7 普通双目极线矫正完成：ProjectId={ProjectId}, Round={Round}, Size={Width}x{Height}, "
+                    + "DisparityDirection={Direction}, Search=[{SearchMin},{SearchMax}], BlockSize=15",
+                    calibProjectId,
+                    roundIndex,
+                    rectifiedMain.Cols,
+                    rectifiedMain.Rows,
+                    disparitySign > 0 ? "Positive" : "Negative",
+                    minDisparity,
+                    minDisparity + 127
+                );
+                using StereoBM matcher = StereoBM.Create(numDisparities: 128, blockSize: 15);
+                matcher.MinDisparity = minDisparity;
+                matcher.Compute(mainGray, secondaryGray, disparity16);
+                disparity16.ConvertTo(disparity, MatType.CV_64FC1, 1d / 16d);
+
+                Cv2.MinMaxLoc(disparity, out double minObservedDisparity, out double maxObservedDisparity);
+                int validDisparityPixels = CountValidDisparities(
+                    disparity,
+                    disparitySign,
+                    minDisparity,
+                    128
+                );
+                long totalPixels = (long)disparity.Rows * disparity.Cols;
+                _logger.LogInformation(
+                    "Step7 普通双目视差统计：ProjectId={ProjectId}, Round={Round}, Direction={Direction}, "
+                    + "Range=[{Min:F2},{Max:F2}], Valid={Valid}/{Total} ({ValidRatio:P2})",
+                    calibProjectId,
+                    roundIndex,
+                    disparitySign > 0 ? "Positive" : "Negative",
+                    minObservedDisparity,
+                    maxObservedDisparity,
+                    validDisparityPixels,
+                    totalPixels,
+                    totalPixels == 0 ? 0d : (double)validDisparityPixels / totalPixels
+                );
+
+                int oppositeValidDisparityPixels = 0;
+                if (validDisparityPixels == 0)
+                {
+                    int oppositeSign = -disparitySign;
+                    int oppositeMinDisparity = oppositeSign > 0 ? 0 : -128;
+                    using Mat oppositeDisparity16 = new();
+                    using Mat oppositeDisparity = new();
+                    using StereoBM oppositeMatcher = StereoBM.Create(
+                        numDisparities: 128,
+                        blockSize: 15
+                    );
+                    oppositeMatcher.MinDisparity = oppositeMinDisparity;
+                    oppositeMatcher.Compute(mainGray, secondaryGray, oppositeDisparity16);
+                    oppositeDisparity16.ConvertTo(
+                        oppositeDisparity,
+                        MatType.CV_64FC1,
+                        1d / 16d
+                    );
+                    oppositeValidDisparityPixels = CountValidDisparities(
+                        oppositeDisparity,
+                        oppositeSign,
+                        oppositeMinDisparity,
+                        128
+                    );
+                    Cv2.MinMaxLoc(
+                        oppositeDisparity,
+                        out double oppositeMinObserved,
+                        out double oppositeMaxObserved
+                    );
+                    _logger.LogWarning(
+                        "Step7 普通双目反方向探测：ProjectId={ProjectId}, Round={Round}, Direction={Direction}, "
+                        + "Search=[{SearchMin},{SearchMax}], Range=[{Min:F2},{Max:F2}], Valid={Valid}/{Total} ({ValidRatio:P2})。"
+                        + "该结果仅用于诊断，不参与点云生成。",
+                        calibProjectId,
+                        roundIndex,
+                        oppositeSign > 0 ? "Positive" : "Negative",
+                        oppositeMinDisparity,
+                        oppositeMinDisparity + 127,
+                        oppositeMinObserved,
+                        oppositeMaxObserved,
+                        oppositeValidDisparityPixels,
+                        totalPixels,
+                        totalPixels == 0
+                            ? 0d
+                            : (double)oppositeValidDisparityPixels / totalPixels
+                    );
+                }
+
+                using Mat depth = StereoReconstructionUtils.ComputeDepthFromDisparity(
+                    disparity,
+                    calibrationData.ProjectionP1,
+                    calibrationData.ProjectionP2,
+                    calibrationData.BaselineMm,
+                    disparitySign
+                );
+                DepthQualityPreview depthPreview = BuildDepthQualityPreview(
+                    depth,
+                    textureImage: rectifiedMain
+                );
+                await _notifier.NotifyDepthQualityMapAsync(
+                    calibProjectId,
+                    depthPreview.PngBytes,
+                    depthPreview.ValidPointCount,
+                    depthPreview.TotalPointCount,
+                    depthPreview.MinimumDepthMm,
+                    depthPreview.MaximumDepthMm
+                );
+                var (pointCloud, colors) = StereoReconstructionUtils.GeneratePointCloud(
+                    depth,
+                    rectifiedMain,
+                    calibrationData.ProjectionP1,
+                    sampleStep: 8
+                );
+                using (pointCloud)
+                using (colors)
+                {
+                    _logger.LogInformation(
+                        "Step7 普通双目点云统计：ProjectId={ProjectId}, Round={Round}, ValidDisparity={ValidDisparity}, "
+                        + "SampleStep=8, GeneratedPoints={GeneratedPoints}, ElapsedMs={ElapsedMs}",
+                        calibProjectId,
+                        roundIndex,
+                        validDisparityPixels,
+                        pointCloud.Rows,
+                        roundTimer.ElapsedMilliseconds
+                    );
+                    if (pointCloud.Rows == 0)
+                    {
+                        throw new InvalidOperationException(
+                            $"第 {roundIndex} 轮未得到有效双目点云。"
+                            + $"视差范围=[{minObservedDisparity:F2}, {maxObservedDisparity:F2}]，"
+                            + $"反方向有效视差={oppositeValidDisparityPixels}，"
+                            + $"矫正图非黑比例=主{mainStats.NonBlackRatio:P2}/从{secondaryStats.NonBlackRatio:P2}。"
+                            + "请检查主从相机顺序、双目标定、曝光同步以及被测物表面纹理。"
+                        );
+                    }
+
+                    byte[] plyBytes = StereoReconstructionUtils.WritePly(pointCloud, colors);
+                    int totalPointCount =
+                        _stateStore.GetTotalPointCount(calibProjectId) + pointCloud.Rows;
+                    _stateStore.AddIncrementalPointCloud(
+                        calibProjectId,
+                        plyBytes,
+                        pointCloud.Rows
+                    );
+                    PointCloudStatusDto? waiting = _stateStore.UpdateProgress(
+                        calibProjectId,
+                        0,
+                        $"第 {roundIndex} 轮普通双目点云完成，等待下一帧"
+                    );
+                    if (waiting is not null)
+                    {
+                        await _notifier.NotifyStatusAsync(waiting);
+                    }
+
+                    _logger.LogInformation(
+                        "Step7 普通双目增量点云完成：ProjectId={ProjectId}, Round={Round}, AddedPoints={AddedPoints}, "
+                        + "TotalPoints={TotalPoints}, PlyBytes={PlyBytes}, ElapsedMs={ElapsedMs}",
+                        calibProjectId,
+                        roundIndex,
+                        pointCloud.Rows,
+                        totalPointCount,
+                        plyBytes.Length,
+                        roundTimer.ElapsedMilliseconds
+                    );
+                }
+            }
+
+            await unitOfWork.CompleteAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(
+                ex,
+                "Step7 普通双目增量点云生成失败：ProjectId={ProjectId}, Round={Round}",
+                calibProjectId,
+                roundIndex
+            );
+            PointCloudStatusDto? failedRound = _stateStore.UpdateProgress(
+                calibProjectId,
+                0,
+                $"第 {roundIndex} 轮普通双目重建失败：{ex.Message}"
+            );
+            if (failedRound is not null)
+            {
+                await _notifier.NotifyStatusAsync(failedRound);
+            }
+        }
+    }
+
+    private static (
+        double Min,
+        double Max,
+        double Mean,
+        double StdDev,
+        double NonBlackRatio
+    ) CalculateGrayImageStats(Mat gray)
+    {
+        Cv2.MinMaxLoc(gray, out double min, out double max);
+        Cv2.MeanStdDev(gray, out Scalar mean, out Scalar stdDev);
+        using Mat nonBlackMask = new();
+        Cv2.Compare(gray, 1, nonBlackMask, CmpTypes.GT);
+        long totalPixels = (long)gray.Rows * gray.Cols;
+        double nonBlackRatio =
+            totalPixels == 0 ? 0d : (double)Cv2.CountNonZero(nonBlackMask) / totalPixels;
+        return (min, max, mean.Val0, stdDev.Val0, nonBlackRatio);
+    }
+
+    private static int CountValidDisparities(
+        Mat disparity,
+        int disparitySign,
+        int minDisparity,
+        int numDisparities
+    )
+    {
+        double lower = disparitySign > 0 ? 0.1 : minDisparity;
+        double upper = disparitySign > 0
+            ? minDisparity + numDisparities - 1
+            : -0.1;
+        using Mat validMask = new();
+        Cv2.InRange(disparity, new Scalar(lower), new Scalar(upper), validMask);
+        return Cv2.CountNonZero(validMask);
     }
 
     public async Task CompleteIncrementalPointCloudAsync(Guid calibProjectId)
@@ -227,10 +759,9 @@ public class CalibPointCloudAppService : AuroraStruct3DAppService, ICalibPointCl
     private async Task<ScanImages> LoadScanImagesForRoundAsync(
         CalibProject project,
         long roundIndex,
-        int patternCount)
+        int totalFrames)
     {
         ScanImages result = new();
-        int totalFrames = patternCount * 2;
 
         for (int frame = 0; frame < totalFrames; frame++)
         {
@@ -269,6 +800,321 @@ public class CalibPointCloudAppService : AuroraStruct3DAppService, ICalibPointCl
             }
         }
 
+        if (project.MainCameraDeviceId.HasValue)
+        {
+            string textureKey = CalibScanAppService.BuildTextureBlobKey(
+                project.Id,
+                project.MainCameraDeviceId.Value,
+                roundIndex
+            );
+            if (await _blobContainer.ExistsAsync(textureKey))
+            {
+                result.TextureImage = await _blobContainer.GetAllBytesAsync(textureKey);
+            }
+        }
+
+        return result;
+    }
+
+    private static GrayCodeDecodeResult DecodeGrayCodeForCamera(
+        List<byte[]> images,
+        Mat mapX,
+        Mat mapY,
+        CancellationToken cancellationToken)
+    {
+        if (images.Count != GrayCodePatternLayout.TotalFrameCount)
+        {
+            throw new InvalidOperationException(
+                $"多尺度条纹解码需要 {GrayCodePatternLayout.TotalFrameCount} 帧，实际 {images.Count} 帧"
+            );
+        }
+
+        int width = mapX.Cols;
+        int height = mapX.Rows;
+        int pixelCount = checked(width * height);
+        byte[] valid = Enumerable.Repeat((byte)1, pixelCount).ToArray();
+        int[] grayX = new int[pixelCount];
+        int[] grayY = new int[pixelCount];
+        List<GrayCodePairDiagnostics> pairDiagnostics = [];
+
+        DecodeGrayBits(
+            images,
+            0,
+            GrayCodePatternLayout.HorizontalBitCount,
+            grayY,
+            valid,
+            mapX,
+            mapY,
+            pairDiagnostics,
+            cancellationToken
+        );
+        DecodeGrayBits(
+            images,
+            GrayCodePatternLayout.HorizontalFrameCount,
+            GrayCodePatternLayout.VerticalBitCount,
+            grayX,
+            valid,
+            mapX,
+            mapY,
+            pairDiagnostics,
+            cancellationToken
+        );
+
+        int validCount = 0;
+        for (int i = 0; i < pixelCount; i++)
+        {
+            if (valid[i] == 0)
+            {
+                continue;
+            }
+
+            validCount++;
+        }
+
+        return new GrayCodeDecodeResult(
+            width,
+            height,
+            grayX,
+            grayY,
+            valid,
+            validCount,
+            pairDiagnostics
+        );
+    }
+
+    private static void DecodeGrayBits(
+        List<byte[]> images,
+        int firstFrame,
+        int bitCount,
+        int[] grayValues,
+        byte[] valid,
+        Mat mapX,
+        Mat mapY,
+        List<GrayCodePairDiagnostics> diagnostics,
+        CancellationToken cancellationToken)
+    {
+        for (int pair = 0; pair < bitCount; pair++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            byte[] original = ReadRectifiedGray(images[firstFrame + pair * 2], mapX, mapY);
+            byte[] inverse = ReadRectifiedGray(images[firstFrame + pair * 2 + 1], mapX, mapY);
+            long originalSum = 0;
+            long inverseSum = 0;
+            long absoluteDifferenceSum = 0;
+            int strongDifferenceCount = 0;
+            int positiveDifferenceCount = 0;
+            for (int i = 0; i < valid.Length; i++)
+            {
+                originalSum += original[i];
+                inverseSum += inverse[i];
+                int pairDifference = original[i] - inverse[i];
+                int absoluteDifference = Math.Abs(pairDifference);
+                absoluteDifferenceSum += absoluteDifference;
+                if (absoluteDifference >= 5)
+                {
+                    strongDifferenceCount++;
+                    if (pairDifference > 0)
+                    {
+                        positiveDifferenceCount++;
+                    }
+                }
+
+                if (valid[i] == 0)
+                {
+                    continue;
+                }
+
+                int difference = pairDifference;
+                if (Math.Abs(difference) < 5)
+                {
+                    valid[i] = 0;
+                    continue;
+                }
+
+                grayValues[i] = (grayValues[i] << 1) | (difference > 0 ? 1 : 0);
+            }
+
+            int frameIndex = firstFrame + pair * 2;
+            diagnostics.Add(
+                new GrayCodePairDiagnostics(
+                    frameIndex,
+                    GrayCodePatternLayout.GetFrameLabel(frameIndex),
+                    originalSum / (double)valid.Length,
+                    inverseSum / (double)valid.Length,
+                    absoluteDifferenceSum / (double)valid.Length,
+                    strongDifferenceCount,
+                    positiveDifferenceCount,
+                    valid.Length
+                )
+            );
+        }
+    }
+
+    private static byte[] ReadRectifiedGray(byte[] imageBytes, Mat mapX, Mat mapY)
+    {
+        using Mat bgr = CalibImageUtils.LoadBgrMat(imageBytes);
+        using Mat gray = new();
+        using Mat rectified = new();
+        Cv2.CvtColor(bgr, gray, ColorConversionCodes.BGR2GRAY);
+        Cv2.Remap(gray, rectified, mapX, mapY, InterpolationFlags.Linear);
+        byte[] pixels = new byte[checked(rectified.Rows * rectified.Cols)];
+        System.Runtime.InteropServices.Marshal.Copy(rectified.Data, pixels, 0, pixels.Length);
+        return pixels;
+    }
+
+    private static Mat BuildGrayCodeDisparity(
+        GrayCodeDecodeResult main,
+        GrayCodeDecodeResult secondary,
+        int disparitySign,
+        out int matchedPixelCount,
+        out GrayCodeMatchDiagnostics diagnostics)
+    {
+        if (main.Width != secondary.Width || main.Height != secondary.Height)
+        {
+            throw new InvalidOperationException("主从相机条纹解码图尺寸不一致。");
+        }
+
+        int pixelCount = checked(main.Width * main.Height);
+        double[] disparities = Enumerable.Repeat(double.NaN, pixelCount).ToArray();
+        matchedPixelCount = 0;
+        long mainValidPixels = 0;
+        long codeFoundPixels = 0;
+        long candidateCount = 0;
+        long nonPositiveRejected = 0;
+        long overRangeRejected = 0;
+        long ambiguousPixelCount = 0;
+        long rowsWithSecondaryCodes = 0;
+        double minimumPositiveCandidate = double.PositiveInfinity;
+        double maximumPositiveCandidate = double.NegativeInfinity;
+
+        for (int y = 0; y < main.Height; y++)
+        {
+            int rowOffset = y * main.Width;
+            Dictionary<int, List<int>> secondaryByPatternCode = new();
+            for (int x = 0; x < secondary.Width; x++)
+            {
+                int index = rowOffset + x;
+                if (secondary.Valid[index] == 0)
+                {
+                    continue;
+                }
+
+                int key =
+                    (secondary.ProjectorY[index] << GrayCodePatternLayout.VerticalBitCount)
+                    | secondary.ProjectorX[index];
+                if (secondaryByPatternCode.TryGetValue(key, out List<int>? candidates))
+                {
+                    candidates.Add(x);
+                }
+                else
+                {
+                    secondaryByPatternCode[key] = [x];
+                }
+            }
+            if (secondaryByPatternCode.Count > 0)
+            {
+                rowsWithSecondaryCodes++;
+            }
+
+            // 当前竖条纹编码每 128px 重复一次，单个像素通常会命中多个周期候选。
+            // 结构光物体在同一条极线上的视差应当连续，因此用上一有效点的视差
+            // 维持同一周期分支。每行的第一个点优先选择较大的合法视差，符合当前
+            // 近距离设备布局；后续点再按连续性跟踪，避免逐像素跳到不同周期。
+            double previousSignedDisparity = double.NaN;
+            for (int x = 0; x < main.Width; x++)
+            {
+                int index = rowOffset + x;
+                if (main.Valid[index] == 0)
+                {
+                    continue;
+                }
+                mainValidPixels++;
+
+                int key =
+                    (main.ProjectorY[index] << GrayCodePatternLayout.VerticalBitCount)
+                    | main.ProjectorX[index];
+                if (!secondaryByPatternCode.TryGetValue(key, out List<int>? candidates))
+                {
+                    continue;
+                }
+                codeFoundPixels++;
+                candidateCount += candidates.Count;
+
+                double bestDisparity = double.NaN;
+                double bestContinuityCost = double.PositiveInfinity;
+                double bestSignedDisparity = double.NaN;
+                int admissibleCandidateCount = 0;
+                foreach (int secondaryX in candidates)
+                {
+                    double candidateDisparity = x - secondaryX;
+                    double signed = candidateDisparity * disparitySign;
+                    if (signed <= 0.1)
+                    {
+                        nonPositiveRejected++;
+                        continue;
+                    }
+                    minimumPositiveCandidate = Math.Min(minimumPositiveCandidate, signed);
+                    maximumPositiveCandidate = Math.Max(maximumPositiveCandidate, signed);
+                    if (signed > MaxStructuredLightDisparity)
+                    {
+                        overRangeRejected++;
+                        continue;
+                    }
+                    admissibleCandidateCount++;
+
+                    double continuityCost = double.IsFinite(previousSignedDisparity)
+                        ? Math.Abs(signed - previousSignedDisparity)
+                        : MaxStructuredLightDisparity - signed;
+                    if (continuityCost > bestContinuityCost)
+                    {
+                        continue;
+                    }
+                    if (continuityCost == bestContinuityCost
+                        && double.IsFinite(bestSignedDisparity)
+                        && signed <= bestSignedDisparity)
+                    {
+                        continue;
+                    }
+
+                    bestDisparity = candidateDisparity;
+                    bestSignedDisparity = signed;
+                    bestContinuityCost = continuityCost;
+                }
+
+                if (admissibleCandidateCount > 1)
+                {
+                    ambiguousPixelCount++;
+                }
+                if (admissibleCandidateCount == 0 || !double.IsFinite(bestDisparity))
+                {
+                    continue;
+                }
+
+                disparities[index] = bestDisparity;
+                previousSignedDisparity = bestSignedDisparity;
+                matchedPixelCount++;
+            }
+        }
+        diagnostics = new GrayCodeMatchDiagnostics(
+            mainValidPixels,
+            codeFoundPixels,
+            candidateCount,
+            nonPositiveRejected,
+            overRangeRejected,
+            ambiguousPixelCount,
+            matchedPixelCount,
+            rowsWithSecondaryCodes,
+            double.IsFinite(minimumPositiveCandidate) ? minimumPositiveCandidate : double.NaN,
+            double.IsFinite(maximumPositiveCandidate) ? maximumPositiveCandidate : double.NaN
+        );
+
+        Mat result = new(main.Height, main.Width, MatType.CV_64FC1);
+        System.Runtime.InteropServices.Marshal.Copy(
+            disparities,
+            0,
+            result.Data,
+            disparities.Length
+        );
         return result;
     }
 
@@ -284,62 +1130,66 @@ public class CalibPointCloudAppService : AuroraStruct3DAppService, ICalibPointCl
             return plyChunks[0];
         }
 
-        List<string> headerLines = new();
-        List<string> dataLines = new();
         int totalVertexCount = 0;
+        List<(byte[] Chunk, int DataOffset)> chunkData = new(plyChunks.Count);
 
         foreach (byte[] chunk in plyChunks)
         {
             string content = Encoding.ASCII.GetString(chunk);
-            string[] lines = content.Split('\n', StringSplitOptions.RemoveEmptyEntries);
-
-            bool isHeader = true;
-            int vertexCount = 0;
-
-            foreach (string line in lines)
+            int headerEnd = content.IndexOf("end_header", StringComparison.Ordinal);
+            if (headerEnd < 0)
             {
-                string trimmed = line.Trim();
+                throw new InvalidDataException("增量点云块缺少 PLY end_header。");
+            }
 
-                if (isHeader)
-                {
-                    if (trimmed.StartsWith("element vertex"))
-                    {
-                        if (int.TryParse(trimmed.Split()[2], out int count))
-                        {
-                            vertexCount = count;
-                        }
-                    }
-                    else if (trimmed == "end_header")
-                    {
-                        isHeader = false;
-                        totalVertexCount += vertexCount;
-                    }
-                }
-                else
-                {
-                    dataLines.Add(line);
-                }
+            int vertexLineStart = content.IndexOf("element vertex ", StringComparison.Ordinal);
+            int vertexLineEnd = vertexLineStart >= 0 ? content.IndexOf('\n', vertexLineStart) : -1;
+            if (vertexLineStart < 0
+                || vertexLineEnd < 0
+                || !int.TryParse(
+                    content.AsSpan(vertexLineStart + "element vertex ".Length,
+                        vertexLineEnd - vertexLineStart - "element vertex ".Length).Trim(),
+                    out int vertexCount))
+            {
+                throw new InvalidDataException("增量点云块的 PLY 顶点数量无效。");
+            }
+
+            totalVertexCount = checked(totalVertexCount + vertexCount);
+            int dataOffset = headerEnd + "end_header".Length;
+            while (dataOffset < chunk.Length && (chunk[dataOffset] == (byte)'\r' || chunk[dataOffset] == (byte)'\n'))
+            {
+                dataOffset++;
+            }
+            chunkData.Add((chunk, dataOffset));
+        }
+
+        string header =
+            "ply\n"
+            + "format ascii 1.0\n"
+            + $"element vertex {totalVertexCount}\n"
+            + "property float x\n"
+            + "property float y\n"
+            + "property float z\n"
+            + "property uchar red\n"
+            + "property uchar green\n"
+            + "property uchar blue\n"
+            + "end_header\n";
+        int capacity = checked(
+            Encoding.ASCII.GetByteCount(header)
+            + chunkData.Sum(x => x.Chunk.Length - x.DataOffset + 1)
+        );
+        using MemoryStream merged = new(capacity);
+        merged.Write(Encoding.ASCII.GetBytes(header));
+        foreach ((byte[] chunk, int dataOffset) in chunkData)
+        {
+            merged.Write(chunk, dataOffset, chunk.Length - dataOffset);
+            if (chunk.Length == dataOffset || chunk[^1] != (byte)'\n')
+            {
+                merged.WriteByte((byte)'\n');
             }
         }
 
-        StringBuilder merged = new();
-        merged.AppendLine("ply");
-        merged.AppendLine("format ascii 1.0");
-        merged.AppendLine($"element vertex {totalVertexCount}");
-        merged.AppendLine("property float x");
-        merged.AppendLine("property float y");
-        merged.AppendLine("property float z");
-        merged.AppendLine("property uchar red");
-        merged.AppendLine("property uchar green");
-        merged.AppendLine("property uchar blue");
-        merged.AppendLine("end_header");
-
-        foreach (string line in dataLines)
-        {
-            merged.AppendLine(line);
-        }
-
-        return Encoding.ASCII.GetBytes(merged.ToString());
+        return merged.ToArray();
     }
 
     private async Task RunGenerationAsync(CalibProject project, CancellationToken cancellationToken)
@@ -358,7 +1208,11 @@ public class CalibPointCloudAppService : AuroraStruct3DAppService, ICalibPointCl
 
             await ReportProgressAsync(project.Id, 15, "正在加载扫描图像...", cancellationToken);
 
-            var scanImages = await LoadScanImagesAsync(project, calibrationData.PatternCount, cancellationToken);
+            var scanImages = await LoadScanImagesAsync(
+                project,
+                GrayCodePatternLayout.TotalFrameCount,
+                cancellationToken
+            );
             if (scanImages.MainImages.Count == 0 || scanImages.SecondaryImages.Count == 0)
             {
                 throw new UserFriendlyException("未找到扫描图像，请先执行在线扫描采集");
@@ -367,25 +1221,42 @@ public class CalibPointCloudAppService : AuroraStruct3DAppService, ICalibPointCl
             await ReportProgressAsync(project.Id, 25, "扫描图像加载完成，共 {MainCount} 张主相机图，{SecondaryCount} 张从相机图", cancellationToken,
                 scanImages.MainImages.Count, scanImages.SecondaryImages.Count);
 
-            await ReportProgressAsync(project.Id, 30, "正在进行相位解包...", cancellationToken);
+            await ReportProgressAsync(project.Id, 30, "正在解码多尺度互补条纹...", cancellationToken);
 
-            int patternCount = calibrationData.PatternCount;
-            int periodCount = calibrationData.PeriodCount;
-
-            var mainPhase = ComputePhaseForCamera(scanImages.MainImages, patternCount, periodCount, cancellationToken);
-            var secondaryPhase = ComputePhaseForCamera(scanImages.SecondaryImages, patternCount, periodCount, cancellationToken);
-
-            await ReportProgressAsync(project.Id, 50, "相位解包完成", cancellationToken);
-
-            await ReportProgressAsync(project.Id, 55, "正在进行立体匹配...", cancellationToken);
-
-            using Mat disparity = StereoReconstructionUtils.ComputeDisparity(
-                mainPhase,
-                secondaryPhase,
-                minDisparity: 0,
-                numDisparities: 64,
-                blockSize: 15
+            GrayCodeDecodeResult mainCode = DecodeGrayCodeForCamera(
+                scanImages.MainImages,
+                calibrationData.Map1x,
+                calibrationData.Map1y,
+                cancellationToken
             );
+            GrayCodeDecodeResult secondaryCode = DecodeGrayCodeForCamera(
+                scanImages.SecondaryImages,
+                calibrationData.Map2x,
+                calibrationData.Map2y,
+                cancellationToken
+            );
+            LogStructuredLightDiagnostics(project.Id, 1, "Main", mainCode);
+            LogStructuredLightDiagnostics(project.Id, 1, "Secondary", secondaryCode);
+
+            await ReportProgressAsync(project.Id, 50, "多尺度条纹解码完成", cancellationToken);
+            await ReportProgressAsync(project.Id, 55, "正在按投影坐标进行立体匹配...", cancellationToken);
+
+            int disparitySign = StereoReconstructionUtils.ComputeDisparitySign(
+                calibrationData.ProjectionP1,
+                calibrationData.ProjectionP2
+            );
+            using Mat disparity = BuildGrayCodeDisparity(
+                mainCode,
+                secondaryCode,
+                disparitySign,
+                out int matchedPixelCount,
+                out GrayCodeMatchDiagnostics matchDiagnostics
+            );
+            LogStructuredLightMatchDiagnostics(project.Id, 1, disparitySign, matchDiagnostics);
+            if (matchedPixelCount == 0)
+            {
+                throw new UserFriendlyException("多尺度条纹未找到有效双目对应点，请检查采集帧序与曝光。");
+            }
 
             await ReportProgressAsync(project.Id, 65, "立体匹配完成", cancellationToken);
 
@@ -396,14 +1267,16 @@ public class CalibPointCloudAppService : AuroraStruct3DAppService, ICalibPointCl
                 disparity,
                 calibrationData.ProjectionP1,
                 calibrationData.ProjectionP2,
-                baselineMm
+                baselineMm,
+                disparitySign
             );
 
             await ReportProgressAsync(project.Id, 80, "深度图计算完成", cancellationToken);
 
             await ReportProgressAsync(project.Id, 85, "正在生成点云...", cancellationToken);
 
-            using (Mat rectifiedMain = CalibImageUtils.LoadBgrMat(scanImages.MainImages[0]))
+            byte[] colorSource = scanImages.TextureImage ?? scanImages.MainImages[0];
+            using (Mat rectifiedMain = CalibImageUtils.LoadBgrMat(colorSource))
             using (Mat rectified = new())
             {
                 Cv2.Remap(rectifiedMain, rectified, calibrationData.Map1x, calibrationData.Map1y, InterpolationFlags.Linear);
@@ -460,7 +1333,8 @@ public class CalibPointCloudAppService : AuroraStruct3DAppService, ICalibPointCl
 
     private async Task<CalibrationData?> LoadCalibrationDataAsync(
         CalibProject project,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool requireProjectorParameters = true)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -489,31 +1363,224 @@ public class CalibPointCloudAppService : AuroraStruct3DAppService, ICalibPointCl
             projParamQuery.Where(x => x.CalibProjectId == project.Id)
         );
 
-        if (projParam == null || projParam.PatternCount <= 0)
+        if (requireProjectorParameters && (projParam == null || projParam.PatternCount <= 0))
         {
             return null;
         }
 
-        using Mat projectionP1 = CalibImageUtils.DeserializeMatrix(stereoResult.ProjectionP1Json);
-        using Mat projectionP2 = CalibImageUtils.DeserializeMatrix(stereoResult.ProjectionP2Json);
+        using Mat projectionP1 = CalibImageUtils.DeserializeMatrix(
+            stereoResult.ProjectionP1Json,
+            3,
+            4
+        );
+        using Mat projectionP2 = CalibImageUtils.DeserializeMatrix(
+            stereoResult.ProjectionP2Json,
+            3,
+            4
+        );
 
         using Mat baseline = StereoReconstructionUtils.ComputeBaselineFromStereoResult(projectionP1, projectionP2);
         double baselineMm = StereoReconstructionUtils.ComputeBaselineDistance(baseline);
+        using Mat translationT = CalibImageUtils.DeserializeVector(
+            stereoResult.TranslationVectorJson
+        );
+        double translationBaselineMm = Math.Sqrt(
+            Math.Pow(translationT.At<double>(0), 2)
+                + Math.Pow(translationT.At<double>(1), 2)
+                + Math.Pow(translationT.At<double>(2), 2)
+        );
 
-        byte[] map1xBytes = await _blobContainer.GetAllBytesAsync(stereoResult.Map1XBlobKey);
-        byte[] map1yBytes = await _blobContainer.GetAllBytesAsync(stereoResult.Map1YBlobKey);
-        byte[] map2xBytes = await _blobContainer.GetAllBytesAsync(stereoResult.Map2XBlobKey);
-        byte[] map2yBytes = await _blobContainer.GetAllBytesAsync(stereoResult.Map2YBlobKey);
+        _logger.LogInformation(
+            "双目标定参数加载诊断：ProjectId={ProjectId}, StereoError={StereoError:F4}px, "
+                + "TranslationT=[{Tx:F4},{Ty:F4},{Tz:F4}], TranslationBaseline={TranslationBaseline:F3}mm, "
+                + "ProjectionBaseline={ProjectionBaseline:F3}mm, Difference={Difference:F3}mm, "
+                + "P1Fx={P1Fx:F3}, P2Fx={P2Fx:F3}, P1Cx={P1Cx:F3}, P2Cx={P2Cx:F3}, "
+                + "CxDifference={CxDifference:F3}, P1Tx={P1Tx:F3}, P2Tx={P2Tx:F3}, Direction={Direction}",
+            project.Id,
+            stereoResult.StereoReprojectionError,
+            translationT.At<double>(0),
+            translationT.At<double>(1),
+            translationT.At<double>(2),
+            translationBaselineMm,
+            baselineMm,
+            Math.Abs(translationBaselineMm - baselineMm),
+            projectionP1.At<double>(0, 0),
+            projectionP2.At<double>(0, 0),
+            projectionP1.At<double>(0, 2),
+            projectionP2.At<double>(0, 2),
+            projectionP1.At<double>(0, 2) - projectionP2.At<double>(0, 2),
+            projectionP1.At<double>(0, 3),
+            projectionP2.At<double>(0, 3),
+            StereoReconstructionUtils.ComputeDisparitySign(projectionP1, projectionP2) > 0
+                ? "Positive"
+                : "Negative"
+        );
+
+        if (stereoResult.RectifyMapWidth <= 0 || stereoResult.RectifyMapHeight <= 0)
+        {
+            throw new UserFriendlyException(
+                $"双目标定矫正图尺寸无效：{stereoResult.RectifyMapWidth}x{stereoResult.RectifyMapHeight}，请重新执行双目标定。"
+            );
+        }
 
         Mat map1x = new(stereoResult.RectifyMapHeight, stereoResult.RectifyMapWidth, MatType.CV_32FC1);
         Mat map1y = new(stereoResult.RectifyMapHeight, stereoResult.RectifyMapWidth, MatType.CV_32FC1);
         Mat map2x = new(stereoResult.RectifyMapHeight, stereoResult.RectifyMapWidth, MatType.CV_32FC1);
         Mat map2y = new(stereoResult.RectifyMapHeight, stereoResult.RectifyMapWidth, MatType.CV_32FC1);
 
-        System.Runtime.InteropServices.Marshal.Copy(map1xBytes, 0, map1x.Data, map1xBytes.Length);
-        System.Runtime.InteropServices.Marshal.Copy(map1yBytes, 0, map1y.Data, map1yBytes.Length);
-        System.Runtime.InteropServices.Marshal.Copy(map2xBytes, 0, map2x.Data, map2xBytes.Length);
-        System.Runtime.InteropServices.Marshal.Copy(map2yBytes, 0, map2y.Data, map2yBytes.Length);
+        bool mapsExist =
+            await _blobContainer.ExistsAsync(stereoResult.Map1XBlobKey)
+            && await _blobContainer.ExistsAsync(stereoResult.Map1YBlobKey)
+            && await _blobContainer.ExistsAsync(stereoResult.Map2XBlobKey)
+            && await _blobContainer.ExistsAsync(stereoResult.Map2YBlobKey);
+
+        if (mapsExist)
+        {
+            byte[] map1xBytes = await _blobContainer.GetAllBytesAsync(stereoResult.Map1XBlobKey);
+            byte[] map1yBytes = await _blobContainer.GetAllBytesAsync(stereoResult.Map1YBlobKey);
+            byte[] map2xBytes = await _blobContainer.GetAllBytesAsync(stereoResult.Map2XBlobKey);
+            byte[] map2yBytes = await _blobContainer.GetAllBytesAsync(stereoResult.Map2YBlobKey);
+
+            int expectedMapBytes = checked(
+                stereoResult.RectifyMapWidth
+                    * stereoResult.RectifyMapHeight
+                    * sizeof(float)
+            );
+            mapsExist =
+                map1xBytes.Length == expectedMapBytes
+                && map1yBytes.Length == expectedMapBytes
+                && map2xBytes.Length == expectedMapBytes
+                && map2yBytes.Length == expectedMapBytes;
+            if (mapsExist)
+            {
+                System.Runtime.InteropServices.Marshal.Copy(map1xBytes, 0, map1x.Data, expectedMapBytes);
+                System.Runtime.InteropServices.Marshal.Copy(map1yBytes, 0, map1y.Data, expectedMapBytes);
+                System.Runtime.InteropServices.Marshal.Copy(map2xBytes, 0, map2x.Data, expectedMapBytes);
+                System.Runtime.InteropServices.Marshal.Copy(map2yBytes, 0, map2y.Data, expectedMapBytes);
+            }
+            else
+            {
+                _logger.LogWarning(
+                    "双目矫正映射 Blob 尺寸异常，将自动重建：ProjectId={ProjectId}, ExpectedBytes={ExpectedBytes}",
+                    project.Id,
+                    expectedMapBytes
+                );
+            }
+        }
+
+        if (!mapsExist)
+        {
+            CalibCameraParam? secondaryCamParam = await AsyncExecuter.FirstOrDefaultAsync(
+                camParamQuery.Where(
+                    x =>
+                        x.CalibProjectId == project.Id
+                        && x.CameraDeviceId == project.SecondaryCameraDeviceId
+                )
+            );
+            if (
+                secondaryCamParam is null
+                || string.IsNullOrWhiteSpace(mainCamParam.DistCoeffsJson)
+                || string.IsNullOrWhiteSpace(secondaryCamParam.IntrinsicMatrixJson)
+                || string.IsNullOrWhiteSpace(secondaryCamParam.DistCoeffsJson)
+            )
+            {
+                throw new InvalidOperationException(
+                    "双目矫正映射文件缺失，且主从相机内参/畸变参数不完整，无法自动重建"
+                );
+            }
+
+            using Mat mainMatrix = CalibImageUtils.DeserializeMatrix(
+                mainCamParam.IntrinsicMatrixJson,
+                3,
+                3
+            );
+            using Mat secondaryMatrix = CalibImageUtils.DeserializeMatrix(
+                secondaryCamParam.IntrinsicMatrixJson,
+                3,
+                3
+            );
+            using Mat mainDist = CalibImageUtils.DeserializeVector(mainCamParam.DistCoeffsJson);
+            using Mat secondaryDist = CalibImageUtils.DeserializeVector(
+                secondaryCamParam.DistCoeffsJson
+            );
+            using Mat rectificationR1 = CalibImageUtils.DeserializeMatrix(
+                stereoResult.RectificationR1Json,
+                3,
+                3
+            );
+            using Mat rectificationR2 = CalibImageUtils.DeserializeMatrix(
+                stereoResult.RectificationR2Json,
+                3,
+                3
+            );
+            Size mapSize = new(stereoResult.RectifyMapWidth, stereoResult.RectifyMapHeight);
+
+            Cv2.InitUndistortRectifyMap(
+                mainMatrix,
+                mainDist,
+                rectificationR1,
+                projectionP1,
+                mapSize,
+                MatType.CV_32FC1,
+                map1x,
+                map1y
+            );
+            Cv2.InitUndistortRectifyMap(
+                secondaryMatrix,
+                secondaryDist,
+                rectificationR2,
+                projectionP2,
+                mapSize,
+                MatType.CV_32FC1,
+                map2x,
+                map2y
+            );
+
+            await _blobContainer.SaveAsync(
+                stereoResult.Map1XBlobKey,
+                SerializeFloatMap(map1x),
+                overrideExisting: true
+            );
+            await _blobContainer.SaveAsync(
+                stereoResult.Map1YBlobKey,
+                SerializeFloatMap(map1y),
+                overrideExisting: true
+            );
+            await _blobContainer.SaveAsync(
+                stereoResult.Map2XBlobKey,
+                SerializeFloatMap(map2x),
+                overrideExisting: true
+            );
+            await _blobContainer.SaveAsync(
+                stereoResult.Map2YBlobKey,
+                SerializeFloatMap(map2y),
+                overrideExisting: true
+            );
+            _logger.LogWarning(
+                "双目矫正映射 Blob 缺失，已根据标定参数自动重建并回写：ProjectId={ProjectId}",
+                project.Id
+            );
+        }
+
+        (double map1Coverage, double map2Coverage, double overlapCoverage) =
+            ComputeRectificationMapCoverage(
+                map1x,
+                map1y,
+                map2x,
+                map2y,
+                stereoResult.RectifyMapWidth,
+                stereoResult.RectifyMapHeight
+            );
+        _logger.LogInformation(
+            "双目标定矫正映射覆盖率：ProjectId={ProjectId}, MapSize={Width}x{Height}, "
+                + "MainValid={MainValid:F2}%, SecondaryValid={SecondaryValid:F2}%, CommonOverlap={CommonOverlap:F2}%",
+            project.Id,
+            stereoResult.RectifyMapWidth,
+            stereoResult.RectifyMapHeight,
+            map1Coverage,
+            map2Coverage,
+            overlapCoverage
+        );
 
         return new CalibrationData
         {
@@ -524,23 +1591,84 @@ public class CalibPointCloudAppService : AuroraStruct3DAppService, ICalibPointCl
             Map1y = map1y,
             Map2x = map2x,
             Map2y = map2y,
-            PatternCount = projParam.PatternCount,
-            PeriodCount = projParam.PeriodCount,
-            ProjectorWidth = projParam.ResolutionWidth,
-            ProjectorHeight = projParam.ResolutionHeight,
+            PatternCount = projParam?.PatternCount ?? 0,
+            PeriodCount = projParam?.PeriodCount ?? 0,
+            ProjectorWidth = projParam?.ResolutionWidth ?? 0,
+            ProjectorHeight = projParam?.ResolutionHeight ?? 0,
         };
+    }
+
+    private static byte[] SerializeFloatMap(Mat map)
+    {
+        int byteCount = checked(map.Rows * map.Cols * sizeof(float));
+        byte[] bytes = new byte[byteCount];
+        System.Runtime.InteropServices.Marshal.Copy(map.Data, bytes, 0, byteCount);
+        return bytes;
+    }
+
+    private static (double MainPercent, double SecondaryPercent, double OverlapPercent)
+        ComputeRectificationMapCoverage(
+            Mat map1x,
+            Mat map1y,
+            Mat map2x,
+            Mat map2y,
+            int sourceWidth,
+            int sourceHeight
+        )
+    {
+        const int sampleStep = 8;
+        int mapRows = map1x.Rows;
+        int mapCols = map1x.Cols;
+        long sampled = 0;
+        long mainValid = 0;
+        long secondaryValid = 0;
+        long overlapValid = 0;
+        for (int y = 0; y < mapRows; y += sampleStep)
+        {
+            for (int x = 0; x < mapCols; x += sampleStep)
+            {
+                sampled++;
+                float mainX = map1x.At<float>(y, x);
+                float mainY = map1y.At<float>(y, x);
+                float secondaryX = map2x.At<float>(y, x);
+                float secondaryY = map2y.At<float>(y, x);
+                bool mainInside =
+                    mainX >= 0
+                    && mainX < sourceWidth - 1
+                    && mainY >= 0
+                    && mainY < sourceHeight - 1;
+                bool secondaryInside =
+                    secondaryX >= 0
+                    && secondaryX < sourceWidth - 1
+                    && secondaryY >= 0
+                    && secondaryY < sourceHeight - 1;
+                if (mainInside)
+                    mainValid++;
+                if (secondaryInside)
+                    secondaryValid++;
+                if (mainInside && secondaryInside)
+                    overlapValid++;
+            }
+        }
+
+        if (sampled == 0)
+            return (0, 0, 0);
+
+        return (
+            mainValid * 100d / sampled,
+            secondaryValid * 100d / sampled,
+            overlapValid * 100d / sampled
+        );
     }
 
     private async Task<ScanImages> LoadScanImagesAsync(
         CalibProject project,
-        int patternCount,
+        int totalFrames,
         CancellationToken cancellationToken)
     {
         ScanImages result = new();
 
         long maxRound = 1;
-        int totalFrames = patternCount * 2;
-
         for (long round = 1; round <= maxRound; round++)
         {
             for (int frame = 0; frame < totalFrames; frame++)
@@ -581,54 +1709,22 @@ public class CalibPointCloudAppService : AuroraStruct3DAppService, ICalibPointCl
                     }
                 }
             }
+
+            if (round == maxRound && project.MainCameraDeviceId.HasValue)
+            {
+                string textureKey = CalibScanAppService.BuildTextureBlobKey(
+                    project.Id,
+                    project.MainCameraDeviceId.Value,
+                    round
+                );
+                if (await _blobContainer.ExistsAsync(textureKey))
+                {
+                    result.TextureImage = await _blobContainer.GetAllBytesAsync(textureKey);
+                }
+            }
         }
 
         return result;
-    }
-
-    private Mat ComputePhaseForCamera(
-        List<byte[]> images,
-        int patternCount,
-        int periodCount,
-        CancellationToken cancellationToken)
-    {
-        int totalFrames = patternCount * 2;
-        int halfFrames = patternCount;
-
-        List<Mat> horizontalImages = new();
-        List<Mat> verticalImages = new();
-
-        for (int i = 0; i < images.Count && i < totalFrames; i++)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            using Mat bgr = CalibImageUtils.LoadBgrMat(images[i]);
-            if (i < halfFrames)
-            {
-                horizontalImages.Add(bgr.Clone());
-            }
-            else
-            {
-                verticalImages.Add(bgr.Clone());
-            }
-        }
-
-        using Mat absolutePhase = StructuredLightUtils.ComputeAbsolutePhase(
-            horizontalImages,
-            verticalImages,
-            periodCount,
-            periodCount
-        );
-
-        Mat[] channels = Cv2.Split(absolutePhase);
-        try
-        {
-            return channels[0].Clone();
-        }
-        finally
-        {
-            foreach (Mat ch in channels) ch.Dispose();
-        }
     }
 
     private async Task ReportProgressAsync(
@@ -645,6 +1741,352 @@ public class CalibPointCloudAppService : AuroraStruct3DAppService, ICalibPointCl
         {
             await _notifier.NotifyStatusAsync(dto);
         }
+    }
+
+    private void LogStructuredLightDiagnostics(
+        Guid projectId,
+        long roundIndex,
+        string cameraRole,
+        GrayCodeDecodeResult result
+    )
+    {
+        double validRate = result.Valid.Length == 0
+            ? 0
+            : result.ValidCount * 100d / result.Valid.Length;
+        _logger.LogInformation(
+            "Step7 条纹解码汇总：ProjectId={ProjectId}, Round={Round}, Camera={Camera}, Size={Width}x{Height}, Valid={Valid}/{Total} ({ValidRate:F2} %)",
+            projectId,
+            roundIndex,
+            cameraRole,
+            result.Width,
+            result.Height,
+            result.ValidCount,
+            result.Valid.Length,
+            validRate
+        );
+
+        foreach (GrayCodePairDiagnostics pair in result.PairDiagnostics)
+        {
+            double strongRate = pair.TotalPixels == 0
+                ? 0
+                : pair.StrongDifferenceCount * 100d / pair.TotalPixels;
+            double positiveRate = pair.StrongDifferenceCount == 0
+                ? 0
+                : pair.PositiveDifferenceCount * 100d / pair.StrongDifferenceCount;
+            _logger.LogInformation(
+                "Step7 条纹互补对诊断：ProjectId={ProjectId}, Round={Round}, Camera={Camera}, Frames={OriginalFrame}/{InverseFrame}, Pattern={Pattern}, "
+                + "Mean={OriginalMean:F2}/{InverseMean:F2}, MeanAbsDiff={MeanAbsDiff:F2}, StrongDiff={Strong}/{Total} ({StrongRate:F2} %), PositivePolarity={PositiveRate:F2} %",
+                projectId,
+                roundIndex,
+                cameraRole,
+                pair.FirstFrameIndex,
+                pair.FirstFrameIndex + 1,
+                pair.PatternLabel,
+                pair.OriginalMean,
+                pair.InverseMean,
+                pair.MeanAbsoluteDifference,
+                pair.StrongDifferenceCount,
+                pair.TotalPixels,
+                strongRate,
+                positiveRate
+            );
+        }
+    }
+
+    /// <summary>
+    /// 将深度矩阵压缩为二维质量拟合图。
+    /// 结构光模式根据解码有效掩码裁剪到最大的投影覆盖区域，避免相机画幅外围
+    /// 未被投影仪照亮的区域占据预览和有效率统计。
+    /// 红色表示该采样块没有有效深度；有效块按有效像素占比从黄色渐变到绿色。
+    /// 质量色以 80% 不透明度覆盖在整平后的主相机纹理图上，保留 20% 底图，
+    /// 便于同时观察物体轮廓和深度质量。
+    /// </summary>
+    private static DepthQualityPreview BuildDepthQualityPreview(
+        Mat depth,
+        byte[]? projectedCoverageMask = null,
+        Mat? textureImage = null)
+    {
+        const int maximumPreviewWidth = 640;
+        Rect coverage = FindProjectedCoverageRect(
+            projectedCoverageMask,
+            depth.Cols,
+            depth.Rows
+        );
+        int sampleStep = Math.Max(
+            1,
+            (int)Math.Ceiling(coverage.Width / (double)maximumPreviewWidth)
+        );
+        int previewWidth = (coverage.Width + sampleStep - 1) / sampleStep;
+        int previewHeight = (coverage.Height + sampleStep - 1) / sampleStep;
+        int validPointCount = 0;
+        double minimumDepth = double.PositiveInfinity;
+        double maximumDepth = double.NegativeInfinity;
+
+        using Mat preview = new(previewHeight, previewWidth, MatType.CV_8UC3);
+        for (int previewY = 0; previewY < previewHeight; previewY++)
+        {
+            int sourceYStart = coverage.Y + previewY * sampleStep;
+            int sourceYEnd = Math.Min(
+                sourceYStart + sampleStep,
+                coverage.Bottom
+            );
+            for (int previewX = 0; previewX < previewWidth; previewX++)
+            {
+                int sourceXStart = coverage.X + previewX * sampleStep;
+                int sourceXEnd = Math.Min(
+                    sourceXStart + sampleStep,
+                    coverage.Right
+                );
+                int blockValidCount = 0;
+                int blockTotalCount = (sourceYEnd - sourceYStart) * (sourceXEnd - sourceXStart);
+                long textureBlueSum = 0;
+                long textureGreenSum = 0;
+                long textureRedSum = 0;
+
+                for (int sourceY = sourceYStart; sourceY < sourceYEnd; sourceY++)
+                {
+                    for (int sourceX = sourceXStart; sourceX < sourceXEnd; sourceX++)
+                    {
+                        if (
+                            textureImage is not null
+                            && !textureImage.Empty()
+                            && sourceY < textureImage.Rows
+                            && sourceX < textureImage.Cols
+                        )
+                        {
+                            Vec3b texturePixel = textureImage.At<Vec3b>(sourceY, sourceX);
+                            textureBlueSum += texturePixel.Item0;
+                            textureGreenSum += texturePixel.Item1;
+                            textureRedSum += texturePixel.Item2;
+                        }
+
+                        double value = depth.At<double>(sourceY, sourceX);
+                        if (!double.IsFinite(value) || value <= 0)
+                        {
+                            continue;
+                        }
+
+                        blockValidCount++;
+                        validPointCount++;
+                        minimumDepth = Math.Min(minimumDepth, value);
+                        maximumDepth = Math.Max(maximumDepth, value);
+                    }
+                }
+
+                Vec3b qualityColor;
+                if (blockValidCount == 0)
+                {
+                    // RGB #ef4444（OpenCV 使用 BGR）
+                    qualityColor = new Vec3b(68, 68, 239);
+                }
+                else
+                {
+                    double score = blockValidCount / (double)blockTotalCount;
+                    // 低分黄色 #facc15 -> 高分绿色 #22c55e。
+                    byte red = (byte)Math.Round(250 + (34 - 250) * score);
+                    byte green = (byte)Math.Round(204 + (197 - 204) * score);
+                    byte blue = (byte)Math.Round(21 + (94 - 21) * score);
+                    qualityColor = new Vec3b(blue, green, red);
+                }
+
+                if (textureImage is null || textureImage.Empty())
+                {
+                    preview.Set(previewY, previewX, qualityColor);
+                    continue;
+                }
+
+                Vec3b textureColor = new(
+                    (byte)(textureBlueSum / blockTotalCount),
+                    (byte)(textureGreenSum / blockTotalCount),
+                    (byte)(textureRedSum / blockTotalCount)
+                );
+                const double qualityOpacity = 0.80d;
+                const double textureOpacity = 1d - qualityOpacity;
+                preview.Set(
+                    previewY,
+                    previewX,
+                    new Vec3b(
+                        BlendColor(textureColor.Item0, qualityColor.Item0),
+                        BlendColor(textureColor.Item1, qualityColor.Item1),
+                        BlendColor(textureColor.Item2, qualityColor.Item2)
+                    )
+                );
+
+                static byte BlendColor(byte texture, byte quality)
+                {
+                    return (byte)Math.Clamp(
+                        Math.Round(
+                            texture * textureOpacity + quality * qualityOpacity
+                        ),
+                        byte.MinValue,
+                        byte.MaxValue
+                    );
+                }
+            }
+        }
+
+        Cv2.ImEncode(".png", preview, out byte[] pngBytes);
+        return new DepthQualityPreview(
+            pngBytes,
+            validPointCount,
+            checked(coverage.Width * coverage.Height),
+            double.IsFinite(minimumDepth) ? minimumDepth : 0,
+            double.IsFinite(maximumDepth) ? maximumDepth : 0
+        );
+    }
+
+    private static Rect FindProjectedCoverageRect(
+        byte[]? coverageMask,
+        int width,
+        int height)
+    {
+        if (coverageMask is null || coverageMask.Length != checked(width * height))
+        {
+            return new Rect(0, 0, width, height);
+        }
+
+        const int tileSize = 32;
+        int tileColumns = (width + tileSize - 1) / tileSize;
+        int tileRows = (height + tileSize - 1) / tileSize;
+        bool[] occupied = new bool[checked(tileColumns * tileRows)];
+        for (int tileY = 0; tileY < tileRows; tileY++)
+        {
+            int y0 = tileY * tileSize;
+            int y1 = Math.Min(y0 + tileSize, height);
+            for (int tileX = 0; tileX < tileColumns; tileX++)
+            {
+                int x0 = tileX * tileSize;
+                int x1 = Math.Min(x0 + tileSize, width);
+                int validCount = 0;
+                int minimumValidCount = Math.Max(8, (x1 - x0) * (y1 - y0) / 100);
+                for (int y = y0; y < y1 && validCount < minimumValidCount; y++)
+                {
+                    int rowOffset = y * width;
+                    for (int x = x0; x < x1; x++)
+                    {
+                        if (coverageMask[rowOffset + x] != 0)
+                        {
+                            validCount++;
+                            if (validCount >= minimumValidCount)
+                            {
+                                break;
+                            }
+                        }
+                    }
+                }
+                occupied[tileY * tileColumns + tileX] =
+                    validCount >= minimumValidCount;
+            }
+        }
+
+        bool[] visited = new bool[occupied.Length];
+        List<(int X, int Y)> largestComponent = [];
+        int[] neighborX = [-1, 1, 0, 0];
+        int[] neighborY = [0, 0, -1, 1];
+        for (int tileY = 0; tileY < tileRows; tileY++)
+        {
+            for (int tileX = 0; tileX < tileColumns; tileX++)
+            {
+                int startIndex = tileY * tileColumns + tileX;
+                if (!occupied[startIndex] || visited[startIndex])
+                {
+                    continue;
+                }
+
+                List<(int X, int Y)> component = [];
+                Queue<(int X, int Y)> queue = new();
+                queue.Enqueue((tileX, tileY));
+                visited[startIndex] = true;
+                while (queue.Count > 0)
+                {
+                    (int currentX, int currentY) = queue.Dequeue();
+                    component.Add((currentX, currentY));
+                    for (int neighbor = 0; neighbor < neighborX.Length; neighbor++)
+                    {
+                        int nextX = currentX + neighborX[neighbor];
+                        int nextY = currentY + neighborY[neighbor];
+                        if (nextX < 0 || nextX >= tileColumns
+                            || nextY < 0 || nextY >= tileRows)
+                        {
+                            continue;
+                        }
+
+                        int nextIndex = nextY * tileColumns + nextX;
+                        if (!occupied[nextIndex] || visited[nextIndex])
+                        {
+                            continue;
+                        }
+
+                        visited[nextIndex] = true;
+                        queue.Enqueue((nextX, nextY));
+                    }
+                }
+
+                if (component.Count > largestComponent.Count)
+                {
+                    largestComponent = component;
+                }
+            }
+        }
+
+        if (largestComponent.Count == 0)
+        {
+            return new Rect(0, 0, width, height);
+        }
+
+        int minimumTileX = largestComponent.Min(tile => tile.X);
+        int maximumTileX = largestComponent.Max(tile => tile.X);
+        int minimumTileY = largestComponent.Min(tile => tile.Y);
+        int maximumTileY = largestComponent.Max(tile => tile.Y);
+        const int paddingTiles = 1;
+        minimumTileX = Math.Max(0, minimumTileX - paddingTiles);
+        maximumTileX = Math.Min(tileColumns - 1, maximumTileX + paddingTiles);
+        minimumTileY = Math.Max(0, minimumTileY - paddingTiles);
+        maximumTileY = Math.Min(tileRows - 1, maximumTileY + paddingTiles);
+
+        int left = minimumTileX * tileSize;
+        int top = minimumTileY * tileSize;
+        int right = Math.Min(width, (maximumTileX + 1) * tileSize);
+        int bottom = Math.Min(height, (maximumTileY + 1) * tileSize);
+        return new Rect(left, top, right - left, bottom - top);
+    }
+
+    private void LogStructuredLightMatchDiagnostics(
+        Guid projectId,
+        long roundIndex,
+        int disparitySign,
+        GrayCodeMatchDiagnostics diagnostics
+    )
+    {
+        double codeHitRate = diagnostics.MainValidPixels == 0
+            ? 0
+            : diagnostics.CodeFoundPixels * 100d / diagnostics.MainValidPixels;
+        double matchRate = diagnostics.MainValidPixels == 0
+            ? 0
+            : diagnostics.MatchedPixels * 100d / diagnostics.MainValidPixels;
+        _logger.LogInformation(
+            "Step7 条纹立体匹配诊断：ProjectId={ProjectId}, Round={Round}, Direction={Direction}, MainValid={MainValid}, "
+            + "CodeFound={CodeFound} ({CodeHitRate:F2} %), CandidateCount={Candidates}, RejectedNonPositive={RejectedNonPositive}, "
+            + "CandidateDisparityRange=[{CandidateMin:F2},{CandidateMax:F2}], MaxAllowed={MaxAllowed:F0}, "
+            + "RejectedOverMax={RejectedOverMax}, AmbiguousPixels={AmbiguousPixels}, "
+            + "Matched={Matched} ({MatchRate:F2} %), RowsWithSecondaryCodes={RowsWithCodes}",
+            projectId,
+            roundIndex,
+            disparitySign > 0 ? "Positive" : "Negative",
+            diagnostics.MainValidPixels,
+            diagnostics.CodeFoundPixels,
+            codeHitRate,
+            diagnostics.CandidateCount,
+            diagnostics.NonPositiveRejected,
+            diagnostics.MinimumPositiveCandidate,
+            diagnostics.MaximumPositiveCandidate,
+            MaxStructuredLightDisparity,
+            diagnostics.OverRangeRejected,
+            diagnostics.AmbiguousPixelCount,
+            diagnostics.MatchedPixels,
+            matchRate,
+            diagnostics.RowsWithSecondaryCodes
+        );
     }
 
     private class CalibrationData
@@ -666,5 +2108,48 @@ public class CalibPointCloudAppService : AuroraStruct3DAppService, ICalibPointCl
     {
         public List<byte[]> MainImages { get; } = new();
         public List<byte[]> SecondaryImages { get; } = new();
+        public byte[]? TextureImage { get; set; }
     }
+
+    private sealed record GrayCodeDecodeResult(
+        int Width,
+        int Height,
+        int[] ProjectorX,
+        int[] ProjectorY,
+        byte[] Valid,
+        int ValidCount,
+        IReadOnlyList<GrayCodePairDiagnostics> PairDiagnostics
+    );
+
+    private sealed record GrayCodePairDiagnostics(
+        int FirstFrameIndex,
+        string PatternLabel,
+        double OriginalMean,
+        double InverseMean,
+        double MeanAbsoluteDifference,
+        int StrongDifferenceCount,
+        int PositiveDifferenceCount,
+        int TotalPixels
+    );
+
+    private sealed record GrayCodeMatchDiagnostics(
+        long MainValidPixels,
+        long CodeFoundPixels,
+        long CandidateCount,
+        long NonPositiveRejected,
+        long OverRangeRejected,
+        long AmbiguousPixelCount,
+        long MatchedPixels,
+        long RowsWithSecondaryCodes,
+        double MinimumPositiveCandidate,
+        double MaximumPositiveCandidate
+    );
+
+    private sealed record DepthQualityPreview(
+        byte[] PngBytes,
+        int ValidPointCount,
+        int TotalPointCount,
+        double MinimumDepthMm,
+        double MaximumDepthMm
+    );
 }

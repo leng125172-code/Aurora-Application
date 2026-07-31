@@ -6,6 +6,17 @@
  */
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 
+const workflowDebugRoutes: RouteRecordRaw[] = __WORKFLOW_DEBUG__
+    ? [
+          {
+              path: 'workflow-ide',
+              name: 'WorkflowIde',
+              component: () => import('@/views/workflow/WorkflowIdePage.vue'),
+              meta: { requiresAuth: true, title: '工作流调试' },
+          },
+      ]
+    : []
+
 const routes: RouteRecordRaw[] = [
     {
         path: '/login',
@@ -60,6 +71,7 @@ const routes: RouteRecordRaw[] = [
                 component: () => import('@/views/system/SystemInfoPage.vue'),
                 meta: { requiresAuth: true, title: 'menu.systemInfo' },
             },
+            ...workflowDebugRoutes,
             {
                 path: 'device-state/faults',
                 name: 'FaultHistory',
@@ -143,6 +155,18 @@ const routes: RouteRecordRaw[] = [
                 name: 'LeisaiMotorConsole',
                 component: () => import('@/views/motors/LeisaiMotorConsolePage.vue'),
                 meta: { requiresAuth: true, title: 'menu.leisaiMotorConsole' },
+            },
+            {
+                path: 'plcs',
+                name: 'PlcManage',
+                component: () => import('@/views/plcs/PlcManagePage.vue'),
+                meta: { requiresAuth: true, title: 'menu.plcManage' },
+            },
+            {
+                path: 'plcs/:id/control',
+                name: 'PlcControl',
+                component: () => import('@/views/plcs/PlcControlPage.vue'),
+                meta: { requiresAuth: true, title: 'menu.plcControl' },
             },
             {
                 path: 'product-models',

@@ -56,7 +56,7 @@ public class CalibProjectorParamAppService : AuroraStruct3DAppService,
             existing.SetFringeParams(
                 input.PeriodCount,
                 input.FringeType,
-                input.PatternCount,
+                GrayCodePatternLayout.TotalFrameCount,
                 input.PhaseShift
             );
             // ProjectorDeviceId 允许变更（用户切换投影仪后重新保存）
@@ -94,7 +94,7 @@ public class CalibProjectorParamAppService : AuroraStruct3DAppService,
         entity.SetFringeParams(
             input.PeriodCount,
             input.FringeType,
-            input.PatternCount,
+            GrayCodePatternLayout.TotalFrameCount,
             input.PhaseShift
         );
         return Task.FromResult(entity);

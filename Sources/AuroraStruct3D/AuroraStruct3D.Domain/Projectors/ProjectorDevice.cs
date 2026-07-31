@@ -248,6 +248,8 @@ public class ProjectorDevice : FullAuditedAggregateRoot<Guid>
     /// <summary>更新设备信息（连接后从设备查询）</summary>
     public ProjectorDevice UpdateDeviceInfo(int hardwareId)
     {
+        if (hardwareId is < 1 or > 255)
+            throw new ArgumentOutOfRangeException(nameof(hardwareId), "USB 光机身份 ID 必须在 1~255 之间。");
         DeviceHardwareId = hardwareId;
         LastCommunicationAt = DateTime.UtcNow;
         return this;
