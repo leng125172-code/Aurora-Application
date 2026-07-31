@@ -17,7 +17,10 @@ public class PlaneRoiPipelineOperatorTests
         Assert.Equal(6, select_fitted_plane.InputVisionParameters!.Count);
         Assert.Contains(
             select_fitted_plane.ConfigParameters!,
-            parameter => parameter.Name == "planeName" && parameter.ControlType == PortControlType.Select
+            parameter =>
+                parameter.Name == "planeName"
+                && parameter.DisplayName == "选择输入槽位"
+                && parameter.ControlType == PortControlType.Select
         );
         Assert.Contains(
             define_plane_roi.ConfigParameters!,

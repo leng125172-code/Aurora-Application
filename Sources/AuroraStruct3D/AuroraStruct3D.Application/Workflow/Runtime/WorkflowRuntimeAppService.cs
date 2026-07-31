@@ -1797,6 +1797,7 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
     /// 从冻结部署快照的图数据执行单个工作流（供运行 Job 内部调用，不对外暴露 HTTP 端点）。
     /// </summary>
     [RemoteService(false)]
+    [NonAction]
     public async Task<WorkflowExecutionTriggerResultDto> ExecuteFrozenWorkflowAsync(
         Guid projectId,
         Guid runId,

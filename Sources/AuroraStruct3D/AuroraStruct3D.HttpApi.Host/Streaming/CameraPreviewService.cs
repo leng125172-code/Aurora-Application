@@ -3,8 +3,8 @@ using AuroraStruct3D.Cameras;
 using AuroraStruct3D.Cameras.Dtos;
 using AuroraStruct3D.Hubs;
 using AuroraStruct3D.Sessions;
-using AuroraStruct3D.Tucam;
-using AuroraStruct3D.Tucam.Interop;
+using AuroraStruct3D.Cameras.Tucam;
+using AuroraStruct3D.Cameras.Tucam.Interop;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
 using Volo.Abp.Threading;
@@ -202,22 +202,18 @@ public class CameraPreviewService : ICameraStreamingService, IHostedService, IDi
         }
 
         using IServiceScope scope = _scopeFactory.CreateScope();
-        ITucamCameraService tucamService =
-            scope.ServiceProvider.GetRequiredService<ITucamCameraService>();
-
-        if (!TryGetDeviceIndex(scope, cameraId, out int deviceIndex))
-        {
-            throw new InvalidOperationException(
-                $"相机 {cameraId} 找不到对应的 DeviceIndex，预览无法启动"
-            );
-        }
+        (CameraDevice camera, ICameraDriver driver) = ResolveCameraDriver(scope, cameraId);
+        if ((camera.Capabilities & CameraCapability.Preview) == 0)
+            throw new InvalidOperationException($"相机 {camera.Name} 不支持预览");
+        if (enableRtp && (camera.Capabilities & CameraCapability.RtpStream) == 0)
+            throw new InvalidOperationException($"相机 {camera.Name} 不支持 RTP 推流");
 
         await StopIncompatibleSameModelPreviewsAsync(scope, cameraId).ConfigureAwait(false);
 
-        bool ownsCapture = !tucamService.IsCapturing(deviceIndex);
+        bool ownsCapture = !driver.IsCapturing(camera.HardwareId!);
         try
         {
-            await tucamService.StartCaptureAsync(deviceIndex);
+            await driver.StartCaptureAsync(camera.HardwareId!);
         }
         catch (Exception ex)
         {
@@ -228,7 +224,15 @@ public class CameraPreviewService : ICameraStreamingService, IHostedService, IDi
         CancellationToken token = _cts.Token;
 
         Thread thread = new Thread(() =>
-            RunPreviewLoop(cameraId, deviceIndex, connectionId, enableRtp, ownsCapture, token)
+            RunPreviewLoop(
+                cameraId,
+                camera.DriverId,
+                camera.HardwareId!,
+                connectionId,
+                enableRtp,
+                ownsCapture,
+                token
+            )
         )
         {
             IsBackground = true,
@@ -240,7 +244,8 @@ public class CameraPreviewService : ICameraStreamingService, IHostedService, IDi
             thread,
             connectionId,
             enableRtp,
-            deviceIndex,
+            camera.DriverId,
+            camera.HardwareId!,
             ownsCapture,
             imageRotationAngle
         );
@@ -255,7 +260,7 @@ public class CameraPreviewService : ICameraStreamingService, IHostedService, IDi
             _frameBuffer.ClearCamera(cameraId);
             if (ownsCapture)
             {
-                await tucamService.StopCaptureAsync(deviceIndex);
+                await driver.StopCaptureAsync(camera.HardwareId!);
             }
             throw;
         }
@@ -272,19 +277,34 @@ public class CameraPreviewService : ICameraStreamingService, IHostedService, IDi
     {
         ICameraDeviceRepository repo = scope.ServiceProvider.GetRequiredService<ICameraDeviceRepository>();
         CameraDevice requested = await repo.GetAsync(requestedCameraId).ConfigureAwait(false);
-        if (string.IsNullOrWhiteSpace(requested.Model))
-            return;
+        // 型号读取失败时也必须采取安全默认值：所有未知型号归入同一
+        // 不可并发组，避免缺失元数据意外放开双机采集。
+        string requestedModelGroup = NormalizeModelGroup(requested.DriverId, requested.Model);
 
         foreach (Guid activeCameraId in _sessions.Keys.Where(x => x != requestedCameraId).ToList())
         {
             CameraDevice active = await repo.GetAsync(activeCameraId).ConfigureAwait(false);
-            if (string.Equals(active.Model, requested.Model, StringComparison.OrdinalIgnoreCase))
+            bool bothAllowConcurrentPreview =
+                (requested.Capabilities & CameraCapability.ConcurrentPreview) != 0
+                && (active.Capabilities & CameraCapability.ConcurrentPreview) != 0;
+            if (bothAllowConcurrentPreview)
+                continue;
+            if (
+                string.Equals(
+                    NormalizeModelGroup(active.DriverId, active.Model),
+                    requestedModelGroup,
+                    StringComparison.OrdinalIgnoreCase
+                )
+            )
             {
                 _logger.LogInformation("相机 {NewCamera} 启动预览前停止同型号相机 {ActiveCamera} 的预览。", requestedCameraId, activeCameraId);
                 await StopPreviewAsync(activeCameraId).ConfigureAwait(false);
             }
         }
     }
+
+    private static string NormalizeModelGroup(string driverId, string? model) =>
+        $"{driverId.Trim()}::{(string.IsNullOrWhiteSpace(model) ? "__unknown_camera_model__" : model.Trim())}";
 
     /// <inheritdoc/>
     public async Task StopPreviewAsync(Guid cameraId)
@@ -448,7 +468,6 @@ public class CameraPreviewService : ICameraStreamingService, IHostedService, IDi
                     {
                         await UpdateCameraStatusAfterAutoStopAsync(
                             cameraId,
-                            stoppedSession.DeviceIndex,
                             staleConnectionId
                         );
                     }
@@ -547,7 +566,8 @@ public class CameraPreviewService : ICameraStreamingService, IHostedService, IDi
     /// </summary>
     private void RunPreviewLoop(
         Guid cameraId,
-        int deviceIndex,
+        string driverId,
+        string hardwareId,
         string? connectionId,
         bool enableRtp,
         bool ownsCapture,
@@ -555,51 +575,19 @@ public class CameraPreviewService : ICameraStreamingService, IHostedService, IDi
     )
     {
         using IServiceScope scope = _scopeFactory.CreateScope();
-        ITucamCameraService tucamService =
-            scope.ServiceProvider.GetRequiredService<ITucamCameraService>();
-
-        _logger.LogInformation("相机 {Id} (index={Idx}) 预览线程开始运行", cameraId, deviceIndex);
-
-        long triggerMode = 0;
-        try
-        {
-            triggerMode = tucamService
-                .GetGenICamIntAsync(deviceIndex, "TriggerMode")
-                .GetAwaiter()
-                .GetResult();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(
-                ex,
-                "相机 {Id} 读取 TriggerMode 失败，按 FreeRunning 模式预览",
-                cameraId
-            );
-        }
-
+        ICameraDriverRegistry registry =
+            scope.ServiceProvider.GetRequiredService<ICameraDriverRegistry>();
+        ICameraDriver driver = registry.GetRequired(driverId);
+        ITucamCameraService? tucamService = driver as ITucamCameraService;
+        int deviceIndex = driver.TryGetRuntimeIndex(hardwareId, out int index) ? index : -1;
         _logger.LogInformation(
-            "相机 {Id} 预览线程采用 TriggerMode={Mode} 策略",
+            "相机 {Id} ({DriverId}/{HardwareId}) 预览线程开始运行",
             cameraId,
-            triggerMode switch
-            {
-                1 => "Standard(外触发)",
-                2 => "Software(软触发)",
-                _ => "FreeRunning(自由运行)",
-            }
+            driverId,
+            hardwareId
         );
-
-        int waitTimeoutMs = triggerMode == 1 ? ExternalTriggerWaitTimeoutMs : 2000;
-
         long metricsLastSent = Environment.TickCount64;
-        long softwareTriggerLastSent = 0;
         int consecutiveTimeouts = 0;
-
-        const int DrainThrottleMs = 20;
-        /// <summary>
-        /// 预热帧数量：会话启动阶段无条件抓帧发布，避免 HTTP 订阅者到达时
-        /// 尚未发布任何帧 → HasFrame=false → 订阅者等待超时。
-        /// 设为 3 以应对软件触发的前几帧曝光不稳定的情况。
-        /// </summary>
         const int WarmupFrames = 3;
         int warmupRemaining = WarmupFrames;
 
@@ -612,48 +600,18 @@ public class CameraPreviewService : ICameraStreamingService, IHostedService, IDi
                     break;
                 }
 
-                if (triggerMode == 2)
-                {
-                    long nowTrig = Environment.TickCount64;
-                    if (nowTrig - softwareTriggerLastSent >= SoftwareTriggerIntervalMs)
-                    {
-                        try
-                        {
-                            tucamService
-                                .DoSoftwareTriggerAsync(deviceIndex)
-                                .GetAwaiter()
-                                .GetResult();
-                            softwareTriggerLastSent = nowTrig;
-                        }
-                        catch (Exception ex)
-                        {
-                            _logger.LogWarning(
-                                ex,
-                                "相机 {Id} 预览线程软件触发失败，本轮跳过",
-                                cameraId
-                            );
-                        }
-                    }
-                }
-
-                // 有 HTTP MJPEG 订阅者 或 RTP 副流开启 或 仍在预热阶段 才真实抓帧；
-                // 否则 Drain 丢帧以防止 SDK 缓存队列积压。
-                // 预热 3 帧：保证 HTTP MJPEG 端点在 HasFrame 查询时总能命中，订阅者无需等待。
                 bool hasHttpSubscribers = _frameBuffer.GetSubscriberCount(cameraId) > 0;
                 bool needPushFrame = hasHttpSubscribers || enableRtp || warmupRemaining > 0;
-
                 if (needPushFrame)
                 {
-                    byte[] bmpFrame;
+                    byte[] jpegFrame;
                     try
                     {
-                        bmpFrame = tucamService
-                            .GrabFrameRawAsync(
-                                deviceIndex,
-                                waitTimeoutMs,
-                                PreviewMaxWidth,
-                                PreviewJpegQualityUnused,
-                                currentSession.ImageRotationAngle
+                        jpegFrame = driver
+                            .GrabJpegAsync(
+                                hardwareId,
+                                timeoutMs: ExternalTriggerWaitTimeoutMs,
+                                imageRotationAngle: currentSession.ImageRotationAngle
                             )
                             .GetAwaiter()
                             .GetResult();
@@ -666,30 +624,13 @@ public class CameraPreviewService : ICameraStreamingService, IHostedService, IDi
                     catch (InvalidOperationException ex)
                         when (ex.Message.Contains("Timeout", StringComparison.OrdinalIgnoreCase))
                     {
-                        if (triggerMode == 1)
-                        {
-                            continue;
-                        }
-
                         consecutiveTimeouts++;
-                        if (consecutiveTimeouts == 1)
-                        {
-                            _logger.LogInformation(
-                                "相机 {Id} (index={Idx}) WaitForFrame 首次超时（TriggerMode={Mode}），可能 SDK 采集线程未启动或 USB 带宽不足；详情：{Msg}",
-                                cameraId,
-                                deviceIndex,
-                                triggerMode,
-                                ex.Message
-                            );
-                        }
-                        else if (consecutiveTimeouts % 2 == 0)
+                        if (consecutiveTimeouts % 2 == 0)
                         {
                             _logger.LogWarning(
-                                "相机 {Id} (index={Idx}) 已连续 {Count} 次 WaitForFrame 超时（TriggerMode={Mode}），SDK 采集线程可能已退出，建议停止预览后重新启动",
+                                "相机 {Id} 已连续 {Count} 次抓帧超时，建议停止预览后重新启动",
                                 cameraId,
-                                deviceIndex,
-                                consecutiveTimeouts,
-                                triggerMode
+                                consecutiveTimeouts
                             );
                         }
                         continue;
@@ -700,28 +641,16 @@ public class CameraPreviewService : ICameraStreamingService, IHostedService, IDi
                         continue;
                     }
 
-                    // 写入 HTTP MJPEG 帧缓冲：有订阅者或预热阶段都写一次，
-                    // 避免订阅者刚到达时 HasFrame=false 被迫等待。
                     if (hasHttpSubscribers || warmupRemaining > 0)
-                    {
-                        _frameBuffer.PublishFrame(cameraId, bmpFrame);
-                    }
-                    // 消费 1 个预热配额
+                        _frameBuffer.PublishFrame(cameraId, jpegFrame);
                     if (warmupRemaining > 0)
-                    {
                         warmupRemaining--;
-                    }
 
                     if (enableRtp)
                     {
                         try
                         {
-                            // RTP 协议定义为 JPEG（RFC 2435），此处仍发送 JPEG；
-                            // 若未来 RTP 也需要 BMP，需单独实现 RTP/BMP 封装。
-                            // 当前 GrabFrameRawAsync 返回 BMP，直接发送到 RTP 订阅者时不做转码以避免性能损失；
-                            // 实际 RTP 订阅者（VLC 等）需要 JPEG，因此这里的 RTP 通道仅在调用方显式启用
-                            // 并接受 BMP 格式时使用。
-                            _rtpServer.SendFrame(cameraId, bmpFrame);
+                            _rtpServer.SendFrame(cameraId, jpegFrame);
                         }
                         catch (Exception ex)
                         {
@@ -731,51 +660,14 @@ public class CameraPreviewService : ICameraStreamingService, IHostedService, IDi
                 }
                 else
                 {
-                    long iterStart = Environment.TickCount64;
-                    int drainTimeoutMs = Math.Min(waitTimeoutMs, DrainThrottleMs - 2);
-                    try
-                    {
-                        bool drained = tucamService
-                            .DrainFrameAsync(deviceIndex, drainTimeoutMs)
-                            .GetAwaiter()
-                            .GetResult();
-                        if (drained)
-                        {
-                            consecutiveTimeouts = 0;
-                        }
-                        else if (triggerMode != 1)
-                        {
-                            consecutiveTimeouts++;
-                            if (consecutiveTimeouts % 25 == 0)
-                            {
-                                _logger.LogWarning(
-                                    "相机 {Id} (index={Idx}) drain 已连续 {Count} 次超时（TriggerMode={Mode}），SDK 采集线程可能已退出",
-                                    cameraId,
-                                    deviceIndex,
-                                    consecutiveTimeouts,
-                                    triggerMode
-                                );
-                            }
-                        }
-                    }
-                    catch (OperationCanceledException)
-                    {
-                        break;
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogWarning(ex, "相机 {Id} drain 帧失败，跳过", cameraId);
-                    }
-
-                    long elapsed = Environment.TickCount64 - iterStart;
-                    int sleepMs = (int)Math.Max(0, DrainThrottleMs - elapsed);
-                    if (sleepMs > 0)
-                    {
-                        Thread.Sleep(sleepMs);
-                    }
+                    Thread.Sleep(20);
                 }
 
-                if (Environment.TickCount64 - metricsLastSent >= MetricsPushIntervalMs)
+                if (
+                    tucamService != null
+                    && deviceIndex >= 0
+                    && Environment.TickCount64 - metricsLastSent >= MetricsPushIntervalMs
+                )
                 {
                     PushLiveMetricsAsync(cameraId, deviceIndex, tucamService, connectionId)
                         .GetAwaiter()
@@ -790,7 +682,7 @@ public class CameraPreviewService : ICameraStreamingService, IHostedService, IDi
             {
                 try
                 {
-                    tucamService.StopCaptureAsync(deviceIndex).GetAwaiter().GetResult();
+                    driver.StopCaptureAsync(hardwareId).GetAwaiter().GetResult();
                 }
                 catch (Exception ex)
                 {
@@ -887,13 +779,11 @@ public class CameraPreviewService : ICameraStreamingService, IHostedService, IDi
             try
             {
                 using IServiceScope scope = _scopeFactory.CreateScope();
-                ITucamCameraService tucamService =
-                    scope.ServiceProvider.GetRequiredService<ITucamCameraService>();
-
-                if (tucamService.IsCapturing(session.DeviceIndex))
-                {
-                    await tucamService.StopCaptureAsync(session.DeviceIndex);
-                }
+                ICameraDriverRegistry registry =
+                    scope.ServiceProvider.GetRequiredService<ICameraDriverRegistry>();
+                ICameraDriver driver = registry.GetRequired(session.DriverId);
+                if (driver.IsCapturing(session.HardwareId))
+                    await driver.StopCaptureAsync(session.HardwareId);
             }
             catch (Exception ex)
             {
@@ -930,7 +820,6 @@ public class CameraPreviewService : ICameraStreamingService, IHostedService, IDi
     /// </summary>
     private async Task UpdateCameraStatusAfterAutoStopAsync(
         Guid cameraId,
-        int deviceIndex,
         string connectionId
     )
     {
@@ -954,17 +843,18 @@ public class CameraPreviewService : ICameraStreamingService, IHostedService, IDi
                 scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
             ICameraDeviceRepository repository =
                 scope.ServiceProvider.GetRequiredService<ICameraDeviceRepository>();
-            ITucamCameraService tucamService =
-                scope.ServiceProvider.GetRequiredService<ITucamCameraService>();
+            ICameraDriverRegistry registry =
+                scope.ServiceProvider.GetRequiredService<ICameraDriverRegistry>();
 
             using IUnitOfWork unitOfWork = unitOfWorkManager.Begin(requiresNew: true);
             CameraDevice camera = await repository.GetAsync(
                 cameraId,
                 cancellationToken: syncCancellationToken
             );
+            ICameraDriver driver = registry.GetRequired(camera.DriverId);
             CameraStatus status =
-                tucamService.IsCapturing(deviceIndex) ? CameraStatus.Capturing
-                : tucamService.IsCameraOpen(deviceIndex) ? CameraStatus.Ready
+                driver.IsCapturing(camera.HardwareId!) ? CameraStatus.Capturing
+                : driver.IsOpen(camera.HardwareId!) ? CameraStatus.Ready
                 : CameraStatus.Closed;
 
             camera.SetStatus(status);
@@ -982,7 +872,10 @@ public class CameraPreviewService : ICameraStreamingService, IHostedService, IDi
                     Status = (int)status,
                     StatusText = status.ToString(),
                     IsCapturing = status == CameraStatus.Capturing,
-                    IsXmlLoaded = tucamService.GetCachedNodeMap(deviceIndex) != null,
+                    IsXmlLoaded =
+                        driver is ITucamCameraService tucam
+                        && driver.TryGetRuntimeIndex(camera.HardwareId!, out int runtimeIndex)
+                        && tucam.GetCachedNodeMap(runtimeIndex) != null,
                 }
             );
         }
@@ -1001,27 +894,24 @@ public class CameraPreviewService : ICameraStreamingService, IHostedService, IDi
     }
 
     /// <summary>
-    /// 根据相机 ID 查询对应的 SDK DeviceIndex
+    /// 根据相机 ID 解析稳定身份和所属驱动。
     /// </summary>
-    private static bool TryGetDeviceIndex(IServiceScope scope, Guid cameraId, out int deviceIndex)
+    private static (CameraDevice Camera, ICameraDriver Driver) ResolveCameraDriver(
+        IServiceScope scope,
+        Guid cameraId
+    )
     {
-        deviceIndex = 0;
-        try
-        {
-            ICameraDeviceRepository repo =
-                scope.ServiceProvider.GetRequiredService<ICameraDeviceRepository>();
-
-            // 同步查询（线程上下文内）
-            CameraDevice? camera = repo.GetAsync(cameraId).GetAwaiter().GetResult();
-            if (camera == null)
-                return false;
-            deviceIndex = camera.DeviceIndex;
-            return true;
-        }
-        catch
-        {
-            return false;
-        }
+        ICameraDeviceRepository repo =
+            scope.ServiceProvider.GetRequiredService<ICameraDeviceRepository>();
+        ICameraDriverRegistry registry =
+            scope.ServiceProvider.GetRequiredService<ICameraDriverRegistry>();
+        CameraDevice camera = repo.GetAsync(cameraId).GetAwaiter().GetResult();
+        if (string.IsNullOrWhiteSpace(camera.HardwareId))
+            throw new InvalidOperationException($"相机 {cameraId} 尚未绑定稳定硬件标识");
+        ICameraDriver driver = registry.GetRequired(camera.DriverId);
+        if (!driver.TryGetRuntimeIndex(camera.HardwareId, out _))
+            throw new InvalidOperationException($"相机 {camera.DriverId}/{camera.HardwareId} 当前离线");
+        return (camera, driver);
     }
 
     /// <inheritdoc/>
@@ -1045,7 +935,8 @@ internal sealed class CameraPreviewSession
         Thread thread,
         string? connectionId,
         bool enableRtp,
-        int deviceIndex,
+        string driverId,
+        string hardwareId,
         bool ownsCapture,
         int imageRotationAngle
     )
@@ -1053,7 +944,8 @@ internal sealed class CameraPreviewSession
         Thread = thread;
         ConnectionId = connectionId;
         EnableRtp = enableRtp;
-        DeviceIndex = deviceIndex;
+        DriverId = driverId;
+        HardwareId = hardwareId;
         OwnsCapture = ownsCapture;
         ImageRotationAngle = imageRotationAngle;
     }
@@ -1075,8 +967,8 @@ internal sealed class CameraPreviewSession
     /// <summary>是否启用 RTP 副流</summary>
     public bool EnableRtp { get; }
 
-    /// <summary>SDK 设备索引</summary>
-    public int DeviceIndex { get; }
+    public string DriverId { get; }
+    public string HardwareId { get; }
 
     /// <summary>本预览会话是否负责停止采集</summary>
     public bool OwnsCapture { get; }

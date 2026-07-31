@@ -8,7 +8,7 @@ import { useRoute, useRouter } from 'vue-router'
 import Button from 'primevue/button'
 import Select from 'primevue/select'
 import { useCameraStore } from '@/stores/cameras'
-import { CameraStatus, type CameraLiveMetricsDto, type GenICamNodeDto } from '@/api/cameras'
+import { CameraCapability, CameraStatus, type CameraLiveMetricsDto, type GenICamNodeDto } from '@/api/cameras'
 import GenICamCategoryCard from '@/components/camera/GenICamCategoryCard.vue'
 import { useAppToast } from '@/composables/useAppToast'
 import { AppCard } from '@/components/primevue'
@@ -29,6 +29,11 @@ const isOpen = computed(() => {
 })
 const previewUrl = computed(() => store.previewFrames.get(deviceId.value) ?? null)
 const metrics = computed<CameraLiveMetricsDto | null>(() => store.liveMetrics.get(deviceId.value) ?? null)
+const supportsParameterNodes = computed(() => !!device.value && (device.value.capabilities & CameraCapability.ParameterNodes) !== 0)
+const supportsPreview = computed(() => !!device.value && (device.value.capabilities & CameraCapability.Preview) !== 0)
+const supportsSnapshot = computed(() => !!device.value && (device.value.capabilities & CameraCapability.Snapshot) !== 0)
+const supportsSoftwareTrigger = computed(() => !!device.value && (device.value.capabilities & CameraCapability.SoftwareTrigger) !== 0)
+const supportsTemperature = computed(() => !!device.value && (device.value.capabilities & CameraCapability.Temperature) !== 0)
 
 // ─── NodeMap ─────────────────────────────────────────────────────────────
 const nodeMap = computed(() => store.nodeMaps.get(deviceId.value) ?? null)
@@ -195,6 +200,7 @@ async function run(fn: () => Promise<void>) {
 }
 
 async function togglePreview() {
+    if (!supportsPreview.value) return
     if (previewing.value) {
         try {
             await run(async () => {
@@ -222,6 +228,7 @@ async function togglePreview() {
 }
 
 async function onSnapshot() {
+    if (!supportsSnapshot.value) return
     await run(async () => {
         const snap = await store.snapshot(deviceId.value)
         snapshotUri.value = snap.dataUri
@@ -231,6 +238,7 @@ async function onSnapshot() {
 }
 
 async function onSoftTrigger() {
+    if (!supportsSoftwareTrigger.value) return
     await run(async () => {
         await store.softTrigger(deviceId.value)
         toast.success(t('camera.softTriggerSent'))
@@ -268,9 +276,9 @@ function scoreColor(score: number): string {
 
 // ─── 全部刷新 ────────────────────────────────────────────────────────────
 async function refreshAll() {
-    if (!nodeMap.value) {
+    if (supportsParameterNodes.value && !nodeMap.value) {
         await loadNodeMap(false)
-    } else {
+    } else if (supportsParameterNodes.value && nodeMap.value) {
         // 串行读取每个分组，避免并发占用 DbContext
         for (const cat of nodeMap.value.categories) {
             await refreshCategory(cat.name)
@@ -282,7 +290,9 @@ async function refreshAll() {
 // ─── 侦听 / 生命周期 ─────────────────────────────────────────────────────
 watch(isOpen, (val) => {
     if (val) {
-        void loadNodeMap(false)
+        if (supportsParameterNodes.value) {
+            void loadNodeMap(false)
+        }
         void loadImageParams()
     }
 })
@@ -294,22 +304,25 @@ onMounted(async () => {
             void router.push({ name: 'CameraManage' })
         })
     }
+    if (!supportsPreview.value && supportsSnapshot.value) {
+        previewTab.value = 'snapshot'
+    }
     // 页面加载/刷新/返回时：向 Hub 续约宽限期并拉取最新快照，恢复 UI 状态
-    try {
-        const snapshot = await store.loadCameraSnapshotState(deviceId.value)
-        previewing.value = snapshot.isPreviewing
-        // NodeMap 由 store 注入，此处只需初始化节点值缓存
-        if (snapshot.nodeMap) {
-            const initial: Record<string, string | null> = {}
-            for (const n of snapshot.nodeMap.allNodes) {
-                initial[n.nodeName] = n.currentValue
+    if (supportsParameterNodes.value) {
+        try {
+            const snapshot = await store.loadCameraSnapshotState(deviceId.value)
+            previewing.value = snapshot.isPreviewing
+            if (snapshot.nodeMap) {
+                const initial: Record<string, string | null> = {}
+                for (const n of snapshot.nodeMap.allNodes) {
+                    initial[n.nodeName] = n.currentValue
+                }
+                nodeValues.value = initial
             }
-            nodeValues.value = initial
-        }
-    } catch {
-        // 快照加载失败时降级：直接拉取 NodeMap
-        if (isOpen.value) {
-            void loadNodeMap(false)
+        } catch {
+            if (isOpen.value) {
+                void loadNodeMap(false)
+            }
         }
     }
     if (isOpen.value) {
@@ -403,6 +416,7 @@ onUnmounted(() => {
                         <!-- Tab 切换 -->
                         <div class="flex items-center gap-1 border-b pb-2">
                             <Button
+                                v-if="supportsPreview"
                                 text
                                 size="small"
                                 :severity="previewTab === 'video' ? 'primary' : 'secondary'"
@@ -411,6 +425,7 @@ onUnmounted(() => {
                                 {{ t('camera.tabVideo') }}
                             </Button>
                             <Button
+                                v-if="supportsSnapshot"
                                 text
                                 size="small"
                                 :severity="previewTab === 'snapshot' ? 'primary' : 'secondary'"
@@ -532,6 +547,7 @@ onUnmounted(() => {
                         <!-- 预览控制按钮 -->
                         <div class="flex gap-2">
                             <Button
+                                v-if="supportsPreview"
                                 :severity="previewing ? 'danger' : 'secondary'"
                                 :outlined="!previewing"
                                 size="small"
@@ -542,6 +558,7 @@ onUnmounted(() => {
                                 {{ previewing ? t('camera.stopPreview') : t('camera.startPreview') }}
                             </Button>
                             <Button
+                                v-if="supportsSnapshot"
                                 severity="secondary"
                                 outlined
                                 size="small"
@@ -588,10 +605,12 @@ onUnmounted(() => {
                         <div v-if="metrics" class="grid grid-cols-2 gap-x-2 gap-y-1 text-xs">
                             <span class="text-muted-foreground">{{ t('camera.frameRate') }}</span>
                             <span>{{ displayMetric(metrics.frameRate) }} fps</span>
-                            <span class="text-muted-foreground">{{ t('camera.fpgaTemp') }}</span>
-                            <span>{{ displayMetric(metrics.fpgaTemperature, 0) }} °C</span>
-                            <span class="text-muted-foreground">{{ t('camera.sensorTemp') }}</span>
-                            <span>{{ displayMetric(metrics.sensorTemperature) }} °C</span>
+                            <template v-if="supportsTemperature">
+                                <span class="text-muted-foreground">{{ t('camera.fpgaTemp') }}</span>
+                                <span>{{ displayMetric(metrics.fpgaTemperature, 0) }} °C</span>
+                                <span class="text-muted-foreground">{{ t('camera.sensorTemp') }}</span>
+                                <span>{{ displayMetric(metrics.sensorTemperature) }} °C</span>
+                            </template>
                             <span class="text-muted-foreground">{{ t('camera.aeStatus') }}</span>
                             <span>{{ metrics.aeStatus === 1 ? t('camera.aeRunning') : t('camera.aeIdle') }}</span>
                             <span class="text-muted-foreground">{{ t('camera.bufFrames') }}</span>
@@ -605,6 +624,7 @@ onUnmounted(() => {
                             </span>
                             <div class="flex gap-2">
                                 <Button
+                                    v-if="supportsSoftwareTrigger"
                                     severity="secondary"
                                     outlined
                                     size="small"
@@ -615,6 +635,7 @@ onUnmounted(() => {
                                     {{ t('camera.softTrigger') }}
                                 </Button>
                                 <Button
+                                    v-if="supportsParameterNodes"
                                     severity="secondary"
                                     outlined
                                     size="small"
@@ -641,7 +662,7 @@ onUnmounted(() => {
 
             <!-- 右：动态节点卡片 -->
             <div class="grid auto-rows-min grid-cols-1 gap-3 md:grid-cols-2">
-                <template v-if="nodeMap && nodeMap.categories.length > 0">
+                <template v-if="supportsParameterNodes && nodeMap && nodeMap.categories.length > 0">
                     <GenICamCategoryCard
                         v-for="cat in nodeMap.categories"
                         :key="cat.name"
@@ -657,7 +678,9 @@ onUnmounted(() => {
                 </template>
                 <div v-else class="rounded-lg border p-6 text-center text-sm text-muted-foreground md:col-span-2">
                     {{
-                        isOpen
+                        !supportsParameterNodes
+                            ? '当前相机驱动未提供动态参数节点'
+                            : isOpen
                             ? nodeMapLoading
                                 ? t('camera.nodMapLoadingFull')
                                 : t('camera.noNodeMap')

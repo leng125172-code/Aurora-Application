@@ -1247,12 +1247,19 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                     b.Property<Guid?>("ActiveParameterSetId")
                         .HasColumnType("uuid");
 
+                    b.Property<int>("Capabilities")
+                        .HasColumnType("integer");
+
                     b.Property<string>("ConcurrencyStamp")
                         .IsConcurrencyToken()
                         .IsRequired()
                         .HasMaxLength(40)
                         .HasColumnType("character varying(40)")
                         .HasColumnName("ConcurrencyStamp");
+
+                    b.Property<string>("ConnectionSummary")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
 
                     b.Property<DateTime>("CreationTime")
                         .HasColumnType("timestamp without time zone")
@@ -1281,10 +1288,21 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
 
+                    b.Property<string>("DriverId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasDefaultValue("tucam");
+
                     b.Property<string>("ExtraProperties")
                         .IsRequired()
                         .HasColumnType("text")
                         .HasColumnName("ExtraProperties");
+
+                    b.Property<string>("HardwareId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
 
                     b.Property<int>("ImageRotationAngle")
                         .ValueGeneratedOnAdd()
@@ -1322,13 +1340,14 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("DeviceIndex")
-                        .IsUnique();
-
-                    b.HasIndex("DeviceSerialNumber")
-                        .IsUnique();
+                    b.HasIndex("DeviceSerialNumber");
 
                     b.HasIndex("IsEnabled");
+
+                    b.HasIndex("DriverId", "DeviceIndex");
+
+                    b.HasIndex("DriverId", "HardwareId")
+                        .IsUnique();
 
                     b.ToTable("AbpProCameraDevices", (string)null);
                 });
@@ -2214,6 +2233,341 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                     b.HasIndex("IsUsed", "ExpiresAt");
 
                     b.ToTable("AbpProOperatorFileRecords", (string)null);
+                });
+
+            modelBuilder.Entity("AuroraStruct3D.Plcs.PlcDevice", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("AuthenticationType")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("AutoTrustServerCertificate")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("ClientCertificatePath")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ConcurrencyStamp")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("ConcurrencyStamp");
+
+                    b.Property<int>("ConnectTimeoutMs")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ConnectionStatus")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreationTime")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("CreationTime");
+
+                    b.Property<Guid?>("CreatorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("CreatorId");
+
+                    b.Property<Guid?>("DeleterId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("DeleterId");
+
+                    b.Property<DateTime?>("DeletionTime")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("DeletionTime");
+
+                    b.Property<string>("DriverId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("EncryptedClientCertificatePassword")
+                        .HasColumnType("text");
+
+                    b.Property<string>("EncryptedPassword")
+                        .HasColumnType("text");
+
+                    b.Property<string>("EndpointUrl")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<string>("ExtensionJson")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ExtraProperties")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("ExtraProperties");
+
+                    b.Property<int>("IdleTimeoutMs")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("IsDeleted");
+
+                    b.Property<bool>("IsEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("KeepAliveMs")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("LastConnectedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
+
+                    b.Property<DateTime?>("LastFailedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<DateTime?>("LastModificationTime")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("LastModificationTime");
+
+                    b.Property<Guid?>("LastModifierId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("LastModifierId");
+
+                    b.Property<int>("MessageSecurityMode")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<int>("OperationTimeoutMs")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Protocol")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ReconnectInitialMs")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ReconnectMaxMs")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("SecurityPolicy")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<int>("SessionTimeoutMs")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("UserName")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.HasIndex("DriverId", "EndpointUrl");
+
+                    b.ToTable("AbpProPlcDevices", (string)null);
+                });
+
+            modelBuilder.Entity("AuroraStruct3D.Plcs.PlcOperationLog", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreationTime")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("CreationTime");
+
+                    b.Property<Guid?>("CreatorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("CreatorId");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
+
+                    b.Property<bool>("IsSuccess")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime>("OccurredAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<int>("OperationType")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("PlcDeviceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("PlcTagId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Summary")
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PlcDeviceId", "OccurredAt");
+
+                    b.ToTable("AbpProPlcOperationLogs", (string)null);
+                });
+
+            modelBuilder.Entity("AuroraStruct3D.Plcs.PlcTag", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Access")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Address")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("ConcurrencyStamp")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("ConcurrencyStamp");
+
+                    b.Property<DateTime>("CreationTime")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("CreationTime");
+
+                    b.Property<Guid?>("CreatorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("CreatorId");
+
+                    b.Property<int>("DataType")
+                        .HasColumnType("integer");
+
+                    b.Property<double?>("Deadband")
+                        .HasColumnType("double precision");
+
+                    b.Property<Guid?>("DeleterId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("DeleterId");
+
+                    b.Property<DateTime?>("DeletionTime")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("DeletionTime");
+
+                    b.Property<string>("DisplayFormat")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("ExtraProperties")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("ExtraProperties");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("IsDeleted");
+
+                    b.Property<bool>("IsEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime?>("LastModificationTime")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("LastModificationTime");
+
+                    b.Property<Guid?>("LastModifierId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("LastModifierId");
+
+                    b.Property<double?>("Maximum")
+                        .HasColumnType("double precision");
+
+                    b.Property<double?>("Minimum")
+                        .HasColumnType("double precision");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<double>("Offset")
+                        .HasColumnType("double precision");
+
+                    b.Property<Guid>("PlcDeviceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("SamplingIntervalMs")
+                        .HasColumnType("integer");
+
+                    b.Property<double>("Scale")
+                        .HasColumnType("double precision");
+
+                    b.Property<string>("Unit")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Code")
+                        .IsUnique();
+
+                    b.HasIndex("PlcDeviceId", "Address")
+                        .IsUnique();
+
+                    b.ToTable("AbpProPlcTags", (string)null);
+                });
+
+            modelBuilder.Entity("AuroraStruct3D.Plcs.PlcTrustedCertificate", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreationTime")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("CreationTime");
+
+                    b.Property<Guid?>("CreatorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("CreatorId");
+
+                    b.Property<DateTime>("NotAfter")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<DateTime>("NotBefore")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<Guid>("PlcDeviceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Subject")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<string>("Thumbprint")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PlcDeviceId", "Thumbprint")
+                        .IsUnique();
+
+                    b.ToTable("AbpProPlcTrustedCertificates", (string)null);
                 });
 
             modelBuilder.Entity("AuroraStruct3D.ProductModels.ProductModel", b =>
@@ -7143,6 +7497,33 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                     b.HasOne("AuroraStruct3D.Motors.MotorAxis", null)
                         .WithMany()
                         .HasForeignKey("MotorAxisId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("AuroraStruct3D.Plcs.PlcOperationLog", b =>
+                {
+                    b.HasOne("AuroraStruct3D.Plcs.PlcDevice", null)
+                        .WithMany()
+                        .HasForeignKey("PlcDeviceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("AuroraStruct3D.Plcs.PlcTag", b =>
+                {
+                    b.HasOne("AuroraStruct3D.Plcs.PlcDevice", null)
+                        .WithMany()
+                        .HasForeignKey("PlcDeviceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("AuroraStruct3D.Plcs.PlcTrustedCertificate", b =>
+                {
+                    b.HasOne("AuroraStruct3D.Plcs.PlcDevice", null)
+                        .WithMany()
+                        .HasForeignKey("PlcDeviceId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

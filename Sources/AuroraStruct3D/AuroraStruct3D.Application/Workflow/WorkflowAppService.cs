@@ -55,6 +55,7 @@ public class WorkflowAppService : AuroraStruct3DAppService, IWorkflowAppService
     }
 
     /// <inheritdoc/>
+    [HttpGet]
     public async Task<List<WorkflowBriefDto>> GetListAsync(Guid projectId)
     {
         IQueryable<WorkflowDefinition> queryable = await _repository.GetQueryableAsync();
@@ -77,6 +78,7 @@ public class WorkflowAppService : AuroraStruct3DAppService, IWorkflowAppService
     }
 
     /// <inheritdoc/>
+    [HttpPost]
     public async Task<WorkflowDto> CreateAsync(CreateWorkflowInput input)
     {
         (Guid projectId, string name, string graphData, GraphDataModel graph) = ReadPayload(input);
@@ -118,6 +120,7 @@ public class WorkflowAppService : AuroraStruct3DAppService, IWorkflowAppService
     }
 
     /// <inheritdoc/>
+    [HttpGet("{id:guid}")]
     public async Task<WorkflowDto> GetAsync(Guid id)
     {
         WorkflowDefinition workflow = await _repository.GetAsync(id);
@@ -126,6 +129,7 @@ public class WorkflowAppService : AuroraStruct3DAppService, IWorkflowAppService
     }
 
     /// <inheritdoc/>
+    [HttpPut("{id:guid}")]
     public async Task<WorkflowDto> UpdateAsync(Guid id, UpdateWorkflowInput input)
     {
         (Guid projectId, string name, string graphData, GraphDataModel graph) = ReadPayload(input);
@@ -180,6 +184,7 @@ public class WorkflowAppService : AuroraStruct3DAppService, IWorkflowAppService
     }
 
     /// <inheritdoc/>
+    [HttpDelete("{id:guid}")]
     public async Task DeleteAsync(Guid id)
     {
         WorkflowDefinition workflow = await _repository.GetAsync(id);
@@ -188,6 +193,7 @@ public class WorkflowAppService : AuroraStruct3DAppService, IWorkflowAppService
     }
 
     /// <inheritdoc/>
+    [HttpPost("{id:guid}/validate")]
     public async Task<WorkflowValidateResultDto> ValidateAsync(Guid id)
     {
         WorkflowDefinition workflow = await _repository.GetAsync(id);
@@ -225,6 +231,7 @@ public class WorkflowAppService : AuroraStruct3DAppService, IWorkflowAppService
     }
 
     /// <inheritdoc/>
+    [HttpPost("{id:guid}/simulate")]
     public async Task<WorkflowDataFlowReportDto> SimulateAsync(Guid id)
     {
         WorkflowDefinition workflow = await _repository.GetAsync(id);

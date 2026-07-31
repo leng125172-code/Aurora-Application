@@ -40,8 +40,12 @@ public class CameraInitScanJob : AsyncBackgroundJob<CameraInitScanJobArgs>, ITra
         try
         {
             _logger.LogInformation("[CameraInitScanJob] 开始扫描相机设备...");
-            int count = await _cameraDeviceAppService.ScanCamerasAsync();
-            _logger.LogInformation("[CameraInitScanJob] 扫描完成，检测到 {Count} 台相机。", count);
+            CameraScanResultDto scan = await _cameraDeviceAppService.ScanCamerasAsync();
+            _logger.LogInformation(
+                "[CameraInitScanJob] 扫描完成，检测到 {Count} 台相机，冲突 {Conflicts} 台。",
+                scan.TotalDiscovered,
+                scan.Conflicts
+            );
         }
         catch (Exception ex)
         {
@@ -54,6 +58,15 @@ public class CameraInitScanJob : AsyncBackgroundJob<CameraInitScanJobArgs>, ITra
         int openedCount = 0;
         foreach (CameraDevice camera in cameras)
         {
+            if (camera.Status == CameraStatus.Error)
+            {
+                _logger.LogInformation(
+                    "[CameraInitScanJob] 相机「{Name}」本次扫描离线，跳过自动打开。",
+                    camera.Name
+                );
+                continue;
+            }
+
             try
             {
                 await _cameraDeviceAppService.OpenCameraAsync(camera.Id);

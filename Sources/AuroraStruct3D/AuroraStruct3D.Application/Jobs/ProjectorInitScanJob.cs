@@ -1,4 +1,5 @@
 using AuroraStruct3D.Projectors;
+using AuroraStruct3D.Projectors.Dtos;
 using Microsoft.Extensions.Logging;
 using Volo.Abp.BackgroundJobs;
 
@@ -19,19 +20,16 @@ public class ProjectorInitScanJob
 {
     private readonly IProjectorDeviceAppService _projectorDeviceAppService;
     private readonly IProjectorDeviceRepository _projectorDeviceRepository;
-    private readonly IProjectorConnectionPool _connectionPool;
     private readonly ILogger<ProjectorInitScanJob> _logger;
 
     public ProjectorInitScanJob(
         IProjectorDeviceAppService projectorDeviceAppService,
         IProjectorDeviceRepository projectorDeviceRepository,
-        IProjectorConnectionPool connectionPool,
         ILogger<ProjectorInitScanJob> logger
     )
     {
         _projectorDeviceAppService = projectorDeviceAppService;
         _projectorDeviceRepository = projectorDeviceRepository;
-        _connectionPool = connectionPool;
         _logger = logger;
     }
 
@@ -74,8 +72,6 @@ public class ProjectorInitScanJob
     /// </summary>
     private async Task InitProjectorAsync(ProjectorDevice device)
     {
-        IDlpProjectorService svc = _connectionPool.GetOrCreate(device.Id);
-
         // ── 连接 ──
         try
         {
@@ -83,23 +79,9 @@ public class ProjectorInitScanJob
                 "[ProjectorInitScanJob] 正在连接投影仪「{Name}」...",
                 device.Name
             );
-            if (device.ConnectionType == ProjectorConnectionType.Tcp)
-            {
-                await svc.ConnectAsync(device.IpAddress!, device.TcpPort);
-            }
-            else
-            {
-                await svc.ConnectHidAsync(
-                    ProjectorConsts.HidVendorId,
-                    ProjectorConsts.HidProductId,
-                    device.HidDeviceIndex
-                );
-            }
-            device.UpdateConnectionStatus(
-                ProjectorConnectionStatus.Connected,
-                connectedAt: DateTime.UtcNow
-            );
-            await _projectorDeviceRepository.UpdateAsync(device);
+            // 复用应用服务连接入口：USB HID 设备会在连接后再次读取
+            // 寄存器 0 校验身份，禁止启动任务绕过稳定身份保护。
+            await _projectorDeviceAppService.ConnectAsync(device.Id);
             _logger.LogInformation(
                 "[ProjectorInitScanJob] 投影仪「{Name}」连接成功。",
                 device.Name
@@ -112,22 +94,17 @@ public class ProjectorInitScanJob
                 device.Name,
                 ex.Message
             );
-            device.UpdateConnectionStatus(
-                ProjectorConnectionStatus.Disconnected,
-                disconnectedAt: DateTime.UtcNow
-            );
-            await _projectorDeviceRepository.UpdateAsync(device);
+            // ConnectAsync 已使用新实体更新断开状态；这里不能再次保存启动扫描前
+            // 加载的旧实体，否则 ConcurrencyStamp 已变化时会触发乐观并发异常。
             return;
         }
 
         // ── 开灯 ──
         try
         {
-            bool ok = await svc.LedOnAsync();
+            bool ok = await _projectorDeviceAppService.LedOnAsync(device.Id);
             if (ok)
             {
-                device.UpdateLedStatus(ProjectorLedStatus.On);
-                await _projectorDeviceRepository.UpdateAsync(device);
                 _logger.LogInformation(
                     "[ProjectorInitScanJob] 投影仪「{Name}」已开灯。",
                     device.Name
@@ -155,7 +132,13 @@ public class ProjectorInitScanJob
         {
             try
             {
-                await svc.SetColorAsync(color);
+                await _projectorDeviceAppService.SetColorAsync(
+                    new SetProjectorColorDto
+                    {
+                        ProjectorDeviceId = device.Id,
+                        Color = color,
+                    }
+                );
                 await Task.Delay(TimeSpan.FromSeconds(1));
             }
             catch (Exception ex)
@@ -180,12 +163,20 @@ public class ProjectorInitScanJob
 
             // 亮度当前处于白光模式，可直接写入
             byte targetLight = device.LastLightValue > 0 ? device.LastLightValue : (byte)75;
-            await svc.SetLightAsync(targetLight);
-            await svc.SetColorAsync(targetColor);
-
-            device.UpdateLightValue(targetLight);
-            device.UpdateColor(targetColor);
-            await _projectorDeviceRepository.UpdateAsync(device);
+            await _projectorDeviceAppService.SetLightAsync(
+                new SetProjectorLightDto
+                {
+                    ProjectorDeviceId = device.Id,
+                    Light = targetLight,
+                }
+            );
+            await _projectorDeviceAppService.SetColorAsync(
+                new SetProjectorColorDto
+                {
+                    ProjectorDeviceId = device.Id,
+                    Color = targetColor,
+                }
+            );
 
             _logger.LogInformation(
                 "[ProjectorInitScanJob] 投影仪「{Name}」参数恢复完成：颜色={Color}，亮度={Light}。",

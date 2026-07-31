@@ -1,5 +1,6 @@
 using System.Reflection;
 using AuroraStruct3D.Workflow;
+using AuroraStruct3D.Workflow.Runtime;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Routing;
@@ -26,20 +27,46 @@ public class WorkflowApiRouteContractTests
     }
 
     [Theory]
-    [InlineData(nameof(WorkflowAppService.GetListAsync))]
-    [InlineData(nameof(WorkflowAppService.CreateAsync))]
-    [InlineData(nameof(WorkflowAppService.GetAsync))]
-    [InlineData(nameof(WorkflowAppService.UpdateAsync))]
-    [InlineData(nameof(WorkflowAppService.DeleteAsync))]
-    [InlineData(nameof(WorkflowAppService.ValidateAsync))]
-    [InlineData(nameof(WorkflowAppService.SimulateAsync))]
-    public void Implementation_Method_Should_Not_Define_Explicit_Http_Contract(string methodName)
+    [InlineData(nameof(WorkflowAppService.GetListAsync), typeof(HttpGetAttribute), null)]
+    [InlineData(nameof(WorkflowAppService.CreateAsync), typeof(HttpPostAttribute), null)]
+    [InlineData(nameof(WorkflowAppService.GetAsync), typeof(HttpGetAttribute), "{id:guid}")]
+    [InlineData(nameof(WorkflowAppService.UpdateAsync), typeof(HttpPutAttribute), "{id:guid}")]
+    [InlineData(nameof(WorkflowAppService.DeleteAsync), typeof(HttpDeleteAttribute), "{id:guid}")]
+    [InlineData(
+        nameof(WorkflowAppService.ValidateAsync),
+        typeof(HttpPostAttribute),
+        "{id:guid}/validate"
+    )]
+    [InlineData(
+        nameof(WorkflowAppService.SimulateAsync),
+        typeof(HttpPostAttribute),
+        "{id:guid}/simulate"
+    )]
+    public void Implementation_Method_Should_Define_Unambiguous_Http_Contract(
+        string methodName,
+        Type attributeType,
+        string? template
+    )
     {
         MethodInfo method = typeof(WorkflowAppService)
             .GetMethods(BindingFlags.Public | BindingFlags.Instance)
             .Single(x => x.Name == methodName);
 
-        Assert.Null(GetHttpMethodAttribute(method));
+        Attribute route = Assert.IsAssignableFrom<HttpMethodAttribute>(
+            GetHttpMethodAttribute(method)
+        );
+        Assert.Equal(attributeType, route.GetType());
+        Assert.Equal(template, ((HttpMethodAttribute)route).Template);
+    }
+
+    [Fact]
+    public void Frozen_Runtime_Execution_Should_Not_Be_An_Http_Action()
+    {
+        MethodInfo method = typeof(WorkflowRuntimeAppService).GetMethod(
+            nameof(WorkflowRuntimeAppService.ExecuteFrozenWorkflowAsync)
+        )!;
+
+        Assert.NotNull(method.GetCustomAttribute<NonActionAttribute>());
     }
 
     [Fact]

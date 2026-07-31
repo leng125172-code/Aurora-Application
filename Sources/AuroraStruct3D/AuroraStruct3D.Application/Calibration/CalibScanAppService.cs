@@ -1,7 +1,7 @@
 using AuroraStruct3D.Calibration.Dtos;
 using AuroraStruct3D.Cameras;
 using AuroraStruct3D.Projectors;
-using AuroraStruct3D.Tucam;
+using AuroraStruct3D.Cameras.Tucam;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Volo.Abp;
@@ -26,7 +26,10 @@ public class CalibScanAppService : AuroraStruct3DAppService, ICalibScanAppServic
     private readonly CalibScanStateStore _stateStore;
     private readonly ICalibScanNotifier _scanNotifier;
     private readonly IRepository<CameraDevice, Guid> _cameraDeviceRepository;
-    private readonly ITucamCameraService _tucamService;
+    private readonly ICameraDriverRegistry _cameraDrivers;
+    private ITucamCameraService _tucamService =>
+        _cameraDrivers.GetRequired("tucam") as ITucamCameraService
+        ?? throw new UserFriendlyException("Tucam 驱动不可用");
     private readonly IRepository<CalibProjectorParam, Guid> _projectorParamRepository;
     private readonly IProjectorConnectionPool _projectorConnectionPool;
     private readonly ILogger<CalibScanAppService> _logger;
@@ -40,7 +43,7 @@ public class CalibScanAppService : AuroraStruct3DAppService, ICalibScanAppServic
         CalibScanStateStore stateStore,
         ICalibScanNotifier scanNotifier,
         IRepository<CameraDevice, Guid> cameraDeviceRepository,
-        ITucamCameraService tucamService,
+        ICameraDriverRegistry cameraDrivers,
         IRepository<CalibProjectorParam, Guid> projectorParamRepository,
         IProjectorConnectionPool projectorConnectionPool,
         ILogger<CalibScanAppService> logger,
@@ -53,7 +56,7 @@ public class CalibScanAppService : AuroraStruct3DAppService, ICalibScanAppServic
         _stateStore = stateStore;
         _scanNotifier = scanNotifier;
         _cameraDeviceRepository = cameraDeviceRepository;
-        _tucamService = tucamService;
+        _cameraDrivers = cameraDrivers;
         _projectorParamRepository = projectorParamRepository;
         _projectorConnectionPool = projectorConnectionPool;
         _logger = logger;
@@ -633,7 +636,7 @@ public class CalibScanAppService : AuroraStruct3DAppService, ICalibScanAppServic
             return null;
         }
 
-        int idx = camera.DeviceIndex;
+        int idx = ResolveTucamRuntimeIndex(camera);
         if (!_tucamService.IsCameraOpen(idx))
         {
             _logger.LogDebug("Step6 扫描帧抓取：相机 {Index} 未打开，跳过", idx);
@@ -832,7 +835,7 @@ public class CalibScanAppService : AuroraStruct3DAppService, ICalibScanAppServic
     private async Task EnsureSoftwareTriggerModeAsync(Guid cameraDeviceId)
     {
         CameraDevice camera = await _cameraDeviceRepository.GetAsync(cameraDeviceId);
-        int idx = camera.DeviceIndex;
+        int idx = ResolveTucamRuntimeIndex(camera);
 
         if (!_tucamService.IsCameraOpen(idx))
         {
@@ -938,9 +941,10 @@ public class CalibScanAppService : AuroraStruct3DAppService, ICalibScanAppServic
         try
         {
             CameraDevice camera = await _cameraDeviceRepository.GetAsync(cameraDeviceId.Value);
-            if (_tucamService.IsCameraOpen(camera.DeviceIndex))
+            int runtimeIndex = ResolveTucamRuntimeIndex(camera);
+            if (_tucamService.IsCameraOpen(runtimeIndex))
             {
-                await _tucamService.StopCaptureAsync(camera.DeviceIndex);
+                await _tucamService.StopCaptureAsync(runtimeIndex);
             }
         }
         catch (Exception ex)
@@ -958,6 +962,20 @@ public class CalibScanAppService : AuroraStruct3DAppService, ICalibScanAppServic
             CalibDeviceType.TwoCamera1Light => CalibScanMode.TwoCamera1Light,
             _ => throw new UserFriendlyException("当前项目设备类型不支持在线扫描"),
         };
+    }
+
+    private int ResolveTucamRuntimeIndex(CameraDevice camera)
+    {
+        if (string.IsNullOrWhiteSpace(camera.HardwareId))
+            throw new UserFriendlyException($"相机 [{camera.Name}] 尚未绑定稳定硬件标识");
+        ICameraDriver driver = _cameraDrivers.GetRequired(camera.DriverId);
+        if (driver is not ITucamCameraService)
+            throw new UserFriendlyException(
+                $"相机驱动 [{camera.DriverId}] 尚未提供在线标定适配器"
+            );
+        return driver.TryGetRuntimeIndex(camera.HardwareId, out int index)
+            ? index
+            : throw new UserFriendlyException($"相机 [{camera.Name}] 当前离线");
     }
 
     private static void ValidateBindingsForScanMode(CalibProject project, CalibScanMode scanMode)

@@ -113,6 +113,16 @@ public class annotate_height_diff_result : IOperator
         double heightA = context.Get<double>("height_a");
         double heightB = context.Get<double>("height_b");
         double signedDiff = context.Get<double>("signed_diff");
+        string nameA = RoiMetadataNameResolver.Resolve(
+            context.Get<string>("roi_metadata_a"),
+            "A",
+            "roi_metadata_a"
+        );
+        string nameB = RoiMetadataNameResolver.Resolve(
+            context.Get<string>("roi_metadata_b"),
+            "B",
+            "roi_metadata_b"
+        );
 
         Mat output = EnsureBgra(inputMat);
 
@@ -128,11 +138,19 @@ public class annotate_height_diff_result : IOperator
             statusColor,
             3
         );
-        DrawMeasurementText(output, $"A: {heightA.ToString("F3", CultureInfo.InvariantCulture)}", 64);
-        DrawMeasurementText(output, $"B: {heightB.ToString("F3", CultureInfo.InvariantCulture)}", 88);
         DrawMeasurementText(
             output,
-            $"dH(A-B): {signedDiff.ToString("F3", CultureInfo.InvariantCulture)}",
+            $"{nameA}: {heightA.ToString("F3", CultureInfo.InvariantCulture)}",
+            64
+        );
+        DrawMeasurementText(
+            output,
+            $"{nameB}: {heightB.ToString("F3", CultureInfo.InvariantCulture)}",
+            88
+        );
+        DrawMeasurementText(
+            output,
+            $"dH({nameA}-{nameB}): {signedDiff.ToString("F3", CultureInfo.InvariantCulture)}",
             112
         );
 
@@ -171,7 +189,7 @@ public class annotate_height_diff_result : IOperator
             new Point(16, y),
             HersheyFonts.HersheySimplex,
             0.55,
-            new Scalar(255, 255, 255, 255),
+            new Scalar(0, 0, 0, 255),
             2
         );
     }

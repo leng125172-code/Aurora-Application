@@ -14,6 +14,13 @@ public class CameraDeviceDto : FullAuditedEntityDto<Guid>
     /// <summary>相机型号</summary>
     public string? Model { get; set; }
 
+    public string DriverId { get; set; } = "tucam";
+    public string? HardwareId { get; set; }
+    public string? ConnectionSummary { get; set; }
+    public CameraCapability Capabilities { get; set; }
+
+    public bool IsOnline { get; set; }
+
     /// <summary>设备序列号（来自 DeviceControl/DeviceSerialNumber）</summary>
     public string? DeviceSerialNumber { get; set; }
 
@@ -48,6 +55,26 @@ public class CameraDeviceDto : FullAuditedEntityDto<Guid>
 
     /// <summary>参数集数量</summary>
     public int ParameterSetCount { get; set; }
+}
+
+public class CameraScanResultDto
+{
+    public int TotalDiscovered { get; set; }
+    public int Created { get; set; }
+    public int Updated { get; set; }
+    public int Offline { get; set; }
+    public int Conflicts { get; set; }
+    public List<CameraDriverScanResultDto> Drivers { get; set; } = [];
+}
+
+public class CameraDriverScanResultDto
+{
+    public string DriverId { get; set; } = string.Empty;
+    public string DisplayName { get; set; } = string.Empty;
+    public int Discovered { get; set; }
+    public int Bound { get; set; }
+    public int Conflicts { get; set; }
+    public string? Error { get; set; }
 }
 
 /// <summary>

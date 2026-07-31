@@ -9,7 +9,7 @@ using AuroraStruct3D.Cameras.Dtos;
 using AuroraStruct3D.OpenCV.ImageOps;
 using AuroraStruct3D.Projectors;
 using AuroraStruct3D.Projectors.Dtos;
-using AuroraStruct3D.Tucam;
+using AuroraStruct3D.Cameras.Tucam;
 using Microsoft.Extensions.Logging;
 using OpenCvSharp;
 using SkiaSharp;
@@ -33,7 +33,10 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
     private readonly IRepository<CalibStereoResult, Guid> _stereoResultRepo;
     private readonly IBlobContainer<CalibPhotoBlobContainer> _blobContainer;
     private readonly IRepository<CameraDevice, Guid> _cameraDeviceRepository;
-    private readonly ITucamCameraService _tucamService;
+    private readonly ICameraDriverRegistry _cameraDrivers;
+    private ITucamCameraService _tucamService =>
+        _cameraDrivers.GetRequired("tucam") as ITucamCameraService
+        ?? throw new UserFriendlyException("Tucam 驱动不可用");
     private readonly IProjectorDeviceAppService _projectorService;
     private readonly ILogger<CalibPhotoAppService> _logger;
     private readonly CalibBoardDetector _boardDetector;
@@ -53,7 +56,7 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
         IRepository<CalibStereoResult, Guid> stereoResultRepo,
         IBlobContainer<CalibPhotoBlobContainer> blobContainer,
         IRepository<CameraDevice, Guid> cameraDeviceRepository,
-        ITucamCameraService tucamService,
+        ICameraDriverRegistry cameraDrivers,
         IProjectorDeviceAppService projectorService,
         ILogger<CalibPhotoAppService> logger,
         CalibBoardDetector boardDetector,
@@ -66,7 +69,7 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
         _stereoResultRepo = stereoResultRepo;
         _blobContainer = blobContainer;
         _cameraDeviceRepository = cameraDeviceRepository;
-        _tucamService = tucamService;
+        _cameraDrivers = cameraDrivers;
         _projectorService = projectorService;
         _logger = logger;
         _boardDetector = boardDetector;
@@ -2764,7 +2767,8 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
     )
     {
         CameraDevice camera = await _cameraDeviceRepository.GetAsync(cameraDeviceId);
-        int idx = camera.DeviceIndex;
+        ITucamCameraService cameraProvider = ResolveTucamCamera(camera);
+        int idx = ResolveRuntimeIndex(camera, cameraProvider);
 
         if (!_tucamService.IsCameraOpen(idx))
         {
@@ -3052,6 +3056,30 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
             ImageDiffScore = record.ImageDiffScore,
             ImageDiffSignificant = record.ImageDiffSignificant,
         };
+    }
+
+    private ITucamCameraService ResolveTucamCamera(CameraDevice camera)
+    {
+        if ((camera.Capabilities & CameraCapability.Snapshot) == 0)
+            throw new UserFriendlyException($"相机 [{camera.Name}] 不支持标定拍照");
+        if (string.IsNullOrWhiteSpace(camera.HardwareId))
+            throw new UserFriendlyException($"相机 [{camera.Name}] 尚未绑定稳定硬件标识");
+        ICameraDriver driver = _cameraDrivers.GetRequired(camera.DriverId);
+        return driver as ITucamCameraService
+            ?? throw new UserFriendlyException(
+                $"相机驱动 [{camera.DriverId}] 尚未提供标定参数适配器"
+            );
+    }
+
+    private static int ResolveRuntimeIndex(
+        CameraDevice camera,
+        ITucamCameraService provider
+    )
+    {
+        ICameraDriver driver = (ICameraDriver)provider;
+        return driver.TryGetRuntimeIndex(camera.HardwareId!, out int index)
+            ? index
+            : throw new UserFriendlyException($"相机 [{camera.Name}] 当前离线");
     }
 
     private static string CreateThumbnailBase64(byte[] imageBytes)

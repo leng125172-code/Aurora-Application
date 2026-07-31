@@ -20,7 +20,7 @@
   - `TriggerOnceAsync()` → 发送 `T`
   - `NextFrameAsync()` → 发送 `N`
 - [CalibProjectorParam](file:///d:/GitRepos/Aurora%20Application/Sources/AuroraStruct3D/AuroraStruct3D.Domain/Calibration/CalibProjectorParam.cs)：Step3 周期参数实体，含 `PatternCount`/`PeriodCount`/`FringeType`/`PhaseShift`/`ResolutionWidth`/`ResolutionHeight`
-- [ITucamCameraService](file:///d:/GitRepos/Aurora%20Application/Sources/AuroraStruct3D/AuroraStruct3D.Tucam/ITucamCameraService.cs)：已支持软件触发 `DoSoftwareTriggerAsync`、`GrabFrameRawAsync(imageRotationAngle)`、`SetGenICamIntAsync`、`_capStartActiveLock`（顺序单活采集）
+- [ITucamCameraService](file:///d:/GitRepos/Aurora%20Application/Sources/AuroraStruct3D/AuroraStruct3D.Cameras/ITucamCameraService.cs)：已支持软件触发 `DoSoftwareTriggerAsync`、`GrabFrameRawAsync(imageRotationAngle)`、`SetGenICamIntAsync`、`_capStartActiveLock`（顺序单活采集）
 - [CameraHub](file:///d:/GitRepos/Aurora%20Application/Sources/AuroraStruct3D/AuroraStruct3D.HttpApi.Host/Hubs/CameraHub.cs) + [SignalRCalibScanNotifier](file:///d:/GitRepos/Aurora%20Application/Sources/AuroraStruct3D/AuroraStruct3D.HttpApi.Host/Notifiers/SignalRCalibScanNotifier.cs)：已建立 `calib-scan:{projectId}` 分组推送机制
 - [TjProjectorCommands.cs](file:///d:/GitRepos/Aurora%20Application/Sources/AuroraStruct3D/AuroraStruct3D.Projectors/Protocol/TjProjectorCommands.cs)：协议常量 `LN=开灯`、`LL=关灯`（用户确认 LL 是笔误）
 

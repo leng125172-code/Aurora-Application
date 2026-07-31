@@ -5,19 +5,23 @@ using System.Drawing.Imaging;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using AuroraStruct3D.Cameras;
-using AuroraStruct3D.Tucam.GenICam;
-using AuroraStruct3D.Tucam.Interop;
+using AuroraStruct3D.Cameras.Tucam.GenICam;
+using AuroraStruct3D.Cameras.Tucam.Interop;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using SkiaSharp;
 using Volo.Abp.Uow;
 
-namespace AuroraStruct3D.Tucam;
+namespace AuroraStruct3D.Cameras.Tucam;
 
 /// <summary>
 /// TUCam相机操作服务实现，封装SDK P/Invoke调用
 /// </summary>
-public class TucamCameraService : ITucamCameraService, IDisposable
+public class TucamCameraService :
+    ITucamCameraService,
+    ICameraDriver,
+    ICameraParameterNodeProvider,
+    IDisposable
 {
     private const string LogTag = "[Cameras]";
 
@@ -26,6 +30,8 @@ public class TucamCameraService : ITucamCameraService, IDisposable
 
     /// <summary>相机句柄字典，key为相机索引</summary>
     private readonly ConcurrentDictionary<int, IntPtr> _cameraHandles = new();
+    private readonly ConcurrentDictionary<string, int> _runtimeIndexByHardwareId =
+        new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>相机采集状态字典，key为相机索引</summary>
     private readonly ConcurrentDictionary<int, CameraCaptureState> _captureStates = new();
@@ -76,6 +82,201 @@ public class TucamCameraService : ITucamCameraService, IDisposable
         _logger = logger;
         _serviceScopeFactory = serviceScopeFactory;
     }
+
+    public string DriverId => "tucam";
+    public string DisplayName => "Tucam";
+
+    public async Task<IReadOnlyList<CameraDiscovery>> ScanAsync(
+        CancellationToken cancellationToken = default
+    )
+    {
+        int count = await InitializeAsync().ConfigureAwait(false);
+        List<CameraDiscovery> devices = [];
+        Dictionary<string, int> discoveredIndexes = new(StringComparer.OrdinalIgnoreCase);
+        for (int index = 0; index < count; index++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            string model = await GetModelByIndexAsync(index).ConfigureAwait(false);
+            if (!IsCameraOpen(index))
+            {
+                // 扫描即建立连接并保持句柄，避免关闭最后一台相机触发 SDK
+                // 重新枚举后 RuntimeIndex 改变，导致刚建立的稳定身份映射失效。
+                await OpenCameraAsync(index).ConfigureAwait(false);
+            }
+
+            string serial =
+                (await GetGenICamStringAsync(index, "DeviceSerialNumber").ConfigureAwait(false))
+                    ?.Trim() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(serial))
+            {
+                _logger.LogWarning(
+                    "{Tag} Ignore Tucam camera at index {Index}: stable serial number is empty",
+                    LogTag,
+                    index
+                );
+                continue;
+            }
+            if (!discoveredIndexes.TryAdd(serial, index))
+            {
+                _logger.LogError(
+                    "{Tag} Ignore duplicated Tucam serial {Serial} at index {Index}",
+                    LogTag,
+                    serial,
+                    index
+                );
+                devices.RemoveAll(x =>
+                    string.Equals(x.HardwareId, serial, StringComparison.OrdinalIgnoreCase)
+                );
+                continue;
+            }
+
+            CameraCapability capabilities =
+                CameraCapability.Preview
+                | CameraCapability.Snapshot
+                | CameraCapability.SoftwareTrigger
+                | CameraCapability.ParameterNodes
+                | CameraCapability.RtpStream;
+            devices.Add(
+                new CameraDiscovery(
+                    DriverId,
+                    serial,
+                    model,
+                    $"USB index {index}",
+                    capabilities,
+                    index
+                )
+            );
+        }
+
+        _runtimeIndexByHardwareId.Clear();
+        foreach (CameraDiscovery device in devices)
+            _runtimeIndexByHardwareId[device.HardwareId] = device.RuntimeIndex;
+        return devices;
+    }
+
+    public bool TryGetRuntimeIndex(string hardwareId, out int runtimeIndex) =>
+        _runtimeIndexByHardwareId.TryGetValue(hardwareId, out runtimeIndex);
+
+    public async Task OpenAsync(string hardwareId, CancellationToken cancellationToken = default)
+    {
+        int index = GetRuntimeIndex(hardwareId);
+        await OpenCameraAsync(index).ConfigureAwait(false);
+    }
+
+    public Task CloseAsync(string hardwareId, CancellationToken cancellationToken = default) =>
+        CloseCameraAsync(GetRuntimeIndex(hardwareId));
+
+    Task ICameraDriver.StartCaptureAsync(
+        string hardwareId,
+        CancellationToken cancellationToken
+    ) => StartCaptureAsync(GetRuntimeIndex(hardwareId));
+
+    Task ICameraDriver.StopCaptureAsync(
+        string hardwareId,
+        CancellationToken cancellationToken
+    ) => StopCaptureAsync(GetRuntimeIndex(hardwareId));
+
+    public async Task<CameraDriverFrame> GrabFrameAsync(
+        string hardwareId,
+        int timeoutMs = 3000,
+        CancellationToken cancellationToken = default
+    )
+    {
+        CameraFrameData frame = await GrabFrameAsync(GetRuntimeIndex(hardwareId), timeoutMs)
+            .ConfigureAwait(false);
+        return new CameraDriverFrame
+        {
+            Width = frame.Width,
+            Height = frame.Height,
+            BitDepth = frame.BitDepth,
+            Channels = frame.Channels,
+            FrameIndex = frame.FrameIndex,
+            Data = frame.Data,
+        };
+    }
+
+    public Task<byte[]> GrabJpegAsync(
+        string hardwareId,
+        int timeoutMs = 8000,
+        int imageRotationAngle = 0,
+        CancellationToken cancellationToken = default
+    ) =>
+        GrabFrameRawAsync(
+            GetRuntimeIndex(hardwareId),
+            timeoutMs,
+            imageRotationAngle
+        );
+
+    public Task SoftwareTriggerAsync(
+        string hardwareId,
+        CancellationToken cancellationToken = default
+    ) => DoSoftwareTriggerAsync(GetRuntimeIndex(hardwareId));
+
+    public bool IsOpen(string hardwareId) =>
+        TryGetRuntimeIndex(hardwareId, out int index) && IsCameraOpen(index);
+
+    public bool IsCapturing(string hardwareId) =>
+        TryGetRuntimeIndex(hardwareId, out int index) && IsCapturing(index);
+
+    private int GetRuntimeIndex(string hardwareId)
+    {
+        if (string.IsNullOrWhiteSpace(hardwareId))
+            throw new ArgumentException("相机稳定硬件标识不能为空", nameof(hardwareId));
+        return TryGetRuntimeIndex(hardwareId, out int index)
+            ? index
+            : throw new InvalidOperationException(
+                $"相机 {DriverId}/{hardwareId} 当前离线或尚未扫描"
+            );
+    }
+
+    public async Task<string?> ReadNodeAsync(
+        string hardwareId,
+        string nodeName,
+        string dataType,
+        CancellationToken cancellationToken = default
+    )
+    {
+        int index = GetRuntimeIndex(hardwareId);
+        return dataType.ToLowerInvariant() switch
+        {
+            "float" => (await GetGenICamFloatAsync(index, nodeName).ConfigureAwait(false))
+                .ToString(System.Globalization.CultureInfo.InvariantCulture),
+            "string" => await GetGenICamStringAsync(index, nodeName).ConfigureAwait(false),
+            _ => (await GetGenICamIntAsync(index, nodeName).ConfigureAwait(false))
+                .ToString(System.Globalization.CultureInfo.InvariantCulture),
+        };
+    }
+
+    public Task WriteNodeAsync(
+        string hardwareId,
+        string nodeName,
+        string dataType,
+        string value,
+        CancellationToken cancellationToken = default
+    )
+    {
+        int index = GetRuntimeIndex(hardwareId);
+        return dataType.ToLowerInvariant() switch
+        {
+            "float" => SetGenICamFloatAsync(
+                index,
+                nodeName,
+                double.Parse(value, System.Globalization.CultureInfo.InvariantCulture)
+            ),
+            "string" => SetGenICamStringAsync(index, nodeName, value),
+            _ => SetGenICamIntAsync(
+                index,
+                nodeName,
+                long.Parse(value, System.Globalization.CultureInfo.InvariantCulture)
+            ),
+        };
+    }
+
+    public Task ExecuteNodeCommandAsync(
+        string hardwareId,
+        string nodeName,
+        CancellationToken cancellationToken = default
+    ) => ExecuteGenICamCommandAsync(GetRuntimeIndex(hardwareId), nodeName);
 
     /// <inheritdoc/>
     public void SetCameraDeviceIdMapping(IReadOnlyDictionary<int, Guid> deviceIds)
@@ -312,16 +513,9 @@ public class TucamCameraService : ITucamCameraService, IDisposable
             _globalSdkLock.Release();
         }
 
-        // 后台异步预跑 NodeMap 枚举 + 选择器依赖探测，结果写入缓存
-        // 注意：保存 Task 引用，StartCaptureAsync 会等待其完成以避免并发 SDK 调用导致堆损坏
-        // 注意：预热任务在 _globalSdkLock 释放后再启动，避免长时间持锁
-        IntPtr newHandle = _cameraHandles.TryGetValue(cameraIndex, out IntPtr h) ? h : IntPtr.Zero;
-        if (newHandle != IntPtr.Zero)
-        {
-            _prewarmTasks[cameraIndex] = Task.Run(() =>
-                PrewarmGenICamNodeMapAsync(cameraIndex, newHandle)
-            );
-        }
+        // NodeMap 改为首次打开参数面板时按需加载。厂商 SDK 的 GenICam 枚举耗时较长，
+        // 在 Open 后后台预热会与关闭、重扫和其他相机操作形成原生句柄竞态，
+        // 双相机反复开关时可能导致 AccessViolation。
 
         return Task.CompletedTask;
     }

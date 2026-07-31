@@ -157,6 +157,18 @@ const routes: RouteRecordRaw[] = [
                 meta: { requiresAuth: true, title: 'menu.leisaiMotorConsole' },
             },
             {
+                path: 'plcs',
+                name: 'PlcManage',
+                component: () => import('@/views/plcs/PlcManagePage.vue'),
+                meta: { requiresAuth: true, title: 'menu.plcManage' },
+            },
+            {
+                path: 'plcs/:id/control',
+                name: 'PlcControl',
+                component: () => import('@/views/plcs/PlcControlPage.vue'),
+                meta: { requiresAuth: true, title: 'menu.plcControl' },
+            },
+            {
                 path: 'product-models',
                 name: 'ProductModelManage',
                 component: () => import('@/views/product-models/ProductModelManagePage.vue'),

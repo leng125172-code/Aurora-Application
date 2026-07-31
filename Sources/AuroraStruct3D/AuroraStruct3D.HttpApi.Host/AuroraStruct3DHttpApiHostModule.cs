@@ -6,12 +6,14 @@ using AuroraStruct3D.HostedServices;
 using AuroraStruct3D.Hubs;
 using AuroraStruct3D.Jobs;
 using AuroraStruct3D.Motors;
+using AuroraStruct3D.Notifiers;
+using AuroraStruct3D.Plcs;
 using AuroraStruct3D.Projectors;
 using AuroraStruct3D.RS485;
 using AuroraStruct3D.Services;
 using AuroraStruct3D.Sessions;
 using AuroraStruct3D.Streaming;
-using AuroraStruct3D.Tucam;
+using AuroraStruct3D.Cameras.Tucam;
 using Hangfire;
 using Lion.AbpPro.CAP;
 using Microsoft.AspNetCore.Http.Features;
@@ -89,6 +91,7 @@ namespace AuroraStruct3D
             context.Services.AddHostedService<DeviceStatePushService>();
             // 注册系统指标采集器（单例，维护两次采样之间的状态）
             context.Services.AddSingleton<SystemMetricsCollector>();
+            context.Services.AddSingleton<IPlcRealtimeNotifier, SignalRPlcRealtimeNotifier>();
 
             // 注册 RTP/MJPEG UDP 推流服务器（单例）
             context.Services.AddSingleton<RtpMjpegServer>();
@@ -164,6 +167,7 @@ namespace AuroraStruct3D
                 endpoints.MapHub<MotorScanHub>("/signalr-hubs/motor-scan");
                 endpoints.MapHub<KtechMotorHub>("/signalr-hubs/ktech-motor");
                 endpoints.MapHub<LeisaiMotorHub>("/signalr-hubs/leisai-motor");
+                endpoints.MapHub<PlcHub>("/signalr-hubs/plc");
                 // 产品数模转换进度推送 Hub
                 endpoints.MapHub<ProductModelHub>("/signalr-hubs/product-model");
                 // AI 模型转换进度推送 Hub
@@ -248,18 +252,34 @@ namespace AuroraStruct3D
             {
                 ICameraDeviceRepository cameraRepo =
                     scope.ServiceProvider.GetRequiredService<ICameraDeviceRepository>();
-                ITucamCameraService tucamService =
-                    scope.ServiceProvider.GetRequiredService<ITucamCameraService>();
+                ICameraDriverRegistry cameraDrivers =
+                    scope.ServiceProvider.GetRequiredService<ICameraDriverRegistry>();
 
                 List<CameraDevice> cameras = cameraRepo
                     .GetEnabledListAsync()
                     .GetAwaiter()
                     .GetResult();
-                Dictionary<int, Guid> cameraMapping = cameras.ToDictionary(
-                    c => c.DeviceIndex,
-                    c => c.Id
-                );
-                tucamService.SetCameraDeviceIdMapping(cameraMapping);
+                if (
+                    cameraDrivers.TryGet("tucam", out ICameraDriver? driver)
+                    && driver is ITucamCameraService tucam
+                )
+                {
+                    Dictionary<int, Guid> cameraMapping = cameras
+                        .Where(c =>
+                            string.Equals(c.DriverId, "tucam", StringComparison.OrdinalIgnoreCase)
+                            && !string.IsNullOrWhiteSpace(c.HardwareId)
+                            && driver.TryGetRuntimeIndex(c.HardwareId, out _)
+                        )
+                        .ToDictionary(
+                            c =>
+                            {
+                                driver.TryGetRuntimeIndex(c.HardwareId!, out int index);
+                                return index;
+                            },
+                            c => c.Id
+                        );
+                    tucam.SetCameraDeviceIdMapping(cameraMapping);
+                }
             }
 
             // 初始化投影仪设备 ID 映射（用于 DlpProjectorService 写入操作日志）

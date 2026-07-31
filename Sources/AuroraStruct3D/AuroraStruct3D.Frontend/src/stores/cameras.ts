@@ -19,6 +19,7 @@ import {
     type CameraLiveMetricsDto,
     type CameraRtpEndpointDto,
     type CameraSnapshotDto,
+    type CameraScanResultDto,
     type StartCameraPreviewDto,
     type GetCameraListDto,
     type UpdateCameraDeviceDto,
@@ -493,10 +494,10 @@ export const useCameraStore = defineStore('camera', () => {
         await refreshCamera(id)
     }
 
-    async function scan(): Promise<number> {
-        const count = await scanCameras()
+    async function scan(): Promise<CameraScanResultDto> {
+        const result = await scanCameras()
         await fetchList()
-        return count
+        return result
     }
 
     // ─── 手动控制：参数读写 ───────────────────────────────────────────────────

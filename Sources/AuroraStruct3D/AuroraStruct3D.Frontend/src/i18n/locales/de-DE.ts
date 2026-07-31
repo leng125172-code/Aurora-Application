@@ -56,6 +56,8 @@ export default {
         stateLog: 'Statusprotokoll',
         serialPortManage: 'RS485-Schnittstellen',
         motorDeviceManage: 'RS485-Motoren',
+        plcManage: 'PLC-Kommunikation',
+        plcControl: 'PLC-Variablen',
         productModelManage: '3D-Modellbibliothek',
         productModelLogs: '3D-Modellprotokolle',
         aiModelManage: 'AI-Modellverwaltung',

@@ -1,6 +1,6 @@
 using System.Runtime.InteropServices;
 
-namespace AuroraStruct3D.Tucam.Interop;
+namespace AuroraStruct3D.Cameras.Tucam.Interop;
 
 /// <summary>
 /// TUCam SDK 原生P/Invoke声明。

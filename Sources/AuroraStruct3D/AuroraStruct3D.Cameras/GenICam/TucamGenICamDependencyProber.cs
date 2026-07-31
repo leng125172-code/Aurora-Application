@@ -1,9 +1,9 @@
 using System.Globalization;
 using System.Runtime.InteropServices;
-using AuroraStruct3D.Tucam.Interop;
+using AuroraStruct3D.Cameras.Tucam.Interop;
 using Microsoft.Extensions.Logging;
 
-namespace AuroraStruct3D.Tucam.GenICam;
+namespace AuroraStruct3D.Cameras.Tucam.GenICam;
 
 /// <summary>
 /// 选择器依赖探测：枚举每个 Selector/Mode 节点的所有选项，

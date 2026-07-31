@@ -1,9 +1,9 @@
 using System.Globalization;
 using System.Runtime.InteropServices;
-using AuroraStruct3D.Tucam.Interop;
+using AuroraStruct3D.Cameras.Tucam.Interop;
 using Microsoft.Extensions.Logging;
 
-namespace AuroraStruct3D.Tucam.GenICam;
+namespace AuroraStruct3D.Cameras.Tucam.GenICam;
 
 /// <summary>
 /// 通过 SDK 动态枚举相机内部 GenICam NodeMap，

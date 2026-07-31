@@ -1,4 +1,4 @@
-namespace AuroraStruct3D.Tucam.Interop;
+namespace AuroraStruct3D.Cameras.Tucam.Interop;
 
 /// <summary>
 /// TUCam API 返回值枚举，对应SDK中的 TUCAMRET

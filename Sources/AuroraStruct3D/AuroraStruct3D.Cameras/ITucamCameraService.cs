@@ -1,7 +1,7 @@
-using AuroraStruct3D.Tucam.GenICam;
-using AuroraStruct3D.Tucam.Interop;
+using AuroraStruct3D.Cameras.Tucam.GenICam;
+using AuroraStruct3D.Cameras.Tucam.Interop;
 
-namespace AuroraStruct3D.Tucam;
+namespace AuroraStruct3D.Cameras.Tucam;
 
 /// <summary>
 /// 单个 GenICam 节点的读取结果（动态值快照）
@@ -82,7 +82,8 @@ public enum ApertureHint
 }
 
 /// <summary>
-/// TUCam相机操作服务接口
+/// Tucam SDK 专用扩展接口。通用生命周期与采集由
+/// AuroraStruct3D.Cameras.ICameraDriver 提供。
 /// </summary>
 public interface ITucamCameraService
 {

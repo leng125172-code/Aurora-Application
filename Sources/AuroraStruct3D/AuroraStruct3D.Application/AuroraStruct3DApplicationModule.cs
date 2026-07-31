@@ -5,7 +5,8 @@ using AuroraStruct3D.Leisai;
 using AuroraStruct3D.OpenCV;
 using AuroraStruct3D.Projectors;
 using AuroraStruct3D.RS485;
-using AuroraStruct3D.Tucam;
+using AuroraStruct3D.Cameras;
+using AuroraStruct3D.Plcs;
 // DeviceStateManagement 项目通迁引用，无需单独 using
 using Lion.AbpPro.CacheManagement;
 using Lion.AbpPro.CodeManagement;
@@ -55,7 +56,10 @@ namespace AuroraStruct3D
             context.Services.AddAiServices();
 
             // 注册TUCam相机服务为单例
-            context.Services.AddTucamCameraServices();
+        context.Services.AddTucamCameraDriver();
+            context.Services.AddPlcCommunication();
+            context.Services.AddSingleton<IPlcRealtimeNotifier, NullPlcRealtimeNotifier>();
+            context.Services.AddSingleton<IPlcSubscriptionTracker, PlcSubscriptionTracker>();
 
             // 注册RS485电机控制服务为单例
             context.Services.AddRS485MotorServices();

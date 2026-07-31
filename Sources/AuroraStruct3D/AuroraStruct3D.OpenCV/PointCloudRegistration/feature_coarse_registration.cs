@@ -128,6 +128,17 @@ public class feature_coarse_registration : IOperator
         double distanceThreshold = 0.05
     )
     {
+        if (normalK < 3)
+            throw new ArgumentOutOfRangeException(nameof(normalK), "法向估计近邻数不能小于 3。");
+        if (!double.IsFinite(featureRadius) || featureRadius <= 0)
+            throw new ArgumentOutOfRangeException(nameof(featureRadius), "特征邻域半径必须为正数。");
+        if (maxIterations < 1 || maxIterations > 100_000)
+            throw new ArgumentOutOfRangeException(nameof(maxIterations), "RANSAC 迭代次数必须在 1–100000 之间。");
+        if (sampleCount < 3 || sampleCount > 2_000)
+            throw new ArgumentOutOfRangeException(nameof(sampleCount), "特征采样点数必须在 3–2000 之间。");
+        if (!double.IsFinite(distanceThreshold) || distanceThreshold <= 0)
+            throw new ArgumentOutOfRangeException(nameof(distanceThreshold), "内点距离阈值必须为正数。");
+
         _normalK = normalK;
         _featureRadius = featureRadius;
         _maxIterations = maxIterations;
@@ -157,8 +168,15 @@ public class feature_coarse_registration : IOperator
         if (targetCloud is null || targetCloud.Empty())
             throw new InvalidOperationException("目标点云为空，无法执行特征粗配准。");
 
-        var src = CloudArrays.From(sourceCloud, _normalK);
-        var tgt = CloudArrays.From(targetCloud, _normalK);
+        // 法向估计当前采用暴力 KNN。若直接在完整扫描点云上执行会产生 O(N²)
+        // 复杂度并触发工作流节点超时。粗配准只需要稀疏特征，因此先构造有上限的
+        // 工作云；最终变换仍应用到完整源点云，不降低输出点云分辨率。
+        int workingPointLimit = Math.Max(500, Math.Min(1_000, _sampleCount * 2));
+        using Mat sourceWorkingCloud = UniformDownsampleCloud(sourceCloud, workingPointLimit);
+        using Mat targetWorkingCloud = UniformDownsampleCloud(targetCloud, workingPointLimit);
+
+        var src = CloudArrays.From(sourceWorkingCloud, _normalK);
+        var tgt = CloudArrays.From(targetWorkingCloud, _normalK);
 
         // 均匀子采样用于特征匹配
         int[] srcSamples = UniformSample(src.Count, _sampleCount);
@@ -193,7 +211,7 @@ public class feature_coarse_registration : IOperator
             throw new InvalidOperationException("有效特征对应点对不足 3，无法估计粗配准变换。");
 
         // RANSAC（SAC-IA 思想）
-        Random rng = new Random();
+        Random rng = new Random(0);
         double[] bestR = { 1, 0, 0, 0, 1, 0, 0, 0, 1 };
         double[] bestT = { 0, 0, 0 };
         int bestInliers = -1;
@@ -244,12 +262,13 @@ public class feature_coarse_registration : IOperator
         }
 
         // 应用到完整源点云
-        Mat alignedCloud = new Mat(src.Count, 3, MatType.CV_32FC1);
-        for (int i = 0; i < src.Count; i++)
+        int sourcePointCount = sourceCloud.Rows;
+        Mat alignedCloud = new Mat(sourcePointCount, 3, MatType.CV_32FC1);
+        for (int i = 0; i < sourcePointCount; i++)
         {
-            double x = src.X[i],
-                y = src.Y[i],
-                z = src.Z[i];
+            double x = sourceCloud.Get<float>(i, 0),
+                y = sourceCloud.Get<float>(i, 1),
+                z = sourceCloud.Get<float>(i, 2);
             alignedCloud.Set(i, 0, (float)(bestR[0] * x + bestR[1] * y + bestR[2] * z + bestT[0]));
             alignedCloud.Set(i, 1, (float)(bestR[3] * x + bestR[4] * y + bestR[5] * z + bestT[1]));
             alignedCloud.Set(i, 2, (float)(bestR[6] * x + bestR[7] * y + bestR[8] * z + bestT[2]));
@@ -266,11 +285,13 @@ public class feature_coarse_registration : IOperator
 
         var stats = new CoarseStats
         {
-            SourcePointCount = src.Count,
-            TargetPointCount = tgt.Count,
+            SourcePointCount = sourcePointCount,
+            TargetPointCount = targetCloud.Rows,
             CorrespondenceCount = correspondences.Count,
             BestInlierCount = bestInliers,
             FeatureSampleCount = srcSamples.Length,
+            SourceWorkingPointCount = src.Count,
+            TargetWorkingPointCount = tgt.Count,
         };
 
         context.Set("aligned_cloud", outputCloud);
@@ -401,6 +422,22 @@ public class feature_coarse_registration : IOperator
         return result;
     }
 
+    private static Mat UniformDownsampleCloud(Mat cloud, int maxPoints)
+    {
+        int rows = cloud.Rows;
+        int cols = cloud.Cols;
+        int count = Math.Min(rows, maxPoints);
+        int[] indices = UniformSample(rows, count);
+        Mat result = new Mat(count, cols, MatType.CV_32FC1);
+        for (int row = 0; row < indices.Length; row++)
+        {
+            int sourceRow = indices[row];
+            for (int col = 0; col < cols; col++)
+                result.Set(row, col, cloud.Get<float>(sourceRow, col));
+        }
+        return result;
+    }
+
     private static int[] SampleDistinct(int n, int k, Random rng)
     {
         var set = new HashSet<int>();
@@ -501,5 +538,7 @@ public class feature_coarse_registration : IOperator
         public int CorrespondenceCount { get; set; }
         public int BestInlierCount { get; set; }
         public int FeatureSampleCount { get; set; }
+        public int SourceWorkingPointCount { get; set; }
+        public int TargetWorkingPointCount { get; set; }
     }
 }

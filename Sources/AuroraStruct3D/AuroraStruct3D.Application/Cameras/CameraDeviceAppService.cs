@@ -1,9 +1,9 @@
 using AuroraStruct3D.Cameras.Dtos;
 using AuroraStruct3D.DeviceState;
 using AuroraStruct3D.Sessions;
-using AuroraStruct3D.Tucam;
-using AuroraStruct3D.Tucam.GenICam;
-using AuroraStruct3D.Tucam.Interop;
+using AuroraStruct3D.Cameras.Tucam;
+using AuroraStruct3D.Cameras.Tucam.GenICam;
+using AuroraStruct3D.Cameras.Tucam.Interop;
 using Microsoft.Extensions.Logging;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
@@ -22,17 +22,22 @@ public class CameraDeviceAppService : AuroraStruct3DAppService, ICameraDeviceApp
     private readonly ICameraDeviceRepository _cameraDeviceRepository;
     private readonly ICameraOperationLogRepository _operationLogRepository;
     private readonly ICameraParameterSetRepository _parameterSetRepository;
-    private readonly ITucamCameraService _tucamService;
+    private readonly ICameraDriverRegistry _driverRegistry;
     private readonly IDeviceStateManager _deviceStateManager;
     private readonly ICameraStreamingService? _streamingService;
     private readonly IDeviceOperationSessionManager _sessionManager;
     private readonly ICurrentClientSession _currentClientSession;
+    private ITucamCameraService TucamService =>
+        _driverRegistry.GetRequired("tucam") as ITucamCameraService
+        ?? throw new UserFriendlyException("Tucam 驱动未注册或版本不兼容");
+    // 仅供遗留 GenICam 专用实现使用；实例仍按注册表解析，不参与通用设备路由。
+    private ITucamCameraService _tucamService => TucamService;
 
     public CameraDeviceAppService(
         ICameraDeviceRepository cameraDeviceRepository,
         ICameraOperationLogRepository operationLogRepository,
         ICameraParameterSetRepository parameterSetRepository,
-        ITucamCameraService tucamService,
+        ICameraDriverRegistry driverRegistry,
         IDeviceStateManager deviceStateManager,
         IDeviceOperationSessionManager sessionManager,
         ICurrentClientSession currentClientSession,
@@ -42,7 +47,7 @@ public class CameraDeviceAppService : AuroraStruct3DAppService, ICameraDeviceApp
         _cameraDeviceRepository = cameraDeviceRepository;
         _operationLogRepository = operationLogRepository;
         _parameterSetRepository = parameterSetRepository;
-        _tucamService = tucamService;
+        _driverRegistry = driverRegistry;
         _deviceStateManager = deviceStateManager;
         _sessionManager = sessionManager;
         _currentClientSession = currentClientSession;
@@ -118,259 +123,131 @@ public class CameraDeviceAppService : AuroraStruct3DAppService, ICameraDeviceApp
         EnsureManualOrMaintenanceMode();
         // 关闭相机（如果已打开）
         CameraDevice camera = await _cameraDeviceRepository.GetAsync(id);
-        if (_tucamService.IsCameraOpen(camera.DeviceIndex))
-        {
-            await _tucamService.CloseCameraAsync(camera.DeviceIndex);
-        }
+        if (
+            !string.IsNullOrWhiteSpace(camera.HardwareId)
+            && _driverRegistry.TryGet(camera.DriverId, out ICameraDriver? driver)
+            && driver!.IsOpen(camera.HardwareId)
+        )
+            await driver.CloseAsync(camera.HardwareId);
 
         await _cameraDeviceRepository.DeleteAsync(id);
     }
 
     /// <inheritdoc/>
-    public async Task<int> ScanCamerasAsync()
+    public async Task<CameraScanResultDto> ScanCamerasAsync()
     {
         EnsureManualOrMaintenanceMode();
-        int count = await _tucamService.InitializeAsync();
-
+        IReadOnlyList<CameraDriverScanResult> scans = await _driverRegistry.ScanAllAsync();
         List<CameraDevice> existingCameras = await _cameraDeviceRepository.GetListAsync();
-        var byIndex = existingCameras
-            .GroupBy(x => x.DeviceIndex)
-            .ToDictionary(
-                g => g.Key,
-                g => g.OrderByDescending(x => x.LastModificationTime ?? x.CreationTime).First()
-            );
-        var bySerial = existingCameras
-            .Where(x => !string.IsNullOrWhiteSpace(x.DeviceSerialNumber))
-            .GroupBy(x => x.DeviceSerialNumber!, StringComparer.Ordinal)
-            .ToDictionary(
-                g => g.Key,
-                g => g.OrderByDescending(x => x.LastModificationTime ?? x.CreationTime).First(),
-                StringComparer.Ordinal
-            );
-
-        int nextSpareIndex =
-            Math.Max(
-                count,
-                existingCameras.Count == 0 ? 0 : existingCameras.Max(x => x.DeviceIndex) + 1
-            ) + 1;
-
-        int AllocateSpareIndex()
-        {
-            while (byIndex.ContainsKey(nextSpareIndex))
-            {
-                nextSpareIndex++;
-            }
-
-            return nextSpareIndex++;
-        }
-
-        async Task EnsureIndexAvailableAsync(int targetIndex, Guid keepCameraId)
-        {
-            if (!byIndex.TryGetValue(targetIndex, out CameraDevice? occupant))
-            {
-                return;
-            }
-
-            if (occupant.Id == keepCameraId)
-            {
-                return;
-            }
-
-            int spareIndex = AllocateSpareIndex();
-            int oldIndex = occupant.DeviceIndex;
-            occupant.SetDeviceIndex(spareIndex);
-            await _cameraDeviceRepository.UpdateAsync(occupant);
-
-            byIndex.Remove(oldIndex);
-            byIndex[spareIndex] = occupant;
-
-            Logger.LogInformation(
-                "相机索引冲突处理：将记录 {CameraId} 从索引 {OldIndex} 暂移到备用索引 {SpareIndex}",
-                occupant.Id,
-                oldIndex,
-                spareIndex
-            );
-        }
-
-        // 扫描过程中同步构建索引→设备ID映射，供操作日志使用
-        var deviceIdMap = new Dictionary<int, Guid>();
-
-        for (int i = 0; i < count; i++)
-        {
-            // 扫描阶段无需打开相机，直接按索引读取型号
-            string model = await _tucamService.GetModelByIndexAsync(i);
-
-            // 扫描阶段读取序列号用于稳定识别相机归属
-            string? serialNumber = await TryReadSerialNumberByIndexAsync(i);
-
-            CameraDevice? matchedCamera = null;
-            if (!string.IsNullOrWhiteSpace(serialNumber))
-            {
-                bySerial.TryGetValue(serialNumber, out matchedCamera);
-            }
-
-            // 回退策略：仅在“索引位上的旧记录也没有序列号”时按索引匹配。
-            // 这样可以避免热插拔后索引漂移把 A 设备误绑定到 B 的历史记录。
-            if (
-                matchedCamera == null
-                && byIndex.TryGetValue(i, out CameraDevice? indexCamera)
-                && CanUseIndexFallback(matchedCamera, indexCamera)
+        var existingByIdentity = existingCameras
+            .Where(x => !string.IsNullOrWhiteSpace(x.HardwareId))
+            .GroupBy(
+                x => $"{x.DriverId}\u001f{x.HardwareId}",
+                StringComparer.OrdinalIgnoreCase
             )
+            .ToDictionary(
+                x => x.Key,
+                x => x.OrderByDescending(y => y.LastModificationTime ?? y.CreationTime).First(),
+                StringComparer.OrdinalIgnoreCase
+            );
+        var onlineIds = new HashSet<Guid>();
+        var result = new CameraScanResultDto();
+        var tucamLogMap = new Dictionary<int, Guid>();
+
+        foreach (CameraDriverScanResult scan in scans)
+        {
+            var driverResult = new CameraDriverScanResultDto
             {
-                matchedCamera = indexCamera;
-            }
-
-            if (matchedCamera == null)
-            {
-                await EnsureIndexAvailableAsync(i, Guid.Empty);
-
-                var newCamera = new CameraDevice(GuidGenerator.Create(), $"相机 #{i}", i);
-                newCamera.UpdateHardwareInfo(model);
-                newCamera.UpdateDeviceSerialNumber(serialNumber);
-                await _cameraDeviceRepository.InsertAsync(newCamera);
-
-                byIndex[i] = newCamera;
-                if (!string.IsNullOrWhiteSpace(newCamera.DeviceSerialNumber))
-                {
-                    bySerial[newCamera.DeviceSerialNumber] = newCamera;
-                }
-
-                Logger.LogInformation(
-                    "自动注册相机设备，索引: {Index}，型号: {Model}，序列号: {SerialNumber}",
-                    i,
-                    model,
-                    serialNumber ?? "(空)"
-                );
-                deviceIdMap[i] = newCamera.Id;
+                DriverId = scan.DriverId,
+                DisplayName = scan.DisplayName,
+                Error = scan.Error,
+            };
+            result.Drivers.Add(driverResult);
+            if (scan.Error != null)
                 continue;
-            }
 
-            bool updated = false;
-            int oldMatchedIndex = matchedCamera.DeviceIndex;
-            string? oldMatchedSerial = matchedCamera.DeviceSerialNumber;
-
-            if (matchedCamera.DeviceIndex != i)
+            IGrouping<string, CameraDiscovery>[] groups = scan.Devices
+                .GroupBy(x => x.HardwareId.Trim(), StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            foreach (IGrouping<string, CameraDiscovery> group in groups)
             {
-                await EnsureIndexAvailableAsync(i, matchedCamera.Id);
-                matchedCamera.SetDeviceIndex(i);
-                updated = true;
-            }
-
-            if (!string.Equals(matchedCamera.Model, model, StringComparison.Ordinal))
-            {
-                matchedCamera.UpdateHardwareInfo(model);
-                updated = true;
-            }
-
-            if (
-                !string.Equals(
-                    matchedCamera.DeviceSerialNumber,
-                    serialNumber,
-                    StringComparison.Ordinal
-                )
-            )
-            {
-                matchedCamera.UpdateDeviceSerialNumber(serialNumber);
-                updated = true;
-            }
-
-            if (updated)
-            {
-                await _cameraDeviceRepository.UpdateAsync(matchedCamera);
-
-                if (oldMatchedIndex != matchedCamera.DeviceIndex)
+                if (string.IsNullOrWhiteSpace(group.Key) || group.Count() != 1)
                 {
-                    byIndex.Remove(oldMatchedIndex);
-                    byIndex[matchedCamera.DeviceIndex] = matchedCamera;
+                    int conflicts = Math.Max(1, group.Count());
+                    result.Conflicts += conflicts;
+                    driverResult.Conflicts += conflicts;
+                    continue;
                 }
 
-                if (
-                    !string.IsNullOrWhiteSpace(oldMatchedSerial)
-                    && !string.Equals(
-                        oldMatchedSerial,
-                        matchedCamera.DeviceSerialNumber,
-                        StringComparison.Ordinal
-                    )
-                )
+                CameraDiscovery discovered = group.Single();
+                result.TotalDiscovered++;
+                driverResult.Discovered++;
+                string key = $"{scan.DriverId}\u001f{discovered.HardwareId}";
+                if (!existingByIdentity.TryGetValue(key, out CameraDevice? camera))
                 {
-                    bySerial.Remove(oldMatchedSerial);
+                    camera = new CameraDevice(
+                        GuidGenerator.Create(),
+                        $"{scan.DisplayName} {discovered.Model}",
+                        discovered.RuntimeIndex
+                    );
+                    camera.UpdateHardwareInfo(discovered.Model);
+                    camera.UpdateDeviceSerialNumber(discovered.HardwareId);
+                    camera.UpdateDriverBinding(
+                        scan.DriverId,
+                        discovered.HardwareId,
+                        discovered.ConnectionSummary,
+                        discovered.Capabilities
+                    );
+                    camera.SetStatus(CameraStatus.Ready);
+                    await _cameraDeviceRepository.InsertAsync(camera);
+                    existingByIdentity[key] = camera;
+                    result.Created++;
+                }
+                else
+                {
+                    camera.SetDeviceIndex(discovered.RuntimeIndex);
+                    camera.UpdateHardwareInfo(discovered.Model);
+                    camera.UpdateDeviceSerialNumber(discovered.HardwareId);
+                    camera.UpdateDriverBinding(
+                        scan.DriverId,
+                        discovered.HardwareId,
+                        discovered.ConnectionSummary,
+                        discovered.Capabilities
+                    );
+                    camera.SetStatus(CameraStatus.Ready);
+                    await _cameraDeviceRepository.UpdateAsync(camera);
+                    result.Updated++;
                 }
 
-                if (!string.IsNullOrWhiteSpace(matchedCamera.DeviceSerialNumber))
-                {
-                    bySerial[matchedCamera.DeviceSerialNumber] = matchedCamera;
-                }
-
-                Logger.LogInformation(
-                    "更新相机记录，ID: {CameraId}，索引: {Index}，型号: {Model}，序列号: {SerialNumber}",
-                    matchedCamera.Id,
-                    i,
-                    model,
-                    serialNumber ?? "(空)"
-                );
+                onlineIds.Add(camera.Id);
+                driverResult.Bound++;
+                if (string.Equals(scan.DriverId, "tucam", StringComparison.OrdinalIgnoreCase))
+                    tucamLogMap[discovered.RuntimeIndex] = camera.Id;
             }
-
-            deviceIdMap[i] = matchedCamera.Id;
         }
 
-        // 扫描完成后刷新 TucamCameraService 的操作日志映射，防止外键违规
-        _tucamService.SetCameraDeviceIdMapping(deviceIdMap);
-
-        return count;
-    }
-
-    private static bool CanUseIndexFallback(
-        CameraDevice? matchedBySerial,
-        CameraDevice? indexCamera
-    )
-    {
-        if (matchedBySerial != null || indexCamera == null)
+        foreach (CameraDevice camera in existingCameras.Where(x => !onlineIds.Contains(x.Id)))
         {
-            return false;
+            camera.SetStatus(CameraStatus.Error);
+            await _cameraDeviceRepository.UpdateAsync(camera);
+            result.Offline++;
         }
 
-        return string.IsNullOrWhiteSpace(indexCamera.DeviceSerialNumber);
+        if (
+            _driverRegistry.TryGet("tucam", out ICameraDriver? tucamDriver)
+            && tucamDriver is ITucamCameraService tucam
+        )
+            tucam.SetCameraDeviceIdMapping(tucamLogMap);
+
+        return result;
     }
 
     /// <inheritdoc/>
     public async Task OpenCameraAsync(Guid id)
     {
         CameraDevice camera = await _cameraDeviceRepository.GetAsync(id);
-
-        await _tucamService.OpenCameraAsync(camera.DeviceIndex);
-
-        // 读取硬件信息并更新数据库
-        string model = await _tucamService.GetCameraModelAsync(camera.DeviceIndex);
-        string? serialNumber = await TryReadSerialNumberFromOpenCameraAsync(camera.DeviceIndex);
-        camera.UpdateHardwareInfo(model);
-
-        // DeviceSerialNumber 在库内唯一；若当前读到的序列号已属于其他相机记录，
-        // 则跳过本次写入，避免触发唯一约束异常导致接口 500。
-        if (string.IsNullOrWhiteSpace(serialNumber))
-        {
-            camera.UpdateDeviceSerialNumber(null);
-        }
-        else
-        {
-            CameraDevice? serialOwner = await _cameraDeviceRepository.FindByDeviceSerialNumberAsync(
-                serialNumber
-            );
-
-            if (serialOwner != null && serialOwner.Id != camera.Id)
-            {
-                Logger.LogWarning(
-                    "[Cameras] Skip updating DeviceSerialNumber for camera {CameraId}. "
-                        + "Serial '{SerialNumber}' already belongs to camera {OwnerCameraId}.",
-                    camera.Id,
-                    serialNumber,
-                    serialOwner.Id
-                );
-            }
-            else
-            {
-                camera.UpdateDeviceSerialNumber(serialNumber);
-            }
-        }
+        ICameraDriver driver = ResolveDriver(camera);
+        await driver.OpenAsync(camera.HardwareId!);
 
         camera.SetStatus(CameraStatus.Ready);
         await _cameraDeviceRepository.UpdateAsync(camera);
@@ -386,7 +263,7 @@ public class CameraDeviceAppService : AuroraStruct3DAppService, ICameraDeviceApp
             await _streamingService.StopPreviewAsync(id);
         }
 
-        await _tucamService.CloseCameraAsync(camera.DeviceIndex);
+        await ResolveDriver(camera).CloseAsync(camera.HardwareId!);
 
         camera.SetStatus(CameraStatus.Closed);
         await _cameraDeviceRepository.UpdateAsync(camera);
@@ -397,7 +274,9 @@ public class CameraDeviceAppService : AuroraStruct3DAppService, ICameraDeviceApp
     {
         CameraDevice camera = await _cameraDeviceRepository.GetAsync(id);
 
-        if (!_tucamService.IsCameraOpen(camera.DeviceIndex))
+        ITucamCameraService tucam = ResolveTucamProvider(camera, CameraCapability.ParameterNodes);
+        int runtimeIndex = ResolveRuntimeIndex(camera);
+        if (!tucam.IsCameraOpen(runtimeIndex))
         {
             throw new UserFriendlyException("相机未打开，请先打开相机再应用参数集");
         }
@@ -413,7 +292,7 @@ public class CameraDeviceAppService : AuroraStruct3DAppService, ICameraDeviceApp
         // 将参数集中的所有参数写入相机硬件
         foreach (CameraParameter param in paramSet.Parameters)
         {
-            await WriteParameterToHardwareAsync(camera.DeviceIndex, param);
+            await WriteParameterToHardwareAsync(tucam, runtimeIndex, param);
         }
 
         // 更新激活的参数集ID
@@ -426,14 +305,18 @@ public class CameraDeviceAppService : AuroraStruct3DAppService, ICameraDeviceApp
     /// <summary>
     /// 将单个参数项写入相机硬件
     /// </summary>
-    private async Task WriteParameterToHardwareAsync(int deviceIndex, CameraParameter param)
+    private async Task WriteParameterToHardwareAsync(
+        ITucamCameraService tucam,
+        int deviceIndex,
+        CameraParameter param
+    )
     {
         if (param.ParamType == CameraParameterType.Property)
         {
             if (Enum.TryParse<TUCamIdProp>(param.ParamKey, out TUCamIdProp propId))
             {
                 double value = param.GetDoubleValue();
-                await _tucamService.SetPropertyValueAsync(deviceIndex, propId, value);
+                await tucam.SetPropertyValueAsync(deviceIndex, propId, value);
             }
             else
             {
@@ -445,7 +328,7 @@ public class CameraDeviceAppService : AuroraStruct3DAppService, ICameraDeviceApp
             if (Enum.TryParse<TUCamIdCapa>(param.ParamKey, out TUCamIdCapa capaId))
             {
                 int value = param.GetIntValue();
-                await _tucamService.SetCapabilityValueAsync(deviceIndex, capaId, value);
+                await tucam.SetCapabilityValueAsync(deviceIndex, capaId, value);
             }
             else
             {
@@ -454,83 +337,43 @@ public class CameraDeviceAppService : AuroraStruct3DAppService, ICameraDeviceApp
         }
     }
 
-    /// <summary>
-    /// 扫描阶段按索引临时打开相机读取 DeviceSerialNumber，读取后立即关闭。
-    /// </summary>
-    private async Task<string?> TryReadSerialNumberByIndexAsync(int deviceIndex)
-    {
-        try
-        {
-            await _tucamService.OpenCameraAsync(deviceIndex);
-            try
-            {
-                return await TryReadSerialNumberFromOpenCameraAsync(deviceIndex);
-            }
-            finally
-            {
-                await _tucamService.CloseCameraAsync(deviceIndex);
-            }
-        }
-        catch (Exception ex)
-        {
-            Logger.LogWarning(
-                ex,
-                "扫描阶段读取相机序列号失败，索引: {Index}，将回退索引匹配",
-                deviceIndex
-            );
-            return null;
-        }
-    }
-
-    /// <summary>
-    /// 在相机已打开时读取 DeviceSerialNumber，并做空值归一化。
-    /// </summary>
-    private async Task<string?> TryReadSerialNumberFromOpenCameraAsync(int deviceIndex)
-    {
-        string? serialNumber = await _tucamService.GetGenICamStringAsync(
-            deviceIndex,
-            "DeviceSerialNumber"
-        );
-
-        if (string.IsNullOrWhiteSpace(serialNumber))
-        {
-            return null;
-        }
-
-        return serialNumber.Trim();
-    }
-
     // ─── 手动控制：硬件信息 ─────────────────────────────────────────────────
 
     /// <inheritdoc/>
     public async Task<CameraDeviceInfoDto> GetDeviceInfoAsync(Guid id)
     {
-        int idx = await GetDeviceIndexAsync(id);
+        CameraDevice camera = await _cameraDeviceRepository.GetAsync(id);
+        ResolveTucamProvider(camera, CameraCapability.ParameterNodes);
+        int idx = ResolveRuntimeIndex(camera);
         EnsureCameraOpen(idx);
 
-        string model = await _tucamService.GetCameraModelAsync(idx);
-        int fpgaTemp = await _tucamService.GetDeviceNumericInfoAsync(
-            idx,
-            TUCamIdInfo.FpgaTemperature
-        );
-        double sensorTemp = await _tucamService.GetPropertyValueAsync(idx, TUCamIdProp.Temperature);
-        int currentWidth = await _tucamService.GetDeviceNumericInfoAsync(
+        string model = await TucamService.GetCameraModelAsync(idx);
+        int? fpgaTemp = null;
+        double? sensorTemp = null;
+        if ((camera.Capabilities & CameraCapability.Temperature) != 0)
+        {
+            fpgaTemp = await TucamService.GetDeviceNumericInfoAsync(
+                idx,
+                TUCamIdInfo.FpgaTemperature
+            );
+            sensorTemp = await TucamService.GetPropertyValueAsync(idx, TUCamIdProp.Temperature);
+        }
+        int currentWidth = await TucamService.GetDeviceNumericInfoAsync(
             idx,
             TUCamIdInfo.CurrentWidth
         );
-        int currentHeight = await _tucamService.GetDeviceNumericInfoAsync(
+        int currentHeight = await TucamService.GetDeviceNumericInfoAsync(
             idx,
             TUCamIdInfo.CurrentHeight
         );
-
         // 通过 GenICam DeviceVersion 节点读取固件版本（ElementAttr 方式）
         string firmwareVersion =
-            await _tucamService.GetGenICamStringAsync(idx, "DeviceVersion") ?? string.Empty;
+            await TucamService.GetGenICamStringAsync(idx, "DeviceVersion") ?? string.Empty;
         string fpgaVersion = string.Empty;
 
         // 通过 GenICam String 节点读取设备序列号（Expert/RO）
         string serialNumber =
-            await _tucamService.GetGenICamStringAsync(idx, "DeviceSerialNumber") ?? string.Empty;
+            await TucamService.GetGenICamStringAsync(idx, "DeviceSerialNumber") ?? string.Empty;
 
         return new CameraDeviceInfoDto
         {
@@ -587,86 +430,30 @@ public class CameraDeviceAppService : AuroraStruct3DAppService, ICameraDeviceApp
         EnsureManualOrMaintenanceMode();
         await EnsureOrAcquireSessionAsync(id, DeviceType.Camera);
         CameraDevice camera = await _cameraDeviceRepository.GetAsync(id);
-        int idx = camera.DeviceIndex;
-        EnsureCameraOpen(idx);
-
-        // 读取当前 TriggerMode 以决定抓帧策略（0=FreeRunning, 1=Standard(外触发), 2=Software）
-        long triggerMode = 0;
-        try
-        {
-            triggerMode = await _tucamService.GetGenICamIntAsync(idx, "TriggerMode");
-        }
-        catch
-        {
-            // 读取失败按 FreeRunning 处理
-        }
-
+        EnsureCapability(camera, CameraCapability.Snapshot);
+        ICameraDriver driver = ResolveDriver(camera);
+        if (!driver.IsOpen(camera.HardwareId!))
+            throw new UserFriendlyException("相机未打开，请先调用打开接口");
         bool startedForSnapshot = false;
         try
         {
-            if (!_tucamService.IsCapturing(idx))
+            if (!driver.IsCapturing(camera.HardwareId!))
             {
-                await _tucamService.StartCaptureAsync(idx);
+                await driver.StartCaptureAsync(camera.HardwareId!);
                 startedForSnapshot = true;
             }
-
-            // 动态计算抓帧超时：取当前曝光时间（微秒）× 2 + 1s 裕量，最少 8s
-            int grabTimeoutMs = 8000;
-            try
-            {
-                long exposureUs = await _tucamService.GetGenICamIntAsync(idx, "ExposureTime");
-                int exposureMs = (int)(exposureUs / 1000L);
-                grabTimeoutMs = Math.Max(exposureMs * 2 + 1000, 8000);
-            }
-            catch
-            {
-                // 读取失败则使用默认 8s
-            }
-
-            // Software 触发模式：必须先发软件触发，否则 WaitForFrame 永远不会返回
-            if (triggerMode == 2)
-            {
-                await _tucamService.DoSoftwareTriggerAsync(idx);
-            }
-            else if (triggerMode == 1)
-            {
-                // Standard 外触发：依赖外部硬件触发信号，若长时间无信号给出友好提示
-                // 这里仍正常等待，但拉长超时到 15s
-                grabTimeoutMs = Math.Max(grabTimeoutMs, 15000);
-            }
-
-            byte[] jpegBytes;
-            try
-            {
-                jpegBytes = await _tucamService.GrabFrameRawAsync(
-                    idx,
-                    timeoutMs: grabTimeoutMs,
-                    imageRotationAngle: camera.ImageRotationAngle
-                );
-            }
-            catch (InvalidOperationException ex)
-            {
-                bool isExternalTriggerTimeout =
-                    triggerMode == 1
-                    && ex.Message.Contains("Timeout", StringComparison.OrdinalIgnoreCase);
-                if (isExternalTriggerTimeout)
-                {
-                    throw new UserFriendlyException(
-                        "外触发模式下未在超时时间内收到硬件触发信号，请确认触发线路正常或切换至自由运行模式后再试。"
-                    );
-                }
-                throw;
-            }
-
+            byte[] jpegBytes = await driver.GrabJpegAsync(
+                camera.HardwareId!,
+                timeoutMs: 15000,
+                imageRotationAngle: camera.ImageRotationAngle
+            );
             string dataUri = "data:image/jpeg;base64," + Convert.ToBase64String(jpegBytes);
             return new CameraSnapshotDto { DataUri = dataUri, CapturedAt = DateTime.UtcNow };
         }
         finally
         {
             if (startedForSnapshot)
-            {
-                await _tucamService.StopCaptureAsync(idx);
-            }
+                await driver.StopCaptureAsync(camera.HardwareId!);
         }
     }
 
@@ -682,8 +469,12 @@ public class CameraDeviceAppService : AuroraStruct3DAppService, ICameraDeviceApp
         }
 
         CameraDevice camera = await _cameraDeviceRepository.GetAsync(id);
-        int idx = camera.DeviceIndex;
-        EnsureCameraOpen(idx);
+        EnsureCapability(camera, CameraCapability.Preview);
+        ICameraDriver driver = ResolveDriver(camera);
+        if (!driver.IsOpen(camera.HardwareId!))
+            throw new UserFriendlyException("相机未打开，请先调用打开接口");
+        if (input.EnableRtp)
+            EnsureCapability(camera, CameraCapability.RtpStream);
 
         await _streamingService.StartPreviewAsync(
             id,
@@ -707,8 +498,9 @@ public class CameraDeviceAppService : AuroraStruct3DAppService, ICameraDeviceApp
 
         CameraDevice camera = await _cameraDeviceRepository.GetAsync(id);
         await _streamingService.StopPreviewAsync(id);
+        ICameraDriver driver = ResolveDriver(camera);
         camera.SetStatus(
-            _tucamService.IsCameraOpen(camera.DeviceIndex)
+                driver.IsOpen(camera.HardwareId!)
                 ? CameraStatus.Ready
                 : CameraStatus.Closed
         );
@@ -721,28 +513,12 @@ public class CameraDeviceAppService : AuroraStruct3DAppService, ICameraDeviceApp
     {
         EnsureManualOrMaintenanceMode();
         await EnsureOrAcquireSessionAsync(id, DeviceType.Camera);
-        int idx = await GetDeviceIndexAsync(id);
-        EnsureCameraOpen(idx);
-
-        // 仅 Software 触发模式（TriggerMode=2）下允许发送软件触发
-        long triggerMode = 0;
-        try
-        {
-            triggerMode = await _tucamService.GetGenICamIntAsync(idx, "TriggerMode");
-        }
-        catch
-        {
-            // 读取失败按未知处理，仍允许触发避免误拦截
-        }
-
-        if (triggerMode != 2)
-        {
-            throw new UserFriendlyException(
-                "当前 TriggerMode 不是 Software（软件触发）模式，发送软件触发无效。请先将 TriggerMode 切换为 Software。"
-            );
-        }
-
-        await _tucamService.DoSoftwareTriggerAsync(idx);
+        CameraDevice camera = await _cameraDeviceRepository.GetAsync(id);
+        EnsureCapability(camera, CameraCapability.SoftwareTrigger);
+        ICameraDriver driver = ResolveDriver(camera);
+        if (!driver.IsOpen(camera.HardwareId!))
+            throw new UserFriendlyException("相机未打开，请先调用打开接口");
+        await driver.SoftwareTriggerAsync(camera.HardwareId!);
     }
 
     /// <inheritdoc/>
@@ -752,19 +528,19 @@ public class CameraDeviceAppService : AuroraStruct3DAppService, ICameraDeviceApp
         int idx = await GetDeviceIndexAsync(id);
         EnsureCameraOpen(idx);
 
-        await _tucamService.ExecuteGenICamCommandAsync(idx, "ExposureAutoOncePulse");
+        await TucamService.ExecuteGenICamCommandAsync(idx, "ExposureAutoOncePulse");
     }
 
     /// <inheritdoc/>
-    public Task<CameraRtpEndpointDto> GetRtpEndpointAsync(Guid id)
+    public async Task<CameraRtpEndpointDto> GetRtpEndpointAsync(Guid id)
     {
+        CameraDevice camera = await _cameraDeviceRepository.GetAsync(id);
+        EnsureCapability(camera, CameraCapability.RtpStream);
         if (_streamingService == null)
-        {
-            return Task.FromResult(new CameraRtpEndpointDto());
-        }
+            return new CameraRtpEndpointDto();
 
         CameraRtpEndpointDto? endpoint = _streamingService.GetRtpEndpoint(id);
-        return Task.FromResult(endpoint ?? new CameraRtpEndpointDto());
+        return endpoint ?? new CameraRtpEndpointDto();
     }
 
     // ─── 通用 GenICam 节点读写 ───────────────────────────────────────────────
@@ -1167,7 +943,51 @@ public class CameraDeviceAppService : AuroraStruct3DAppService, ICameraDeviceApp
     /// </summary>
     private async Task<int> GetDeviceIndexAsync(Guid id)
     {
-        return await _cameraDeviceRepository.GetDeviceIndexByIdAsync(id);
+        CameraDevice camera = await _cameraDeviceRepository.GetAsync(id);
+        ResolveTucamProvider(camera, CameraCapability.ParameterNodes);
+        return ResolveRuntimeIndex(camera);
+    }
+
+    private ICameraDriver ResolveDriver(CameraDevice camera)
+    {
+        if (!camera.IsEnabled)
+            throw new UserFriendlyException($"相机 [{camera.Name}] 已禁用");
+        if (string.IsNullOrWhiteSpace(camera.HardwareId))
+            throw new UserFriendlyException($"相机 [{camera.Name}] 尚未绑定稳定硬件标识，请重新扫描");
+        if (!_driverRegistry.TryGet(camera.DriverId, out ICameraDriver? driver))
+            throw new UserFriendlyException($"相机驱动 [{camera.DriverId}] 未安装");
+        if (!driver!.TryGetRuntimeIndex(camera.HardwareId, out _))
+            throw new UserFriendlyException($"相机 [{camera.Name}] 当前离线，请重新扫描并检查连接");
+        return driver;
+    }
+
+    private int ResolveRuntimeIndex(CameraDevice camera)
+    {
+        ICameraDriver driver = ResolveDriver(camera);
+        if (!driver.TryGetRuntimeIndex(camera.HardwareId!, out int index))
+            throw new UserFriendlyException($"相机 [{camera.Name}] 当前离线");
+        return index;
+    }
+
+    private static void EnsureCapability(CameraDevice camera, CameraCapability capability)
+    {
+        if ((camera.Capabilities & capability) != capability)
+            throw new UserFriendlyException(
+                $"相机 [{camera.Name}] 的驱动不支持 {capability} 能力"
+            );
+    }
+
+    private ITucamCameraService ResolveTucamProvider(
+        CameraDevice camera,
+        CameraCapability capability
+    )
+    {
+        EnsureCapability(camera, capability);
+        ICameraDriver driver = ResolveDriver(camera);
+        return driver as ITucamCameraService
+            ?? throw new UserFriendlyException(
+                $"相机驱动 [{camera.DriverId}] 未提供 GenICam 参数节点适配器"
+            );
     }
 
     // ─── GenICam 动态 NodeMap API（前端动态生成 UI）────────────────────────────
@@ -1440,7 +1260,8 @@ public class CameraDeviceAppService : AuroraStruct3DAppService, ICameraDeviceApp
     {
         // 1. 基础校验与索引解析
         CameraDevice camera = await _cameraDeviceRepository.GetAsync(id);
-        int idx = camera.DeviceIndex;
+        ResolveTucamProvider(camera, CameraCapability.ParameterNodes);
+        int idx = ResolveRuntimeIndex(camera);
 
         CameraSnapshotStateDto snapshot = new CameraSnapshotStateDto
         {

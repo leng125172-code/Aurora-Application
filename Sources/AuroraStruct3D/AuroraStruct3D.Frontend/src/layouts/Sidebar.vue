@@ -469,6 +469,22 @@ function navigate(path: string, tab?: string): void {
             </div>
 
             <!-- 三维数模管理 -->
+            <button
+                :class="
+                    cn(
+                        'flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors text-left',
+                        route.path.startsWith('/plcs')
+                            ? 'bg-accent text-accent-foreground'
+                            : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                    )
+                "
+                @click="navigate('/plcs')"
+            >
+                <Cable class="size-4 shrink-0" />
+                {{ t('menu.plcManage') }}
+            </button>
+
+            <!-- 三维数模管理 -->
             <div>
                 <button
                     :class="

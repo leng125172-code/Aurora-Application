@@ -11,7 +11,7 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\..\Sources\AuroraStruct3D\AuroraStruct3D.Tucam\AuroraStruct3D.Tucam.csproj" />
+    <ProjectReference Include="..\..\Sources\AuroraStruct3D\AuroraStruct3D.Cameras\AuroraStruct3D.Cameras.csproj" />
     </ItemGroup>
 
     <ItemGroup>

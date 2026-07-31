@@ -4,6 +4,7 @@ using AuroraStruct3D.Cameras;
 using AuroraStruct3D.DeviceState;
 using AuroraStruct3D.Motors;
 using AuroraStruct3D.OperatorFile;
+using AuroraStruct3D.Plcs;
 using AuroraStruct3D.ProductModels;
 using AuroraStruct3D.Projectors;
 using AuroraStruct3D.Projects;
@@ -116,6 +117,12 @@ namespace AuroraStruct3D.EntityFrameworkCore
         public DbSet<CameraParameter> CameraParameters { get; set; }
         public DbSet<CameraOperationLog> CameraOperationLogs { get; set; }
 
+        // ── PLC 通讯模块 ─────────────────────────────────────────────────────────
+        public DbSet<PlcDevice> PlcDevices { get; set; }
+        public DbSet<PlcTag> PlcTags { get; set; }
+        public DbSet<PlcOperationLog> PlcOperationLogs { get; set; }
+        public DbSet<PlcTrustedCertificate> PlcTrustedCertificates { get; set; }
+
         // ── 电机模块 ──────────────────────────────────────────────────────────────
         public DbSet<MotorAxis> MotorAxes { get; set; }
         public DbSet<MotorMotionConfig> MotorMotionConfigs { get; set; }
@@ -200,6 +207,9 @@ namespace AuroraStruct3D.EntityFrameworkCore
 
             // 相机模块
             builder.ConfigureCamera();
+
+            // PLC 通讯模块
+            builder.ConfigurePlc();
 
             // 串口通讯模块（必须在电机模块之前配置，因为电机轴有外镰关联）
             builder.ConfigureSerialPort();

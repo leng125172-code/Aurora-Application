@@ -157,10 +157,10 @@ public class CameraDeviceInfoDto
     public string FpgaVersion { get; set; } = string.Empty;
 
     /// <summary>FPGA 温度（摄氏度）</summary>
-    public int FpgaTemperature { get; set; }
+    public int? FpgaTemperature { get; set; }
 
     /// <summary>传感器温度（摄氏度，来自 TUIDP_TEMPERATURE）</summary>
-    public double SensorTemperature { get; set; }
+    public double? SensorTemperature { get; set; }
 
     /// <summary>当前图像宽度（像素）</summary>
     public int CurrentWidth { get; set; }

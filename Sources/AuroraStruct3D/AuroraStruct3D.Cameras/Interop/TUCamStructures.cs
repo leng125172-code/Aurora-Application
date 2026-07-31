@@ -1,6 +1,6 @@
 using System.Runtime.InteropServices;
 
-namespace AuroraStruct3D.Tucam.Interop;
+namespace AuroraStruct3D.Cameras.Tucam.Interop;
 
 /// <summary>
 /// SDK初始化参数结构体（对应 TUCAM_INIT）

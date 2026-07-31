@@ -1,6 +1,6 @@
-using AuroraStruct3D.Tucam.Interop;
+using AuroraStruct3D.Cameras.Tucam.Interop;
 
-namespace AuroraStruct3D.Tucam.GenICam;
+namespace AuroraStruct3D.Cameras.Tucam.GenICam;
 
 /// <summary>
 /// GenICam 节点元数据（从相机 NodeMap 动态枚举得到的单条节点信息）

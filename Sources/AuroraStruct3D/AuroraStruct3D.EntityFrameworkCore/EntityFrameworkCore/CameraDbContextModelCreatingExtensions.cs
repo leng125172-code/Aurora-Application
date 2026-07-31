@@ -25,6 +25,10 @@ public static class CameraDbContextModelCreatingExtensions
             b.Property(x => x.Name).IsRequired().HasMaxLength(CameraConsts.MaxNameLength);
 
             b.Property(x => x.Model).HasMaxLength(CameraConsts.MaxNameLength);
+            b.Property(x => x.DriverId).IsRequired().HasMaxLength(64).HasDefaultValue("tucam");
+            b.Property(x => x.HardwareId).HasMaxLength(CameraConsts.MaxSerialNumberLength);
+            b.Property(x => x.ConnectionSummary).HasMaxLength(256);
+            b.Property(x => x.Capabilities).HasConversion<int>();
 
             b.Property(x => x.DeviceSerialNumber).HasMaxLength(CameraConsts.MaxSerialNumberLength);
 
@@ -34,8 +38,9 @@ public static class CameraDbContextModelCreatingExtensions
 
             b.Property(x => x.ImageRotationAngle).HasDefaultValue(0);
 
-            b.HasIndex(x => x.DeviceIndex).IsUnique();
-            b.HasIndex(x => x.DeviceSerialNumber).IsUnique();
+            b.HasIndex(x => new { x.DriverId, x.DeviceIndex });
+            b.HasIndex(x => x.DeviceSerialNumber);
+            b.HasIndex(x => new { x.DriverId, x.HardwareId }).IsUnique();
             b.HasIndex(x => x.IsEnabled);
 
             // 一个相机拥有多个参数集（级联删除）
