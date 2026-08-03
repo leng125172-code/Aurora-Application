@@ -915,7 +915,7 @@ function goBack() {
 
         <!-- Tab 切换按钮组 -->
         <div class="flex flex-wrap gap-2 border-b">
-            <button
+            <Button unstyled type="button"
                 v-for="tab in [
                     { key: 'info', label: t('ktechConsole.tabInfo') },
                     { key: 'params', label: t('ktechConsole.tabParams') },
@@ -932,7 +932,7 @@ function goBack() {
                 @click="activeTab = tab.key as any"
             >
                 {{ tab.label }}
-            </button>
+            </Button>
         </div>
 
         <!-- ──────── 产品信息 Tab ──────── -->

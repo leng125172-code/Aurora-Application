@@ -39,6 +39,8 @@ export default {
         loginFailed: 'Login failed, please check credentials',
     },
     menu: {
+        visualApplications: 'Vision Applications',
+        visualSolutions: 'Vision Solutions',
         dashboard: 'Dashboard',
         swagger: 'API Docs',
         cap: 'CAP Messages',
@@ -76,6 +78,17 @@ export default {
         calibWizard: 'Calibration Wizard',
         ktechMotorConsole: 'KTECH Motor Console',
         leisaiMotorConsole: 'Leisai Motor Console',
+    },
+    projectManagement: {
+        title: 'Vision Solutions', subtitle: 'Manage vision projects, workflows, and production deployment status', refresh: 'Refresh', create: 'New Project',
+        searchPlaceholder: 'Search project code or name', search: 'Search', reset: 'Reset', allStatuses: 'All statuses',
+        statusActive: 'Active', statusSuspended: 'Suspended', statusCompleted: 'Completed', statusArchived: 'Archived',
+        sortNewest: 'Newest', sortOldest: 'Oldest', sortName: 'By name', sortCode: 'By code',
+        project: 'Project', status: 'Status', workflows: 'Workflows', deployment: 'Active deployment', noDeployment: 'Not deployed', audit: 'Creator / Updated', actions: 'Actions',
+        workflow: 'Configure Workflow', edit: 'Edit', delete: 'Delete', empty: 'No vision solutions', total: '{total} projects', previous: 'Previous', next: 'Next',
+        createTitle: 'New Vision Project', editTitle: 'Edit Vision Project', code: 'Project code', name: 'Project name', version: 'Version', description: 'Description', save: 'Save', cancel: 'Cancel',
+        codeRequired: 'Project code is required', nameRequired: 'Project name is required', versionRequired: 'Version is required', created: 'Project created', updated: 'Project updated', statusChanged: 'Project status updated', deleted: 'Project deleted',
+        deleteTitle: 'Delete Vision Project', deleteMessage: 'Delete “{code} · {name}”? It contains {workflows} workflows; {deployment}.', deleteDeployment: 'active deployment rev {revision}', deleteNoDeployment: 'no active deployment',
     },
     layout: {
         logout: 'Logout',
@@ -1389,7 +1402,6 @@ export default {
         step4HomeCompleted: 'Homing test completed and the driver was disabled according to the flow.',
         step4HomeWaitTimeout:
             'Homing test was triggered, but the completion bit was not detected before timeout. Please continue checking the realtime monitor and on-site status.',
-        step4HomeMoveAfterNotImplemented: 'Move-to-target-after-home 32-bit stop position writing is not implemented yet.',
 
         // Step 5 Camera & Projector Calibration
         step5BoardConfigTitle: 'Calibration Board Configuration',

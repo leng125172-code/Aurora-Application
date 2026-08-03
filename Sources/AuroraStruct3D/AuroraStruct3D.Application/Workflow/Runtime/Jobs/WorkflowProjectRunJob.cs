@@ -1,4 +1,5 @@
 using System.Text.Json;
+using AuroraStruct3D.DeviceState;
 using Hangfire;
 using Microsoft.Extensions.Logging;
 using Volo.Abp;
@@ -19,9 +20,11 @@ public class WorkflowProjectRunJob : ITransientDependency
     private readonly WorkflowRuntimeAppService _runtimeAppService;
     private readonly IRepository<WorkflowProjectRun, Guid> _runRepository;
     private readonly IRepository<WorkflowProjectDeployment, Guid> _deploymentRepository;
+    private readonly IRepository<WorkflowProjectTaskConfig, Guid> _taskConfigRepository;
     private readonly IWorkflowRuntimeVariablePool _runtimeVariablePool;
     private readonly IAsyncQueryableExecuter _asyncExecuter;
     private readonly IGuidGenerator _guidGenerator;
+    private readonly IDeviceFaultReporter _faultReporter;
     private readonly ILogger<WorkflowProjectRunJob> _logger;
 
     /// <summary>
@@ -31,18 +34,22 @@ public class WorkflowProjectRunJob : ITransientDependency
         WorkflowRuntimeAppService runtimeAppService,
         IRepository<WorkflowProjectRun, Guid> runRepository,
         IRepository<WorkflowProjectDeployment, Guid> deploymentRepository,
+        IRepository<WorkflowProjectTaskConfig, Guid> taskConfigRepository,
         IWorkflowRuntimeVariablePool runtimeVariablePool,
         IAsyncQueryableExecuter asyncExecuter,
         IGuidGenerator guidGenerator,
+        IDeviceFaultReporter faultReporter,
         ILogger<WorkflowProjectRunJob> logger
     )
     {
         _runtimeAppService = runtimeAppService;
         _runRepository = runRepository;
         _deploymentRepository = deploymentRepository;
+        _taskConfigRepository = taskConfigRepository;
         _runtimeVariablePool = runtimeVariablePool;
         _asyncExecuter = asyncExecuter;
         _guidGenerator = guidGenerator;
+        _faultReporter = faultReporter;
         _logger = logger;
     }
 
@@ -146,6 +153,8 @@ public class WorkflowProjectRunJob : ITransientDependency
     )
     {
         WorkflowProjectRun run = await _runRepository.GetAsync(runId);
+        WorkflowProjectTaskConfig? taskConfig = await _asyncExecuter.FirstOrDefaultAsync(
+            (await _taskConfigRepository.GetQueryableAsync()).Where(x => x.ProjectId == run.ProjectId));
         run.MarkRunning(DateTime.UtcNow);
         await _runRepository.UpdateAsync(run, autoSave: true);
 
@@ -204,6 +213,7 @@ public class WorkflowProjectRunJob : ITransientDependency
                 }
 
                 run.MarkCanceled(DateTime.UtcNow);
+                run.SetInspectionResult(WorkflowInspectionDecision.Canceled, WorkflowPlcHandshakeErrorCode.Canceled, "任务已取消。");
                 await SaveProgressAsync(run, itemMap.Values);
                 _runtimeVariablePool.Clear();
                 _logger.LogInformation(
@@ -239,6 +249,7 @@ public class WorkflowProjectRunJob : ITransientDependency
                 if (!continueOnError)
                 {
                     run.MarkFailed(DateTime.UtcNow, item.ErrorMessage);
+                    run.SetInspectionResult(WorkflowInspectionDecision.Error, WorkflowPlcHandshakeErrorCode.WorkflowFailed, item.ErrorMessage);
                     await _runRepository.UpdateAsync(run, autoSave: true);
                     _runtimeVariablePool.Clear();
                     throw new InvalidOperationException(item.ErrorMessage);
@@ -267,8 +278,38 @@ public class WorkflowProjectRunJob : ITransientDependency
 
                 if (result.Error)
                 {
+                    await ReportPlcWorkflowFaultIfNeededAsync(
+                        run,
+                        workflowId,
+                        result.Message,
+                        result.Status?.FaultNodeId
+                    );
+
+                if (taskConfig?.ResultWorkflowId == workflowId)
+                {
+                    Dtos.WorkflowVariableResultDto? output = result.Variables.FirstOrDefault(x =>
+                        string.Equals(x.Name, taskConfig.ResultVariableName, StringComparison.Ordinal));
+                    if (output is null)
+                    {
+                        run.SetInspectionResult(WorkflowInspectionDecision.Error,
+                            WorkflowPlcHandshakeErrorCode.ResultVariableMissing,
+                            $"结果变量 {taskConfig.ResultVariableName} 未产出。");
+                    }
+                    else if (TryReadBoolean(output.Value, out bool isOk))
+                    {
+                        run.SetInspectionResult(isOk ? WorkflowInspectionDecision.Ok : WorkflowInspectionDecision.Ng);
+                    }
+                    else
+                    {
+                        run.SetInspectionResult(WorkflowInspectionDecision.Error,
+                            WorkflowPlcHandshakeErrorCode.ResultVariableTypeMismatch,
+                            $"结果变量 {taskConfig.ResultVariableName} 不是布尔值。");
+                    }
+                }
                     throw new UserFriendlyException(result.Message ?? "工作流执行失败。");
                 }
+
+                await RecoverPlcWorkflowFaultsAsync(run.ProjectId, workflowId);
 
                 item.ExecutionId = result.ExecutionId;
                 item.Status = WorkflowProjectRunItemStatus.Succeeded;
@@ -292,6 +333,7 @@ public class WorkflowProjectRunJob : ITransientDependency
                 if (!continueOnError)
                 {
                     run.MarkFailed(DateTime.UtcNow, ex.Message);
+                    run.SetInspectionResult(WorkflowInspectionDecision.Error, WorkflowPlcHandshakeErrorCode.WorkflowFailed, ex.Message);
                     await _runRepository.UpdateAsync(run, autoSave: true);
                     _runtimeVariablePool.Clear();
                     throw;
@@ -300,6 +342,10 @@ public class WorkflowProjectRunJob : ITransientDependency
         }
 
         run = await _runRepository.GetAsync(runId);
+        if (taskConfig?.ResultWorkflowId is not null && run.InspectionDecision == WorkflowInspectionDecision.None)
+            run.SetInspectionResult(WorkflowInspectionDecision.Error,
+                WorkflowPlcHandshakeErrorCode.ResultVariableMissing,
+                "任务已完成，但未取得配置的最终判定变量。");
         run.MarkSucceeded(DateTime.UtcNow);
         await SaveProgressAsync(run, itemMap.Values);
         _runtimeVariablePool.Clear();
@@ -310,6 +356,54 @@ public class WorkflowProjectRunJob : ITransientDependency
             run.ProjectId
         );
     }
+
+    private async Task ReportPlcWorkflowFaultIfNeededAsync(
+        WorkflowProjectRun run,
+        Guid workflowId,
+        string? message,
+        string? nodeId
+    )
+    {
+        string faultCode = message?.Contains("[PLC_READ_FAILED]", StringComparison.Ordinal) == true
+            ? "PLC_READ_FAILED"
+            : message?.Contains("[PLC_WRITE_FAILED]", StringComparison.Ordinal) == true
+                ? "PLC_WRITE_FAILED"
+                : string.Empty;
+        if (string.IsNullOrEmpty(faultCode))
+            return;
+
+        await _faultReporter.ReportAsync(new DeviceFaultReport
+        {
+            Source = DeviceFaultSource.Plc,
+            FaultCode = faultCode,
+            FaultMessage = message ?? "PLC 工作流操作失败。",
+            Fingerprint = $"workflow-plc:{run.ProjectId}:{workflowId}:{faultCode}",
+            WorkflowProjectId = run.ProjectId,
+            WorkflowRunId = run.Id,
+            WorkflowId = workflowId,
+            WorkflowNodeId = nodeId,
+        });
+    }
+
+    private static bool TryReadBoolean(object? value, out bool result)
+    {
+        if (value is bool boolean) { result = boolean; return true; }
+        if (value is JsonElement element && element.ValueKind is JsonValueKind.True or JsonValueKind.False)
+        { result = element.GetBoolean(); return true; }
+        result = false;
+        return false;
+    }
+
+    private Task RecoverPlcWorkflowFaultsAsync(Guid projectId, Guid workflowId) => Task.WhenAll(
+        _faultReporter.RecoverAsync(
+            $"workflow-plc:{projectId}:{workflowId}:PLC_READ_FAILED",
+            "PLC 工作流读取已成功"
+        ),
+        _faultReporter.RecoverAsync(
+            $"workflow-plc:{projectId}:{workflowId}:PLC_WRITE_FAILED",
+            "PLC 工作流写入已成功"
+        )
+    );
 
     private async Task SaveProgressAsync(
         WorkflowProjectRun run,

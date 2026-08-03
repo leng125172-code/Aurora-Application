@@ -1,7 +1,9 @@
 <template>
     <div>
         <!-- 端点行 -->
-        <button
+        <Button
+            unstyled
+            type="button"
             class="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-muted/40 transition-colors"
             @click="isOpen = !isOpen"
         >
@@ -21,7 +23,7 @@
                 :value="t('swaggerPage.deprecated')"
                 class="text-xs"
             />
-        </button>
+        </Button>
 
         <!-- 调试面板（展开） -->
         <Transition name="slide">
@@ -37,6 +39,7 @@ import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { ApiEndpoint, SwaggerDocument } from '@/types/swagger'
 import Tag from 'primevue/tag'
+import Button from 'primevue/button'
 import { methodColor } from '@/api/swagger'
 import ApiDebugPanel from './ApiDebugPanel.vue'
 

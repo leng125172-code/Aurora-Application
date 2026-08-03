@@ -39,6 +39,8 @@ export default {
         loginFailed: 'ログインに失敗しました',
     },
     menu: {
+        visualApplications: 'ビジョンアプリ',
+        visualSolutions: 'ビジョンソリューション',
         dashboard: 'ダッシュボード',
         swagger: 'API ドキュメント',
         cap: 'CAP メッセージ',
@@ -76,6 +78,17 @@ export default {
         cameraLogs: '操作履歴',
         management: '管理',
         operationLogs: '操作履歴',
+    },
+    projectManagement: {
+        title: 'ビジョンソリューション', subtitle: 'ビジョンプロジェクト、ワークフロー、デプロイ状態を管理します', refresh: '更新', create: '新規プロジェクト',
+        searchPlaceholder: 'プロジェクト番号または名前を検索', search: '検索', reset: 'リセット', allStatuses: 'すべての状態',
+        statusActive: '進行中', statusSuspended: '一時停止', statusCompleted: '完了', statusArchived: 'アーカイブ',
+        sortNewest: '新しい順', sortOldest: '古い順', sortName: '名前順', sortCode: '番号順',
+        project: 'プロジェクト', status: '状態', workflows: 'ワークフロー', deployment: '有効なデプロイ', noDeployment: '未デプロイ', audit: '作成者 / 更新日時', actions: '操作',
+        workflow: 'ワークフロー設定', edit: '編集', delete: '削除', empty: 'ビジョンソリューションがありません', total: '全 {total} 件', previous: '前へ', next: '次へ',
+        createTitle: 'ビジョンプロジェクト作成', editTitle: 'ビジョンプロジェクト編集', code: 'プロジェクト番号', name: 'プロジェクト名', version: 'バージョン', description: '説明', save: '保存', cancel: 'キャンセル',
+        codeRequired: 'プロジェクト番号を入力してください', nameRequired: 'プロジェクト名を入力してください', versionRequired: 'バージョンを入力してください', created: 'プロジェクトを作成しました', updated: 'プロジェクトを更新しました', statusChanged: '状態を更新しました', deleted: 'プロジェクトを削除しました',
+        deleteTitle: 'ビジョンプロジェクトを削除', deleteMessage: '「{code} · {name}」を削除しますか？ワークフロー {workflows} 件、{deployment}。', deleteDeployment: '有効なデプロイ rev {revision}', deleteNoDeployment: '有効なデプロイなし',
     },
     layout: {
         logout: 'ログアウト',
@@ -1389,7 +1402,6 @@ export default {
         step4HomeCompleted: '原点復帰テストが完了し、手順どおりドライバの有効化を解除しました。',
         step4HomeWaitTimeout:
             '原点復帰テストは開始されましたが、待機時間内に完了ビットを検出できませんでした。リアルタイム監視と現場状態を継続して確認してください。',
-        step4HomeMoveAfterNotImplemented: '原点復帰後移動の 32 ビット停止位置書き込みはまだ未実装です。',
 
         // Step 5 カメラ・プロジェクターキャリブレーション
         step5BoardConfigTitle: 'キャリブレーションボード設定',

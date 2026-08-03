@@ -12,7 +12,7 @@ namespace AuroraStruct3D.OpenCV.EdgeDetectOps;
 /// 端口约定：
 /// <list type="bullet">
 ///   <item>输入 <c>input_mat</c>（Mat）— 输入图像（建议为灰度图）</item>
-///   <item>输出 <c>output_mat</c>（Mat）— 梯度幅值图像（CV_8UC1）</item>
+///   <item>输出 <c>output_mat</c>（Mat）— 透明 BGRA 梯度边缘图；线条颜色跟随当前主题</item>
 /// </list>
 /// </para>
 /// </summary>
@@ -117,7 +117,8 @@ public class sobel_edge : IOperator
             Cv2.Normalize(magnitude, output, 0, 255, NormTypes.MinMax);
             output.ConvertTo(output, MatType.CV_8UC1);
 
-            context.Set("output_mat", output.Clone());
+            using Mat themedOutput = EdgeThemeRenderer.Render(output);
+            context.Set("output_mat", themedOutput.Clone());
         }
         finally
         {

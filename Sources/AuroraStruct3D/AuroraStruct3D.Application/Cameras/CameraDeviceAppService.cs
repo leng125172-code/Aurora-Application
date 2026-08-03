@@ -24,6 +24,7 @@ public class CameraDeviceAppService : AuroraStruct3DAppService, ICameraDeviceApp
     private readonly ICameraParameterSetRepository _parameterSetRepository;
     private readonly ICameraDriverRegistry _driverRegistry;
     private readonly IDeviceStateManager _deviceStateManager;
+    private readonly IDeviceFaultReporter _faultReporter;
     private readonly ICameraStreamingService? _streamingService;
     private readonly IDeviceOperationSessionManager _sessionManager;
     private readonly ICurrentClientSession _currentClientSession;
@@ -39,6 +40,7 @@ public class CameraDeviceAppService : AuroraStruct3DAppService, ICameraDeviceApp
         ICameraParameterSetRepository parameterSetRepository,
         ICameraDriverRegistry driverRegistry,
         IDeviceStateManager deviceStateManager,
+        IDeviceFaultReporter faultReporter,
         IDeviceOperationSessionManager sessionManager,
         ICurrentClientSession currentClientSession,
         ICameraStreamingService? streamingService = null
@@ -49,6 +51,7 @@ public class CameraDeviceAppService : AuroraStruct3DAppService, ICameraDeviceApp
         _parameterSetRepository = parameterSetRepository;
         _driverRegistry = driverRegistry;
         _deviceStateManager = deviceStateManager;
+        _faultReporter = faultReporter;
         _sessionManager = sessionManager;
         _currentClientSession = currentClientSession;
         _streamingService = streamingService;
@@ -246,11 +249,30 @@ public class CameraDeviceAppService : AuroraStruct3DAppService, ICameraDeviceApp
     public async Task OpenCameraAsync(Guid id)
     {
         CameraDevice camera = await _cameraDeviceRepository.GetAsync(id);
-        ICameraDriver driver = ResolveDriver(camera);
-        await driver.OpenAsync(camera.HardwareId!);
-
-        camera.SetStatus(CameraStatus.Ready);
-        await _cameraDeviceRepository.UpdateAsync(camera);
+        string fingerprint = $"camera:{camera.Id}:CAMERA_OPEN_FAILED";
+        try
+        {
+            ICameraDriver driver = ResolveDriver(camera);
+            await driver.OpenAsync(camera.HardwareId!);
+            camera.SetStatus(CameraStatus.Ready);
+            await _cameraDeviceRepository.UpdateAsync(camera);
+            await _faultReporter.RecoverAsync(fingerprint, "相机已成功打开");
+        }
+        catch (Exception ex)
+        {
+            camera.SetStatus(CameraStatus.Error);
+            await _cameraDeviceRepository.UpdateAsync(camera);
+            await _faultReporter.ReportAsync(new DeviceFaultReport
+            {
+                Source = DeviceFaultSource.Camera,
+                FaultCode = "CAMERA_OPEN_FAILED",
+                FaultMessage = $"[Cameras] 打开相机“{camera.Name}”失败：{ex.Message}",
+                Fingerprint = fingerprint,
+                DeviceId = camera.Id,
+                DeviceName = camera.Name,
+            });
+            throw;
+        }
     }
 
     /// <inheritdoc/>

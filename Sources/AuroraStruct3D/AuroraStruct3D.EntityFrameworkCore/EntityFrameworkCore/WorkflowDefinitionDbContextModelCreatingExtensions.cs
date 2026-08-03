@@ -16,6 +16,23 @@ public static class WorkflowDefinitionDbContextModelCreatingExtensions
     /// </summary>
     public static void ConfigureWorkflowDefinition(this ModelBuilder builder)
     {
+        builder.Entity<WorkflowPlcHandshakeConfig>(b =>
+        {
+            b.ToTable("AbpProWorkflowPlcHandshakeConfigs");
+            b.ConfigureByConvention();
+            b.Property(x => x.LastError).HasMaxLength(1024);
+            b.HasIndex(x => x.ProjectId).IsUnique();
+            b.HasIndex(x => x.PlcDeviceId).IsUnique().HasFilter("\"IsEnabled\" = true AND \"IsDeleted\" = false");
+            b.HasIndex(x => x.CurrentRunId);
+        });
+        builder.Entity<WorkflowPlcTrigger>(b =>
+        {
+            b.ToTable("AbpProWorkflowPlcTriggers"); b.ConfigureByConvention();
+            b.Property(x => x.ExpectedValueJson).IsRequired().HasMaxLength(2048);
+            b.Property(x => x.LastSkipReason).HasMaxLength(1024);
+            b.HasIndex(x => new { x.PlcDeviceId, x.PlcTagId, x.IsEnabled });
+            b.HasIndex(x => x.ProjectId);
+        });
         builder.Entity<WorkflowDefinition>(b =>
         {
             b.ToTable($"{TablePrefix}WorkflowDefinitions");

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import * as monaco from 'monaco-editor'
 import * as signalR from '@microsoft/signalr'
 import { VueFlow, useVueFlow, type Edge, type Node } from '@vue-flow/core'
@@ -54,6 +54,33 @@ import {
     workflowResultFileName,
     type WorkflowResultPresentation,
 } from '@/utils/workflow-result'
+import { useAppToast } from '@/composables/useAppToast'
+import { useAppConfirm } from '@/composables/useAppConfirm'
+import {
+    activateProjectDeployment,
+    deleteWorkflowPlcTrigger,
+    getProjectDeployments,
+    getProjectTasks,
+    getWorkflow as getRuntimeWorkflow,
+    getWorkflowPlcHandshake,
+    getWorkflowPlcHandshakeStatus,
+    getWorkflowPlcTriggers,
+    publishProjectDeployment,
+    resetWorkflowPlcHandshake,
+    saveWorkflowPlcHandshake,
+    saveWorkflowPlcTrigger,
+    updateProjectTasks,
+    type ProjectDeployment,
+    type ProjectTaskBatch,
+    type SaveWorkflowPlcHandshakeConfig,
+    type WorkflowPlcHandshakeStatus,
+    type SaveWorkflowPlcTrigger,
+    type WorkflowPlcTrigger,
+} from '@/api/workflow'
+import {
+    getPlcTags, getPlcs, readPlcTags, writePlcTag, PlcTagAccess, PlcTagDataType,
+    type PlcDeviceDto, type PlcTagDto, type PlcTagValueDto,
+} from '@/api/plcs'
 
 self.MonacoEnvironment = {
     getWorker: () =>
@@ -66,6 +93,8 @@ self.MonacoEnvironment = {
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
+const toast = useAppToast()
+const confirmAction = useAppConfirm()
 const projectId = ref(String(route.query.projectId ?? ''))
 const projectFilter = ref('')
 const projects = ref<ProjectBrief[]>([])
@@ -154,6 +183,53 @@ const canPrimaryDebug = computed(() =>
 )
 const editorHost = ref<HTMLElement>()
 const jsonText = ref('')
+const plcTriggerDrawerOpen = ref(false)
+const taskDrawerOpen = ref(false)
+const taskLoading = ref(false)
+const taskSaving = ref(false)
+const taskConfig = ref<ProjectTaskBatch>()
+const deployment = ref<ProjectDeployment>()
+const handshakeStatus = ref<WorkflowPlcHandshakeStatus>()
+const resultOutputs = ref<string[]>([])
+const handshakeTags = ref<PlcTagDto[]>([])
+const handshakeForm = ref<SaveWorkflowPlcHandshakeConfig>({
+    projectId: '', plcDeviceId: '', captureRequestTagId: '', requestIdTagId: '', resultAckTagId: '',
+    resultAckIdTagId: '', heartbeatTagId: '', deviceStatusTagId: '', taskStatusTagId: '', canCaptureTagId: '',
+    captureAckTagId: '', ackRequestIdTagId: '', resultValidTagId: '', resultRequestIdTagId: '',
+    resultCodeTagId: '', errorCodeTagId: '', isEnabled: false,
+})
+const plcTriggerLoading = ref(false)
+const plcTriggerSaving = ref(false)
+const plcTriggers = ref<WorkflowPlcTrigger[]>([])
+const plcDevices = ref<PlcDeviceDto[]>([])
+const plcTags = ref<PlcTagDto[]>([])
+const editingPlcTriggerId = ref<string>()
+const plcTriggerForm = ref({ plcDeviceId: '', plcTagId: '', value: '', tolerance: 0, isEnabled: true })
+const plcTriggerDebugValue = ref<PlcTagValueDto>()
+const plcTriggerDebugging = ref(false)
+const selectedPlcTag = computed(() => plcTags.value.find((tag) => tag.id === plcTriggerForm.value.plcTagId))
+const selectedPlcCanRead = computed(() => !!selectedPlcTag.value && (selectedPlcTag.value.access & PlcTagAccess.Read) !== 0)
+const selectedPlcCanWrite = computed(() => !!selectedPlcTag.value && (selectedPlcTag.value.access & PlcTagAccess.Write) !== 0)
+const selectedPlcIsFloat = computed(() => selectedPlcTag.value?.dataType === PlcTagDataType.Float || selectedPlcTag.value?.dataType === PlcTagDataType.Double)
+const selectedPlcIsBoolean = computed(() => selectedPlcTag.value?.dataType === PlcTagDataType.Boolean)
+const selectedPlcIsDate = computed(() => selectedPlcTag.value?.dataType === PlcTagDataType.DateTime)
+const selectedPlcIsNumeric = computed(() => selectedPlcTag.value !== undefined && [PlcTagDataType.SByte, PlcTagDataType.Byte, PlcTagDataType.Int16, PlcTagDataType.UInt16, PlcTagDataType.Int32, PlcTagDataType.UInt32, PlcTagDataType.Int64, PlcTagDataType.UInt64, PlcTagDataType.Float, PlcTagDataType.Double].includes(selectedPlcTag.value.dataType))
+const handshakeFields = [
+    ['captureRequestTagId', '拍照请求 CaptureRequest', 'PLC 写 1，平台受理后 PLC 自己清零'],
+    ['requestIdTagId', '请求号 RequestId', 'PLC 写入递增请求号'],
+    ['resultAckTagId', '结果确认 ResultAck', 'PLC 收到结果后写 1，并由 PLC 清零'],
+    ['resultAckIdTagId', '结果确认号 ResultAckId', 'PLC 回写已接收的请求号'],
+    ['heartbeatTagId', '心跳 Heartbeat', '平台周期写入'],
+    ['deviceStatusTagId', '设备状态 DeviceStatus', '平台写入整体状态'],
+    ['taskStatusTagId', '任务状态 TaskStatus', '平台写入任务阶段'],
+    ['canCaptureTagId', '允许拍照 CanCapture', '平台写入是否可接收请求'],
+    ['captureAckTagId', '拍照受理 CaptureAck', '平台确认请求'],
+    ['ackRequestIdTagId', '受理请求号 AckRequestId', '平台回写请求号'],
+    ['resultValidTagId', '结果有效 ResultValid', '平台发布结果后置 1'],
+    ['resultRequestIdTagId', '结果请求号 ResultRequestId', '平台写入结果对应请求号'],
+    ['resultCodeTagId', '结果码 ResultCode', '平台写入 OK/NG/Error'],
+    ['errorCodeTagId', '错误码 ErrorCode', '平台写入错误原因'],
+] as const
 let editor: monaco.editor.IStandaloneCodeEditor | undefined
 let validationTimer: ReturnType<typeof setTimeout> | undefined
 let clockTimer: ReturnType<typeof setInterval> | undefined
@@ -215,6 +291,243 @@ function ideInput(offset = 0) {
         workflowId: source.value?.workflowId,
         projectId: projectId.value || undefined,
     }
+}
+
+function resetPlcTriggerForm() {
+    editingPlcTriggerId.value = undefined
+    plcTriggerForm.value = { plcDeviceId: '', plcTagId: '', value: '', tolerance: 0, isEnabled: true }
+    plcTags.value = []
+}
+
+function emptyHandshake(): SaveWorkflowPlcHandshakeConfig {
+    return {
+        projectId: projectId.value, plcDeviceId: '', captureRequestTagId: '', requestIdTagId: '',
+        resultAckTagId: '', resultAckIdTagId: '', heartbeatTagId: '', deviceStatusTagId: '',
+        taskStatusTagId: '', canCaptureTagId: '', captureAckTagId: '', ackRequestIdTagId: '',
+        resultValidTagId: '', resultRequestIdTagId: '', resultCodeTagId: '', errorCodeTagId: '', isEnabled: false,
+    }
+}
+
+async function loadResultOutputs() {
+    resultOutputs.value = []
+    const id = taskConfig.value?.resultWorkflowId
+    if (!id) return
+    try {
+        const workflow = await getRuntimeWorkflow(id)
+        const parsed = JSON.parse(workflow.outputVariables || '[]')
+        resultOutputs.value = Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string') : []
+        if (!resultOutputs.value.includes(taskConfig.value?.resultVariableName || '')) taskConfig.value!.resultVariableName = undefined
+    } catch (error) { toast.error(`加载结果变量失败：${String(error)}`) }
+}
+
+async function loadHandshakeTags() {
+    handshakeTags.value = []
+    if (!handshakeForm.value.plcDeviceId) return
+    try { handshakeTags.value = (await getPlcTags(handshakeForm.value.plcDeviceId)).filter((x) => x.isEnabled) }
+    catch (error) { toast.error(`加载握手点位失败：${String(error)}`) }
+}
+
+async function openTaskDrawer() {
+    if (!projectId.value) return
+    taskDrawerOpen.value = true
+    taskLoading.value = true
+    try {
+        const [tasks, devices, status] = await Promise.all([
+            getProjectTasks(projectId.value), getPlcs(), getWorkflowPlcHandshakeStatus(projectId.value),
+        ])
+        taskConfig.value = tasks
+        plcDevices.value = devices.filter((x) => x.isEnabled)
+        handshakeStatus.value = status
+        try { deployment.value = await getProjectDeployments(projectId.value) } catch { deployment.value = undefined }
+        if (status.isConfigured) {
+            const config = await getWorkflowPlcHandshake(projectId.value)
+            const { id: _id, ...saveInput } = config
+            handshakeForm.value = saveInput
+            await loadHandshakeTags()
+        } else { handshakeForm.value = emptyHandshake() }
+        await loadResultOutputs()
+    } catch (error) { toast.error(`加载任务配置失败：${String(error)}`) }
+    finally { taskLoading.value = false }
+}
+
+async function saveTaskConfig() {
+    if (!taskConfig.value) return
+    try {
+        taskSaving.value = true
+        taskConfig.value.items.forEach((x, index) => { x.orderNo = index })
+        taskConfig.value = await updateProjectTasks(taskConfig.value)
+        toast.success('任务配置已保存；修改后需要重新发布并激活。')
+    } catch (error) { toast.error(`保存任务配置失败：${String(error)}`) }
+    finally { taskSaving.value = false }
+}
+
+function moveTask(index: number, offset: number) {
+    if (!taskConfig.value) return
+    const target = index + offset
+    if (target < 0 || target >= taskConfig.value.items.length) return
+    const [item] = taskConfig.value.items.splice(index, 1)
+    taskConfig.value.items.splice(target, 0, item!)
+}
+
+async function publishAndActivate() {
+    if (!projectId.value) return
+    try {
+        taskSaving.value = true
+        const published = await publishProjectDeployment(projectId.value)
+        deployment.value = await activateProjectDeployment(published.id)
+        toast.success(`部署 rev ${deployment.value.revision} 已激活。`)
+    } catch (error) { toast.error(`发布激活失败：${String(error)}`) }
+    finally { taskSaving.value = false }
+}
+
+async function saveHandshake() {
+    if (!projectId.value) return
+    try {
+        taskSaving.value = true
+        handshakeForm.value.projectId = projectId.value
+        await saveWorkflowPlcHandshake(projectId.value, handshakeForm.value)
+        handshakeStatus.value = await getWorkflowPlcHandshakeStatus(projectId.value)
+        toast.success('PLC 握手配置已保存。')
+    } catch (error) { toast.error(`保存 PLC 握手配置失败：${String(error)}`) }
+    finally { taskSaving.value = false }
+}
+
+async function resetHandshake() {
+    if (!projectId.value || !(await confirmAction({ message: '确认复位当前 PLC 握手状态？' }))) return
+    try { handshakeStatus.value = await resetWorkflowPlcHandshake(projectId.value); toast.success('握手状态已复位。') }
+    catch (error) { toast.error(`复位失败：${String(error)}`) }
+}
+
+async function openPlcTriggerDrawer() {
+    if (!projectId.value) return
+    plcTriggerDrawerOpen.value = true
+    plcTriggerLoading.value = true
+    try {
+        const [triggers, devices] = await Promise.all([getWorkflowPlcTriggers(projectId.value), getPlcs()])
+        plcTriggers.value = triggers
+        plcDevices.value = devices.filter((device) => device.isEnabled)
+    } catch (error) {
+        toast.error(`加载 PLC 触发配置失败：${String(error)}`)
+    } finally {
+        plcTriggerLoading.value = false
+    }
+}
+
+async function loadPlcTags() {
+    plcTriggerForm.value.plcTagId = ''
+    plcTriggerDebugValue.value = undefined
+    plcTags.value = []
+    if (!plcTriggerForm.value.plcDeviceId) return
+    try {
+        plcTags.value = (await getPlcTags(plcTriggerForm.value.plcDeviceId)).filter((tag) => tag.isEnabled)
+    } catch (error) {
+        toast.error(`加载 PLC 点位失败：${String(error)}`)
+    }
+}
+
+function editPlcTrigger(trigger: WorkflowPlcTrigger) {
+    plcTriggerDebugValue.value = undefined
+    editingPlcTriggerId.value = trigger.id
+    plcTriggerForm.value = { plcDeviceId: trigger.plcDeviceId, plcTagId: trigger.plcTagId, value: '', tolerance: trigger.tolerance, isEnabled: trigger.isEnabled }
+    void getPlcTags(trigger.plcDeviceId).then((tags) => {
+        plcTags.value = tags.filter((tag) => tag.isEnabled || tag.id === trigger.plcTagId)
+        try {
+            const parsed = JSON.parse(trigger.expectedValueJson)
+            plcTriggerForm.value.value = typeof parsed === 'string' ? parsed : String(parsed)
+        } catch { plcTriggerForm.value.value = trigger.expectedValueJson }
+    }).catch((error) => toast.error(`加载 PLC 点位失败：${String(error)}`))
+}
+
+function expectedValueJson() {
+    if (selectedPlcIsBoolean.value) return JSON.stringify(plcTriggerForm.value.value === 'true')
+    if (selectedPlcIsNumeric.value) {
+        const value = Number(plcTriggerForm.value.value)
+        if (!Number.isFinite(value)) throw new Error('请输入有效数值。')
+        return JSON.stringify(value)
+    }
+    if (selectedPlcIsDate.value) {
+        const date = new Date(plcTriggerForm.value.value)
+        if (Number.isNaN(date.getTime())) throw new Error('请输入有效日期时间。')
+        return JSON.stringify(date.toISOString())
+    }
+    return JSON.stringify(plcTriggerForm.value.value)
+}
+
+async function readPlcTriggerDebugValue() {
+    if (!selectedPlcTag.value || !selectedPlcCanRead.value) return
+    try {
+        plcTriggerDebugging.value = true
+        const values = await readPlcTags(plcTriggerForm.value.plcDeviceId, [selectedPlcTag.value.id])
+        plcTriggerDebugValue.value = values[0]
+        if (!values.length) toast.warning('PLC 未返回该点位的值。')
+    } catch (error) { toast.error(`读取触发点位失败：${String(error)}`) }
+    finally { plcTriggerDebugging.value = false }
+}
+
+async function writePlcTriggerDebugValue() {
+    if (!selectedPlcTag.value || !selectedPlcCanWrite.value) return
+    try {
+        plcTriggerDebugging.value = true
+        await writePlcTag(plcTriggerForm.value.plcDeviceId, selectedPlcTag.value.id, JSON.parse(expectedValueJson()) as unknown)
+        toast.success('已写入目标值，请观察任务是否被触发。')
+        if (selectedPlcCanRead.value) await readPlcTriggerDebugValue()
+    } catch (error) { toast.error(`写入调试值失败：${error instanceof Error ? error.message : String(error)}`) }
+    finally { plcTriggerDebugging.value = false }
+}
+
+function plcDebugValueText(value: unknown) {
+    if (value === undefined) return '-'
+    if (typeof value === 'string') return value
+    try { return JSON.stringify(value) } catch { return String(value) }
+}
+
+async function savePlcTrigger() {
+    if (!projectId.value || !selectedPlcTag.value) { toast.warning('请选择 PLC 和点位。'); return }
+    try {
+        plcTriggerSaving.value = true
+        const input: SaveWorkflowPlcTrigger = {
+            projectId: projectId.value, plcDeviceId: plcTriggerForm.value.plcDeviceId,
+            plcTagId: plcTriggerForm.value.plcTagId, expectedValueJson: expectedValueJson(),
+            tolerance: selectedPlcIsFloat.value ? Math.max(0, plcTriggerForm.value.tolerance) : 0,
+            isEnabled: plcTriggerForm.value.isEnabled,
+        }
+        await saveWorkflowPlcTrigger(editingPlcTriggerId.value, input)
+        plcTriggers.value = await getWorkflowPlcTriggers(projectId.value)
+        resetPlcTriggerForm()
+        toast.success('PLC 触发配置已保存。')
+    } catch (error) {
+        toast.error(`保存 PLC 触发配置失败：${error instanceof Error ? error.message : String(error)}`)
+    } finally { plcTriggerSaving.value = false }
+}
+
+async function togglePlcTrigger(trigger: WorkflowPlcTrigger) {
+    try {
+        await saveWorkflowPlcTrigger(trigger.id, { ...trigger, isEnabled: !trigger.isEnabled })
+        plcTriggers.value = await getWorkflowPlcTriggers(projectId.value)
+    } catch (error) { toast.error(`更新触发状态失败：${String(error)}`) }
+}
+
+async function removePlcTrigger(trigger: WorkflowPlcTrigger) {
+    if (!(await confirmAction({ message: '确认删除该 PLC 触发映射？' }))) return
+    try {
+        await deleteWorkflowPlcTrigger(trigger.id)
+        plcTriggers.value = plcTriggers.value.filter((item) => item.id !== trigger.id)
+        if (editingPlcTriggerId.value === trigger.id) resetPlcTriggerForm()
+        toast.success('PLC 触发配置已删除。')
+    } catch (error) { toast.error(`删除 PLC 触发配置失败：${String(error)}`) }
+}
+
+function triggerValueDisplay(trigger: WorkflowPlcTrigger) {
+    try { return JSON.parse(trigger.expectedValueJson) as string | number | boolean } catch { return trigger.expectedValueJson }
+}
+
+function plcDeviceName(id: string) {
+    return plcDevices.value.find((device) => device.id === id)?.name ?? id
+}
+
+function plcTagName(trigger: WorkflowPlcTrigger) {
+    const tag = plcTags.value.find((item) => item.id === trigger.plcTagId)
+    return tag ? `${tag.code} · ${tag.name}` : trigger.plcTagId
 }
 
 async function loadWorkflows() {
@@ -850,6 +1163,7 @@ onMounted(async () => {
         clockNow.value = Date.now()
     }, 100)
     window.addEventListener('keydown', handleDebugShortcut)
+    window.addEventListener('beforeunload', handleBeforeUnload)
     registerLanguage()
     if (editorHost.value) {
         editor = monaco.editor.create(editorHost.value, {
@@ -885,6 +1199,9 @@ onMounted(async () => {
 
 watch(workflowId, () => void loadWorkflow())
 watch(projectId, () => {
+    plcTriggerDrawerOpen.value = false
+    plcTriggers.value = []
+    resetPlcTriggerForm()
     workflowId.value = ''
     source.value = null
     void router.replace({
@@ -902,9 +1219,23 @@ onBeforeUnmount(() => {
     clearInterval(clockTimer)
     stopDebugPolling()
     window.removeEventListener('keydown', handleDebugShortcut)
+    window.removeEventListener('beforeunload', handleBeforeUnload)
     if (debugConnection) void debugConnection.stop()
     disposables.forEach((x) => x.dispose())
     editor?.dispose()
+})
+
+function handleBeforeUnload(event: BeforeUnloadEvent): void {
+    if (!dirty.value) return
+    event.preventDefault()
+}
+
+onBeforeRouteLeave(async () => {
+    if (!dirty.value) return true
+    return confirmAction({
+        header: '存在未保存修改',
+        message: '当前工作流尚未保存，确认离开并放弃修改吗？',
+    })
 })
 
 function handleDebugShortcut(event: KeyboardEvent) {
@@ -915,35 +1246,20 @@ function handleDebugShortcut(event: KeyboardEvent) {
 </script>
 
 <template>
-    <div class="-m-6 flex h-[calc(100vh-3.5rem)] flex-col bg-background text-foreground">
-        <header class="flex h-12 items-center gap-2 border-b px-3">
-            <GitBranch class="size-4 text-primary" />
-            <input
-                v-model.trim="projectFilter"
-                class="h-8 w-40 rounded border bg-background px-2 text-sm"
-                placeholder="搜索项目"
-                title="按项目名称或编号搜索"
-            />
-            <select v-model="projectId" class="h-8 min-w-64 rounded border bg-background px-2 text-sm">
-                <option value="" disabled>选择项目</option>
-                <option v-for="item in filteredProjects" :key="item.id" :value="item.id">
-                    {{ item.projectCode }} · {{ item.name }}
-                </option>
-            </select>
-            <select v-model="workflowId" class="h-8 min-w-56 rounded border bg-background px-2 text-sm">
-                <option value="" disabled>选择工作流</option>
-                <option v-for="item in workflows" :key="item.id" :value="item.id">{{ item.name }}</option>
-            </select>
-            <div class="mx-2 h-5 w-px bg-border" />
-            <button class="ide-button" :disabled="!dirty || saving" @click="save">
-                <Save class="size-4" />{{ saving ? '保存中' : '保存' }}
-            </button>
-            <button class="ide-button" @click="formatDocument"><WandSparkles class="size-4" />格式化</button>
-            <button class="ide-button" :disabled="!canPrimaryDebug" title="调试运行/继续 (F5)"
-                @click="primaryDebugAction">
-                <Bug v-if="primaryDebugLabel === '调试运行'" class="size-4" />
-                <Play v-else class="size-4" />{{ primaryDebugLabel }}
-            </button>
+    <div class="workflow-ide-shell -m-3 flex h-[calc(100vh-3.5rem)] flex-col overflow-hidden bg-background text-foreground sm:-m-4 lg:-m-6">
+        <header class="flex-none border-b bg-card/70 shadow-sm backdrop-blur">
+            <div class="flex min-h-12 flex-wrap items-center gap-2 px-3 py-2">
+                <div class="mr-1 flex items-center gap-2 font-medium"><GitBranch class="size-4 text-primary" /><span class="hidden xl:inline">工作流调试</span></div>
+                <input v-model.trim="projectFilter" class="ide-field w-36" placeholder="搜索项目" title="按项目名称或编号搜索" />
+                <select v-model="projectId" class="ide-field min-w-52 max-w-72 flex-1"><option value="" disabled>选择项目</option><option v-for="item in filteredProjects" :key="item.id" :value="item.id">{{ item.projectCode }} · {{ item.name }}</option></select>
+                <select v-model="workflowId" class="ide-field min-w-44 max-w-64 flex-1"><option value="" disabled>选择工作流</option><option v-for="item in workflows" :key="item.id" :value="item.id">{{ item.name }}</option></select>
+                <span class="debug-state-badge" :class="debugStateInfo.className"><span class="debug-state-dot" />{{ debugStateInfo.label }}<template v-if="debugStatus"> · {{ debugStatus.executedSteps }}/{{ debugStatus.totalSteps }} · {{ formatDuration(displayDurationMs) }}</template></span>
+                <span v-if="effectiveDebugState === 'running' && debugStatus?.currentNodeName" class="max-w-52 truncate text-xs text-muted-foreground">{{ debugStatus.currentNodeName }}<template v-if="displayCurrentNodeDurationMs >= 2000"> · {{ formatDuration(displayCurrentNodeDurationMs) }}</template></span>
+                <span class="ml-auto whitespace-nowrap text-xs" :class="dirty ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'">{{ dirty ? '● 未保存' : '已同步' }}<template v-if="source"> · rev {{ source.revision }}</template></span>
+            </div>
+            <div class="ide-action-bar">
+                <div class="ide-action-group"><button class="ide-button ide-button-primary" :disabled="!dirty || saving" @click="save"><Save class="size-4" />{{ saving ? '保存中' : '保存' }}</button><button class="ide-button" :disabled="!projectId" @click="openTaskDrawer">任务配置</button><button class="ide-button" :disabled="!projectId" @click="openPlcTriggerDrawer">PLC 触发</button><button class="ide-button" @click="formatDocument"><WandSparkles class="size-4" />格式化</button></div>
+                <div class="ide-action-group"><button class="ide-button ide-button-primary" :disabled="!canPrimaryDebug" title="调试运行/继续 (F5)" @click="primaryDebugAction"><Bug v-if="primaryDebugLabel === '调试运行'" class="size-4" /><Play v-else class="size-4" />{{ primaryDebugLabel }}</button>
             <button class="ide-button" :disabled="!canPauseDebug" @click="pause">暂停</button>
             <button class="ide-button" :disabled="debugActivity !== 'idle' || (!!executionId && !canStepDebug)"
                 @click="stepOnce"><StepForward class="size-4" />单步</button>
@@ -962,27 +1278,11 @@ function handleDebugShortcut(event: KeyboardEvent) {
                 :disabled="!selectedNodeId || debugActivity !== 'idle' || (!!executionId && !canContinueDebug)"
                 @click="runToSelection">运行到节点</button>
             <button class="ide-button" :disabled="!canStopDebug" @click="stop"><CircleStop class="size-4" />停止</button>
-            <span class="debug-state-badge" :class="debugStateInfo.className">
-                <span class="debug-state-dot" />{{ debugStateInfo.label }}
-                <template v-if="debugStatus">
-                    · {{ debugStatus.executedSteps }}/{{ debugStatus.totalSteps }}
-                    · {{ formatDuration(displayDurationMs) }}
-                </template>
-            </span>
-            <span v-if="effectiveDebugState === 'running' && debugStatus?.currentNodeName"
-                class="max-w-48 truncate text-xs text-muted-foreground">
-                {{ debugStatus.currentNodeName }}
-                <template v-if="displayCurrentNodeDurationMs >= 2000">
-                    · 当前节点耗时 {{ formatDuration(displayCurrentNodeDurationMs) }}
-                </template>
-            </span>
-            <span class="ml-auto text-xs text-muted-foreground">
-                {{ dirty ? '● 未保存' : '已同步' }}
-                <template v-if="source"> · rev {{ source.revision }}</template>
-            </span>
+                </div>
+            </div>
         </header>
 
-        <div class="flex h-9 items-center border-b px-3 text-xs">
+        <div class="flex h-9 flex-none items-center overflow-x-auto border-b bg-muted/20 px-3 text-xs">
             <button v-for="view in ['split', 'graph', 'source', 'json'] as const" :key="view"
                 class="h-full border-b-2 px-3" :class="activeView === view ? 'border-primary text-primary' : 'border-transparent'"
                 @click="activeView = view">
@@ -991,14 +1291,14 @@ function handleDebugShortcut(event: KeyboardEvent) {
             <span v-if="selectedNodeId" class="ml-auto">节点：{{ selectedNodeId }}</span>
         </div>
 
-        <main class="grid min-h-0 flex-1" :class="activeView === 'split' ? 'grid-cols-2' : 'grid-cols-1'">
-            <section v-show="activeView === 'split' || activeView === 'graph'" class="relative min-h-0 border-r">
+        <main class="grid min-h-0 flex-1" :class="activeView === 'split' ? 'grid-cols-1 grid-rows-2 lg:grid-cols-2 lg:grid-rows-1' : 'grid-cols-1'">
+            <section v-show="activeView === 'split' || activeView === 'graph'" class="relative min-h-0 overflow-hidden border-b lg:border-b-0 lg:border-r">
                 <VueFlow :nodes="graphNodes" :edges="graphEdges" fit-view-on-init
                     @node-click="selectGraphNode" @node-double-click="({ node }) => toggleBreakpoint(node.id)">
                     <Background />
                     <Controls />
                 </VueFlow>
-                <div class="absolute left-3 top-3 rounded bg-background/90 px-2 py-1 text-xs shadow">
+                <div class="absolute left-3 top-3 max-w-[calc(100%-1.5rem)] rounded border bg-background/90 px-2 py-1 text-xs shadow-sm backdrop-blur">
                     双击节点切换断点 · 红框为断点 · 绿色为当前节点
                 </div>
                 <div v-if="breakpointNodes.length"
@@ -1006,7 +1306,7 @@ function handleDebugShortcut(event: KeyboardEvent) {
                     ● {{ breakpointNodes.length }} 个断点
                 </div>
             </section>
-            <section v-show="activeView === 'split' || activeView === 'source'" class="min-h-0">
+            <section v-show="activeView === 'split' || activeView === 'source'" class="min-h-0 overflow-hidden">
                 <div ref="editorHost" class="h-full w-full" />
             </section>
             <section v-if="activeView === 'json'" class="flex min-h-0 flex-col p-3">
@@ -1017,8 +1317,114 @@ function handleDebugShortcut(event: KeyboardEvent) {
             </section>
         </main>
 
-        <section class="h-48 border-t">
-            <div class="flex h-8 items-center border-b px-2 text-xs">
+        <div v-if="taskDrawerOpen" class="plc-trigger-mask" @click.self="taskDrawerOpen = false">
+            <aside class="plc-trigger-drawer task-config-drawer">
+                <header class="drawer-header">
+                    <div class="min-w-0"><div class="font-medium">任务执行与 PLC 握手</div><div class="truncate text-xs text-muted-foreground">按 1 → 2 → 3 完成配置；任务修改后必须重新发布激活</div></div>
+                    <div class="ml-auto flex shrink-0 gap-1"><button class="ide-button h-7" @click="openTaskDrawer">刷新</button><button class="ide-button h-7" @click="taskDrawerOpen = false">关闭</button></div>
+                </header>
+                <div v-if="taskLoading" class="p-6 text-sm text-muted-foreground">加载中…</div>
+                <div v-else class="min-h-0 flex-1 space-y-4 overflow-auto p-4">
+                    <section v-if="taskConfig" class="rounded border p-4">
+                        <div class="mb-3 font-medium">1. 配置任务工作流</div>
+                        <div class="grid grid-cols-1 gap-3 text-xs sm:grid-cols-2">
+                            <label>执行方式<select v-model.number="taskConfig.taskType" class="mt-1 h-8 w-full rounded border bg-background px-2"><option :value="0">立即/外部触发</option><option :value="1">周期执行</option></select></label>
+                            <label v-if="taskConfig.taskType === 1">周期（秒）<input v-model.number="taskConfig.cycleIntervalSeconds" type="number" min="1" class="mt-1 h-8 w-full rounded border bg-background px-2" /></label>
+                        </div>
+                        <div class="mt-3 space-y-2">
+                            <div v-for="(item, index) in taskConfig.items" :key="item.workflowId" class="flex items-center gap-2 rounded border px-3 py-2 text-xs">
+                                <input v-model="item.isEnabled" type="checkbox" /><span class="min-w-0 flex-1 truncate">{{ index + 1 }}. {{ item.workflowName }}</span>
+                                <button class="ide-button h-6" :disabled="index === 0" @click="moveTask(index, -1)">↑</button><button class="ide-button h-6" :disabled="index === taskConfig.items.length - 1" @click="moveTask(index, 1)">↓</button>
+                            </div>
+                        </div>
+                        <div class="mt-3 grid grid-cols-1 gap-3 text-xs sm:grid-cols-2">
+                            <label>最终判定工作流<select v-model="taskConfig.resultWorkflowId" class="mt-1 h-8 w-full rounded border bg-background px-2" @change="loadResultOutputs"><option value="">请选择</option><option v-for="item in taskConfig.items.filter(x => x.isEnabled)" :key="item.workflowId" :value="item.workflowId">{{ item.workflowName }}</option></select></label>
+                            <label>布尔输出变量<select v-model="taskConfig.resultVariableName" :disabled="!taskConfig.resultWorkflowId" class="mt-1 h-8 w-full rounded border bg-background px-2"><option value="">请选择 Boolean 输出</option><option v-for="name in resultOutputs" :key="name" :value="name">{{ name }}</option></select></label>
+                        </div>
+                        <button class="ide-button ide-button-primary mt-3" :disabled="taskSaving" @click="saveTaskConfig">保存任务配置</button>
+                    </section>
+
+                    <section class="rounded border p-4">
+                        <div class="flex items-center gap-2"><div><div class="font-medium">2. 发布并激活部署</div><div class="text-xs text-muted-foreground">PLC 请求只运行当前激活的部署快照</div></div><span class="ml-auto rounded bg-muted px-2 py-1 text-xs">{{ deployment?.isCurrentActive ? `已激活 rev ${deployment.revision}` : '无激活部署' }}</span></div>
+                        <button class="ide-button ide-button-primary mt-3" :disabled="taskSaving" @click="publishAndActivate">发布新版本并激活</button>
+                    </section>
+
+                    <section class="rounded border p-4">
+                        <div class="flex items-center gap-2"><div><div class="font-medium">3. 配置 PLC 握手点位</div><div class="text-xs text-muted-foreground">谁写入信号，谁负责清零</div></div><span class="ml-auto rounded-full px-2 py-1 text-xs" :class="handshakeStatus?.isEnabled ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400' : 'bg-muted text-muted-foreground'">{{ handshakeStatus?.isConfigured ? (handshakeStatus.isEnabled ? '运行中' : '已停用') : '未配置' }}</span></div>
+                        <label class="mt-3 block text-xs">PLC 设备<select v-model="handshakeForm.plcDeviceId" class="mt-1 h-8 w-full rounded border bg-background px-2" @change="loadHandshakeTags"><option value="">请选择 PLC</option><option v-for="device in plcDevices" :key="device.id" :value="device.id">{{ device.name }}</option></select></label>
+                        <div class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                            <label v-for="field in handshakeFields" :key="field[0]" class="text-xs">{{ field[1] }}<select v-model="handshakeForm[field[0]]" :disabled="!handshakeForm.plcDeviceId" class="mt-1 h-8 w-full rounded border bg-background px-2" :title="field[2]"><option value="">请选择点位</option><option v-for="tag in handshakeTags" :key="tag.id" :value="tag.id">{{ tag.code }} · {{ tag.name }}</option></select><span class="mt-0.5 block text-[10px] text-muted-foreground">{{ field[2] }}</span></label>
+                        </div>
+                        <label class="mt-3 flex items-center gap-2 text-xs"><input v-model="handshakeForm.isEnabled" type="checkbox" />启用 PLC 握手</label>
+                        <button class="ide-button ide-button-primary mt-3" :disabled="taskSaving || !handshakeForm.plcDeviceId" @click="saveHandshake">保存握手配置</button>
+                    </section>
+
+                    <section class="rounded border p-4 text-xs">
+                        <div class="flex items-center"><div class="font-medium text-sm">运行状态</div><button class="ml-auto ide-button h-7" @click="resetHandshake">复位握手</button></div>
+                        <div class="mt-2 grid grid-cols-2 gap-2 text-muted-foreground sm:grid-cols-3"><span>阶段：{{ handshakeStatus?.phase ?? '-' }}</span><span>当前请求：{{ handshakeStatus?.currentRequestId ?? '-' }}</span><span>已完成：{{ handshakeStatus?.lastCompletedRequestId ?? '-' }}</span><span>结果：{{ handshakeStatus?.resultCode ?? '-' }}</span><span>错误：{{ handshakeStatus?.errorCode ?? '-' }}</span><span class="col-span-2 break-all sm:col-span-3">运行 ID：{{ handshakeStatus?.currentRunId ?? '-' }}</span></div>
+                        <div v-if="handshakeStatus?.lastError" class="mt-2 text-destructive">{{ handshakeStatus.lastError }}</div>
+                    </section>
+                </div>
+            </aside>
+        </div>
+
+        <div v-if="plcTriggerDrawerOpen" class="plc-trigger-mask" @click.self="plcTriggerDrawerOpen = false">
+            <aside class="plc-trigger-drawer">
+                <header class="drawer-header">
+                    <div class="min-w-0"><div class="font-medium">PLC 触发</div><div class="truncate text-xs text-muted-foreground">当前项目的激活部署触发映射</div></div>
+                    <div class="ml-auto flex shrink-0 gap-1"><button class="ide-button h-7" @click="openPlcTriggerDrawer">刷新</button><button class="ide-button h-7" @click="plcTriggerDrawerOpen = false">关闭</button></div>
+                </header>
+                <div class="min-h-0 flex-1 overflow-auto p-4">
+                    <form class="space-y-3 rounded border bg-muted/20 p-3" @submit.prevent="savePlcTrigger">
+                        <div class="flex items-center"><span class="font-medium text-sm">{{ editingPlcTriggerId ? '编辑触发' : '新增触发' }}</span><button v-if="editingPlcTriggerId" type="button" class="ml-auto text-xs text-primary" @click="resetPlcTriggerForm">取消编辑</button></div>
+                        <label class="block text-xs">PLC
+                            <select v-model="plcTriggerForm.plcDeviceId" :disabled="!!editingPlcTriggerId" class="mt-1 h-8 w-full rounded border bg-background px-2" @change="loadPlcTags">
+                                <option value="">选择 PLC</option><option v-for="device in plcDevices" :key="device.id" :value="device.id">{{ device.name }}</option>
+                            </select>
+                        </label>
+                        <label class="block text-xs">点位
+                            <select v-model="plcTriggerForm.plcTagId" :disabled="!!editingPlcTriggerId || !plcTriggerForm.plcDeviceId" class="mt-1 h-8 w-full rounded border bg-background px-2">
+                                <option value="">选择点位</option><option v-for="tag in plcTags" :key="tag.id" :value="tag.id">{{ tag.name }} · {{ tag.code }}</option>
+                            </select>
+                        </label>
+                        <label v-if="selectedPlcIsBoolean" class="block text-xs">目标值
+                            <select v-model="plcTriggerForm.value" class="mt-1 h-8 w-full rounded border bg-background px-2"><option value="true">true</option><option value="false">false</option></select>
+                        </label>
+                        <label v-else class="block text-xs">目标值
+                            <input v-model="plcTriggerForm.value" :type="selectedPlcIsNumeric ? 'number' : selectedPlcIsDate ? 'datetime-local' : 'text'" :step="selectedPlcIsFloat ? 'any' : undefined" class="mt-1 h-8 w-full rounded border bg-background px-2" :placeholder="selectedPlcTag?.dataType === PlcTagDataType.ByteString ? 'Base64' : '输入目标值'" />
+                        </label>
+                        <label v-if="selectedPlcIsFloat" class="block text-xs">浮点容差
+                            <input v-model.number="plcTriggerForm.tolerance" type="number" min="0" step="any" class="mt-1 h-8 w-full rounded border bg-background px-2" />
+                        </label>
+                        <label class="flex items-center gap-2 text-xs"><input v-model="plcTriggerForm.isEnabled" type="checkbox" />启用此触发</label>
+                        <button type="submit" class="ide-button w-full justify-center" :disabled="plcTriggerSaving || !selectedPlcTag">{{ plcTriggerSaving ? '保存中…' : '保存触发' }}</button>
+                        <section v-if="selectedPlcTag" class="rounded border border-dashed bg-background p-3">
+                            <div class="flex items-center gap-2">
+                                <div><div class="text-xs font-medium">调试配置</div><div class="text-[10px] text-muted-foreground">直接读写所选点位，用于保存前联调 PLC 触发条件</div></div>
+                                <span class="ml-auto rounded bg-muted px-1.5 py-0.5 text-[10px]">{{ selectedPlcCanRead ? '可读' : '不可读' }} / {{ selectedPlcCanWrite ? '可写' : '不可写' }}</span>
+                            </div>
+                            <div class="mt-2 grid grid-cols-1 items-center gap-2 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
+                                <div class="min-w-0 rounded bg-muted px-2 py-1.5 font-mono text-xs" :title="plcDebugValueText(plcTriggerDebugValue?.engineeringValue)">当前值：<span class="break-all">{{ plcDebugValueText(plcTriggerDebugValue?.engineeringValue) }}</span><span v-if="plcTriggerDebugValue" class="ml-1 text-[10px] text-muted-foreground">{{ plcTriggerDebugValue.quality }}</span></div>
+                                <button type="button" class="ide-button h-8" :disabled="plcTriggerDebugging || !selectedPlcCanRead" @click="readPlcTriggerDebugValue">读取</button>
+                                <button type="button" class="ide-button h-8" :disabled="plcTriggerDebugging || !selectedPlcCanWrite || plcTriggerForm.value === ''" title="将上面的目标值直接写入 PLC 点位" @click="writePlcTriggerDebugValue">写入目标值</button>
+                            </div>
+                            <div v-if="!selectedPlcCanWrite" class="mt-2 text-[10px] text-amber-600">该点位不可写，只能读取现场值；请由 PLC 侧改变点位进行触发测试。</div>
+                        </section>
+                    </form>
+                    <div class="mt-5"><div class="mb-2 text-sm font-medium">已配置触发</div><div v-if="plcTriggerLoading" class="text-xs text-muted-foreground">加载中…</div>
+                        <div v-else-if="!plcTriggers.length" class="rounded border border-dashed p-4 text-center text-xs text-muted-foreground">尚未配置 PLC 触发。</div>
+                        <article v-for="trigger in plcTriggers" :key="trigger.id" class="mb-2 rounded border bg-card p-3 text-xs shadow-sm">
+                            <div class="flex flex-wrap items-center gap-2"><span class="font-mono text-sm font-semibold">= {{ triggerValueDisplay(trigger) }}</span><span class="rounded-full px-2 py-0.5" :class="trigger.isEnabled ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400' : 'bg-muted text-muted-foreground'">{{ trigger.isEnabled ? '已启用' : '已停用' }}</span><div class="ml-auto flex gap-2"><button class="text-primary hover:underline" @click="editPlcTrigger(trigger)">编辑</button><button class="text-primary hover:underline" @click="togglePlcTrigger(trigger)">{{ trigger.isEnabled ? '停用' : '启用' }}</button><button class="text-destructive hover:underline" @click="removePlcTrigger(trigger)">删除</button></div></div>
+                            <div class="mt-2 break-all text-muted-foreground">{{ plcDeviceName(trigger.plcDeviceId) }} · {{ plcTagName(trigger) }}<template v-if="trigger.tolerance"> · 容差 {{ trigger.tolerance }}</template></div>
+                            <div v-if="trigger.lastTriggeredAt" class="mt-1 text-muted-foreground">上次触发：{{ new Date(trigger.lastTriggeredAt).toLocaleString() }}</div><div v-if="trigger.lastSkipReason" class="mt-1 text-amber-600">最近跳过：{{ trigger.lastSkipReason }}</div>
+                        </article>
+                    </div>
+                </div>
+            </aside>
+        </div>
+
+        <section class="h-[clamp(10rem,24vh,15rem)] flex-none border-t bg-card/40">
+            <div class="flex h-8 items-center overflow-x-auto border-b px-2 text-xs">
                 <button v-for="tab in ['problems', 'variables', 'watch', 'trace', 'performance', 'results', 'output'] as const" :key="tab"
                     class="h-full px-3" :class="bottomTab === tab && 'text-primary'" @click="bottomTab = tab">
                     {{ { problems: `问题 (${problems.length})`, variables: '变量/栈', watch: '监视', trace: '跟踪', performance: '性能', results: `结果 (${debugStatus?.outputs?.length ?? 0})`, output: '输出日志' }[tab] }}
@@ -1026,12 +1432,14 @@ function handleDebugShortcut(event: KeyboardEvent) {
                 <button v-if="bottomTab === 'watch'" class="ml-auto ide-button h-6" @click="refreshWatch">刷新</button>
                 <button v-if="bottomTab === 'trace' || bottomTab === 'performance'" class="ml-auto ide-button h-6" @click="refreshDebugDetails">刷新</button>
             </div>
-            <div class="h-40 overflow-auto p-2 text-xs">
-                <button v-if="bottomTab === 'problems'" v-for="problem in problems" :key="`${problem.code}-${problem.range.start.offset}`"
-                    class="flex w-full gap-3 rounded px-2 py-1 text-left hover:bg-muted" @click="selectProblem(problem)">
-                    <span :class="problem.severity === 'warning' ? 'text-amber-500' : 'text-red-500'">{{ problem.code }}</span>
-                    <span>{{ problem.message }}</span><span class="ml-auto">Ln {{ problem.range.start.line }}</span>
-                </button>
+            <div class="h-[calc(100%-2rem)] overflow-auto p-2 text-xs">
+                <template v-if="bottomTab === 'problems'">
+                    <button v-for="problem in problems" :key="`${problem.code}-${problem.range.start.offset}`"
+                        type="button" class="flex w-full gap-3 rounded px-2 py-1 text-left hover:bg-muted" @click="selectProblem(problem)">
+                        <span :class="problem.severity === 'warning' ? 'text-amber-500' : 'text-red-500'">{{ problem.code }}</span>
+                        <span>{{ problem.message }}</span><span class="ml-auto">Ln {{ problem.range.start.line }}</span>
+                    </button>
+                </template>
                 <template v-else-if="bottomTab === 'variables'">
                     <div class="mb-1 font-medium">变量</div>
                     <table class="debug-table">
@@ -1089,7 +1497,7 @@ function handleDebugShortcut(event: KeyboardEvent) {
                         <span v-if="executionId">执行 ID：{{ executionId }}</span>
                     </div>
                     <div v-if="!debugResults.length"
-                        class="rounded border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-amber-700">
+                        class="rounded border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-amber-700 dark:text-amber-400">
                         工作流已执行完成，但结束节点未设置输出。
                     </div>
                     <table v-else class="debug-table">
@@ -1171,13 +1579,76 @@ function handleDebugShortcut(event: KeyboardEvent) {
 .ide-button {
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     gap: 0.35rem;
+    min-height: 1.75rem;
+    flex: 0 0 auto;
+    border: 1px solid transparent;
     border-radius: 0.3rem;
-    padding: 0.35rem 0.6rem;
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+    line-height: 1rem;
+    white-space: nowrap;
+    transition: color 150ms ease, background-color 150ms ease, border-color 150ms ease, opacity 150ms ease;
+}
+.ide-button:hover:not(:disabled) { border-color: hsl(var(--border)); background: hsl(var(--accent)); }
+.ide-button:focus-visible { outline: 2px solid hsl(var(--ring)); outline-offset: 2px; }
+.ide-button:disabled { opacity: 0.4; }
+.ide-button-primary { background: hsl(var(--primary)); color: hsl(var(--primary-foreground)); }
+.ide-button-primary:hover:not(:disabled) { border-color: hsl(var(--primary)); background: hsl(var(--primary) / 88%); }
+.ide-field {
+    height: 1.75rem;
+    min-width: 0;
+    border: 1px solid hsl(var(--border));
+    border-radius: 0.375rem;
+    background: hsl(var(--background));
+    padding: 0 0.55rem;
     font-size: 0.75rem;
 }
-.ide-button:hover:not(:disabled) { background: hsl(var(--accent)); }
-.ide-button:disabled { opacity: 0.4; }
+.ide-field:focus { outline: 2px solid hsl(var(--ring) / 35%); border-color: hsl(var(--ring)); }
+.ide-action-bar {
+    display: flex;
+    min-height: 2.6rem;
+    align-items: center;
+    gap: 0.5rem;
+    overflow-x: auto;
+    border-top: 1px solid hsl(var(--border) / 55%);
+    padding: 0.3rem 0.75rem;
+    scrollbar-width: thin;
+}
+.ide-action-group { display: flex; flex: 0 0 auto; align-items: center; gap: 0.15rem; }
+.ide-action-group + .ide-action-group { border-left: 1px solid hsl(var(--border)); padding-left: 0.5rem; }
+.plc-trigger-mask {
+    position: fixed;
+    inset: 0;
+    z-index: 60;
+    display: flex;
+    justify-content: flex-end;
+    background: rgb(15 23 42 / 38%);
+    backdrop-filter: blur(2px);
+}
+.plc-trigger-drawer {
+    display: flex;
+    height: 100%;
+    width: min(30rem, 100vw);
+    min-width: 0;
+    flex-direction: column;
+    border-left: 1px solid hsl(var(--border));
+    background: hsl(var(--background));
+    box-shadow: -12px 0 30px rgb(15 23 42 / 20%);
+}
+.task-config-drawer { width: min(56rem, 100vw); }
+.drawer-header {
+    display: flex;
+    min-height: 3.5rem;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 0.5rem;
+    border-bottom: 1px solid hsl(var(--border));
+    background: hsl(var(--card) / 85%);
+    padding: 0.65rem 1rem;
+    backdrop-filter: blur(8px);
+}
 .debug-state-badge {
     display: inline-flex;
     align-items: center;
@@ -1189,13 +1660,17 @@ function handleDebugShortcut(event: KeyboardEvent) {
     white-space: nowrap;
 }
 .debug-state-dot { width: 0.5rem; height: 0.5rem; border-radius: 9999px; background: currentColor; }
-.debug-state-idle { color: #64748b; background: rgb(100 116 139 / 12%); }
-.debug-state-running { color: #2563eb; background: rgb(37 99 235 / 12%); }
+.debug-state-idle { color: hsl(var(--muted-foreground)); background: hsl(var(--muted)); }
+.debug-state-running { color: #2563eb; background: rgb(37 99 235 / 14%); }
 .debug-state-running .debug-state-dot { animation: workflow-node-pulse 0.7s ease-in-out infinite alternate; }
-.debug-state-paused { color: #d97706; background: rgb(217 119 6 / 12%); }
-.debug-state-completed { color: #16a34a; background: rgb(22 163 74 / 12%); }
-.debug-state-faulted { color: #dc2626; background: rgb(220 38 38 / 12%); }
-.debug-state-stopped { color: #475569; background: rgb(71 85 105 / 12%); }
+.debug-state-paused { color: #b45309; background: rgb(217 119 6 / 14%); }
+.debug-state-completed { color: #15803d; background: rgb(22 163 74 / 14%); }
+.debug-state-faulted { color: #dc2626; background: rgb(220 38 38 / 14%); }
+.debug-state-stopped { color: hsl(var(--muted-foreground)); background: hsl(var(--muted)); }
+:global(.dark) .debug-state-running { color: #60a5fa; }
+:global(.dark) .debug-state-paused { color: #fbbf24; }
+:global(.dark) .debug-state-completed { color: #4ade80; }
+:global(.dark) .debug-state-faulted { color: #f87171; }
 :deep(.workflow-node-running) {
     box-shadow: 0 0 0 4px #3b82f6, 0 0 18px rgb(59 130 246 / 70%);
     animation: workflow-node-pulse 1.2s ease-in-out infinite alternate;
@@ -1204,7 +1679,7 @@ function handleDebugShortcut(event: KeyboardEvent) {
 :deep(.workflow-node-completed) { box-shadow: 0 0 0 3px #22c55e; }
 :deep(.workflow-node-faulted) { box-shadow: 0 0 0 4px #ef4444, 0 0 14px rgb(239 68 68 / 60%); }
 :deep(.workflow-node-breakpoint) { box-shadow: 0 0 0 3px #ef4444; }
-.debug-table { width: 100%; border-collapse: collapse; font-family: ui-monospace, monospace; }
+.debug-table { width: max-content; min-width: 100%; border-collapse: separate; border-spacing: 0; font-family: ui-monospace, monospace; }
 .debug-table th {
     position: sticky;
     top: 0;
@@ -1215,10 +1690,19 @@ function handleDebugShortcut(event: KeyboardEvent) {
 }
 .debug-table th, .debug-table td {
     max-width: 32rem;
-    border: 1px solid hsl(var(--border));
+    border-right: 1px solid hsl(var(--border));
+    border-bottom: 1px solid hsl(var(--border));
     padding: 0.25rem 0.4rem;
     overflow-wrap: anywhere;
     vertical-align: top;
+}
+.debug-table tr > :first-child { border-left: 1px solid hsl(var(--border)); }
+.debug-table thead tr:first-child > * { border-top: 1px solid hsl(var(--border)); }
+@media (max-width: 640px) {
+    .workflow-ide-shell { margin: -1rem; height: calc(100vh - 3.5rem); }
+    .plc-trigger-drawer, .task-config-drawer { width: 100vw; border-left: 0; }
+    .drawer-header { padding-inline: 0.75rem; }
+    .debug-state-badge { order: 5; }
 }
 @keyframes workflow-node-pulse {
     from { filter: brightness(1); }

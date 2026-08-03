@@ -10,6 +10,8 @@ import Dialog from 'primevue/dialog'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import ToggleSwitch from 'primevue/toggleswitch'
+import Checkbox from 'primevue/checkbox'
+import Textarea from 'primevue/textarea'
 import { AppCard } from '@/components/primevue'
 import { useAppToast } from '@/composables/useAppToast'
 
@@ -455,18 +457,19 @@ onMounted(() => {
                         <div class="flex items-center justify-between">
                             <span class="text-sm font-medium">{{ t('serialPort.debug') }}</span>
                         </div>
-                        <textarea
+                        <Textarea
                             v-model="rawForm.payload"
-                            class="h-24 w-full resize-none rounded border bg-background px-2 py-1.5 font-mono text-xs"
+                            size="small"
+                            class="h-24 w-full resize-none font-mono text-xs"
                             placeholder="01 03 10 03 00 01 B0 CA"
                         />
                         <div class="grid grid-cols-2 gap-x-4 gap-y-2">
                             <label class="flex items-center gap-2 text-sm">
-                                <input v-model="rawForm.isHex" type="checkbox" />
+                                <Checkbox v-model="rawForm.isHex" binary />
                                 {{ t('serialPort.hexMode') }}
                             </label>
                             <label class="flex items-center gap-2 text-sm">
-                                <input v-model="rawForm.appendNewLine" type="checkbox" :disabled="rawForm.isHex" />
+                                <Checkbox v-model="rawForm.appendNewLine" binary :disabled="rawForm.isHex" />
                                 {{ t('serialPort.appendNewLine') }}
                             </label>
                             <div class="flex flex-col gap-1">

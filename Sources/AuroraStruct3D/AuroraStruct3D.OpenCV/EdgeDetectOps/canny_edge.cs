@@ -12,7 +12,7 @@ namespace AuroraStruct3D.OpenCV.EdgeDetectOps;
 /// 端口约定：
 /// <list type="bullet">
 ///   <item>输入 <c>input_mat</c>（Mat）— 输入图像（建议为灰度图）</item>
-///   <item>输出 <c>output_mat</c>（Mat）— 边缘检测结果（CV_8UC1 二值图，255=边缘）</item>
+///   <item>输出 <c>output_mat</c>（Mat）— 透明 BGRA 边缘图；线条颜色跟随当前主题</item>
 /// </list>
 /// </para>
 /// </summary>
@@ -135,7 +135,8 @@ public class canny_edge : IOperator
         try
         {
             Cv2.Canny(grayMat, result, _lowThreshold, _highThreshold, _apertureSize, _l2Gradient);
-            context.Set("output_mat", result.Clone());
+            using Mat themedResult = EdgeThemeRenderer.Render(result);
+            context.Set("output_mat", themedResult.Clone());
         }
         finally
         {

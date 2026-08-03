@@ -81,6 +81,10 @@ public class CalibMotorParamAppService : AuroraStruct3DAppService, ICalibMotorPa
         entity.SetOriginLocked(input.IsOriginLocked ?? entity.IsOriginLocked);
         entity.SetLimitEnabled(input.LimitEnabled ?? entity.LimitEnabled);
         entity.SetHomingMode(input.HomingMode ?? entity.HomingMode);
+        entity.SetHomingOptions(
+            input.MoveAfterHome ?? entity.MoveAfterHome,
+            input.WithZSignal ?? entity.WithZSignal
+        );
     }
 
     private static CalibMotorParamDto ToDto(CalibMotorParam entity) =>
@@ -100,6 +104,8 @@ public class CalibMotorParamAppService : AuroraStruct3DAppService, ICalibMotorPa
             IsOriginLocked = entity.IsOriginLocked,
             LimitEnabled = entity.LimitEnabled,
             HomingMode = entity.HomingMode,
+            MoveAfterHome = entity.MoveAfterHome,
+            WithZSignal = entity.WithZSignal,
             CreationTime = entity.CreationTime,
             LastModificationTime = entity.LastModificationTime,
         };

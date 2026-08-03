@@ -47,6 +47,12 @@ public class CalibMotorParamDto
     /// <summary>回原模式（限位回零 / 原点回零）。</summary>
     public CalibHomingMode HomingMode { get; set; }
 
+    /// <summary>回原完成后是否移动到指定停止位。</summary>
+    public bool MoveAfterHome { get; set; }
+
+    /// <summary>回原时是否使用编码器 Z 信号。</summary>
+    public bool WithZSignal { get; set; }
+
     /// <summary>创建时间。</summary>
     public DateTime CreationTime { get; set; }
 
@@ -97,4 +103,10 @@ public class SaveCalibMotorParamInput
 
     /// <summary>回原模式（限位回零 / 原点回零）。</summary>
     public CalibHomingMode? HomingMode { get; set; }
+
+    /// <summary>回原完成后是否移动到指定停止位。</summary>
+    public bool? MoveAfterHome { get; set; }
+
+    /// <summary>回原时是否使用编码器 Z 信号。</summary>
+    public bool? WithZSignal { get; set; }
 }

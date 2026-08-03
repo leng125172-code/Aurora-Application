@@ -80,6 +80,7 @@ public class DeviceStateAppService : AuroraStruct3DAppService, IDeviceStateAppSe
     )
     {
         long totalCount = await _faultRepository.GetCountAsync(
+            source: input.Source,
             faultLevel: input.FaultLevel,
             isResolved: input.IsResolved,
             startTime: input.StartTime,
@@ -89,6 +90,7 @@ public class DeviceStateAppService : AuroraStruct3DAppService, IDeviceStateAppSe
         List<DeviceFault> items = await _faultRepository.GetPagedListAsync(
             skipCount: input.SkipCount,
             maxResultCount: input.MaxResultCount,
+            source: input.Source,
             faultLevel: input.FaultLevel,
             isResolved: input.IsResolved,
             startTime: input.StartTime,
@@ -139,6 +141,17 @@ public class DeviceStateAppService : AuroraStruct3DAppService, IDeviceStateAppSe
             FaultCode = fault.FaultCode,
             FaultMessage = fault.FaultMessage,
             FaultReason = fault.FaultReason,
+            Source = fault.Source,
+            DeviceId = fault.DeviceId,
+            DeviceName = fault.DeviceName,
+            WorkflowProjectId = fault.WorkflowProjectId,
+            WorkflowProjectName = fault.WorkflowProjectName,
+            WorkflowRunId = fault.WorkflowRunId,
+            WorkflowId = fault.WorkflowId,
+            WorkflowName = fault.WorkflowName,
+            WorkflowNodeId = fault.WorkflowNodeId,
+            LastOccurredAt = fault.LastOccurredAt,
+            OccurrenceCount = fault.OccurrenceCount,
             IsResolved = fault.IsResolved,
             IsAutoRecovered = fault.IsAutoRecovered,
             ResolverId = fault.ResolverId,

@@ -23,6 +23,18 @@ public class DeviceFaultDto
     /// <summary>故障原因分析</summary>
     public string? FaultReason { get; set; }
 
+    public DeviceFaultSource Source { get; set; }
+    public Guid? DeviceId { get; set; }
+    public string? DeviceName { get; set; }
+    public Guid? WorkflowProjectId { get; set; }
+    public string? WorkflowProjectName { get; set; }
+    public Guid? WorkflowRunId { get; set; }
+    public Guid? WorkflowId { get; set; }
+    public string? WorkflowName { get; set; }
+    public string? WorkflowNodeId { get; set; }
+    public DateTime LastOccurredAt { get; set; }
+    public int OccurrenceCount { get; set; }
+
     /// <summary>是否已处理</summary>
     public bool IsResolved { get; set; }
 

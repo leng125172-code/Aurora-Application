@@ -58,3 +58,12 @@ public interface IOperator : IDisposable
     /// <exception cref="InvalidOperationException">输入参数非法或执行失败时抛出。</exception>
     void Execute(IWorkflowContext context);
 }
+
+/// <summary>
+/// Optional asynchronous operator contract.  Existing <see cref="IOperator"/> implementations
+/// remain synchronous; infrastructure operators can use this contract for network I/O.
+/// </summary>
+public interface IAsyncWorkflowOperator
+{
+    Task ExecuteAsync(IWorkflowContext context, CancellationToken cancellationToken = default);
+}

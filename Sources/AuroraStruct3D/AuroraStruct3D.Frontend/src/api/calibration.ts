@@ -163,6 +163,8 @@ export interface CalibMotorParamDto {
     readonly isOriginLocked: boolean
     readonly limitEnabled: boolean
     readonly homingMode: CalibHomingMode
+    readonly moveAfterHome: boolean
+    readonly withZSignal: boolean
     readonly creationTime: string
     readonly lastModificationTime: string | null
 }
@@ -181,6 +183,8 @@ export interface SaveCalibMotorParamInput {
     isOriginLocked?: boolean | null
     limitEnabled?: boolean | null
     homingMode?: CalibHomingMode | null
+    moveAfterHome?: boolean | null
+    withZSignal?: boolean | null
 }
 
 // ===================== 云台组 API =====================

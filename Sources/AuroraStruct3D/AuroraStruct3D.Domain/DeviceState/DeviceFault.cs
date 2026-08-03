@@ -26,6 +26,23 @@ public class DeviceFault : FullAuditedAggregateRoot<Guid>
     /// <summary>故障原因分析（最大 512 字符）</summary>
     public string? FaultReason { get; private set; }
 
+    /// <summary>故障来源。</summary>
+    public DeviceFaultSource Source { get; private set; }
+
+    /// <summary>用于合并同一活跃故障的稳定指纹。</summary>
+    public string? Fingerprint { get; private set; }
+
+    public Guid? DeviceId { get; private set; }
+    public string? DeviceName { get; private set; }
+    public Guid? WorkflowProjectId { get; private set; }
+    public string? WorkflowProjectName { get; private set; }
+    public Guid? WorkflowRunId { get; private set; }
+    public Guid? WorkflowId { get; private set; }
+    public string? WorkflowName { get; private set; }
+    public string? WorkflowNodeId { get; private set; }
+    public DateTime LastOccurredAt { get; private set; }
+    public int OccurrenceCount { get; private set; }
+
     // ─── 处理状态 ────────────────────────────────────────────────────────────
 
     /// <summary>故障是否已处理（false = 未处理，含重启自动解决）</summary>
@@ -107,6 +124,32 @@ public class DeviceFault : FullAuditedAggregateRoot<Guid>
         StateLogId = stateLogId;
         Remark = Truncate(remark, DeviceStateConsts.MaxRemarkLength);
         IsResolved = false;
+        Source = DeviceFaultSource.System;
+        LastOccurredAt = OccurredAt;
+        OccurrenceCount = 1;
+    }
+
+    /// <summary>设置运行故障的来源与关联信息。</summary>
+    public void SetRuntimeContext(DeviceFaultReport report)
+    {
+        Source = report.Source;
+        Fingerprint = Truncate(report.Fingerprint, 256);
+        DeviceId = report.DeviceId;
+        DeviceName = Truncate(report.DeviceName, 128);
+        WorkflowProjectId = report.WorkflowProjectId;
+        WorkflowProjectName = Truncate(report.WorkflowProjectName, 128);
+        WorkflowRunId = report.WorkflowRunId;
+        WorkflowId = report.WorkflowId;
+        WorkflowName = Truncate(report.WorkflowName, 128);
+        WorkflowNodeId = Truncate(report.WorkflowNodeId, 128);
+    }
+
+    /// <summary>合并一次同类活跃故障。</summary>
+    public void Reoccur(string message)
+    {
+        FaultMessage = Truncate(message, DeviceStateConsts.MaxFaultMessageLength);
+        LastOccurredAt = DateTime.UtcNow;
+        OccurrenceCount++;
     }
 
     // ─── 领域方法 ────────────────────────────────────────────────────────────

@@ -13,6 +13,15 @@ public class EfCoreDeviceFaultRepository
     : EfCoreRepository<AuroraStruct3DDbContext, DeviceFault, Guid>,
         IDeviceFaultRepository
 {
+    public async Task<DeviceFault?> FindUnresolvedByFingerprintAsync(string fingerprint, CancellationToken cancellationToken = default)
+    {
+        AuroraStruct3DDbContext context = await GetDbContextAsync();
+        return await context.DeviceFaults
+            .Where(x => !x.IsResolved && x.Fingerprint == fingerprint)
+            .OrderByDescending(x => x.LastOccurredAt)
+            .FirstOrDefaultAsync(cancellationToken);
+    }
+
     public EfCoreDeviceFaultRepository(
         IDbContextProvider<AuroraStruct3DDbContext> dbContextProvider
     )
@@ -22,6 +31,7 @@ public class EfCoreDeviceFaultRepository
     public async Task<List<DeviceFault>> GetPagedListAsync(
         int skipCount,
         int maxResultCount,
+        DeviceFaultSource? source = null,
         DeviceFaultLevel? faultLevel = null,
         bool? isResolved = null,
         DateTime? startTime = null,
@@ -31,6 +41,9 @@ public class EfCoreDeviceFaultRepository
     {
         AuroraStruct3DDbContext context = await GetDbContextAsync();
         IQueryable<DeviceFault> query = context.DeviceFaults.AsNoTracking();
+
+        if (source.HasValue)
+            query = query.Where(f => f.Source == source.Value);
 
         if (faultLevel.HasValue)
             query = query.Where(f => f.FaultLevel == faultLevel.Value);
@@ -53,6 +66,7 @@ public class EfCoreDeviceFaultRepository
 
     /// <inheritdoc/>
     public async Task<long> GetCountAsync(
+        DeviceFaultSource? source = null,
         DeviceFaultLevel? faultLevel = null,
         bool? isResolved = null,
         DateTime? startTime = null,
@@ -62,6 +76,9 @@ public class EfCoreDeviceFaultRepository
     {
         AuroraStruct3DDbContext context = await GetDbContextAsync();
         IQueryable<DeviceFault> query = context.DeviceFaults.AsNoTracking();
+
+        if (source.HasValue)
+            query = query.Where(f => f.Source == source.Value);
 
         if (faultLevel.HasValue)
             query = query.Where(f => f.FaultLevel == faultLevel.Value);

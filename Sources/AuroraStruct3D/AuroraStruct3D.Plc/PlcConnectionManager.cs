@@ -4,6 +4,12 @@ namespace AuroraStruct3D.Plcs;
 
 public sealed class PlcConnectionManager : IPlcConnectionManager, IAsyncDisposable
 {
+    private sealed class ReconnectBackoffException : InvalidOperationException
+    {
+        public ReconnectBackoffException(DateTime nextAttempt)
+            : base($"PLC 正在等待重连退避，将在 {nextAttempt:O} 后再次尝试。") { }
+    }
+
     private sealed class Entry
     {
         public SemaphoreSlim Gate { get; } = new(1, 1);
@@ -13,6 +19,7 @@ public sealed class PlcConnectionManager : IPlcConnectionManager, IAsyncDisposab
         public PlcConnectionOptions? Options { get; set; }
         public string? DriverId { get; set; }
         public int ReconnectDelayMs { get; set; }
+        public DateTime NextReconnectAt { get; set; }
     }
 
     private readonly IPlcDriverRegistry _registry;
@@ -39,12 +46,18 @@ public sealed class PlcConnectionManager : IPlcConnectionManager, IAsyncDisposab
             entry.LastUsedAt = DateTime.UtcNow;
             entry.Options = options;
             entry.DriverId = driverId;
-            entry.ReconnectDelayMs = options.ReconnectInitialMs;
             if (
                 entry.Connection != null
                 && await entry.Connection.HealthCheckAsync(cancellationToken).ConfigureAwait(false)
             )
+            {
+                entry.ReconnectDelayMs = options.ReconnectInitialMs;
+                entry.NextReconnectAt = DateTime.MinValue;
                 return entry.Connection;
+            }
+
+            if (entry.NextReconnectAt > DateTime.UtcNow)
+                throw new ReconnectBackoffException(entry.NextReconnectAt);
 
             if (entry.Connection != null)
                 await entry.Connection.DisposeAsync().ConfigureAwait(false);
@@ -55,11 +68,20 @@ public sealed class PlcConnectionManager : IPlcConnectionManager, IAsyncDisposab
                 .ConnectAsync(options, cancellationToken)
                 .ConfigureAwait(false);
             entry.Status = PlcConnectionStatus.Connected;
+            entry.ReconnectDelayMs = options.ReconnectInitialMs;
+            entry.NextReconnectAt = DateTime.MinValue;
             return entry.Connection;
+        }
+        catch (ReconnectBackoffException)
+        {
+            throw;
         }
         catch
         {
             entry.Status = PlcConnectionStatus.Faulted;
+            int delay = entry.ReconnectDelayMs <= 0 ? options.ReconnectInitialMs : entry.ReconnectDelayMs;
+            entry.NextReconnectAt = DateTime.UtcNow.AddMilliseconds(delay);
+            entry.ReconnectDelayMs = Math.Min(options.ReconnectMaxMs, Math.Max(delay * 2, options.ReconnectInitialMs));
             throw;
         }
         finally
@@ -171,6 +193,7 @@ public sealed class PlcConnectionManager : IPlcConnectionManager, IAsyncDisposab
                     catch when (!cancellationToken.IsCancellationRequested)
                     {
                         entry.Status = PlcConnectionStatus.Faulted;
+                        entry.NextReconnectAt = DateTime.UtcNow.AddMilliseconds(entry.ReconnectDelayMs);
                         entry.ReconnectDelayMs = Math.Min(
                             entry.Options.ReconnectMaxMs,
                             entry.ReconnectDelayMs * 2

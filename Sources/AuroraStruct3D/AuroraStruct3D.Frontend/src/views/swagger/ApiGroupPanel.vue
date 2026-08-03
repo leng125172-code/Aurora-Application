@@ -4,7 +4,9 @@
         <GlowBorder class="absolute inset-0 pointer-events-none rounded-lg" :border-width="1" />
 
         <!-- 分组标题栏 -->
-        <button
+        <Button
+            unstyled
+            type="button"
             class="relative z-10 w-full flex items-center justify-between px-4 py-3 text-left hover:bg-muted/50 transition-colors"
             @click="isOpen = !isOpen"
         >
@@ -13,7 +15,7 @@
                 <Tag severity="secondary" :value="t('swaggerPage.endpointCount', { count: group.endpoints.length })" />
                 <span class="text-muted-foreground text-xs">{{ isOpen ? '▲' : '▼' }}</span>
             </div>
-        </button>
+        </Button>
 
         <!-- 接口列表（展开/收起动画） -->
         <Transition name="slide">
@@ -29,6 +31,7 @@ import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { ApiGroup, SwaggerDocument } from '@/types/swagger'
 import Tag from 'primevue/tag'
+import Button from 'primevue/button'
 import { GlowBorder } from '@/components/ui/glow-border'
 import ApiEndpointRow from './ApiEndpointRow.vue'
 

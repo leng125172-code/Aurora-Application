@@ -12,6 +12,7 @@ import {
     type DeviceFaultDto,
     type GetFaultPagedInput,
     DeviceFaultLevel,
+    DeviceFaultSource,
     getFaultPagedListAsync,
 } from '@/api/device-state'
 import { extractLogTag } from '@/utils/log-tag'
@@ -36,6 +37,7 @@ function goToPage(page: number): void {
 
 // ─── 筛选条件 ────────────────────────────────────────────────────────────────
 const filterFaultLevel = ref<DeviceFaultLevel | null>(null)
+const filterSource = ref<DeviceFaultSource | null>(null)
 const filterIsResolved = ref<boolean | null>(null)
 const filterStartTime = ref<Date | null>(null)
 const filterEndTime = ref<Date | null>(null)
@@ -48,6 +50,7 @@ async function loadAsync(): Promise<void> {
             maxResultCount: pageSize.value,
             sorting: 'occurredAt DESC',
             faultLevel: filterFaultLevel.value,
+            source: filterSource.value,
             isResolved: filterIsResolved.value,
             startTime: filterStartTime.value ? filterStartTime.value.toISOString() : null,
             endTime: filterEndTime.value ? filterEndTime.value.toISOString() : null,
@@ -67,6 +70,7 @@ function onFilterChange(): void {
 
 function onReset(): void {
     filterFaultLevel.value = null
+    filterSource.value = null
     filterIsResolved.value = null
     filterStartTime.value = null
     filterEndTime.value = null
@@ -81,6 +85,14 @@ const faultLevelOptions = computed<Array<{ value: DeviceFaultLevel | null; label
     { value: DeviceFaultLevel.SafetyFault, label: t('deviceState.faultLevel.safetyFault') },
 ])
 
+const faultSourceOptions = [
+    { value: null, label: '全部来源' },
+    { value: DeviceFaultSource.System, label: '系统' },
+    { value: DeviceFaultSource.Camera, label: '相机' },
+    { value: DeviceFaultSource.Plc, label: 'PLC' },
+    { value: DeviceFaultSource.Workflow, label: '工作流' },
+]
+
 const faultLevelI18nKeys: Record<DeviceFaultLevel, string> = {
     [DeviceFaultLevel.Warning]: 'deviceState.faultLevel.warning',
     [DeviceFaultLevel.GeneralFault]: 'deviceState.faultLevel.generalFault',
@@ -90,6 +102,22 @@ const faultLevelI18nKeys: Record<DeviceFaultLevel, string> = {
 
 function faultLevelLabel(level: DeviceFaultLevel): string {
     return t(faultLevelI18nKeys[level] ?? '')
+}
+
+const faultSourceLabels: Record<DeviceFaultSource, string> = {
+    [DeviceFaultSource.System]: '系统',
+    [DeviceFaultSource.Camera]: '相机',
+    [DeviceFaultSource.Plc]: 'PLC',
+    [DeviceFaultSource.Workflow]: '工作流',
+}
+
+function faultSourceLabel(source: DeviceFaultSource): string {
+    return faultSourceLabels[source] ?? '系统'
+}
+
+function faultAssociation(data: DeviceFaultDto): string {
+    const parts = [data.deviceName, data.workflowProjectName, data.workflowName, data.workflowNodeId]
+    return parts.filter((value): value is string => Boolean(value)).join(' / ') || '—'
 }
 
 const resolvedOptions = computed<Array<{ value: boolean | null; label: string }>>(() => [
@@ -136,6 +164,16 @@ onMounted(() => {
                             },
                             dropdown: { class: '!w-6 !flex !items-center !justify-center' },
                         }"
+                        @change="onFilterChange"
+                    />
+                    <span class="text-sm text-muted-foreground whitespace-nowrap">来源</span>
+                    <Select
+                        v-model="filterSource"
+                        :options="faultSourceOptions"
+                        option-label="label"
+                        option-value="value"
+                        size="small"
+                        class="!text-xs w-full"
                         @change="onFilterChange"
                     />
                     <span class="text-sm text-muted-foreground whitespace-nowrap">{{ t('deviceState.status') }}</span>
@@ -240,6 +278,17 @@ onMounted(() => {
                     </template>
                 </Column>
 
+                <Column header="来源 / 关联" style="min-width: 12rem; max-width: 20rem">
+                    <template #body="{ data }">
+                        <div class="text-xs">
+                            <div class="font-medium">{{ faultSourceLabel(data.source as DeviceFaultSource) }}</div>
+                            <div class="truncate text-muted-foreground" :title="faultAssociation(data)">
+                                {{ faultAssociation(data) }}
+                            </div>
+                        </div>
+                    </template>
+                </Column>
+
                 <Column :header="t('deviceState.message')" style="min-width: 16rem; max-width: 28rem">
                     <template #body="{ data }">
                         <template v-if="data.faultMessage">
@@ -265,6 +314,12 @@ onMounted(() => {
                         <span :class="data.isResolved ? 'text-green-600' : 'text-muted-foreground'">
                             {{ data.isResolved ? t('deviceState.resolved') : t('deviceState.unresolved') }}
                         </span>
+                    </template>
+                </Column>
+
+                <Column header="次数" style="min-width: 4.5rem">
+                    <template #body="{ data }">
+                        <span class="tabular-nums">{{ data.occurrenceCount }}</span>
                     </template>
                 </Column>
 

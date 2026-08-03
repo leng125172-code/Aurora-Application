@@ -177,9 +177,11 @@ public class render_plane_outlines : IOperator
             throw new InvalidOperationException("输入图像为空，无法渲染平面轮廓。");
         }
 
-        Mat output = EnsureBgra(inputMat);
-        int imageWidth = output.Width;
-        int imageHeight = output.Height;
+        // 轮廓图作为前端可叠加的图层输出：不复制输入像素，也不填充 ROI 区域。
+        // 保留原始尺寸以便与底图精确对齐，背景维持完全透明。
+        Mat output = Mat.Zeros(inputMat.Rows, inputMat.Cols, MatType.CV_8UC4);
+        int imageWidth = inputMat.Width;
+        int imageHeight = inputMat.Height;
 
         PointCloudData? fullPointCloud = null;
         if (_viewType == "tilted")
@@ -276,51 +278,25 @@ public class render_plane_outlines : IOperator
             regionOutlines.Add((region, i, outlinePoints));
         }
 
-        // 第三步：先渲染所有平面表面（填充），再画轮廓线，保证轮廓线在最上层可见
-        // 斜视图不叠加平面选区，仅俯视图绘制
-        if (_viewType != "tilted")
+        // 仅绘制轮廓和标签，输出背景透明，可由前端与任意底图组合显示。
+        foreach (var (region, _, outlinePoints) in regionOutlines)
         {
-            foreach (var (region, i, outlinePoints) in regionOutlines)
-            {
-                Scalar fillColor = ComputePlaneFillColor(region, overallMinZ, overallMaxZ);
+            // 3D 平面 ROI 的轮廓和名称固定使用黑色；其他结果标注仍可跟随主题。
+            Scalar drawColor = new(0, 0, 0, 255);
+            int thickness = region.IsSelected ? _highlightThickness : _outlineThickness;
 
-                using Mat roiMask = Mat.Zeros(imageHeight, imageWidth, MatType.CV_8UC1);
-                Cv2.FillPoly(roiMask, new[] { outlinePoints }, Scalar.White);
+            Cv2.Polylines(output, new[] { outlinePoints }, true, drawColor, thickness);
 
-                using Mat overlay = output.Clone();
-                overlay.SetTo(fillColor, roiMask);
-                Cv2.AddWeighted(overlay, 0.55, output, 0.45, 0, output);
-            }
-
-            // 第四步：画轮廓线和标签
-            foreach (var (region, i, outlinePoints) in regionOutlines)
-            {
-                Scalar baseColor =
-                    i < DefaultColors.Length
-                        ? DefaultColors[i]
-                        : new Scalar(
-                            (byte)(255 * Math.Sin(i * 0.7)),
-                            (byte)(255 * Math.Cos(i * 0.5)),
-                            (byte)(255 * Math.Sin(i * 0.3)),
-                            255
-                        );
-
-                Scalar drawColor = region.IsSelected ? _highlightColor : baseColor;
-                int thickness = region.IsSelected ? _highlightThickness : _outlineThickness;
-
-                Cv2.Polylines(output, new[] { outlinePoints }, true, drawColor, thickness);
-
-                Point labelPoint = new(outlinePoints[0].X, Math.Max(20, outlinePoints[0].Y - 8));
-                Cv2.PutText(
-                    output,
-                    region.Name,
-                    labelPoint,
-                    HersheyFonts.HersheySimplex,
-                    0.45,
-                    drawColor,
-                    2
-                );
-            }
+            Point labelPoint = new(outlinePoints[0].X, Math.Max(20, outlinePoints[0].Y - 8));
+            Cv2.PutText(
+                output,
+                region.Name,
+                labelPoint,
+                HersheyFonts.HersheySimplex,
+                0.45,
+                drawColor,
+                2
+            );
         }
 
         context.Set("output_mat", output);

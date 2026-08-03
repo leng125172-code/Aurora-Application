@@ -41,6 +41,12 @@ const routes: RouteRecordRaw[] = [
                 meta: { requiresAuth: true, title: 'menu.dashboard' },
             },
             {
+                path: 'projects',
+                name: 'ProjectManage',
+                component: () => import('@/views/projects/ProjectManagePage.vue'),
+                meta: { requiresAuth: true, title: 'menu.visualSolutions' },
+            },
+            {
                 path: 'embed/swagger',
                 name: 'EmbedSwagger',
                 // 使用自研 Swagger UI（解析 OpenAPI JSON + 在线调试）

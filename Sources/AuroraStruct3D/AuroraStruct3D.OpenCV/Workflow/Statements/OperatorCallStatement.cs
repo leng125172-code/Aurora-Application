@@ -234,6 +234,40 @@ public sealed class OperatorCallStatement : IWorkflowStatement
         }
     }
 
+    public async Task ExecuteAsync(IWorkflowContext context, CancellationToken cancellationToken = default)
+    {
+        Dictionary<string, object?> existingPortValues = new(StringComparer.Ordinal);
+        foreach (string portName in InputBindings.Keys)
+            if (context.Contains(portName)) existingPortValues[portName] = context.Get(portName);
+        foreach ((string portName, InputBinding binding) in InputBindings)
+            context.Set(portName, binding.Resolve(context));
+
+        IOperator op = CreateOperatorInstance(ConfigArgBindings.Count > 0
+            ? ConfigArgBindings.Select(b => b.Resolve(context)).ToArray() : Array.Empty<object?>());
+        try
+        {
+            if (op is IAsyncWorkflowOperator asyncOperator)
+                await asyncOperator.ExecuteAsync(context, cancellationToken);
+            else
+                op.Execute(context);
+            foreach ((string portName, OutputBinding binding) in OutputBindings)
+            {
+                context.Set(binding.VariableName, context.Get(portName));
+                if (!string.Equals(binding.VariableName, portName, StringComparison.Ordinal)) context.Remove(portName);
+            }
+        }
+        finally
+        {
+            op.Dispose();
+            foreach (string portName in InputBindings.Keys)
+            {
+                if (IsOutputTarget(portName)) continue;
+                if (existingPortValues.TryGetValue(portName, out object? previous)) context.Set(portName, previous);
+                else context.Remove(portName);
+            }
+        }
+    }
+
     private static string FormatValue(object? value)
     {
         if (value is null)

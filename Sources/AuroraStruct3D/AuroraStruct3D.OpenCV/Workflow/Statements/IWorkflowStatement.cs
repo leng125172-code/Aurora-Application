@@ -21,4 +21,10 @@ public interface IWorkflowStatement
     /// </summary>
     /// <param name="context">当前作用域的工作流运行时上下文。</param>
     void Execute(IWorkflowContext context);
+
+    Task ExecuteAsync(IWorkflowContext context, CancellationToken cancellationToken = default)
+    {
+        Execute(context);
+        return Task.CompletedTask;
+    }
 }

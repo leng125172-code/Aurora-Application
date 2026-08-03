@@ -1389,7 +1389,6 @@ export default {
         step4HomeCompleted: 'Der Referenztest wurde abgeschlossen und der Antrieb wurde gemäß Ablauf deaktiviert.',
         step4HomeWaitTimeout:
             'Der Referenztest wurde ausgelöst, aber das Abschluss-Bit wurde vor dem Timeout nicht erkannt. Bitte Echtzeitüberwachung und Vor-Ort-Status weiter prüfen.',
-        step4HomeMoveAfterNotImplemented: 'Das Schreiben der 32-Bit-Stopp-Position nach der Referenzfahrt ist noch nicht implementiert.',
 
         // Step 5 Kamera- und Projektorkalibration
         step5BoardConfigTitle: 'Kalibrierplattenparameter',

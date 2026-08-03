@@ -339,7 +339,7 @@ watch(
                     >
                         {{ t('calib.step3NoImages') }}
                     </div>
-                    <button
+                    <Button unstyled type="button"
                         v-for="img in props.generatedFringeImages"
                         :key="img.index"
                         :class="[
@@ -351,7 +351,7 @@ watch(
                         @click="selectedFringeImageIdxModel = img.index"
                     >
                         {{ img.label }}
-                    </button>
+                    </Button>
                 </div>
 
                 <div class="flex flex-1 flex-col min-w-0 min-h-0 p-4">

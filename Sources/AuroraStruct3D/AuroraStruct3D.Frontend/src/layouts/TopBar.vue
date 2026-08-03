@@ -1,6 +1,6 @@
 ﻿<script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { LogOut, User } from '@lucide/vue'
+import { LogOut, Menu as MenuIcon, User } from '@lucide/vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import Button from 'primevue/button'
@@ -22,6 +22,7 @@ const deviceStateStore = useDeviceStateStore()
 const router = useRouter()
 const { t } = useI18n()
 const toast = useAppToast()
+const emit = defineEmits<{ toggleNavigation: [] }>()
 
 const profileMenuRef = ref<InstanceType<typeof Menu> | null>(null)
 const isAllServoSamplingEnabled = ref(false)
@@ -91,14 +92,24 @@ onMounted(() => {
 </script>
 
 <template>
-    <header class="flex h-14 items-center justify-between border-b bg-card/40 px-4 backdrop-blur">
-        <div class="text-sm text-muted-foreground">
-            {{ auth.currentUser?.userName ?? '' }}
+    <header class="flex h-14 items-center justify-between gap-2 border-b bg-card/40 px-2 backdrop-blur sm:px-4">
+        <div class="flex min-w-0 items-center gap-2">
+            <Button
+                type="button"
+                severity="secondary"
+                text
+                class="lg:!hidden"
+                aria-label="打开导航"
+                @click="emit('toggleNavigation')"
+            >
+                <template #icon><MenuIcon class="size-4" /></template>
+            </Button>
+            <span class="truncate text-sm text-muted-foreground">{{ auth.currentUser?.userName ?? '' }}</span>
         </div>
-        <div class="flex items-center gap-2">
+        <div class="flex min-w-0 items-center gap-1 sm:gap-2">
             <!-- 设备状态徽章 + 模式切换 -->
             <DeviceStatusBadge :status="deviceStateStore.state?.status" />
-            <DeviceModeSwitcher :device-state="deviceStateStore.state" />
+            <div class="hidden md:block"><DeviceModeSwitcher :device-state="deviceStateStore.state" /></div>
             <label
                 class="flex items-center gap-2 rounded-full border border-border/60 bg-background/70 px-2.5 py-1"
                 :class="isServoSamplingLoading ? 'opacity-60' : ''"

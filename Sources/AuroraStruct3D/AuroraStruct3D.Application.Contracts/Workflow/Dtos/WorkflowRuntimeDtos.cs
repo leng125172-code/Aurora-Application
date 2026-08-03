@@ -270,6 +270,29 @@ public class WorkflowProjectRunEnqueueResultDto
     public int DeploymentRevision { get; set; }
 }
 
+public class WorkflowPlcTriggerDto
+{
+    public Guid Id { get; set; }
+    public Guid ProjectId { get; set; }
+    public Guid PlcDeviceId { get; set; }
+    public Guid PlcTagId { get; set; }
+    public string ExpectedValueJson { get; set; } = string.Empty;
+    public double Tolerance { get; set; }
+    public bool IsEnabled { get; set; }
+    public DateTime? LastTriggeredAt { get; set; }
+    public string? LastSkipReason { get; set; }
+}
+
+public class SaveWorkflowPlcTriggerInput
+{
+    public Guid ProjectId { get; set; }
+    public Guid PlcDeviceId { get; set; }
+    public Guid PlcTagId { get; set; }
+    [Required] public string ExpectedValueJson { get; set; } = string.Empty;
+    [Range(0, double.MaxValue)] public double Tolerance { get; set; }
+    public bool IsEnabled { get; set; } = true;
+}
+
 /// <summary>
 /// 项目工作流任务配置行项（单个工作流的启用与执行顺序）。
 /// </summary>
@@ -311,6 +334,13 @@ public class WorkflowProjectTaskBatchDto
     /// <summary>周期间隔（秒）；仅 Cyclic 有效。</summary>
     [Range(1, 86400)]
     public int? CycleIntervalSeconds { get; set; }
+
+    /// <summary>提供正式任务 OK/NG 判定的工作流。</summary>
+    public Guid? ResultWorkflowId { get; set; }
+
+    /// <summary>最终布尔判定变量名。</summary>
+    [StringLength(128)]
+    public string? ResultVariableName { get; set; }
 
     /// <summary>任务配置行项（各工作流的启用与顺序）。</summary>
     public List<WorkflowProjectTaskDto> Items { get; set; } = new();
@@ -483,8 +513,71 @@ public class WorkflowProjectRunStatusDto
     /// <summary>错误信息。</summary>
     public string? ErrorMessage { get; set; }
 
+    public WorkflowInspectionDecision InspectionDecision { get; set; }
+    public WorkflowPlcHandshakeErrorCode InspectionErrorCode { get; set; }
+    public string? InspectionErrorMessage { get; set; }
+
     /// <summary>运行内各工作流结果。</summary>
     public List<WorkflowProjectRunItemDto> Items { get; set; } = new();
+}
+
+public class WorkflowPlcHandshakeConfigDto
+{
+    public Guid Id { get; set; }
+    public Guid ProjectId { get; set; }
+    public Guid PlcDeviceId { get; set; }
+    public Guid CaptureRequestTagId { get; set; }
+    public Guid RequestIdTagId { get; set; }
+    public Guid ResultAckTagId { get; set; }
+    public Guid ResultAckIdTagId { get; set; }
+    public Guid HeartbeatTagId { get; set; }
+    public Guid DeviceStatusTagId { get; set; }
+    public Guid TaskStatusTagId { get; set; }
+    public Guid CanCaptureTagId { get; set; }
+    public Guid CaptureAckTagId { get; set; }
+    public Guid AckRequestIdTagId { get; set; }
+    public Guid ResultValidTagId { get; set; }
+    public Guid ResultRequestIdTagId { get; set; }
+    public Guid ResultCodeTagId { get; set; }
+    public Guid ErrorCodeTagId { get; set; }
+    public bool IsEnabled { get; set; }
+}
+
+public class SaveWorkflowPlcHandshakeConfigInput
+{
+    public Guid ProjectId { get; set; }
+    public Guid PlcDeviceId { get; set; }
+    public Guid CaptureRequestTagId { get; set; }
+    public Guid RequestIdTagId { get; set; }
+    public Guid ResultAckTagId { get; set; }
+    public Guid ResultAckIdTagId { get; set; }
+    public Guid HeartbeatTagId { get; set; }
+    public Guid DeviceStatusTagId { get; set; }
+    public Guid TaskStatusTagId { get; set; }
+    public Guid CanCaptureTagId { get; set; }
+    public Guid CaptureAckTagId { get; set; }
+    public Guid AckRequestIdTagId { get; set; }
+    public Guid ResultValidTagId { get; set; }
+    public Guid ResultRequestIdTagId { get; set; }
+    public Guid ResultCodeTagId { get; set; }
+    public Guid ErrorCodeTagId { get; set; }
+    public bool IsEnabled { get; set; }
+}
+
+public class WorkflowPlcHandshakeStatusDto
+{
+    public Guid ProjectId { get; set; }
+    public bool IsConfigured { get; set; }
+    public bool IsEnabled { get; set; }
+    public WorkflowPlcHandshakePhase Phase { get; set; }
+    public int CurrentRequestId { get; set; }
+    public int LastCompletedRequestId { get; set; }
+    public Guid? CurrentRunId { get; set; }
+    public WorkflowInspectionDecision ResultCode { get; set; }
+    public WorkflowPlcHandshakeErrorCode ErrorCode { get; set; }
+    public DateTime? LastRequestAt { get; set; }
+    public DateTime? LastResultAt { get; set; }
+    public string? LastError { get; set; }
 }
 
 /// <summary>

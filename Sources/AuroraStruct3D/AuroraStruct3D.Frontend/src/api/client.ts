@@ -7,6 +7,7 @@ import axios, { type AxiosInstance, type InternalAxiosRequestConfig } from 'axio
 import ToastEventBus from 'primevue/toasteventbus'
 
 import { useAuthStore } from '@/stores/auth'
+import { useThemeStore } from '@/stores/theme'
 import { router } from '@/router'
 import type { AbpRemoteError } from '@/types/abp'
 import { getClientSessionId } from '@/utils/clientSession'
@@ -41,6 +42,7 @@ export function showErrorToastOnce(error: unknown): void {
 
 httpClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
     const auth = useAuthStore()
+    const theme = useThemeStore()
     if (auth.token) {
         config.headers.set('Authorization', `Bearer ${auth.token}`)
     }
@@ -50,6 +52,8 @@ httpClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
     }
     // 每个标签页独有的设备会话标识（Soft-Exclusive Session ownership key）
     config.headers.set('X-Client-Session-Id', getClientSessionId())
+    // 主题由服务端用于工作流图像等需要渲染文字叠加的响应。
+    config.headers.set('X-Aurora-Theme', theme.isDark ? 'dark' : 'light')
     // 默认接受语言；后续由 i18n Store 同步
     if (!config.headers.has('Accept-Language')) {
         const culture = localStorage.getItem('aurora.culture') || 'zh-CN'
@@ -60,7 +64,7 @@ httpClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
 
 httpClient.interceptors.response.use(
     (response) => response,
-    (error: { response?: { status?: number; data?: unknown }; message?: string }) => {
+    (error: { response?: { status?: number; data?: unknown }; message?: string; code?: string }) => {
         const status = error.response?.status
         const data = error.response?.data
         // 仅当响应体为对象时才尝试解析 ABP 错误格式（HTML 或纯文本响应不做解析）
@@ -73,12 +77,18 @@ httpClient.interceptors.response.use(
             const auth = useAuthStore()
             auth.reset()
             // 主动跳转到登录页，路由守卫只在导航时触发，无法接管当前页面的 API 401
-            router.push({ name: 'Login', query: { redirect: router.currentRoute.value.fullPath } })
+            if (router.currentRoute.value.name !== 'Login') {
+                void router.replace({ name: 'Login', query: { redirect: router.currentRoute.value.fullPath } })
+            }
         }
 
         let message: string
         if (remote?.message) {
             message = remote.message
+        } else if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT') {
+            message = '服务器响应超时，请检查网络或稍后重试'
+        } else if (!error.response && (error.code === 'ERR_NETWORK' || error.message === 'Network Error')) {
+            message = '无法连接服务器，请检查网络和服务器状态'
         } else {
             // 对非 ABP 格式响应（如 HTML 错误页、纯文本等）给出友好中文提示
             switch (status) {

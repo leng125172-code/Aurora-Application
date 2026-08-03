@@ -13,11 +13,13 @@ using AuroraStruct3D.RS485;
 using AuroraStruct3D.Services;
 using AuroraStruct3D.Sessions;
 using AuroraStruct3D.Streaming;
+using AuroraStruct3D.Swagger;
 using AuroraStruct3D.Cameras.Tucam;
 using Hangfire;
 using Lion.AbpPro.CAP;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
+using Swashbuckle.AspNetCore.SwaggerGen;
 using Volo.Abp.AspNetCore.ExceptionHandling;
 using Volo.Abp.AspNetCore.Mvc;
 using Volo.Abp.AspNetCore.Mvc.Libs;
@@ -72,6 +74,9 @@ namespace AuroraStruct3D
                 .AddAbpProSwagger("AbpPro")
                 .AddAbpProCap()
                 .AddAbpProHangfire();
+
+            context.Services.AddSwaggerGen(options =>
+                options.OperationFilter<ClientThemeHeaderOperationFilter>());
 
             // 移除 Kestrel 上传大小限制，支持大型三维文件上传
             context.Services.Configure<KestrelServerOptions>(options =>

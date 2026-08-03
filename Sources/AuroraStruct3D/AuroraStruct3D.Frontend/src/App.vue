@@ -2,6 +2,7 @@
 import { onMounted, onUnmounted } from 'vue'
 import { RouterView } from 'vue-router'
 import Toast from 'primevue/toast'
+import ConfirmDialog from 'primevue/confirmdialog'
 import { AuroraBackground } from '@/components/ui/aurora-background'
 import { useDeviceStateStore } from '@/stores/deviceState'
 
@@ -24,4 +25,5 @@ onUnmounted(() => {
     </AuroraBackground>
     <!-- PrimeVue 全局 Toast 容器：业务侧通过 useAppToast() 调用 -->
     <Toast position="top-right" />
+    <ConfirmDialog group="global" />
 </template>

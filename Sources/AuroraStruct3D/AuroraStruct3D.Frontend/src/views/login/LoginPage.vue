@@ -24,14 +24,21 @@ const username = ref('')
 const password = ref('')
 const tenantName = ref('')
 const submitting = ref(false)
+const usernameError = ref('')
+const passwordError = ref('')
 
 async function handleSubmit(): Promise<void> {
+    if (submitting.value) return
+    usernameError.value = ''
+    passwordError.value = ''
     if (!username.value) {
-        toast.warn(t('login.usernameRequired'))
+        usernameError.value = t('login.usernameRequired')
+        toast.warn(usernameError.value)
         return
     }
     if (!password.value) {
-        toast.warn(t('login.passwordRequired'))
+        passwordError.value = t('login.passwordRequired')
+        toast.warn(passwordError.value)
         return
     }
 
@@ -95,7 +102,7 @@ async function handleSubmit(): Promise<void> {
             </template>
 
             <template #content>
-                <form class="space-y-4" @submit.prevent="handleSubmit">
+                <form id="login-form" class="space-y-4" novalidate @submit.prevent="handleSubmit">
                     <!-- 租户 -->
                     <div class="flex flex-col gap-2">
                         <label for="login-tenant" class="text-sm font-medium">{{ t('login.tenant') }}</label>
@@ -117,8 +124,13 @@ async function handleSubmit(): Promise<void> {
                             size="small"
                             autocomplete="username"
                             class="w-full"
-                            @keyup.enter="handleSubmit"
+                            autofocus
+                            :invalid="!!usernameError"
+                            :aria-invalid="!!usernameError"
+                            aria-describedby="login-username-error"
+                            @update:model-value="usernameError = ''"
                         />
+                        <small v-if="usernameError" id="login-username-error" class="text-xs text-destructive" role="alert">{{ usernameError }}</small>
                     </div>
                     <!-- 密码 -->
                     <div class="flex flex-col gap-2">
@@ -128,24 +140,29 @@ async function handleSubmit(): Promise<void> {
                             v-model="password"
                             size="small"
                             :feedback="false"
+                            :prompt-label="t('login.password')"
                             toggle-mask
                             autocomplete="current-password"
                             input-class="w-full"
                             class="w-full"
-                            @keyup.enter="handleSubmit"
+                            :invalid="!!passwordError"
+                            :input-props="{ 'aria-invalid': !!passwordError, 'aria-describedby': 'login-password-error' }"
+                            @update:model-value="passwordError = ''"
                         />
+                        <small v-if="passwordError" id="login-password-error" class="text-xs text-destructive" role="alert">{{ passwordError }}</small>
                     </div>
                 </form>
             </template>
 
             <template #footer>
                 <Button
+                    type="submit"
+                    form="login-form"
                     class="w-full"
                     :label="submitting ? t('login.signingIn') : t('login.signIn')"
                     size="small"
                     :loading="submitting"
                     :disabled="submitting"
-                    @click="handleSubmit"
                 />
             </template>
         </AppCard>

@@ -46,6 +46,9 @@ public static class WorkflowProjectRunDbContextModelCreatingExtensions
             b.Property(x => x.FinishedAt);
             b.Property(x => x.ErrorMessage).HasMaxLength(WorkflowProjectRunConsts.MaxErrorLength);
             b.Property(x => x.IsCancelRequested).IsRequired();
+            b.Property(x => x.InspectionDecision).IsRequired();
+            b.Property(x => x.InspectionErrorCode).IsRequired();
+            b.Property(x => x.InspectionErrorMessage).HasMaxLength(WorkflowProjectRunConsts.MaxErrorLength);
 
             b.HasIndex(x => new { x.ProjectId, x.CreationTime });
             b.HasIndex(x => x.DeploymentId);

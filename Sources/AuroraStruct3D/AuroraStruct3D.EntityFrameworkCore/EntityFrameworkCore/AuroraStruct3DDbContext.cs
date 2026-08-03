@@ -164,6 +164,8 @@ namespace AuroraStruct3D.EntityFrameworkCore
         public DbSet<WorkflowProjectTask> WorkflowProjectTasks { get; set; }
         public DbSet<WorkflowProjectDeployment> WorkflowProjectDeployments { get; set; }
         public DbSet<WorkflowProjectRun> WorkflowProjectRuns { get; set; }
+        public DbSet<WorkflowPlcTrigger> WorkflowPlcTriggers { get; set; }
+        public DbSet<WorkflowPlcHandshakeConfig> WorkflowPlcHandshakeConfigs { get; set; }
 
         // ── 变量模块（离线变量库 + 在线变量池）────────────────────────────────────
         public DbSet<VariableDefinition> VariableDefinitions { get; set; }

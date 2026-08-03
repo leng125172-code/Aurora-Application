@@ -30,7 +30,7 @@ public enum LeisaiHomingMode
 /// 雷赛回原参数配置输入 DTO。
 /// 由后端负责将语义字段转换为寄存器值写入驱动。
 /// </summary>
-public class LeisaiHomingConfigInputDto
+public class LeisaiHomingConfigInputDto : IValidatableObject
 {
     /// <summary>回原方向（对应 0x600A Bit0）。</summary>
     public LeisaiHomingDirection HomingDirection { get; set; } = LeisaiHomingDirection.Negative;
@@ -62,6 +62,17 @@ public class LeisaiHomingConfigInputDto
     /// 为 null 时不写入，保留驱动器当前值。
     /// </summary>
     public int? HomeAccelerationRpm { get; set; }
+
+    public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+    {
+        if (MoveAfterHome && !HomeStopPosition.HasValue)
+        {
+            yield return new ValidationResult(
+                "启用回原后移动时必须提供回零停止位。",
+                new[] { nameof(HomeStopPosition) }
+            );
+        }
+    }
 }
 
 /// <summary>

@@ -61,6 +61,8 @@ public static class CalibrationDbContextModelCreatingExtensions
             b.Property(x => x.PositiveSoftLimit).HasPrecision(18, 6);
             b.Property(x => x.NegativeSoftLimit).HasPrecision(18, 6);
             b.Property(x => x.HomeSpeed).HasPrecision(18, 6);
+            b.Property(x => x.MoveAfterHome).HasDefaultValue(false);
+            b.Property(x => x.WithZSignal).HasDefaultValue(false);
             b.Property(x => x.HomeAcceleration).HasPrecision(18, 6);
 
             b.HasIndex(x => x.CalibProjectId);

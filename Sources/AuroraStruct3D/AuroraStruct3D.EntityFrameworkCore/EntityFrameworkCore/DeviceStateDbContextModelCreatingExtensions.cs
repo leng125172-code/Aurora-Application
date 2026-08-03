@@ -73,6 +73,14 @@ public static class DeviceStateDbContextModelCreatingExtensions
             b.Property(x => x.FaultCode).HasMaxLength(DeviceStateConsts.MaxFaultCodeLength);
             b.Property(x => x.FaultMessage).HasMaxLength(DeviceStateConsts.MaxFaultMessageLength);
             b.Property(x => x.FaultReason).HasMaxLength(DeviceStateConsts.MaxFaultReasonLength);
+            b.Property(x => x.Source).IsRequired().HasConversion<int>();
+            b.Property(x => x.Fingerprint).HasMaxLength(256);
+            b.Property(x => x.DeviceName).HasMaxLength(128);
+            b.Property(x => x.WorkflowProjectName).HasMaxLength(128);
+            b.Property(x => x.WorkflowName).HasMaxLength(128);
+            b.Property(x => x.WorkflowNodeId).HasMaxLength(128);
+            b.Property(x => x.LastOccurredAt).IsRequired();
+            b.Property(x => x.OccurrenceCount).IsRequired();
 
             // 处理状态
             b.Property(x => x.IsResolved).IsRequired();
@@ -99,6 +107,7 @@ public static class DeviceStateDbContextModelCreatingExtensions
             b.HasIndex(x => x.FaultLevel);
             b.HasIndex(x => x.IsResolved);
             b.HasIndex(x => new { x.IsResolved, x.FaultLevel });
+            b.HasIndex(x => new { x.IsResolved, x.Fingerprint });
         });
     }
 }

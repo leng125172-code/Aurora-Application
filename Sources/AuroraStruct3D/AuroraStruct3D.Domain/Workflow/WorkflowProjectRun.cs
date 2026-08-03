@@ -63,6 +63,10 @@ public class WorkflowProjectRun : FullAuditedAggregateRoot<Guid>
     /// <summary>取消标记。</summary>
     public bool IsCancelRequested { get; private set; }
 
+    public WorkflowInspectionDecision InspectionDecision { get; private set; }
+    public WorkflowPlcHandshakeErrorCode InspectionErrorCode { get; private set; }
+    public string? InspectionErrorMessage { get; private set; }
+
     /// <summary>无参构造（EF）。</summary>
     protected WorkflowProjectRun() { }
 
@@ -107,7 +111,15 @@ public class WorkflowProjectRun : FullAuditedAggregateRoot<Guid>
             SuccessCount = 0,
             FailedCount = 0,
             IsCancelRequested = false,
+            InspectionDecision = WorkflowInspectionDecision.None,
         };
+    }
+
+    public void SetInspectionResult(WorkflowInspectionDecision decision, WorkflowPlcHandshakeErrorCode errorCode = WorkflowPlcHandshakeErrorCode.None, string? errorMessage = null)
+    {
+        InspectionDecision = decision;
+        InspectionErrorCode = errorCode;
+        InspectionErrorMessage = string.IsNullOrWhiteSpace(errorMessage) ? null : errorMessage[..Math.Min(errorMessage.Length, WorkflowProjectRunConsts.MaxErrorLength)];
     }
 
     /// <summary>

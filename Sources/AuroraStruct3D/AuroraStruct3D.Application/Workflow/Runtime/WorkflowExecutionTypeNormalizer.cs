@@ -190,6 +190,14 @@ internal static class WorkflowExecutionTypeNormalizer
         string declared = NormalizeDeclaredType(declaredType);
         string runtime = NormalizeDeclaredType(runtimeType);
 
+        // System.Object is used by operators whose runtime value type depends on
+        // external data (for example, a PLC tag may yield a number, boolean or
+        // string). It is the top-level CLR type and must accept every value type.
+        if (declared == "System.Object")
+        {
+            return true;
+        }
+
         if (string.Equals(declared, runtime, StringComparison.Ordinal))
         {
             return true;

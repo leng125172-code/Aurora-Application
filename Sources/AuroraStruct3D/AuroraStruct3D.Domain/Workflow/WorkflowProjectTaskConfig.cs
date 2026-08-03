@@ -17,6 +17,12 @@ public class WorkflowProjectTaskConfig : FullAuditedAggregateRoot<Guid>
     /// <summary>周期间隔（秒）；仅 <see cref="WorkflowProjectTaskType.Cyclic"/> 有效。</summary>
     public int? CycleIntervalSeconds { get; private set; }
 
+    /// <summary>正式任务最终 OK/NG 判定所在工作流。</summary>
+    public Guid? ResultWorkflowId { get; private set; }
+
+    /// <summary>正式任务最终 OK/NG 判定布尔变量名。</summary>
+    public string? ResultVariableName { get; private set; }
+
     protected WorkflowProjectTaskConfig() { }
 
     /// <summary>
@@ -50,6 +56,18 @@ public class WorkflowProjectTaskConfig : FullAuditedAggregateRoot<Guid>
     {
         TaskType = taskType;
         CycleIntervalSeconds = NormalizeCycleInterval(taskType, cycleIntervalSeconds);
+    }
+
+    public void SetResultBinding(Guid? workflowId, string? variableName)
+    {
+        if (workflowId is null || workflowId == Guid.Empty || string.IsNullOrWhiteSpace(variableName))
+        {
+            ResultWorkflowId = null;
+            ResultVariableName = null;
+            return;
+        }
+        ResultWorkflowId = workflowId;
+        ResultVariableName = Check.NotNullOrWhiteSpace(variableName, nameof(variableName), 128);
     }
 
     private static int? NormalizeCycleInterval(

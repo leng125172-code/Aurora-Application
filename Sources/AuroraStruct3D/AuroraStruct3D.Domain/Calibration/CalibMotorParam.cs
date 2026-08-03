@@ -53,6 +53,12 @@ public class CalibMotorParam : FullAuditedEntity<Guid>
     /// <summary>回原模式（限位回零 / 原点回零）。对应雷赛 0x600A Bit2。</summary>
     public CalibHomingMode HomingMode { get; private set; }
 
+    /// <summary>回原后是否移动到指定停止位。对应雷赛 0x600A Bit1。</summary>
+    public bool MoveAfterHome { get; private set; }
+
+    /// <summary>回原时是否携带 Z 信号。对应雷赛 0x600A Bit8。</summary>
+    public bool WithZSignal { get; private set; }
+
     // EF Core 所需的无参构造函数
     protected CalibMotorParam() { }
 
@@ -125,6 +131,14 @@ public class CalibMotorParam : FullAuditedEntity<Guid>
     public CalibMotorParam SetHomingMode(CalibHomingMode homingMode)
     {
         HomingMode = homingMode;
+        return this;
+    }
+
+    /// <summary>设置雷赛回原扩展选项。</summary>
+    public CalibMotorParam SetHomingOptions(bool moveAfterHome, bool withZSignal)
+    {
+        MoveAfterHome = moveAfterHome;
+        WithZSignal = withZSignal;
         return this;
     }
 }

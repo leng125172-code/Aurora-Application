@@ -73,7 +73,7 @@ const { t } = useI18n()
                 :key="cam.id"
                 class="border border-border/50 rounded-lg overflow-hidden"
             >
-                <button
+                <Button unstyled type="button"
                     class="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-muted/30 transition-colors"
                     :class="{ 'bg-muted/20': props.expandedCameraId === cam.id }"
                     @click="props.toggleCameraExpand(cam.id)"
@@ -100,7 +100,7 @@ const { t } = useI18n()
                         class="size-4 shrink-0 text-muted-foreground"
                     />
                     <ChevronRight v-else class="size-4 shrink-0 text-muted-foreground" />
-                </button>
+                </Button>
 
                 <div
                     v-if="props.expandedCameraId === cam.id"

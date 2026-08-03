@@ -97,6 +97,31 @@ public sealed class WorkflowExecutor
         return context;
     }
 
+    /// <summary>Asynchronously executes a workflow, allowing network-backed operators.</summary>
+    public async Task<WorkflowContext> ExecuteAsync(
+        WorkflowDefinition workflow,
+        IReadOnlyDictionary<string, object?>? initialVariables = null,
+        CancellationToken cancellationToken = default
+    )
+    {
+        ArgumentNullException.ThrowIfNull(workflow);
+        var context = new WorkflowContext();
+        if (initialVariables is not null)
+            foreach ((string name, object? value) in initialVariables) context.Set(name, value);
+
+        for (int i = 0; i < workflow.Statements.Count; i++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            IWorkflowStatement statement = workflow.Statements[i];
+            try { await statement.ExecuteAsync(context, cancellationToken); }
+            catch (Exception ex) when (ex is not WorkflowExecutionException)
+            {
+                throw new WorkflowExecutionException(workflow.Name, i + 1, DescribeStatement(statement), ex);
+            }
+        }
+        return context;
+    }
+
     private static string DescribeStatement(IWorkflowStatement statement) =>
         statement switch
         {

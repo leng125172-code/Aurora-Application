@@ -17,6 +17,7 @@ import InputNumber from 'primevue/inputnumber'
 import ToggleSwitch from 'primevue/toggleswitch'
 import { AppCard } from '@/components/primevue'
 import { useAppToast } from '@/composables/useAppToast'
+import { useAppConfirm } from '@/composables/useAppConfirm'
 import {
     LeisaiParamGroupNames,
     type LeisaiBatchReadResultDto,
@@ -36,6 +37,7 @@ const store = useLeisaiMotorStore()
 const themeStore = useThemeStore()
 const { t } = useI18n()
 const toast = useAppToast()
+const confirmAction = useAppConfirm()
 
 const axisId = computed(() => String(route.params.axisId ?? ''))
 const activeTab = ref<TabKey>('chart')
@@ -412,7 +414,7 @@ async function resetCurrentGroupToDefault(): Promise<void> {
         toast.warning(t('leisaiConsole.noDefaultValue'))
         return
     }
-    if (!confirm(t('leisaiConsole.resetConfirm', { count: addrs.length }))) {
+    if (!(await confirmAction({ message: t('leisaiConsole.resetConfirm', { count: addrs.length }) }))) {
         return
     }
     isWritingParams.value = true
@@ -858,10 +860,9 @@ const tabLabels = computed(() => ({
 
         <!-- Tab 切换条 -->
         <div class="flex flex-wrap gap-2 border-b">
-            <button
+            <Button unstyled type="button"
                 v-for="[key, label] in Object.entries(tabLabels)"
                 :key="key"
-                type="button"
                 :class="[
                     'px-4 py-2 text-sm border-b-2 transition-colors',
                     activeTab === key
@@ -871,7 +872,7 @@ const tabLabels = computed(() => ({
                 @click="activeTab = key as TabKey"
             >
                 {{ label }}
-            </button>
+            </Button>
         </div>
 
         <!-- Tab: 图表（v-show 保留 DOM，防止切换 Tab 时图表状态被重置） -->
@@ -1224,8 +1225,7 @@ const tabLabels = computed(() => ({
                         </div>
                         <ul class="space-y-1">
                             <li v-for="g in availableGroups" :key="g">
-                                <button
-                                    type="button"
+                                <Button unstyled type="button"
                                     class="flex w-full items-center justify-between rounded px-2 py-1 text-left text-xs hover:bg-muted"
                                     :class="currentGroup === g ? 'bg-primary/10 font-semibold text-primary' : ''"
                                     @click="currentGroup = g"
@@ -1237,7 +1237,7 @@ const tabLabels = computed(() => ({
                                     <span class="text-[10px] text-muted-foreground">
                                         {{ paramMetadata.filter((p) => p.group === g).length }}
                                     </span>
-                                </button>
+                                </Button>
                             </li>
                         </ul>
                     </div>
@@ -1323,15 +1323,14 @@ const tabLabels = computed(() => ({
                                                 />
                                             </td>
                                             <td class="px-2 py-1">
-                                                <button
-                                                    type="button"
+                                                <Button unstyled type="button"
                                                     class="text-[10px] text-muted-foreground hover:text-foreground disabled:opacity-30"
                                                     :disabled="!isParamDirty(p.addressLow)"
                                                     @click="paramEdits[p.addressLow] = paramValues[p.addressLow]"
                                                     :title="t('leisaiConsole.undoChange')"
                                                 >
                                                     {{ t('leisaiConsole.undoChange') }}
-                                                </button>
+                                                </Button>
                                             </td>
                                         </tr>
                                         <tr

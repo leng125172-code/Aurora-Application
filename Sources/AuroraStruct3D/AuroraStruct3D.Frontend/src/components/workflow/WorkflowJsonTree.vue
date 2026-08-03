@@ -38,7 +38,7 @@ function primitiveText(value: unknown): string {
 <template>
     <details v-if="isContainer" :open="depth < 2" class="font-mono text-xs">
         <summary class="cursor-pointer select-none py-0.5">
-            <span v-if="label" class="text-sky-700">{{ label }}: </span>
+            <span v-if="label" class="text-sky-700 dark:text-sky-400">{{ label }}: </span>
             <span class="text-muted-foreground">{{ containerLabel }}</span>
         </summary>
         <div class="ml-4 border-l border-border pl-2">
@@ -53,12 +53,12 @@ function primitiveText(value: unknown): string {
         </div>
     </details>
     <div v-else class="py-0.5 font-mono text-xs">
-        <span v-if="label" class="text-sky-700">{{ label }}: </span>
+        <span v-if="label" class="text-sky-700 dark:text-sky-400">{{ label }}: </span>
         <span
             :class="{
-                'text-emerald-700': typeof value === 'boolean',
-                'text-violet-700': typeof value === 'number',
-                'text-amber-700': typeof value === 'string',
+                'text-emerald-700 dark:text-emerald-400': typeof value === 'boolean',
+                'text-violet-700 dark:text-violet-400': typeof value === 'number',
+                'text-amber-700 dark:text-amber-400': typeof value === 'string',
                 'text-muted-foreground': value === null || value === undefined,
             }"
         >{{ primitiveText(value) }}</span>

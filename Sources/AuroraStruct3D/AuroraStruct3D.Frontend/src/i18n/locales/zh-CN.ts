@@ -39,6 +39,8 @@ export default {
         loginFailed: '登录失败，请检查凭据',
     },
     menu: {
+        visualApplications: '视觉应用',
+        visualSolutions: '视觉解决方案',
         dashboard: '仪表盘',
         swagger: 'Swagger 文档',
         cap: 'CAP 消息',
@@ -76,6 +78,17 @@ export default {
         calibWizard: '标定向导',
         ktechMotorConsole: '瓴控电机操作台',
         leisaiMotorConsole: '雷赛电机操作台',
+    },
+    projectManagement: {
+        title: '视觉解决方案', subtitle: '管理视觉项目、工作流配置与生产部署状态', refresh: '刷新', create: '新建项目',
+        searchPlaceholder: '搜索项目编号或名称', search: '查询', reset: '重置', allStatuses: '全部状态',
+        statusActive: '进行中', statusSuspended: '已暂停', statusCompleted: '已完成', statusArchived: '已归档',
+        sortNewest: '最新创建', sortOldest: '最早创建', sortName: '按名称', sortCode: '按编号',
+        project: '项目', status: '状态', workflows: '工作流', deployment: '激活部署', noDeployment: '未部署', audit: '创建人 / 更新时间', actions: '操作',
+        workflow: '配置工作流', edit: '编辑', delete: '删除', empty: '暂无视觉解决方案', total: '共 {total} 个项目', previous: '上一页', next: '下一页',
+        createTitle: '新建视觉项目', editTitle: '编辑视觉项目', code: '项目编号', name: '项目名称', version: '版本', description: '项目描述', save: '保存', cancel: '取消',
+        codeRequired: '请输入项目编号', nameRequired: '请输入项目名称', versionRequired: '请输入版本号', created: '项目创建成功', updated: '项目更新成功', statusChanged: '项目状态已更新', deleted: '项目已删除',
+        deleteTitle: '删除视觉项目', deleteMessage: '确认删除“{code} · {name}”？该项目包含 {workflows} 个工作流，{deployment}。', deleteDeployment: '激活部署 rev {revision}', deleteNoDeployment: '当前没有激活部署',
     },
     dashboard: {
         cpu: 'CPU 负载',
@@ -1399,7 +1412,6 @@ export default {
         step4HomeStarted: '已触发回原测试，请保持实时监控开启。',
         step4HomeCompleted: '回原测试已完成，驱动已按流程关闭使能。',
         step4HomeWaitTimeout: '回原测试已触发，但在等待时间内未检测到完成位，请继续结合实时监控确认现场状态。',
-        step4HomeMoveAfterNotImplemented: '当前版本暂未实现“回原后移动到指定位置”的32位停止位写入。',
 
         // Step 5 相机投影仪标定
         step5BoardConfigTitle: '标定板参数配置',

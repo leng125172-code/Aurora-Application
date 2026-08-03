@@ -1,6 +1,13 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import Button from 'primevue/button'
+import Checkbox from 'primevue/checkbox'
+import Column from 'primevue/column'
+import DataTable from 'primevue/datatable'
+import InputText from 'primevue/inputtext'
+import Password from 'primevue/password'
+import Select from 'primevue/select'
 import {
     PlcAuthenticationType,
     PlcMessageSecurityMode,
@@ -14,8 +21,20 @@ import {
     type PlcDriverDescriptor,
     type SavePlcDeviceDto,
 } from '@/api/plcs'
+import { useAppConfirm } from '@/composables/useAppConfirm'
 
 const router = useRouter()
+const confirmAction = useAppConfirm()
+const authenticationOptions = [
+    { label: '匿名', value: PlcAuthenticationType.Anonymous },
+    { label: '用户名密码', value: PlcAuthenticationType.UserName },
+    { label: '客户端证书', value: PlcAuthenticationType.Certificate },
+]
+const securityModeOptions = [
+    { label: 'None', value: PlcMessageSecurityMode.None },
+    { label: 'Sign', value: PlcMessageSecurityMode.Sign },
+    { label: 'SignAndEncrypt', value: PlcMessageSecurityMode.SignAndEncrypt },
+]
 const devices = ref<PlcDeviceDto[]>([])
 const drivers = ref<PlcDriverDescriptor[]>([])
 const loading = ref(false)
@@ -59,7 +78,7 @@ async function test(device: PlcDeviceDto) {
     testMessage.value = result.success ? `连接成功（${result.durationMs} ms）` : `连接失败：${result.error}`
 }
 async function remove(device: PlcDeviceDto) {
-    if (!confirm(`确认删除 PLC“${device.name}”？`)) return
+    if (!(await confirmAction({ message: `确认删除 PLC“${device.name}”？` }))) return
     await deletePlc(device.id)
     await load()
 }
@@ -67,65 +86,46 @@ onMounted(load)
 </script>
 
 <template>
-    <div class="space-y-5 p-6">
+    <div class="space-y-5 p-1 sm:p-2">
         <div class="flex items-center justify-between">
             <div>
                 <h1 class="text-2xl font-bold">PLC 通讯管理</h1>
                 <p class="text-sm text-muted-foreground">OPC UA 已启用；S7、FINS、MC/SLMP 为后续驱动占位。</p>
             </div>
-            <button class="rounded-md bg-primary px-4 py-2 text-primary-foreground" @click="showEditor = !showEditor">新增 PLC</button>
+            <Button size="small" label="新增 PLC" @click="showEditor = !showEditor" />
         </div>
 
         <div v-if="showEditor" class="grid gap-3 rounded-lg border p-4 md:grid-cols-2">
-            <label class="space-y-1 text-sm">名称<input v-model="form.name" class="w-full rounded border bg-background p-2" /></label>
+            <label class="space-y-1 text-sm">名称<InputText v-model="form.name" size="small" class="w-full" /></label>
             <label class="space-y-1 text-sm">驱动
-                <select v-model="form.driverId" class="w-full rounded border bg-background p-2">
-                    <option v-for="driver in drivers" :key="driver.driverId" :value="driver.driverId" :disabled="!driver.isInstalled">
-                        {{ driver.displayName }}{{ driver.isInstalled ? '' : '（未安装）' }}
-                    </option>
-                </select>
+                <Select v-model="form.driverId" size="small" class="w-full" :options="drivers" option-label="displayName" option-value="driverId" />
             </label>
-            <label class="space-y-1 text-sm md:col-span-2">Endpoint URL<input v-model="form.endpointUrl" class="w-full rounded border bg-background p-2" /></label>
+            <label class="space-y-1 text-sm md:col-span-2">Endpoint URL<InputText v-model="form.endpointUrl" size="small" class="w-full" /></label>
             <label class="space-y-1 text-sm">认证方式
-                <select v-model.number="form.authenticationType" class="w-full rounded border bg-background p-2">
-                    <option :value="0">匿名</option><option :value="1">用户名密码</option><option :value="2">客户端证书</option>
-                </select>
+                <Select v-model="form.authenticationType" size="small" class="w-full" :options="authenticationOptions" option-label="label" option-value="value" />
             </label>
             <label class="space-y-1 text-sm">消息安全
-                <select v-model.number="form.messageSecurityMode" class="w-full rounded border bg-background p-2">
-                    <option :value="0">None</option><option :value="1">Sign</option><option :value="2">SignAndEncrypt</option>
-                </select>
+                <Select v-model="form.messageSecurityMode" size="small" class="w-full" :options="securityModeOptions" option-label="label" option-value="value" />
             </label>
             <template v-if="form.authenticationType === PlcAuthenticationType.UserName">
-                <label class="space-y-1 text-sm">用户名<input v-model="form.userName" class="w-full rounded border bg-background p-2" /></label>
-                <label class="space-y-1 text-sm">密码<input v-model="form.password" type="password" class="w-full rounded border bg-background p-2" /></label>
+                <label class="space-y-1 text-sm">用户名<InputText v-model="form.userName" size="small" class="w-full" /></label>
+                <label class="space-y-1 text-sm">密码<Password v-model="form.password" size="small" :feedback="false" toggle-mask class="w-full" input-class="w-full" /></label>
             </template>
-            <label class="flex items-center gap-2 text-sm"><input v-model="form.autoTrustServerCertificate" type="checkbox" />首次自动信任服务端证书</label>
+            <label class="flex items-center gap-2 text-sm"><Checkbox v-model="form.autoTrustServerCertificate" binary />首次自动信任服务端证书</label>
             <div class="flex justify-end gap-2 md:col-span-2">
-                <button class="rounded border px-4 py-2" @click="showEditor = false">取消</button>
-                <button class="rounded bg-primary px-4 py-2 text-primary-foreground" @click="save">保存</button>
+                <Button size="small" severity="secondary" outlined label="取消" @click="showEditor = false" />
+                <Button size="small" label="保存" @click="save" />
             </div>
         </div>
 
         <p v-if="testMessage" class="rounded border p-3 text-sm">{{ testMessage }}</p>
-        <div class="overflow-hidden rounded-lg border">
-            <table class="w-full text-sm">
-                <thead class="bg-muted/60"><tr><th class="p-3 text-left">名称</th><th class="p-3 text-left">协议</th><th class="p-3 text-left">端点</th><th class="p-3">状态</th><th class="p-3">操作</th></tr></thead>
-                <tbody>
-                    <tr v-for="device in devices" :key="device.id" class="border-t">
-                        <td class="p-3 font-medium">{{ device.name }}</td>
-                        <td class="p-3">{{ device.driverId }}</td>
-                        <td class="p-3 font-mono text-xs">{{ device.endpointUrl }}</td>
-                        <td class="p-3 text-center">{{ ['已断开', '连接中', '已连接', '重连中', '故障'][device.connectionStatus] }}</td>
-                        <td class="space-x-2 p-3 text-center">
-                            <button class="rounded border px-2 py-1" @click="test(device)">测试</button>
-                            <button class="rounded border px-2 py-1" @click="router.push(`/plcs/${device.id}/control`)">点位</button>
-                            <button class="rounded border px-2 py-1 text-destructive" @click="remove(device)">删除</button>
-                        </td>
-                    </tr>
-                    <tr v-if="!loading && devices.length === 0"><td colspan="5" class="p-8 text-center text-muted-foreground">暂无 PLC 设备</td></tr>
-                </tbody>
-            </table>
-        </div>
+        <DataTable :value="devices" :loading="loading" data-key="id" striped-rows class="overflow-hidden rounded-lg border">
+            <Column field="name" header="名称"><template #body="{ data }"><span class="font-medium">{{ data.name }}</span></template></Column>
+            <Column field="driverId" header="协议" />
+            <Column field="endpointUrl" header="端点"><template #body="{ data }"><span class="font-mono text-xs">{{ data.endpointUrl }}</span></template></Column>
+            <Column header="状态"><template #body="{ data }">{{ ['已断开', '连接中', '已连接', '重连中', '故障'][data.connectionStatus] }}</template></Column>
+            <Column header="操作"><template #body="{ data }"><div class="flex gap-1"><Button size="small" severity="secondary" outlined label="测试" @click="test(data)" /><Button size="small" severity="secondary" outlined label="点位" @click="router.push(`/plcs/${data.id}/control`)" /><Button size="small" severity="danger" text label="删除" @click="remove(data)" /></div></template></Column>
+            <template #empty><div class="p-8 text-center text-muted-foreground">暂无 PLC 设备</div></template>
+        </DataTable>
     </div>
 </template>

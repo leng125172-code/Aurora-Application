@@ -15,6 +15,7 @@ using AuroraStruct3D.OpenCV.Workflow.Statements;
 using AuroraStruct3D.OpenCV.Workflow.Scripting;
 using AuroraStruct3D.OpenCV.Workflow.Values;
 using AuroraStruct3D.OperatorFile;
+using AuroraStruct3D.Plcs;
 using AuroraStruct3D.ProductModels;
 using AuroraStruct3D.Variables;
 using AuroraStruct3D.Variables.Dtos;
@@ -22,6 +23,7 @@ using AuroraStruct3D.Workflow.Dtos;
 using AuroraStruct3D.Workflow.Runtime.Jobs;
 using Hangfire;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -51,6 +53,7 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
     private const string ExecutionErrorCodeStepInvalidInput = "STEP_INVALID_INPUT";
     private const string ExecutionErrorCodeNotCompleted = "EXECUTION_NOT_COMPLETED";
     private const string ExecutionErrorCodeStopped = "EXECUTION_STOPPED";
+    private const string ClientThemeHeaderName = "X-Aurora-Theme";
 
     private readonly IRepository<WorkflowDefinition, Guid> _repository;
     private readonly IOperatorRegistry _registry;
@@ -68,12 +71,16 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
     private readonly IRepository<WorkflowProjectTask, Guid> _taskRepository;
     private readonly IRepository<WorkflowProjectDeployment, Guid> _deploymentRepository;
     private readonly IRepository<WorkflowProjectRun, Guid> _runRepository;
+    private readonly IRepository<WorkflowPlcTrigger, Guid> _plcTriggerRepository;
+    private readonly IRepository<WorkflowPlcHandshakeConfig, Guid> _plcHandshakeRepository;
+    private readonly IRepository<PlcTag, Guid> _plcTagRepository;
     private readonly IRepository<VariableDefinition, Guid> _variableDefinitionRepository;
     private readonly IBlobContainer<OperatorFileBlobContainer> _operatorFileBlobContainer;
     private readonly IOperatorFileRecordRepository _operatorFileRecordRepository;
     private readonly IRepository<ProductModel, Guid> _productModelRepository;
     private readonly IBlobContainer<ProductModelBlobContainer> _productModelBlobContainer;
     private readonly IServiceScopeFactory _serviceScopeFactory;
+    private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly WorkflowRuntimeSafetyOptions _safetyOptions;
 
     private static readonly HashSet<string> UploadedFileExtensions = new(
@@ -115,12 +122,16 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
         IRepository<WorkflowProjectTask, Guid> taskRepository,
         IRepository<WorkflowProjectDeployment, Guid> deploymentRepository,
         IRepository<WorkflowProjectRun, Guid> runRepository,
+        IRepository<WorkflowPlcTrigger, Guid> plcTriggerRepository,
+        IRepository<WorkflowPlcHandshakeConfig, Guid> plcHandshakeRepository,
+        IRepository<PlcTag, Guid> plcTagRepository,
         IRepository<VariableDefinition, Guid> variableDefinitionRepository,
         IBlobContainer<OperatorFileBlobContainer> operatorFileBlobContainer,
         IOperatorFileRecordRepository operatorFileRecordRepository,
         IRepository<ProductModel, Guid> productModelRepository,
         IBlobContainer<ProductModelBlobContainer> productModelBlobContainer,
         IServiceScopeFactory serviceScopeFactory,
+        IHttpContextAccessor httpContextAccessor,
         IOptions<WorkflowRuntimeSafetyOptions>? safetyOptions = null
     )
     {
@@ -140,13 +151,145 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
         _taskRepository = taskRepository;
         _deploymentRepository = deploymentRepository;
         _runRepository = runRepository;
+        _plcTriggerRepository = plcTriggerRepository;
+        _plcHandshakeRepository = plcHandshakeRepository;
+        _plcTagRepository = plcTagRepository;
         _variableDefinitionRepository = variableDefinitionRepository;
         _operatorFileBlobContainer = operatorFileBlobContainer;
         _operatorFileRecordRepository = operatorFileRecordRepository;
         _productModelRepository = productModelRepository;
         _productModelBlobContainer = productModelBlobContainer;
         _serviceScopeFactory = serviceScopeFactory;
+        _httpContextAccessor = httpContextAccessor;
         _safetyOptions = safetyOptions?.Value ?? new WorkflowRuntimeSafetyOptions();
+    }
+
+    private WorkflowDisplayTheme CurrentDisplayTheme =>
+        string.Equals(
+            _httpContextAccessor.HttpContext?.Request.Headers[ClientThemeHeaderName].ToString(),
+            "dark",
+            StringComparison.OrdinalIgnoreCase
+        )
+            ? WorkflowDisplayTheme.Dark
+            : WorkflowDisplayTheme.Light;
+
+    [HttpGet("projects/{projectId:guid}/plc-triggers")]
+    public async Task<List<WorkflowPlcTriggerDto>> GetPlcTriggersAsync(Guid projectId)
+        => (await AsyncExecuter.ToListAsync((await _plcTriggerRepository.GetQueryableAsync())
+            .Where(x => x.ProjectId == projectId).OrderBy(x => x.CreationTime)))
+            .Select(MapPlcTrigger).ToList();
+
+    [HttpPost("plc-triggers")]
+    public async Task<WorkflowPlcTriggerDto> SavePlcTriggerAsync(Guid? id, SaveWorkflowPlcTriggerInput input)
+    {
+        if (input.ProjectId == Guid.Empty || input.PlcDeviceId == Guid.Empty || input.PlcTagId == Guid.Empty)
+            throw new UserFriendlyException("项目、PLC 和点位不能为空。");
+        _ = JsonDocument.Parse(input.ExpectedValueJson);
+        WorkflowPlcTrigger entity;
+        if (id.HasValue && id.Value != Guid.Empty)
+        {
+            entity = await _plcTriggerRepository.GetAsync(id.Value);
+            if (entity.ProjectId != input.ProjectId || entity.PlcDeviceId != input.PlcDeviceId || entity.PlcTagId != input.PlcTagId)
+                throw new UserFriendlyException("PLC 触发映射不支持跨项目或点位修改，请删除后重建。");
+            entity.Update(input.ExpectedValueJson, input.Tolerance, input.IsEnabled);
+            await _plcTriggerRepository.UpdateAsync(entity, autoSave: true);
+        }
+        else
+        {
+            entity = new WorkflowPlcTrigger(GuidGenerator.Create(), input.ProjectId, input.PlcDeviceId, input.PlcTagId, input.ExpectedValueJson, input.Tolerance, input.IsEnabled);
+            await _plcTriggerRepository.InsertAsync(entity, autoSave: true);
+        }
+        return MapPlcTrigger(entity);
+    }
+
+    [HttpDelete("plc-triggers/{id:guid}")]
+    public Task DeletePlcTriggerAsync(Guid id) => _plcTriggerRepository.DeleteAsync(id);
+
+    [HttpGet("projects/{projectId:guid}/plc-handshake")]
+    public async Task<WorkflowPlcHandshakeConfigDto> GetPlcHandshakeAsync(Guid projectId)
+    {
+        WorkflowPlcHandshakeConfig? entity = await AsyncExecuter.FirstOrDefaultAsync(
+            (await _plcHandshakeRepository.GetQueryableAsync()).Where(x => x.ProjectId == projectId));
+        if (entity is null) throw new UserFriendlyException("当前项目尚未配置 OPC UA 任务握手。");
+        return MapPlcHandshakeConfig(entity);
+    }
+
+    [HttpPut("projects/{projectId:guid}/plc-handshake")]
+    public async Task<WorkflowPlcHandshakeConfigDto> SavePlcHandshakeAsync(Guid projectId, SaveWorkflowPlcHandshakeConfigInput input)
+    {
+        if (projectId == Guid.Empty || input.ProjectId != Guid.Empty && input.ProjectId != projectId)
+            throw new UserFriendlyException("ProjectId 不一致。");
+        Guid[] tagIds = [input.CaptureRequestTagId, input.RequestIdTagId, input.ResultAckTagId,
+            input.ResultAckIdTagId, input.HeartbeatTagId, input.DeviceStatusTagId,
+            input.TaskStatusTagId, input.CanCaptureTagId, input.CaptureAckTagId,
+            input.AckRequestIdTagId, input.ResultValidTagId, input.ResultRequestIdTagId,
+            input.ResultCodeTagId, input.ErrorCodeTagId];
+        if (tagIds.Any(x => x == Guid.Empty) || tagIds.Distinct().Count() != tagIds.Length)
+            throw new UserFriendlyException("握手点位不能为空且不能重复使用。");
+        List<PlcTag> tags = await AsyncExecuter.ToListAsync((await _plcTagRepository.GetQueryableAsync())
+            .Where(x => tagIds.Contains(x.Id) && x.PlcDeviceId == input.PlcDeviceId && x.IsEnabled));
+        if (tags.Count != tagIds.Length) throw new UserFriendlyException("存在不属于所选 PLC 或已禁用的握手点位。");
+        HashSet<Guid> boolIds = [input.CaptureRequestTagId, input.ResultAckTagId,
+            input.CanCaptureTagId, input.CaptureAckTagId, input.ResultValidTagId];
+        if (tags.Any(x => boolIds.Contains(x.Id) && x.DataType != PlcTagDataType.Boolean)
+            || tags.Any(x => !boolIds.Contains(x.Id) && x.DataType is not (PlcTagDataType.Int32 or PlcTagDataType.UInt32 or PlcTagDataType.Int64 or PlcTagDataType.UInt64)))
+            throw new UserFriendlyException("握手 BOOL/DINT 点位类型与协议不一致。");
+        HashSet<Guid> plcOwned = [input.CaptureRequestTagId, input.RequestIdTagId, input.ResultAckTagId, input.ResultAckIdTagId];
+        if (tags.Any(x => plcOwned.Contains(x.Id) && !x.Access.HasFlag(PlcTagAccess.Read))
+            || tags.Any(x => !plcOwned.Contains(x.Id) && !x.Access.HasFlag(PlcTagAccess.Write)))
+            throw new UserFriendlyException("PLC 拥有点位必须可读，平台拥有点位必须可写。");
+        if (input.IsEnabled)
+        {
+            WorkflowProjectTaskConfig? taskConfig = await AsyncExecuter.FirstOrDefaultAsync(
+                (await _taskConfigRepository.GetQueryableAsync()).Where(x => x.ProjectId == projectId));
+            if (taskConfig?.ResultWorkflowId is null || string.IsNullOrWhiteSpace(taskConfig.ResultVariableName))
+                throw new UserFriendlyException("启用 OPC UA 握手前必须配置正式任务的布尔结果变量。");
+            bool deviceAlreadyUsed = await AsyncExecuter.AnyAsync(
+                (await _plcHandshakeRepository.GetQueryableAsync()).Where(x =>
+                    x.ProjectId != projectId && x.PlcDeviceId == input.PlcDeviceId && x.IsEnabled));
+            if (deviceAlreadyUsed) throw new UserFriendlyException("该 PLC 已用于其他项目的生产握手。");
+        }
+
+        WorkflowPlcHandshakeConfig? entity = await AsyncExecuter.FirstOrDefaultAsync(
+            (await _plcHandshakeRepository.GetQueryableAsync()).Where(x => x.ProjectId == projectId));
+        entity ??= new WorkflowPlcHandshakeConfig(GuidGenerator.Create(), projectId);
+        entity.Configure(input.PlcDeviceId, input.CaptureRequestTagId, input.RequestIdTagId,
+            input.ResultAckTagId, input.ResultAckIdTagId, input.HeartbeatTagId,
+            input.DeviceStatusTagId, input.TaskStatusTagId, input.CanCaptureTagId,
+            input.CaptureAckTagId, input.AckRequestIdTagId, input.ResultValidTagId,
+            input.ResultRequestIdTagId, input.ResultCodeTagId, input.ErrorCodeTagId, input.IsEnabled);
+        if (entity.Id == Guid.Empty) throw new InvalidOperationException();
+        if (await _plcHandshakeRepository.FindAsync(entity.Id) is null)
+            await _plcHandshakeRepository.InsertAsync(entity, autoSave: true);
+        else await _plcHandshakeRepository.UpdateAsync(entity, autoSave: true);
+        return MapPlcHandshakeConfig(entity);
+    }
+
+    [HttpGet("projects/{projectId:guid}/plc-handshake/status")]
+    public async Task<WorkflowPlcHandshakeStatusDto> GetPlcHandshakeStatusAsync(Guid projectId)
+    {
+        WorkflowPlcHandshakeConfig? entity = await AsyncExecuter.FirstOrDefaultAsync(
+            (await _plcHandshakeRepository.GetQueryableAsync()).Where(x => x.ProjectId == projectId));
+        return entity is null
+            ? new WorkflowPlcHandshakeStatusDto
+            {
+                ProjectId = projectId,
+                IsConfigured = false,
+                IsEnabled = false,
+                Phase = WorkflowPlcHandshakePhase.Idle,
+            }
+            : MapPlcHandshakeStatus(entity);
+    }
+
+    [HttpPost("projects/{projectId:guid}/plc-handshake/reset")]
+    public async Task<WorkflowPlcHandshakeStatusDto> ResetPlcHandshakeAsync(Guid projectId)
+    {
+        WorkflowPlcHandshakeConfig? entity = await AsyncExecuter.FirstOrDefaultAsync(
+            (await _plcHandshakeRepository.GetQueryableAsync()).Where(x => x.ProjectId == projectId));
+        if (entity is null) throw new UserFriendlyException("当前项目尚未配置 OPC UA 任务握手，无需复位。");
+        entity.Reset();
+        await _plcHandshakeRepository.UpdateAsync(entity, autoSave: true);
+        return MapPlcHandshakeStatus(entity);
     }
 
     /// <inheritdoc/>
@@ -188,6 +331,8 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
             ProjectId = projectId,
             TaskType = taskType,
             CycleIntervalSeconds = cycleIntervalSeconds,
+            ResultWorkflowId = taskConfig?.ResultWorkflowId,
+            ResultVariableName = taskConfig?.ResultVariableName,
             Items = workflows
                 .Select(x =>
                     taskMap.TryGetValue(x.Id, out WorkflowProjectTask? task)
@@ -252,6 +397,29 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
             throw new UserFriendlyException("存在不属于当前项目的工作流，无法保存任务配置。");
         }
 
+        if (input.ResultWorkflowId.HasValue)
+        {
+            WorkflowProjectTaskDto? resultItem = input.Items.FirstOrDefault(x => x.WorkflowId == input.ResultWorkflowId.Value);
+            if (resultItem is null || !resultItem.IsEnabled || string.IsNullOrWhiteSpace(input.ResultVariableName))
+                throw new UserFriendlyException("结果绑定必须选择已启用的工作流和布尔输出变量。");
+            WorkflowDefinition resultWorkflow = workflows.Single(x => x.Id == input.ResultWorkflowId.Value);
+            List<string> declaredOutputs = DeserializeJson<List<string>>(resultWorkflow.OutputVariables ?? "[]") ?? [];
+            if (!declaredOutputs.Contains(input.ResultVariableName, StringComparer.Ordinal))
+                throw new UserFriendlyException("结果变量不在所选工作流的正式输出中。");
+            GraphDataModel resultGraph = JsonSerializer.Deserialize<GraphDataModel>(
+                resultWorkflow.GraphData, GraphJson.Options) ?? new GraphDataModel();
+            VariableCompileRequestDto compileRequest = await _compileRequestFactory.BuildAsync(
+                input.ProjectId, resultWorkflow.Id, resultGraph);
+            VariableDeclarationDto? declaration = compileRequest.Declarations.FirstOrDefault(x =>
+                string.Equals(x.Name, input.ResultVariableName, StringComparison.Ordinal));
+            if (declaration is null || WorkflowExecutionTypeNormalizer.NormalizeDeclaredType(declaration.TypeName) != "System.Boolean")
+                throw new UserFriendlyException("正式任务结果变量必须是布尔类型。");
+        }
+        else if (!string.IsNullOrWhiteSpace(input.ResultVariableName))
+        {
+            throw new UserFriendlyException("配置结果变量时必须同时选择结果工作流。");
+        }
+
         int? cycleIntervalSeconds =
             input.TaskType == WorkflowProjectTaskType.Cyclic ? input.CycleIntervalSeconds : null;
 
@@ -275,6 +443,8 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
             taskConfig.SetTrigger(input.TaskType, cycleIntervalSeconds);
             await _taskConfigRepository.UpdateAsync(taskConfig, autoSave: true);
         }
+        taskConfig.SetResultBinding(input.ResultWorkflowId, input.ResultVariableName);
+        await _taskConfigRepository.UpdateAsync(taskConfig, autoSave: true);
 
         Dictionary<Guid, WorkflowProjectTask> existingMap = (
             await AsyncExecuter.ToListAsync(
@@ -1119,6 +1289,9 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
             try
             {
                 using IDisposable blobStoreScope = CreateOperatorFileBlobStoreScope();
+                using IServiceScope infrastructureScope = _serviceScopeFactory.CreateScope();
+                using IDisposable workflowServiceScope = WorkflowServiceProviderAmbient.Push(infrastructureScope.ServiceProvider);
+                using IDisposable workflowDisplayThemeScope = WorkflowDisplayThemeAmbient.Push(CurrentDisplayTheme);
                 _kernel.ExecuteToCompletion(session);
 
                 if (isPlaneRoi)
@@ -1889,6 +2062,9 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
                         BuildStatusDto(session, input.IncludeVariables)
                     );
                     using IDisposable blobStoreScope = CreateOperatorFileBlobStoreScope();
+                    using IServiceScope infrastructureScope = _serviceScopeFactory.CreateScope();
+                    using IDisposable workflowServiceScope = WorkflowServiceProviderAmbient.Push(infrastructureScope.ServiceProvider);
+                    using IDisposable workflowDisplayThemeScope = WorkflowDisplayThemeAmbient.Push(session.DisplayTheme);
                     _kernel.ExecuteSteps(session, input.Steps, markCompleted: false);
                     if (
                         session.Status == WorkflowExecutionStatus.Running
@@ -2048,6 +2224,9 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
                 BuildStatusDto(session, includeVariables: true)
             );
             using IDisposable blobStoreScope = CreateOperatorFileBlobStoreScope();
+            using IServiceScope infrastructureScope = _serviceScopeFactory.CreateScope();
+            using IDisposable workflowServiceScope = WorkflowServiceProviderAmbient.Push(infrastructureScope.ServiceProvider);
+            using IDisposable workflowDisplayThemeScope = WorkflowDisplayThemeAmbient.Push(session.DisplayTheme);
             _kernel.Continue(session, markCompleted: false);
             if (session.StepCursor >= session.RuntimeWorkflow.Statements.Count)
             {
@@ -2138,6 +2317,9 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
                 BuildStatusDto(session, includeVariables: true)
             );
             using IDisposable blobStoreScope = CreateOperatorFileBlobStoreScope();
+            using IServiceScope infrastructureScope = _serviceScopeFactory.CreateScope();
+            using IDisposable workflowServiceScope = WorkflowServiceProviderAmbient.Push(infrastructureScope.ServiceProvider);
+            using IDisposable workflowDisplayThemeScope = WorkflowDisplayThemeAmbient.Push(session.DisplayTheme);
             _kernel.Continue(session, nodeId, markCompleted: false);
             if (session.StepCursor >= session.RuntimeWorkflow.Statements.Count)
             {
@@ -2680,6 +2862,7 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
             input.LoopCount,
             initialVariables
         );
+        session.DisplayTheme = CurrentDisplayTheme;
         _sessionStore.Add(session);
 
         return new WorkflowExecutionTriggerResultDto
@@ -2712,6 +2895,9 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
         try
         {
             using IDisposable blobStoreScope = CreateOperatorFileBlobStoreScope();
+            using IServiceScope infrastructureScope = _serviceScopeFactory.CreateScope();
+            using IDisposable workflowServiceScope = WorkflowServiceProviderAmbient.Push(infrastructureScope.ServiceProvider);
+            using IDisposable workflowDisplayThemeScope = WorkflowDisplayThemeAmbient.Push(CurrentDisplayTheme);
             _kernel.ExecuteToCompletion(session);
             PersistOutputs(session);
             session.FrozenVariables = session.VariablePool.Snapshot(
@@ -2775,6 +2961,9 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
             try
             {
                 using IDisposable blobStoreScope = CreateOperatorFileBlobStoreScope();
+                using IServiceScope infrastructureScope = _serviceScopeFactory.CreateScope();
+                using IDisposable workflowServiceScope = WorkflowServiceProviderAmbient.Push(infrastructureScope.ServiceProvider);
+                using IDisposable workflowDisplayThemeScope = WorkflowDisplayThemeAmbient.Push(CurrentDisplayTheme);
                 _kernel.ExecuteToCompletion(session);
                 finalVariables = CollectDeclaredVariables(session);
                 lastSession = session;
@@ -4653,6 +4842,9 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
             StartedAt = run.StartedAt,
             FinishedAt = run.FinishedAt,
             ErrorMessage = run.ErrorMessage,
+            InspectionDecision = run.InspectionDecision,
+            InspectionErrorCode = run.InspectionErrorCode,
+            InspectionErrorMessage = run.InspectionErrorMessage,
             Items = items
                 .Select(x => new WorkflowProjectRunItemDto
                 {
@@ -4679,6 +4871,35 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
             OrderNo = task.OrderNo,
         };
     }
+
+    private static WorkflowPlcTriggerDto MapPlcTrigger(WorkflowPlcTrigger trigger) => new()
+    {
+        Id = trigger.Id, ProjectId = trigger.ProjectId, PlcDeviceId = trigger.PlcDeviceId,
+        PlcTagId = trigger.PlcTagId, ExpectedValueJson = trigger.ExpectedValueJson,
+        Tolerance = trigger.Tolerance, IsEnabled = trigger.IsEnabled,
+        LastTriggeredAt = trigger.LastTriggeredAt, LastSkipReason = trigger.LastSkipReason,
+    };
+
+    private static WorkflowPlcHandshakeConfigDto MapPlcHandshakeConfig(WorkflowPlcHandshakeConfig x) => new()
+    {
+        Id = x.Id, ProjectId = x.ProjectId, PlcDeviceId = x.PlcDeviceId,
+        CaptureRequestTagId = x.CaptureRequestTagId, RequestIdTagId = x.RequestIdTagId,
+        ResultAckTagId = x.ResultAckTagId, ResultAckIdTagId = x.ResultAckIdTagId,
+        HeartbeatTagId = x.HeartbeatTagId, DeviceStatusTagId = x.DeviceStatusTagId,
+        TaskStatusTagId = x.TaskStatusTagId, CanCaptureTagId = x.CanCaptureTagId,
+        CaptureAckTagId = x.CaptureAckTagId, AckRequestIdTagId = x.AckRequestIdTagId,
+        ResultValidTagId = x.ResultValidTagId, ResultRequestIdTagId = x.ResultRequestIdTagId,
+        ResultCodeTagId = x.ResultCodeTagId, ErrorCodeTagId = x.ErrorCodeTagId,
+        IsEnabled = x.IsEnabled,
+    };
+
+    private static WorkflowPlcHandshakeStatusDto MapPlcHandshakeStatus(WorkflowPlcHandshakeConfig x) => new()
+    {
+        ProjectId = x.ProjectId, IsConfigured = true, IsEnabled = x.IsEnabled, Phase = x.Phase,
+        CurrentRequestId = x.CurrentRequestId, LastCompletedRequestId = x.LastCompletedRequestId,
+        CurrentRunId = x.CurrentRunId, ResultCode = x.ResultCode, ErrorCode = x.ErrorCode,
+        LastRequestAt = x.LastRequestAt, LastResultAt = x.LastResultAt, LastError = x.LastError,
+    };
 
     private static WorkflowProjectDeploymentDto MapDeploymentDto(
         WorkflowProjectDeployment deployment

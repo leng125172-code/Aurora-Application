@@ -40,6 +40,13 @@ export enum DeviceFaultLevel {
     SafetyFault = 3,
 }
 
+export enum DeviceFaultSource {
+    System = 0,
+    Camera = 1,
+    Plc = 2,
+    Workflow = 3,
+}
+
 export enum StateChangeTrigger {
     UserManual = 0,
     SystemAuto = 1,
@@ -70,6 +77,17 @@ export interface DeviceFaultDto {
     readonly faultCode: string | null
     readonly faultMessage: string | null
     readonly faultReason: string | null
+    readonly source: DeviceFaultSource
+    readonly deviceId: string | null
+    readonly deviceName: string | null
+    readonly workflowProjectId: string | null
+    readonly workflowProjectName: string | null
+    readonly workflowRunId: string | null
+    readonly workflowId: string | null
+    readonly workflowName: string | null
+    readonly workflowNodeId: string | null
+    readonly lastOccurredAt: string
+    readonly occurrenceCount: number
     readonly isResolved: boolean
     readonly isAutoRecovered: boolean
     readonly resolverId: string | null
@@ -121,6 +139,7 @@ export interface GetFaultPagedInput {
     readonly maxResultCount?: number
     readonly sorting?: string | null
     readonly faultLevel?: DeviceFaultLevel | null
+    readonly source?: DeviceFaultSource | null
     readonly isResolved?: boolean | null
     readonly startTime?: string | null
     readonly endTime?: string | null

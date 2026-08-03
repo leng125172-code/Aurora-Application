@@ -7,6 +7,7 @@ namespace AuroraStruct3D.DeviceState;
 /// </summary>
 public interface IDeviceFaultRepository : IRepository<DeviceFault, Guid>
 {
+    Task<DeviceFault?> FindUnresolvedByFingerprintAsync(string fingerprint, CancellationToken cancellationToken = default);
     /// <summary>
     /// 分页查询故障记录，按发生时间倒序
     /// </summary>
@@ -20,6 +21,7 @@ public interface IDeviceFaultRepository : IRepository<DeviceFault, Guid>
     Task<List<DeviceFault>> GetPagedListAsync(
         int skipCount,
         int maxResultCount,
+        DeviceFaultSource? source = null,
         DeviceFaultLevel? faultLevel = null,
         bool? isResolved = null,
         DateTime? startTime = null,
@@ -29,6 +31,7 @@ public interface IDeviceFaultRepository : IRepository<DeviceFault, Guid>
 
     /// <summary>统计故障记录总数</summary>
     Task<long> GetCountAsync(
+        DeviceFaultSource? source = null,
         DeviceFaultLevel? faultLevel = null,
         bool? isResolved = null,
         DateTime? startTime = null,

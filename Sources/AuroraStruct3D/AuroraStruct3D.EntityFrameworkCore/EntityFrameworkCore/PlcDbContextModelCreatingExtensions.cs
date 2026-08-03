@@ -20,7 +20,9 @@ public static class PlcDbContextModelCreatingExtensions
                 .IsRequired()
                 .HasMaxLength(PlcConsts.MaxSecurityPolicyLength);
             b.Property(x => x.LastError).HasMaxLength(PlcConsts.MaxErrorLength);
-            b.HasIndex(x => x.Name).IsUnique();
+            b.HasIndex(x => x.Name)
+                .IsUnique()
+                .HasFilter("\"IsDeleted\" = false");
             b.HasIndex(x => new { x.DriverId, x.EndpointUrl });
         });
 

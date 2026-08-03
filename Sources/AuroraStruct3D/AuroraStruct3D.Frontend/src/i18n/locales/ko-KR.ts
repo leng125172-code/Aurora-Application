@@ -39,6 +39,8 @@ export default {
         loginFailed: '로그인 실패, 자격 증명을 확인하세요',
     },
     menu: {
+        visualApplications: '비전 애플리케이션',
+        visualSolutions: '비전 솔루션',
         dashboard: '대시보드',
         swagger: 'API 문서',
         cap: 'CAP 메시지',
@@ -76,6 +78,17 @@ export default {
         cameraLogs: '작업 기록',
         management: '관리',
         operationLogs: '작업 기록',
+    },
+    projectManagement: {
+        title: '비전 솔루션', subtitle: '비전 프로젝트, 워크플로 및 배포 상태를 관리합니다', refresh: '새로 고침', create: '새 프로젝트',
+        searchPlaceholder: '프로젝트 코드 또는 이름 검색', search: '검색', reset: '초기화', allStatuses: '모든 상태',
+        statusActive: '진행 중', statusSuspended: '일시 중지', statusCompleted: '완료', statusArchived: '보관됨',
+        sortNewest: '최신순', sortOldest: '오래된순', sortName: '이름순', sortCode: '코드순',
+        project: '프로젝트', status: '상태', workflows: '워크플로', deployment: '활성 배포', noDeployment: '배포 안 됨', audit: '생성자 / 업데이트', actions: '작업',
+        workflow: '워크플로 구성', edit: '편집', delete: '삭제', empty: '비전 솔루션이 없습니다', total: '총 {total}개 프로젝트', previous: '이전', next: '다음',
+        createTitle: '비전 프로젝트 만들기', editTitle: '비전 프로젝트 편집', code: '프로젝트 코드', name: '프로젝트 이름', version: '버전', description: '설명', save: '저장', cancel: '취소',
+        codeRequired: '프로젝트 코드를 입력하세요', nameRequired: '프로젝트 이름을 입력하세요', versionRequired: '버전을 입력하세요', created: '프로젝트가 생성되었습니다', updated: '프로젝트가 업데이트되었습니다', statusChanged: '프로젝트 상태가 업데이트되었습니다', deleted: '프로젝트가 삭제되었습니다',
+        deleteTitle: '비전 프로젝트 삭제', deleteMessage: '“{code} · {name}”을 삭제하시겠습니까? 워크플로 {workflows}개, {deployment}.', deleteDeployment: '활성 배포 rev {revision}', deleteNoDeployment: '활성 배포 없음',
     },
     layout: {
         logout: '로그아웃',
@@ -1390,7 +1403,6 @@ export default {
         step4HomeCompleted: '원점복귀 테스트가 완료되었고 절차에 따라 드라이버 인에이블을 해제했습니다.',
         step4HomeWaitTimeout:
             '원점복귀 테스트는 시작되었지만 대기 시간 안에 완료 비트를 확인하지 못했습니다. 실시간 모니터링과 현장 상태를 계속 확인해 주세요.',
-        step4HomeMoveAfterNotImplemented: '원점복귀 후 이동용 32비트 정지 위치 쓰기는 아직 구현되지 않았습니다.',
 
         // Step 5 카메라 정사 캘리브레이션
         step5BoardConfigTitle: '캘리브레이션 보드 설정',

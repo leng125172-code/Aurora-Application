@@ -1,4 +1,5 @@
 using System.Globalization;
+using AuroraStruct3D.OpenCV.Workflow;
 
 namespace AuroraStruct3D.OpenCV.RoiOps;
 
@@ -183,13 +184,17 @@ public class annotate_height_diff_result : IOperator
 
     private static void DrawMeasurementText(Mat output, string text, int y)
     {
+        Scalar textColor = WorkflowDisplayThemeAmbient.Current == WorkflowDisplayTheme.Dark
+            ? new Scalar(255, 255, 255, 255)
+            : new Scalar(0, 0, 0, 255);
+
         Cv2.PutText(
             output,
             text,
             new Point(16, y),
             HersheyFonts.HersheySimplex,
             0.55,
-            new Scalar(0, 0, 0, 255),
+            textColor,
             2
         );
     }

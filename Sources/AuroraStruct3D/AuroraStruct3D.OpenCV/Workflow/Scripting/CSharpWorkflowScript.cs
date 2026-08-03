@@ -769,12 +769,29 @@ public static class CSharpWorkflowScript
 
     private static List<OperatorContract> GetOperatorContracts()
     {
-        return typeof(IOperator).Assembly.GetTypes()
+        return AppDomain.CurrentDomain.GetAssemblies()
+            .SelectMany(GetLoadableTypes)
             .Where(x => x.IsClass && !x.IsAbstract && typeof(IOperator).IsAssignableFrom(x))
             .Select(TryCreateContract)
             .Where(x => x is not null)
             .Cast<OperatorContract>()
             .ToList();
+    }
+
+    private static IEnumerable<Type> GetLoadableTypes(Assembly assembly)
+    {
+        try
+        {
+            return assembly.GetTypes();
+        }
+        catch (ReflectionTypeLoadException exception)
+        {
+            return exception.Types.OfType<Type>();
+        }
+        catch (NotSupportedException)
+        {
+            return [];
+        }
     }
 
     private static OperatorContract? TryCreateContract(Type type)

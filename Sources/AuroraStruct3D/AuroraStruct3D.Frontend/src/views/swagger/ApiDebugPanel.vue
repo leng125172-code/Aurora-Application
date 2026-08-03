@@ -55,10 +55,11 @@
 
                 <!-- 请求体 Tab -->
                 <TabPanel value="body" class="mt-3">
-                    <textarea
+                    <Textarea
                         v-model="req.body"
                         rows="8"
-                        class="w-full rounded-md border bg-background p-3 font-mono text-xs resize-y focus:outline-none focus:ring-1 focus:ring-ring"
+                        size="small"
+                        class="w-full font-mono text-xs resize-y"
                         :placeholder="t('swaggerPage.bodyPlaceholder')"
                     />
                 </TabPanel>
@@ -114,6 +115,7 @@ import type { ApiEndpoint, SwaggerDocument, DebugRequest, DebugResponse } from '
 import { executeDebugRequest, generateExampleBody, statusColor } from '@/api/swagger'
 import InputText from 'primevue/inputtext'
 import Button from 'primevue/button'
+import Textarea from 'primevue/textarea'
 import Tabs from 'primevue/tabs'
 import TabList from 'primevue/tablist'
 import Tab from 'primevue/tab'

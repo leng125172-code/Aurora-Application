@@ -653,9 +653,15 @@ public class LeisaiMotorAppService : AuroraStruct3DAppService, ILeisaiMotorAppSe
         int value
     )
     {
-        uint unsigned = (uint)value;
-        await driver.WriteRegisterAsync((ushort)(addressLow - 1), (ushort)(unsigned >> 16));
-        await driver.WriteRegisterAsync(addressLow, (ushort)(unsigned & 0xFFFF));
+        (ushort high, ushort low) = SplitInt32(value);
+        await driver.WriteRegisterAsync((ushort)(addressLow - 1), high);
+        await driver.WriteRegisterAsync(addressLow, low);
+    }
+
+    internal static (ushort High, ushort Low) SplitInt32(int value)
+    {
+        uint unsigned = unchecked((uint)value);
+        return ((ushort)(unsigned >> 16), (ushort)(unsigned & 0xFFFF));
     }
 
     /// <summary>

@@ -1266,7 +1266,7 @@ onMounted(async () => {
         <div v-else class="flex flex-col gap-2">
             <div v-for="cam in cameras" :key="cam.id" class="overflow-hidden rounded-lg border border-border/50">
                 <!-- 相机卡片头部（可折叠） -->
-                <button
+                <Button unstyled type="button"
                     class="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/20"
                     :class="{ 'bg-muted/20': expandedCameraId === cam.id }"
                     @click="toggleCameraExpand(cam.id)"
@@ -1302,7 +1302,7 @@ onMounted(async () => {
 
                     <ChevronDown v-if="expandedCameraId === cam.id" class="size-4 shrink-0 text-muted-foreground" />
                     <ChevronRight v-else class="size-4 shrink-0 text-muted-foreground" />
-                </button>
+                </Button>
 
                 <!-- 展开内容 -->
                 <div v-if="expandedCameraId === cam.id" class="border-t border-border/40 bg-background/20">
@@ -1786,12 +1786,12 @@ onMounted(async () => {
                                                     </div>
 
                                                     <!-- 删除按钮（hover 显示） -->
-                                                    <button
+                                                    <Button unstyled type="button"
                                                         class="absolute right-1 top-1 rounded bg-black/60 p-0.5 opacity-0 transition-opacity group-hover:opacity-100"
                                                         @click.stop="doDeletePhoto(photo, cam.id)"
                                                     >
                                                         <Trash2 class="size-3 text-white" />
-                                                    </button>
+                                                    </Button>
                                                 </div>
                                             </div>
                                         </div>
@@ -1940,12 +1940,12 @@ onMounted(async () => {
                                                         </div>
                                                     </div>
 
-                                                    <button
+                                                    <Button unstyled type="button"
                                                         class="absolute right-1 top-1 rounded bg-black/60 p-0.5 opacity-0 transition-opacity group-hover:opacity-100"
                                                         @click.stop="doDeletePhoto(sample.projectorOffPhoto, cam.id)"
                                                     >
                                                         <Trash2 class="size-3 text-white" />
-                                                    </button>
+                                                    </Button>
                                                 </div>
                                             </div>
                                         </div>
@@ -1997,12 +1997,12 @@ onMounted(async () => {
                                                         }}
                                                     </div>
 
-                                                    <button
+                                                    <Button unstyled type="button"
                                                         class="absolute right-1 top-1 rounded bg-black/60 p-0.5 opacity-0 transition-opacity group-hover:opacity-100"
                                                         @click.stop="doDeletePhoto(photo, cam.id)"
                                                     >
                                                         <Trash2 class="size-3 text-white" />
-                                                    </button>
+                                                    </Button>
                                                 </div>
                                             </div>
                                         </div>

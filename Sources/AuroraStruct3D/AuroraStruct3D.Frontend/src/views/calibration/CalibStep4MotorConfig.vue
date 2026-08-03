@@ -129,8 +129,8 @@ function createDefaultForm(axis: MotorAxisDto, saved?: CalibMotorParamDto): Step
         homingDirection,
         homingMode:
             saved?.homingMode != null ? (saved.homingMode as unknown as LeisaiHomingMode) : LeisaiHomingMode.Limit,
-        moveAfterHome: false,
-        withZSignal: false,
+        moveAfterHome: saved?.moveAfterHome ?? false,
+        withZSignal: saved?.withZSignal ?? false,
         homeStopPosition: saved?.mechanicalOriginPosition != null ? Number(saved.mechanicalOriginPosition) : null,
         homeSpeedRpm: saved?.homeSpeed != null ? Number(saved.homeSpeed) : null,
         homeAccelerationRpm: saved?.homeAcceleration != null ? Number(saved.homeAcceleration) : null,
@@ -247,6 +247,8 @@ function buildSavePayload(axis: MotorAxisDto, form: Step4MotorForm) {
         mechanicalOriginPosition: form.homeStopPosition,
         originDirection: toOriginDirection(form.homingDirection),
         homingMode: form.homingMode as unknown as CalibHomingMode,
+        moveAfterHome: form.moveAfterHome,
+        withZSignal: form.withZSignal,
         positiveSoftLimit: form.positiveSoftLimit,
         negativeSoftLimit: form.negativeSoftLimit,
         homeSpeed: form.homeSpeedRpm,
@@ -272,6 +274,10 @@ async function refreshAxis(axis: MotorAxisDto): Promise<void> {
 async function saveHomeConfig(axis: MotorAxisDto): Promise<void> {
     const form = motorForms.value[axis.id]
     if (!props.project || !form) return
+    if (form.moveAfterHome && form.homeStopPosition == null) {
+        toast.warning(t('calib.step4HomeStopPositionRequired'))
+        return
+    }
 
     setBusy(savingHomeIds, axis.id, true)
     try {
@@ -312,6 +318,10 @@ async function disableHomeConfig(axis: MotorAxisDto): Promise<void> {
 async function testHome(axis: MotorAxisDto): Promise<void> {
     const form = motorForms.value[axis.id]
     if (!form) return
+    if (form.moveAfterHome && form.homeStopPosition == null) {
+        toast.warning(t('calib.step4HomeStopPositionRequired'))
+        return
+    }
 
     if (isKtech(axis)) {
         toast.warning(t('calib.step4HomingUnsupportedKtech'))
@@ -393,7 +403,7 @@ async function saveLimitConfigAction(axis: MotorAxisDto): Promise<void> {
                         class="flex items-center gap-3 px-4 py-3 transition-colors"
                         :class="{ 'bg-muted/20': expandedMotorId === axis.id }"
                     >
-                        <button
+                        <Button unstyled type="button"
                             class="flex min-w-0 flex-1 items-center gap-3 text-left"
                             @click="toggleMotorExpand(axis.id)"
                         >
@@ -413,7 +423,7 @@ async function saveLimitConfigAction(axis: MotorAxisDto): Promise<void> {
                                 class="size-4 shrink-0 text-muted-foreground"
                             />
                             <ChevronRight v-else class="size-4 shrink-0 text-muted-foreground" />
-                        </button>
+                        </Button>
                         <Button
                             severity="secondary"
                             outlined
@@ -473,6 +483,9 @@ async function saveLimitConfigAction(axis: MotorAxisDto): Promise<void> {
                                             v-model="motorForms[axis.id].positiveSoftLimit"
                                             size="small"
                                             :use-grouping="false"
+                                            :min="-2147483648"
+                                            :max="2147483647"
+                                            :max-fraction-digits="0"
                                             class="w-full"
                                             :input-class="'!text-xs !h-7 !py-0'"
                                             :disabled="isLeisai(axis) && motorForms[axis.id].limitEnabled"

@@ -6,8 +6,10 @@
     "description": "AuroraStruct3D 前端 SPA（Vue 3 + Vite + TypeScript + shadcn-vue + Inspira UI）",
     "scripts": {
         "dev": "vite",
+        "dev:local-test": "vite --mode local-test",
         "build": "vite build --mode debug",
         "build:debug": "vite build --mode debug",
+        "build:local-test": "vite build --mode local-test",
         "build:release": "vite build --mode release",
         "preview": "vite preview",
         "lint": "eslint . --ext .ts,.vue",

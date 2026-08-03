@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Text.Json;
 using AuroraStruct3D.DeviceState;
 using AuroraStruct3D.Sessions;
+using Microsoft.AspNetCore.Mvc;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Domain.Repositories;
@@ -13,7 +14,8 @@ namespace AuroraStruct3D.Plcs;
 public class PlcDeviceAppService
     : AuroraStruct3DAppService,
         IPlcDeviceAppService,
-        IPlcTagAccessor
+        IPlcTagAccessor,
+        IPlcWorkflowTagAccessor
 {
     private readonly IRepository<PlcDevice, Guid> _devices;
     private readonly IRepository<PlcTag, Guid> _tags;
@@ -98,6 +100,12 @@ public class PlcDeviceAppService
     {
         await EnsureWriteControlAsync(id);
         EnsureInstalledAndMatching(input.DriverId, input.Protocol);
+        if (
+            await AsyncExecuter.AnyAsync(
+                (await _devices.GetQueryableAsync()).Where(x => x.Id != id && x.Name == input.Name)
+            )
+        )
+            throw new UserFriendlyException($"PLC 名称已存在：{input.Name}");
         PlcDevice device = await _devices.GetAsync(id);
         device.SetConfiguration(input.Name, input.Protocol, input.DriverId, input.EndpointUrl);
         Apply(device, input);
@@ -324,16 +332,29 @@ public class PlcDeviceAppService
 
     public async Task UnsubscribeAsync(Guid id, string subscriptionId)
     {
-        PlcDevice device = await _devices.GetAsync(id);
-        IPlcDriver driver = Resolve(device);
-        if (driver is IPlcSubscriptionDriver subscriptions)
+        try
         {
-            IPlcConnection connection = await ConnectCoreAsync(device);
-            await subscriptions.UnsubscribeAsync(connection, subscriptionId);
+            // 掉线时禁止为取消订阅而发起重连；连接释放后服务端订阅已失效。
+            if (_connections.GetStatus(id) != PlcConnectionStatus.Connected)
+                return;
+
+            PlcDevice device = await _devices.GetAsync(id);
+            IPlcDriver driver = Resolve(device);
+            if (driver is IPlcSubscriptionDriver subscriptions)
+            {
+                IPlcConnection connection = await ConnectCoreAsync(device);
+                await subscriptions.UnsubscribeAsync(connection, subscriptionId);
+            }
         }
-        _subscriptionTracker.Remove(subscriptionId);
+        finally
+        {
+            // 无论 OPC UA 服务端是否可达，均必须解除本地跟踪，防止断线后重复重连。
+            _subscriptionTracker.Remove(subscriptionId);
+        }
     }
 
+    [RemoteService(false)]
+    [NonAction]
     public async Task<IReadOnlyList<PlcTagValueDto>> ReadByCodesAsync(
         Guid plcDeviceId,
         IReadOnlyList<string> tagCodes,
@@ -349,6 +370,8 @@ public class PlcDeviceAppService
         return await ReadCoreAsync(plcDeviceId, tags, cancellationToken);
     }
 
+    [RemoteService(false)]
+    [NonAction]
     public async Task<IReadOnlyList<PlcWriteResultDto>> WriteByCodesAsync(
         Guid plcDeviceId,
         IReadOnlyDictionary<string, object?> values,
@@ -363,6 +386,18 @@ public class PlcDeviceAppService
             cancellationToken
         );
         return await WriteCoreAsync(plcDeviceId, tags, values, cancellationToken);
+    }
+
+    [RemoteService(false)]
+    [NonAction]
+    public async Task<IReadOnlyList<PlcWriteResultDto>> WriteByCodesAsync(
+        Guid plcDeviceId, IReadOnlyDictionary<string, object?> values,
+        WorkflowPlcOperationContext context, CancellationToken cancellationToken = default)
+    {
+        List<PlcTag> tags = await AsyncExecuter.ToListAsync(
+            (await _tags.GetQueryableAsync()).Where(x => x.PlcDeviceId == plcDeviceId && values.Keys.Contains(x.Code)), cancellationToken);
+        return await WriteCoreAsync(plcDeviceId, tags, values, cancellationToken,
+            $"工作流写入 run={context.ProjectRunId}; execution={context.ExecutionId}; node={context.NodeId}");
     }
 
     private async Task<IReadOnlyList<PlcTagValueDto>> ReadCoreAsync(
@@ -386,7 +421,8 @@ public class PlcDeviceAppService
         Guid id,
         List<PlcTag> tags,
         IReadOnlyDictionary<string, object?> values,
-        CancellationToken cancellationToken = default
+        CancellationToken cancellationToken = default,
+        string? auditSummary = null
     )
     {
         PlcDevice device = await _devices.GetAsync(id);
@@ -430,7 +466,7 @@ public class PlcDeviceAppService
                 result.TagId,
                 PlcOperationType.Write,
                 result.Success,
-                result.Success ? "点位写入" : null,
+                result.Success ? auditSummary ?? "点位写入" : auditSummary,
                 result.Error
             );
         return mapped;

@@ -40,6 +40,15 @@ public interface IPlcTagAccessor
     );
 }
 
+/// <summary>Restricted PLC access surface for workflow infrastructure operators.</summary>
+public interface IPlcWorkflowTagAccessor
+{
+    Task<IReadOnlyList<PlcTagValueDto>> ReadByCodesAsync(Guid plcDeviceId, IReadOnlyList<string> tagCodes, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<PlcWriteResultDto>> WriteByCodesAsync(Guid plcDeviceId, IReadOnlyDictionary<string, object?> values, WorkflowPlcOperationContext context, CancellationToken cancellationToken = default);
+}
+
+public sealed record WorkflowPlcOperationContext(Guid? ProjectRunId, Guid ExecutionId, string? NodeId);
+
 public interface IPlcRealtimeNotifier
 {
     Task ValueChangedAsync(string connectionId, PlcTagValueDto value);

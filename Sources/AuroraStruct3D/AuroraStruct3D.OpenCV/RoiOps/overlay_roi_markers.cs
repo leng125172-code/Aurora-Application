@@ -125,6 +125,7 @@ public class overlay_roi_markers : IOperator
         for (int i = 0; i < roiCount; i++)
         {
             Scalar fillColor = ResolveColor(i);
+            // ROI 选区边框和名称保持黑色，不随结果展示主题变化。
             Scalar annotationColor = new(0, 0, 0, 255);
             Mat? mask = roiMasks is not null && i < roiMasks.Count ? roiMasks[i] : null;
             RoiMetadata? roi = metadata is not null && i < metadata.Rois.Count ? metadata.Rois[i] : null;
@@ -315,4 +316,5 @@ public class overlay_roi_markers : IOperator
 
         return palette[index % palette.Length];
     }
+
 }

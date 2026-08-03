@@ -24,6 +24,8 @@ public static class WorkflowProjectTaskConfigDbContextModelCreatingExtensions
             b.Property(x => x.ProjectId).IsRequired();
             b.Property(x => x.TaskType).IsRequired();
             b.Property(x => x.CycleIntervalSeconds);
+            b.Property(x => x.ResultWorkflowId);
+            b.Property(x => x.ResultVariableName).HasMaxLength(128);
 
             b.HasIndex(x => x.ProjectId).IsUnique();
         });

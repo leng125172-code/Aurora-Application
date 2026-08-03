@@ -18,6 +18,7 @@ import {
     Box,
     ScanLine,
     GitBranch,
+    FolderKanban,
     ChevronDown,
     ChevronRight,
 } from '@lucide/vue'
@@ -68,6 +69,17 @@ function navigate(path: string, tab?: string): void {
     <aside class="flex h-full w-56 flex-col border-r bg-card/40 backdrop-blur">
         <div class="flex h-14 items-center border-b px-4 text-base font-semibold">AuroraStruct3D</div>
         <nav class="flex-1 space-y-1 overflow-y-auto p-2">
+            <div class="px-3 py-1 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                {{ t('menu.visualApplications') }}
+            </div>
+            <button
+                :class="cn('flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors text-left', isExactActive('/projects') ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground')"
+                @click="navigate('/projects')"
+            >
+                <FolderKanban class="size-4 shrink-0" />
+                {{ t('menu.visualSolutions') }}
+            </button>
+
             <!-- 工具监控 -->
             <div class="px-3 py-1 text-xs font-medium text-muted-foreground uppercase tracking-wider">
                 {{ t('menu.tools') }}

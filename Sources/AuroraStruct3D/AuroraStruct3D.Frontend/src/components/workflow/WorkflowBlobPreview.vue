@@ -7,9 +7,11 @@ import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js'
 import { PCDLoader } from 'three/examples/jsm/loaders/PCDLoader.js'
 import { PLYLoader } from 'three/examples/jsm/loaders/PLYLoader.js'
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js'
+import Button from 'primevue/button'
 
 import { httpClient } from '@/api/client'
 import WorkflowJsonTree from '@/components/workflow/WorkflowJsonTree.vue'
+import { useThemeStore } from '@/stores/theme'
 import {
     workflowResultFileExtension,
     workflowResultFileName,
@@ -20,6 +22,7 @@ const props = defineProps<{
     blobKey: string
     presentation: WorkflowResultPresentation
 }>()
+const themeStore = useThemeStore()
 
 const loading = ref(false)
 const error = ref('')
@@ -32,6 +35,52 @@ let renderer: THREE.WebGLRenderer | undefined
 let controls: OrbitControls | undefined
 let animationFrame = 0
 let sceneObject: THREE.Object3D | undefined
+let gridHelper: THREE.GridHelper | undefined
+
+function themeForegroundColor() {
+    return themeStore.isDark ? 0xffffff : 0x000000
+}
+
+function applyThreeTheme() {
+    const color = themeForegroundColor()
+    if (sceneObject) {
+        sceneObject.traverse((child) => {
+            if (child instanceof THREE.Line || child instanceof THREE.LineSegments) {
+                const materials = Array.isArray(child.material) ? child.material : [child.material]
+                materials.forEach((material) => {
+                    if (material instanceof THREE.LineBasicMaterial) material.color.setHex(color)
+                })
+            } else if (child instanceof THREE.Points) {
+                const material = child.material
+                if (material instanceof THREE.PointsMaterial && !child.geometry.hasAttribute('color')) {
+                    material.color.setHex(color)
+                }
+            } else if (child instanceof THREE.Mesh) {
+                const materials = Array.isArray(child.material) ? child.material : [child.material]
+                materials.forEach((material) => {
+                    if (
+                        material instanceof THREE.MeshBasicMaterial
+                        || material instanceof THREE.MeshStandardMaterial
+                        || material instanceof THREE.MeshPhongMaterial
+                    ) {
+                        if (material.wireframe) material.color.setHex(color)
+                    }
+                })
+            }
+        })
+    }
+
+    if (gridHelper) {
+        const materials = Array.isArray(gridHelper.material)
+            ? gridHelper.material
+            : [gridHelper.material]
+        materials.forEach((material) => {
+            if (material instanceof THREE.LineBasicMaterial) {
+                material.color.setHex(themeStore.isDark ? 0x475569 : 0x94a3b8)
+            }
+        })
+    }
+}
 
 async function fetchBlob(): Promise<Blob> {
     const endpoint = props.presentation === 'image'
@@ -66,6 +115,7 @@ function disposeThree() {
     controls = undefined
     if (sceneObject) disposeObject(sceneObject)
     sceneObject = undefined
+    gridHelper = undefined
     renderer?.dispose()
     renderer = undefined
 }
@@ -91,7 +141,7 @@ function pointsFromGeometry(geometry: THREE.BufferGeometry): THREE.Points {
         geometry,
         new THREE.PointsMaterial({
             size: 0.02,
-            color: 0x22d3ee,
+            color: themeForegroundColor(),
             vertexColors: geometry.hasAttribute('color'),
             sizeAttenuation: true,
         }),
@@ -136,17 +186,24 @@ async function initThree(buffer: ArrayBuffer) {
     const canvas = canvasRef.value
     if (!canvas) return
 
-    renderer = new THREE.WebGLRenderer({ canvas, antialias: true })
+    renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true })
+    renderer.setClearColor(0x000000, 0)
     renderer.setPixelRatio(window.devicePixelRatio)
     renderer.setSize(canvas.clientWidth || 720, canvas.clientHeight || 360, false)
 
     const scene = new THREE.Scene()
-    scene.background = new THREE.Color(0x111827)
+    scene.background = null
     scene.add(new THREE.AmbientLight(0xffffff, 0.8))
     const light = new THREE.DirectionalLight(0xffffff, 1)
     light.position.set(5, 10, 7)
     scene.add(light)
-    scene.add(new THREE.GridHelper(10, 10, 0x475569, 0x334155))
+    gridHelper = new THREE.GridHelper(
+        10,
+        10,
+        themeStore.isDark ? 0x64748b : 0x64748b,
+        themeStore.isDark ? 0x334155 : 0xcbd5e1,
+    )
+    scene.add(gridHelper)
 
     const camera = new THREE.PerspectiveCamera(
         60,
@@ -158,6 +215,7 @@ async function initThree(buffer: ArrayBuffer) {
     controls.enableDamping = true
 
     sceneObject = await parseThreeObject(buffer)
+    applyThreeTheme()
     scene.add(sceneObject)
     const box = new THREE.Box3().setFromObject(sceneObject)
     const center = box.getCenter(new THREE.Vector3())
@@ -231,6 +289,7 @@ async function downloadBlob() {
 }
 
 watch(() => [props.blobKey, props.presentation], () => void loadPreview())
+watch(() => themeStore.isDark, () => applyThreeTheme())
 onMounted(() => void loadPreview())
 onBeforeUnmount(() => {
     clearObjectUrl()
@@ -239,26 +298,26 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-    <div class="rounded border border-border bg-background p-3">
+    <div class="overflow-hidden rounded-lg border border-border bg-background p-3 shadow-sm">
         <div class="mb-2 flex items-center justify-between gap-3">
             <div class="min-w-0">
                 <div class="truncate font-medium">{{ workflowResultFileName(blobKey) }}</div>
                 <div class="truncate text-xs text-muted-foreground">{{ blobKey }}</div>
             </div>
-            <button class="ide-button shrink-0" type="button" @click="downloadBlob">下载</button>
+            <Button size="small" severity="secondary" outlined label="下载" @click="downloadBlob" />
         </div>
         <div v-if="loading" class="py-6 text-center text-muted-foreground">正在加载预览…</div>
-        <div v-else-if="error" class="rounded bg-red-500/10 px-3 py-2 text-red-600">{{ error }}</div>
+        <div v-else-if="error" class="rounded border border-red-500/25 bg-red-500/10 px-3 py-2 text-red-600 dark:text-red-400">{{ error }}</div>
         <img
             v-else-if="presentation === 'image' && objectUrl"
             :src="objectUrl"
-            class="max-h-[28rem] max-w-full rounded object-contain"
+            class="mx-auto max-h-[28rem] max-w-full rounded object-contain"
             alt="工作流结果图片"
         />
         <canvas
             v-else-if="presentation === 'point-cloud' || presentation === 'model-3d'"
             ref="canvasRef"
-            class="h-[24rem] w-full rounded"
+            class="h-[clamp(16rem,42vh,24rem)] w-full rounded bg-muted/30"
         />
         <div
             v-else-if="presentation === 'json-file'"

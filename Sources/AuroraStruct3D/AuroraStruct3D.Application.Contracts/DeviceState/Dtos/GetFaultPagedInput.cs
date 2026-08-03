@@ -7,6 +7,9 @@ namespace AuroraStruct3D.DeviceState;
 /// </summary>
 public class GetFaultPagedInput : PagedAndSortedResultRequestDto
 {
+    /// <summary>按故障来源过滤（可选）</summary>
+    public DeviceFaultSource? Source { get; set; }
+
     /// <summary>按故障等级过滤（可选）</summary>
     public DeviceFaultLevel? FaultLevel { get; set; }
 

@@ -72,6 +72,13 @@ public interface IWorkflowRuntimeAppService : IApplicationService
     Task<WorkflowProjectRunEnqueueResultDto> EnqueueProjectRunAsync(
         WorkflowProjectRunEnqueueInput input
     );
+    Task<List<WorkflowPlcTriggerDto>> GetPlcTriggersAsync(Guid projectId);
+    Task<WorkflowPlcTriggerDto> SavePlcTriggerAsync(Guid? id, SaveWorkflowPlcTriggerInput input);
+    Task DeletePlcTriggerAsync(Guid id);
+    Task<WorkflowPlcHandshakeConfigDto> GetPlcHandshakeAsync(Guid projectId);
+    Task<WorkflowPlcHandshakeConfigDto> SavePlcHandshakeAsync(Guid projectId, SaveWorkflowPlcHandshakeConfigInput input);
+    Task<WorkflowPlcHandshakeStatusDto> GetPlcHandshakeStatusAsync(Guid projectId);
+    Task<WorkflowPlcHandshakeStatusDto> ResetPlcHandshakeAsync(Guid projectId);
 
     /// <summary>
     /// 查询项目运行列表。

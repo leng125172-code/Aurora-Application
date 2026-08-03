@@ -50,16 +50,22 @@ namespace AuroraStruct3D
 
             // 注册 OpenCV 算子注册表服务（IOperatorRegistry + Redis 缓存 + 启动时自动扫描算子）
             // 依赖：IDistributedCache（Redis）须已在 HttpApi.Host 完成注册
-            context.Services.AddOpenCVServices();
+            context.Services.AddOpenCVServices(typeof(AuroraStruct3DApplicationModule).Assembly);
 
             // 注册 AI 模型运行时服务为单例
             context.Services.AddAiServices();
 
             // 注册TUCam相机服务为单例
-        context.Services.AddTucamCameraDriver();
+            context.Services.AddTucamCameraDriver();
             context.Services.AddPlcCommunication();
+            context.Services.AddTransient<IPlcTagAccessor>(sp =>
+                (IPlcTagAccessor)sp.GetRequiredService<IPlcDeviceAppService>());
+            context.Services.AddTransient<IPlcWorkflowTagAccessor>(sp =>
+                (IPlcWorkflowTagAccessor)sp.GetRequiredService<IPlcDeviceAppService>());
             context.Services.AddSingleton<IPlcRealtimeNotifier, NullPlcRealtimeNotifier>();
             context.Services.AddSingleton<IPlcSubscriptionTracker, PlcSubscriptionTracker>();
+            context.Services.AddHostedService<WorkflowPlcTriggerHostedService>();
+            context.Services.AddHostedService<WorkflowPlcHandshakeHostedService>();
 
             // 注册RS485电机控制服务为单例
             context.Services.AddRS485MotorServices();

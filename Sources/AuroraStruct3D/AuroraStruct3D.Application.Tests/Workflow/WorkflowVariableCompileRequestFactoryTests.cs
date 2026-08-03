@@ -11,6 +11,17 @@ namespace AuroraStruct3D.Application.Tests.Workflow;
 
 public class WorkflowVariableCompileRequestFactoryTests
 {
+    [Theory]
+    [InlineData("System.Double")]
+    [InlineData("System.Boolean")]
+    [InlineData("System.String")]
+    public void IsCompatible_Should_Allow_Any_Runtime_Type_For_Object(string runtimeType)
+    {
+        Assert.True(
+            WorkflowExecutionTypeNormalizer.IsCompatible("System.Object", runtimeType)
+        );
+    }
+
     [Fact]
     public void NormalizeDeclaredType_Should_Shorten_Generic_Clr_Type_Name()
     {

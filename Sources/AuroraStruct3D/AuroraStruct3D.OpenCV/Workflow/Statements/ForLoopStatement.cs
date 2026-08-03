@@ -82,4 +82,16 @@ public sealed class ForLoopStatement : IWorkflowStatement
             }
         }
     }
+
+    public async Task ExecuteAsync(IWorkflowContext context, CancellationToken cancellationToken = default)
+    {
+        if (Step == 0) throw new InvalidOperationException("ForLoop step cannot be zero.");
+        for (double value = From; Step > 0 ? value <= To : value >= To; value += Step)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            context.Set(VariableName, value);
+            foreach (IWorkflowStatement statement in Body)
+                await statement.ExecuteAsync(context, cancellationToken);
+        }
+    }
 }

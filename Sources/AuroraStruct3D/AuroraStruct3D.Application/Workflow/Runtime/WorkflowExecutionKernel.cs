@@ -449,6 +449,9 @@ public sealed class WorkflowExecutionSession : IDisposable
     /// <summary>执行模式。</summary>
     public WorkflowExecutionMode Mode { get; init; }
 
+    /// <summary>创建该会话的客户端显示主题；后台调试继续执行时仍须保留。</summary>
+    public WorkflowDisplayTheme DisplayTheme { get; set; } = WorkflowDisplayTheme.Light;
+
     /// <summary>总轮次。</summary>
     public int LoopCount { get; init; } = 1;
 

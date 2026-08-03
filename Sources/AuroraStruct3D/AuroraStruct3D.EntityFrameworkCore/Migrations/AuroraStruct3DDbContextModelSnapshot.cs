@@ -731,11 +731,21 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                     b.Property<int>("HomingMode")
                         .HasColumnType("integer");
 
+                    b.Property<bool>("MoveAfterHome")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
                     b.Property<bool>("IsDeleted")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
                         .HasDefaultValue(false)
                         .HasColumnName("IsDeleted");
+
+                    b.Property<bool>("WithZSignal")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
 
                     b.Property<bool>("IsOriginLocked")
                         .HasColumnType("boolean");
@@ -1526,6 +1536,13 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                         .HasColumnType("timestamp without time zone")
                         .HasColumnName("DeletionTime");
 
+                    b.Property<Guid?>("DeviceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("DeviceName")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
                     b.Property<long?>("DurationMs")
                         .HasColumnType("bigint");
 
@@ -1549,6 +1566,10 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                         .HasMaxLength(512)
                         .HasColumnType("character varying(512)");
 
+                    b.Property<string>("Fingerprint")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
                     b.Property<bool>("IsAutoRecovered")
                         .HasColumnType("boolean");
 
@@ -1569,8 +1590,14 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("LastModifierId");
 
+                    b.Property<DateTime>("LastOccurredAt")
+                        .HasColumnType("timestamp without time zone");
+
                     b.Property<DateTime>("OccurredAt")
                         .HasColumnType("timestamp without time zone");
+
+                    b.Property<int>("OccurrenceCount")
+                        .HasColumnType("integer");
 
                     b.Property<string>("Remark")
                         .HasMaxLength(512)
@@ -1591,11 +1618,35 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
 
+                    b.Property<int>("Source")
+                        .HasColumnType("integer");
+
                     b.Property<Guid?>("StateLogId")
                         .HasColumnType("uuid");
 
                     b.Property<int?>("SwitchedToMode")
                         .HasColumnType("integer");
+
+                    b.Property<Guid?>("WorkflowId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("WorkflowName")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("WorkflowNodeId")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<Guid?>("WorkflowProjectId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("WorkflowProjectName")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<Guid?>("WorkflowRunId")
+                        .HasColumnType("uuid");
 
                     b.HasKey("Id");
 
@@ -1606,6 +1657,8 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                     b.HasIndex("OccurredAt");
 
                     b.HasIndex("IsResolved", "FaultLevel");
+
+                    b.HasIndex("IsResolved", "Fingerprint");
 
                     b.ToTable("AbpProDeviceFaults", (string)null);
                 });
@@ -2370,7 +2423,8 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("Name")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("\"IsDeleted\" = false");
 
                     b.HasIndex("DriverId", "EndpointUrl");
 
@@ -3473,6 +3527,229 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                     b.ToTable("AbpProWorkflowMigrationBatches", (string)null);
                 });
 
+            modelBuilder.Entity("AuroraStruct3D.Workflow.WorkflowPlcHandshakeConfig", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AckRequestIdTagId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CanCaptureTagId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CaptureAckTagId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CaptureRequestTagId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ConcurrencyStamp")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("ConcurrencyStamp");
+
+                    b.Property<DateTime>("CreationTime")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("CreationTime");
+
+                    b.Property<Guid?>("CreatorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("CreatorId");
+
+                    b.Property<int>("CurrentRequestId")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("CurrentRunId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("DeleterId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("DeleterId");
+
+                    b.Property<DateTime?>("DeletionTime")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("DeletionTime");
+
+                    b.Property<Guid>("DeviceStatusTagId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("ErrorCode")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("ErrorCodeTagId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ExtraProperties")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("ExtraProperties");
+
+                    b.Property<Guid>("HeartbeatTagId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("IsDeleted");
+
+                    b.Property<bool>("IsEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("LastCompletedRequestId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
+
+                    b.Property<DateTime?>("LastModificationTime")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("LastModificationTime");
+
+                    b.Property<Guid?>("LastModifierId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("LastModifierId");
+
+                    b.Property<DateTime?>("LastRequestAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<DateTime?>("LastResultAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<int>("Phase")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("PlcDeviceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("RequestIdTagId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ResultAckIdTagId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ResultAckTagId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("ResultCode")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("ResultCodeTagId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ResultRequestIdTagId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ResultValidTagId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TaskStatusTagId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CurrentRunId");
+
+                    b.HasIndex("PlcDeviceId")
+                        .IsUnique()
+                        .HasFilter("\"IsEnabled\" = true AND \"IsDeleted\" = false");
+
+                    b.HasIndex("ProjectId")
+                        .IsUnique();
+
+                    b.ToTable("AbpProWorkflowPlcHandshakeConfigs", (string)null);
+                });
+
+            modelBuilder.Entity("AuroraStruct3D.Workflow.WorkflowPlcTrigger", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ConcurrencyStamp")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("ConcurrencyStamp");
+
+                    b.Property<DateTime>("CreationTime")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("CreationTime");
+
+                    b.Property<Guid?>("CreatorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("CreatorId");
+
+                    b.Property<Guid?>("DeleterId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("DeleterId");
+
+                    b.Property<DateTime?>("DeletionTime")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("DeletionTime");
+
+                    b.Property<string>("ExpectedValueJson")
+                        .IsRequired()
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
+                    b.Property<string>("ExtraProperties")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("ExtraProperties");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("IsDeleted");
+
+                    b.Property<bool>("IsEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime?>("LastModificationTime")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("LastModificationTime");
+
+                    b.Property<Guid?>("LastModifierId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("LastModifierId");
+
+                    b.Property<string>("LastSkipReason")
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
+
+                    b.Property<DateTime?>("LastTriggeredAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<Guid>("PlcDeviceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("PlcTagId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("uuid");
+
+                    b.Property<double>("Tolerance")
+                        .HasColumnType("double precision");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProjectId");
+
+                    b.HasIndex("PlcDeviceId", "PlcTagId", "IsEnabled");
+
+                    b.ToTable("AbpProWorkflowPlcTriggers", (string)null);
+                });
+
             modelBuilder.Entity("AuroraStruct3D.Workflow.WorkflowProjectDeployment", b =>
                 {
                     b.Property<Guid>("Id")
@@ -3626,6 +3903,16 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                     b.Property<string>("HangfireJobId")
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
+
+                    b.Property<int>("InspectionDecision")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("InspectionErrorCode")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("InspectionErrorMessage")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
 
                     b.Property<bool>("IsCancelRequested")
                         .HasColumnType("boolean");
@@ -3807,6 +4094,13 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                         .HasColumnName("LastModifierId");
 
                     b.Property<Guid>("ProjectId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ResultVariableName")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<Guid?>("ResultWorkflowId")
                         .HasColumnType("uuid");
 
                     b.Property<int>("TaskType")

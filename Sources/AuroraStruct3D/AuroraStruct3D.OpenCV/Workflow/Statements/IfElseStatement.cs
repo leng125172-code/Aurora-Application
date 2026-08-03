@@ -72,4 +72,11 @@ public sealed class IfElseStatement : IWorkflowStatement
             statement.Execute(context);
         }
     }
+
+    public async Task ExecuteAsync(IWorkflowContext context, CancellationToken cancellationToken = default)
+    {
+        IReadOnlyList<IWorkflowStatement> statements = Condition(context) ? ThenBody : ElseBody;
+        foreach (IWorkflowStatement statement in statements)
+            await statement.ExecuteAsync(context, cancellationToken);
+    }
 }

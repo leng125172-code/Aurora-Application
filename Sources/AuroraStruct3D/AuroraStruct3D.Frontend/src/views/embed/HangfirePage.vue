@@ -14,6 +14,7 @@ import Button from 'primevue/button'
 import Tag from 'primevue/tag'
 import { AppCard } from '@/components/primevue'
 import { useAppToast } from '@/composables/useAppToast'
+import { useAppConfirm } from '@/composables/useAppConfirm'
 import { httpClient } from '@/api/client'
 import { useAuthStore } from '@/stores/auth'
 import { useThemeStore } from '@/stores/theme'
@@ -23,6 +24,7 @@ const route = useRoute()
 const authStore = useAuthStore()
 const themeStore = useThemeStore()
 const toast = useAppToast()
+const confirmAction = useAppConfirm()
 
 const activeTab = computed(() => (route.query.tab as string) || 'dashboard')
 
@@ -225,7 +227,7 @@ async function requeueJob(jobId: string): Promise<void> {
 }
 
 async function deleteJob(jobId: string): Promise<void> {
-    if (!confirm(t('management.confirmDelete', { name: jobId }))) return
+    if (!(await confirmAction({ message: t('management.confirmDelete', { name: jobId }) }))) return
     try {
         await httpClient.delete(`/api/hangfire/jobs/${encodeURIComponent(jobId)}`)
         toast.success(t('common.success'))
@@ -258,7 +260,7 @@ async function triggerJob(id: string): Promise<void> {
 }
 
 async function deleteRecurringJob(id: string): Promise<void> {
-    if (!confirm(t('management.confirmDelete', { name: id }))) return
+    if (!(await confirmAction({ message: t('management.confirmDelete', { name: id }) }))) return
     try {
         await httpClient.delete(`/api/hangfire/recurring-jobs/${encodeURIComponent(id)}`)
         toast.success(t('common.success'))
