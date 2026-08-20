@@ -199,10 +199,10 @@ watch(total, updateTotalPages, { immediate: true })
         <div class="flex items-center justify-between">
             <h1 class="text-2xl font-bold tracking-tight">{{ t('menu.users') }}</h1>
             <div class="flex gap-2">
-                <Button severity="secondary" outlined :disabled="loading" @click="loadUsers">
+                <Button size="small" severity="secondary" outlined :disabled="loading" @click="loadUsers">
                     <RefreshCw :class="['size-4', loading && 'animate-spin']" />
                 </Button>
-                <Button @click="openCreate">
+                <Button size="small" @click="openCreate">
                     <Plus class="mr-1 size-4" />
                     {{ t('management.createUser') }}
                 </Button>
@@ -217,7 +217,7 @@ watch(total, updateTotalPages, { immediate: true })
                 class="max-w-xs"
                 @keydown.enter="handleSearch"
             />
-            <Button severity="secondary" outlined @click="handleSearch">
+            <Button size="small" severity="secondary" outlined @click="handleSearch">
                 <Search class="mr-1 size-4" />
                 {{ t('common.search') }}
             </Button>

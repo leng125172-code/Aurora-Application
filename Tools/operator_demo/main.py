@@ -266,8 +266,8 @@ def report_output_variables(graph_data):
     print(f"      ✓ 结束节点输出：{', '.join(output_variables)}")
 
 
-def generate_and_validate_v2_source(workflow_name, graph_data):
-    """使用目标服务的正式生成器生成 V2 源码，并在保存前阻止旧语法进入数据库。"""
+def generate_and_validate_v3_source(workflow_name, graph_data):
+    """使用目标服务的正式生成器生成 V3 强类型源码。"""
     source = api_client.api_post(
         "/api/app/workflow/graph/to-source",
         {
@@ -280,11 +280,11 @@ def generate_and_validate_v2_source(workflow_name, graph_data):
 
     problems = []
     if not re.search(
-        r'^\s*Workflow\("(?:\\.|[^"\\])*",\s*2\);\s*$',
+        r'^\s*Workflow\("(?:\\.|[^"\\])*",\s*3\);\s*$',
         source,
         re.MULTILINE,
     ):
-        problems.append("缺少 Workflow(name, 2) 声明")
+        problems.append("缺少 Workflow(name, 3) 声明")
     if "GraphBegin(" in source or "\n    Node(" in source or "\n    Edge(" in source:
         problems.append("仍包含 V1 Graph/Node/Edge 序列化语句")
     if "_null" in source:
@@ -293,28 +293,28 @@ def generate_and_validate_v2_source(workflow_name, graph_data):
         problems.append("缺少 Return(...) 输出声明")
     if problems:
         raise RuntimeError(
-            f"{workflow_name}: 服务端生成的脚本不是有效 V2："
+            f"{workflow_name}: 服务端生成的脚本不是有效 V3："
             + "；".join(problems)
         )
 
     print(
-        f"      ✓ V2 脚本预检通过："
+        f"      ✓ V3 脚本预检通过："
         f"{len(source.splitlines())} 行，{len(source.encode('utf-8'))} bytes"
     )
     return source
 
 
 def verify_saved_workflow_source(workflow_id, workflow_name):
-    """保存后回读源码，确认旧 demo 已真正被 V2 覆盖。"""
+    """保存后回读源码，确认已使用 V3。"""
     saved = api_client.api_get(f"/api/app/workflow/{workflow_id}/source")
     source = saved.get("sourceCode") or ""
     language_version = saved.get("languageVersion")
-    if language_version != 2 or "_null" in source or "GraphBegin(" in source:
+    if language_version != 3 or "_null" in source or "GraphBegin(" in source:
         raise RuntimeError(
             f"{workflow_name}: 保存后源码校验失败，"
             f"languageVersion={language_version}"
         )
-    print(f"      ✓ 保存后 V2 源码回读确认，revision={saved.get('revision')}")
+    print(f"      ✓ 保存后 V3 源码回读确认，revision={saved.get('revision')}")
 
 
 def create_project():
@@ -355,7 +355,7 @@ def create_workflow(project_id, workflow_name, graph_data, contracts):
     print(f"      创建工作流：{workflow_name} ...")
     complete_graph_output_bindings(graph_data, contracts)
     validate_graph_contracts(graph_data, contracts)
-    generate_and_validate_v2_source(workflow_name, graph_data)
+    generate_and_validate_v3_source(workflow_name, graph_data)
 
     payload = {
         "projectId": project_id,

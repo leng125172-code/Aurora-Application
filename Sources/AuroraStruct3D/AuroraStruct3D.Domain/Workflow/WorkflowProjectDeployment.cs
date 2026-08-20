@@ -30,6 +30,10 @@ public class WorkflowProjectDeployment : FullAuditedAggregateRoot<Guid>
     /// <summary>冻结的变量定义 JSON（发布时固化的项目变量默认值列表）。</summary>
     public string FrozenVariablesJson { get; private set; } = "[]";
 
+    public string FrozenTaskConfigJson { get; private set; } = "{}";
+
+    public int SnapshotSchemaVersion { get; private set; } = 2;
+
     /// <summary>激活时间。</summary>
     public DateTime? ActivatedAt { get; private set; }
 
@@ -48,6 +52,7 @@ public class WorkflowProjectDeployment : FullAuditedAggregateRoot<Guid>
         IEnumerable<WorkflowProjectDeploymentItem> items,
         IEnumerable<WorkflowProjectFrozenGraph> frozenGraphs,
         IEnumerable<WorkflowProjectFrozenVariable> frozenVariables,
+        WorkflowProjectFrozenTaskConfig frozenTaskConfig,
         string snapshotHash
     )
     {
@@ -90,6 +95,9 @@ public class WorkflowProjectDeployment : FullAuditedAggregateRoot<Guid>
             nameof(frozenVariablesJson),
             WorkflowProjectDeploymentConsts.MaxFrozenVariablesJsonLength
         );
+        string frozenTaskConfigJson = JsonSerializer.Serialize(frozenTaskConfig);
+        Check.Length(frozenTaskConfigJson, nameof(frozenTaskConfigJson),
+            WorkflowProjectDeploymentConsts.MaxFrozenTaskConfigJsonLength);
 
         return new WorkflowProjectDeployment
         {
@@ -101,6 +109,8 @@ public class WorkflowProjectDeployment : FullAuditedAggregateRoot<Guid>
             SnapshotHash = snapshotHash,
             FrozenGraphsJson = frozenGraphsJson,
             FrozenVariablesJson = frozenVariablesJson,
+            FrozenTaskConfigJson = frozenTaskConfigJson,
+            SnapshotSchemaVersion = 2,
         };
     }
 
@@ -135,64 +145,16 @@ public class WorkflowProjectDeployment : FullAuditedAggregateRoot<Guid>
         ActivatedBy = null;
     }
 
-    /// <summary>
-    /// 更新部署快照内容（原地修改，不改变版本号与状态）。
-    /// </summary>
-    /// <returns>内容是否发生变化。</returns>
-    public bool UpdatePublishedContent(
-        IEnumerable<WorkflowProjectDeploymentItem> items,
-        IEnumerable<WorkflowProjectFrozenGraph> frozenGraphs,
-        IEnumerable<WorkflowProjectFrozenVariable> frozenVariables,
-        string snapshotHash
-    )
-    {
-        Check.NotNull(items, nameof(items));
-        Check.NotNull(frozenGraphs, nameof(frozenGraphs));
-        Check.NotNull(frozenVariables, nameof(frozenVariables));
-        Check.NotNullOrWhiteSpace(
-            snapshotHash,
-            nameof(snapshotHash),
-            WorkflowProjectDeploymentConsts.MaxSnapshotHashLength
-        );
+}
 
-        string snapshotJson = JsonSerializer.Serialize(items.ToList());
-        Check.Length(
-            snapshotJson,
-            nameof(snapshotJson),
-            WorkflowProjectDeploymentConsts.MaxSnapshotJsonLength
-        );
-
-        string frozenGraphsJson = JsonSerializer.Serialize(frozenGraphs.ToList());
-        Check.Length(
-            frozenGraphsJson,
-            nameof(frozenGraphsJson),
-            WorkflowProjectDeploymentConsts.MaxFrozenGraphsJsonLength
-        );
-
-        string frozenVariablesJson = JsonSerializer.Serialize(frozenVariables.ToList());
-        Check.Length(
-            frozenVariablesJson,
-            nameof(frozenVariablesJson),
-            WorkflowProjectDeploymentConsts.MaxFrozenVariablesJsonLength
-        );
-
-        bool changed =
-            !string.Equals(SnapshotHash, snapshotHash, StringComparison.Ordinal)
-            || !string.Equals(SnapshotJson, snapshotJson, StringComparison.Ordinal)
-            || !string.Equals(FrozenGraphsJson, frozenGraphsJson, StringComparison.Ordinal)
-            || !string.Equals(FrozenVariablesJson, frozenVariablesJson, StringComparison.Ordinal);
-
-        if (!changed)
-        {
-            return false;
-        }
-
-        SnapshotHash = snapshotHash;
-        SnapshotJson = snapshotJson;
-        FrozenGraphsJson = frozenGraphsJson;
-        FrozenVariablesJson = frozenVariablesJson;
-        return true;
-    }
+public class WorkflowProjectFrozenTaskConfig
+{
+    public Guid TaskConfigId { get; set; }
+    public WorkflowProjectTaskType TaskType { get; set; }
+    public int? CycleIntervalSeconds { get; set; }
+    public Guid? ResultWorkflowId { get; set; }
+    public string? ResultVariableName { get; set; }
+    public WorkflowProjectRunOnErrorAction OnErrorAction { get; set; }
 }
 
 /// <summary>

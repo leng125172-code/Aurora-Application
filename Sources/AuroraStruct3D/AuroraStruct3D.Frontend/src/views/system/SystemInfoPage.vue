@@ -162,6 +162,17 @@ const uptimeDays = computed<number>(() => {
 // 超过 30 天时展示稳定运行横幅
 const showStableBanner = computed<boolean>(() => uptimeDays.value >= 30)
 
+const localizedUptime = computed<string>(() => {
+    if (!info.value) return '—'
+    const start = new Date(info.value.server.processStartTime).getTime()
+    const now = new Date(info.value.server.serverTime).getTime()
+    const totalMinutes = Math.max(0, Math.floor((now - start) / 60_000))
+    const days = Math.floor(totalMinutes / 1_440)
+    const hours = Math.floor((totalMinutes % 1_440) / 60)
+    const minutes = totalMinutes % 60
+    return t('sysinfo.uptimeValue', { days, hours, minutes })
+})
+
 /** 切换展开/折叠某个程序集 */
 function toggleAssembly(name: string): void {
     expandedAssembly.value = expandedAssembly.value === name ? null : name
@@ -183,9 +194,9 @@ function shortInfoVersion(ver: string): string {
 </script>
 
 <template>
-    <div class="space-y-5">
+    <div class="app-page" data-testid="system-info-page">
         <!-- 页头 -->
-        <div class="flex items-center justify-between">
+        <div class="app-page-header">
             <h1 class="text-2xl font-bold tracking-tight">{{ t('sysinfo.title') }}</h1>
             <Button severity="secondary" outlined size="small" :disabled="loading" @click="loadData">
                 <RefreshCw :class="['size-4 mr-1.5', loading && 'animate-spin']" />
@@ -232,7 +243,8 @@ function shortInfoVersion(ver: string): string {
                                 {{ t('sysinfo.processor') }}
                             </span>
                             <span class="break-all">
-                                {{ info.server.processorModel }}，{{ info.server.processorCount }} 核
+                                {{ info.server.processorModel }} ·
+                                {{ t('sysinfo.processorCores', { count: info.server.processorCount }) }}
                                 <Tag
                                     v-if="info.server.cpuPercent >= 0"
                                     :severity="cpuColor(info.server.cpuPercent)"
@@ -305,7 +317,7 @@ function shortInfoVersion(ver: string): string {
                             <span class="shrink-0 whitespace-nowrap text-muted-foreground">
                                 {{ t('sysinfo.uptime') }}
                             </span>
-                            <span class="font-medium">{{ info.server.uptimeText }}</span>
+                            <span class="font-medium">{{ localizedUptime }}</span>
                         </div>
                     </div>
                 </div>

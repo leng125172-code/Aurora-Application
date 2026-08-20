@@ -25,6 +25,7 @@ public class WorkflowProjectRunJob : ITransientDependency
     private readonly IAsyncQueryableExecuter _asyncExecuter;
     private readonly IGuidGenerator _guidGenerator;
     private readonly IDeviceFaultReporter _faultReporter;
+    private readonly IDeviceStateManager _deviceStateManager;
     private readonly ILogger<WorkflowProjectRunJob> _logger;
 
     /// <summary>
@@ -39,6 +40,7 @@ public class WorkflowProjectRunJob : ITransientDependency
         IAsyncQueryableExecuter asyncExecuter,
         IGuidGenerator guidGenerator,
         IDeviceFaultReporter faultReporter,
+        IDeviceStateManager deviceStateManager,
         ILogger<WorkflowProjectRunJob> logger
     )
     {
@@ -50,6 +52,7 @@ public class WorkflowProjectRunJob : ITransientDependency
         _asyncExecuter = asyncExecuter;
         _guidGenerator = guidGenerator;
         _faultReporter = faultReporter;
+        _deviceStateManager = deviceStateManager;
         _logger = logger;
     }
 
@@ -77,11 +80,25 @@ public class WorkflowProjectRunJob : ITransientDependency
     [UnitOfWork]
     public async Task ExecuteRecurringAsync(WorkflowProjectRunRecurringArgs args)
     {
-        // 项目独占：已有进行中的运行时跳过本次触发。
+        WorkflowProjectTaskConfig? registeredTask = await _asyncExecuter.FirstOrDefaultAsync(
+            (await _taskConfigRepository.GetQueryableAsync()).Where(x =>
+                x.ProjectId == args.ProjectId && x.IsEnabled
+                && (args.TaskConfigId == Guid.Empty || x.Id == args.TaskConfigId)));
+        if (registeredTask is null || !registeredTask.IsEnabled)
+        {
+            _logger.LogInformation("[WorkflowProjectRunJob] Recurring skip: project task is disabled");
+            return;
+        }
+        if (!_deviceStateManager.CanAcceptProductionCommand)
+        {
+            _logger.LogInformation("[WorkflowProjectRunJob] Recurring skip: device is not Running in Online/Auto mode");
+            return;
+        }
+
+        // 全局独占：单设备任意项目已有正式运行时跳过。
         bool hasActiveRun = await _asyncExecuter.AnyAsync(
             (await _runRepository.GetQueryableAsync()).Where(x =>
-                x.ProjectId == args.ProjectId
-                && (
+                (
                     x.Status == WorkflowProjectRunStatus.Queued
                     || x.Status == WorkflowProjectRunStatus.Running
                 )
@@ -153,8 +170,9 @@ public class WorkflowProjectRunJob : ITransientDependency
     )
     {
         WorkflowProjectRun run = await _runRepository.GetAsync(runId);
-        WorkflowProjectTaskConfig? taskConfig = await _asyncExecuter.FirstOrDefaultAsync(
-            (await _taskConfigRepository.GetQueryableAsync()).Where(x => x.ProjectId == run.ProjectId));
+        WorkflowProjectFrozenTaskConfig taskConfig =
+            Deserialize<WorkflowProjectFrozenTaskConfig>(deployment.FrozenTaskConfigJson)
+            ?? new WorkflowProjectFrozenTaskConfig();
         run.MarkRunning(DateTime.UtcNow);
         await _runRepository.UpdateAsync(run, autoSave: true);
 
@@ -285,17 +303,22 @@ public class WorkflowProjectRunJob : ITransientDependency
                         result.Status?.FaultNodeId
                     );
 
-                if (taskConfig?.ResultWorkflowId == workflowId)
+                    throw new UserFriendlyException(result.Message ?? "工作流执行失败。");
+                }
+
+                if (taskConfig.ResultWorkflowId == workflowId)
                 {
+                    WorkflowOutputAccessor accessor = WorkflowOutputAccessor.Compile(taskConfig.ResultVariableName!);
                     Dtos.WorkflowVariableResultDto? output = result.Variables.FirstOrDefault(x =>
-                        string.Equals(x.Name, taskConfig.ResultVariableName, StringComparison.Ordinal));
+                        string.Equals(x.Name, accessor.RootVariableName, StringComparison.Ordinal));
                     if (output is null)
                     {
                         run.SetInspectionResult(WorkflowInspectionDecision.Error,
                             WorkflowPlcHandshakeErrorCode.ResultVariableMissing,
                             $"结果变量 {taskConfig.ResultVariableName} 未产出。");
                     }
-                    else if (TryReadBoolean(output.Value, out bool isOk))
+                    else if (accessor.TryGetValue(output.Value, out object? decisionValue)
+                        && TryReadBoolean(decisionValue, out bool isOk))
                     {
                         run.SetInspectionResult(isOk ? WorkflowInspectionDecision.Ok : WorkflowInspectionDecision.Ng);
                     }
@@ -305,8 +328,6 @@ public class WorkflowProjectRunJob : ITransientDependency
                             WorkflowPlcHandshakeErrorCode.ResultVariableTypeMismatch,
                             $"结果变量 {taskConfig.ResultVariableName} 不是布尔值。");
                     }
-                }
-                    throw new UserFriendlyException(result.Message ?? "工作流执行失败。");
                 }
 
                 await RecoverPlcWorkflowFaultsAsync(run.ProjectId, workflowId);
@@ -342,7 +363,7 @@ public class WorkflowProjectRunJob : ITransientDependency
         }
 
         run = await _runRepository.GetAsync(runId);
-        if (taskConfig?.ResultWorkflowId is not null && run.InspectionDecision == WorkflowInspectionDecision.None)
+        if (taskConfig.ResultWorkflowId is not null && run.InspectionDecision == WorkflowInspectionDecision.None)
             run.SetInspectionResult(WorkflowInspectionDecision.Error,
                 WorkflowPlcHandshakeErrorCode.ResultVariableMissing,
                 "任务已完成，但未取得配置的最终判定变量。");

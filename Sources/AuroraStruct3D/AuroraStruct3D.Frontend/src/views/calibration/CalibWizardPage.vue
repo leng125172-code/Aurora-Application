@@ -602,11 +602,7 @@ const fringe3PhaseError = computed<string | null>(() => null)
 
 /** 是否可生成图像 */
 const fringe3CanGenerate = computed(() => {
-    return (
-        projectorWidthPixels.value === 1280
-        && projectorHeightInput.value === 720
-        && fringe3ImageCount.value === 16
-    )
+    return projectorWidthPixels.value === 1280 && projectorHeightInput.value === 720 && fringe3ImageCount.value === 16
 })
 
 async function initStep3Hub(): Promise<void> {

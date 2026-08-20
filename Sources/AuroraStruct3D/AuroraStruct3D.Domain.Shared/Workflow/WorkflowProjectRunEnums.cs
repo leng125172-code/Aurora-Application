@@ -12,6 +12,12 @@ public enum WorkflowProjectRunStartType
     Cyclic = 1,
 }
 
+public enum WorkflowProjectRunOnErrorAction
+{
+    StopRun = 0,
+    ContinueRun = 1,
+}
+
 /// <summary>
 /// 项目部署快照状态。
 /// </summary>

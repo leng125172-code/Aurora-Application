@@ -127,6 +127,8 @@ export interface UpdateProjectorDeviceDto {
     name: string
     description?: string
     isEnabled: boolean
+    /** USB HID projector identity stored in user register 0 (1-255). */
+    deviceHardwareId?: number | null
 }
 
 export interface GetProjectorListDto {

@@ -16,4 +16,6 @@ public static class WorkflowProjectDeploymentConsts
 
     /// <summary>冻结变量定义 JSON 最大长度。</summary>
     public const int MaxFrozenVariablesJsonLength = 1048576;
+
+    public const int MaxFrozenTaskConfigJsonLength = 4096;
 }

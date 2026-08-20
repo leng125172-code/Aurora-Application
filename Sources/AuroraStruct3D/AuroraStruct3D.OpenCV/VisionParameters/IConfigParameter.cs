@@ -23,6 +23,9 @@ public interface IConfigParameter
     /// </summary>
     string? DisplayName { get; }
 
+    /// <summary>配置参数用途及约束说明。</summary>
+    string? Description { get; }
+
     /// <summary>
     /// 参数的 CLR 类型，用于前端渲染对应的控件（文本框、数字框、枚举下拉等）。
     /// </summary>

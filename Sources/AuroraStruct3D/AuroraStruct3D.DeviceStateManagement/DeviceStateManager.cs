@@ -62,7 +62,7 @@ public class DeviceStateManager : IDeviceStateManager
 
     /// <inheritdoc/>
     public bool CanAcceptProductionCommand =>
-        _status is DeviceStatus.Running or DeviceStatus.Paused;
+        _status == DeviceStatus.Running && _runMode is DeviceRunMode.Online or DeviceRunMode.Auto;
 
     /// <inheritdoc/>
     public bool CanSwitchMode =>
@@ -102,7 +102,7 @@ public class DeviceStateManager : IDeviceStateManager
                 throw new InvalidOperationException(
                     $"当前状态 [{_status}] 不允许启动，必须处于 Standby 或 Stopped 状态"
                 );
-            if (_runMode == DeviceRunMode.Maintenance)
+            if (_runMode is not (DeviceRunMode.Online or DeviceRunMode.Auto))
                 throw new InvalidOperationException(
                     "维护模式下不允许启动生产，请先切换至在线或自动模式"
                 );

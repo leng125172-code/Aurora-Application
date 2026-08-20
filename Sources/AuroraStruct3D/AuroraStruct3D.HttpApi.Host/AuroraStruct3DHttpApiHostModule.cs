@@ -18,7 +18,11 @@ using AuroraStruct3D.Cameras.Tucam;
 using Hangfire;
 using Lion.AbpPro.CAP;
 using Microsoft.AspNetCore.Http.Features;
+using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
+using Microsoft.Net.Http.Headers;
+using System.IO.Compression;
+using System.Text.RegularExpressions;
 using Swashbuckle.AspNetCore.SwaggerGen;
 using Volo.Abp.AspNetCore.ExceptionHandling;
 using Volo.Abp.AspNetCore.Mvc;
@@ -53,6 +57,19 @@ namespace AuroraStruct3D
 
         public override void ConfigureServices(ServiceConfigurationContext context)
         {
+            context.Services.AddResponseCompression(options =>
+            {
+                options.EnableForHttps = true;
+                options.Providers.Add<BrotliCompressionProvider>();
+                options.Providers.Add<GzipCompressionProvider>();
+            });
+            context.Services.Configure<BrotliCompressionProviderOptions>(options =>
+                options.Level = CompressionLevel.Fastest
+            );
+            context.Services.Configure<GzipCompressionProviderOptions>(options =>
+                options.Level = CompressionLevel.Fastest
+            );
+
             // 项目已改为纯 Vue SPA，不再依赖 ABP 的 wwwroot/libs 客户端库，禁用启动检查
             Configure<AbpMvcLibsOptions>(options => options.CheckLibs = false);
 
@@ -129,6 +146,7 @@ namespace AuroraStruct3D
         {
             var app = context.GetApplicationBuilder();
             app.UseAbpProRequestLocalization();
+            app.UseResponseCompression();
             //app.UseAbpProRequestResponseEncrypt();
             app.UseCorrelationId();
             app.MapAbpStaticAssets();
@@ -140,7 +158,25 @@ namespace AuroraStruct3D
             provider.Mappings[".js"] = "application/javascript; charset=utf-8";
             provider.Mappings[".mjs"] = "application/javascript; charset=utf-8";
             provider.Mappings[".css"] = "text/css; charset=utf-8";
-            app.UseStaticFiles(new StaticFileOptions { ContentTypeProvider = provider });
+            app.UseStaticFiles(
+                new StaticFileOptions
+                {
+                    ContentTypeProvider = provider,
+                    OnPrepareResponse = staticFileContext =>
+                    {
+                        string fileName = Path.GetFileName(staticFileContext.File.Name);
+                        bool isHashedAsset = Regex.IsMatch(
+                            fileName,
+                            @"-[A-Za-z0-9_-]{8,}\.[^.]+$",
+                            RegexOptions.CultureInvariant
+                        );
+                        staticFileContext.Context.Response.Headers[HeaderNames.CacheControl] =
+                            isHashedAsset
+                                ? "public,max-age=31536000,immutable"
+                                : "no-cache";
+                    },
+                }
+            );
             app.UseAbpProMiniProfiler();
             app.UseRouting();
             app.UseAbpProCors();
@@ -203,6 +239,7 @@ namespace AuroraStruct3D
                     }
 
                     httpContext.Response.ContentType = "text/html; charset=utf-8";
+                    httpContext.Response.Headers[HeaderNames.CacheControl] = "no-cache";
                     var indexPath = Path.Combine(
                         httpContext
                             .RequestServices.GetRequiredService<IWebHostEnvironment>()

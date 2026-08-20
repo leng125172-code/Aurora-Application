@@ -24,13 +24,7 @@ public sealed class flatness_inspection : IOperator
         ];
 
     public static List<IVisionParameter>? OutputVisionParameters =>
-        [
-            NumberOutput("flatness_deviation", "平面度超差值"),
-            BoolOutput("is_valid", "结果是否有效"),
-            BoolOutput("is_ok", "是否合格"),
-            StringOutput("inspection_status", "检测状态"),
-            StringOutput("result_json", "平面度判定结果", PortControlType.Download),
-        ];
+        [InspectionResults.Output<FlatnessInspectionDetails>("平面度判定结果")];
 
     public static List<IConfigParameter>? ConfigParameters =>
         [
@@ -77,29 +71,19 @@ public sealed class flatness_inspection : IOperator
         string status = !isValid ? "UNKNOWN" : isOk ? "OK" : "NG";
         JsonElement? measurement = ParseJson(context.Get<string>("measurement_json"));
 
-        context.Set("flatness_deviation", measuredFlatness - _maxFlatness);
-        context.Set("is_valid", isValid);
-        context.Set("is_ok", isOk);
-        context.Set("inspection_status", status);
-        context.Set(
-            "result_json",
-            JsonSerializer.Serialize(
-                new
-                {
+        context.Set("result", InspectionResults.CreateTyped(isValid, isOk,
+                new FlatnessInspectionDetails(
                     status,
                     isValid,
                     isOk,
                     measuredFlatness,
-                    maxFlatness = _maxFlatness,
-                    flatnessDeviation = measuredFlatness - _maxFlatness,
+                    _maxFlatness,
+                    measuredFlatness - _maxFlatness,
                     maxAbsoluteDistance,
-                    allowedAbsoluteDistance = _maxAbsoluteDistance,
+                    _maxAbsoluteDistance,
                     flatnessOk,
                     absoluteDistanceOk,
-                    measurement,
-                }
-            )
-        );
+                    measurement), status));
     }
 
     public void Dispose() { }

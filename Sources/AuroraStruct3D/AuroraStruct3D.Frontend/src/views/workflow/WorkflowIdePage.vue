@@ -6,6 +6,12 @@ import * as signalR from '@microsoft/signalr'
 import { VueFlow, useVueFlow, type Edge, type Node } from '@vue-flow/core'
 import { Background } from '@vue-flow/background'
 import { Controls } from '@vue-flow/controls'
+import Button from 'primevue/button'
+import Checkbox from 'primevue/checkbox'
+import InputNumber from 'primevue/inputnumber'
+import InputText from 'primevue/inputtext'
+import Select from 'primevue/select'
+import Textarea from 'primevue/textarea'
 import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
 import {
@@ -14,7 +20,10 @@ import {
     debugAndRunSource,
     debugSource,
     diagnostics,
+    definition,
     formatSource,
+    hover,
+    getWorkflowNodePalette,
     getBreakpoints,
     getDebugSessions,
     getDebugResult,
@@ -27,6 +36,14 @@ import {
     listWorkflows,
     patchGraph,
     pauseDebug,
+    references,
+    semanticTokens,
+    mapPosition,
+    renameSymbol,
+    previewWorkflowMigration,
+    startWorkflowMigration,
+    retryWorkflowMigration,
+    rollbackWorkflowMigration,
     runTo,
     saveWorkflowSource,
     setBreakpoints,
@@ -44,6 +61,9 @@ import {
     type WorkflowBrief,
     type WorkflowGraph,
     type WorkflowSource,
+    type WorkflowNodeDefinition,
+    type WorkflowMigrationBatch,
+    type WorkflowMigrationItem,
 } from '@/api/workflow-ide'
 import { useAuthStore } from '@/stores/auth'
 import { Bug, CircleStop, Code2, GitBranch, Play, Save, StepForward, WandSparkles } from '@lucide/vue'
@@ -57,20 +77,21 @@ import {
 import { useAppToast } from '@/composables/useAppToast'
 import { useAppConfirm } from '@/composables/useAppConfirm'
 import {
-    activateProjectDeployment,
+    applyProjectToDevice,
     deleteWorkflowPlcTrigger,
-    getProjectDeployments,
+    getProjectApplicationStatus,
+    getProjectDeploymentHistory,
     getProjectTasks,
     getWorkflow as getRuntimeWorkflow,
     getWorkflowPlcHandshake,
     getWorkflowPlcHandshakeStatus,
     getWorkflowPlcTriggers,
-    publishProjectDeployment,
     resetWorkflowPlcHandshake,
+    rollbackProjectDeployment,
     saveWorkflowPlcHandshake,
     saveWorkflowPlcTrigger,
-    updateProjectTasks,
     type ProjectDeployment,
+    type ProjectApplicationStatus,
     type ProjectTaskBatch,
     type SaveWorkflowPlcHandshakeConfig,
     type WorkflowPlcHandshakeStatus,
@@ -78,16 +99,21 @@ import {
     type WorkflowPlcTrigger,
 } from '@/api/workflow'
 import {
-    getPlcTags, getPlcs, readPlcTags, writePlcTag, PlcTagAccess, PlcTagDataType,
-    type PlcDeviceDto, type PlcTagDto, type PlcTagValueDto,
+    browsePlcTree,
+    getPlcTags,
+    getPlcs,
+    readPlcTags,
+    writePlcTag,
+    PlcTagAccess,
+    PlcTagDataType,
+    type PlcBrowseTreeNode,
+    type PlcDeviceDto,
+    type PlcTagDto,
+    type PlcTagValueDto,
 } from '@/api/plcs'
 
 self.MonacoEnvironment = {
-    getWorker: () =>
-        new Worker(
-            new URL('../../workers/monaco-editor.worker.ts', import.meta.url),
-            { type: 'module' },
-        ),
+    getWorker: () => new Worker(new URL('../../workers/monaco-editor.worker.ts', import.meta.url), { type: 'module' }),
 }
 
 const route = useRoute()
@@ -105,8 +131,13 @@ const documentVersion = ref(0)
 const activeView = ref<'split' | 'graph' | 'source' | 'json'>('split')
 const problems = ref<IdeDiagnostic[]>([])
 const selectedNodeId = ref<string>()
+const selectedPort = ref<{ name: string; direction: string }>()
 const dirty = ref(false)
 const saving = ref(false)
+const migrationBusy = ref(false)
+const migrationItems = ref<WorkflowMigrationItem[]>([])
+const migrationBatch = ref<WorkflowMigrationBatch>()
+const migrationPanelOpen = ref(false)
 const debugStatus = ref<DebugStatus>()
 const debugResults = ref<DebugExecutionResult[]>([])
 const previewResult = ref<DebugExecutionResult>()
@@ -115,7 +146,7 @@ const debugActivity = ref<'idle' | 'starting' | 'running' | 'stopped'>('idle')
 const breakpointNodes = ref<string[]>([])
 const completedNodeIds = ref<string[]>([])
 const selectedHasBreakpoint = computed(
-    () => !!selectedNodeId.value && breakpointNodes.value.includes(selectedNodeId.value),
+    () => !!selectedNodeId.value && breakpointNodes.value.includes(selectedNodeId.value)
 )
 const effectiveDebugState = computed(() => {
     if (debugActivity.value === 'starting') return 'starting'
@@ -137,66 +168,121 @@ const debugStateInfo = computed(() => {
     return states[effectiveDebugState.value] ?? states['not-started']!
 })
 const canContinueDebug = computed(
-    () => !!executionId.value && debugActivity.value === 'idle'
-        && (debugStatus.value?.canContinue ?? !debugStatus.value?.isTerminal),
+    () =>
+        !!executionId.value &&
+        debugActivity.value === 'idle' &&
+        (debugStatus.value?.canContinue ?? !debugStatus.value?.isTerminal)
 )
 const canStepDebug = computed(
-    () => !!executionId.value && debugActivity.value === 'idle'
-        && (debugStatus.value?.canStep ?? !debugStatus.value?.isTerminal),
+    () =>
+        !!executionId.value &&
+        debugActivity.value === 'idle' &&
+        (debugStatus.value?.canStep ?? !debugStatus.value?.isTerminal)
 )
-const canPauseDebug = computed(
-    () => !!executionId.value && effectiveDebugState.value === 'running',
-)
+const canPauseDebug = computed(() => !!executionId.value && effectiveDebugState.value === 'running')
 const canStopDebug = computed(
-    () => !!executionId.value && (debugStatus.value?.canStop ?? !debugStatus.value?.isTerminal),
+    () => !!executionId.value && (debugStatus.value?.canStop ?? !debugStatus.value?.isTerminal)
 )
 const watchExpressions = ref<string[]>(['retstatus.status'])
 const watchResults = ref<Array<Record<string, unknown>>>([])
 const traceResults = ref<Array<Record<string, unknown>>>([])
 const stackResults = ref<Array<Record<string, unknown>>>([])
 const performanceResults = ref<Array<Record<string, unknown>>>([])
-const bottomTab = ref<'problems' | 'variables' | 'watch' | 'trace' | 'performance' | 'results' | 'output'>(
-    'problems'
-)
+const bottomTab = ref<'problems' | 'variables' | 'watch' | 'trace' | 'performance' | 'results' | 'output'>('problems')
 const output = ref<string[]>([])
 const statusReceivedAt = ref(Date.now())
 const clockNow = ref(Date.now())
-const displayDurationMs = computed(() =>
-    (debugStatus.value?.durationMs ?? 0)
-    + (effectiveDebugState.value === 'running' ? Math.max(0, clockNow.value - statusReceivedAt.value) : 0),
+const displayDurationMs = computed(
+    () =>
+        (debugStatus.value?.durationMs ?? 0) +
+        (effectiveDebugState.value === 'running' ? Math.max(0, clockNow.value - statusReceivedAt.value) : 0)
 )
-const displayCurrentNodeDurationMs = computed(() =>
-    (debugStatus.value?.currentNodeDurationMs ?? 0)
-    + (effectiveDebugState.value === 'running' ? Math.max(0, clockNow.value - statusReceivedAt.value) : 0),
+const displayCurrentNodeDurationMs = computed(
+    () =>
+        (debugStatus.value?.currentNodeDurationMs ?? 0) +
+        (effectiveDebugState.value === 'running' ? Math.max(0, clockNow.value - statusReceivedAt.value) : 0)
 )
-const primaryDebugLabel = computed(() =>
-    executionId.value && !debugStatus.value?.isTerminal ? '继续' : '调试运行',
-)
-const canPrimaryDebug = computed(() =>
-    debugActivity.value !== 'starting'
-    && debugActivity.value !== 'running'
-    && (
-        !executionId.value
-        || !!debugStatus.value?.isTerminal
-        || (debugStatus.value?.canContinue ?? false)
-    ),
+const primaryDebugLabel = computed(() => (executionId.value && !debugStatus.value?.isTerminal ? '继续' : '调试运行'))
+const canPrimaryDebug = computed(
+    () =>
+        debugActivity.value !== 'starting' &&
+        debugActivity.value !== 'running' &&
+        (!executionId.value || !!debugStatus.value?.isTerminal || (debugStatus.value?.canContinue ?? false))
 )
 const editorHost = ref<HTMLElement>()
 const jsonText = ref('')
 const plcTriggerDrawerOpen = ref(false)
 const taskDrawerOpen = ref(false)
+const operatorDocsOpen = ref(false)
+const operatorDocsLoading = ref(false)
+const operatorDocsSearch = ref('')
+const operatorDefinitions = ref<WorkflowNodeDefinition[]>([])
+const selectedOperator = ref<WorkflowNodeDefinition>()
+const filteredOperatorDefinitions = computed(() => {
+    const keyword = operatorDocsSearch.value.trim().toLocaleLowerCase()
+    return operatorDefinitions.value.filter(
+        (x) =>
+            x.nodeType === 'Operator' &&
+            (!keyword ||
+                x.displayName.toLocaleLowerCase().includes(keyword) ||
+                (x.description ?? '').toLocaleLowerCase().includes(keyword))
+    )
+})
+
+async function openOperatorDocs(): Promise<void> {
+    operatorDocsOpen.value = true
+    operatorDocsLoading.value = true
+    try {
+        const palette = await getWorkflowNodePalette()
+        operatorDefinitions.value = palette.categories.flatMap((x) => x.nodes)
+        const visible = filteredOperatorDefinitions.value
+        if (!selectedOperator.value || !visible.some((x) => x.id === selectedOperator.value?.id))
+            selectedOperator.value = visible[0]
+    } catch (error) {
+        toast.error(`加载算子说明失败：${String(error)}`)
+    } finally {
+        operatorDocsLoading.value = false
+    }
+}
+
+function metadataText(value: unknown): string {
+    if (value === undefined || value === null) return ''
+    return typeof value === 'string' ? value : JSON.stringify(value)
+}
 const taskLoading = ref(false)
 const taskSaving = ref(false)
 const taskConfig = ref<ProjectTaskBatch>()
 const deployment = ref<ProjectDeployment>()
+const applicationStatus = ref<ProjectApplicationStatus>()
+const deploymentHistory = ref<ProjectDeployment[]>([])
+const versionHistoryOpen = ref(false)
+const taskConfigBaseline = ref('')
+const taskConfigDirty = computed(
+    () => !!taskConfig.value && JSON.stringify(taskConfig.value) !== taskConfigBaseline.value
+)
 const handshakeStatus = ref<WorkflowPlcHandshakeStatus>()
 const resultOutputs = ref<string[]>([])
-const handshakeTags = ref<PlcTagDto[]>([])
+const handshakeNodeTree = ref<PlcBrowseTreeNode[]>([])
+const handshakeTreeLoading = ref(false)
+const handshakeTreeTruncated = ref(false)
 const handshakeForm = ref<SaveWorkflowPlcHandshakeConfig>({
-    projectId: '', plcDeviceId: '', captureRequestTagId: '', requestIdTagId: '', resultAckTagId: '',
-    resultAckIdTagId: '', heartbeatTagId: '', deviceStatusTagId: '', taskStatusTagId: '', canCaptureTagId: '',
-    captureAckTagId: '', ackRequestIdTagId: '', resultValidTagId: '', resultRequestIdTagId: '',
-    resultCodeTagId: '', errorCodeTagId: '', isEnabled: false,
+    projectId: '',
+    plcDeviceId: '',
+    captureRequestAddress: '',
+    requestIdAddress: '',
+    resultAckAddress: '',
+    resultAckIdAddress: '',
+    heartbeatAddress: '',
+    deviceStatusAddress: '',
+    taskStatusAddress: '',
+    canCaptureAddress: '',
+    captureAckAddress: '',
+    ackRequestIdAddress: '',
+    resultValidAddress: '',
+    resultRequestIdAddress: '',
+    resultCodeAddress: '',
+    errorCodeAddress: '',
+    isEnabled: false,
 })
 const plcTriggerLoading = ref(false)
 const plcTriggerSaving = ref(false)
@@ -208,30 +294,70 @@ const plcTriggerForm = ref({ plcDeviceId: '', plcTagId: '', value: '', tolerance
 const plcTriggerDebugValue = ref<PlcTagValueDto>()
 const plcTriggerDebugging = ref(false)
 const selectedPlcTag = computed(() => plcTags.value.find((tag) => tag.id === plcTriggerForm.value.plcTagId))
-const selectedPlcCanRead = computed(() => !!selectedPlcTag.value && (selectedPlcTag.value.access & PlcTagAccess.Read) !== 0)
-const selectedPlcCanWrite = computed(() => !!selectedPlcTag.value && (selectedPlcTag.value.access & PlcTagAccess.Write) !== 0)
-const selectedPlcIsFloat = computed(() => selectedPlcTag.value?.dataType === PlcTagDataType.Float || selectedPlcTag.value?.dataType === PlcTagDataType.Double)
+const selectedPlcCanRead = computed(
+    () => !!selectedPlcTag.value && (selectedPlcTag.value.access & PlcTagAccess.Read) !== 0
+)
+const selectedPlcCanWrite = computed(
+    () => !!selectedPlcTag.value && (selectedPlcTag.value.access & PlcTagAccess.Write) !== 0
+)
+const selectedPlcIsFloat = computed(
+    () =>
+        selectedPlcTag.value?.dataType === PlcTagDataType.Float ||
+        selectedPlcTag.value?.dataType === PlcTagDataType.Double
+)
 const selectedPlcIsBoolean = computed(() => selectedPlcTag.value?.dataType === PlcTagDataType.Boolean)
 const selectedPlcIsDate = computed(() => selectedPlcTag.value?.dataType === PlcTagDataType.DateTime)
-const selectedPlcIsNumeric = computed(() => selectedPlcTag.value !== undefined && [PlcTagDataType.SByte, PlcTagDataType.Byte, PlcTagDataType.Int16, PlcTagDataType.UInt16, PlcTagDataType.Int32, PlcTagDataType.UInt32, PlcTagDataType.Int64, PlcTagDataType.UInt64, PlcTagDataType.Float, PlcTagDataType.Double].includes(selectedPlcTag.value.dataType))
+const selectedPlcIsNumeric = computed(
+    () =>
+        selectedPlcTag.value !== undefined &&
+        [
+            PlcTagDataType.SByte,
+            PlcTagDataType.Byte,
+            PlcTagDataType.Int16,
+            PlcTagDataType.UInt16,
+            PlcTagDataType.Int32,
+            PlcTagDataType.UInt32,
+            PlcTagDataType.Int64,
+            PlcTagDataType.UInt64,
+            PlcTagDataType.Float,
+            PlcTagDataType.Double,
+        ].includes(selectedPlcTag.value.dataType)
+)
 const handshakeFields = [
-    ['captureRequestTagId', '拍照请求 CaptureRequest', 'PLC 写 1，平台受理后 PLC 自己清零'],
-    ['requestIdTagId', '请求号 RequestId', 'PLC 写入递增请求号'],
-    ['resultAckTagId', '结果确认 ResultAck', 'PLC 收到结果后写 1，并由 PLC 清零'],
-    ['resultAckIdTagId', '结果确认号 ResultAckId', 'PLC 回写已接收的请求号'],
-    ['heartbeatTagId', '心跳 Heartbeat', '平台周期写入'],
-    ['deviceStatusTagId', '设备状态 DeviceStatus', '平台写入整体状态'],
-    ['taskStatusTagId', '任务状态 TaskStatus', '平台写入任务阶段'],
-    ['canCaptureTagId', '允许拍照 CanCapture', '平台写入是否可接收请求'],
-    ['captureAckTagId', '拍照受理 CaptureAck', '平台确认请求'],
-    ['ackRequestIdTagId', '受理请求号 AckRequestId', '平台回写请求号'],
-    ['resultValidTagId', '结果有效 ResultValid', '平台发布结果后置 1'],
-    ['resultRequestIdTagId', '结果请求号 ResultRequestId', '平台写入结果对应请求号'],
-    ['resultCodeTagId', '结果码 ResultCode', '平台写入 OK/NG/Error'],
-    ['errorCodeTagId', '错误码 ErrorCode', '平台写入错误原因'],
+    ['captureRequestAddress', '拍照请求 CaptureRequest', 'BOOL；PLC 写 1，平台受理后 PLC 自己清零'],
+    ['requestIdAddress', '请求号 RequestId', 'DINT；PLC 写入递增请求号'],
+    ['resultAckAddress', '结果确认 ResultAck', 'BOOL；PLC 收到结果后写 1，并由 PLC 清零'],
+    ['resultAckIdAddress', '结果确认号 ResultAckId', 'DINT；PLC 回写已接收的请求号'],
+    ['heartbeatAddress', '心跳 Heartbeat', 'DINT；平台周期写入'],
+    ['deviceStatusAddress', '设备状态 DeviceStatus', 'DINT；平台写入整体状态'],
+    ['taskStatusAddress', '任务状态 TaskStatus', 'DINT；平台写入任务阶段'],
+    ['canCaptureAddress', '允许拍照 CanCapture', 'BOOL；平台写入是否可接收请求'],
+    ['captureAckAddress', '拍照受理 CaptureAck', 'BOOL；平台确认请求'],
+    ['ackRequestIdAddress', '受理请求号 AckRequestId', 'DINT；平台回写请求号'],
+    ['resultValidAddress', '结果有效 ResultValid', 'BOOL；平台发布结果后置 1'],
+    ['resultRequestIdAddress', '结果请求号 ResultRequestId', 'DINT；平台写入结果对应请求号'],
+    ['resultCodeAddress', '结果码 ResultCode', 'DINT；平台写入 OK/NG/Error'],
+    ['errorCodeAddress', '错误码 ErrorCode', 'DINT；平台写入错误原因'],
 ] as const
+const handshakeVariableOptions = computed(() => {
+    const result: Array<{ address: string; label: string }> = []
+    const visit = (nodes: PlcBrowseTreeNode[], depth: number) => {
+        for (const node of nodes) {
+            if (node.nodeClass.toLowerCase() === 'variable') {
+                result.push({
+                    address: node.address,
+                    label: `${'　'.repeat(depth)}${node.displayName || node.browseName} · ${node.address}`,
+                })
+            }
+            visit(node.children || [], depth + 1)
+        }
+    }
+    visit(handshakeNodeTree.value, 0)
+    return result
+})
 let editor: monaco.editor.IStandaloneCodeEditor | undefined
 let validationTimer: ReturnType<typeof setTimeout> | undefined
+let cursorMapTimer: ReturnType<typeof setTimeout> | undefined
 let clockTimer: ReturnType<typeof setInterval> | undefined
 let debugPollTimer: ReturnType<typeof setInterval> | undefined
 let debugConnection: signalR.HubConnection | undefined
@@ -251,19 +377,21 @@ const graphNodes = computed<Node[]>(() =>
         id: node.id,
         position: { x: node.x ?? (index % 4) * 220, y: node.y ?? Math.floor(index / 4) * 140 },
         label: node.text?.value || node.type,
-        data: { type: node.type },
+        data: { type: node.type, selectedPort: selectedNodeId.value === node.id ? selectedPort.value : undefined },
         class:
             debugStatus.value?.faultNodeId === node.id
                 ? 'workflow-node-faulted'
                 : debugStatus.value?.currentNodeId === node.id
-                ? effectiveDebugState.value === 'running'
-                    ? 'workflow-node-running'
-                    : 'workflow-node-paused'
-                : completedNodeIds.value.includes(node.id)
-                  ? 'workflow-node-completed'
-                : breakpointNodes.value.includes(node.id)
-                  ? 'workflow-node-breakpoint'
-                  : '',
+                  ? effectiveDebugState.value === 'running'
+                      ? 'workflow-node-running'
+                      : 'workflow-node-paused'
+                  : completedNodeIds.value.includes(node.id)
+                    ? 'workflow-node-completed'
+                    : breakpointNodes.value.includes(node.id)
+                      ? 'workflow-node-breakpoint'
+                      : selectedNodeId.value === node.id && selectedPort.value
+                        ? 'workflow-node-port-selected'
+                        : '',
     }))
 )
 const graphEdges = computed<Edge[]>(() =>
@@ -301,11 +429,45 @@ function resetPlcTriggerForm() {
 
 function emptyHandshake(): SaveWorkflowPlcHandshakeConfig {
     return {
-        projectId: projectId.value, plcDeviceId: '', captureRequestTagId: '', requestIdTagId: '',
-        resultAckTagId: '', resultAckIdTagId: '', heartbeatTagId: '', deviceStatusTagId: '',
-        taskStatusTagId: '', canCaptureTagId: '', captureAckTagId: '', ackRequestIdTagId: '',
-        resultValidTagId: '', resultRequestIdTagId: '', resultCodeTagId: '', errorCodeTagId: '', isEnabled: false,
+        projectId: projectId.value,
+        plcDeviceId: '',
+        captureRequestAddress: '',
+        requestIdAddress: '',
+        resultAckAddress: '',
+        resultAckIdAddress: '',
+        heartbeatAddress: '',
+        deviceStatusAddress: '',
+        taskStatusAddress: '',
+        canCaptureAddress: '',
+        captureAckAddress: '',
+        ackRequestIdAddress: '',
+        resultValidAddress: '',
+        resultRequestIdAddress: '',
+        resultCodeAddress: '',
+        errorCodeAddress: '',
+        isEnabled: false,
     }
+}
+
+async function loadHandshakeNodeTree() {
+    handshakeNodeTree.value = []
+    handshakeTreeTruncated.value = false
+    if (!handshakeForm.value.plcDeviceId) return
+    try {
+        handshakeTreeLoading.value = true
+        const result = await browsePlcTree(handshakeForm.value.plcDeviceId)
+        handshakeNodeTree.value = result.items
+        handshakeTreeTruncated.value = result.truncated
+    } catch (error) {
+        toast.error(`加载 OPC UA 节点树失败：${String(error)}`)
+    } finally {
+        handshakeTreeLoading.value = false
+    }
+}
+
+async function onHandshakeDeviceChange() {
+    for (const [field] of handshakeFields) handshakeForm.value[field] = ''
+    await loadHandshakeNodeTree()
 }
 
 async function loadResultOutputs() {
@@ -316,15 +478,11 @@ async function loadResultOutputs() {
         const workflow = await getRuntimeWorkflow(id)
         const parsed = JSON.parse(workflow.outputVariables || '[]')
         resultOutputs.value = Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string') : []
-        if (!resultOutputs.value.includes(taskConfig.value?.resultVariableName || '')) taskConfig.value!.resultVariableName = undefined
-    } catch (error) { toast.error(`加载结果变量失败：${String(error)}`) }
-}
-
-async function loadHandshakeTags() {
-    handshakeTags.value = []
-    if (!handshakeForm.value.plcDeviceId) return
-    try { handshakeTags.value = (await getPlcTags(handshakeForm.value.plcDeviceId)).filter((x) => x.isEnabled) }
-    catch (error) { toast.error(`加载握手点位失败：${String(error)}`) }
+        if (!resultOutputs.value.includes(taskConfig.value?.resultVariableName || ''))
+            taskConfig.value!.resultVariableName = undefined
+    } catch (error) {
+        toast.error(`加载结果变量失败：${String(error)}`)
+    }
 }
 
 async function openTaskDrawer() {
@@ -333,32 +491,63 @@ async function openTaskDrawer() {
     taskLoading.value = true
     try {
         const [tasks, devices, status] = await Promise.all([
-            getProjectTasks(projectId.value), getPlcs(), getWorkflowPlcHandshakeStatus(projectId.value),
+            getProjectTasks(projectId.value),
+            getPlcs(),
+            getWorkflowPlcHandshakeStatus(projectId.value),
         ])
         taskConfig.value = tasks
+        taskConfigBaseline.value = JSON.stringify(tasks)
         plcDevices.value = devices.filter((x) => x.isEnabled)
         handshakeStatus.value = status
-        try { deployment.value = await getProjectDeployments(projectId.value) } catch { deployment.value = undefined }
+        try {
+            applicationStatus.value = await getProjectApplicationStatus(projectId.value)
+            deployment.value = applicationStatus.value.activeDeployment ?? undefined
+        } catch {
+            deployment.value = undefined
+        }
         if (status.isConfigured) {
             const config = await getWorkflowPlcHandshake(projectId.value)
             const { id: _id, ...saveInput } = config
             handshakeForm.value = saveInput
-            await loadHandshakeTags()
-        } else { handshakeForm.value = emptyHandshake() }
+            await loadHandshakeNodeTree()
+        } else {
+            handshakeForm.value = emptyHandshake()
+        }
         await loadResultOutputs()
-    } catch (error) { toast.error(`加载任务配置失败：${String(error)}`) }
-    finally { taskLoading.value = false }
+    } catch (error) {
+        toast.error(`加载任务配置失败：${String(error)}`)
+    } finally {
+        taskLoading.value = false
+    }
 }
 
 async function saveTaskConfig() {
     if (!taskConfig.value) return
     try {
         taskSaving.value = true
-        taskConfig.value.items.forEach((x, index) => { x.orderNo = index })
-        taskConfig.value = await updateProjectTasks(taskConfig.value)
-        toast.success('任务配置已保存；修改后需要重新发布并激活。')
-    } catch (error) { toast.error(`保存任务配置失败：${String(error)}`) }
-    finally { taskSaving.value = false }
+        if (dirty.value && !(await save())) return
+        if (!applicationStatus.value) applicationStatus.value = await getProjectApplicationStatus(projectId.value)
+        taskConfig.value.items.forEach((x, index) => {
+            x.orderNo = index
+        })
+        const result = await applyProjectToDevice(
+            projectId.value,
+            taskConfig.value,
+            applicationStatus.value.activeDeployment?.id
+        )
+        deployment.value = result.deployment
+        taskConfigBaseline.value = JSON.stringify(taskConfig.value)
+        applicationStatus.value = await getProjectApplicationStatus(projectId.value)
+        toast.success(
+            result.unchanged
+                ? `任务配置已生效 R${result.deployment.revision}。`
+                : `任务配置已保存并生效 R${result.deployment.revision}。`
+        )
+    } catch (error) {
+        toast.error(`保存并生效任务配置失败：${String(error)}`)
+    } finally {
+        taskSaving.value = false
+    }
 }
 
 function moveTask(index: number, offset: number) {
@@ -369,15 +558,26 @@ function moveTask(index: number, offset: number) {
     taskConfig.value.items.splice(target, 0, item!)
 }
 
-async function publishAndActivate() {
+async function openVersionHistory() {
     if (!projectId.value) return
+    versionHistoryOpen.value = true
     try {
-        taskSaving.value = true
-        const published = await publishProjectDeployment(projectId.value)
-        deployment.value = await activateProjectDeployment(published.id)
-        toast.success(`部署 rev ${deployment.value.revision} 已激活。`)
-    } catch (error) { toast.error(`发布激活失败：${String(error)}`) }
-    finally { taskSaving.value = false }
+        deploymentHistory.value = (await getProjectDeploymentHistory(projectId.value, 0, 100)).items
+    } catch (error) {
+        toast.error(`加载版本历史失败：${String(error)}`)
+    }
+}
+
+async function rollbackToVersion(item: ProjectDeployment) {
+    if (!(await confirmAction({ message: `确认将设备回滚到 R${item.revision}？` }))) return
+    try {
+        deployment.value = await rollbackProjectDeployment(item.id)
+        applicationStatus.value = await getProjectApplicationStatus(projectId.value)
+        deploymentHistory.value = (await getProjectDeploymentHistory(projectId.value, 0, 100)).items
+        toast.success(`已回滚并应用 R${item.revision}。`)
+    } catch (error) {
+        toast.error(`回滚失败：${String(error)}`)
+    }
 }
 
 async function saveHandshake() {
@@ -388,14 +588,21 @@ async function saveHandshake() {
         await saveWorkflowPlcHandshake(projectId.value, handshakeForm.value)
         handshakeStatus.value = await getWorkflowPlcHandshakeStatus(projectId.value)
         toast.success('PLC 握手配置已保存。')
-    } catch (error) { toast.error(`保存 PLC 握手配置失败：${String(error)}`) }
-    finally { taskSaving.value = false }
+    } catch (error) {
+        toast.error(`保存 PLC 握手配置失败：${String(error)}`)
+    } finally {
+        taskSaving.value = false
+    }
 }
 
 async function resetHandshake() {
     if (!projectId.value || !(await confirmAction({ message: '确认复位当前 PLC 握手状态？' }))) return
-    try { handshakeStatus.value = await resetWorkflowPlcHandshake(projectId.value); toast.success('握手状态已复位。') }
-    catch (error) { toast.error(`复位失败：${String(error)}`) }
+    try {
+        handshakeStatus.value = await resetWorkflowPlcHandshake(projectId.value)
+        toast.success('握手状态已复位。')
+    } catch (error) {
+        toast.error(`复位失败：${String(error)}`)
+    }
 }
 
 async function openPlcTriggerDrawer() {
@@ -428,14 +635,24 @@ async function loadPlcTags() {
 function editPlcTrigger(trigger: WorkflowPlcTrigger) {
     plcTriggerDebugValue.value = undefined
     editingPlcTriggerId.value = trigger.id
-    plcTriggerForm.value = { plcDeviceId: trigger.plcDeviceId, plcTagId: trigger.plcTagId, value: '', tolerance: trigger.tolerance, isEnabled: trigger.isEnabled }
-    void getPlcTags(trigger.plcDeviceId).then((tags) => {
-        plcTags.value = tags.filter((tag) => tag.isEnabled || tag.id === trigger.plcTagId)
-        try {
-            const parsed = JSON.parse(trigger.expectedValueJson)
-            plcTriggerForm.value.value = typeof parsed === 'string' ? parsed : String(parsed)
-        } catch { plcTriggerForm.value.value = trigger.expectedValueJson }
-    }).catch((error) => toast.error(`加载 PLC 点位失败：${String(error)}`))
+    plcTriggerForm.value = {
+        plcDeviceId: trigger.plcDeviceId,
+        plcTagId: trigger.plcTagId,
+        value: '',
+        tolerance: trigger.tolerance,
+        isEnabled: trigger.isEnabled,
+    }
+    void getPlcTags(trigger.plcDeviceId)
+        .then((tags) => {
+            plcTags.value = tags.filter((tag) => tag.isEnabled || tag.id === trigger.plcTagId)
+            try {
+                const parsed = JSON.parse(trigger.expectedValueJson)
+                plcTriggerForm.value.value = typeof parsed === 'string' ? parsed : String(parsed)
+            } catch {
+                plcTriggerForm.value.value = trigger.expectedValueJson
+            }
+        })
+        .catch((error) => toast.error(`加载 PLC 点位失败：${String(error)}`))
 }
 
 function expectedValueJson() {
@@ -460,34 +677,53 @@ async function readPlcTriggerDebugValue() {
         const values = await readPlcTags(plcTriggerForm.value.plcDeviceId, [selectedPlcTag.value.id])
         plcTriggerDebugValue.value = values[0]
         if (!values.length) toast.warning('PLC 未返回该点位的值。')
-    } catch (error) { toast.error(`读取触发点位失败：${String(error)}`) }
-    finally { plcTriggerDebugging.value = false }
+    } catch (error) {
+        toast.error(`读取触发点位失败：${String(error)}`)
+    } finally {
+        plcTriggerDebugging.value = false
+    }
 }
 
 async function writePlcTriggerDebugValue() {
     if (!selectedPlcTag.value || !selectedPlcCanWrite.value) return
     try {
         plcTriggerDebugging.value = true
-        await writePlcTag(plcTriggerForm.value.plcDeviceId, selectedPlcTag.value.id, JSON.parse(expectedValueJson()) as unknown)
+        await writePlcTag(
+            plcTriggerForm.value.plcDeviceId,
+            selectedPlcTag.value.id,
+            JSON.parse(expectedValueJson()) as unknown
+        )
         toast.success('已写入目标值，请观察任务是否被触发。')
         if (selectedPlcCanRead.value) await readPlcTriggerDebugValue()
-    } catch (error) { toast.error(`写入调试值失败：${error instanceof Error ? error.message : String(error)}`) }
-    finally { plcTriggerDebugging.value = false }
+    } catch (error) {
+        toast.error(`写入调试值失败：${error instanceof Error ? error.message : String(error)}`)
+    } finally {
+        plcTriggerDebugging.value = false
+    }
 }
 
 function plcDebugValueText(value: unknown) {
     if (value === undefined) return '-'
     if (typeof value === 'string') return value
-    try { return JSON.stringify(value) } catch { return String(value) }
+    try {
+        return JSON.stringify(value)
+    } catch {
+        return String(value)
+    }
 }
 
 async function savePlcTrigger() {
-    if (!projectId.value || !selectedPlcTag.value) { toast.warning('请选择 PLC 和点位。'); return }
+    if (!projectId.value || !selectedPlcTag.value) {
+        toast.warning('请选择 PLC 和点位。')
+        return
+    }
     try {
         plcTriggerSaving.value = true
         const input: SaveWorkflowPlcTrigger = {
-            projectId: projectId.value, plcDeviceId: plcTriggerForm.value.plcDeviceId,
-            plcTagId: plcTriggerForm.value.plcTagId, expectedValueJson: expectedValueJson(),
+            projectId: projectId.value,
+            plcDeviceId: plcTriggerForm.value.plcDeviceId,
+            plcTagId: plcTriggerForm.value.plcTagId,
+            expectedValueJson: expectedValueJson(),
             tolerance: selectedPlcIsFloat.value ? Math.max(0, plcTriggerForm.value.tolerance) : 0,
             isEnabled: plcTriggerForm.value.isEnabled,
         }
@@ -497,14 +733,18 @@ async function savePlcTrigger() {
         toast.success('PLC 触发配置已保存。')
     } catch (error) {
         toast.error(`保存 PLC 触发配置失败：${error instanceof Error ? error.message : String(error)}`)
-    } finally { plcTriggerSaving.value = false }
+    } finally {
+        plcTriggerSaving.value = false
+    }
 }
 
 async function togglePlcTrigger(trigger: WorkflowPlcTrigger) {
     try {
         await saveWorkflowPlcTrigger(trigger.id, { ...trigger, isEnabled: !trigger.isEnabled })
         plcTriggers.value = await getWorkflowPlcTriggers(projectId.value)
-    } catch (error) { toast.error(`更新触发状态失败：${String(error)}`) }
+    } catch (error) {
+        toast.error(`更新触发状态失败：${String(error)}`)
+    }
 }
 
 async function removePlcTrigger(trigger: WorkflowPlcTrigger) {
@@ -514,11 +754,17 @@ async function removePlcTrigger(trigger: WorkflowPlcTrigger) {
         plcTriggers.value = plcTriggers.value.filter((item) => item.id !== trigger.id)
         if (editingPlcTriggerId.value === trigger.id) resetPlcTriggerForm()
         toast.success('PLC 触发配置已删除。')
-    } catch (error) { toast.error(`删除 PLC 触发配置失败：${String(error)}`) }
+    } catch (error) {
+        toast.error(`删除 PLC 触发配置失败：${String(error)}`)
+    }
 }
 
 function triggerValueDisplay(trigger: WorkflowPlcTrigger) {
-    try { return JSON.parse(trigger.expectedValueJson) as string | number | boolean } catch { return trigger.expectedValueJson }
+    try {
+        return JSON.parse(trigger.expectedValueJson) as string | number | boolean
+    } catch {
+        return trigger.expectedValueJson
+    }
 }
 
 function plcDeviceName(id: string) {
@@ -581,9 +827,7 @@ async function restoreDebugSession() {
     try {
         const sessions = await getDebugSessions(projectId.value)
         const workflowSessions = sessions.filter((item) => item.workflowId === workflowId.value)
-        const session =
-            workflowSessions.find((item) => !item.isTerminal)
-            ?? workflowSessions[0]
+        const session = workflowSessions.find((item) => !item.isTerminal) ?? workflowSessions[0]
         if (!session) return
 
         executionId.value = session.executionId
@@ -594,7 +838,7 @@ async function restoreDebugSession() {
         await connectDebugEvents(session.executionId)
         await applyDebugStatus(session)
         output.value.unshift(
-            `已恢复调试会话：${session.debugState ?? 'paused'}，进度 ${session.executedSteps}/${session.totalSteps}`,
+            `已恢复调试会话：${session.debugState ?? 'paused'}，进度 ${session.executedSteps}/${session.totalSteps}`
         )
     } catch (error) {
         executionId.value = ''
@@ -619,10 +863,7 @@ async function validateNow() {
         model,
         'workflow',
         result.diagnostics.map((item) => ({
-            severity:
-                item.severity === 'warning'
-                    ? monaco.MarkerSeverity.Warning
-                    : monaco.MarkerSeverity.Error,
+            severity: item.severity === 'warning' ? monaco.MarkerSeverity.Warning : monaco.MarkerSeverity.Error,
             message: `[${item.code}] ${item.message}`,
             startLineNumber: Math.max(1, item.range.start.line),
             startColumn: Math.max(1, item.range.start.column),
@@ -638,14 +879,16 @@ function scheduleValidation() {
 }
 
 async function save() {
-    if (!source.value) return
+    if (!source.value) return false
     saving.value = true
     try {
         source.value = await saveWorkflowSource(source.value.workflowId, source.value)
         dirty.value = false
         output.value.unshift(`已保存 revision ${source.value.revision}`)
+        return true
     } catch (error) {
         output.value.unshift(`保存失败：${String(error)}`)
+        return false
     } finally {
         saving.value = false
     }
@@ -784,11 +1027,12 @@ async function stepMode(mode: 'into' | 'over' | 'out') {
     if (!canStepDebug.value) return
     debugActivity.value = 'running'
     try {
-        const status = mode === 'into'
-            ? await stepInto(executionId.value)
-            : mode === 'over'
-              ? await stepOver(executionId.value)
-              : await stepOut(executionId.value)
+        const status =
+            mode === 'into'
+                ? await stepInto(executionId.value)
+                : mode === 'over'
+                  ? await stepOver(executionId.value)
+                  : await stepOut(executionId.value)
         debugActivity.value = 'idle'
         await applyDebugStatus(status)
     } finally {
@@ -829,11 +1073,13 @@ async function refreshDebugDetails() {
         getTrace(executionId.value),
         getPerformance(executionId.value),
     ])
-    completedNodeIds.value = Array.from(new Set(
-        traceResults.value
-            .filter((item) => item.nodeId && item.status !== 'faulted')
-            .map((item) => String(item.nodeId)),
-    ))
+    completedNodeIds.value = Array.from(
+        new Set(
+            traceResults.value
+                .filter((item) => item.nodeId && item.status !== 'faulted')
+                .map((item) => String(item.nodeId))
+        )
+    )
 }
 
 async function applyDebugStatus(status: DebugStatus, eventUpdatedAt?: string) {
@@ -859,23 +1105,21 @@ async function applyDebugStatus(status: DebugStatus, eventUpdatedAt?: string) {
     if (effectiveStatus.debugState === 'completed') {
         if (terminalMessageKey !== lastTerminalMessageKey) {
             output.value.unshift(
-                `调试执行完成：${effectiveStatus.executedSteps}/${effectiveStatus.totalSteps} 个节点，耗时 ${formatDuration(effectiveStatus.durationMs ?? 0)}，输出 ${debugResults.value.length} 项`,
+                `调试执行完成：${effectiveStatus.executedSteps}/${effectiveStatus.totalSteps} 个节点，耗时 ${formatDuration(effectiveStatus.durationMs ?? 0)}，输出 ${debugResults.value.length} 项`
             )
         }
         bottomTab.value = 'results'
     } else if (effectiveStatus.debugState === 'faulted') {
         if (terminalMessageKey !== lastTerminalMessageKey) {
             output.value.unshift(
-                `调试执行失败${effectiveStatus.faultNodeId ? `（节点 ${effectiveStatus.faultNodeId}）` : ''}：${effectiveStatus.errorMessage || '未知错误'}`,
+                `调试执行失败${effectiveStatus.faultNodeId ? `（节点 ${effectiveStatus.faultNodeId}）` : ''}：${effectiveStatus.errorMessage || '未知错误'}`
             )
         }
         bottomTab.value = 'output'
     }
     if (terminalMessageKey) lastTerminalMessageKey = terminalMessageKey
     await nextTick()
-    const currentNode = source.value?.graphData.nodes.find(
-        (node) => node.id === status.currentNodeId,
-    )
+    const currentNode = source.value?.graphData.nodes.find((node) => node.id === status.currentNodeId)
     if (currentNode) {
         selectedNodeId.value = currentNode.id
         await setCenter(currentNode.x ?? 0, currentNode.y ?? 0, {
@@ -924,9 +1168,9 @@ function scheduleDebugResultRetry(status: DebugStatus) {
     resultRetryTimer = setTimeout(() => {
         resultRetryTimer = undefined
         if (
-            executionId.value === status.executionId
-            && debugStatus.value?.debugState === 'completed'
-            && resultExecutionId !== status.executionId
+            executionId.value === status.executionId &&
+            debugStatus.value?.debugState === 'completed' &&
+            resultExecutionId !== status.executionId
         ) {
             void ensureDebugResult(debugStatus.value)
         }
@@ -946,12 +1190,15 @@ async function connectDebugEvents(id: string) {
             'DebugStateChangedAsync',
             async (eventExecutionId: string, eventType: string, updatedAt: string, status: DebugStatus) => {
                 if (eventExecutionId.toLowerCase() !== executionId.value.toLowerCase()) return
-                if (eventType === 'node-completed' && status.currentNodeId
-                    && !completedNodeIds.value.includes(status.currentNodeId)) {
+                if (
+                    eventType === 'node-completed' &&
+                    status.currentNodeId &&
+                    !completedNodeIds.value.includes(status.currentNodeId)
+                ) {
                     completedNodeIds.value.push(status.currentNodeId)
                 }
                 await applyDebugStatus(status, updatedAt)
-            },
+            }
         )
         debugConnection.onreconnected(async () => {
             joinedExecutionId = ''
@@ -1005,10 +1252,7 @@ function formatDuration(ms: number) {
     return `${(ms / 1000).toFixed(2)} s`
 }
 
-function tableColumns(
-    rows: Array<Record<string, unknown>>,
-    preferred: string[],
-): string[] {
+function tableColumns(rows: Array<Record<string, unknown>>, preferred: string[]): string[] {
     const available = new Set(rows.flatMap((row) => Object.keys(row)))
     return [
         ...preferred.filter((key) => available.has(key)),
@@ -1028,15 +1272,7 @@ function resultPresentation(result: DebugExecutionResult): WorkflowResultPresent
 }
 
 function isFilePresentation(presentation: WorkflowResultPresentation): boolean {
-    return [
-        'image',
-        'point-cloud',
-        'model-3d',
-        'cad',
-        'json-file',
-        'text-file',
-        'file',
-    ].includes(presentation)
+    return ['image', 'point-cloud', 'model-3d', 'cad', 'json-file', 'text-file', 'file'].includes(presentation)
 }
 
 function openResultPreview(result: DebugExecutionResult) {
@@ -1050,10 +1286,19 @@ function selectProblem(problem: IdeDiagnostic) {
     editor?.focus()
 }
 
-function selectGraphNode(event: { node: Node }) {
+async function selectGraphNode(event: { node: Node }) {
     selectedNodeId.value = event.node.id
+    selectedPort.value = undefined
     const problem = problems.value.find((x) => x.nodeId === event.node.id)
     if (problem) selectProblem(problem)
+    else if (editor) {
+        const result = await mapPosition({ ...ideInput(0), nodeId: event.node.id })
+        if (result.documentVersion === documentVersion.value && result.range) {
+            activeView.value = 'source'
+            editor.setPosition({ lineNumber: result.range.start.line, column: result.range.start.column })
+            editor.revealLineInCenter(result.range.start.line)
+        }
+    }
 }
 
 function toggleBreakpoint(nodeId: string) {
@@ -1092,7 +1337,7 @@ function registerLanguage() {
     }
     disposables.push(
         monaco.languages.registerCompletionItemProvider('aurora-workflow', {
-            triggerCharacters: ['(', ',', ':', ' '],
+            triggerCharacters: ['(', ',', ':', ' ', '.', '['],
             provideCompletionItems: async (model, position) => {
                 const version = documentVersion.value
                 const result = await completions(ideInput(model.getOffsetAt(position)))
@@ -1114,10 +1359,124 @@ function registerLanguage() {
                                 ? monaco.languages.CompletionItemKind.Class
                                 : item.kind === 'variable'
                                   ? monaco.languages.CompletionItemKind.Variable
-                                : monaco.languages.CompletionItemKind.Function,
+                                  : item.kind === 'property'
+                                    ? monaco.languages.CompletionItemKind.Property
+                                    : item.kind === 'enum'
+                                      ? monaco.languages.CompletionItemKind.EnumMember
+                                      : monaco.languages.CompletionItemKind.Function,
                         insertText: item.insertText,
                         insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
                         range,
+                    })),
+                }
+            },
+        }),
+        monaco.languages.registerHoverProvider('aurora-workflow', {
+            provideHover: async (model, position) => {
+                const result = await hover(ideInput(model.getOffsetAt(position)))
+                if (!result.markdown) return null
+                return { contents: [{ value: result.markdown }] }
+            },
+        }),
+        monaco.languages.registerDefinitionProvider('aurora-workflow', {
+            provideDefinition: async (model, position) => {
+                const result = await definition(ideInput(model.getOffsetAt(position)))
+                return result.locations.map((location) => {
+                    let uri = model.uri
+                    if (location.uri && location.virtualSource) {
+                        uri = monaco.Uri.parse(location.uri)
+                        const existing = monaco.editor.getModel(uri)
+                        if (existing) existing.setValue(location.virtualSource)
+                        else monaco.editor.createModel(location.virtualSource, 'csharp', uri)
+                    }
+                    return {
+                        uri,
+                        range: new monaco.Range(
+                            location.range.start.line,
+                            location.range.start.column,
+                            location.range.end.line,
+                            location.range.end.column
+                        ),
+                    }
+                })
+            },
+        }),
+        monaco.languages.registerReferenceProvider('aurora-workflow', {
+            provideReferences: async (model, position) => {
+                const result = await references(ideInput(model.getOffsetAt(position)))
+                return result.locations.map((location) => ({
+                    uri: model.uri,
+                    range: new monaco.Range(
+                        location.range.start.line,
+                        location.range.start.column,
+                        location.range.end.line,
+                        location.range.end.column
+                    ),
+                }))
+            },
+        }),
+        monaco.languages.registerDocumentSemanticTokensProvider('aurora-workflow', {
+            getLegend: () => ({ tokenTypes: ['keyword', 'type', 'variable', 'property', 'enumMember', 'function', 'parameter'], tokenModifiers: [] }),
+            provideDocumentSemanticTokens: async (_model) => {
+                const version = documentVersion.value
+                const result = await semanticTokens(ideInput(0))
+                if (result.documentVersion !== version) return { data: new Uint32Array() }
+                const typeIndex: Record<string, number> = {
+                    keyword: 0, type: 1, variable: 2, property: 3,
+                    enumMember: 4, function: 5, parameter: 6,
+                }
+                const sorted = [...result.tokens].sort((a, b) =>
+                    a.range.start.line - b.range.start.line || a.range.start.column - b.range.start.column)
+                const data: number[] = []
+                let lastLine = 0
+                let lastColumn = 0
+                for (const token of sorted) {
+                    const line = token.range.start.line - 1
+                    const column = token.range.start.column - 1
+                    const deltaLine = line - lastLine
+                    const deltaColumn = deltaLine === 0 ? column - lastColumn : column
+                    const length = Math.max(1, token.range.end.offset - token.range.start.offset)
+                    data.push(deltaLine, deltaColumn, length, typeIndex[token.type] ?? 5, 0)
+                    lastLine = line
+                    lastColumn = column
+                }
+                return { data: new Uint32Array(data) }
+            },
+            releaseDocumentSemanticTokens: () => undefined,
+        }),
+        monaco.languages.registerRenameProvider('aurora-workflow', {
+            resolveRenameLocation: (model, position) => {
+                const word = model.getWordAtPosition(position)
+                if (!word) throw new Error('当前位置没有可重命名的符号')
+                return {
+                    text: word.word,
+                    range: new monaco.Range(position.lineNumber, word.startColumn, position.lineNumber, word.endColumn),
+                }
+            },
+            provideRenameEdits: async (model, position, newName) => {
+                if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(newName)) {
+                    return { edits: [], rejectReason: '变量名必须是合法标识符' }
+                }
+                const word = model.getWordAtPosition(position)
+                if (!word) return { edits: [], rejectReason: '当前位置没有可重命名的变量' }
+                const result = await renameSymbol({
+                    ...ideInput(model.getOffsetAt(position)), oldName: word.word, newName,
+                })
+                const error = result.diagnostics.find((item) => item.severity === 'error')
+                if (error) return { edits: [], rejectReason: error.message }
+                return {
+                    edits: result.edits.map((edit) => ({
+                        resource: model.uri,
+                        textEdit: {
+                            text: edit.newText,
+                            range: new monaco.Range(
+                                edit.range.start.line,
+                                edit.range.start.column,
+                                edit.range.end.line,
+                                edit.range.end.column
+                            ),
+                        },
+                        versionId: model.getVersionId(),
                     })),
                 }
             },
@@ -1191,9 +1550,31 @@ onMounted(async () => {
             dirty.value = true
             scheduleValidation()
         })
+        editor.onDidChangeCursorPosition((event) => {
+            clearTimeout(cursorMapTimer)
+            cursorMapTimer = setTimeout(async () => {
+                if (!editor) return
+                const result = await mapPosition(ideInput(editor.getModel()!.getOffsetAt(event.position)))
+                if (result.documentVersion === documentVersion.value && result.nodeId)
+                {
+                    selectedNodeId.value = result.nodeId
+                    selectedPort.value = result.portName && result.portDirection
+                        ? { name: result.portName, direction: result.portDirection }
+                        : undefined
+                }
+            }, 120)
+        })
     }
     await loadProjects()
     await loadWorkflows()
+    if (projectId.value) {
+        try {
+            applicationStatus.value = await getProjectApplicationStatus(projectId.value)
+            deployment.value = applicationStatus.value.activeDeployment ?? undefined
+        } catch {
+            applicationStatus.value = undefined
+        }
+    }
     await loadWorkflow()
 })
 
@@ -1204,6 +1585,9 @@ watch(projectId, () => {
     resetPlcTriggerForm()
     workflowId.value = ''
     source.value = null
+    applicationStatus.value = undefined
+    taskConfig.value = undefined
+    taskConfigBaseline.value = ''
     void router.replace({
         query: {
             ...route.query,
@@ -1212,9 +1596,15 @@ watch(projectId, () => {
         },
     })
     void loadWorkflows()
+    if (projectId.value)
+        void getProjectApplicationStatus(projectId.value).then((status) => {
+            applicationStatus.value = status
+            deployment.value = status.activeDeployment ?? undefined
+        })
 })
 onBeforeUnmount(() => {
     clearTimeout(validationTimer)
+    clearTimeout(cursorMapTimer)
     clearTimeout(resultRetryTimer)
     clearInterval(clockTimer)
     stopDebugPolling()
@@ -1243,66 +1633,315 @@ function handleDebugShortcut(event: KeyboardEvent) {
     event.preventDefault()
     void primaryDebugAction()
 }
+
+async function previewMigration() {
+    migrationBusy.value = true
+    migrationPanelOpen.value = true
+    try {
+        const result = await previewWorkflowMigration()
+        migrationItems.value = result.items
+        toast.success(`扫描 ${result.scannedCount} 个，${result.migratableCount} 个可迁移。`)
+    } catch (error) {
+        toast.error(`迁移预览失败：${String(error)}`)
+    } finally { migrationBusy.value = false }
+}
+
+async function executeMigration() {
+    if (!(await confirmAction({ header: '执行旧工作流迁移', message: '将逐工作流备份并升级为 V3，确认继续？' }))) return
+    migrationBusy.value = true
+    try {
+        migrationBatch.value = await startWorkflowMigration()
+        migrationItems.value = migrationBatch.value.items
+        toast.success(`迁移完成：成功 ${migrationBatch.value.migratedCount}，失败 ${migrationBatch.value.failedCount}。`)
+    } catch (error) { toast.error(`迁移失败：${String(error)}`) }
+    finally { migrationBusy.value = false }
+}
+
+async function retryMigration() {
+    if (!migrationBatch.value) return
+    migrationBusy.value = true
+    try {
+        migrationBatch.value = await retryWorkflowMigration(migrationBatch.value.batchId)
+        migrationItems.value = migrationBatch.value.items
+    } finally { migrationBusy.value = false }
+}
+
+async function rollbackMigration(workflowId?: string) {
+    if (!migrationBatch.value || !(await confirmAction({ header: '回滚迁移', message: '将恢复迁移前完整快照，确认继续？' }))) return
+    migrationBusy.value = true
+    try {
+        migrationBatch.value = await rollbackWorkflowMigration(migrationBatch.value.batchId, workflowId)
+        migrationItems.value = migrationBatch.value.items
+        toast.success('迁移已回滚。')
+    } finally { migrationBusy.value = false }
+}
 </script>
 
 <template>
-    <div class="workflow-ide-shell -m-3 flex h-[calc(100vh-3.5rem)] flex-col overflow-hidden bg-background text-foreground sm:-m-4 lg:-m-6">
+    <div
+        class="workflow-ide-shell -m-3 flex h-[calc(100vh-3.5rem)] flex-col overflow-hidden bg-background text-foreground sm:-m-4 lg:-m-6"
+    >
         <header class="flex-none border-b bg-card/70 shadow-sm backdrop-blur">
             <div class="flex min-h-12 flex-wrap items-center gap-2 px-3 py-2">
-                <div class="mr-1 flex items-center gap-2 font-medium"><GitBranch class="size-4 text-primary" /><span class="hidden xl:inline">工作流调试</span></div>
-                <input v-model.trim="projectFilter" class="ide-field w-36" placeholder="搜索项目" title="按项目名称或编号搜索" />
-                <select v-model="projectId" class="ide-field min-w-52 max-w-72 flex-1"><option value="" disabled>选择项目</option><option v-for="item in filteredProjects" :key="item.id" :value="item.id">{{ item.projectCode }} · {{ item.name }}</option></select>
-                <select v-model="workflowId" class="ide-field min-w-44 max-w-64 flex-1"><option value="" disabled>选择工作流</option><option v-for="item in workflows" :key="item.id" :value="item.id">{{ item.name }}</option></select>
-                <span class="debug-state-badge" :class="debugStateInfo.className"><span class="debug-state-dot" />{{ debugStateInfo.label }}<template v-if="debugStatus"> · {{ debugStatus.executedSteps }}/{{ debugStatus.totalSteps }} · {{ formatDuration(displayDurationMs) }}</template></span>
-                <span v-if="effectiveDebugState === 'running' && debugStatus?.currentNodeName" class="max-w-52 truncate text-xs text-muted-foreground">{{ debugStatus.currentNodeName }}<template v-if="displayCurrentNodeDurationMs >= 2000"> · {{ formatDuration(displayCurrentNodeDurationMs) }}</template></span>
-                <span class="ml-auto whitespace-nowrap text-xs" :class="dirty ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'">{{ dirty ? '● 未保存' : '已同步' }}<template v-if="source"> · rev {{ source.revision }}</template></span>
+                <div class="mr-1 flex items-center gap-2 font-medium">
+                    <GitBranch class="size-4 text-primary" />
+                    <span class="hidden xl:inline">工作流调试</span>
+                </div>
+                <InputText
+                    v-model.trim="projectFilter"
+                    size="small"
+                    class="w-36"
+                    placeholder="搜索项目"
+                    title="按项目名称或编号搜索"
+                />
+                <Select
+                    v-model="projectId"
+                    size="small"
+                    class="min-w-52 max-w-72 flex-1"
+                    :options="filteredProjects"
+                    option-label="name"
+                    option-value="id"
+                    placeholder="选择项目"
+                >
+                    <template #option="{ option }">{{ option.projectCode }} · {{ option.name }}</template>
+                </Select>
+                <Select
+                    v-model="workflowId"
+                    size="small"
+                    class="min-w-44 max-w-64 flex-1"
+                    :options="workflows"
+                    option-label="name"
+                    option-value="id"
+                    placeholder="选择工作流"
+                />
+                <span class="debug-state-badge" :class="debugStateInfo.className">
+                    <span class="debug-state-dot" />
+                    {{ debugStateInfo.label }}
+                    <template v-if="debugStatus">
+                        · {{ debugStatus.executedSteps }}/{{ debugStatus.totalSteps }} ·
+                        {{ formatDuration(displayDurationMs) }}
+                    </template>
+                </span>
+                <span
+                    v-if="effectiveDebugState === 'running' && debugStatus?.currentNodeName"
+                    class="max-w-52 truncate text-xs text-muted-foreground"
+                >
+                    {{ debugStatus.currentNodeName }}
+                    <template v-if="displayCurrentNodeDurationMs >= 2000">
+                        · {{ formatDuration(displayCurrentNodeDurationMs) }}
+                    </template>
+                </span>
+                <span
+                    class="ml-auto whitespace-nowrap text-xs"
+                    :class="
+                        dirty || taskConfigDirty || applicationStatus?.hasUnappliedChanges
+                            ? 'text-amber-600 dark:text-amber-400'
+                            : 'text-emerald-600'
+                    "
+                >
+                    {{
+                        dirty
+                            ? '● 工作流未保存'
+                            : taskConfigDirty
+                              ? '● 任务配置未保存'
+                              : deployment
+                                ? `任务已生效 R${deployment.revision}`
+                                : '尚未配置任务'
+                    }}
+                </span>
             </div>
             <div class="ide-action-bar">
-                <div class="ide-action-group"><button class="ide-button ide-button-primary" :disabled="!dirty || saving" @click="save"><Save class="size-4" />{{ saving ? '保存中' : '保存' }}</button><button class="ide-button" :disabled="!projectId" @click="openTaskDrawer">任务配置</button><button class="ide-button" :disabled="!projectId" @click="openPlcTriggerDrawer">PLC 触发</button><button class="ide-button" @click="formatDocument"><WandSparkles class="size-4" />格式化</button></div>
-                <div class="ide-action-group"><button class="ide-button ide-button-primary" :disabled="!canPrimaryDebug" title="调试运行/继续 (F5)" @click="primaryDebugAction"><Bug v-if="primaryDebugLabel === '调试运行'" class="size-4" /><Play v-else class="size-4" />{{ primaryDebugLabel }}</button>
-            <button class="ide-button" :disabled="!canPauseDebug" @click="pause">暂停</button>
-            <button class="ide-button" :disabled="debugActivity !== 'idle' || (!!executionId && !canStepDebug)"
-                @click="stepOnce"><StepForward class="size-4" />单步</button>
-            <button class="ide-button" :disabled="!selectedNodeId" :aria-pressed="selectedHasBreakpoint"
-                :title="selectedHasBreakpoint ? '取消选中节点的断点' : '在选中节点执行前暂停'"
-                @click="toggleSelectedBreakpoint">
-                {{ selectedHasBreakpoint ? '取消断点' : '设置断点' }}
-            </button>
-            <button class="ide-button" :disabled="!canStepDebug" title="执行当前节点后停在下一节点；扁平工作流中等同于“越过”"
-                @click="stepMode('into')">进入节点</button>
-            <button class="ide-button" :disabled="!canStepDebug" title="执行当前节点后停在下一节点；当前工作流没有可进入的子调用"
-                @click="stepMode('over')">越过节点</button>
-            <button class="ide-button" :disabled="!canStepDebug" title="当前为顶层工作流，将运行到工作流结束"
-                @click="stepMode('out')">跳出工作流</button>
-            <button class="ide-button"
-                :disabled="!selectedNodeId || debugActivity !== 'idle' || (!!executionId && !canContinueDebug)"
-                @click="runToSelection">运行到节点</button>
-            <button class="ide-button" :disabled="!canStopDebug" @click="stop"><CircleStop class="size-4" />停止</button>
+                <div class="ide-action-group">
+                    <Button size="small" :disabled="!dirty || saving || taskSaving" @click="save">
+                        <Save class="size-3.5" />
+                        {{ saving ? '保存中' : '保存工作流' }}
+                    </Button>
+                    <Button size="small" severity="secondary" outlined :disabled="!projectId" @click="openTaskDrawer">
+                        任务配置
+                    </Button>
+                    <Button size="small" severity="secondary" outlined @click="openOperatorDocs">算子说明</Button>
+                    <Button size="small" severity="secondary" outlined :loading="migrationBusy" @click="previewMigration">
+                        V1/V2 迁移
+                    </Button>
+                    <Button
+                        size="small"
+                        severity="secondary"
+                        outlined
+                        :disabled="!projectId"
+                        @click="openVersionHistory"
+                    >
+                        版本历史
+                    </Button>
+                    <Button
+                        size="small"
+                        severity="secondary"
+                        outlined
+                        :disabled="!projectId"
+                        @click="openPlcTriggerDrawer"
+                    >
+                        PLC 触发
+                    </Button>
+                    <Button size="small" severity="secondary" outlined @click="formatDocument">
+                        <WandSparkles class="size-3.5" />
+                        格式化
+                    </Button>
+                </div>
+                <div class="ide-action-group">
+                    <Button
+                        size="small"
+                        :disabled="!canPrimaryDebug"
+                        title="调试运行/继续 (F5)"
+                        @click="primaryDebugAction"
+                    >
+                        <Bug v-if="primaryDebugLabel === '调试运行'" class="size-3.5" />
+                        <Play v-else class="size-3.5" />
+                        {{ primaryDebugLabel }}
+                    </Button>
+                    <Button size="small" severity="secondary" outlined :disabled="!canPauseDebug" @click="pause">
+                        暂停
+                    </Button>
+                    <Button
+                        size="small"
+                        severity="secondary"
+                        outlined
+                        :disabled="debugActivity !== 'idle' || (!!executionId && !canStepDebug)"
+                        @click="stepOnce"
+                    >
+                        <StepForward class="size-3.5" />
+                        单步
+                    </Button>
+                    <Button
+                        size="small"
+                        severity="secondary"
+                        outlined
+                        :disabled="!selectedNodeId"
+                        :aria-pressed="selectedHasBreakpoint"
+                        :title="selectedHasBreakpoint ? '取消选中节点的断点' : '在选中节点执行前暂停'"
+                        @click="toggleSelectedBreakpoint"
+                    >
+                        {{ selectedHasBreakpoint ? '取消断点' : '设置断点' }}
+                    </Button>
+                    <Button
+                        size="small"
+                        severity="secondary"
+                        outlined
+                        :disabled="!canStepDebug"
+                        title="执行当前节点后停在下一节点；扁平工作流中等同于“越过"
+                        @click="stepMode('into')"
+                    >
+                        进入节点
+                    </Button>
+                    <Button
+                        size="small"
+                        severity="secondary"
+                        outlined
+                        :disabled="!canStepDebug"
+                        title="执行当前节点后停在下一节点；当前工作流没有可进入的子调用"
+                        @click="stepMode('over')"
+                    >
+                        越过节点
+                    </Button>
+                    <Button
+                        size="small"
+                        severity="secondary"
+                        outlined
+                        :disabled="!canStepDebug"
+                        title="当前为顶层工作流，将运行到工作流结束"
+                        @click="stepMode('out')"
+                    >
+                        跳出工作流
+                    </Button>
+                    <Button
+                        size="small"
+                        severity="secondary"
+                        outlined
+                        :disabled="!selectedNodeId || debugActivity !== 'idle' || (!!executionId && !canContinueDebug)"
+                        @click="runToSelection"
+                    >
+                        运行到节点
+                    </Button>
+                    <Button size="small" severity="danger" outlined :disabled="!canStopDebug" @click="stop">
+                        <CircleStop class="size-3.5" />
+                        停止
+                    </Button>
+                </div>
+            </div>
+            <div v-if="migrationPanelOpen" class="border-t bg-card px-3 py-2 text-xs">
+                <div class="mb-2 flex items-center gap-2">
+                    <strong>旧工作流迁移预览</strong>
+                    <Button size="small" :disabled="migrationItems.length === 0" :loading="migrationBusy" @click="executeMigration">执行迁移</Button>
+                    <Button v-if="migrationBatch?.failedCount" size="small" severity="secondary" :loading="migrationBusy" @click="retryMigration">重试失败项</Button>
+                    <Button v-if="migrationBatch?.migratedCount" size="small" severity="danger" outlined :loading="migrationBusy" @click="rollbackMigration()">回滚整批</Button>
+                    <Button size="small" severity="secondary" text class="ml-auto" @click="migrationPanelOpen = false">关闭</Button>
+                </div>
+                <div class="max-h-36 overflow-auto rounded border">
+                    <div v-for="item in migrationItems" :key="item.workflowId" class="flex items-center gap-2 border-b px-2 py-1 last:border-0">
+                        <span class="min-w-44 font-medium">{{ item.workflowName }}</span>
+                        <span :class="item.success ? 'text-emerald-600' : 'text-red-600'">{{ item.success ? (item.rolledBack ? '已回滚' : '可迁移') : '失败' }}</span>
+                        <span class="flex-1 truncate text-muted-foreground"
+                            :title="item.portChanges?.map(change => `${change.nodeId}: ${change.oldVariable} (${change.oldPort}) → ${change.newExpression}`).join('\n')">
+                            {{ item.diagnostic || item.changes.join('；') }}
+                            <template v-if="item.portChanges?.length">（{{ item.portChanges.length }} 个端口引用）</template>
+                        </span>
+                        <Button v-if="migrationBatch && item.success && !item.rolledBack" size="small" severity="danger" text @click="rollbackMigration(item.workflowId)">回滚</Button>
+                    </div>
+                    <div v-if="migrationItems.length === 0" class="p-3 text-muted-foreground">没有需要迁移的工作流。</div>
                 </div>
             </div>
         </header>
 
         <div class="flex h-9 flex-none items-center overflow-x-auto border-b bg-muted/20 px-3 text-xs">
-            <button v-for="view in ['split', 'graph', 'source', 'json'] as const" :key="view"
-                class="h-full border-b-2 px-3" :class="activeView === view ? 'border-primary text-primary' : 'border-transparent'"
-                @click="activeView = view">
+            <Button
+                v-for="view in ['split', 'graph', 'source', 'json'] as const"
+                :key="view"
+                size="small"
+                text
+                severity="secondary"
+                class="h-full rounded-none border-b-2 px-3"
+                :class="activeView === view ? 'border-primary text-primary' : 'border-transparent'"
+                @click="activeView = view"
+            >
                 {{ { split: '分屏', graph: '画布', source: '脚本', json: 'JSON' }[view] }}
-            </button>
-            <span v-if="selectedNodeId" class="ml-auto">节点：{{ selectedNodeId }}</span>
+            </Button>
+            <span v-if="selectedNodeId" class="ml-auto">
+                节点：{{ selectedNodeId }}
+                <strong v-if="selectedPort" class="ml-2 text-primary">
+                    {{ selectedPort.direction === 'input' ? '入参' : '出参' }}：{{ selectedPort.name }}
+                </strong>
+            </span>
         </div>
 
-        <main class="grid min-h-0 flex-1" :class="activeView === 'split' ? 'grid-cols-1 grid-rows-2 lg:grid-cols-2 lg:grid-rows-1' : 'grid-cols-1'">
-            <section v-show="activeView === 'split' || activeView === 'graph'" class="relative min-h-0 overflow-hidden border-b lg:border-b-0 lg:border-r">
-                <VueFlow :nodes="graphNodes" :edges="graphEdges" fit-view-on-init
-                    @node-click="selectGraphNode" @node-double-click="({ node }) => toggleBreakpoint(node.id)">
+        <main
+            class="grid min-h-0 flex-1"
+            :class="activeView === 'split' ? 'grid-cols-1 grid-rows-2 lg:grid-cols-2 lg:grid-rows-1' : 'grid-cols-1'"
+        >
+            <section
+                v-show="activeView === 'split' || activeView === 'graph'"
+                class="relative min-h-0 overflow-hidden border-b lg:border-b-0 lg:border-r"
+            >
+                <VueFlow
+                    :nodes="graphNodes"
+                    :edges="graphEdges"
+                    fit-view-on-init
+                    @node-click="selectGraphNode"
+                    @node-double-click="({ node }) => toggleBreakpoint(node.id)"
+                >
                     <Background />
                     <Controls />
                 </VueFlow>
-                <div class="absolute left-3 top-3 max-w-[calc(100%-1.5rem)] rounded border bg-background/90 px-2 py-1 text-xs shadow-sm backdrop-blur">
+                <div
+                    class="absolute left-3 top-3 max-w-[calc(100%-1.5rem)] rounded border bg-background/90 px-2 py-1 text-xs shadow-sm backdrop-blur"
+                >
                     双击节点切换断点 · 红框为断点 · 绿色为当前节点
                 </div>
-                <div v-if="breakpointNodes.length"
-                    class="absolute right-3 top-3 rounded bg-background/90 px-2 py-1 text-xs text-red-500 shadow">
+                <div v-if="selectedPort"
+                    class="absolute bottom-3 left-3 rounded border-2 border-primary bg-background px-3 py-2 text-xs font-semibold text-primary shadow">
+                    {{ selectedPort.direction === 'input' ? '输入端口' : '输出端口' }} · {{ selectedPort.name }}
+                </div>
+                <div
+                    v-if="breakpointNodes.length"
+                    class="absolute right-3 top-3 rounded bg-background/90 px-2 py-1 text-xs text-red-500 shadow"
+                >
                     ● {{ breakpointNodes.length }} 个断点
                 </div>
             </section>
@@ -1310,60 +1949,378 @@ function handleDebugShortcut(event: KeyboardEvent) {
                 <div ref="editorHost" class="h-full w-full" />
             </section>
             <section v-if="activeView === 'json'" class="flex min-h-0 flex-col p-3">
-                <textarea v-model="jsonText" class="min-h-0 flex-1 resize-none rounded border bg-muted/30 p-3 font-mono text-xs" />
+                <Textarea v-model="jsonText" class="min-h-0 flex-1 resize-none font-mono text-xs" />
                 <div class="mt-2 flex justify-end">
-                    <button class="ide-button" @click="applyJson"><Code2 class="size-4" />生成候选脚本</button>
+                    <Button size="small" text severity="secondary" class="" @click="applyJson">
+                        <Code2 class="size-4" />
+                        生成候选脚本
+                    </Button>
                 </div>
             </section>
         </main>
 
+        <div v-if="operatorDocsOpen" class="plc-trigger-mask" @click.self="operatorDocsOpen = false">
+            <aside class="plc-trigger-drawer operator-docs-drawer">
+                <header class="drawer-header">
+                    <div>
+                        <div class="font-medium">算子参数配置说明</div>
+                        <div class="text-xs text-muted-foreground">入参、配置参数和出参的连接与填写指南</div>
+                    </div>
+                    <div class="ml-auto flex gap-1">
+                        <Button size="small" text severity="secondary" class="h-7" @click="openOperatorDocs">
+                            刷新
+                        </Button>
+                        <Button size="small" text severity="secondary" class="h-7" @click="operatorDocsOpen = false">
+                            关闭
+                        </Button>
+                    </div>
+                </header>
+                <div class="operator-docs-body">
+                    <section class="operator-docs-list">
+                        <InputText
+                            v-model.trim="operatorDocsSearch"
+                            size="small"
+                            class="w-full"
+                            placeholder="搜索算子"
+                        />
+                        <div v-if="operatorDocsLoading" class="p-3 text-sm text-muted-foreground">
+                            正在加载算子说明…
+                        </div>
+                        <Button
+                            size="small"
+                            text
+                            severity="secondary"
+                            v-for="operator in filteredOperatorDefinitions"
+                            :key="operator.id"
+                            class="operator-docs-item"
+                            :class="{ active: selectedOperator?.id === operator.id }"
+                            @click="selectedOperator = operator"
+                        >
+                            <span class="font-medium">{{ operator.displayName }}</span>
+                            <span class="line-clamp-2 text-xs text-muted-foreground">
+                                {{ operator.description || '暂无算子功能说明' }}
+                            </span>
+                        </Button>
+                        <div
+                            v-if="!operatorDocsLoading && filteredOperatorDefinitions.length === 0"
+                            class="p-3 text-sm text-muted-foreground"
+                        >
+                            没有匹配的算子。
+                        </div>
+                    </section>
+                    <section v-if="selectedOperator" class="operator-docs-detail">
+                        <h2 class="text-lg font-semibold">{{ selectedOperator.displayName }}</h2>
+                        <p class="mt-1 text-sm text-muted-foreground">
+                            {{ selectedOperator.description || '暂无算子功能说明' }}
+                        </p>
+                        <template
+                            v-for="group in [
+                                { title: '入参', empty: '无入参', items: selectedOperator.inputPorts, config: false },
+                                {
+                                    title: '配置参数',
+                                    empty: '无配置参数',
+                                    items: selectedOperator.configFields,
+                                    config: true,
+                                },
+                                { title: '出参', empty: '无出参', items: selectedOperator.outputPorts, config: false },
+                            ]"
+                            :key="group.title"
+                        >
+                            <h3 class="operator-docs-section-title">{{ group.title }}</h3>
+                            <div v-if="group.items.length === 0" class="text-sm text-muted-foreground">
+                                {{ group.empty }}
+                            </div>
+                            <article
+                                v-for="parameter in group.items"
+                                :key="parameter.name"
+                                class="operator-parameter-card"
+                            >
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <strong>{{ parameter.displayName || parameter.name }}</strong>
+                                    <code>{{ parameter.name }}</code>
+                                    <span
+                                        v-if="group.config && 'required' in parameter"
+                                        class="text-xs"
+                                        :class="parameter.required ? 'text-red-600' : 'text-muted-foreground'"
+                                    >
+                                        {{ parameter.required ? '必填' : '可选' }}
+                                    </span>
+                                </div>
+                                <p class="mt-2 whitespace-pre-wrap text-sm leading-6">
+                                    {{ parameter.description || '暂无配置说明' }}
+                                </p>
+                                <div class="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                                    <span>
+                                        类型：{{
+                                            'portTypeName' in parameter
+                                                ? parameter.portTypeName
+                                                : parameter.valueTypeName
+                                        }}
+                                    </span>
+                                    <span v-if="metadataText(parameter.defaultValue)">
+                                        默认值：{{ metadataText(parameter.defaultValue) }}
+                                    </span>
+                                    <span v-if="metadataText(parameter.valueLimit)">
+                                        范围/选项：{{ metadataText(parameter.valueLimit) }}
+                                    </span>
+                                </div>
+                            </article>
+                        </template>
+                    </section>
+                    <section v-else class="grid flex-1 place-items-center text-sm text-muted-foreground">
+                        请选择一个算子查看配置说明。
+                    </section>
+                </div>
+            </aside>
+        </div>
+
         <div v-if="taskDrawerOpen" class="plc-trigger-mask" @click.self="taskDrawerOpen = false">
             <aside class="plc-trigger-drawer task-config-drawer">
                 <header class="drawer-header">
-                    <div class="min-w-0"><div class="font-medium">任务执行与 PLC 握手</div><div class="truncate text-xs text-muted-foreground">按 1 → 2 → 3 完成配置；任务修改后必须重新发布激活</div></div>
-                    <div class="ml-auto flex shrink-0 gap-1"><button class="ide-button h-7" @click="openTaskDrawer">刷新</button><button class="ide-button h-7" @click="taskDrawerOpen = false">关闭</button></div>
+                    <div class="min-w-0">
+                        <div class="font-medium">任务配置与 PLC 握手</div>
+                        <div class="truncate text-xs text-muted-foreground">选择工作流并保存任务配置后直接生效</div>
+                    </div>
+                    <div class="ml-auto flex shrink-0 gap-1">
+                        <Button size="small" severity="secondary" text @click="openTaskDrawer">刷新</Button>
+                        <Button size="small" severity="secondary" text @click="taskDrawerOpen = false">关闭</Button>
+                    </div>
                 </header>
                 <div v-if="taskLoading" class="p-6 text-sm text-muted-foreground">加载中…</div>
                 <div v-else class="min-h-0 flex-1 space-y-4 overflow-auto p-4">
                     <section v-if="taskConfig" class="rounded border p-4">
-                        <div class="mb-3 font-medium">1. 配置任务工作流</div>
+                        <div class="mb-3 font-medium">配置任务工作流</div>
                         <div class="grid grid-cols-1 gap-3 text-xs sm:grid-cols-2">
-                            <label>执行方式<select v-model.number="taskConfig.taskType" class="mt-1 h-8 w-full rounded border bg-background px-2"><option :value="0">立即/外部触发</option><option :value="1">周期执行</option></select></label>
-                            <label v-if="taskConfig.taskType === 1">周期（秒）<input v-model.number="taskConfig.cycleIntervalSeconds" type="number" min="1" class="mt-1 h-8 w-full rounded border bg-background px-2" /></label>
+                            <label>
+                                执行方式
+                                <Select
+                                    v-model="taskConfig.taskType"
+                                    size="small"
+                                    class="mt-1 w-full"
+                                    :options="[
+                                        { label: '立即/外部触发', value: 0 },
+                                        { label: '周期执行', value: 1 },
+                                    ]"
+                                    option-label="label"
+                                    option-value="value"
+                                />
+                            </label>
+                            <label v-if="taskConfig.taskType === 1">
+                                周期（秒）
+                                <InputNumber
+                                    v-model="taskConfig.cycleIntervalSeconds"
+                                    size="small"
+                                    :min="1"
+                                    class="mt-1 w-full"
+                                    :use-grouping="false"
+                                />
+                            </label>
                         </div>
                         <div class="mt-3 space-y-2">
-                            <div v-for="(item, index) in taskConfig.items" :key="item.workflowId" class="flex items-center gap-2 rounded border px-3 py-2 text-xs">
-                                <input v-model="item.isEnabled" type="checkbox" /><span class="min-w-0 flex-1 truncate">{{ index + 1 }}. {{ item.workflowName }}</span>
-                                <button class="ide-button h-6" :disabled="index === 0" @click="moveTask(index, -1)">↑</button><button class="ide-button h-6" :disabled="index === taskConfig.items.length - 1" @click="moveTask(index, 1)">↓</button>
+                            <div
+                                v-for="(item, index) in taskConfig.items"
+                                :key="item.workflowId"
+                                class="flex items-center gap-2 rounded border px-3 py-2 text-xs"
+                            >
+                                <Checkbox v-model="item.isEnabled" binary />
+                                <span class="min-w-0 flex-1 truncate">{{ index + 1 }}. {{ item.workflowName }}</span>
+                                <Button
+                                    size="small"
+                                    severity="secondary"
+                                    text
+                                    :disabled="index === 0"
+                                    aria-label="上移"
+                                    @click="moveTask(index, -1)"
+                                >
+                                    ↑
+                                </Button>
+                                <Button
+                                    size="small"
+                                    severity="secondary"
+                                    text
+                                    :disabled="index === taskConfig.items.length - 1"
+                                    aria-label="下移"
+                                    @click="moveTask(index, 1)"
+                                >
+                                    ↓
+                                </Button>
                             </div>
                         </div>
                         <div class="mt-3 grid grid-cols-1 gap-3 text-xs sm:grid-cols-2">
-                            <label>最终判定工作流<select v-model="taskConfig.resultWorkflowId" class="mt-1 h-8 w-full rounded border bg-background px-2" @change="loadResultOutputs"><option value="">请选择</option><option v-for="item in taskConfig.items.filter(x => x.isEnabled)" :key="item.workflowId" :value="item.workflowId">{{ item.workflowName }}</option></select></label>
-                            <label>布尔输出变量<select v-model="taskConfig.resultVariableName" :disabled="!taskConfig.resultWorkflowId" class="mt-1 h-8 w-full rounded border bg-background px-2"><option value="">请选择 Boolean 输出</option><option v-for="name in resultOutputs" :key="name" :value="name">{{ name }}</option></select></label>
+                            <label>
+                                最终判定工作流
+                                <Select
+                                    v-model="taskConfig.resultWorkflowId"
+                                    size="small"
+                                    class="mt-1 w-full"
+                                    :options="taskConfig.items.filter((x) => x.isEnabled)"
+                                    option-label="workflowName"
+                                    option-value="workflowId"
+                                    placeholder="请选择"
+                                    @change="loadResultOutputs"
+                                />
+                            </label>
+                            <label>
+                                布尔输出变量
+                                <Select
+                                    v-model="taskConfig.resultVariableName"
+                                    size="small"
+                                    :disabled="!taskConfig.resultWorkflowId"
+                                    class="mt-1 w-full"
+                                    :options="resultOutputs"
+                                    placeholder="请选择 Boolean 输出"
+                                />
+                            </label>
                         </div>
-                        <button class="ide-button ide-button-primary mt-3" :disabled="taskSaving" @click="saveTaskConfig">保存任务配置</button>
+                        <Button size="small" class="mt-3" :loading="taskSaving" @click="saveTaskConfig">
+                            保存任务配置
+                        </Button>
                     </section>
 
                     <section class="rounded border p-4">
-                        <div class="flex items-center gap-2"><div><div class="font-medium">2. 发布并激活部署</div><div class="text-xs text-muted-foreground">PLC 请求只运行当前激活的部署快照</div></div><span class="ml-auto rounded bg-muted px-2 py-1 text-xs">{{ deployment?.isCurrentActive ? `已激活 rev ${deployment.revision}` : '无激活部署' }}</span></div>
-                        <button class="ide-button ide-button-primary mt-3" :disabled="taskSaving" @click="publishAndActivate">发布新版本并激活</button>
-                    </section>
-
-                    <section class="rounded border p-4">
-                        <div class="flex items-center gap-2"><div><div class="font-medium">3. 配置 PLC 握手点位</div><div class="text-xs text-muted-foreground">谁写入信号，谁负责清零</div></div><span class="ml-auto rounded-full px-2 py-1 text-xs" :class="handshakeStatus?.isEnabled ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400' : 'bg-muted text-muted-foreground'">{{ handshakeStatus?.isConfigured ? (handshakeStatus.isEnabled ? '运行中' : '已停用') : '未配置' }}</span></div>
-                        <label class="mt-3 block text-xs">PLC 设备<select v-model="handshakeForm.plcDeviceId" class="mt-1 h-8 w-full rounded border bg-background px-2" @change="loadHandshakeTags"><option value="">请选择 PLC</option><option v-for="device in plcDevices" :key="device.id" :value="device.id">{{ device.name }}</option></select></label>
+                        <div class="flex items-center gap-2">
+                            <div>
+                                <div class="font-medium">配置 PLC 握手点位</div>
+                                <div class="text-xs text-muted-foreground">握手点位单独保存，不会被任务配置覆盖</div>
+                            </div>
+                            <span
+                                class="ml-auto rounded-full px-2 py-1 text-xs"
+                                :class="
+                                    handshakeStatus?.isEnabled
+                                        ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400'
+                                        : 'bg-muted text-muted-foreground'
+                                "
+                            >
+                                {{
+                                    handshakeStatus?.isConfigured
+                                        ? handshakeStatus.isEnabled
+                                            ? '运行中'
+                                            : '已停用'
+                                        : '未配置'
+                                }}
+                            </span>
+                        </div>
+                        <label class="mt-3 block text-xs">
+                            PLC 设备
+                            <Select
+                                v-model="handshakeForm.plcDeviceId"
+                                size="small"
+                                class="mt-1 w-full"
+                                :options="plcDevices"
+                                option-label="name"
+                                option-value="id"
+                                placeholder="请选择 PLC"
+                                @change="onHandshakeDeviceChange"
+                            />
+                        </label>
+                        <p class="mt-2 text-[10px] text-muted-foreground">
+                            握手点位来自 OPC UA 节点树，与 PLC 调试页的实时点位表相互独立。
+                            <span v-if="handshakeTreeLoading">正在加载节点树…</span>
+                            <span v-else-if="handshakeTreeTruncated" class="text-amber-600">
+                                节点树达到服务端限制，仅显示部分节点。
+                            </span>
+                        </p>
                         <div class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                            <label v-for="field in handshakeFields" :key="field[0]" class="text-xs">{{ field[1] }}<select v-model="handshakeForm[field[0]]" :disabled="!handshakeForm.plcDeviceId" class="mt-1 h-8 w-full rounded border bg-background px-2" :title="field[2]"><option value="">请选择点位</option><option v-for="tag in handshakeTags" :key="tag.id" :value="tag.id">{{ tag.code }} · {{ tag.name }}</option></select><span class="mt-0.5 block text-[10px] text-muted-foreground">{{ field[2] }}</span></label>
+                            <label v-for="field in handshakeFields" :key="field[0]" class="text-xs">
+                                {{ field[1] }}
+                                <Select
+                                    v-model="handshakeForm[field[0]]"
+                                    size="small"
+                                    :disabled="!handshakeForm.plcDeviceId || handshakeTreeLoading"
+                                    class="mt-1 w-full font-mono"
+                                    :options="handshakeVariableOptions"
+                                    option-label="label"
+                                    option-value="address"
+                                    placeholder="请选择 OPC UA 节点"
+                                    :title="field[2]"
+                                    editable
+                                />
+                                <span class="mt-0.5 block text-[10px] text-muted-foreground">{{ field[2] }}</span>
+                            </label>
                         </div>
-                        <label class="mt-3 flex items-center gap-2 text-xs"><input v-model="handshakeForm.isEnabled" type="checkbox" />启用 PLC 握手</label>
-                        <button class="ide-button ide-button-primary mt-3" :disabled="taskSaving || !handshakeForm.plcDeviceId" @click="saveHandshake">保存握手配置</button>
+                        <label class="mt-3 flex items-center gap-2 text-xs">
+                            <Checkbox v-model="handshakeForm.isEnabled" binary />
+                            启用 PLC 握手
+                        </label>
+                        <Button
+                            size="small"
+                            class="mt-3"
+                            :loading="taskSaving"
+                            :disabled="!handshakeForm.plcDeviceId"
+                            @click="saveHandshake"
+                        >
+                            保存握手配置
+                        </Button>
                     </section>
 
                     <section class="rounded border p-4 text-xs">
-                        <div class="flex items-center"><div class="font-medium text-sm">运行状态</div><button class="ml-auto ide-button h-7" @click="resetHandshake">复位握手</button></div>
-                        <div class="mt-2 grid grid-cols-2 gap-2 text-muted-foreground sm:grid-cols-3"><span>阶段：{{ handshakeStatus?.phase ?? '-' }}</span><span>当前请求：{{ handshakeStatus?.currentRequestId ?? '-' }}</span><span>已完成：{{ handshakeStatus?.lastCompletedRequestId ?? '-' }}</span><span>结果：{{ handshakeStatus?.resultCode ?? '-' }}</span><span>错误：{{ handshakeStatus?.errorCode ?? '-' }}</span><span class="col-span-2 break-all sm:col-span-3">运行 ID：{{ handshakeStatus?.currentRunId ?? '-' }}</span></div>
-                        <div v-if="handshakeStatus?.lastError" class="mt-2 text-destructive">{{ handshakeStatus.lastError }}</div>
+                        <div class="flex items-center">
+                            <div class="font-medium text-sm">运行状态</div>
+                            <Button size="small" severity="secondary" outlined class="ml-auto" @click="resetHandshake">
+                                复位握手
+                            </Button>
+                        </div>
+                        <div class="mt-2 grid grid-cols-2 gap-2 text-muted-foreground sm:grid-cols-3">
+                            <span>阶段：{{ handshakeStatus?.phase ?? '-' }}</span>
+                            <span>当前请求：{{ handshakeStatus?.currentRequestId ?? '-' }}</span>
+                            <span>已完成：{{ handshakeStatus?.lastCompletedRequestId ?? '-' }}</span>
+                            <span>结果：{{ handshakeStatus?.resultCode ?? '-' }}</span>
+                            <span>错误：{{ handshakeStatus?.errorCode ?? '-' }}</span>
+                            <span class="col-span-2 break-all sm:col-span-3">
+                                运行 ID：{{ handshakeStatus?.currentRunId ?? '-' }}
+                            </span>
+                        </div>
+                        <div v-if="handshakeStatus?.lastError" class="mt-2 text-destructive">
+                            {{ handshakeStatus.lastError }}
+                        </div>
                     </section>
+                </div>
+            </aside>
+        </div>
+
+        <div v-if="versionHistoryOpen" class="plc-trigger-mask" @click.self="versionHistoryOpen = false">
+            <aside class="plc-trigger-drawer">
+                <header class="drawer-header">
+                    <div>
+                        <div class="font-medium">版本历史</div>
+                        <div class="text-xs text-muted-foreground">高级部署与回滚记录</div>
+                    </div>
+                    <Button size="small" severity="secondary" text class="ml-auto" @click="versionHistoryOpen = false">
+                        关闭
+                    </Button>
+                </header>
+                <div class="min-h-0 flex-1 space-y-2 overflow-auto p-4">
+                    <div v-for="item in deploymentHistory" :key="item.id" class="rounded border p-3 text-xs">
+                        <div class="flex items-center">
+                            <strong>R{{ item.revision }}</strong>
+                            <span class="ml-2 rounded bg-muted px-2 py-0.5">
+                                {{ item.isCurrentActive ? '当前生效' : item.status === 3 ? '已归档' : '已发布' }}
+                            </span>
+                            <span class="ml-auto">
+                                {{ item.taskType === 1 ? `周期 ${item.cycleIntervalSeconds}s` : '立即/外部触发' }}
+                            </span>
+                        </div>
+                        <div class="mt-2 flex items-center text-muted-foreground">
+                            <span>
+                                结果：{{ item.resultVariableName || '未配置' }} · 错误策略：{{
+                                    item.onErrorAction === 1 ? '继续' : '停止'
+                                }}
+                            </span>
+                            <Button
+                                v-if="item.canRollback"
+                                size="small"
+                                severity="secondary"
+                                outlined
+                                class="ml-auto"
+                                @click="rollbackToVersion(item)"
+                            >
+                                回滚
+                            </Button>
+                        </div>
+                    </div>
+                    <div v-if="!deploymentHistory.length" class="py-8 text-center text-sm text-muted-foreground">
+                        暂无应用记录
+                    </div>
                 </div>
             </aside>
         </div>
@@ -1371,52 +2328,244 @@ function handleDebugShortcut(event: KeyboardEvent) {
         <div v-if="plcTriggerDrawerOpen" class="plc-trigger-mask" @click.self="plcTriggerDrawerOpen = false">
             <aside class="plc-trigger-drawer">
                 <header class="drawer-header">
-                    <div class="min-w-0"><div class="font-medium">PLC 触发</div><div class="truncate text-xs text-muted-foreground">当前项目的激活部署触发映射</div></div>
-                    <div class="ml-auto flex shrink-0 gap-1"><button class="ide-button h-7" @click="openPlcTriggerDrawer">刷新</button><button class="ide-button h-7" @click="plcTriggerDrawerOpen = false">关闭</button></div>
+                    <div class="min-w-0">
+                        <div class="font-medium">PLC 触发</div>
+                        <div class="truncate text-xs text-muted-foreground">当前项目的正式任务触发映射</div>
+                    </div>
+                    <div class="ml-auto flex shrink-0 gap-1">
+                        <Button size="small" text severity="secondary" class="h-7" @click="openPlcTriggerDrawer">
+                            刷新
+                        </Button>
+                        <Button
+                            size="small"
+                            text
+                            severity="secondary"
+                            class="h-7"
+                            @click="plcTriggerDrawerOpen = false"
+                        >
+                            关闭
+                        </Button>
+                    </div>
                 </header>
                 <div class="min-h-0 flex-1 overflow-auto p-4">
                     <form class="space-y-3 rounded border bg-muted/20 p-3" @submit.prevent="savePlcTrigger">
-                        <div class="flex items-center"><span class="font-medium text-sm">{{ editingPlcTriggerId ? '编辑触发' : '新增触发' }}</span><button v-if="editingPlcTriggerId" type="button" class="ml-auto text-xs text-primary" @click="resetPlcTriggerForm">取消编辑</button></div>
-                        <label class="block text-xs">PLC
-                            <select v-model="plcTriggerForm.plcDeviceId" :disabled="!!editingPlcTriggerId" class="mt-1 h-8 w-full rounded border bg-background px-2" @change="loadPlcTags">
-                                <option value="">选择 PLC</option><option v-for="device in plcDevices" :key="device.id" :value="device.id">{{ device.name }}</option>
-                            </select>
+                        <div class="flex items-center">
+                            <span class="font-medium text-sm">{{ editingPlcTriggerId ? '编辑触发' : '新增触发' }}</span>
+                            <Button
+                                size="small"
+                                text
+                                severity="secondary"
+                                v-if="editingPlcTriggerId"
+                                type="button"
+                                class="ml-auto text-xs text-primary"
+                                @click="resetPlcTriggerForm"
+                            >
+                                取消编辑
+                            </Button>
+                        </div>
+                        <label class="block text-xs">
+                            PLC
+                            <Select
+                                v-model="plcTriggerForm.plcDeviceId"
+                                size="small"
+                                :disabled="!!editingPlcTriggerId"
+                                class="mt-1 w-full"
+                                :options="plcDevices"
+                                option-label="name"
+                                option-value="id"
+                                placeholder="选择 PLC"
+                                @change="loadPlcTags"
+                            />
                         </label>
-                        <label class="block text-xs">点位
-                            <select v-model="plcTriggerForm.plcTagId" :disabled="!!editingPlcTriggerId || !plcTriggerForm.plcDeviceId" class="mt-1 h-8 w-full rounded border bg-background px-2">
-                                <option value="">选择点位</option><option v-for="tag in plcTags" :key="tag.id" :value="tag.id">{{ tag.name }} · {{ tag.code }}</option>
-                            </select>
+                        <label class="block text-xs">
+                            点位
+                            <Select
+                                v-model="plcTriggerForm.plcTagId"
+                                size="small"
+                                :disabled="!!editingPlcTriggerId || !plcTriggerForm.plcDeviceId"
+                                class="mt-1 w-full"
+                                :options="plcTags"
+                                option-label="name"
+                                option-value="id"
+                                placeholder="选择点位"
+                            >
+                                <template #option="{ option }">{{ option.name }} · {{ option.code }}</template>
+                            </Select>
                         </label>
-                        <label v-if="selectedPlcIsBoolean" class="block text-xs">目标值
-                            <select v-model="plcTriggerForm.value" class="mt-1 h-8 w-full rounded border bg-background px-2"><option value="true">true</option><option value="false">false</option></select>
+                        <label v-if="selectedPlcIsBoolean" class="block text-xs">
+                            目标值
+                            <Select
+                                v-model="plcTriggerForm.value"
+                                size="small"
+                                class="mt-1 w-full"
+                                :options="['true', 'false']"
+                            />
                         </label>
-                        <label v-else class="block text-xs">目标值
-                            <input v-model="plcTriggerForm.value" :type="selectedPlcIsNumeric ? 'number' : selectedPlcIsDate ? 'datetime-local' : 'text'" :step="selectedPlcIsFloat ? 'any' : undefined" class="mt-1 h-8 w-full rounded border bg-background px-2" :placeholder="selectedPlcTag?.dataType === PlcTagDataType.ByteString ? 'Base64' : '输入目标值'" />
+                        <label v-else class="block text-xs">
+                            目标值
+                            <InputText
+                                v-model="plcTriggerForm.value"
+                                size="small"
+                                :type="selectedPlcIsNumeric ? 'number' : selectedPlcIsDate ? 'datetime-local' : 'text'"
+                                :step="selectedPlcIsFloat ? 'any' : undefined"
+                                class="mt-1 w-full"
+                                :placeholder="
+                                    selectedPlcTag?.dataType === PlcTagDataType.ByteString ? 'Base64' : '输入目标值'
+                                "
+                            />
                         </label>
-                        <label v-if="selectedPlcIsFloat" class="block text-xs">浮点容差
-                            <input v-model.number="plcTriggerForm.tolerance" type="number" min="0" step="any" class="mt-1 h-8 w-full rounded border bg-background px-2" />
+                        <label v-if="selectedPlcIsFloat" class="block text-xs">
+                            浮点容差
+                            <InputNumber
+                                v-model="plcTriggerForm.tolerance"
+                                size="small"
+                                :min="0"
+                                :max-fraction-digits="8"
+                                class="mt-1 w-full"
+                                :use-grouping="false"
+                            />
                         </label>
-                        <label class="flex items-center gap-2 text-xs"><input v-model="plcTriggerForm.isEnabled" type="checkbox" />启用此触发</label>
-                        <button type="submit" class="ide-button w-full justify-center" :disabled="plcTriggerSaving || !selectedPlcTag">{{ plcTriggerSaving ? '保存中…' : '保存触发' }}</button>
+                        <label class="flex items-center gap-2 text-xs">
+                            <Checkbox v-model="plcTriggerForm.isEnabled" binary />
+                            启用此触发
+                        </label>
+                        <Button
+                            size="small"
+                            text
+                            severity="secondary"
+                            type="submit"
+                            class="w-full justify-center"
+                            :disabled="plcTriggerSaving || !selectedPlcTag"
+                        >
+                            {{ plcTriggerSaving ? '保存中…' : '保存触发' }}
+                        </Button>
                         <section v-if="selectedPlcTag" class="rounded border border-dashed bg-background p-3">
                             <div class="flex items-center gap-2">
-                                <div><div class="text-xs font-medium">调试配置</div><div class="text-[10px] text-muted-foreground">直接读写所选点位，用于保存前联调 PLC 触发条件</div></div>
-                                <span class="ml-auto rounded bg-muted px-1.5 py-0.5 text-[10px]">{{ selectedPlcCanRead ? '可读' : '不可读' }} / {{ selectedPlcCanWrite ? '可写' : '不可写' }}</span>
+                                <div>
+                                    <div class="text-xs font-medium">调试配置</div>
+                                    <div class="text-[10px] text-muted-foreground">
+                                        直接读写所选点位，用于保存前联调 PLC 触发条件
+                                    </div>
+                                </div>
+                                <span class="ml-auto rounded bg-muted px-1.5 py-0.5 text-[10px]">
+                                    {{ selectedPlcCanRead ? '可读' : '不可读' }} /
+                                    {{ selectedPlcCanWrite ? '可写' : '不可写' }}
+                                </span>
                             </div>
-                            <div class="mt-2 grid grid-cols-1 items-center gap-2 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
-                                <div class="min-w-0 rounded bg-muted px-2 py-1.5 font-mono text-xs" :title="plcDebugValueText(plcTriggerDebugValue?.engineeringValue)">当前值：<span class="break-all">{{ plcDebugValueText(plcTriggerDebugValue?.engineeringValue) }}</span><span v-if="plcTriggerDebugValue" class="ml-1 text-[10px] text-muted-foreground">{{ plcTriggerDebugValue.quality }}</span></div>
-                                <button type="button" class="ide-button h-8" :disabled="plcTriggerDebugging || !selectedPlcCanRead" @click="readPlcTriggerDebugValue">读取</button>
-                                <button type="button" class="ide-button h-8" :disabled="plcTriggerDebugging || !selectedPlcCanWrite || plcTriggerForm.value === ''" title="将上面的目标值直接写入 PLC 点位" @click="writePlcTriggerDebugValue">写入目标值</button>
+                            <div
+                                class="mt-2 grid grid-cols-1 items-center gap-2 sm:grid-cols-[minmax(0,1fr)_auto_auto]"
+                            >
+                                <div
+                                    class="min-w-0 rounded bg-muted px-2 py-1.5 font-mono text-xs"
+                                    :title="plcDebugValueText(plcTriggerDebugValue?.engineeringValue)"
+                                >
+                                    当前值：
+                                    <span class="break-all">
+                                        {{ plcDebugValueText(plcTriggerDebugValue?.engineeringValue) }}
+                                    </span>
+                                    <span v-if="plcTriggerDebugValue" class="ml-1 text-[10px] text-muted-foreground">
+                                        {{ plcTriggerDebugValue.quality }}
+                                    </span>
+                                </div>
+                                <Button
+                                    size="small"
+                                    text
+                                    severity="secondary"
+                                    type="button"
+                                    class="h-8"
+                                    :disabled="plcTriggerDebugging || !selectedPlcCanRead"
+                                    @click="readPlcTriggerDebugValue"
+                                >
+                                    读取
+                                </Button>
+                                <Button
+                                    size="small"
+                                    text
+                                    severity="secondary"
+                                    type="button"
+                                    class="h-8"
+                                    :disabled="
+                                        plcTriggerDebugging || !selectedPlcCanWrite || plcTriggerForm.value === ''
+                                    "
+                                    title="将上面的目标值直接写入 PLC 点位"
+                                    @click="writePlcTriggerDebugValue"
+                                >
+                                    写入目标值
+                                </Button>
                             </div>
-                            <div v-if="!selectedPlcCanWrite" class="mt-2 text-[10px] text-amber-600">该点位不可写，只能读取现场值；请由 PLC 侧改变点位进行触发测试。</div>
+                            <div v-if="!selectedPlcCanWrite" class="mt-2 text-[10px] text-amber-600">
+                                该点位不可写，只能读取现场值；请由 PLC 侧改变点位进行触发测试。
+                            </div>
                         </section>
                     </form>
-                    <div class="mt-5"><div class="mb-2 text-sm font-medium">已配置触发</div><div v-if="plcTriggerLoading" class="text-xs text-muted-foreground">加载中…</div>
-                        <div v-else-if="!plcTriggers.length" class="rounded border border-dashed p-4 text-center text-xs text-muted-foreground">尚未配置 PLC 触发。</div>
-                        <article v-for="trigger in plcTriggers" :key="trigger.id" class="mb-2 rounded border bg-card p-3 text-xs shadow-sm">
-                            <div class="flex flex-wrap items-center gap-2"><span class="font-mono text-sm font-semibold">= {{ triggerValueDisplay(trigger) }}</span><span class="rounded-full px-2 py-0.5" :class="trigger.isEnabled ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400' : 'bg-muted text-muted-foreground'">{{ trigger.isEnabled ? '已启用' : '已停用' }}</span><div class="ml-auto flex gap-2"><button class="text-primary hover:underline" @click="editPlcTrigger(trigger)">编辑</button><button class="text-primary hover:underline" @click="togglePlcTrigger(trigger)">{{ trigger.isEnabled ? '停用' : '启用' }}</button><button class="text-destructive hover:underline" @click="removePlcTrigger(trigger)">删除</button></div></div>
-                            <div class="mt-2 break-all text-muted-foreground">{{ plcDeviceName(trigger.plcDeviceId) }} · {{ plcTagName(trigger) }}<template v-if="trigger.tolerance"> · 容差 {{ trigger.tolerance }}</template></div>
-                            <div v-if="trigger.lastTriggeredAt" class="mt-1 text-muted-foreground">上次触发：{{ new Date(trigger.lastTriggeredAt).toLocaleString() }}</div><div v-if="trigger.lastSkipReason" class="mt-1 text-amber-600">最近跳过：{{ trigger.lastSkipReason }}</div>
+                    <div class="mt-5">
+                        <div class="mb-2 text-sm font-medium">已配置触发</div>
+                        <div v-if="plcTriggerLoading" class="text-xs text-muted-foreground">加载中…</div>
+                        <div
+                            v-else-if="!plcTriggers.length"
+                            class="rounded border border-dashed p-4 text-center text-xs text-muted-foreground"
+                        >
+                            尚未配置 PLC 触发。
+                        </div>
+                        <article
+                            v-for="trigger in plcTriggers"
+                            :key="trigger.id"
+                            class="mb-2 rounded border bg-card p-3 text-xs shadow-sm"
+                        >
+                            <div class="flex flex-wrap items-center gap-2">
+                                <span class="font-mono text-sm font-semibold">
+                                    = {{ triggerValueDisplay(trigger) }}
+                                </span>
+                                <span
+                                    class="rounded-full px-2 py-0.5"
+                                    :class="
+                                        trigger.isEnabled
+                                            ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400'
+                                            : 'bg-muted text-muted-foreground'
+                                    "
+                                >
+                                    {{ trigger.isEnabled ? '已启用' : '已停用' }}
+                                </span>
+                                <div class="ml-auto flex gap-2">
+                                    <Button
+                                        size="small"
+                                        text
+                                        severity="secondary"
+                                        class="text-primary hover:underline"
+                                        @click="editPlcTrigger(trigger)"
+                                    >
+                                        编辑
+                                    </Button>
+                                    <Button
+                                        size="small"
+                                        text
+                                        severity="secondary"
+                                        class="text-primary hover:underline"
+                                        @click="togglePlcTrigger(trigger)"
+                                    >
+                                        {{ trigger.isEnabled ? '停用' : '启用' }}
+                                    </Button>
+                                    <Button
+                                        size="small"
+                                        text
+                                        severity="secondary"
+                                        class="text-destructive hover:underline"
+                                        @click="removePlcTrigger(trigger)"
+                                    >
+                                        删除
+                                    </Button>
+                                </div>
+                            </div>
+                            <div class="mt-2 break-all text-muted-foreground">
+                                {{ plcDeviceName(trigger.plcDeviceId) }} · {{ plcTagName(trigger) }}
+                                <template v-if="trigger.tolerance">· 容差 {{ trigger.tolerance }}</template>
+                            </div>
+                            <div v-if="trigger.lastTriggeredAt" class="mt-1 text-muted-foreground">
+                                上次触发：{{ new Date(trigger.lastTriggeredAt).toLocaleString() }}
+                            </div>
+                            <div v-if="trigger.lastSkipReason" class="mt-1 text-amber-600">
+                                最近跳过：{{ trigger.lastSkipReason }}
+                            </div>
                         </article>
                     </div>
                 </div>
@@ -1425,66 +2574,251 @@ function handleDebugShortcut(event: KeyboardEvent) {
 
         <section class="h-[clamp(10rem,24vh,15rem)] flex-none border-t bg-card/40">
             <div class="flex h-8 items-center overflow-x-auto border-b px-2 text-xs">
-                <button v-for="tab in ['problems', 'variables', 'watch', 'trace', 'performance', 'results', 'output'] as const" :key="tab"
-                    class="h-full px-3" :class="bottomTab === tab && 'text-primary'" @click="bottomTab = tab">
-                    {{ { problems: `问题 (${problems.length})`, variables: '变量/栈', watch: '监视', trace: '跟踪', performance: '性能', results: `结果 (${debugStatus?.outputs?.length ?? 0})`, output: '输出日志' }[tab] }}
-                </button>
-                <button v-if="bottomTab === 'watch'" class="ml-auto ide-button h-6" @click="refreshWatch">刷新</button>
-                <button v-if="bottomTab === 'trace' || bottomTab === 'performance'" class="ml-auto ide-button h-6" @click="refreshDebugDetails">刷新</button>
+                <Button
+                    size="small"
+                    text
+                    severity="secondary"
+                    v-for="tab in [
+                        'problems',
+                        'variables',
+                        'watch',
+                        'trace',
+                        'performance',
+                        'results',
+                        'output',
+                    ] as const"
+                    :key="tab"
+                    class="h-full px-3"
+                    :class="bottomTab === tab && 'text-primary'"
+                    @click="bottomTab = tab"
+                >
+                    {{
+                        {
+                            problems: `问题 (${problems.length})`,
+                            variables: '变量/栈',
+                            watch: '监视',
+                            trace: '跟踪',
+                            performance: '性能',
+                            results: `结果 (${debugStatus?.outputs?.length ?? 0})`,
+                            output: '输出日志',
+                        }[tab]
+                    }}
+                </Button>
+                <Button
+                    size="small"
+                    text
+                    severity="secondary"
+                    v-if="bottomTab === 'watch'"
+                    class="ml-auto h-6"
+                    @click="refreshWatch"
+                >
+                    刷新
+                </Button>
+                <Button
+                    size="small"
+                    text
+                    severity="secondary"
+                    v-if="bottomTab === 'trace' || bottomTab === 'performance'"
+                    class="ml-auto h-6"
+                    @click="refreshDebugDetails"
+                >
+                    刷新
+                </Button>
             </div>
             <div class="h-[calc(100%-2rem)] overflow-auto p-2 text-xs">
                 <template v-if="bottomTab === 'problems'">
-                    <button v-for="problem in problems" :key="`${problem.code}-${problem.range.start.offset}`"
-                        type="button" class="flex w-full gap-3 rounded px-2 py-1 text-left hover:bg-muted" @click="selectProblem(problem)">
-                        <span :class="problem.severity === 'warning' ? 'text-amber-500' : 'text-red-500'">{{ problem.code }}</span>
-                        <span>{{ problem.message }}</span><span class="ml-auto">Ln {{ problem.range.start.line }}</span>
-                    </button>
+                    <Button
+                        size="small"
+                        text
+                        severity="secondary"
+                        v-for="problem in problems"
+                        :key="`${problem.code}-${problem.range.start.offset}`"
+                        type="button"
+                        class="flex w-full gap-3 rounded px-2 py-1 text-left hover:bg-muted"
+                        @click="selectProblem(problem)"
+                    >
+                        <span :class="problem.severity === 'warning' ? 'text-amber-500' : 'text-red-500'">
+                            {{ problem.code }}
+                        </span>
+                        <span>{{ problem.message }}</span>
+                        <span class="ml-auto">Ln {{ problem.range.start.line }}</span>
+                    </Button>
                 </template>
                 <template v-else-if="bottomTab === 'variables'">
                     <div class="mb-1 font-medium">变量</div>
                     <table class="debug-table">
-                        <thead><tr><th v-for="column in tableColumns(debugStatus?.variables ?? [], ['name', 'typeName', 'value', 'valueType'])" :key="column">{{ column }}</th></tr></thead>
+                        <thead>
+                            <tr>
+                                <th
+                                    v-for="column in tableColumns(debugStatus?.variables ?? [], [
+                                        'name',
+                                        'typeName',
+                                        'value',
+                                        'valueType',
+                                    ])"
+                                    :key="column"
+                                >
+                                    {{ column }}
+                                </th>
+                            </tr>
+                        </thead>
                         <tbody>
                             <tr v-for="(row, index) in debugStatus?.variables ?? []" :key="index">
-                                <td v-for="column in tableColumns(debugStatus?.variables ?? [], ['name', 'typeName', 'value', 'valueType'])" :key="column">{{ formatCell(row[column]) }}</td>
+                                <td
+                                    v-for="column in tableColumns(debugStatus?.variables ?? [], [
+                                        'name',
+                                        'typeName',
+                                        'value',
+                                        'valueType',
+                                    ])"
+                                    :key="column"
+                                >
+                                    {{ formatCell(row[column]) }}
+                                </td>
                             </tr>
-                            <tr v-if="!(debugStatus?.variables?.length)"><td class="text-muted-foreground">暂无变量</td></tr>
+                            <tr v-if="!debugStatus?.variables?.length">
+                                <td class="text-muted-foreground">暂无变量</td>
+                            </tr>
                         </tbody>
                     </table>
                     <div class="mb-1 mt-3 font-medium">调用栈</div>
                     <table class="debug-table">
-                        <thead><tr><th v-for="column in tableColumns(stackResults, ['depth', 'workflowName', 'nodeId', 'statementId'])" :key="column">{{ column }}</th></tr></thead>
+                        <thead>
+                            <tr>
+                                <th
+                                    v-for="column in tableColumns(stackResults, [
+                                        'depth',
+                                        'workflowName',
+                                        'nodeId',
+                                        'statementId',
+                                    ])"
+                                    :key="column"
+                                >
+                                    {{ column }}
+                                </th>
+                            </tr>
+                        </thead>
                         <tbody>
                             <tr v-for="(row, index) in stackResults" :key="index">
-                                <td v-for="column in tableColumns(stackResults, ['depth', 'workflowName', 'nodeId', 'statementId'])" :key="column">{{ formatCell(row[column]) }}</td>
+                                <td
+                                    v-for="column in tableColumns(stackResults, [
+                                        'depth',
+                                        'workflowName',
+                                        'nodeId',
+                                        'statementId',
+                                    ])"
+                                    :key="column"
+                                >
+                                    {{ formatCell(row[column]) }}
+                                </td>
                             </tr>
                             <tr v-if="!stackResults.length"><td class="text-muted-foreground">暂无调用栈</td></tr>
                         </tbody>
                     </table>
                 </template>
                 <table v-else-if="bottomTab === 'watch'" class="debug-table">
-                    <thead><tr><th v-for="column in tableColumns(watchResults, ['expression', 'success', 'value', 'valueType', 'error'])" :key="column">{{ column }}</th></tr></thead>
+                    <thead>
+                        <tr>
+                            <th
+                                v-for="column in tableColumns(watchResults, [
+                                    'expression',
+                                    'success',
+                                    'value',
+                                    'valueType',
+                                    'error',
+                                ])"
+                                :key="column"
+                            >
+                                {{ column }}
+                            </th>
+                        </tr>
+                    </thead>
                     <tbody>
                         <tr v-for="(row, index) in watchResults" :key="index">
-                            <td v-for="column in tableColumns(watchResults, ['expression', 'success', 'value', 'valueType', 'error'])" :key="column">{{ formatCell(row[column]) }}</td>
+                            <td
+                                v-for="column in tableColumns(watchResults, [
+                                    'expression',
+                                    'success',
+                                    'value',
+                                    'valueType',
+                                    'error',
+                                ])"
+                                :key="column"
+                            >
+                                {{ formatCell(row[column]) }}
+                            </td>
                         </tr>
                         <tr v-if="!watchResults.length"><td class="text-muted-foreground">暂无监视结果</td></tr>
                     </tbody>
                 </table>
                 <table v-else-if="bottomTab === 'trace'" class="debug-table">
-                    <thead><tr><th v-for="column in tableColumns(traceResults, ['sequence', 'timestamp', 'eventType', 'nodeId', 'message'])" :key="column">{{ column }}</th></tr></thead>
+                    <thead>
+                        <tr>
+                            <th
+                                v-for="column in tableColumns(traceResults, [
+                                    'sequence',
+                                    'timestamp',
+                                    'eventType',
+                                    'nodeId',
+                                    'message',
+                                ])"
+                                :key="column"
+                            >
+                                {{ column }}
+                            </th>
+                        </tr>
+                    </thead>
                     <tbody>
                         <tr v-for="(row, index) in traceResults" :key="index">
-                            <td v-for="column in tableColumns(traceResults, ['sequence', 'timestamp', 'eventType', 'nodeId', 'message'])" :key="column">{{ formatCell(row[column]) }}</td>
+                            <td
+                                v-for="column in tableColumns(traceResults, [
+                                    'sequence',
+                                    'timestamp',
+                                    'eventType',
+                                    'nodeId',
+                                    'message',
+                                ])"
+                                :key="column"
+                            >
+                                {{ formatCell(row[column]) }}
+                            </td>
                         </tr>
                         <tr v-if="!traceResults.length"><td class="text-muted-foreground">暂无跟踪事件</td></tr>
                     </tbody>
                 </table>
                 <table v-else-if="bottomTab === 'performance'" class="debug-table">
-                    <thead><tr><th v-for="column in tableColumns(performanceResults, ['nodeId', 'nodeTitle', 'executionCount', 'totalElapsedMs', 'averageElapsedMs', 'maxElapsedMs'])" :key="column">{{ column }}</th></tr></thead>
+                    <thead>
+                        <tr>
+                            <th
+                                v-for="column in tableColumns(performanceResults, [
+                                    'nodeId',
+                                    'nodeTitle',
+                                    'executionCount',
+                                    'totalElapsedMs',
+                                    'averageElapsedMs',
+                                    'maxElapsedMs',
+                                ])"
+                                :key="column"
+                            >
+                                {{ column }}
+                            </th>
+                        </tr>
+                    </thead>
                     <tbody>
                         <tr v-for="(row, index) in performanceResults" :key="index">
-                            <td v-for="column in tableColumns(performanceResults, ['nodeId', 'nodeTitle', 'executionCount', 'totalElapsedMs', 'averageElapsedMs', 'maxElapsedMs'])" :key="column">{{ formatCell(row[column]) }}</td>
+                            <td
+                                v-for="column in tableColumns(performanceResults, [
+                                    'nodeId',
+                                    'nodeTitle',
+                                    'executionCount',
+                                    'totalElapsedMs',
+                                    'averageElapsedMs',
+                                    'maxElapsedMs',
+                                ])"
+                                :key="column"
+                            >
+                                {{ formatCell(row[column]) }}
+                            </td>
                         </tr>
                         <tr v-if="!performanceResults.length"><td class="text-muted-foreground">暂无性能数据</td></tr>
                     </tbody>
@@ -1496,12 +2830,21 @@ function handleDebugShortcut(event: KeyboardEvent) {
                         <span>耗时：{{ formatDuration(debugStatus?.durationMs ?? 0) }}</span>
                         <span v-if="executionId">执行 ID：{{ executionId }}</span>
                     </div>
-                    <div v-if="!debugResults.length"
-                        class="rounded border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-amber-700 dark:text-amber-400">
+                    <div
+                        v-if="!debugResults.length"
+                        class="rounded border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-amber-700 dark:text-amber-400"
+                    >
                         工作流已执行完成，但结束节点未设置输出。
                     </div>
                     <table v-else class="debug-table">
-                        <thead><tr><th>Display 名称</th><th>变量名称</th><th>值类型</th><th>值</th></tr></thead>
+                        <thead>
+                            <tr>
+                                <th>Display 名称</th>
+                                <th>变量名称</th>
+                                <th>值类型</th>
+                                <th>值</th>
+                            </tr>
+                        </thead>
                         <tbody>
                             <tr v-for="result in debugResults" :key="result.name">
                                 <td>{{ result.displayName || result.name }}</td>
@@ -1529,25 +2872,28 @@ function handleDebugShortcut(event: KeyboardEvent) {
                                         <span class="max-w-[32rem] truncate" :title="String(result.value)">
                                             {{ workflowResultFileName(result.value) }}
                                         </span>
-                                        <button
-                                            class="ide-button"
+                                        <Button
+                                            size="small"
+                                            text
+                                            severity="secondary"
+                                            class=""
                                             type="button"
                                             @click="openResultPreview(result)"
                                         >
                                             {{
                                                 previewResult?.name === result.name
                                                     ? '收起'
-                                                    : resultPresentation(result) === 'cad'
-                                                      || resultPresentation(result) === 'file'
+                                                    : resultPresentation(result) === 'cad' ||
+                                                        resultPresentation(result) === 'file'
                                                       ? '下载'
                                                       : '查看'
                                             }}
-                                        </button>
+                                        </Button>
                                     </div>
                                     <div
                                         v-else-if="
-                                            resultPresentation(result) === 'object'
-                                            || resultPresentation(result) === 'array'
+                                            resultPresentation(result) === 'object' ||
+                                            resultPresentation(result) === 'array'
                                         "
                                         class="max-h-40 min-w-64 overflow-auto"
                                     >
@@ -1560,9 +2906,9 @@ function handleDebugShortcut(event: KeyboardEvent) {
                     </table>
                     <WorkflowBlobPreview
                         v-if="
-                            previewResult
-                            && typeof previewResult.value === 'string'
-                            && isFilePresentation(resultPresentation(previewResult))
+                            previewResult &&
+                            typeof previewResult.value === 'string' &&
+                            isFilePresentation(resultPresentation(previewResult))
                         "
                         class="mt-3"
                         :blob-key="previewResult.value"
@@ -1576,36 +2922,6 @@ function handleDebugShortcut(event: KeyboardEvent) {
 </template>
 
 <style scoped>
-.ide-button {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.35rem;
-    min-height: 1.75rem;
-    flex: 0 0 auto;
-    border: 1px solid transparent;
-    border-radius: 0.3rem;
-    padding: 0.25rem 0.5rem;
-    font-size: 0.75rem;
-    line-height: 1rem;
-    white-space: nowrap;
-    transition: color 150ms ease, background-color 150ms ease, border-color 150ms ease, opacity 150ms ease;
-}
-.ide-button:hover:not(:disabled) { border-color: hsl(var(--border)); background: hsl(var(--accent)); }
-.ide-button:focus-visible { outline: 2px solid hsl(var(--ring)); outline-offset: 2px; }
-.ide-button:disabled { opacity: 0.4; }
-.ide-button-primary { background: hsl(var(--primary)); color: hsl(var(--primary-foreground)); }
-.ide-button-primary:hover:not(:disabled) { border-color: hsl(var(--primary)); background: hsl(var(--primary) / 88%); }
-.ide-field {
-    height: 1.75rem;
-    min-width: 0;
-    border: 1px solid hsl(var(--border));
-    border-radius: 0.375rem;
-    background: hsl(var(--background));
-    padding: 0 0.55rem;
-    font-size: 0.75rem;
-}
-.ide-field:focus { outline: 2px solid hsl(var(--ring) / 35%); border-color: hsl(var(--ring)); }
 .ide-action-bar {
     display: flex;
     min-height: 2.6rem;
@@ -1616,8 +2932,16 @@ function handleDebugShortcut(event: KeyboardEvent) {
     padding: 0.3rem 0.75rem;
     scrollbar-width: thin;
 }
-.ide-action-group { display: flex; flex: 0 0 auto; align-items: center; gap: 0.15rem; }
-.ide-action-group + .ide-action-group { border-left: 1px solid hsl(var(--border)); padding-left: 0.5rem; }
+.ide-action-group {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 0.15rem;
+}
+.ide-action-group + .ide-action-group {
+    border-left: 1px solid hsl(var(--border));
+    padding-left: 0.5rem;
+}
 .plc-trigger-mask {
     position: fixed;
     inset: 0;
@@ -1637,7 +2961,58 @@ function handleDebugShortcut(event: KeyboardEvent) {
     background: hsl(var(--background));
     box-shadow: -12px 0 30px rgb(15 23 42 / 20%);
 }
-.task-config-drawer { width: min(56rem, 100vw); }
+.task-config-drawer {
+    width: min(56rem, 100vw);
+}
+.operator-docs-drawer {
+    width: min(72rem, 100vw);
+}
+.operator-docs-body {
+    display: flex;
+    min-height: 0;
+    flex: 1;
+    overflow: hidden;
+}
+.operator-docs-list {
+    width: 18rem;
+    flex: none;
+    overflow-y: auto;
+    border-right: 1px solid hsl(var(--border));
+    padding: 0.75rem;
+}
+.operator-docs-item {
+    display: flex;
+    width: 100%;
+    flex-direction: column;
+    gap: 0.25rem;
+    border-radius: 0.375rem;
+    padding: 0.625rem;
+    text-align: left;
+}
+.operator-docs-item:hover,
+.operator-docs-item.active {
+    background: hsl(var(--accent));
+    color: hsl(var(--accent-foreground));
+}
+.operator-docs-detail {
+    min-width: 0;
+    flex: 1;
+    overflow-y: auto;
+    padding: 1rem 1.25rem 2rem;
+}
+.operator-docs-section-title {
+    margin: 1.25rem 0 0.5rem;
+    border-bottom: 1px solid hsl(var(--border));
+    padding-bottom: 0.375rem;
+    font-weight: 600;
+}
+.operator-parameter-card {
+    margin-top: 0.5rem;
+    border: 1px solid hsl(var(--border));
+    border-radius: 0.5rem;
+    background: hsl(var(--card));
+    padding: 0.75rem;
+}
 .drawer-header {
     display: flex;
     min-height: 3.5rem;
@@ -1659,27 +3034,85 @@ function handleDebugShortcut(event: KeyboardEvent) {
     font-weight: 600;
     white-space: nowrap;
 }
-.debug-state-dot { width: 0.5rem; height: 0.5rem; border-radius: 9999px; background: currentColor; }
-.debug-state-idle { color: hsl(var(--muted-foreground)); background: hsl(var(--muted)); }
-.debug-state-running { color: #2563eb; background: rgb(37 99 235 / 14%); }
-.debug-state-running .debug-state-dot { animation: workflow-node-pulse 0.7s ease-in-out infinite alternate; }
-.debug-state-paused { color: #b45309; background: rgb(217 119 6 / 14%); }
-.debug-state-completed { color: #15803d; background: rgb(22 163 74 / 14%); }
-.debug-state-faulted { color: #dc2626; background: rgb(220 38 38 / 14%); }
-.debug-state-stopped { color: hsl(var(--muted-foreground)); background: hsl(var(--muted)); }
-:global(.dark) .debug-state-running { color: #60a5fa; }
-:global(.dark) .debug-state-paused { color: #fbbf24; }
-:global(.dark) .debug-state-completed { color: #4ade80; }
-:global(.dark) .debug-state-faulted { color: #f87171; }
+.debug-state-dot {
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 9999px;
+    background: currentColor;
+}
+.debug-state-idle {
+    color: hsl(var(--muted-foreground));
+    background: hsl(var(--muted));
+}
+.debug-state-running {
+    color: #2563eb;
+    background: rgb(37 99 235 / 14%);
+}
+.debug-state-running .debug-state-dot {
+    animation: workflow-node-pulse 0.7s ease-in-out infinite alternate;
+}
+.debug-state-paused {
+    color: #b45309;
+    background: rgb(217 119 6 / 14%);
+}
+.debug-state-completed {
+    color: #15803d;
+    background: rgb(22 163 74 / 14%);
+}
+.debug-state-faulted {
+    color: #dc2626;
+    background: rgb(220 38 38 / 14%);
+}
+.debug-state-stopped {
+    color: hsl(var(--muted-foreground));
+    background: hsl(var(--muted));
+}
+:global(.dark) .debug-state-running {
+    color: #60a5fa;
+}
+:global(.dark) .debug-state-paused {
+    color: #fbbf24;
+}
+:global(.dark) .debug-state-completed {
+    color: #4ade80;
+}
+:global(.dark) .debug-state-faulted {
+    color: #f87171;
+}
 :deep(.workflow-node-running) {
-    box-shadow: 0 0 0 4px #3b82f6, 0 0 18px rgb(59 130 246 / 70%);
+    box-shadow:
+        0 0 0 4px #3b82f6,
+        0 0 18px rgb(59 130 246 / 70%);
     animation: workflow-node-pulse 1.2s ease-in-out infinite alternate;
 }
-:deep(.workflow-node-paused) { box-shadow: 0 0 0 4px #eab308, 0 0 14px rgb(234 179 8 / 55%); }
-:deep(.workflow-node-completed) { box-shadow: 0 0 0 3px #22c55e; }
-:deep(.workflow-node-faulted) { box-shadow: 0 0 0 4px #ef4444, 0 0 14px rgb(239 68 68 / 60%); }
-:deep(.workflow-node-breakpoint) { box-shadow: 0 0 0 3px #ef4444; }
-.debug-table { width: max-content; min-width: 100%; border-collapse: separate; border-spacing: 0; font-family: ui-monospace, monospace; }
+:deep(.workflow-node-paused) {
+    box-shadow:
+        0 0 0 4px #eab308,
+        0 0 14px rgb(234 179 8 / 55%);
+}
+:deep(.workflow-node-completed) {
+    box-shadow: 0 0 0 3px #22c55e;
+}
+:deep(.workflow-node-faulted) {
+    box-shadow:
+        0 0 0 4px #ef4444,
+        0 0 14px rgb(239 68 68 / 60%);
+}
+:deep(.workflow-node-breakpoint) {
+    box-shadow: 0 0 0 3px #ef4444;
+}
+
+:deep(.workflow-node-port-selected) {
+    border: 3px solid var(--p-primary-color) !important;
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--p-primary-color) 25%, transparent) !important;
+}
+.debug-table {
+    width: max-content;
+    min-width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-family: ui-monospace, monospace;
+}
 .debug-table th {
     position: sticky;
     top: 0;
@@ -1688,7 +3121,8 @@ function handleDebugShortcut(event: KeyboardEvent) {
     text-align: left;
     font-weight: 600;
 }
-.debug-table th, .debug-table td {
+.debug-table th,
+.debug-table td {
     max-width: 32rem;
     border-right: 1px solid hsl(var(--border));
     border-bottom: 1px solid hsl(var(--border));
@@ -1696,16 +3130,39 @@ function handleDebugShortcut(event: KeyboardEvent) {
     overflow-wrap: anywhere;
     vertical-align: top;
 }
-.debug-table tr > :first-child { border-left: 1px solid hsl(var(--border)); }
-.debug-table thead tr:first-child > * { border-top: 1px solid hsl(var(--border)); }
+.debug-table tr > :first-child {
+    border-left: 1px solid hsl(var(--border));
+}
+.debug-table thead tr:first-child > * {
+    border-top: 1px solid hsl(var(--border));
+}
 @media (max-width: 640px) {
-    .workflow-ide-shell { margin: -1rem; height: calc(100vh - 3.5rem); }
-    .plc-trigger-drawer, .task-config-drawer { width: 100vw; border-left: 0; }
-    .drawer-header { padding-inline: 0.75rem; }
-    .debug-state-badge { order: 5; }
+    .workflow-ide-shell {
+        margin: -1rem;
+        height: calc(100vh - 3.5rem);
+    }
+    .plc-trigger-drawer,
+    .task-config-drawer,
+    .operator-docs-drawer {
+        width: 100vw;
+        border-left: 0;
+    }
+    .operator-docs-list {
+        width: 13rem;
+    }
+    .drawer-header {
+        padding-inline: 0.75rem;
+    }
+    .debug-state-badge {
+        order: 5;
+    }
 }
 @keyframes workflow-node-pulse {
-    from { filter: brightness(1); }
-    to { filter: brightness(1.18); }
+    from {
+        filter: brightness(1);
+    }
+    to {
+        filter: brightness(1.18);
+    }
 }
 </style>

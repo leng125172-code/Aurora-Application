@@ -159,8 +159,6 @@ public class WorkflowExecutionAppService : AuroraStruct3DAppService, IWorkflowEx
                 .ToDictionary(x => x.Key, x => x.First(), StringComparer.Ordinal);
 
             var variables = new List<WorkflowVariableResultDto>();
-            List<RegionMeasurementResultDto>? regions = null;
-
             foreach (string name in context.VariableNames)
             {
                 object? value = context.Get(name);
@@ -169,16 +167,6 @@ public class WorkflowExecutionAppService : AuroraStruct3DAppService, IWorkflowEx
                 string? scalar = WorkflowValueTypes.IsScalar(valueType)
                     ? WorkflowValueSerializer.ScalarToString(value)
                     : null;
-
-                if (name == "result_json" && scalar != null)
-                {
-                    try
-                    {
-                        var result = JsonSerializer.Deserialize<HeightDiffResultDto>(scalar);
-                        regions = result?.Regions;
-                    }
-                    catch (JsonException) { }
-                }
 
                 string? stagedKey = null;
                 if (outputNames.Contains(name))
@@ -214,7 +202,7 @@ public class WorkflowExecutionAppService : AuroraStruct3DAppService, IWorkflowEx
                 DurationMs = stopwatch.ElapsedMilliseconds,
                 RuntimeInstanceId = runtimeInstanceId,
                 Variables = variables,
-                Regions = regions,
+                Regions = null,
             };
         }
         finally
@@ -416,8 +404,4 @@ public class WorkflowExecutionAppService : AuroraStruct3DAppService, IWorkflowEx
         }
     }
 
-    private class HeightDiffResultDto
-    {
-        public List<RegionMeasurementResultDto>? Regions { get; set; }
-    }
 }

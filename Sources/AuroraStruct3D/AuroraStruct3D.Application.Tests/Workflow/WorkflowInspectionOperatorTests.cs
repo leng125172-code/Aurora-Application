@@ -56,9 +56,10 @@ public class WorkflowInspectionOperatorTests
         using var sut = new shape_inspection("rectangle", 2, allowAdditional);
         sut.Execute(context);
 
-        Assert.Equal(expectedStatus, context.Get<string>("inspection_status"));
-        Assert.Equal(expectedStatus == "OK", context.Get<bool>("is_ok"));
-        using JsonDocument result = JsonDocument.Parse(context.Get<string>("result_json")!);
+        InspectionResultBase inspection = Result(context);
+        Assert.Equal(expectedStatus, inspection.resultCode.ToString());
+        Assert.Equal(expectedStatus == "OK", inspection.isOk);
+        using JsonDocument result = JsonDocument.Parse(inspection.ToDetailsNode()!.ToJsonString());
         Assert.Equal(
             "rectangle",
             result.RootElement.GetProperty("expectedShape").GetString()
@@ -77,8 +78,8 @@ public class WorkflowInspectionOperatorTests
 
         sut.Execute(context);
 
-        Assert.False(context.Get<bool>("is_valid"));
-        Assert.Equal("UNKNOWN", context.Get<string>("inspection_status"));
+        Assert.False(Result(context).isValid);
+        Assert.Equal(InspectionResultCode.UNKNOWN, Result(context).resultCode);
     }
 
     [Theory]
@@ -107,8 +108,8 @@ public class WorkflowInspectionOperatorTests
 
         sut.Execute(context);
 
-        Assert.Equal(expectedStatus, context.Get<string>("inspection_status"));
-        Assert.Equal(expectedStatus == "OK", context.Get<bool>("is_ok"));
+        Assert.Equal(expectedStatus, Result(context).resultCode.ToString());
+        Assert.Equal(expectedStatus == "OK", Result(context).isOk);
     }
 
     [Fact]
@@ -126,9 +127,9 @@ public class WorkflowInspectionOperatorTests
 
         sut.Execute(context);
 
-        Assert.True(context.Get<bool>("is_valid"));
-        Assert.True(context.Get<bool>("angle_ok"));
-        Assert.Equal("OK", context.Get<string>("inspection_status"));
+        Assert.True(Result(context).isValid);
+        Assert.True(Result(context).ToDetailsNode()!["angle"]!["isOk"]!.GetValue<bool>());
+        Assert.Equal(InspectionResultCode.OK, Result(context).resultCode);
     }
 
     [Fact]
@@ -140,8 +141,8 @@ public class WorkflowInspectionOperatorTests
 
         sut.Execute(context);
 
-        Assert.False(context.Get<bool>("is_valid"));
-        Assert.Equal("UNKNOWN", context.Get<string>("inspection_status"));
+        Assert.False(Result(context).isValid);
+        Assert.Equal(InspectionResultCode.UNKNOWN, Result(context).resultCode);
     }
 
     [Theory]
@@ -161,8 +162,8 @@ public class WorkflowInspectionOperatorTests
 
         sut.Execute(context);
 
-        Assert.Equal(expectedStatus, context.Get<string>("inspection_status"));
-        Assert.Equal(expectedStatus == "OK", context.Get<bool>("is_ok"));
+        Assert.Equal(expectedStatus, Result(context).resultCode.ToString());
+        Assert.Equal(expectedStatus == "OK", Result(context).isOk);
     }
 
     [Fact]
@@ -173,17 +174,19 @@ public class WorkflowInspectionOperatorTests
 
         sut.Execute(context);
 
-        Assert.False(context.Get<bool>("is_valid"));
-        Assert.Equal("UNKNOWN", context.Get<string>("inspection_status"));
+        Assert.False(Result(context).isValid);
+        Assert.Equal(InspectionResultCode.UNKNOWN, Result(context).resultCode);
     }
 
     private static void AssertUnifiedOutputs(
         IEnumerable<AuroraStruct3D.OpenCV.VisionParameters.IVisionParameter> outputs
     )
     {
-        Assert.Contains(outputs, x => x.ParameterName == "is_valid");
-        Assert.Contains(outputs, x => x.ParameterName == "is_ok");
-        Assert.Contains(outputs, x => x.ParameterName == "inspection_status");
-        Assert.Contains(outputs, x => x.ParameterName == "result_json");
+        var output = Assert.Single(outputs);
+        Assert.Equal("result", output.ParameterName);
+        Assert.True(typeof(InspectionResultBase).IsAssignableFrom(output.ParameterType));
     }
+
+    private static InspectionResultBase Result(WorkflowContext context) =>
+        Assert.IsAssignableFrom<InspectionResultBase>(context.Get("result"));
 }

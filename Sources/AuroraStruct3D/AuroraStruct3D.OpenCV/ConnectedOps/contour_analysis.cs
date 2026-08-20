@@ -1,4 +1,5 @@
 using System.Text.Json;
+using AuroraStruct3D.OpenCV.Workflow;
 
 namespace AuroraStruct3D.OpenCV.ConnectedOps;
 
@@ -51,13 +52,7 @@ public class contour_analysis : IOperator
                 ParameterType = typeof(int),
                 ControlType = PortControlType.Download,
             },
-            new VisionParameter<bool>
-            {
-                ParameterName = "is_ok",
-                DisplayName = "轮廓数量是否合格",
-                ParameterType = typeof(bool),
-                ControlType = PortControlType.Download,
-            },
+            InspectionResults.Output<ContourInspectionDetails>("轮廓检测结果"),
         };
 
     public static List<IConfigParameter>? ConfigParameters =>
@@ -266,10 +261,9 @@ public class contour_analysis : IOperator
             string json = JsonSerializer.Serialize(features, JsonOptions);
             context.Set("contours_json", json);
             context.Set("contour_count", features.Count);
-            context.Set(
-                "is_ok",
-                features.Count >= _minCount && features.Count <= _maxCount
-            );
+            bool isOk = features.Count >= _minCount && features.Count <= _maxCount;
+            context.Set("result", InspectionResults.CreateTyped(true, isOk,
+                new ContourInspectionDetails(features.Count, _minCount, _maxCount)));
         }
         finally
         {

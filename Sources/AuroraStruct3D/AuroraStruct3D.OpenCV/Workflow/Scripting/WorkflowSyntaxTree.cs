@@ -66,15 +66,15 @@ public static partial class WorkflowSyntaxParser
     [GeneratedRegex(@"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*\(([\s\S]*)\)\s*;\s*$")]
     private static partial Regex CallPattern();
 
-    [GeneratedRegex(@"^\s*(?:(?:var\s+[A-Za-z_][A-Za-z0-9_]*|var\s*\([^)]*\))\s*=\s*)?([A-Za-z_][A-Za-z0-9_]*)\s*\(([\s\S]*)\)\s*;\s*$")]
+    [GeneratedRegex(@"^\s*(?:(?:var\s+[A-Za-z_][A-Za-z0-9_]*|var\s*\([^)]*\))\s*=\s*)?([A-Za-z_][A-Za-z0-9_]*)(?:\s*<[^;()]+>)?\s*\(([\s\S]*)\)\s*;\s*$")]
     private static partial Regex V2CallPattern();
 
     public static WorkflowSyntaxTree Parse(string source)
     {
         source ??= string.Empty;
-        bool isV2 = Regex.IsMatch(
+        bool isCSharp = Regex.IsMatch(
             source,
-            @"Workflow\s*\(\s*""(?:\\.|[^""])*""\s*,\s*2\s*\)",
+            @"Workflow\s*\(\s*""(?:\\.|[^""])*""\s*,\s*(?:2|3)\s*\)",
             RegexOptions.Singleline);
         List<WorkflowSyntaxStatement> statements = [];
         List<WorkflowSyntaxDiagnostic> diagnostics = [];
@@ -93,7 +93,7 @@ public static partial class WorkflowSyntaxParser
             string callText = source[codeStart..end];
             if (string.IsNullOrWhiteSpace(RemoveLineComments(callText)))
                 continue;
-            Match match = (isV2 ? V2CallPattern() : CallPattern()).Match(callText);
+            Match match = (isCSharp ? V2CallPattern() : CallPattern()).Match(callText);
             if (!match.Success)
             {
                 diagnostics.Add(Diagnostic("WFS1001", "需要白名单方法调用语句并以分号结束。", source, codeStart, end));
@@ -101,7 +101,7 @@ public static partial class WorkflowSyntaxParser
             }
 
             string method = match.Groups[1].Value;
-            if (!isV2 && !CSharpWorkflowScript.AllowedMethods.Contains(method))
+            if (!isCSharp && !CSharpWorkflowScript.AllowedMethods.Contains(method))
             {
                 diagnostics.Add(Diagnostic("WFS1002", $"不允许的语句 '{method}'。", source, codeStart, end));
             }
@@ -125,7 +125,7 @@ public static partial class WorkflowSyntaxParser
                     diagnostics.Add(Diagnostic("WFS0004", "JSON 参数深度超过 64 层限制。", source, codeStart, end));
                 }
             }
-            string? nodeId = isV2
+            string? nodeId = isCSharp
                 ? ReadV2NodeId(source, codeStart)
                 : method switch
                 {
@@ -133,7 +133,7 @@ public static partial class WorkflowSyntaxParser
                         ReadString(arguments.FirstOrDefault()),
                     _ => null,
                 };
-            int syntaxStart = isV2 && nodeId is not null
+            int syntaxStart = isCSharp && nodeId is not null
                 ? FindV2MetadataStart(source, codeStart)
                 : codeStart;
             string text = source[syntaxStart..end];
@@ -156,7 +156,7 @@ public static partial class WorkflowSyntaxParser
             }
         }
 
-        if (isV2 && !diagnostics.Any(x => x.Severity == "error"))
+        if (isCSharp && !diagnostics.Any(x => x.Severity == "error"))
         {
             try
             {

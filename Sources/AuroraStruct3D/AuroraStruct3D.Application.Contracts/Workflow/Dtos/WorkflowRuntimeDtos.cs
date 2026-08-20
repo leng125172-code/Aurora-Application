@@ -221,6 +221,9 @@ public class WorkflowProjectRunEnqueueInput
     [Required]
     public Guid ProjectId { get; set; }
 
+    /// <summary>目标任务配置；为空时仅允许项目存在唯一启用任务。</summary>
+    public Guid? TaskConfigId { get; set; }
+
     /// <summary>触发启动类型。</summary>
     public WorkflowProjectRunStartType StartType { get; set; } =
         WorkflowProjectRunStartType.Immediate;
@@ -235,18 +238,6 @@ public class WorkflowProjectRunEnqueueInput
 }
 
 /// <summary>
-/// 项目运行出错后的处理策略。
-/// </summary>
-public enum WorkflowProjectRunOnErrorAction
-{
-    /// <summary>遇错即停止运行。</summary>
-    StopRun = 0,
-
-    /// <summary>跳过失败工作流并继续执行后续工作流。</summary>
-    ContinueRun = 1,
-}
-
-/// <summary>
 /// 项目级工作流运行入队结果。
 /// </summary>
 public class WorkflowProjectRunEnqueueResultDto
@@ -256,6 +247,8 @@ public class WorkflowProjectRunEnqueueResultDto
 
     /// <summary>项目 ID。</summary>
     public Guid ProjectId { get; set; }
+
+    public Guid TaskConfigId { get; set; }
 
     /// <summary>运行内工作流数。</summary>
     public int WorkflowCount { get; set; }
@@ -342,6 +335,9 @@ public class WorkflowProjectTaskBatchDto
     [StringLength(128)]
     public string? ResultVariableName { get; set; }
 
+    public WorkflowProjectRunOnErrorAction OnErrorAction { get; set; } =
+        WorkflowProjectRunOnErrorAction.StopRun;
+
     /// <summary>任务配置行项（各工作流的启用与顺序）。</summary>
     public List<WorkflowProjectTaskDto> Items { get; set; } = new();
 }
@@ -389,6 +385,79 @@ public class WorkflowProjectDeploymentDto
 
     /// <summary>创建时间。</summary>
     public DateTime CreationTime { get; set; }
+
+    public int SnapshotSchemaVersion { get; set; }
+    public WorkflowProjectTaskType TaskType { get; set; }
+    public int? CycleIntervalSeconds { get; set; }
+    public Guid? ResultWorkflowId { get; set; }
+    public string? ResultVariableName { get; set; }
+    public WorkflowProjectRunOnErrorAction OnErrorAction { get; set; }
+}
+
+public class CreateWorkflowProjectTaskInput
+{
+    [Required]
+    public Guid ProjectId { get; set; }
+    [Required, StringLength(128)]
+    public string Name { get; set; } = string.Empty;
+    public bool IsEnabled { get; set; } = true;
+    public SaveWorkflowPlcHandshakeConfigInput? PlcHandshake { get; set; }
+}
+
+public class UpdateWorkflowProjectTaskInput
+{
+    [Required, StringLength(128)]
+    public string Name { get; set; } = string.Empty;
+    public bool IsEnabled { get; set; }
+    public SaveWorkflowPlcHandshakeConfigInput? PlcHandshake { get; set; }
+}
+
+public class UpdateWorkflowProjectTaskEnabledInput
+{
+    public bool IsEnabled { get; set; }
+}
+
+public class WorkflowProjectTaskRegistrationDto
+{
+    public Guid Id { get; set; }
+    public Guid ProjectId { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public bool IsEnabled { get; set; }
+    public DateTime CreationTime { get; set; }
+    public WorkflowPlcHandshakeConfigDto? PlcHandshake { get; set; }
+}
+
+public class WorkflowProjectDeploymentHistoryInput
+{
+    [Range(0, int.MaxValue)] public int SkipCount { get; set; }
+    [Range(1, 100)] public int MaxResultCount { get; set; } = 20;
+}
+
+public class ApplyWorkflowProjectInput
+{
+    public Guid? ExpectedActiveDeploymentId { get; set; }
+    [Required]
+    public WorkflowProjectTaskBatchDto TaskConfig { get; set; } = new();
+}
+
+public class ApplyWorkflowProjectResultDto
+{
+    public Guid ProjectId { get; set; }
+    public WorkflowProjectDeploymentDto Deployment { get; set; } = new();
+    public bool CreatedNewRevision { get; set; }
+    public bool ActivationChanged { get; set; }
+    public bool Unchanged { get; set; }
+    public DateTime AppliedAt { get; set; }
+}
+
+public class WorkflowProjectApplicationStatusDto
+{
+    public Guid ProjectId { get; set; }
+    public WorkflowProjectDeploymentDto? ActiveDeployment { get; set; }
+    public WorkflowProjectDeploymentDto? LatestDeployment { get; set; }
+    public bool HasUnappliedChanges { get; set; }
+    public bool CanApply { get; set; }
+    public List<string> ValidationMessages { get; set; } = [];
 }
 
 /// <summary>
@@ -524,22 +593,23 @@ public class WorkflowProjectRunStatusDto
 public class WorkflowPlcHandshakeConfigDto
 {
     public Guid Id { get; set; }
+    public Guid TaskConfigId { get; set; }
     public Guid ProjectId { get; set; }
     public Guid PlcDeviceId { get; set; }
-    public Guid CaptureRequestTagId { get; set; }
-    public Guid RequestIdTagId { get; set; }
-    public Guid ResultAckTagId { get; set; }
-    public Guid ResultAckIdTagId { get; set; }
-    public Guid HeartbeatTagId { get; set; }
-    public Guid DeviceStatusTagId { get; set; }
-    public Guid TaskStatusTagId { get; set; }
-    public Guid CanCaptureTagId { get; set; }
-    public Guid CaptureAckTagId { get; set; }
-    public Guid AckRequestIdTagId { get; set; }
-    public Guid ResultValidTagId { get; set; }
-    public Guid ResultRequestIdTagId { get; set; }
-    public Guid ResultCodeTagId { get; set; }
-    public Guid ErrorCodeTagId { get; set; }
+    public string CaptureRequestAddress { get; set; } = string.Empty;
+    public string RequestIdAddress { get; set; } = string.Empty;
+    public string ResultAckAddress { get; set; } = string.Empty;
+    public string ResultAckIdAddress { get; set; } = string.Empty;
+    public string HeartbeatAddress { get; set; } = string.Empty;
+    public string DeviceStatusAddress { get; set; } = string.Empty;
+    public string TaskStatusAddress { get; set; } = string.Empty;
+    public string CanCaptureAddress { get; set; } = string.Empty;
+    public string CaptureAckAddress { get; set; } = string.Empty;
+    public string AckRequestIdAddress { get; set; } = string.Empty;
+    public string ResultValidAddress { get; set; } = string.Empty;
+    public string ResultRequestIdAddress { get; set; } = string.Empty;
+    public string ResultCodeAddress { get; set; } = string.Empty;
+    public string ErrorCodeAddress { get; set; } = string.Empty;
     public bool IsEnabled { get; set; }
 }
 
@@ -547,20 +617,20 @@ public class SaveWorkflowPlcHandshakeConfigInput
 {
     public Guid ProjectId { get; set; }
     public Guid PlcDeviceId { get; set; }
-    public Guid CaptureRequestTagId { get; set; }
-    public Guid RequestIdTagId { get; set; }
-    public Guid ResultAckTagId { get; set; }
-    public Guid ResultAckIdTagId { get; set; }
-    public Guid HeartbeatTagId { get; set; }
-    public Guid DeviceStatusTagId { get; set; }
-    public Guid TaskStatusTagId { get; set; }
-    public Guid CanCaptureTagId { get; set; }
-    public Guid CaptureAckTagId { get; set; }
-    public Guid AckRequestIdTagId { get; set; }
-    public Guid ResultValidTagId { get; set; }
-    public Guid ResultRequestIdTagId { get; set; }
-    public Guid ResultCodeTagId { get; set; }
-    public Guid ErrorCodeTagId { get; set; }
+    public string CaptureRequestAddress { get; set; } = string.Empty;
+    public string RequestIdAddress { get; set; } = string.Empty;
+    public string ResultAckAddress { get; set; } = string.Empty;
+    public string ResultAckIdAddress { get; set; } = string.Empty;
+    public string HeartbeatAddress { get; set; } = string.Empty;
+    public string DeviceStatusAddress { get; set; } = string.Empty;
+    public string TaskStatusAddress { get; set; } = string.Empty;
+    public string CanCaptureAddress { get; set; } = string.Empty;
+    public string CaptureAckAddress { get; set; } = string.Empty;
+    public string AckRequestIdAddress { get; set; } = string.Empty;
+    public string ResultValidAddress { get; set; } = string.Empty;
+    public string ResultRequestIdAddress { get; set; } = string.Empty;
+    public string ResultCodeAddress { get; set; } = string.Empty;
+    public string ErrorCodeAddress { get; set; } = string.Empty;
     public bool IsEnabled { get; set; }
 }
 

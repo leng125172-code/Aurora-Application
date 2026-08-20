@@ -6,6 +6,7 @@ using AuroraStruct3D.OpenCV.Workflow.Compilation.Model;
 using AuroraStruct3D.OpenCV.Workflow.Scripting;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 using Volo.Abp.DependencyInjection;
 using Microsoft.Extensions.Options;
 using RuntimeWorkflowDefinition = AuroraStruct3D.OpenCV.Workflow.WorkflowDefinition;
@@ -231,6 +232,11 @@ public sealed class WorkflowProgramCache : IWorkflowProgramCache, ISingletonDepe
         CancellationToken cancellationToken
     )
     {
+        if (!Regex.IsMatch(sourceCode,
+            "^\\s*Workflow\\s*\\(\\s*\"(?:\\\\.|[^\"])*\"\\s*,\\s*3\\s*\\)\\s*;",
+            RegexOptions.Multiline))
+            throw new WorkflowCompilationException(
+                "V1/V2 工作流已禁止执行，请先迁移到 V3。");
         (string name, GraphDataModel graph) = CSharpWorkflowScript.Parse(sourceCode);
         RuntimeWorkflowDefinition workflow = await new WorkflowGraphCompiler(_registry)
             .CompileAsync(graph, name, cancellationToken);

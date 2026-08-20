@@ -22,12 +22,17 @@ public static class WorkflowProjectTaskConfigDbContextModelCreatingExtensions
             b.ConfigureByConvention();
 
             b.Property(x => x.ProjectId).IsRequired();
+            b.Property(x => x.Name).IsRequired().HasMaxLength(WorkflowProjectTaskConfig.MaxNameLength);
             b.Property(x => x.TaskType).IsRequired();
             b.Property(x => x.CycleIntervalSeconds);
+            b.Property(x => x.OnErrorAction).IsRequired();
+            b.Property(x => x.IsEnabled).IsRequired();
             b.Property(x => x.ResultWorkflowId);
             b.Property(x => x.ResultVariableName).HasMaxLength(128);
 
-            b.HasIndex(x => x.ProjectId).IsUnique();
+            b.HasIndex(x => x.ProjectId);
+            b.HasIndex(x => new { x.ProjectId, x.IsEnabled }).IsUnique()
+                .HasFilter("\"IsEnabled\" = true AND \"IsDeleted\" = false");
         });
     }
 }

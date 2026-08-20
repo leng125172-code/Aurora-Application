@@ -12,6 +12,9 @@ public sealed class NodeConfigFieldDto
     /// <summary>UI 显示名，可为 null（前端回退到 Name）。</summary>
     public string? DisplayName { get; init; }
 
+    /// <summary>配置指南，直接用于指导用户如何填写该配置参数。</summary>
+    public string Description { get; init; } = string.Empty;
+
     /// <summary>
     /// 参数 CLR 类型全名，前端据此渲染控件：
     /// <list type="bullet">

@@ -12,13 +12,15 @@ public sealed class OpcUaPlcDriver : IPlcDriver, IPlcBrowsableDriver, IPlcSubscr
     private sealed class OpcConnection : IPlcConnection
     {
         private readonly PlcConnectionOptions _options;
+        private readonly Action<Session> _cleanupSubscriptions;
         private SessionReconnectHandler? _reconnect;
         public Session Session { get; private set; }
 
-        public OpcConnection(Session session, PlcConnectionOptions options)
+        public OpcConnection(Session session, PlcConnectionOptions options, Action<Session> cleanupSubscriptions)
         {
             Session = session;
             _options = options;
+            _cleanupSubscriptions = cleanupSubscriptions;
             Session.KeepAlive += OnKeepAlive;
         }
 
@@ -69,6 +71,7 @@ public sealed class OpcUaPlcDriver : IPlcDriver, IPlcBrowsableDriver, IPlcSubscr
         {
             Session.KeepAlive -= OnKeepAlive;
             _reconnect?.Dispose();
+            _cleanupSubscriptions(Session);
             await Session.CloseAsync().ConfigureAwait(false);
             Session.Dispose();
         }
@@ -247,7 +250,7 @@ public sealed class OpcUaPlcDriver : IPlcDriver, IPlcBrowsableDriver, IPlcSubscr
                 cancellationToken
             )
             .ConfigureAwait(false);
-        return new OpcConnection(session, options);
+        return new OpcConnection(session, options, CleanupSubscriptions);
     }
 
     public Task ValidateAddressAsync(
@@ -351,10 +354,28 @@ public sealed class OpcUaPlcDriver : IPlcDriver, IPlcBrowsableDriver, IPlcSubscr
             ReferenceTypeIds.HierarchicalReferences,
             true,
             (uint)(NodeClass.Object | NodeClass.Variable),
-            out _,
+            out byte[] continuationPoint,
             out ReferenceDescriptionCollection references
         );
-        var items = references
+        var allReferences = new List<ReferenceDescription>(references);
+        while (continuationPoint is { Length: > 0 } && allReferences.Count < request.MaxResults)
+        {
+            session.BrowseNext(
+                null,
+                false,
+                continuationPoint,
+                out continuationPoint,
+                out ReferenceDescriptionCollection nextReferences
+            );
+            allReferences.AddRange(nextReferences);
+        }
+        if (continuationPoint is { Length: > 0 })
+        {
+            session.BrowseNext(null, true, continuationPoint, out _, out _);
+        }
+
+        var items = allReferences
+            .Take(request.MaxResults)
             .Select(x =>
                 new PlcBrowseNode(
                     ExpandedNodeId.ToNodeId(x.NodeId, session.NamespaceUris)?.ToString()
@@ -389,6 +410,7 @@ public sealed class OpcUaPlcDriver : IPlcDriver, IPlcBrowsableDriver, IPlcSubscr
         };
         foreach (PlcSubscriptionItem item in items)
         {
+            var callbackGate = new SemaphoreSlim(1, 1);
             var monitored = new MonitoredItem(subscription.DefaultItem)
             {
                 DisplayName = item.Key,
@@ -405,20 +427,25 @@ public sealed class OpcUaPlcDriver : IPlcDriver, IPlcBrowsableDriver, IPlcSubscr
                     DeadbandType = (uint)DeadbandType.Absolute,
                     DeadbandValue = item.Deadband.Value,
                 };
-            monitored.Notification += (sender, e) =>
+            monitored.Notification += async (sender, e) =>
             {
-                foreach (DataValue value in sender.DequeueValues())
-                    _ = onValue(
-                        new PlcValue(
-                            item.Key,
-                            value.Value,
-                            item.DataType,
-                            value.StatusCode.ToString(),
-                            value.SourceTimestamp,
-                            value.ServerTimestamp,
-                            DateTime.UtcNow
-                        )
-                    );
+                await callbackGate.WaitAsync().ConfigureAwait(false);
+                try
+                {
+                    foreach (DataValue value in sender.DequeueValues())
+                        await onValue(new PlcValue(item.Key, value.Value, item.DataType,
+                            value.StatusCode.ToString(), value.SourceTimestamp,
+                            value.ServerTimestamp, DateTime.UtcNow)).ConfigureAwait(false);
+                }
+                catch
+                {
+                    // OPC SDK event callbacks cannot propagate failures to the publisher.
+                    // The serialized gate still prevents overlapping/out-of-order delivery.
+                }
+                finally
+                {
+                    callbackGate.Release();
+                }
             };
             subscription.AddItem(monitored);
         }
@@ -447,6 +474,18 @@ public sealed class OpcUaPlcDriver : IPlcDriver, IPlcBrowsableDriver, IPlcSubscr
         connection is OpcConnection opc
             ? opc.Session
             : throw new ArgumentException("连接不属于 OPC UA 驱动", nameof(connection));
+
+    private void CleanupSubscriptions(Session session)
+    {
+        foreach ((string id, Subscription subscription) in _subscriptions.ToArray())
+        {
+            if (!ReferenceEquals(subscription.Session, session)
+                || !_subscriptions.TryRemove(id, out Subscription? removed))
+                continue;
+            try { removed.Delete(true); } catch { }
+            removed.Dispose();
+        }
+    }
 
     private static object? ConvertValue(object? value, PlcTagDataType type)
     {

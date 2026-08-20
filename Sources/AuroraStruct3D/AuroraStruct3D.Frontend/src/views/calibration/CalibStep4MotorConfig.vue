@@ -403,7 +403,11 @@ async function saveLimitConfigAction(axis: MotorAxisDto): Promise<void> {
                         class="flex items-center gap-3 px-4 py-3 transition-colors"
                         :class="{ 'bg-muted/20': expandedMotorId === axis.id }"
                     >
-                        <Button unstyled type="button"
+                        <Button
+                            size="small"
+                            text
+                            severity="secondary"
+                            type="button"
                             class="flex min-w-0 flex-1 items-center gap-3 text-left"
                             @click="toggleMotorExpand(axis.id)"
                         >

@@ -18,6 +18,8 @@ public class VisionParameter<T> : IVisionParameter
     /// <summary>端口 UI 显示名（实例级），为 null 时回退到类型名。</summary>
     public string? DisplayName { get; set; }
 
+    public string? Description { get; set; }
+
     /// <summary>参数实际数据类型。</summary>
     public Type ParameterType { get; set; } = typeof(T);
 

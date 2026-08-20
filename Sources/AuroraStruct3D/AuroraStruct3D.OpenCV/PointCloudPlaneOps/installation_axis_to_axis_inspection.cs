@@ -57,10 +57,8 @@ public sealed class installation_axis_to_axis_inspection : IOperator
         bool valid = reasons.Count == 0;
         bool ok = valid && Math.Abs(deviation) <= _maxDeviation;
         string status = !valid ? "UNKNOWN" : ok ? "OK" : "NG";
-        installation_axis_to_plane_inspection.Set(context, "axis_angle", angle);
-        installation_axis_to_plane_inspection.Set(context, "angle_deviation", deviation);
         installation_axis_to_plane_inspection.SetResult(context, status, valid, ok,
-            new { axisAngle = InstallationAngleMath.Round(angle), angleDeviation = InstallationAngleMath.Round(deviation), referenceRmse, measuredRmse, reasons });
+            new InstallationAxisInspectionDetails { axisAngle = InstallationAngleMath.Round(angle), angleDeviation = InstallationAngleMath.Round(deviation), referenceRmse = referenceRmse, measuredRmse = measuredRmse, reasons = reasons });
     }
     public void Dispose() { if (_disposed) return; _disposed = true; GC.SuppressFinalize(this); }
 }

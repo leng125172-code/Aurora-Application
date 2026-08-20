@@ -50,6 +50,7 @@ public sealed class WorkflowGraphValidator
 
     /// <summary>变量定义记录：变量名 → 定义它的节点 ID（用于重复定义检测）。</summary>
     private readonly Dictionary<string, string> _definers = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, string?> _schemas = new(StringComparer.Ordinal);
 
     /// <summary>ForLoop 循环体内受保护的变量名集合。</summary>
     private readonly Stack<HashSet<string>> _protectedVars = new();
@@ -73,6 +74,7 @@ public sealed class WorkflowGraphValidator
 
         _consumers.Clear();
         _definers.Clear();
+        _schemas.Clear();
         _protectedVars.Clear();
 
         var diagnostics = new List<WorkflowDiagnostic>();
@@ -201,6 +203,7 @@ public sealed class WorkflowGraphValidator
         switch (node.Type)
         {
             case NodeTypeTokens.StartNode:
+                ValidateStartNode(node, symbols, diagnostics);
                 return;
 
             case NodeTypeTokens.EndNode:
@@ -646,7 +649,7 @@ public sealed class WorkflowGraphValidator
                 CheckTypeCompat(
                     node.Id,
                     portName,
-                    symbols.GetValueOrDefault(varName),
+                    ResolveReferenceType(node.Id, portName, varName, symbols, diagnostics),
                     portType,
                     diagnostics,
                     operatorId,
@@ -700,7 +703,7 @@ public sealed class WorkflowGraphValidator
                 CheckTypeCompat(
                     node.Id,
                     cfg.Name,
-                    symbols.GetValueOrDefault(refName),
+                    ResolveReferenceType(node.Id, cfg.Name, refName, symbols, diagnostics),
                     cfg.ParameterTypeName,
                     diagnostics,
                     operatorId,
@@ -750,6 +753,8 @@ public sealed class WorkflowGraphValidator
                     diagnostics,
                     IsShadowAllowed(node, varName)
                 );
+                _schemas[varName] = descriptor?.Outputs
+                    .FirstOrDefault(o => o.ParameterName == portName)?.JsonSchema;
             }
         }
     }
@@ -770,7 +775,14 @@ public sealed class WorkflowGraphValidator
             return;
         }
 
-        if (!symbols.ContainsKey(variableName))
+        string rootName;
+        try { rootName = WorkflowValueAccessor.Compile(variableName).RootVariableName; }
+        catch (FormatException ex)
+        {
+            diagnostics.Add(ErrorDiag(nodeId, target, ex.Message));
+            return;
+        }
+        if (!symbols.ContainsKey(rootName))
         {
             diagnostics.Add(
                 ErrorDiag(
@@ -783,12 +795,114 @@ public sealed class WorkflowGraphValidator
         }
 
         // 记录消费关系（用于后续未使用变量检测）。
-        if (!_consumers.TryGetValue(variableName, out HashSet<string>? consumerSet))
+        if (!_consumers.TryGetValue(rootName, out HashSet<string>? consumerSet))
         {
             consumerSet = new HashSet<string>(StringComparer.Ordinal);
-            _consumers[variableName] = consumerSet;
+            _consumers[rootName] = consumerSet;
         }
         consumerSet.Add(nodeId);
+    }
+
+    private void ValidateStartNode(
+        NodeModel node,
+        Dictionary<string, string?> symbols,
+        List<WorkflowDiagnostic> diagnostics)
+    {
+        if (node.Properties?.OutputBindings is not { } inputs) return;
+        foreach ((string port, string variable) in inputs)
+        {
+            CheckName(node.Id, variable, diagnostics);
+            string? typeName = node.Properties.OutputBindingTypeNames?.GetValueOrDefault(port);
+            DeclareVariable(node.Id, variable, typeName, symbols, diagnostics, false);
+            _schemas[variable] = node.Properties.OutputBindingSchemas?.GetValueOrDefault(port);
+        }
+    }
+
+    private string? ResolveReferenceType(
+        string nodeId,
+        string target,
+        string expression,
+        Dictionary<string, string?> symbols,
+        List<WorkflowDiagnostic> diagnostics)
+    {
+        WorkflowValueAccessor accessor;
+        try { accessor = WorkflowValueAccessor.Compile(expression); }
+        catch (FormatException ex)
+        {
+            diagnostics.Add(ErrorDiag(nodeId, target, ex.Message));
+            return null;
+        }
+        string? rootType = symbols.GetValueOrDefault(accessor.RootVariableName);
+        if (expression == accessor.RootVariableName)
+            return rootType;
+        if (!_schemas.TryGetValue(accessor.RootVariableName, out string? jsonSchema)
+            || string.IsNullOrWhiteSpace(jsonSchema))
+        {
+            diagnostics.Add(ErrorDiag(nodeId, target,
+                $"变量 '{accessor.RootVariableName}' 没有结构类型元数据，无法访问 '{expression}'。"));
+            return null;
+        }
+        try
+        {
+            using JsonDocument document = JsonDocument.Parse(jsonSchema);
+            JsonElement schema = document.RootElement;
+            string suffix = expression[accessor.RootVariableName.Length..];
+            foreach (Match segment in Regex.Matches(suffix, @"\.([A-Za-z_][A-Za-z0-9_]*)|\[(\d+)\]"))
+            {
+                schema = EffectiveSchema(schema);
+                if (segment.Groups[1].Success)
+                {
+                    string member = segment.Groups[1].Value;
+                    if (member == "Length" && SchemaType(schema) == "array")
+                        return typeof(int).FullName;
+                    if (!schema.TryGetProperty("properties", out JsonElement properties)
+                        || !properties.TryGetProperty(member, out schema))
+                    {
+                        diagnostics.Add(ErrorDiag(nodeId, target,
+                            $"类型上不存在成员 '{member}'（表达式 '{expression}'）。"));
+                        return null;
+                    }
+                }
+                else if (!schema.TryGetProperty("items", out schema))
+                {
+                    diagnostics.Add(ErrorDiag(nodeId, target,
+                        $"表达式 '{expression}' 对非数组类型使用了下标。"));
+                    return null;
+                }
+            }
+            if (schema.TryGetProperty("x-clr-type", out JsonElement clrType)
+                && clrType.GetString() is { Length: > 0 } declaredType)
+                return declaredType;
+            return SchemaType(schema) switch
+            {
+                "boolean" => typeof(bool).FullName,
+                "integer" => typeof(int).FullName,
+                "number" => typeof(double).FullName,
+                "string" => typeof(string).FullName,
+                _ => rootType,
+            };
+        }
+        catch (JsonException ex)
+        {
+            diagnostics.Add(ErrorDiag(nodeId, target, $"JSON Schema 无效：{ex.Message}"));
+            return null;
+        }
+    }
+
+    private static JsonElement EffectiveSchema(JsonElement schema)
+    {
+        if (schema.TryGetProperty("anyOf", out JsonElement anyOf))
+            foreach (JsonElement candidate in anyOf.EnumerateArray())
+                if (candidate.TryGetProperty("type", out JsonElement type)
+                    && type.GetString() != "null") return candidate;
+        return schema;
+    }
+
+    private static string? SchemaType(JsonElement schema)
+    {
+        schema = EffectiveSchema(schema);
+        return schema.TryGetProperty("type", out JsonElement type) && type.ValueKind == JsonValueKind.String
+            ? type.GetString() : null;
     }
 
     private void CheckTypeCompat(
@@ -804,6 +918,10 @@ public sealed class WorkflowGraphValidator
         if (haveType is null || needType is null)
             return; // 任一类型未知，跳过。
         if (string.Equals(haveType, needType, StringComparison.Ordinal))
+            return;
+        Type? haveClr = ResolveClrType(haveType);
+        Type? needClr = ResolveClrType(needType);
+        if (haveClr is not null && needClr?.IsAssignableFrom(haveClr) == true)
             return;
 
         bool numericMismatch =
@@ -826,16 +944,14 @@ public sealed class WorkflowGraphValidator
             return;
         }
 
-        diagnostics.Add(
-            new WorkflowDiagnostic
-            {
-                Severity = WorkflowDiagnosticSeverity.Warning,
-                NodeId = nodeId,
-                Target = target,
-                Message = $"类型可能不匹配：变量类型 '{haveType}' → 期望 '{needType}'。",
-            }
-        );
+        diagnostics.Add(ErrorDiag(nodeId, target,
+            $"类型不匹配：变量类型 '{haveType}' → 期望 '{needType}'。"));
     }
+
+    private static Type? ResolveClrType(string typeName) =>
+        AppDomain.CurrentDomain.GetAssemblies()
+            .Select(assembly => assembly.GetType(typeName, false))
+            .FirstOrDefault(type => type is not null);
 
     private static void CheckName(
         string nodeId,

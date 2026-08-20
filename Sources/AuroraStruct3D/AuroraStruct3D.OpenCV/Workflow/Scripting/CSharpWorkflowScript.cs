@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using AuroraStruct3D.OpenCV.Workflow.Compilation.Model;
+using AuroraStruct3D.OpenCV.Workflow;
 using System.Security.Cryptography;
 using System.Reflection;
 using System.Text.RegularExpressions;
@@ -37,7 +38,7 @@ public sealed class WorkflowScriptException : FormatException
 /// </summary>
 public static class CSharpWorkflowScript
 {
-    public const int LanguageVersion = 2;
+    public const int LanguageVersion = 3;
     private static readonly JsonSerializerOptions ScriptJsonOptions = new()
     {
         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
@@ -65,7 +66,7 @@ public static class CSharpWorkflowScript
         return version switch
         {
             1 => ParseV1(source),
-            LanguageVersion => ParseV2(source),
+            2 or LanguageVersion => ParseV2(source),
             _ => throw Error(1, $"不支持的脚本版本 {version}。"),
         };
     }
@@ -74,13 +75,25 @@ public static class CSharpWorkflowScript
     {
         StringBuilder source = new();
         IReadOnlyDictionary<string, string> variableNames = BuildVariableNames(graph);
-        source.AppendLine("// Aurora Workflow Script V2 - operator call syntax");
+        source.AppendLine("// Aurora Workflow Script V3 - strongly typed value expressions");
         NodeModel? start = graph.Nodes.FirstOrDefault(x => x.Type == "start-node");
         if (start is not null)
             WriteNodeMetadata(source, start, variableNames);
         source.Append("Workflow(").Append(Json(workflowName)).Append(", ").Append(LanguageVersion)
             .AppendLine(");");
         source.AppendLine();
+        if (start?.Properties?.OutputBindings is { } externalInputs)
+        {
+            foreach ((string port, string variable) in externalInputs)
+            {
+                string typeName = start.Properties.OutputBindingTypeNames?.GetValueOrDefault(port)
+                    ?? "object";
+                source.Append("var ").Append(VariableName(variableNames, variable))
+                    .Append(" = Input<").Append(ShortTypeName(typeName)).Append(">(")
+                    .Append(Json(port)).AppendLine(");");
+            }
+            if (externalInputs.Count > 0) source.AppendLine();
+        }
 
         _ = GetOperatorContractsByName(); // Reject ambiguous class names before emitting source.
         Dictionary<Guid, OperatorContract> contracts = GetOperatorContractsById();
@@ -104,7 +117,7 @@ public static class CSharpWorkflowScript
             IEnumerable<string> values = end.Properties?.InputBindings?.Values
                 ?? Enumerable.Empty<string>();
             source.Append("Return(")
-                .AppendJoin(", ", values.Select(x => VariableName(variableNames, x)))
+                .AppendJoin(", ", values.Select(x => ValueExpression(variableNames, x)))
                 .AppendLine(");");
         }
         return source.ToString();
@@ -269,9 +282,9 @@ public static class CSharpWorkflowScript
             {
                 workflowName = JsonSerializer.Deserialize<string>(workflow.Groups["name"].Value)
                     ?? string.Empty;
-                if (int.Parse(workflow.Groups["version"].Value, CultureInfo.InvariantCulture)
-                    != LanguageVersion)
-                    throw Error(line, "Workflow 版本必须为 2。");
+                int parsedVersion = int.Parse(workflow.Groups["version"].Value, CultureInfo.InvariantCulture);
+                if (parsedVersion is not 2 && parsedVersion != LanguageVersion)
+                    throw Error(line, $"Workflow 版本必须为 2 或 {LanguageVersion}。");
                 start = CreateSpecialNode(
                     "start-node", pendingMetadata, ref autoIndex, "Start");
                 if (pendingMetadata?.ExternalInputs is { Count: > 0 } externalInputs)
@@ -293,6 +306,32 @@ public static class CSharpWorkflowScript
                     }
                 }
                 graph.Nodes.Add(start);
+                pendingMetadata = null;
+                continue;
+            }
+
+            Match inputDeclaration = Regex.Match(statement,
+                @"^var\s+(?<variable>[A-Za-z_][A-Za-z0-9_]*)\s*=\s*Input\s*<\s*(?<type>[A-Za-z_][A-Za-z0-9_\.\[\]?<>\s]*)\s*>\s*\(\s*(?<port>""(?:\\.|[^""])*"")\s*\)\s*;$",
+                RegexOptions.Singleline);
+            if (inputDeclaration.Success)
+            {
+                if (start is null) throw Error(line, "Input<T> 必须位于 Workflow 语句之后。");
+                string variable = RequireIdentifier(inputDeclaration.Groups["variable"].Value, line);
+                string port = JsonSerializer.Deserialize<string>(inputDeclaration.Groups["port"].Value)!;
+                Type inputType = ResolveWorkflowType(inputDeclaration.Groups["type"].Value, line);
+                if (!variables.Add(variable)) throw Error(line, $"外部输入变量 '{variable}' 重复定义。");
+                start.Properties ??= new NodePropertiesModel();
+                start.Properties.OutputBindings ??= new(StringComparer.Ordinal);
+                start.Properties.OutputBindingSources ??= new(StringComparer.Ordinal);
+                start.Properties.OutputBindingTypeNames ??= new(StringComparer.Ordinal);
+                start.Properties.OutputBindingSchemas ??= new(StringComparer.Ordinal);
+                if (start.Properties.OutputBindings.ContainsKey(port))
+                    throw Error(line, $"外部输入端口 '{port}' 重复定义。");
+                start.Properties.OutputBindings[port] = variable;
+                start.Properties.OutputBindingSources[port] = "variable";
+                start.Properties.OutputBindingTypeNames[port] = inputType.FullName ?? inputType.Name;
+                start.Properties.OutputBindingSchemas[port] = WorkflowJsonSchema.For(inputType);
+                producers[variable] = start.Id;
                 pendingMetadata = null;
                 continue;
             }
@@ -323,7 +362,7 @@ public static class CSharpWorkflowScript
                 for (int index = 0; index < returnVariables.Count; index++)
                 {
                     string variable = returnVariables[index];
-                    if (!variables.Contains(variable))
+                    if (!variables.Contains(RootVariable(variable)))
                         throw Error(line, $"Return 引用了未定义变量 '{variable}'。");
                     EndOutputMetadata? outputMetadata = metadataMatches
                         ? pendingMetadata!.Outputs![index]
@@ -426,7 +465,7 @@ public static class CSharpWorkflowScript
         }
 
         if (string.IsNullOrWhiteSpace(workflowName) || start is null)
-            throw Error(1, "脚本缺少 Workflow(name, 2) 语句。");
+            throw Error(1, $"脚本缺少 Workflow(name, {LanguageVersion}) 语句。");
 
         BuildDerivedEdges(graph, start, end, producers);
         return (workflowName, graph);
@@ -541,7 +580,7 @@ public static class CSharpWorkflowScript
                 : "literal";
             args.Add(
                 kind == "variable"
-                    ? VariableName(variableNames, value)
+                    ? ValueExpression(variableNames, value)
                     : LiteralFromString(value));
         }
         foreach (string name in contract.Config)
@@ -552,7 +591,7 @@ public static class CSharpWorkflowScript
             args.Add(
                 name + ": " + (
                     kind == "variable"
-                        ? VariableName(variableNames, ReadVariableFromJson(value))
+                        ? ValueExpression(variableNames, ReadVariableFromJson(value))
                         : value.GetRawText()));
         }
         for (int i = 0; i < args.Count; i++)
@@ -574,10 +613,7 @@ public static class CSharpWorkflowScript
             textX = node.Text?.X,
             textY = node.Text?.Y,
             title = node.Text?.Value,
-            externalInputs = node.Type == "start-node"
-                ? node.Properties?.OutputBindings?.Values
-                    .Select(x => VariableName(variableNames, x)).ToArray()
-                : null,
+            externalInputs = (string[]?)null,
             outputs = node.Type == "end-node"
                 ? node.Properties?.InputBindings?.Select(binding => new
                     {
@@ -650,6 +686,12 @@ public static class CSharpWorkflowScript
         IReadOnlySet<string> variables,
         int line)
     {
+        if (TryParseEnumLiteral(expression, out JsonElement enumLiteral))
+        {
+            properties.InputBindings![port] = LiteralToBindingString(enumLiteral);
+            properties.InputBindingSources![port] = "literal";
+            return;
+        }
         // Compatibility for V2 scripts produced before the null-binding fix:
         // the generator normalized an unbound `null` input to the identifier `_null`.
         if (string.Equals(expression, "_null", StringComparison.Ordinal)
@@ -659,9 +701,9 @@ public static class CSharpWorkflowScript
             properties.InputBindingSources![port] = "literal";
             return;
         }
-        if (IsIdentifier(expression))
+        if (IsValueExpression(expression))
         {
-            if (!variables.Contains(expression))
+            if (!variables.Contains(RootVariable(expression)))
                 throw Error(line, $"输入引用了未定义变量 '{expression}'。");
             properties.InputBindings![port] = expression;
             properties.InputBindingSources![port] = "variable";
@@ -679,9 +721,15 @@ public static class CSharpWorkflowScript
         IReadOnlySet<string> variables,
         int line)
     {
-        if (IsIdentifier(expression))
+        if (TryParseEnumLiteral(expression, out JsonElement enumLiteral))
         {
-            if (!variables.Contains(expression))
+            properties.Params![name] = enumLiteral;
+            properties.ParamSources![name] = "literal";
+            return;
+        }
+        if (IsValueExpression(expression))
+        {
+            if (!variables.Contains(RootVariable(expression)))
                 throw Error(line, $"配置参数引用了未定义变量 '{expression}'。");
             using JsonDocument variable = JsonDocument.Parse(
                 JsonSerializer.Serialize(new Dictionary<string, string> { ["$var"] = expression }));
@@ -706,7 +754,7 @@ public static class CSharpWorkflowScript
             List<string> dependencies = (node.Properties?.InputBindings ?? [])
                 .Where(x =>
                     node.Properties?.InputBindingSources?.GetValueOrDefault(x.Key) == "variable")
-                .Select(x => producers.GetValueOrDefault(x.Value))
+                .Select(x => producers.GetValueOrDefault(RootVariable(x.Value)))
                 .Where(x => !string.IsNullOrWhiteSpace(x))
                 .Cast<string>()
                 .Distinct(StringComparer.Ordinal)
@@ -720,7 +768,7 @@ public static class CSharpWorkflowScript
         {
             List<string> endSources = (end.Properties?.InputBindings?.Values
                     ?? Enumerable.Empty<string>())
-                .Select(x => producers.GetValueOrDefault(x))
+                .Select(x => producers.GetValueOrDefault(RootVariable(x)))
                 .Where(x => !string.IsNullOrWhiteSpace(x))
                 .Cast<string>()
                 .Distinct(StringComparer.Ordinal)
@@ -1144,6 +1192,52 @@ public static class CSharpWorkflowScript
         Regex.IsMatch(value, @"^[A-Za-z_][A-Za-z0-9_]*$")
         && !CSharpKeywords.Contains(value);
 
+    private static bool IsValueExpression(string value)
+    {
+        try
+        {
+            _ = WorkflowValueAccessor.Compile(value);
+            return !CSharpKeywords.Contains(RootVariable(value));
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
+    }
+
+    private static bool TryParseEnumLiteral(string expression, out JsonElement value)
+    {
+        Match match = Regex.Match(expression,
+            @"^(?<type>[A-Za-z_][A-Za-z0-9_]*)\.(?<value>[A-Za-z_][A-Za-z0-9_]*)$");
+        Type? enumType = match.Success
+            ? WorkflowTypeRegistry.Resolve(match.Groups["type"].Value) : null;
+        if (enumType?.IsEnum == true
+            && Enum.IsDefined(enumType, match.Groups["value"].Value))
+        {
+            value = JsonSerializer.SerializeToElement(match.Groups["value"].Value);
+            return true;
+        }
+        value = default;
+        return false;
+    }
+
+    private static string RootVariable(string expression) =>
+        WorkflowValueAccessor.Compile(expression).RootVariableName;
+
+    private static string RequireValueExpression(string value, int line) =>
+        IsValueExpression(value)
+            ? value
+            : throw Error(line, $"'{value}' 不是合法的变量或成员访问表达式。");
+
+    private static string ValueExpression(
+        IReadOnlyDictionary<string, string> variableNames,
+        string expression)
+    {
+        WorkflowValueAccessor accessor = WorkflowValueAccessor.Compile(expression);
+        string mappedRoot = VariableName(variableNames, accessor.RootVariableName);
+        return mappedRoot + expression[accessor.RootVariableName.Length..];
+    }
+
     private static string RequireIdentifier(string value, int line) =>
         IsIdentifier(value)
             ? value
@@ -1268,6 +1362,28 @@ public static class CSharpWorkflowScript
         value.ValueKind == JsonValueKind.Null ? null : value.GetInt32();
     private static string Json(string? value) =>
         JsonSerializer.Serialize(value, ScriptJsonOptions);
+
+    private static string ShortTypeName(string typeName)
+    {
+        Type? type = ResolveWorkflowTypeOrNull(typeName);
+        if (type is null) return typeName;
+        if (type.IsArray) return ShortTypeName(type.GetElementType()!.FullName!) + "[]";
+        Type? nullable = Nullable.GetUnderlyingType(type);
+        if (nullable is not null) return ShortTypeName(nullable.FullName!) + "?";
+        if (type.IsGenericType)
+            return type.Name.Split('`')[0] + "<" + string.Join(", ",
+                type.GetGenericArguments().Select(argument => ShortTypeName(argument.FullName!))) + ">";
+        return type.Name;
+    }
+
+    private static Type ResolveWorkflowType(string typeName, int line) =>
+        ResolveWorkflowTypeOrNull(typeName)
+        ?? throw Error(line, $"Input<T> 使用了未注册类型 '{typeName}'。");
+
+    private static Type? ResolveWorkflowTypeOrNull(string typeName)
+    {
+        return WorkflowTypeRegistry.Resolve(typeName);
+    }
     private static string Number(double? value) =>
         value?.ToString("R", CultureInfo.InvariantCulture) ?? "null";
     private static string Integer(int? value) =>

@@ -1,12 +1,42 @@
 using System.Text.Json;
 using AuroraStruct3D.OpenCV.Workflow.Compilation.Model;
 using AuroraStruct3D.OpenCV.Workflow.Scripting;
+using AuroraStruct3D.OpenCV.Workflow;
 using Xunit;
 
 namespace AuroraStruct3D.Workflow;
 
 public class CSharpWorkflowScriptTests
 {
+    [Fact]
+    public void V3_should_parse_and_regenerate_typed_external_input()
+    {
+        const string source = """
+            Workflow("typed-input", 3);
+            var request = Input<InstallationPlaneInspectionDetails>("request");
+            Return(request);
+            """;
+
+        (_, GraphDataModel graph) = CSharpWorkflowScript.Parse(source);
+        NodeModel start = Assert.Single(graph.Nodes, node => node.Type == "start-node");
+        Assert.Equal("request", start.Properties!.OutputBindings!["request"]);
+        Assert.Contains("InstallationPlaneInspectionDetails",
+            start.Properties.OutputBindingTypeNames!["request"]);
+        Assert.Contains("qualityReasons", start.Properties.OutputBindingSchemas!["request"]);
+        Assert.Contains("Input<InstallationPlaneInspectionDetails>",
+            CSharpWorkflowScript.Generate("typed-input", graph));
+    }
+
+    [Fact]
+    public void Generated_schema_should_include_nested_arrays_and_enum_values()
+    {
+        string schema = WorkflowJsonSchema.For<InspectionResult<InstallationPlaneInspectionDetails>>();
+        Assert.Contains("qualityReasons", schema);
+        Assert.Contains("array", schema);
+        Assert.Contains("resultCode", schema);
+        Assert.Contains("UNKNOWN", schema);
+    }
+
     [Fact]
     public void Graph_should_round_trip_through_restricted_csharp_script()
     {
@@ -114,7 +144,7 @@ public class CSharpWorkflowScriptTests
         (string name, GraphDataModel restored) = CSharpWorkflowScript.Parse(source);
 
         Assert.Equal("检测流程", name);
-        Assert.Contains("Workflow(\"检测流程\", 2);", source);
+        Assert.Contains("Workflow(\"检测流程\", 3);", source);
         Assert.Contains("\"title\":\"开始\"", source);
         Assert.DoesNotContain("\\u68C0\\u6D4B", source);
         Assert.Contains("var (alignedCloud, transformMatrix, registrationResult)", source);

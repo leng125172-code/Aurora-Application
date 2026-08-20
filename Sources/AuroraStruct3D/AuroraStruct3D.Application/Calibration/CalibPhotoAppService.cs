@@ -796,7 +796,7 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
         {
             // P0 优化：迭代剔除单帧误差 > max(2*mean, mean+2*stddev) 的离群帧后重新求解
             // 最多 3 轮，最小保留 10 帧；剔除帧的 PhotoId 和误差会写入日志
-            reprojError = CalibrateCameraWithOutlierRejection(
+            reprojError = CalibrateCameraWithStableModelSelection(
                 objectMats,
                 imageMats,
                 imageSize,
@@ -804,6 +804,7 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
                 distCoeffs,
                 out rvecArray,
                 out tvecArray,
+                GetMaxSingleCameraReprojectionError(project),
                 photos: intrinsicPhotos,
                 minSamples: 10,
                 maxIterations: 3,
@@ -1340,7 +1341,7 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
             // 最多 3 轮，最小保留 10 帧；剔除帧的 PhotoId 和误差会写入日志
             // 注：若 CollectIntrinsicPointMatsAsync 跳过了失败帧导致 objectMats.Count < intrinsicPhotos.Count，
             //     方法内部会自动降级为仅记录原索引（不记录 PhotoId/FileName），避免索引错位
-            reprojError = CalibrateCameraWithOutlierRejection(
+            reprojError = CalibrateCameraWithStableModelSelection(
                 objectMats,
                 imageMats,
                 imageSize,
@@ -1348,6 +1349,7 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
                 distCoeffs,
                 out rvecArray,
                 out tvecArray,
+                GetMaxSingleCameraReprojectionError(project),
                 photos: intrinsicPhotos,
                 minSamples: 10,
                 maxIterations: 3,
@@ -2256,6 +2258,30 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
             phaseSwS.ElapsedMilliseconds
         );
 
+        var (mainCoverage, secondaryCoverage, overlapCoverage) =
+            CalibComputationUtils.ComputeRectificationMapCoverage(
+                map1x, map1y, map2x, map2y, imageSize.Width, imageSize.Height
+            );
+        _logger.LogInformation(
+            "[双目标定] 矫正映射覆盖率 — 主={Main:F2}%, 从={Secondary:F2}%, 共同={Overlap:F2}%, 阈值={Threshold:F2}%",
+            mainCoverage,
+            secondaryCoverage,
+            overlapCoverage,
+            CalibComputationUtils.MinimumRectificationCoveragePercent
+        );
+        double minimumCoverage = CalibComputationUtils.MinimumRectificationCoveragePercent;
+        if (mainCoverage < minimumCoverage
+            || secondaryCoverage < minimumCoverage
+            || overlapCoverage < minimumCoverage)
+        {
+            throw new UserFriendlyException(
+                $"双目矫正映射无有效共同视场：主={mainCoverage:F2}%，从={secondaryCoverage:F2}%，"
+                + $"共同={overlapCoverage:F2}%（最低 {minimumCoverage:F2}%）。"
+                + $"整平参数 fx={p1.At<double>(0, 0):F3}, cx={p1.At<double>(0, 2):F3}。"
+                + "请补拍覆盖画面中心、四角和不同倾角的标定照片后重新计算。"
+            );
+        }
+
         phaseSwS.Restart();
         string map1XBlobKey = BuildStereoMapBlobKey(calibProjectId, "map1x");
         string map1YBlobKey = BuildStereoMapBlobKey(calibProjectId, "map1y");
@@ -2313,18 +2339,6 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
         }
         else
         {
-            try
-            {
-                await _blobContainer.DeleteAsync(stereoResult.Map1XBlobKey);
-                await _blobContainer.DeleteAsync(stereoResult.Map1YBlobKey);
-                await _blobContainer.DeleteAsync(stereoResult.Map2XBlobKey);
-                await _blobContainer.DeleteAsync(stereoResult.Map2YBlobKey);
-            }
-            catch
-            {
-                // 旧 map 可能不存在，忽略删除异常
-            }
-
             stereoResult.SetResult(
                 stereoError,
                 rJson,
@@ -2411,6 +2425,66 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
 
     // ─── 私有辅助方法 ─────────────────────────────────────────────────────────────
 
+    private double CalibrateCameraWithStableModelSelection(
+        List<Mat> objectMats,
+        List<Mat> imageMats,
+        Size imageSize,
+        Mat cameraMatrix,
+        Mat distCoeffs,
+        out Mat[] rvecArray,
+        out Mat[] tvecArray,
+        double maximumReprojectionError,
+        List<CalibPhotoRecord>? photos = null,
+        int minSamples = 10,
+        int maxIterations = 3,
+        string logPrefix = "[内参标定]"
+    )
+    {
+        double stableError = CalibrateCameraWithOutlierRejection(
+            objectMats, imageMats, imageSize, cameraMatrix, distCoeffs,
+            out rvecArray, out tvecArray, CalibrationFlags.FixK3,
+            photos, minSamples, maxIterations, logPrefix + "[FixK3]"
+        );
+        bool stableModelValid = CalibComputationUtils.TryValidateCameraModel(
+            cameraMatrix, distCoeffs, imageSize, out string stableReason
+        );
+        if (stableError <= maximumReprojectionError && stableModelValid)
+        {
+            _logger.LogInformation(
+                "{Prefix} 采用 FixK3 稳定模型，RMS={Error:F4}px",
+                logPrefix,
+                stableError
+            );
+            return stableError;
+        }
+
+        _logger.LogWarning(
+            "{Prefix} FixK3 模型未通过，RMS={Error:F4}px，参数有效={Valid}，原因={Reason}；尝试完整模型",
+            logPrefix, stableError, stableModelValid, stableReason
+        );
+        foreach (Mat mat in rvecArray) mat.Dispose();
+        foreach (Mat mat in tvecArray) mat.Dispose();
+        cameraMatrix.SetTo(Scalar.All(0));
+        distCoeffs.SetTo(Scalar.All(0));
+
+        double fullError = CalibrateCameraWithOutlierRejection(
+            objectMats, imageMats, imageSize, cameraMatrix, distCoeffs,
+            out rvecArray, out tvecArray, CalibrationFlags.None,
+            photos, minSamples, maxIterations, logPrefix + "[Full]"
+        );
+        if (!CalibComputationUtils.TryValidateCameraModel(
+                cameraMatrix, distCoeffs, imageSize, out string fullReason))
+        {
+            foreach (Mat mat in rvecArray) mat.Dispose();
+            foreach (Mat mat in tvecArray) mat.Dispose();
+            rvecArray = [];
+            tvecArray = [];
+            throw new UserFriendlyException($"内参模型不合理：{fullReason}，请补拍覆盖画面中心、四角和不同倾角的标定照片");
+        }
+        _logger.LogInformation("{Prefix} 采用完整畸变模型，RMS={Error:F4}px", logPrefix, fullError);
+        return fullError;
+    }
+
     /// <summary>
     /// 内参标定：迭代剔除高重投影误差帧后重新求解（P0 优化）。
     /// 每轮调用 <see cref="Cv2.CalibrateCamera"/> 后用 <see cref="Cv2.ProjectPoints"/> 计算每帧 RMS 误差，
@@ -2438,6 +2512,7 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
         Mat distCoeffs,
         out Mat[] rvecArray,
         out Mat[] tvecArray,
+        CalibrationFlags calibrationFlags,
         List<CalibPhotoRecord>? photos = null,
         int minSamples = 10,
         int maxIterations = 3,
@@ -2487,7 +2562,7 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
                     distCoeffs,
                     out rvecArray,
                     out tvecArray,
-                    CalibrationFlags.None
+                    calibrationFlags
                 );
             }
             catch
@@ -3321,9 +3396,54 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
 
             if (stereoResult == null || string.IsNullOrWhiteSpace(stereoResult.RotationMatrixJson))
                 return false;
+            if (!await HasUsableStereoMapsAsync(stereoResult))
+                return false;
         }
 
         return true;
+    }
+
+    private async Task<bool> HasUsableStereoMapsAsync(CalibStereoResult result)
+    {
+        if (result.RectifyMapWidth <= 1 || result.RectifyMapHeight <= 1)
+            return false;
+        string[] keys =
+        [
+            result.Map1XBlobKey,
+            result.Map1YBlobKey,
+            result.Map2XBlobKey,
+            result.Map2YBlobKey,
+        ];
+        foreach (string key in keys)
+        {
+            if (string.IsNullOrWhiteSpace(key) || !await _blobContainer.ExistsAsync(key))
+                return false;
+        }
+
+        int expectedBytes = checked(result.RectifyMapWidth * result.RectifyMapHeight * sizeof(float));
+        byte[][] bytes = new byte[keys.Length][];
+        for (int index = 0; index < keys.Length; index++)
+        {
+            bytes[index] = await _blobContainer.GetAllBytesAsync(keys[index]);
+            if (bytes[index].Length != expectedBytes)
+                return false;
+        }
+
+        using Mat map1x = new(result.RectifyMapHeight, result.RectifyMapWidth, MatType.CV_32FC1);
+        using Mat map1y = new(result.RectifyMapHeight, result.RectifyMapWidth, MatType.CV_32FC1);
+        using Mat map2x = new(result.RectifyMapHeight, result.RectifyMapWidth, MatType.CV_32FC1);
+        using Mat map2y = new(result.RectifyMapHeight, result.RectifyMapWidth, MatType.CV_32FC1);
+        Mat[] maps = [map1x, map1y, map2x, map2y];
+        for (int index = 0; index < maps.Length; index++)
+            System.Runtime.InteropServices.Marshal.Copy(bytes[index], 0, maps[index].Data, expectedBytes);
+
+        var coverage = CalibComputationUtils.ComputeRectificationMapCoverage(
+            map1x, map1y, map2x, map2y, result.RectifyMapWidth, result.RectifyMapHeight
+        );
+        double minimum = CalibComputationUtils.MinimumRectificationCoveragePercent;
+        return coverage.MainPercent >= minimum
+            && coverage.SecondaryPercent >= minimum
+            && coverage.OverlapPercent >= minimum;
     }
 
     private static CalibStereoComputeResultDto ToStereoResultDto(CalibStereoResult result)

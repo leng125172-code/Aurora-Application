@@ -32,13 +32,14 @@ public class WorkflowPlcHandshakeTests
     [Fact]
     public void Configure_Should_Reject_A_Tag_Used_By_Two_Roles()
     {
-        Guid duplicate = Guid.NewGuid();
-        Guid[] ids = Enumerable.Range(0, 13).Select(_ => Guid.NewGuid()).ToArray();
+        const string duplicate = "ns=2;s=Duplicate";
+        string[] addresses = Enumerable.Range(0, 13).Select(x => $"ns=2;s=Point{x}").ToArray();
         WorkflowPlcHandshakeConfig config = new(Guid.NewGuid(), Guid.NewGuid());
 
         Assert.Throws<BusinessException>(() => config.Configure(Guid.NewGuid(),
-            duplicate, duplicate, ids[0], ids[1], ids[2], ids[3], ids[4], ids[5],
-            ids[6], ids[7], ids[8], ids[9], ids[10], ids[11], true));
+            duplicate, duplicate, addresses[0], addresses[1], addresses[2], addresses[3],
+            addresses[4], addresses[5], addresses[6], addresses[7], addresses[8],
+            addresses[9], addresses[10], addresses[11], true));
     }
 
     [Fact]
@@ -50,10 +51,11 @@ public class WorkflowPlcHandshakeTests
 
     private static WorkflowPlcHandshakeConfig CreateConfigured()
     {
-        Guid[] ids = Enumerable.Range(0, 14).Select(_ => Guid.NewGuid()).ToArray();
+        string[] addresses = Enumerable.Range(0, 14).Select(x => $"ns=2;s=Point{x}").ToArray();
         WorkflowPlcHandshakeConfig config = new(Guid.NewGuid(), Guid.NewGuid());
-        config.Configure(Guid.NewGuid(), ids[0], ids[1], ids[2], ids[3], ids[4], ids[5],
-            ids[6], ids[7], ids[8], ids[9], ids[10], ids[11], ids[12], ids[13], true);
+        config.Configure(Guid.NewGuid(), addresses[0], addresses[1], addresses[2], addresses[3],
+            addresses[4], addresses[5], addresses[6], addresses[7], addresses[8], addresses[9],
+            addresses[10], addresses[11], addresses[12], addresses[13], true);
         return config;
     }
 }

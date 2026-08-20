@@ -1,3 +1,4 @@
+using System.Text.Json;
 using AuroraStruct3D.OpenCV.Registry;
 using AuroraStruct3D.Workflow.Dtos;
 
@@ -250,19 +251,79 @@ public class WorkflowNodePaletteAppService
         {
             Name = p.ParameterName,
             DisplayName = p.DisplayName,
+            Description = p.Description,
             PortTypeName = p.ParameterTypeName,
             DefaultValue = p.DefaultValue,
             ValueLimit = p.ValueLimit,
+            JsonSchema = p.JsonSchema,
+            TypeSymbol = BuildTypeSymbol(p.ParameterTypeName, p.JsonSchema, p.ValueLimit),
             ErrorCheck = p.ErrorCheck,
             ControlType = p.ControlType,
             MatType = p.MatType,
         };
+
+    private static WorkflowTypeSymbolDto BuildTypeSymbol(
+        string typeName,
+        string? jsonSchema,
+        object? valueLimit)
+    {
+        if (!string.IsNullOrWhiteSpace(jsonSchema))
+        {
+            try
+            {
+                using JsonDocument document = JsonDocument.Parse(jsonSchema);
+                return BuildSchemaType(document.RootElement, typeName);
+            }
+            catch (JsonException) { }
+        }
+        Type? type = Type.GetType(typeName, throwOnError: false);
+        if (type?.IsEnum == true || valueLimit is IEnumerable<string>)
+            return new WorkflowTypeSymbolDto
+            {
+                Kind = WorkflowTypeKind.Enum,
+                Name = type?.Name ?? typeName,
+                EnumValues = type?.GetEnumNames().ToList() ?? ((IEnumerable<string>)valueLimit!).ToList(),
+            };
+        return new WorkflowTypeSymbolDto
+        {
+            Kind = typeName.Contains("Mat", StringComparison.Ordinal) ? WorkflowTypeKind.Image
+                : typeName.Contains("PointCloud", StringComparison.Ordinal) ? WorkflowTypeKind.PointCloud
+                : WorkflowTypeKind.Primitive,
+            Name = type?.Name ?? typeName,
+        };
+    }
+
+    private static WorkflowTypeSymbolDto BuildSchemaType(JsonElement schema, string fallbackName)
+    {
+        string schemaType = schema.TryGetProperty("type", out JsonElement type) && type.ValueKind == JsonValueKind.String
+            ? type.GetString()! : "object";
+        WorkflowTypeSymbolDto result = new()
+        {
+            Kind = schemaType == "array" ? WorkflowTypeKind.Array
+                : schemaType == "object" ? WorkflowTypeKind.Object : WorkflowTypeKind.Primitive,
+            Name = schema.TryGetProperty("title", out JsonElement title) ? title.GetString() ?? fallbackName : fallbackName,
+            Nullable = schema.TryGetProperty("nullable", out JsonElement nullable) && nullable.ValueKind == JsonValueKind.True,
+            Documentation = schema.TryGetProperty("description", out JsonElement description) ? description.GetString() : null,
+        };
+        if (schema.TryGetProperty("enum", out JsonElement values) && values.ValueKind == JsonValueKind.Array)
+        {
+            result.Kind = WorkflowTypeKind.Enum;
+            result.EnumValues = values.EnumerateArray().Select(x => x.ToString()).ToList();
+        }
+        if (schemaType == "array" && schema.TryGetProperty("items", out JsonElement items))
+            result.ElementType = BuildSchemaType(items, fallbackName + "Item");
+        if (schema.TryGetProperty("properties", out JsonElement properties))
+            foreach (JsonProperty property in properties.EnumerateObject())
+                result.Properties[property.Name] = BuildSchemaType(property.Value, property.Name);
+        return result;
+    }
 
     private static NodeConfigFieldDto MapConfig(ConfigParameterDescriptor c) =>
         new()
         {
             Name = c.Name,
             DisplayName = c.DisplayName,
+            Description = c.Description,
             ValueTypeName = c.ParameterTypeName,
             DefaultValue = c.DefaultValue,
             ValueLimit = c.ValueLimit,

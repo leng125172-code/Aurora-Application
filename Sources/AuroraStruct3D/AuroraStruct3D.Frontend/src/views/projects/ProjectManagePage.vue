@@ -85,8 +85,11 @@ async function loadList(): Promise<void> {
         })
         items.value = result.items
         total.value = result.totalCount
-    } catch (error) { showErrorToastOnce(error) }
-    finally { loading.value = false }
+    } catch (error) {
+        showErrorToastOnce(error)
+    } finally {
+        loading.value = false
+    }
 }
 
 function search(): void {
@@ -117,9 +120,18 @@ function openCreate(): void {
 }
 
 function validateForm(form: CreateProjectInput | UpdateProjectInput, projectCode?: string): boolean {
-    if (projectCode !== undefined && !projectCode.trim()) { toast.warning(t('projectManagement.codeRequired')); return false }
-    if (!form.name.trim()) { toast.warning(t('projectManagement.nameRequired')); return false }
-    if (!form.version.trim()) { toast.warning(t('projectManagement.versionRequired')); return false }
+    if (projectCode !== undefined && !projectCode.trim()) {
+        toast.warning(t('projectManagement.codeRequired'))
+        return false
+    }
+    if (!form.name.trim()) {
+        toast.warning(t('projectManagement.nameRequired'))
+        return false
+    }
+    if (!form.version.trim()) {
+        toast.warning(t('projectManagement.versionRequired'))
+        return false
+    }
     return true
 }
 
@@ -137,8 +149,11 @@ async function submitCreate(): Promise<void> {
         toast.success(t('projectManagement.created'))
         skipCount.value = 0
         await loadList()
-    } catch (error) { showErrorToastOnce(error) }
-    finally { createSaving.value = false }
+    } catch (error) {
+        showErrorToastOnce(error)
+    } finally {
+        createSaving.value = false
+    }
 }
 
 const editOpen = ref(false)
@@ -164,8 +179,11 @@ async function submitEdit(): Promise<void> {
         editOpen.value = false
         toast.success(t('projectManagement.updated'))
         await loadList()
-    } catch (error) { showErrorToastOnce(error) }
-    finally { editSaving.value = false }
+    } catch (error) {
+        showErrorToastOnce(error)
+    } finally {
+        editSaving.value = false
+    }
 }
 
 async function setStatus(item: ProjectInfoDto, nextStatus: ProjectStatus): Promise<void> {
@@ -174,7 +192,9 @@ async function setStatus(item: ProjectInfoDto, nextStatus: ProjectStatus): Promi
         await changeProjectStatus(item.id, nextStatus)
         toast.success(t('projectManagement.statusChanged'))
         await loadList()
-    } catch (error) { showErrorToastOnce(error) }
+    } catch (error) {
+        showErrorToastOnce(error)
+    }
 }
 
 function confirmDelete(item: ProjectInfoDto): void {
@@ -201,7 +221,9 @@ function confirmDelete(item: ProjectInfoDto): void {
                     skipCount.value = Math.max(0, skipCount.value - maxResultCount.value)
                 }
                 await loadList()
-            } catch (error) { showErrorToastOnce(error) }
+            } catch (error) {
+                showErrorToastOnce(error)
+            }
         },
     })
 }
@@ -222,47 +244,225 @@ onMounted(() => void loadList())
         <BorderBeam :size="220" :duration="14" :border-width="1.5" />
         <div class="mb-4 flex flex-wrap items-start justify-between gap-3">
             <div>
-                <div class="flex items-center gap-2"><FolderKanban class="size-6 text-primary" /><h1 class="text-2xl font-semibold">{{ t('projectManagement.title') }}</h1></div>
+                <div class="flex items-center gap-2">
+                    <FolderKanban class="size-6 text-primary" />
+                    <h1 class="text-2xl font-semibold">{{ t('projectManagement.title') }}</h1>
+                </div>
                 <p class="mt-1 text-sm text-muted-foreground">{{ t('projectManagement.subtitle') }}</p>
             </div>
             <div class="flex w-full gap-2 sm:w-auto">
-                <Button severity="secondary" outlined :disabled="loading" @click="loadList"><RefreshCw class="mr-2 size-4" :class="{ 'animate-spin': loading }" />{{ t('projectManagement.refresh') }}</Button>
-                <Button @click="openCreate"><Plus class="mr-2 size-4" />{{ t('projectManagement.create') }}</Button>
+                <Button size="small" severity="secondary" outlined :disabled="loading" @click="loadList">
+                    <RefreshCw class="mr-1.5 size-3.5" :class="{ 'animate-spin': loading }" />
+                    {{ t('projectManagement.refresh') }}
+                </Button>
+                <Button size="small" @click="openCreate">
+                    <Plus class="mr-1.5 size-3.5" />
+                    {{ t('projectManagement.create') }}
+                </Button>
             </div>
         </div>
 
         <section class="mb-4 flex flex-wrap gap-2 rounded-lg border bg-card/60 p-3">
-            <InputText v-model="filter" class="min-w-0 flex-[1_1_100%] sm:min-w-64" :placeholder="t('projectManagement.searchPlaceholder')" @keyup.enter="search" />
-            <Select v-model="status" :options="filterStatusOptions" option-label="label" option-value="value" class="min-w-0 flex-1 sm:w-44 sm:flex-none" />
-            <Select v-model="sorting" :options="sortingOptions" option-label="label" option-value="value" class="min-w-0 flex-1 sm:w-44 sm:flex-none" @change="search" />
-            <Button @click="search"><Search class="mr-2 size-4" />{{ t('projectManagement.search') }}</Button>
-            <Button severity="secondary" text @click="resetFilters">{{ t('projectManagement.reset') }}</Button>
+            <InputText
+                v-model="filter"
+                class="min-w-0 flex-[1_1_100%] sm:min-w-64"
+                :placeholder="t('projectManagement.searchPlaceholder')"
+                @keyup.enter="search"
+            />
+            <Select
+                v-model="status"
+                :options="filterStatusOptions"
+                option-label="label"
+                option-value="value"
+                class="min-w-0 flex-1 sm:w-44 sm:flex-none"
+            />
+            <Select
+                v-model="sorting"
+                :options="sortingOptions"
+                option-label="label"
+                option-value="value"
+                class="min-w-0 flex-1 sm:w-44 sm:flex-none"
+                @change="search"
+            />
+            <Button size="small" @click="search">
+                <Search class="mr-1.5 size-3.5" />
+                {{ t('projectManagement.search') }}
+            </Button>
+            <Button size="small" severity="secondary" text @click="resetFilters">
+                {{ t('projectManagement.reset') }}
+            </Button>
         </section>
 
         <div class="min-h-0 flex-1 overflow-auto rounded-lg border bg-card/60">
             <DataTable :value="items" :loading="loading" data-key="id" striped-rows>
                 <Column :header="t('projectManagement.project')" style="min-width: 16rem">
-                    <template #body="{ data }"><div class="font-medium">{{ data.name }}</div><div class="font-mono text-xs text-muted-foreground">{{ data.projectCode }} · v{{ data.version }}</div><div v-if="data.description" class="mt-1 max-w-md truncate text-xs text-muted-foreground" :title="data.description">{{ data.description }}</div></template>
+                    <template #body="{ data }">
+                        <div class="font-medium">{{ data.name }}</div>
+                        <div class="font-mono text-xs text-muted-foreground">
+                            {{ data.projectCode }} · v{{ data.version }}
+                        </div>
+                        <div
+                            v-if="data.description"
+                            class="mt-1 max-w-md truncate text-xs text-muted-foreground"
+                            :title="data.description"
+                        >
+                            {{ data.description }}
+                        </div>
+                    </template>
                 </Column>
-                <Column :header="t('projectManagement.status')" style="width: 9rem"><template #body="{ data }"><Tag :value="statusLabel(data.status)" :severity="statusSeverity(data.status)" /></template></Column>
-                <Column :header="t('projectManagement.workflows')" style="width: 8rem"><template #body="{ data }"><span class="font-medium">{{ data.workflowCount }}</span></template></Column>
-                <Column :header="t('projectManagement.deployment')" style="min-width: 10rem"><template #body="{ data }"><Tag v-if="data.hasActiveDeployment" severity="success" :value="`rev ${data.activeDeploymentRevision}`" /><span v-else class="text-xs text-muted-foreground">{{ t('projectManagement.noDeployment') }}</span></template></Column>
-                <Column :header="t('projectManagement.audit')" style="min-width: 13rem"><template #body="{ data }"><div class="text-sm">{{ data.creatorUserName || '-' }}</div><div class="text-xs text-muted-foreground">{{ displayDate(data.lastModificationTime || data.creationTime) }}</div></template></Column>
-                <Column :header="t('projectManagement.actions')" style="min-width: 24rem"><template #body="{ data }"><div class="flex flex-wrap items-center gap-1"><Button v-if="workflowDebugEnabled" size="small" severity="secondary" outlined @click="openWorkflow(data)"><GitBranch class="mr-1 size-3.5" />{{ t('projectManagement.workflow') }}</Button><Button size="small" severity="secondary" text @click="openEdit(data)"><Pencil class="mr-1 size-3.5" />{{ t('projectManagement.edit') }}</Button><Select :model-value="data.status" :options="statusOptions" option-label="label" option-value="value" class="h-8 w-32 text-xs" @update:model-value="setStatus(data, $event)" /><Button size="small" severity="danger" text @click="confirmDelete(data)"><Trash2 class="size-3.5" /></Button></div></template></Column>
-                <template #empty><div class="p-8 text-center text-muted-foreground">{{ t('projectManagement.empty') }}</div></template>
+                <Column :header="t('projectManagement.status')" style="width: 9rem">
+                    <template #body="{ data }">
+                        <Tag :value="statusLabel(data.status)" :severity="statusSeverity(data.status)" />
+                    </template>
+                </Column>
+                <Column :header="t('projectManagement.workflows')" style="width: 8rem">
+                    <template #body="{ data }">
+                        <span class="font-medium">{{ data.workflowCount }}</span>
+                    </template>
+                </Column>
+                <Column :header="t('projectManagement.deployment')" style="min-width: 10rem">
+                    <template #body="{ data }">
+                        <Tag
+                            v-if="data.hasActiveDeployment"
+                            severity="success"
+                            :value="`rev ${data.activeDeploymentRevision}`"
+                        />
+                        <span v-else class="text-xs text-muted-foreground">
+                            {{ t('projectManagement.noDeployment') }}
+                        </span>
+                    </template>
+                </Column>
+                <Column :header="t('projectManagement.audit')" style="min-width: 13rem">
+                    <template #body="{ data }">
+                        <div class="text-sm">{{ data.creatorUserName || '-' }}</div>
+                        <div class="text-xs text-muted-foreground">
+                            {{ displayDate(data.lastModificationTime || data.creationTime) }}
+                        </div>
+                    </template>
+                </Column>
+                <Column :header="t('projectManagement.actions')" style="min-width: 24rem">
+                    <template #body="{ data }">
+                        <div class="flex flex-wrap items-center gap-1">
+                            <Button
+                                v-if="workflowDebugEnabled"
+                                size="small"
+                                severity="secondary"
+                                outlined
+                                @click="openWorkflow(data)"
+                            >
+                                <GitBranch class="mr-1 size-3.5" />
+                                {{ t('projectManagement.workflow') }}
+                            </Button>
+                            <Button size="small" severity="secondary" text @click="openEdit(data)">
+                                <Pencil class="mr-1 size-3.5" />
+                                {{ t('projectManagement.edit') }}
+                            </Button>
+                            <Select
+                                size="small"
+                                :model-value="data.status"
+                                :options="statusOptions"
+                                option-label="label"
+                                option-value="value"
+                                class="w-32 text-xs"
+                                @update:model-value="setStatus(data, $event)"
+                            />
+                            <Button size="small" severity="danger" text @click="confirmDelete(data)">
+                                <Trash2 class="size-3.5" />
+                            </Button>
+                        </div>
+                    </template>
+                </Column>
+                <template #empty>
+                    <div class="p-8 text-center text-muted-foreground">{{ t('projectManagement.empty') }}</div>
+                </template>
             </DataTable>
         </div>
 
-        <div class="mt-3 flex items-center justify-between text-sm text-muted-foreground"><span>{{ t('projectManagement.total', { total }) }}</span><div class="flex items-center gap-2"><Button size="small" severity="secondary" outlined :disabled="currentPage <= 1" @click="goToPage(currentPage - 1)">{{ t('projectManagement.previous') }}</Button><span>{{ currentPage }} / {{ totalPages }}</span><Button size="small" severity="secondary" outlined :disabled="currentPage >= totalPages" @click="goToPage(currentPage + 1)">{{ t('projectManagement.next') }}</Button></div></div>
+        <div class="mt-3 flex items-center justify-between text-sm text-muted-foreground">
+            <span>{{ t('projectManagement.total', { total }) }}</span>
+            <div class="flex items-center gap-2">
+                <Button
+                    size="small"
+                    severity="secondary"
+                    outlined
+                    :disabled="currentPage <= 1"
+                    @click="goToPage(currentPage - 1)"
+                >
+                    {{ t('projectManagement.previous') }}
+                </Button>
+                <span>{{ currentPage }} / {{ totalPages }}</span>
+                <Button
+                    size="small"
+                    severity="secondary"
+                    outlined
+                    :disabled="currentPage >= totalPages"
+                    @click="goToPage(currentPage + 1)"
+                >
+                    {{ t('projectManagement.next') }}
+                </Button>
+            </div>
+        </div>
 
-        <Dialog v-model:visible="createOpen" modal :header="t('projectManagement.createTitle')" class="w-[34rem] max-w-[95vw]">
-            <div class="grid gap-4"><label class="grid gap-1 text-sm">{{ t('projectManagement.code') }} *<InputText v-model="createForm.projectCode" maxlength="64" /></label><label class="grid gap-1 text-sm">{{ t('projectManagement.name') }} *<InputText v-model="createForm.name" maxlength="256" /></label><label class="grid gap-1 text-sm">{{ t('projectManagement.version') }} *<InputText v-model="createForm.version" maxlength="32" /></label><label class="grid gap-1 text-sm">{{ t('projectManagement.description') }}<Textarea v-model="createForm.description" rows="5" maxlength="2000" /></label></div>
-            <template #footer><Button severity="secondary" text @click="createOpen = false">{{ t('projectManagement.cancel') }}</Button><Button :loading="createSaving" @click="submitCreate">{{ t('projectManagement.save') }}</Button></template>
+        <Dialog
+            v-model:visible="createOpen"
+            modal
+            :header="t('projectManagement.createTitle')"
+            class="w-[34rem] max-w-[95vw]"
+        >
+            <div class="grid gap-4">
+                <label class="grid gap-1 text-sm">
+                    {{ t('projectManagement.code') }} *
+                    <InputText v-model="createForm.projectCode" maxlength="64" />
+                </label>
+                <label class="grid gap-1 text-sm">
+                    {{ t('projectManagement.name') }} *
+                    <InputText v-model="createForm.name" maxlength="256" />
+                </label>
+                <label class="grid gap-1 text-sm">
+                    {{ t('projectManagement.version') }} *
+                    <InputText v-model="createForm.version" maxlength="32" />
+                </label>
+                <label class="grid gap-1 text-sm">
+                    {{ t('projectManagement.description') }}
+                    <Textarea v-model="createForm.description" rows="5" maxlength="2000" />
+                </label>
+            </div>
+            <template #footer>
+                <Button severity="secondary" text @click="createOpen = false">
+                    {{ t('projectManagement.cancel') }}
+                </Button>
+                <Button :loading="createSaving" @click="submitCreate">{{ t('projectManagement.save') }}</Button>
+            </template>
         </Dialog>
 
-        <Dialog v-model:visible="editOpen" modal :header="t('projectManagement.editTitle')" class="w-[34rem] max-w-[95vw]">
-            <div class="grid gap-4"><label class="grid gap-1 text-sm">{{ t('projectManagement.code') }}<InputText :model-value="editing?.projectCode" disabled /></label><label class="grid gap-1 text-sm">{{ t('projectManagement.name') }} *<InputText v-model="editForm.name" maxlength="256" /></label><label class="grid gap-1 text-sm">{{ t('projectManagement.version') }} *<InputText v-model="editForm.version" maxlength="32" /></label><label class="grid gap-1 text-sm">{{ t('projectManagement.description') }}<Textarea v-model="editForm.description" rows="5" maxlength="2000" /></label></div>
-            <template #footer><Button severity="secondary" text @click="editOpen = false">{{ t('projectManagement.cancel') }}</Button><Button :loading="editSaving" @click="submitEdit">{{ t('projectManagement.save') }}</Button></template>
+        <Dialog
+            v-model:visible="editOpen"
+            modal
+            :header="t('projectManagement.editTitle')"
+            class="w-[34rem] max-w-[95vw]"
+        >
+            <div class="grid gap-4">
+                <label class="grid gap-1 text-sm">
+                    {{ t('projectManagement.code') }}
+                    <InputText :model-value="editing?.projectCode" disabled />
+                </label>
+                <label class="grid gap-1 text-sm">
+                    {{ t('projectManagement.name') }} *
+                    <InputText v-model="editForm.name" maxlength="256" />
+                </label>
+                <label class="grid gap-1 text-sm">
+                    {{ t('projectManagement.version') }} *
+                    <InputText v-model="editForm.version" maxlength="32" />
+                </label>
+                <label class="grid gap-1 text-sm">
+                    {{ t('projectManagement.description') }}
+                    <Textarea v-model="editForm.description" rows="5" maxlength="2000" />
+                </label>
+            </div>
+            <template #footer>
+                <Button severity="secondary" text @click="editOpen = false">{{ t('projectManagement.cancel') }}</Button>
+                <Button :loading="editSaving" @click="submitEdit">{{ t('projectManagement.save') }}</Button>
+            </template>
         </Dialog>
         <ConfirmDialog />
     </div>

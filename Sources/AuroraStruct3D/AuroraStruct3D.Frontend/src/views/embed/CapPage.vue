@@ -7,7 +7,7 @@ import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import * as signalR from '@microsoft/signalr'
-import * as echarts from 'echarts'
+import { echarts } from '@/lib/echarts'
 import { RefreshCw, RotateCcw } from '@lucide/vue'
 import Button from 'primevue/button'
 import Tag from 'primevue/tag'
@@ -322,7 +322,7 @@ onUnmounted(async () => {
         <!-- 标题 + 刷新 -->
         <div class="flex items-center justify-between">
             <h1 class="text-2xl font-bold tracking-tight">{{ t('menu.cap') }}</h1>
-            <Button severity="secondary" outlined :disabled="loading" @click="loadCurrentTab">
+            <Button size="small" severity="secondary" outlined :disabled="loading" @click="loadCurrentTab">
                 <RefreshCw :class="['size-4', loading && 'animate-spin']" />
             </Button>
         </div>

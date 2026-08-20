@@ -16,6 +16,7 @@ public interface IPlcDeviceAppService : IApplicationService
     Task DisconnectAsync(Guid id);
     Task ConfirmServerCertificateAsync(Guid id, ConfirmPlcCertificateInput input);
     Task<PlcBrowseResult> BrowseAsync(Guid id, PlcBrowseInput input);
+    Task<PlcBrowseTreeResultDto> BrowseTreeAsync(Guid id, PlcBrowseTreeInput input);
     Task<ListResultDto<PlcTagDto>> GetTagsAsync(Guid id);
     Task<PlcTagDto> CreateTagAsync(Guid id, SavePlcTagDto input);
     Task<PlcTagDto> UpdateTagAsync(Guid id, Guid tagId, SavePlcTagDto input);
@@ -45,6 +46,8 @@ public interface IPlcWorkflowTagAccessor
 {
     Task<IReadOnlyList<PlcTagValueDto>> ReadByCodesAsync(Guid plcDeviceId, IReadOnlyList<string> tagCodes, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<PlcWriteResultDto>> WriteByCodesAsync(Guid plcDeviceId, IReadOnlyDictionary<string, object?> values, WorkflowPlcOperationContext context, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<PlcValue>> ReadRawAsync(Guid plcDeviceId, IReadOnlyList<PlcReadRequest> requests, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<PlcWriteResult>> WriteRawAsync(Guid plcDeviceId, IReadOnlyList<PlcWriteRequest> requests, CancellationToken cancellationToken = default);
 }
 
 public sealed record WorkflowPlcOperationContext(Guid? ProjectRunId, Guid ExecutionId, string? NodeId);

@@ -11,9 +11,13 @@
         "build:debug": "vite build --mode debug",
         "build:local-test": "vite build --mode local-test",
         "build:release": "vite build --mode release",
+        "perf:build": "vite build --mode release && node scripts/check-build-budget.mjs dist",
+        "perf:budget": "node scripts/check-build-budget.mjs dist",
         "preview": "vite preview",
         "lint": "eslint . --ext .ts,.vue",
         "type-check": "vue-tsc --noEmit",
+        "test:visual": "playwright test",
+        "test:visual:update": "playwright test --update-snapshots",
         "format": "prettier --write \"src/**/*.{vue,ts,js,html}\""
     },
     "dependencies": {
@@ -58,6 +62,7 @@
     },
     "devDependencies": {
         "@inspira-ui/plugins": "^0.0.2",
+        "@playwright/test": "^1.62.1",
         "@splinetool/runtime": "^1.12.95",
         "@tailwindcss/vite": "^4.3.0",
         "@types/node": "^25.9.1",

@@ -1,4 +1,4 @@
-using System.Text.Json;
+using System.Text.Json.Nodes;
 using AuroraStruct3D.OpenCV.MeasureOps;
 using AuroraStruct3D.OpenCV.PointCloudProjection;
 using AuroraStruct3D.OpenCV.Workflow;
@@ -55,18 +55,19 @@ public class InstallationAngleFeatureInspectionOperatorTests
 
         op.Execute(context);
 
-        Assert.Equal("OK", context.Get<string>("inspection_status"));
-        Assert.True(context.Get<bool>("is_valid"));
-        Assert.True(context.Get<bool>("is_ok"));
-        Assert.InRange(context.Get<double>("measured_angle"), 89, 91);
-        using JsonDocument result = JsonDocument.Parse(context.Get<string>("result_json")!);
+        InspectionResultBase result = Assert.IsAssignableFrom<InspectionResultBase>(context.Get("result"));
+        Assert.Equal(InspectionResultCode.OK, result.resultCode);
+        Assert.True(result.isValid);
+        Assert.True(result.isOk);
+        JsonNode details = result.ToDetailsNode()!;
+        Assert.InRange(details["MeasuredAngle"]!.GetValue<double>(), 89, 91);
         Assert.InRange(
-            result.RootElement.GetProperty("intersection").GetProperty("x").GetDouble(),
+            details["Intersection"]!["X"]!.GetValue<double>(),
             78,
             82
         );
         Assert.InRange(
-            result.RootElement.GetProperty("intersection").GetProperty("y").GetDouble(),
+            details["Intersection"]!["Y"]!.GetValue<double>(),
             38,
             42
         );
@@ -83,9 +84,10 @@ public class InstallationAngleFeatureInspectionOperatorTests
 
         op.Execute(context);
 
-        Assert.Equal("UNKNOWN", context.Get<string>("inspection_status"));
-        Assert.False(context.Get<bool>("is_valid"));
-        Assert.False(context.Get<bool>("is_ok"));
+        InspectionResultBase result = Assert.IsAssignableFrom<InspectionResultBase>(context.Get("result"));
+        Assert.Equal(InspectionResultCode.UNKNOWN, result.resultCode);
+        Assert.False(result.isValid);
+        Assert.False(result.isOk);
     }
 
     [Fact]

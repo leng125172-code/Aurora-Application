@@ -126,6 +126,14 @@ export interface PlcBrowseNode {
     access: PlcTagAccess
     hasChildren: boolean
 }
+export interface PlcBrowseTreeNode extends PlcBrowseNode {
+    children: PlcBrowseTreeNode[]
+}
+export interface PlcBrowseTreeResult {
+    items: PlcBrowseTreeNode[]
+    nodeCount: number
+    truncated: boolean
+}
 
 const BASE = '/api/app/plc-device'
 const items = <T>(data: { items: T[] } | T[]): T[] => (Array.isArray(data) ? data : data.items)
@@ -164,6 +172,16 @@ export async function confirmPlcCertificate(id: string, thumbprint: string): Pro
 }
 export async function browsePlc(id: string, parentAddress?: string): Promise<{ items: PlcBrowseNode[]; continuationToken?: string }> {
     return (await httpClient.post(`${BASE}/${id}/browse`, { parentAddress, maxResults: 500 })).data
+}
+export async function browsePlcTree(
+    id: string,
+    input: { rootAddress?: string; maxDepth?: number; maxNodes?: number } = {},
+): Promise<PlcBrowseTreeResult> {
+    return (await httpClient.post<PlcBrowseTreeResult>(`${BASE}/${id}/browse-tree`, {
+        maxDepth: 8,
+        maxNodes: 3000,
+        ...input,
+    })).data
 }
 export async function getPlcTags(id: string): Promise<PlcTagDto[]> {
     const { data } = await httpClient.get<{ items: PlcTagDto[] }>(`${BASE}/${id}/tags`)

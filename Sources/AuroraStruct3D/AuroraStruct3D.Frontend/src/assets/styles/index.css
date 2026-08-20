@@ -18,16 +18,16 @@
  */
 :root {
     /* 基础色：金色系核心 */
-    --background: 0 0% 100%;            /* 纯白背景 */
-    --foreground: 32 25% 15%;           /* 深暖棕（金色互补暗文字） */
+    --background: 220 20% 97%;
+    --foreground: 222 28% 12%;
     --card: 0 0% 100%;
     --card-foreground: 32 25% 15%;
     --popover: 0 0% 100%;
     --popover-foreground: 32 25% 15%;
 
     /* 金色主色：暖调香槟金（HSL更精准） */
-    --primary: 44 45% 62%;              /* #D4B96A 暖香槟金（核心特征色） */
-    --primary-foreground: 0 0% 100%;     /* 白色文字 */
+    --primary: 39 64% 42%;
+    --primary-foreground: 0 0% 100%;
     --secondary: 42 55% 94%;            /* 极浅金（背景/辅助区） */
     --secondary-foreground: 35 30% 25%; /* 深暖棕文字 */
     --muted: 40 30% 96%;                /* 浅金灰（弱化区） */
@@ -38,9 +38,9 @@
     /* 功能色 */
     --destructive: 0 70% 50%;
     --destructive-foreground: 0 0% 100%;
-    --border: 40 12% 82%;               /* 浅色边框：低饱和暖灰，自然不抢眼 */
-    --input: 40 12% 82%;
-    --ring: 44 45% 62%;                 /* 焦点环 = 主色（强化金色特征） */
+    --border: 218 16% 82%;
+    --input: 218 16% 82%;
+    --ring: 39 64% 42%;
     --radius: 0.5rem;
 
     /* 图表色：与金色协调的暖色系 */
@@ -53,9 +53,9 @@
 
 .dark {
     /* 基础色：深黑+暗金 */
-    --background: 0 0% 5%;              /* 近纯黑背景（比原更透气） */
-    --foreground: 42 35% 85%;           /* 浅金米色文字（更易读） */
-    --card: 0 0% 8%;
+    --background: 222 28% 7%;
+    --foreground: 216 20% 90%;
+    --card: 222 24% 10%;
     --card-foreground: 42 35% 85%;
     --popover: 0 0% 6%;
     --popover-foreground: 42 35% 85%;
@@ -172,6 +172,20 @@
             -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
             'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
         margin: 0;
+        min-width: 320px;
+        overflow: hidden;
+    }
+
+    button,
+    input,
+    select,
+    textarea {
+        font: inherit;
+    }
+
+    :focus-visible {
+        outline: 2px solid hsl(var(--ring));
+        outline-offset: 2px;
     }
 }
 
@@ -193,8 +207,19 @@
         overscroll-behavior-inline: contain;
     }
 
-    .p-datatable-table {
-        min-width: 44rem;
+    .p-datatable-table { min-width: 38rem; }
+}
+
+@media (max-width: 389px) {
+    .p-datatable-table { min-width: 34rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        scroll-behavior: auto !important;
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
     }
 }
 
@@ -337,11 +362,7 @@
     }
     /* 输入控件：默认更紧凑 + 金色焦点环 */
     .p-inputtext,
-    .p-select,
     .p-textarea,
-    .p-multiselect,
-    .p-treeselect,
-    .p-cascadeselect,
     .p-datepicker-input,
     .p-password-input,
     .p-inputnumber-input {
@@ -350,9 +371,22 @@
         min-height: 1.75rem;
         transition: border-color 0.2s ease, box-shadow 0.2s ease;
     }
+    /* Select 类组件的根节点包含 label 与 dropdown，不能直接加 padding，
+     * 否则会与 PrimeVue 内部间距叠加并导致控件异常变高。 */
+    .p-select,
+    .p-multiselect,
+    .p-treeselect,
+    .p-cascadeselect {
+        min-height: 1.75rem;
+        font-size: 0.8125rem;
+        transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
     .p-inputtext:focus,
-    .p-select:focus,
-    .p-textarea:focus {
+    .p-textarea:focus,
+    .p-select.p-focus,
+    .p-multiselect.p-focus,
+    .p-treeselect.p-focus,
+    .p-cascadeselect.p-focus {
         border-color: hsl(var(--ring));
         box-shadow: 0 0 0 1px hsl(var(--ring)); /* 金色焦点环强化 */
     }
@@ -367,6 +401,13 @@
         background: hsl(var(--muted) / 0.6); /* 与 plain table 表头背景一致 */
         border-bottom: 2px solid hsl(var(--border)); /* 与 plain table 表头分隔线一致 */
         color: hsl(var(--muted-foreground));
+    }
+    .p-datatable-wrapper {
+        max-width: 100%;
+        scrollbar-gutter: stable;
+    }
+    .p-datatable .p-datatable-tbody > tr:focus-within {
+        background: hsl(var(--accent) / 0.55);
     }
     /* 表头操作列按钮间距（避免操作按钮挤在一起） */
     .p-datatable .p-datatable-tbody > tr > td .p-button + .p-button {
@@ -408,6 +449,7 @@
     }
     .p-dialog .p-dialog-content {
         padding: 0 1rem 1rem;
+        overflow-wrap: anywhere;
     }
     .p-dialog .p-dialog-footer {
         padding: 0.75rem 1rem;
@@ -505,5 +547,85 @@
         padding: 0.5rem 1rem;
         font-size: 0.8125rem;
         vertical-align: middle;
+    }
+}
+/* 项目使用 Lucide SVG 默认插槽而不是 PrimeIcons `icon` prop；PrimeVue 无法自动
+ * 添加 p-button-icon-only。对仅含一个 SVG 的按钮补齐同等紧凑尺寸。 */
+.p-button:has(> svg:only-child) {
+    width: 1.75rem !important;
+    height: 1.75rem !important;
+    min-width: 1.75rem !important;
+    min-height: 1.75rem !important;
+    padding: 0 !important;
+    aspect-ratio: 1 / 1;
+    flex-shrink: 0;
+}
+
+@layer components {
+    .app-page {
+        width: 100%;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+    }
+    .app-page-header {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+    }
+    .app-page-title {
+        min-width: 0;
+        font-size: 1.25rem;
+        line-height: 1.75rem;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+    }
+    .app-toolbar {
+        display: flex;
+        min-width: 0;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.5rem;
+        border: 1px solid hsl(var(--border));
+        border-radius: 0.625rem;
+        background: hsl(var(--card) / 0.72);
+        padding: 0.625rem;
+    }
+    .app-surface {
+        min-width: 0;
+        border: 1px solid hsl(var(--border));
+        border-radius: 0.625rem;
+        background: hsl(var(--card) / 0.88);
+        box-shadow: 0 1px 2px hsl(222 30% 10% / 0.06);
+    }
+    .app-status-dot {
+        width: 0.5rem;
+        height: 0.5rem;
+        flex: none;
+        border-radius: 9999px;
+        box-shadow: 0 0 0 3px hsl(var(--border) / 0.65);
+    }
+    [data-testid="page-content"] > * { min-width: 0; }
+    [data-testid="page-content"] h1 {
+        overflow-wrap: anywhere;
+        color: hsl(var(--foreground));
+    }
+    [data-testid="page-content"] pre,
+    [data-testid="page-content"] code { max-width: 100%; }
+    @media (max-width: 639px) {
+        .app-page { gap: 0.75rem; }
+        .app-page-header { align-items: flex-start; flex-direction: column; }
+        .app-page-title { font-size: 1.125rem; line-height: 1.5rem; }
+        .app-page-header > :last-child { width: 100%; }
+        .app-toolbar > .p-inputtext,
+        .app-toolbar > .p-select,
+        .app-toolbar > .p-datepicker { width: 100%; }
+        [data-testid="page-content"] h1 { font-size: 1.25rem; line-height: 1.75rem; }
+        .p-card .p-card-body { padding: 0.75rem; }
+        .p-dialog .p-dialog-header { padding: 0.75rem; }
+        .p-dialog .p-dialog-content { padding: 0 0.75rem 0.75rem; }
     }
 }

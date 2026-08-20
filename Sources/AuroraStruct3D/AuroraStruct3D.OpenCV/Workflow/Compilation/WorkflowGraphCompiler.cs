@@ -375,7 +375,7 @@ public sealed class WorkflowGraphCompiler
             return targetTypeName is null
                 ? new VariableRefBinding(refName)
                 : new ComputedBinding(ctx =>
-                    ValueCoercion.Coerce(ctx.Get(refName), targetTypeName)
+                    ValueCoercion.Coerce(WorkflowValueAccessor.Compile(refName).Resolve(ctx), targetTypeName)
                 );
         }
 

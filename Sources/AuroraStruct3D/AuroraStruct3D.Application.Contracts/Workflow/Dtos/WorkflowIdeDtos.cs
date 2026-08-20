@@ -70,6 +70,9 @@ public class WorkflowIdeCompletionDto
     public string InsertText { get; set; } = string.Empty;
     public string? Detail { get; set; }
     public string? Documentation { get; set; }
+    public WorkflowIdeRangeDto? ReplacementRange { get; set; }
+    public WorkflowTypeSymbolDto? TypeSymbol { get; set; }
+    public string? SortText { get; set; }
 }
 
 public class WorkflowIdeCompletionListDto
@@ -100,6 +103,8 @@ public class WorkflowIdeSymbolDto
     public string? NodeId { get; set; }
     public string? StatementId { get; set; }
     public WorkflowIdeRangeDto Range { get; set; } = new();
+    public string? Uri { get; set; }
+    public string? VirtualSource { get; set; }
 }
 
 public class WorkflowIdeSymbolsDto
@@ -137,6 +142,8 @@ public class WorkflowIdeMapPositionInput : WorkflowIdeDocumentInput
 {
     public string? StatementId { get; set; }
     public string? NodeId { get; set; }
+    public string? PortName { get; set; }
+    public string? PortDirection { get; set; }
 }
 
 public class WorkflowIdeMapPositionDto
@@ -144,6 +151,8 @@ public class WorkflowIdeMapPositionDto
     public int DocumentVersion { get; set; }
     public string? StatementId { get; set; }
     public string? NodeId { get; set; }
+    public string? PortName { get; set; }
+    public string? PortDirection { get; set; }
     public WorkflowIdeRangeDto? Range { get; set; }
 }
 
@@ -237,6 +246,7 @@ public enum WorkflowTypeKind
     FileReference,
     Nullable,
     Union,
+    Enum,
 }
 
 public class WorkflowTypeSymbolDto
@@ -246,4 +256,6 @@ public class WorkflowTypeSymbolDto
     public bool Nullable { get; set; }
     public WorkflowTypeSymbolDto? ElementType { get; set; }
     public Dictionary<string, WorkflowTypeSymbolDto> Properties { get; set; } = [];
+    public List<string> EnumValues { get; set; } = [];
+    public string? Documentation { get; set; }
 }

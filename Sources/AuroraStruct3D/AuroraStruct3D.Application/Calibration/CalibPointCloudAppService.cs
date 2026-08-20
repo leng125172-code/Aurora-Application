@@ -1563,7 +1563,7 @@ public class CalibPointCloudAppService : AuroraStruct3DAppService, ICalibPointCl
         }
 
         (double map1Coverage, double map2Coverage, double overlapCoverage) =
-            ComputeRectificationMapCoverage(
+            CalibComputationUtils.ComputeRectificationMapCoverage(
                 map1x,
                 map1y,
                 map2x,
@@ -1581,6 +1581,21 @@ public class CalibPointCloudAppService : AuroraStruct3DAppService, ICalibPointCl
             map2Coverage,
             overlapCoverage
         );
+        double minimumCoverage = CalibComputationUtils.MinimumRectificationCoveragePercent;
+        if (map1Coverage < minimumCoverage
+            || map2Coverage < minimumCoverage
+            || overlapCoverage < minimumCoverage)
+        {
+            map1x.Dispose();
+            map1y.Dispose();
+            map2x.Dispose();
+            map2y.Dispose();
+            throw new UserFriendlyException(
+                $"双目矫正映射无有效共同视场：主={map1Coverage:F2}%，从={map2Coverage:F2}%，"
+                + $"共同={overlapCoverage:F2}%（最低 {minimumCoverage:F2}%）。"
+                + "请返回标定步骤补拍覆盖中心、四角和不同倾角的照片并重新计算。"
+            );
+        }
 
         return new CalibrationData
         {
@@ -1604,61 +1619,6 @@ public class CalibPointCloudAppService : AuroraStruct3DAppService, ICalibPointCl
         byte[] bytes = new byte[byteCount];
         System.Runtime.InteropServices.Marshal.Copy(map.Data, bytes, 0, byteCount);
         return bytes;
-    }
-
-    private static (double MainPercent, double SecondaryPercent, double OverlapPercent)
-        ComputeRectificationMapCoverage(
-            Mat map1x,
-            Mat map1y,
-            Mat map2x,
-            Mat map2y,
-            int sourceWidth,
-            int sourceHeight
-        )
-    {
-        const int sampleStep = 8;
-        int mapRows = map1x.Rows;
-        int mapCols = map1x.Cols;
-        long sampled = 0;
-        long mainValid = 0;
-        long secondaryValid = 0;
-        long overlapValid = 0;
-        for (int y = 0; y < mapRows; y += sampleStep)
-        {
-            for (int x = 0; x < mapCols; x += sampleStep)
-            {
-                sampled++;
-                float mainX = map1x.At<float>(y, x);
-                float mainY = map1y.At<float>(y, x);
-                float secondaryX = map2x.At<float>(y, x);
-                float secondaryY = map2y.At<float>(y, x);
-                bool mainInside =
-                    mainX >= 0
-                    && mainX < sourceWidth - 1
-                    && mainY >= 0
-                    && mainY < sourceHeight - 1;
-                bool secondaryInside =
-                    secondaryX >= 0
-                    && secondaryX < sourceWidth - 1
-                    && secondaryY >= 0
-                    && secondaryY < sourceHeight - 1;
-                if (mainInside)
-                    mainValid++;
-                if (secondaryInside)
-                    secondaryValid++;
-                if (mainInside && secondaryInside)
-                    overlapValid++;
-            }
-        }
-
-        if (sampled == 0)
-            return (0, 0, 0);
-
-        return (
-            mainValid * 100d / sampled,
-            secondaryValid * 100d / sampled,
-            overlapValid * 100d / sampled
-        );
     }
 
     private async Task<ScanImages> LoadScanImagesAsync(

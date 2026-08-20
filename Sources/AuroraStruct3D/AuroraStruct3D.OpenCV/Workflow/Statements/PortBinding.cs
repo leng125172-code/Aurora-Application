@@ -48,6 +48,7 @@ public sealed class ConstantBinding : InputBinding
 /// </summary>
 public sealed class VariableRefBinding : InputBinding
 {
+    private readonly WorkflowValueAccessor _accessor;
     /// <summary>引用的工作流变量名，区分大小写。</summary>
     public string VariableName { get; }
 
@@ -56,10 +57,11 @@ public sealed class VariableRefBinding : InputBinding
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(variableName);
         VariableName = variableName;
+        _accessor = WorkflowValueAccessor.Compile(variableName);
     }
 
     /// <inheritdoc/>
-    public override object? Resolve(IWorkflowContext context) => context.Get(VariableName);
+    public override object? Resolve(IWorkflowContext context) => _accessor.Resolve(context);
 }
 
 // ── 输出端口绑定 ──────────────────────────────────────────────────────────────

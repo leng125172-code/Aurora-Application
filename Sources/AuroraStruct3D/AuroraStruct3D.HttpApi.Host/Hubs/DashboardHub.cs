@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Authorization;
+using AuroraStruct3D.Realtime;
 using Volo.Abp.AspNetCore.SignalR;
 
 namespace AuroraStruct3D.Hubs;
@@ -10,4 +11,17 @@ namespace AuroraStruct3D.Hubs;
 /// </summary>
 [AllowAnonymous]
 [DisableAutoHubMap] // 阻止 ABP 自动注册，避免与模块中显式 MapHub 产生路由冲突
-public class DashboardHub : AbpHub { }
+public class DashboardHub(RealtimeSubscriberTracker subscribers) : AbpHub
+{
+    public override async Task OnConnectedAsync()
+    {
+        subscribers.Connected(RealtimeSubscriberTracker.Dashboard);
+        await base.OnConnectedAsync();
+    }
+
+    public override async Task OnDisconnectedAsync(Exception? exception)
+    {
+        subscribers.Disconnected(RealtimeSubscriberTracker.Dashboard);
+        await base.OnDisconnectedAsync(exception);
+    }
+}

@@ -131,6 +131,7 @@ public class WorkflowProjectRunRefactorTests
             items,
             frozenGraphs,
             frozenVariables,
+            new WorkflowProjectFrozenTaskConfig(),
             snapshotHash: "snap"
         );
 

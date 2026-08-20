@@ -6,6 +6,9 @@ public interface IVisionParameter
 
     string? DisplayName { get; }
 
+    /// <summary>参数用途说明；未显式提供时注册表会生成类型与方向相关的说明。</summary>
+    string? Description => null;
+
     Type ParameterType { get; }
 
     object? Value { get; set; }

@@ -117,7 +117,7 @@ def login(username, password):
     print("✓ 身份认证成功")
 
 
-def api_post(path, body):
+def api_post(path, body, timeout=30):
     global _access_token, _session
     if not _access_token:
         raise RuntimeError("未登录，无法发送请求")
@@ -130,7 +130,7 @@ def api_post(path, body):
         "发送 POST 请求",
         {"path": path, "url": url, "bodyKeys": sorted(list(body.keys()))},
     )
-    resp = session.post(url, json=body, timeout=30)
+    resp = session.post(url, json=body, timeout=timeout)
     
     # 打印错误信息
     try:

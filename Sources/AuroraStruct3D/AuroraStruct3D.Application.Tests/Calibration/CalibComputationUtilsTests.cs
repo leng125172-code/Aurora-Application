@@ -78,6 +78,73 @@ public class CalibComputationUtilsTests
         );
     }
 
+    [Fact]
+    public void TryValidateCameraModel_RejectsRunawayK3()
+    {
+        using Mat camera = Mat.Eye(3, 3, MatType.CV_64FC1);
+        camera.Set(0, 0, 2000d);
+        camera.Set(1, 1, 2000d);
+        camera.Set(0, 2, 1024d);
+        camera.Set(1, 2, 1224d);
+        using Mat distortion = Mat.Zeros(5, 1, MatType.CV_64FC1).ToMat();
+        distortion.Set(4, 0, -173d);
+
+        bool valid = CalibComputationUtils.TryValidateCameraModel(
+            camera, distortion, new Size(2048, 2448), out string reason
+        );
+
+        Assert.False(valid);
+        Assert.Contains("d4", reason);
+    }
+
+    [Fact]
+    public void ComputeRectificationMapCoverage_DetectsZeroSecondaryCoverage()
+    {
+        using Mat map1x = new(20, 20, MatType.CV_32FC1);
+        using Mat map1y = new(20, 20, MatType.CV_32FC1);
+        using Mat map2x = new(20, 20, MatType.CV_32FC1, Scalar.All(3086));
+        using Mat map2y = new(20, 20, MatType.CV_32FC1, Scalar.All(0));
+        for (int y = 0; y < 20; y++)
+        for (int x = 0; x < 20; x++)
+        {
+            map1x.Set(y, x, (float)x);
+            map1y.Set(y, x, (float)y);
+        }
+
+        var coverage = CalibComputationUtils.ComputeRectificationMapCoverage(
+            map1x, map1y, map2x, map2y, 2048, 2448, sampleStep: 1
+        );
+
+        Assert.Equal(100d, coverage.MainPercent, 6);
+        Assert.Equal(0d, coverage.SecondaryPercent, 6);
+        Assert.Equal(0d, coverage.OverlapPercent, 6);
+    }
+
+    [Fact]
+    public void ComputeRectificationMapCoverage_IdentityMapsHaveFullCoverage()
+    {
+        using Mat map1x = new(10, 10, MatType.CV_32FC1);
+        using Mat map1y = new(10, 10, MatType.CV_32FC1);
+        using Mat map2x = new(10, 10, MatType.CV_32FC1);
+        using Mat map2y = new(10, 10, MatType.CV_32FC1);
+        for (int y = 0; y < 10; y++)
+        for (int x = 0; x < 10; x++)
+        {
+            map1x.Set(y, x, (float)x);
+            map1y.Set(y, x, (float)y);
+            map2x.Set(y, x, (float)x);
+            map2y.Set(y, x, (float)y);
+        }
+
+        var coverage = CalibComputationUtils.ComputeRectificationMapCoverage(
+            map1x, map1y, map2x, map2y, 20, 20, sampleStep: 1
+        );
+
+        Assert.Equal(100d, coverage.MainPercent, 6);
+        Assert.Equal(100d, coverage.SecondaryPercent, 6);
+        Assert.Equal(100d, coverage.OverlapPercent, 6);
+    }
+
     // ─── CreateProjectorPixelPoints ─────────────────────────────────────────
 
     [Fact]

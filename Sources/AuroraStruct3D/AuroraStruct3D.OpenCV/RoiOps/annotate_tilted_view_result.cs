@@ -1,4 +1,5 @@
 using System.Text.Json;
+using AuroraStruct3D.OpenCV.Workflow;
 
 namespace AuroraStruct3D.OpenCV.RoiOps;
 
@@ -19,11 +20,12 @@ public class annotate_tilted_view_result : IOperator
         new()
         {
             new MatImg { ParameterName = "input_mat", DisplayName = "输入图像" },
-            new VisionParameter<bool>
+            new VisionParameter<InspectionResultBase>
             {
-                ParameterName = "is_ok",
-                ParameterType = typeof(bool),
-                DisplayName = "判定结果",
+                ParameterName = "inspection_result",
+                ParameterType = typeof(InspectionResultBase),
+                JsonSchema = InspectionResultSchema.Inspection,
+                DisplayName = "检测结果",
                 ControlType = PortControlType.Variable,
             },
         };
@@ -81,7 +83,9 @@ public class annotate_tilted_view_result : IOperator
             throw new InvalidOperationException("输入图像为空，无法绘制结果标注。");
         }
 
-        bool isOk = context.Get<bool>("is_ok");
+        InspectionResultBase inspectionResult = context.Get<InspectionResultBase>("inspection_result")
+            ?? throw new InvalidOperationException("上下文变量 'inspection_result' 为空。");
+        bool isOk = inspectionResult.isOk;
 
         Mat output = EnsureBgra(inputMat);
 

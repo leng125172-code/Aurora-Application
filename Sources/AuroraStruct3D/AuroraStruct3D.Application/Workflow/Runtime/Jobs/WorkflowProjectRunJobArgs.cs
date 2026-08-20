@@ -11,6 +11,8 @@ public class WorkflowProjectRunJobArgs
     /// <summary>项目 ID。</summary>
     public Guid ProjectId { get; set; }
 
+    public Guid TaskConfigId { get; set; }
+
     /// <summary>来源部署快照 ID。</summary>
     public Guid DeploymentId { get; set; }
 
@@ -28,6 +30,8 @@ public class WorkflowProjectRunRecurringArgs
 {
     /// <summary>项目 ID。</summary>
     public Guid ProjectId { get; set; }
+
+    public Guid TaskConfigId { get; set; }
 
     /// <summary>来源部署快照 ID。</summary>
     public Guid DeploymentId { get; set; }

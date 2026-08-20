@@ -22,6 +22,8 @@ public class PointCloudFilePath : IVisionParameter
     /// <summary>端口 UI 显示名（实例级），为 null 时回退到类型上的 [DisplayName] 特性。</summary>
     public string? DisplayName { get; set; }
 
+    public string? Description { get; set; }
+
     /// <summary>参数实际数据类型：点云文件路径的值为 <see cref="string"/>。</summary>
     public Type ParameterType => typeof(string);
 

@@ -68,6 +68,13 @@ export interface DeviceStateDto {
     readonly isInTransition: boolean
     readonly canAcceptProductionCommand: boolean
     readonly canSwitchMode: boolean
+    readonly canStart: boolean
+    readonly canPause: boolean
+    readonly canResume: boolean
+    readonly canStop: boolean
+    readonly canAcknowledgeFault: boolean
+    readonly canReset: boolean
+    readonly canEmergencyStop: boolean
 }
 
 export interface DeviceFaultDto {
@@ -134,6 +141,9 @@ export interface SwitchModeInput {
     readonly reason?: string | null
 }
 
+export interface DeviceCommandInput { readonly reason?: string | null }
+export interface EmergencyStopInput { readonly reason: string }
+
 export interface GetFaultPagedInput {
     readonly skipCount?: number
     readonly maxResultCount?: number
@@ -174,6 +184,18 @@ export async function getCurrentFaultAsync(): Promise<DeviceFaultDto | null> {
 export async function switchModeAsync(input: SwitchModeInput): Promise<void> {
     await httpClient.post('/api/app/device-state/switch-mode', input)
 }
+
+async function executeCommand(path: string, input: DeviceCommandInput = {}): Promise<DeviceStateDto> {
+    return (await httpClient.post<DeviceStateDto>(`/api/app/device-state/${path}`, input)).data
+}
+
+export const startDeviceAsync = (input: DeviceCommandInput = {}) => executeCommand('start', input)
+export const pauseDeviceAsync = (input: DeviceCommandInput = {}) => executeCommand('pause', input)
+export const resumeDeviceAsync = (input: DeviceCommandInput = {}) => executeCommand('resume', input)
+export const stopDeviceAsync = (input: DeviceCommandInput = {}) => executeCommand('stop', input)
+export const acknowledgeDeviceFaultAsync = (input: DeviceCommandInput = {}) => executeCommand('acknowledge-fault', input)
+export const resetDeviceAsync = (input: DeviceCommandInput = {}) => executeCommand('reset', input)
+export const emergencyStopDeviceAsync = (input: EmergencyStopInput) => executeCommand('emergency-stop', input)
 
 /** 分页查询历史故障记录（需要登录） */
 export async function getFaultPagedListAsync(input: GetFaultPagedInput): Promise<PagedResultDto<DeviceFaultDto>> {

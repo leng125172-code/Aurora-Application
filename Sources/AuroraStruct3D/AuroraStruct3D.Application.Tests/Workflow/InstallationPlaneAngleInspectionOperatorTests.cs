@@ -1,4 +1,3 @@
-using System.Text.Json;
 using AuroraStruct3D.OpenCV.PointCloudPlaneOps;
 using AuroraStruct3D.OpenCV.VisionParameters;
 using AuroraStruct3D.OpenCV.Workflow;
@@ -20,21 +19,9 @@ public class InstallationPlaneAngleInspectionOperatorTests
             input => Assert.Equal("measured_plane_params", input.ParameterName),
             input => Assert.Equal("measured_points", input.ParameterName)
         );
-        Assert.Contains(
+        Assert.Collection(
             installation_plane_angle_inspection.OutputVisionParameters!,
-            output => output.ParameterName == "tilt_x"
-        );
-        Assert.Contains(
-            installation_plane_angle_inspection.OutputVisionParameters!,
-            output => output.ParameterName == "tilt_y"
-        );
-        Assert.Contains(
-            installation_plane_angle_inspection.OutputVisionParameters!,
-            output => output.ParameterName == "inspection_status"
-        );
-        Assert.Contains(
-            installation_plane_angle_inspection.OutputVisionParameters!,
-            output => output.ParameterName == "is_valid"
+            output => Assert.Equal("result", output.ParameterName)
         );
     }
 
@@ -73,12 +60,13 @@ public class InstallationPlaneAngleInspectionOperatorTests
         );
         op.Execute(context);
 
-        Assert.Equal("NG", context.Get<string>("inspection_status"));
-        Assert.True(context.Get<bool>("is_valid"));
-        Assert.False(context.Get<bool>("is_ok"));
-        Assert.InRange(context.Get<double>("tilt_x"), 1.999, 2.001);
-        Assert.InRange(context.Get<double>("tilt_y"), -1.001, -0.999);
-        Assert.InRange(context.Get<double>("total_tilt"), 2.235, 2.237);
+        InspectionResultBase result = Assert.IsAssignableFrom<InspectionResultBase>(context.Get("result"));
+        Assert.Equal(InspectionResultCode.NG, result.resultCode);
+        Assert.True(result.isValid);
+        Assert.False(result.isOk);
+        Assert.InRange(result.ToDetailsNode()!["tiltX"]!.GetValue<double>(), 1.999, 2.001);
+        Assert.InRange(result.ToDetailsNode()!["tiltY"]!.GetValue<double>(), -1.001, -0.999);
+        Assert.InRange(result.ToDetailsNode()!["totalTilt"]!.GetValue<double>(), 2.235, 2.237);
     }
 
     [Fact]
@@ -96,11 +84,11 @@ public class InstallationPlaneAngleInspectionOperatorTests
         using var op = new installation_plane_angle_inspection(minPointCount: 30);
         op.Execute(context);
 
-        Assert.Equal("UNKNOWN", context.Get<string>("inspection_status"));
-        Assert.False(context.Get<bool>("is_valid"));
-        Assert.False(context.Get<bool>("is_ok"));
-        using JsonDocument result = JsonDocument.Parse(context.Get<string>("result_json")!);
-        Assert.NotEmpty(result.RootElement.GetProperty("qualityReasons").EnumerateArray());
+        InspectionResultBase result = Assert.IsAssignableFrom<InspectionResultBase>(context.Get("result"));
+        Assert.Equal(InspectionResultCode.UNKNOWN, result.resultCode);
+        Assert.False(result.isValid);
+        Assert.False(result.isOk);
+        Assert.NotEmpty(result.ToDetailsNode()!["qualityReasons"]!.AsArray());
     }
 
     private static Mat CreatePlane(double[] normal)

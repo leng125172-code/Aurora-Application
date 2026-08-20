@@ -92,6 +92,12 @@ public sealed class NodePropertiesModel
     /// </summary>
     public Dictionary<string, string>? OutputBindingSources { get; set; }
 
+    /// <summary>开始节点外部入参的 CLR 类型名：端口名 → 类型名。</summary>
+    public Dictionary<string, string>? OutputBindingTypeNames { get; set; }
+
+    /// <summary>开始节点外部入参的 JSON Schema：端口名 → Schema。</summary>
+    public Dictionary<string, string>? OutputBindingSchemas { get; set; }
+
     /// <summary>容器子画布（仅 <c>flow_container</c> 携带）。</summary>
     public GraphDataModel? InnerGraphData { get; set; }
 }

@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
+import Button from 'primevue/button'
 import {
     LayoutDashboard,
     FileText,
@@ -66,19 +67,32 @@ function navigate(path: string, tab?: string): void {
 </script>
 
 <template>
-    <aside class="flex h-full w-56 flex-col border-r bg-card/40 backdrop-blur">
-        <div class="flex h-14 items-center border-b px-4 text-base font-semibold">AuroraStruct3D</div>
-        <nav class="flex-1 space-y-1 overflow-y-auto p-2">
+    <aside data-testid="app-sidebar" class="flex h-full w-64 flex-col border-r bg-card/95 backdrop-blur-xl lg:w-60">
+        <div class="flex h-14 shrink-0 items-center gap-2 border-b px-4 text-sm font-bold tracking-wide">
+            <span class="size-2 rounded-sm bg-primary shadow-[0_0_10px_hsl(var(--primary)/0.55)]" />
+            AuroraStruct3D
+        </div>
+        <nav class="sidebar-nav flex-1 space-y-1 overflow-y-auto p-2">
             <div class="px-3 py-1 text-xs font-medium text-muted-foreground uppercase tracking-wider">
                 {{ t('menu.visualApplications') }}
             </div>
-            <button
-                :class="cn('flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors text-left', isExactActive('/projects') ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground')"
+            <Button
+                size="small"
+                text
+                severity="secondary"
+                :class="
+                    cn(
+                        'flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors text-left',
+                        isExactActive('/projects')
+                            ? 'bg-accent text-accent-foreground'
+                            : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                    )
+                "
                 @click="navigate('/projects')"
             >
                 <FolderKanban class="size-4 shrink-0" />
                 {{ t('menu.visualSolutions') }}
-            </button>
+            </Button>
 
             <!-- 工具监控 -->
             <div class="px-3 py-1 text-xs font-medium text-muted-foreground uppercase tracking-wider">
@@ -86,7 +100,10 @@ function navigate(path: string, tab?: string): void {
             </div>
 
             <!-- 仪表盘 -->
-            <button
+            <Button
+                size="small"
+                text
+                severity="secondary"
                 :class="
                     cn(
                         'flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors text-left',
@@ -99,9 +116,12 @@ function navigate(path: string, tab?: string): void {
             >
                 <LayoutDashboard class="size-4 shrink-0" />
                 {{ t('menu.dashboard') }}
-            </button>
+            </Button>
 
-            <button
+            <Button
+                size="small"
+                text
+                severity="secondary"
                 v-if="workflowDebugEnabled"
                 :class="
                     cn(
@@ -115,10 +135,13 @@ function navigate(path: string, tab?: string): void {
             >
                 <GitBranch class="size-4 shrink-0" />
                 工作流调试
-            </button>
+            </Button>
 
             <!-- Swagger -->
-            <button
+            <Button
+                size="small"
+                text
+                severity="secondary"
                 :class="
                     cn(
                         'flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors text-left',
@@ -131,11 +154,14 @@ function navigate(path: string, tab?: string): void {
             >
                 <FileText class="size-4 shrink-0" />
                 {{ t('menu.swagger') }}
-            </button>
+            </Button>
 
             <!-- CAP 展开组 -->
             <div>
-                <button
+                <Button
+                    size="small"
+                    text
+                    severity="secondary"
                     :class="
                         cn(
                             'flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors text-left',
@@ -150,9 +176,12 @@ function navigate(path: string, tab?: string): void {
                     <span class="flex-1">{{ t('menu.cap') }}</span>
                     <ChevronDown v-if="capExpanded" class="size-3.5" />
                     <ChevronRight v-else class="size-3.5" />
-                </button>
+                </Button>
                 <div v-if="capExpanded" class="ml-6 mt-0.5 space-y-0.5">
-                    <button
+                    <Button
+                        size="small"
+                        text
+                        severity="secondary"
                         v-for="(label, tab) in {
                             dashboard: t('cap.tabDashboard'),
                             published: t('cap.tabPublished'),
@@ -172,13 +201,16 @@ function navigate(path: string, tab?: string): void {
                         @click="navigate('/embed/cap', tab)"
                     >
                         {{ label }}
-                    </button>
+                    </Button>
                 </div>
             </div>
 
             <!-- Hangfire 展开组 -->
             <div>
-                <button
+                <Button
+                    size="small"
+                    text
+                    severity="secondary"
                     :class="
                         cn(
                             'flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors text-left',
@@ -193,9 +225,12 @@ function navigate(path: string, tab?: string): void {
                     <span class="flex-1">{{ t('menu.hangfire') }}</span>
                     <ChevronDown v-if="hangfireExpanded" class="size-3.5" />
                     <ChevronRight v-else class="size-3.5" />
-                </button>
+                </Button>
                 <div v-if="hangfireExpanded" class="ml-6 mt-0.5 space-y-0.5">
-                    <button
+                    <Button
+                        size="small"
+                        text
+                        severity="secondary"
                         v-for="(label, tab) in {
                             dashboard: t('hangfire.tabDashboard'),
                             jobs: t('hangfire.tabJobs'),
@@ -215,12 +250,15 @@ function navigate(path: string, tab?: string): void {
                         @click="navigate('/embed/hangfire', tab)"
                     >
                         {{ label }}
-                    </button>
+                    </Button>
                 </div>
             </div>
 
             <!-- MiniProfiler -->
-            <button
+            <Button
+                size="small"
+                text
+                severity="secondary"
                 :class="
                     cn(
                         'flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors text-left',
@@ -233,10 +271,13 @@ function navigate(path: string, tab?: string): void {
             >
                 <Gauge class="size-4 shrink-0" />
                 {{ t('menu.profiler') }}
-            </button>
+            </Button>
 
             <!-- 系统信息 -->
-            <button
+            <Button
+                size="small"
+                text
+                severity="secondary"
                 :class="
                     cn(
                         'flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors text-left',
@@ -249,7 +290,7 @@ function navigate(path: string, tab?: string): void {
             >
                 <Info class="size-4 shrink-0" />
                 {{ t('menu.systemInfo') }}
-            </button>
+            </Button>
 
             <!-- 设备状态 -->
             <div class="px-3 py-1 text-xs font-medium text-muted-foreground uppercase tracking-wider">
@@ -257,7 +298,10 @@ function navigate(path: string, tab?: string): void {
             </div>
 
             <!-- 故障历史 -->
-            <button
+            <Button
+                size="small"
+                text
+                severity="secondary"
                 :class="
                     cn(
                         'flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors text-left',
@@ -270,10 +314,13 @@ function navigate(path: string, tab?: string): void {
             >
                 <AlertTriangle class="size-4 shrink-0" />
                 {{ t('menu.faultHistory') }}
-            </button>
+            </Button>
 
             <!-- 状态日志 -->
-            <button
+            <Button
+                size="small"
+                text
+                severity="secondary"
                 :class="
                     cn(
                         'flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors text-left',
@@ -286,11 +333,14 @@ function navigate(path: string, tab?: string): void {
             >
                 <ScrollText class="size-4 shrink-0" />
                 {{ t('menu.stateLog') }}
-            </button>
+            </Button>
 
             <!-- 投影仪管理展开组 -->
             <div>
-                <button
+                <Button
+                    size="small"
+                    text
+                    severity="secondary"
                     :class="
                         cn(
                             'flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors text-left',
@@ -305,9 +355,12 @@ function navigate(path: string, tab?: string): void {
                     <span class="flex-1">{{ t('menu.projectorManage') }}</span>
                     <ChevronDown v-if="projectorExpanded" class="size-3.5" />
                     <ChevronRight v-else class="size-3.5" />
-                </button>
+                </Button>
                 <div v-if="projectorExpanded" class="ml-6 mt-0.5 space-y-0.5">
-                    <button
+                    <Button
+                        size="small"
+                        text
+                        severity="secondary"
                         :class="
                             cn(
                                 'flex w-full items-center rounded-md px-3 py-1.5 text-sm transition-colors text-left',
@@ -319,8 +372,11 @@ function navigate(path: string, tab?: string): void {
                         @click="navigate('/projectors')"
                     >
                         {{ t('menu.management') }}
-                    </button>
-                    <button
+                    </Button>
+                    <Button
+                        size="small"
+                        text
+                        severity="secondary"
                         :class="
                             cn(
                                 'flex w-full items-center rounded-md px-3 py-1.5 text-sm transition-colors text-left',
@@ -332,13 +388,16 @@ function navigate(path: string, tab?: string): void {
                         @click="navigate('/projectors/logs')"
                     >
                         {{ t('menu.operationLogs') }}
-                    </button>
+                    </Button>
                 </div>
             </div>
 
             <!-- 相机管理展开组 -->
             <div>
-                <button
+                <Button
+                    size="small"
+                    text
+                    severity="secondary"
                     :class="
                         cn(
                             'flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors text-left',
@@ -353,9 +412,12 @@ function navigate(path: string, tab?: string): void {
                     <span class="flex-1">{{ t('menu.cameraManage') }}</span>
                     <ChevronDown v-if="cameraExpanded" class="size-3.5" />
                     <ChevronRight v-else class="size-3.5" />
-                </button>
+                </Button>
                 <div v-if="cameraExpanded" class="ml-6 mt-0.5 space-y-0.5">
-                    <button
+                    <Button
+                        size="small"
+                        text
+                        severity="secondary"
                         :class="
                             cn(
                                 'flex w-full items-center rounded-md px-3 py-1.5 text-sm transition-colors text-left',
@@ -367,8 +429,11 @@ function navigate(path: string, tab?: string): void {
                         @click="navigate('/cameras')"
                     >
                         {{ t('menu.management') }}
-                    </button>
-                    <button
+                    </Button>
+                    <Button
+                        size="small"
+                        text
+                        severity="secondary"
                         :class="
                             cn(
                                 'flex w-full items-center rounded-md px-3 py-1.5 text-sm transition-colors text-left',
@@ -380,13 +445,16 @@ function navigate(path: string, tab?: string): void {
                         @click="navigate('/cameras/logs')"
                     >
                         {{ t('menu.operationLogs') }}
-                    </button>
+                    </Button>
                 </div>
             </div>
 
             <!-- 485 串口管理 -->
             <div>
-                <button
+                <Button
+                    size="small"
+                    text
+                    severity="secondary"
                     :class="
                         cn(
                             'flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors text-left',
@@ -401,9 +469,12 @@ function navigate(path: string, tab?: string): void {
                     <span class="flex-1">{{ t('menu.serialPortManage') }}</span>
                     <ChevronDown v-if="serialPortExpanded" class="size-3.5" />
                     <ChevronRight v-else class="size-3.5" />
-                </button>
+                </Button>
                 <div v-if="serialPortExpanded" class="ml-6 mt-0.5 space-y-0.5">
-                    <button
+                    <Button
+                        size="small"
+                        text
+                        severity="secondary"
                         :class="
                             cn(
                                 'flex w-full items-center rounded-md px-3 py-1.5 text-sm transition-colors text-left',
@@ -415,8 +486,11 @@ function navigate(path: string, tab?: string): void {
                         @click="navigate('/serial-ports')"
                     >
                         {{ t('menu.management') }}
-                    </button>
-                    <button
+                    </Button>
+                    <Button
+                        size="small"
+                        text
+                        severity="secondary"
                         :class="
                             cn(
                                 'flex w-full items-center rounded-md px-3 py-1.5 text-sm transition-colors text-left',
@@ -428,13 +502,16 @@ function navigate(path: string, tab?: string): void {
                         @click="navigate('/serial-ports/logs')"
                     >
                         {{ t('menu.operationLogs') }}
-                    </button>
+                    </Button>
                 </div>
             </div>
 
             <!-- 485 电机设备管理 -->
             <div>
-                <button
+                <Button
+                    size="small"
+                    text
+                    severity="secondary"
                     :class="
                         cn(
                             'flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors text-left',
@@ -449,9 +526,12 @@ function navigate(path: string, tab?: string): void {
                     <span class="flex-1">{{ t('menu.motorDeviceManage') }}</span>
                     <ChevronDown v-if="motorExpanded" class="size-3.5" />
                     <ChevronRight v-else class="size-3.5" />
-                </button>
+                </Button>
                 <div v-if="motorExpanded" class="ml-6 mt-0.5 space-y-0.5">
-                    <button
+                    <Button
+                        size="small"
+                        text
+                        severity="secondary"
                         :class="
                             cn(
                                 'flex w-full items-center rounded-md px-3 py-1.5 text-sm transition-colors text-left',
@@ -463,8 +543,11 @@ function navigate(path: string, tab?: string): void {
                         @click="navigate('/motors')"
                     >
                         {{ t('menu.management') }}
-                    </button>
-                    <button
+                    </Button>
+                    <Button
+                        size="small"
+                        text
+                        severity="secondary"
                         :class="
                             cn(
                                 'flex w-full items-center rounded-md px-3 py-1.5 text-sm transition-colors text-left',
@@ -476,12 +559,15 @@ function navigate(path: string, tab?: string): void {
                         @click="navigate('/motors/logs')"
                     >
                         {{ t('menu.operationLogs') }}
-                    </button>
+                    </Button>
                 </div>
             </div>
 
             <!-- 三维数模管理 -->
-            <button
+            <Button
+                size="small"
+                text
+                severity="secondary"
                 :class="
                     cn(
                         'flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors text-left',
@@ -494,11 +580,14 @@ function navigate(path: string, tab?: string): void {
             >
                 <Cable class="size-4 shrink-0" />
                 {{ t('menu.plcManage') }}
-            </button>
+            </Button>
 
             <!-- 三维数模管理 -->
             <div>
-                <button
+                <Button
+                    size="small"
+                    text
+                    severity="secondary"
                     :class="
                         cn(
                             'flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors text-left',
@@ -513,9 +602,12 @@ function navigate(path: string, tab?: string): void {
                     <span class="flex-1">{{ t('menu.productModelManage') }}</span>
                     <ChevronDown v-if="productModelExpanded" class="size-3.5" />
                     <ChevronRight v-else class="size-3.5" />
-                </button>
+                </Button>
                 <div v-if="productModelExpanded" class="ml-6 mt-0.5 space-y-0.5">
-                    <button
+                    <Button
+                        size="small"
+                        text
+                        severity="secondary"
                         :class="
                             cn(
                                 'flex w-full items-center rounded-md px-3 py-1.5 text-sm transition-colors text-left',
@@ -527,8 +619,11 @@ function navigate(path: string, tab?: string): void {
                         @click="navigate('/product-models')"
                     >
                         {{ t('menu.management') }}
-                    </button>
-                    <button
+                    </Button>
+                    <Button
+                        size="small"
+                        text
+                        severity="secondary"
                         :class="
                             cn(
                                 'flex w-full items-center rounded-md px-3 py-1.5 text-sm transition-colors text-left',
@@ -540,13 +635,16 @@ function navigate(path: string, tab?: string): void {
                         @click="navigate('/product-models/logs')"
                     >
                         {{ t('menu.operationLogs') }}
-                    </button>
+                    </Button>
                 </div>
             </div>
 
             <!-- AI 模型管理 -->
             <div>
-                <button
+                <Button
+                    size="small"
+                    text
+                    severity="secondary"
                     :class="
                         cn(
                             'flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors text-left',
@@ -561,9 +659,12 @@ function navigate(path: string, tab?: string): void {
                     <span class="flex-1">{{ t('menu.aiModelManage') }}</span>
                     <ChevronDown v-if="aiModelExpanded" class="size-3.5" />
                     <ChevronRight v-else class="size-3.5" />
-                </button>
+                </Button>
                 <div v-if="aiModelExpanded" class="ml-6 mt-0.5 space-y-0.5">
-                    <button
+                    <Button
+                        size="small"
+                        text
+                        severity="secondary"
                         :class="
                             cn(
                                 'flex w-full items-center rounded-md px-3 py-1.5 text-sm transition-colors text-left',
@@ -575,8 +676,11 @@ function navigate(path: string, tab?: string): void {
                         @click="navigate('/ai-models')"
                     >
                         {{ t('menu.management') }}
-                    </button>
-                    <button
+                    </Button>
+                    <Button
+                        size="small"
+                        text
+                        severity="secondary"
                         :class="
                             cn(
                                 'flex w-full items-center rounded-md px-3 py-1.5 text-sm transition-colors text-left',
@@ -588,13 +692,16 @@ function navigate(path: string, tab?: string): void {
                         @click="navigate('/ai-models/logs')"
                     >
                         {{ t('menu.operationLogs') }}
-                    </button>
+                    </Button>
                 </div>
             </div>
 
             <!-- 标定管理 可展开菜单 -->
             <div>
-                <button
+                <Button
+                    size="small"
+                    text
+                    severity="secondary"
                     :class="
                         cn(
                             'flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors text-left',
@@ -609,9 +716,12 @@ function navigate(path: string, tab?: string): void {
                     <span class="flex-1">{{ t('menu.calibration') }}</span>
                     <ChevronDown v-if="calibExpanded" class="size-3.5" />
                     <ChevronRight v-else class="size-3.5" />
-                </button>
+                </Button>
                 <div v-if="calibExpanded" class="ml-6 mt-0.5 flex flex-col gap-0.5">
-                    <button
+                    <Button
+                        size="small"
+                        text
+                        severity="secondary"
                         :class="
                             cn(
                                 'flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors text-left',
@@ -624,9 +734,16 @@ function navigate(path: string, tab?: string): void {
                     >
                         <ScanLine class="size-3.5 shrink-0" />
                         {{ t('menu.calibProjectManage') }}
-                    </button>
+                    </Button>
                 </div>
             </div>
         </nav>
     </aside>
 </template>
+
+<style scoped>
+.sidebar-nav :deep(.p-button) {
+    justify-content: flex-start;
+    text-align: left;
+}
+</style>

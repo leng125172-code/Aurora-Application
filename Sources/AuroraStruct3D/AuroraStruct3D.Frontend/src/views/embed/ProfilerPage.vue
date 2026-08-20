@@ -171,7 +171,7 @@ onMounted(loadList)
         <!-- 标题栏 -->
         <div class="flex items-center justify-between">
             <h1 class="text-2xl font-bold tracking-tight">{{ t('menu.profiler') }}</h1>
-            <Button severity="secondary" outlined :disabled="loading" @click="loadList">
+            <Button size="small" severity="secondary" outlined :disabled="loading" @click="loadList">
                 <RefreshCw :class="['size-4', loading && 'animate-spin']" />
             </Button>
         </div>

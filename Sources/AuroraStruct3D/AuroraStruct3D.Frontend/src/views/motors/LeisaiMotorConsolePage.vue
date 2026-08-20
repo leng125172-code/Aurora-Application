@@ -5,7 +5,7 @@
  *  - 通过 SignalR 实时接收状态推送（250 ms 周期）
  *  - REST 调用统一走 @/api/leisai
  */
-import * as echarts from 'echarts'
+import { echarts } from '@/lib/echarts'
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
@@ -860,7 +860,11 @@ const tabLabels = computed(() => ({
 
         <!-- Tab 切换条 -->
         <div class="flex flex-wrap gap-2 border-b">
-            <Button unstyled type="button"
+            <Button
+                size="small"
+                text
+                severity="secondary"
+                type="button"
                 v-for="[key, label] in Object.entries(tabLabels)"
                 :key="key"
                 :class="[
@@ -1225,7 +1229,11 @@ const tabLabels = computed(() => ({
                         </div>
                         <ul class="space-y-1">
                             <li v-for="g in availableGroups" :key="g">
-                                <Button unstyled type="button"
+                                <Button
+                                    size="small"
+                                    text
+                                    severity="secondary"
+                                    type="button"
                                     class="flex w-full items-center justify-between rounded px-2 py-1 text-left text-xs hover:bg-muted"
                                     :class="currentGroup === g ? 'bg-primary/10 font-semibold text-primary' : ''"
                                     @click="currentGroup = g"
@@ -1323,7 +1331,11 @@ const tabLabels = computed(() => ({
                                                 />
                                             </td>
                                             <td class="px-2 py-1">
-                                                <Button unstyled type="button"
+                                                <Button
+                                                    size="small"
+                                                    text
+                                                    severity="secondary"
+                                                    type="button"
                                                     class="text-[10px] text-muted-foreground hover:text-foreground disabled:opacity-30"
                                                     :disabled="!isParamDirty(p.addressLow)"
                                                     @click="paramEdits[p.addressLow] = paramValues[p.addressLow]"

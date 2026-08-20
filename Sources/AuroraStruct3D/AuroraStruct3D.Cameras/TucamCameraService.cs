@@ -203,8 +203,9 @@ public class TucamCameraService :
     ) =>
         GrabFrameRawAsync(
             GetRuntimeIndex(hardwareId),
-            timeoutMs,
-            imageRotationAngle
+            timeoutMs: timeoutMs,
+            maxWidth: 0,
+            imageRotationAngle: imageRotationAngle
         );
 
     public Task SoftwareTriggerAsync(

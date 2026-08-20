@@ -3,6 +3,7 @@ using AuroraStruct3D.OpenCV.Registry;
 using AuroraStruct3D.OpenCV.Workflow.Compilation;
 using AuroraStruct3D.OpenCV.Workflow.Compilation.Model;
 using AuroraStruct3D.OpenCV.Workflow.Scripting;
+using AuroraStruct3D.OpenCV.Workflow;
 using AuroraStruct3D.Workflow.Dtos;
 using Microsoft.AspNetCore.Mvc;
 using Volo.Abp.Application.Services;
@@ -100,15 +101,26 @@ public sealed class WorkflowIdeAppService : ApplicationService
     [HttpPost("completions")]
     public async Task<WorkflowIdeCompletionListDto> CompletionsAsync(WorkflowIdeDocumentInput input)
     {
+        List<WorkflowIdeCompletionDto>? memberItems = await TryGetMemberCompletionsAsync(input);
+        if (memberItems is not null)
+            return new() { DocumentVersion = input.DocumentVersion, Items = memberItems };
+
         List<WorkflowIdeCompletionDto> items =
         [
             new()
             {
+                Label = "Input", Kind = "method",
+                InsertText = "var ${1:input} = Input<${2:string}>(\"${3:input}\");",
+                Detail = "Strongly typed workflow input",
+                Documentation = "Declares a named input port with a registered CLR type.",
+            },
+            new()
+            {
                 Label = "Workflow",
                 Kind = "method",
-                InsertText = "Workflow(\"${1:name}\", 2);",
+                InsertText = "Workflow(\"${1:name}\", 3);",
                 Detail = "Workflow declaration",
-                Documentation = "Declares the workflow name and V2 language version.",
+                Documentation = "Declares the workflow name and V3 strongly typed language version.",
             },
             new()
             {
@@ -119,6 +131,16 @@ public sealed class WorkflowIdeAppService : ApplicationService
                 Documentation = "Returns one or more workflow variables.",
             },
         ];
+        foreach (Type type in WorkflowTypeRegistry.GetRegisteredTypes()
+                     .OrderBy(x => x.Name, StringComparer.Ordinal))
+        {
+            items.Add(new WorkflowIdeCompletionDto
+            {
+                Label = type.Name, Kind = type.IsEnum ? "enum" : "type",
+                InsertText = type.Name, Detail = type.FullName,
+                SortText = "1_" + type.Name,
+            });
+        }
         foreach (OperatorDescriptor descriptor in await _registry.GetAllOperatorsAsync())
         {
             OperatorParametersDescriptor? parameters =
@@ -149,6 +171,111 @@ public sealed class WorkflowIdeAppService : ApplicationService
                 });
         }
         return new() { DocumentVersion = input.DocumentVersion, Items = items };
+    }
+
+    private async Task<List<WorkflowIdeCompletionDto>?> TryGetMemberCompletionsAsync(
+        WorkflowIdeDocumentInput input)
+    {
+        int offset = Math.Clamp(input.Offset, 0, input.SourceCode.Length);
+        Match access = Regex.Match(input.SourceCode[..offset],
+            @"(?<root>[A-Za-z_][A-Za-z0-9_]*)(?<path>(?:\.[A-Za-z_][A-Za-z0-9_]*|\[\d+\])*)\.(?<partial>[A-Za-z_][A-Za-z0-9_]*)?$");
+        if (!access.Success)
+            return null;
+
+        string root = access.Groups["root"].Value;
+        Type? enumType = WorkflowTypeRegistry.Resolve(root);
+        if (enumType?.IsEnum == true)
+            return Enum.GetNames(enumType).Select(name => new WorkflowIdeCompletionDto
+            {
+                Label = name, Kind = "enum", InsertText = name,
+                Detail = enumType.Name, SortText = "0_" + name,
+            }).ToList();
+        try
+        {
+            (_, GraphDataModel parsedGraph) = CSharpWorkflowScript.Parse(input.SourceCode);
+            NodeModel? startNode = parsedGraph.Nodes.FirstOrDefault(x => x.Type == "start-node");
+            string? inputPort = startNode?.Properties?.OutputBindings?
+                .FirstOrDefault(x => x.Value == root).Key;
+            string? inputSchema = inputPort is null ? null
+                : startNode?.Properties?.OutputBindingSchemas?.GetValueOrDefault(inputPort);
+            if (!string.IsNullOrWhiteSpace(inputSchema))
+                return CompleteSchema(inputSchema, access.Groups["path"].Value,
+                    access.Groups["partial"].Value);
+        }
+        catch (FormatException) { }
+        Match declaration = Regex.Matches(input.SourceCode[..offset],
+            @"var\s+(?:(?<single>[A-Za-z_][A-Za-z0-9_]*)|\((?<tuple>[^)]*)\))\s*=\s*(?<op>[A-Za-z_][A-Za-z0-9_]*)\s*\(",
+            RegexOptions.Singleline).Cast<Match>().LastOrDefault(x =>
+                x.Groups["single"].Value == root
+                || x.Groups["tuple"].Value.Split(',').Any(v => v.Trim() == root))!;
+        if (declaration is null)
+            return [];
+
+        OperatorDescriptor? descriptor = (await _registry.GetAllOperatorsAsync()).FirstOrDefault(x =>
+            x.TypeFullName.EndsWith("." + declaration.Groups["op"].Value, StringComparison.Ordinal));
+        if (descriptor is null)
+            return [];
+        OperatorParametersDescriptor? contract = await _registry.GetParametersAsync(descriptor.Id);
+        string[] declaredOutputs = declaration.Groups["single"].Success
+            ? [declaration.Groups["single"].Value]
+            : declaration.Groups["tuple"].Value.Split(',').Select(x => x.Trim()).ToArray();
+        int outputIndex = Array.IndexOf(declaredOutputs, root);
+        ParameterDescriptor? port = contract?.Outputs.ElementAtOrDefault(outputIndex);
+        if (string.IsNullOrWhiteSpace(port?.JsonSchema))
+            return [];
+
+        return CompleteSchema(port.JsonSchema, access.Groups["path"].Value,
+            access.Groups["partial"].Value);
+    }
+
+    private static List<WorkflowIdeCompletionDto> CompleteSchema(
+        string jsonSchema, string path, string partial)
+    {
+        using JsonDocument schemaDocument = JsonDocument.Parse(jsonSchema);
+        JsonElement schema = schemaDocument.RootElement;
+        foreach (Match segment in Regex.Matches(path, @"\.([A-Za-z_][A-Za-z0-9_]*)|\[(\d+)\]"))
+        {
+            schema = EffectiveSchema(schema);
+            if (segment.Groups[1].Success)
+            {
+                if (!schema.TryGetProperty("properties", out JsonElement properties)
+                    || !properties.TryGetProperty(segment.Groups[1].Value, out schema))
+                    return [];
+            }
+            else if (!schema.TryGetProperty("items", out schema))
+                return [];
+        }
+        schema = EffectiveSchema(schema);
+        if (schema.TryGetProperty("type", out JsonElement finalType)
+            && finalType.GetString() == "array")
+            return [new WorkflowIdeCompletionDto
+            {
+                Label = "Length", Kind = "property", InsertText = "Length",
+                Detail = "int", Documentation = "Number of elements in the array.",
+            }];
+        if (!schema.TryGetProperty("properties", out JsonElement members))
+            return [];
+        return members.EnumerateObject()
+            .Where(x => x.Name.StartsWith(partial, StringComparison.OrdinalIgnoreCase))
+            .Select(x => new WorkflowIdeCompletionDto
+            {
+                Label = x.Name,
+                Kind = "property",
+                InsertText = x.Name,
+                Detail = x.Value.TryGetProperty("type", out JsonElement type) ? type.ToString() : "member",
+                Documentation = x.Value.TryGetProperty("description", out JsonElement description)
+                    ? description.GetString() : null,
+                SortText = "0_" + x.Name,
+            }).ToList();
+    }
+
+    private static JsonElement EffectiveSchema(JsonElement schema)
+    {
+        if (schema.TryGetProperty("anyOf", out JsonElement anyOf))
+            foreach (JsonElement candidate in anyOf.EnumerateArray())
+                if (candidate.TryGetProperty("type", out JsonElement type)
+                    && type.GetString() != "null") return candidate;
+        return schema;
     }
 
     [HttpPost("hover")]
@@ -219,8 +346,41 @@ public sealed class WorkflowIdeAppService : ApplicationService
     }
 
     [HttpPost("definition")]
-    public Task<WorkflowIdeLocationsDto> DefinitionAsync(WorkflowIdeDocumentInput input) =>
-        FindLocationsAsync(input, definitionsOnly: true);
+    public async Task<WorkflowIdeLocationsDto> DefinitionAsync(WorkflowIdeDocumentInput input)
+    {
+        Match? token = Regex.Matches(input.SourceCode,
+                @"[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*|\[\d+\])*")
+            .Cast<Match>().FirstOrDefault(x => x.Index <= input.Offset && x.Index + x.Length >= input.Offset);
+        if (token is not null && token.Value.Contains('.'))
+        {
+            string root = Regex.Match(token.Value, @"^[A-Za-z_][A-Za-z0-9_]*").Value;
+            string? schema = await TryGetVariableSchemaAsync(input.SourceCode, root);
+            if (!string.IsNullOrWhiteSpace(schema))
+            {
+                string[] memberPath = Regex.Matches(token.Value, @"[A-Za-z_][A-Za-z0-9_]*")
+                    .Cast<Match>().Skip(1).Select(x => x.Value).ToArray();
+                string member = memberPath.Last();
+                (string virtualSource, int line, int column) = BuildVirtualTypeSource(schema, memberPath);
+                string schemaHash = WorkflowProgramHash.ComputeContentHash(schema)[..12];
+                return new WorkflowIdeLocationsDto
+                {
+                    DocumentVersion = input.DocumentVersion,
+                    Locations = [new WorkflowIdeSymbolDto
+                    {
+                        Name = member, Kind = "member-definition",
+                        Uri = $"aurora-type://{Uri.EscapeDataString(root)}/{schemaHash}",
+                        VirtualSource = virtualSource,
+                        Range = new WorkflowIdeRangeDto
+                        {
+                            Start = new WorkflowIdePositionDto { Line = line, Column = column },
+                            End = new WorkflowIdePositionDto { Line = line, Column = column + member.Length },
+                        },
+                    }],
+                };
+            }
+        }
+        return await FindLocationsAsync(input, definitionsOnly: true);
+    }
 
     [HttpPost("references")]
     public Task<WorkflowIdeLocationsDto> ReferencesAsync(WorkflowIdeDocumentInput input) =>
@@ -262,18 +422,51 @@ public sealed class WorkflowIdeAppService : ApplicationService
     [HttpPost("semantic-tokens")]
     public Task<WorkflowIdeSemanticTokensDto> SemanticTokensAsync(WorkflowIdeDocumentInput input)
     {
-        List<WorkflowIdeSemanticTokenDto> tokens = WorkflowSyntaxParser.Parse(input.SourceCode).Statements
-            .Select(x => new WorkflowIdeSemanticTokenDto
+        string source = input.SourceCode;
+        List<WorkflowIdeSemanticTokenDto> tokens = [];
+        List<(int Start, int End)> occupied = [];
+        void Add(Match match, string type, string group = "")
+        {
+            Group value = string.IsNullOrEmpty(group) ? match.Groups[0] : match.Groups[group];
+            if (!value.Success || occupied.Any(x => value.Index < x.End && value.Index + value.Length > x.Start)
+                || !IsCodeToken(source, value.Index)) return;
+            occupied.Add((value.Index, value.Index + value.Length));
+            tokens.Add(new WorkflowIdeSemanticTokenDto
             {
-                Range = MapRange(x.Span),
-                Type = x.Method switch
-                {
-                    "Node" => "class",
-                    "Param" or "Input" or "Output" => "property",
-                    _ => "function",
-                },
-            }).ToList();
+                Range = MapRange(new WorkflowTextSpan(Position(source, value.Index),
+                    Position(source, value.Index + value.Length))), Type = type,
+            });
+        }
+        foreach (Match match in Regex.Matches(source, @"\b(?:Workflow|Return|Input|var|true|false|null)\b")) Add(match, "keyword");
+        foreach (Match match in Regex.Matches(source, @"Input\s*<\s*(?<type>[A-Za-z_][A-Za-z0-9_\.<>\[\]?]*)")) Add(match, "type", "type");
+        foreach (Match match in Regex.Matches(source, @"\bInspectionResultCode\.(?<value>[A-Za-z_][A-Za-z0-9_]*)")) Add(match, "enumMember", "value");
+        foreach (Match match in Regex.Matches(source, @"\bvar\s+(?<name>[A-Za-z_][A-Za-z0-9_]*)")) Add(match, "variable", "name");
+        foreach (Match match in Regex.Matches(source, @"\.(?<member>[A-Za-z_][A-Za-z0-9_]*)")) Add(match, "property", "member");
+        foreach (Match match in Regex.Matches(source, @"(?<call>[A-Za-z_][A-Za-z0-9_]*)\s*(?:<[^;()]+>)?\s*\(")) Add(match, "function", "call");
+        foreach (string variable in ReadDeclaredVariables(source))
+            foreach (Match match in Regex.Matches(source, $@"\b{Regex.Escape(variable)}\b")) Add(match, "variable");
+        tokens = tokens.OrderBy(x => x.Range.Start.Offset).ToList();
         return Task.FromResult(new WorkflowIdeSemanticTokensDto { DocumentVersion = input.DocumentVersion, Tokens = tokens });
+    }
+
+    private static bool IsCodeToken(string source, int offset)
+    {
+        bool inString = false, escaped = false, inLineComment = false;
+        for (int i = 0; i < offset; i++)
+        {
+            char c = source[i];
+            if (inLineComment) { if (c == '\n') inLineComment = false; continue; }
+            if (inString)
+            {
+                if (escaped) escaped = false;
+                else if (c == '\\') escaped = true;
+                else if (c == '"') inString = false;
+                continue;
+            }
+            if (c == '"') inString = true;
+            else if (c == '/' && i + 1 < offset && source[i + 1] == '/') { inLineComment = true; i++; }
+        }
+        return !inString && !inLineComment;
     }
 
     [HttpPost("map-position")]
@@ -284,11 +477,37 @@ public sealed class WorkflowIdeAppService : ApplicationService
             input.StatementId is not null ? tree.Statements.FirstOrDefault(x => x.StatementId == input.StatementId)
             : input.NodeId is not null ? tree.Statements.FirstOrDefault(x => x.NodeId == input.NodeId)
             : tree.FindAt(input.Offset);
+        string? portName = input.PortName;
+        string? portDirection = input.PortDirection;
+        if (statement?.NodeId is not null && string.IsNullOrWhiteSpace(portName))
+        {
+            try
+            {
+                (_, GraphDataModel graph) = CSharpWorkflowScript.Parse(input.SourceCode);
+                NodeModel? node = EnumerateNodes(graph).FirstOrDefault(x => x.Id == statement.NodeId);
+                Match? token = Regex.Matches(input.SourceCode,
+                        @"[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*|\[\d+\])*")
+                    .Cast<Match>().FirstOrDefault(x => x.Index <= input.Offset && x.Index + x.Length >= input.Offset);
+                string root = token is null ? string.Empty
+                    : WorkflowValueAccessor.Compile(token.Value).RootVariableName;
+                KeyValuePair<string, string>? inputBinding = node?.Properties?.InputBindings?
+                    .FirstOrDefault(x => WorkflowValueAccessor.Compile(x.Value).RootVariableName == root);
+                KeyValuePair<string, string>? outputBinding = node?.Properties?.OutputBindings?
+                    .FirstOrDefault(x => x.Value == root);
+                if (inputBinding is { } read && !string.IsNullOrEmpty(read.Key))
+                    (portName, portDirection) = (read.Key, "input");
+                else if (outputBinding is { } write && !string.IsNullOrEmpty(write.Key))
+                    (portName, portDirection) = (write.Key, "output");
+            }
+            catch (FormatException) { }
+        }
         return Task.FromResult(new WorkflowIdeMapPositionDto
         {
             DocumentVersion = input.DocumentVersion,
             StatementId = statement?.StatementId,
             NodeId = statement?.NodeId,
+            PortName = portName,
+            PortDirection = portDirection,
             Range = statement is null ? null : MapRange(statement.Span),
         });
     }
@@ -344,31 +563,62 @@ public sealed class WorkflowIdeAppService : ApplicationService
     {
         if (!Regex.IsMatch(input.NewName, @"^[A-Za-z_][A-Za-z0-9_]*$"))
             return Task.FromResult(RefactorError(input, "WFR4001", "新变量名不是合法标识符。"));
-        string quotedOld = JsonSerializer.Serialize(input.OldName);
-        string quotedNew = JsonSerializer.Serialize(input.NewName);
-        MatchCollection matches = Regex.Matches(input.SourceCode, Regex.Escape(quotedOld));
-        if (matches.Count == 0)
-            return Task.FromResult(RefactorError(input, "WFR4002", "未找到变量定义或引用。"));
+        HashSet<string> declarations = ReadDeclaredVariables(input.SourceCode).ToHashSet(StringComparer.Ordinal);
+        if (!declarations.Contains(input.OldName))
+            return Task.FromResult(RefactorError(input, "WFR4002", "当前位置不是可重命名的工作流变量。"));
         if (!string.Equals(input.OldName, input.NewName, StringComparison.Ordinal)
-            && input.SourceCode.Contains(quotedNew, StringComparison.Ordinal))
+            && declarations.Contains(input.NewName))
             return Task.FromResult(RefactorError(input, "WFR4003", "目标变量名已存在。"));
-        List<WorkflowIdeTextEditDto> edits = matches.Cast<Match>().Select(x =>
+        if (CSharpKeywords.Contains(input.NewName))
+            return Task.FromResult(RefactorError(input, "WFR4004", "目标变量名是保留关键字。"));
+        List<Match> matches = Regex.Matches(input.SourceCode, $@"\b{Regex.Escape(input.OldName)}\b")
+            .Cast<Match>().Where(match => IsVariableOccurrence(input.SourceCode, match)).ToList();
+        List<WorkflowIdeTextEditDto> edits = matches.Select(x =>
             new WorkflowIdeTextEditDto
             {
                 Range = MapRange(new WorkflowTextSpan(
                     Position(input.SourceCode, x.Index),
                     Position(input.SourceCode, x.Index + x.Length))),
-                NewText = quotedNew,
+                NewText = input.NewName,
             }).ToList();
         string source = input.SourceCode;
-        foreach (Match match in matches.Cast<Match>().Reverse())
-            source = source.Remove(match.Index, match.Length).Insert(match.Index, quotedNew);
+        foreach (Match match in matches.AsEnumerable().Reverse())
+            source = source.Remove(match.Index, match.Length).Insert(match.Index, input.NewName);
         return Task.FromResult(new WorkflowRefactorPreviewDto
         {
             DocumentVersion = input.DocumentVersion,
             SourceCode = source,
             Edits = edits,
         });
+    }
+
+    private static readonly HashSet<string> CSharpKeywords = new(StringComparer.Ordinal)
+    { "var", "class", "return", "true", "false", "null", "new", "string", "int", "bool", "double" };
+
+    private static bool IsVariableOccurrence(string source, Match match)
+    {
+        bool inString = false, escaped = false, inLineComment = false;
+        for (int i = 0; i < match.Index; i++)
+        {
+            char c = source[i];
+            if (inLineComment) { if (c == '\n') inLineComment = false; continue; }
+            if (inString)
+            {
+                if (escaped) escaped = false;
+                else if (c == '\\') escaped = true;
+                else if (c == '"') inString = false;
+                continue;
+            }
+            if (c == '"') inString = true;
+            else if (c == '/' && i + 1 < match.Index && source[i + 1] == '/') { inLineComment = true; i++; }
+        }
+        if (inString || inLineComment) return false;
+        int previous = match.Index - 1;
+        while (previous >= 0 && char.IsWhiteSpace(source[previous])) previous--;
+        if (previous >= 0 && source[previous] == '.') return false;
+        int next = match.Index + match.Length;
+        while (next < source.Length && char.IsWhiteSpace(source[next])) next++;
+        return next >= source.Length || source[next] != ':';
     }
 
     [HttpPost("extract-subgraph")]
@@ -418,6 +668,33 @@ public sealed class WorkflowIdeAppService : ApplicationService
 
     private Task<WorkflowIdeLocationsDto> FindLocationsAsync(WorkflowIdeDocumentInput input, bool definitionsOnly)
     {
+        Match token = Regex.Matches(input.SourceCode,
+                @"[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*|\[\d+\])*")
+            .Cast<Match>().FirstOrDefault(x =>
+                x.Index <= input.Offset && x.Index + x.Length >= input.Offset)!;
+        if (token is not null)
+        {
+            string root = Regex.Match(token.Value, @"^[A-Za-z_][A-Za-z0-9_]*").Value;
+            MatchCollection occurrences = Regex.Matches(input.SourceCode, $@"\b{Regex.Escape(root)}\b");
+            Match? declaration = Regex.Matches(input.SourceCode,
+                    $@"\bvar\s+(?:{Regex.Escape(root)}\b|\([^)]*\b{Regex.Escape(root)}\b[^)]*\))")
+                .Cast<Match>().FirstOrDefault();
+            IEnumerable<Match> selected = definitionsOnly
+                ? declaration is null ? [] : [declaration]
+                : occurrences.Cast<Match>();
+            return Task.FromResult(new WorkflowIdeLocationsDto
+            {
+                DocumentVersion = input.DocumentVersion,
+                Locations = selected.Select(x => new WorkflowIdeSymbolDto
+                {
+                    Name = root,
+                    Kind = definitionsOnly ? "variable-definition" : "variable-reference",
+                    Range = MapRange(new WorkflowTextSpan(Position(input.SourceCode, x.Index),
+                        Position(input.SourceCode, x.Index + x.Length))),
+                }).ToList(),
+            });
+        }
+
         WorkflowSyntaxTree tree = WorkflowSyntaxParser.Parse(input.SourceCode);
         WorkflowSyntaxStatement? current = tree.FindAt(input.Offset);
         string? nodeId = current?.NodeId;
@@ -429,6 +706,102 @@ public sealed class WorkflowIdeAppService : ApplicationService
             DocumentVersion = input.DocumentVersion,
             Locations = statements.Select(x => MapSymbol(x, nodeId!)).ToList(),
         });
+    }
+
+    private async Task<string?> TryGetVariableSchemaAsync(string source, string root)
+    {
+        try
+        {
+            (_, GraphDataModel graph) = CSharpWorkflowScript.Parse(source);
+            NodeModel? start = graph.Nodes.FirstOrDefault(x => x.Type == "start-node");
+            string? port = start?.Properties?.OutputBindings?.FirstOrDefault(x => x.Value == root).Key;
+            if (port is not null && start?.Properties?.OutputBindingSchemas?.GetValueOrDefault(port) is { } inputSchema)
+                return inputSchema;
+        }
+        catch (FormatException) { }
+        Match declaration = Regex.Matches(source,
+            @"var\s+(?:(?<single>[A-Za-z_][A-Za-z0-9_]*)|\((?<tuple>[^)]*)\))\s*=\s*(?<op>[A-Za-z_][A-Za-z0-9_]*)\s*\(",
+            RegexOptions.Singleline).Cast<Match>().LastOrDefault(x =>
+                x.Groups["single"].Value == root
+                || x.Groups["tuple"].Value.Split(',').Any(v => v.Trim() == root))!;
+        if (declaration is null) return null;
+        OperatorDescriptor? descriptor = (await _registry.GetAllOperatorsAsync()).FirstOrDefault(x =>
+            x.TypeFullName.EndsWith("." + declaration.Groups["op"].Value, StringComparison.Ordinal));
+        if (descriptor is null) return null;
+        OperatorParametersDescriptor? contract = await _registry.GetParametersAsync(descriptor.Id);
+        string[] outputs = declaration.Groups["single"].Success
+            ? [declaration.Groups["single"].Value]
+            : declaration.Groups["tuple"].Value.Split(',').Select(x => x.Trim()).ToArray();
+        return contract?.Outputs.ElementAtOrDefault(Array.IndexOf(outputs, root))?.JsonSchema;
+    }
+
+    private static (string Source, int Line, int Column) BuildVirtualTypeSource(
+        string schemaJson, IReadOnlyList<string> targetPath)
+    {
+        using JsonDocument document = JsonDocument.Parse(schemaJson);
+        List<string> lines = [];
+        int targetLine = 1, targetColumn = 1;
+        void WriteType(JsonElement rawSchema, string typeName, IReadOnlyList<string> path)
+        {
+            JsonElement schema = EffectiveSchema(rawSchema);
+            lines.Add($"public sealed class {typeName}");
+            lines.Add("{");
+            if (schema.TryGetProperty("properties", out JsonElement properties))
+                foreach (JsonProperty property in properties.EnumerateObject())
+                {
+                    JsonElement propertySchema = EffectiveSchema(property.Value);
+                    string clrType = SchemaClrName(propertySchema, property.Name);
+                    string line = $"    public {clrType} {property.Name} {{ get; init; }}";
+                    lines.Add(line);
+                    if (path.Count == 1 && property.Name == path[0])
+                    {
+                        targetLine = lines.Count;
+                        targetColumn = line.IndexOf(property.Name, StringComparison.Ordinal) + 1;
+                    }
+                }
+            lines.Add("}");
+            if (schema.TryGetProperty("properties", out JsonElement nestedProperties))
+                foreach (JsonProperty property in nestedProperties.EnumerateObject())
+                {
+                    JsonElement nested = EffectiveSchema(property.Value);
+                    if (nested.TryGetProperty("type", out JsonElement nestedType)
+                        && nestedType.GetString() == "object"
+                        && nested.TryGetProperty("properties", out _))
+                    {
+                        lines.Add(string.Empty);
+                        string nestedName = char.ToUpperInvariant(property.Name[0]) + property.Name[1..] + "Details";
+                        IReadOnlyList<string> nestedPath = path.Count > 1 && property.Name == path[0]
+                            ? path.Skip(1).ToArray() : [];
+                        WriteType(nested, nestedName, nestedPath);
+                    }
+                }
+        }
+        string title = EffectiveSchema(document.RootElement).TryGetProperty("title", out JsonElement titleNode)
+            ? titleNode.GetString() ?? "WorkflowType" : "WorkflowType";
+        WriteType(document.RootElement, Regex.Replace(title, "`.*$", string.Empty), targetPath);
+        return (string.Join(Environment.NewLine, lines), targetLine, targetColumn);
+    }
+
+    private static string SchemaClrName(JsonElement schema, string memberName)
+    {
+        if (schema.TryGetProperty("enum", out _)) return nameof(InspectionResultCode);
+        return schema.TryGetProperty("type", out JsonElement type) ? type.GetString() switch
+        {
+            "boolean" => "bool", "integer" => "int", "number" => "double",
+            "string" => "string", "array" => "IReadOnlyList<object>",
+            "object" => char.ToUpperInvariant(memberName[0]) + memberName[1..] + "Details",
+            _ => "object",
+        } : "object";
+    }
+
+    private static IEnumerable<NodeModel> EnumerateNodes(GraphDataModel graph)
+    {
+        foreach (NodeModel node in graph.Nodes)
+        {
+            yield return node;
+            if (node.Properties?.InnerGraphData is { } inner)
+                foreach (NodeModel child in EnumerateNodes(inner)) yield return child;
+        }
     }
 
     private static string BuildOperatorCompletion(
@@ -472,13 +845,24 @@ public sealed class WorkflowIdeAppService : ApplicationService
             lines.Add(descriptor.Description);
         if (parameters is not null)
         {
-            lines.Add(
-                $"Inputs: {string.Join(", ", parameters.Inputs.Select(x => x.ParameterName))}");
-            lines.Add(
-                $"Outputs: {string.Join(", ", parameters.Outputs.Select(x => x.ParameterName))}");
+            if (parameters.Inputs.Count > 0)
+            {
+                lines.Add("入参：");
+                lines.AddRange(parameters.Inputs.Select(x =>
+                    $"- `{x.ParameterName}`（{x.DisplayName ?? x.ParameterName}，{x.ParameterTypeName}）：{x.Description}"));
+            }
             if (parameters.Config.Count > 0)
-                lines.Add(
-                    $"Config: {string.Join(", ", parameters.Config.Select(x => x.Name))}");
+            {
+                lines.Add("配置参数：");
+                lines.AddRange(parameters.Config.Select(x =>
+                    $"- `{x.Name}`（{x.DisplayName ?? x.Name}，{x.ParameterTypeName}）：{x.Description}"));
+            }
+            if (parameters.Outputs.Count > 0)
+            {
+                lines.Add("出参：");
+                lines.AddRange(parameters.Outputs.Select(x =>
+                    $"- `{x.ParameterName}`（{x.DisplayName ?? x.ParameterName}，{x.ParameterTypeName}）：{x.Description}"));
+            }
         }
         return string.Join(Environment.NewLine, lines);
     }

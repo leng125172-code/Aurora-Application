@@ -7,7 +7,7 @@
 import { ref, onMounted, onUnmounted, computed, nextTick, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import * as signalR from '@microsoft/signalr'
-import * as echarts from 'echarts'
+import { echarts } from '@/lib/echarts'
 import { AnimatedCircularProgressBar } from '@/components/ui/animated-circular-progressbar'
 import { AppCard } from '@/components/primevue'
 import { useAuthStore } from '@/stores/auth'
@@ -240,13 +240,13 @@ onUnmounted(async () => {
 </script>
 
 <template>
-    <div class="space-y-5">
+    <div class="app-page" data-testid="dashboard-page">
         <h1 class="text-2xl font-bold tracking-tight">{{ t('menu.dashboard') }}</h1>
 
         <!-- 系统负载：圆形进度条 -->
-        <div class="flex flex-wrap gap-4">
+        <div data-visual-dynamic class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
             <!-- CPU -->
-            <AppCard class="w-[250px] h-[250px]" :beam-size="80" :beam-duration="8">
+            <AppCard class="h-[250px] w-full" :beam-size="80" :beam-duration="8">
                 <div class="flex flex-col items-center gap-2 py-5">
                     <div class="text-sm text-muted-foreground">{{ t('dashboard.cpu') }}</div>
                     <AnimatedCircularProgressBar
@@ -265,7 +265,7 @@ onUnmounted(async () => {
             </AppCard>
 
             <!-- 内存 -->
-            <AppCard class="w-[250px] h-[250px]" :beam-size="80" :beam-duration="8" :beam-delay="2">
+            <AppCard class="h-[250px] w-full" :beam-size="80" :beam-duration="8" :beam-delay="2">
                 <div class="flex flex-col items-center gap-2 py-5">
                     <div class="text-sm text-muted-foreground">{{ t('dashboard.memory') }}</div>
                     <AnimatedCircularProgressBar
@@ -286,13 +286,7 @@ onUnmounted(async () => {
             </AppCard>
 
             <!-- NPU 卡片（仅当 NPU 和 GPU 同时存在时单独展示 NPU；否则在混合卡中显示）-->
-            <AppCard
-                v-if="showBothNpuGpu"
-                class="w-[250px] h-[250px]"
-                :beam-size="80"
-                :beam-duration="8"
-                :beam-delay="4"
-            >
+            <AppCard v-if="showBothNpuGpu" class="h-[250px] w-full" :beam-size="80" :beam-duration="8" :beam-delay="4">
                 <div class="flex flex-col items-center gap-2 py-5">
                     <div class="text-sm text-muted-foreground">{{ t('dashboard.npu') }}</div>
                     <AnimatedCircularProgressBar
@@ -309,13 +303,7 @@ onUnmounted(async () => {
             </AppCard>
 
             <!-- GPU 卡片（仅当 NPU 和 GPU 同时存在时单独展示 GPU）-->
-            <AppCard
-                v-if="showBothNpuGpu"
-                class="w-[250px] h-[250px]"
-                :beam-size="80"
-                :beam-duration="8"
-                :beam-delay="6"
-            >
+            <AppCard v-if="showBothNpuGpu" class="h-[250px] w-full" :beam-size="80" :beam-duration="8" :beam-delay="6">
                 <div class="flex flex-col items-center gap-2 py-5">
                     <div class="text-sm text-muted-foreground">{{ t('dashboard.gpu') }}</div>
                     <AnimatedCircularProgressBar
@@ -332,7 +320,7 @@ onUnmounted(async () => {
             </AppCard>
 
             <!-- NPU（Linux/RK3588）/ GPU（Windows）混合卡（仅当两者不同时存在时显示）-->
-            <AppCard v-else class="w-[250px] h-[250px]" :beam-size="80" :beam-duration="8" :beam-delay="4">
+            <AppCard v-else class="h-[250px] w-full" :beam-size="80" :beam-duration="8" :beam-delay="4">
                 <div class="flex flex-col items-center gap-2 py-5">
                     <div class="text-sm text-muted-foreground">
                         {{ metrics.npuPercent >= 0 ? t('dashboard.npu') : t('dashboard.gpu') }}
@@ -372,18 +360,18 @@ onUnmounted(async () => {
         </div>
 
         <!-- 网络流量：速率摘要 + 折线图合并 -->
-        <AppCard>
+        <AppCard data-visual-dynamic>
             <div class="p-4 space-y-3">
                 <div>
                     <div class="text-base font-semibold">{{ t('dashboard.traffic') }}</div>
-                    <div class="text-sm text-muted-foreground mt-1">
-                        <span class="text-[rgb(249,204,131)] font-medium mr-4">
+                    <div class="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
+                        <span class="font-medium text-amber-600 dark:text-amber-300">
                             ↑ {{ formatBytes(metrics.networkSendRate, true) }}
                         </span>
-                        <span class="text-[rgb(135,195,255)] font-medium">
+                        <span class="font-medium text-sky-600 dark:text-sky-300">
                             ↓ {{ formatBytes(metrics.networkReceiveRate, true) }}
                         </span>
-                        <span class="ml-4 text-muted-foreground text-xs">
+                        <span class="basis-full text-xs text-muted-foreground sm:basis-auto">
                             {{ t('dashboard.totalSent') }}: {{ formatBytes(metrics.networkTotalSent) }} &nbsp;
                             {{ t('dashboard.totalReceived') }}: {{ formatBytes(metrics.networkTotalReceived) }}
                         </span>
@@ -394,7 +382,7 @@ onUnmounted(async () => {
         </AppCard>
 
         <!-- CAP + Hangfire 概览 -->
-        <div class="grid gap-4 md:grid-cols-2">
+        <div data-visual-dynamic class="grid gap-4 md:grid-cols-2">
             <!-- CAP 概览 -->
             <AppCard :beam-size="100">
                 <div class="p-4 space-y-3">
@@ -432,7 +420,7 @@ onUnmounted(async () => {
             <AppCard :beam-size="100" :beam-delay="5">
                 <div class="p-4 space-y-3">
                     <div class="text-base font-semibold">{{ t('dashboard.hangfireOverview') }}</div>
-                    <div class="grid grid-cols-3 gap-2">
+                    <div class="grid grid-cols-2 gap-2 sm:grid-cols-3">
                         <div class="rounded-lg bg-muted/40 p-3">
                             <div class="text-xs text-muted-foreground">{{ t('hangfire.enqueued') }}</div>
                             <div class="mt-1 text-xl font-semibold text-yellow-500">

@@ -106,10 +106,7 @@ function indexOfBytes(source: Uint8Array, pattern: Uint8Array, start = 0): numbe
     return -1
 }
 
-function appendBytes(
-    left: Uint8Array<ArrayBufferLike>,
-    right: Uint8Array<ArrayBufferLike>
-): Uint8Array<ArrayBuffer> {
+function appendBytes(left: Uint8Array<ArrayBufferLike>, right: Uint8Array<ArrayBufferLike>): Uint8Array<ArrayBuffer> {
     const merged = new Uint8Array(left.length + right.length)
     merged.set(left)
     merged.set(right, left.length)
@@ -284,21 +281,14 @@ async function startHub(): Promise<void> {
             depthMapPointCount.value = totalPointCount
             minimumDepthMm.value = minDepthMm
             maximumDepthMm.value = maxDepthMm
-            reconstructionMessage.value =
-                `有效深度 ${validPointCount.toLocaleString()} / ${totalPointCount.toLocaleString()}`
+            reconstructionMessage.value = `有效深度 ${validPointCount.toLocaleString()} / ${totalPointCount.toLocaleString()}`
             reconstructionError.value = null
         }
     )
 
     hubConnection.on(
         'ReceivePointCloudStatusAsync',
-        (
-            next: {
-                calibProjectId: string
-                progressMessage?: string | null
-                errorMessage?: string | null
-            }
-        ) => {
+        (next: { calibProjectId: string; progressMessage?: string | null; errorMessage?: string | null }) => {
             if (!next || next.calibProjectId !== props.project.id) return
             if (next.progressMessage) reconstructionMessage.value = next.progressMessage
             reconstructionError.value = next.errorMessage ?? null
@@ -493,9 +483,7 @@ onUnmounted(async () => {
                 <template v-if="suppressProjectorControl">
                     当前仅打开投影仪灯光，不操作显示模式或发送 T/N 指令；主、从相机进行普通双目采集。
                 </template>
-                <template v-else>
-                    主、从相机按条纹逐帧串行触发；每轮完成后采集白光纹理帧并生成准实时彩色点云。
-                </template>
+                <template v-else>主、从相机按条纹逐帧串行触发；每轮完成后采集白光纹理帧并生成准实时彩色点云。</template>
             </p>
         </div>
 
@@ -582,8 +570,7 @@ onUnmounted(async () => {
                         :value="depthQualityMapUrl ? '已更新' : '等待中'"
                     />
                     <span class="text-xs text-muted-foreground">
-                        有效 {{ validDepthPointCount.toLocaleString() }} /
-                        {{ depthMapPointCount.toLocaleString() }} 点
+                        有效 {{ validDepthPointCount.toLocaleString() }} / {{ depthMapPointCount.toLocaleString() }} 点
                     </span>
                 </div>
             </div>
@@ -593,7 +580,8 @@ onUnmounted(async () => {
             </p>
             <div class="mb-3 flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
                 <span class="flex items-center gap-1.5">
-                    <i class="h-2.5 w-2.5 rounded-full bg-red-500"></i>无效区域
+                    <i class="h-2.5 w-2.5 rounded-full bg-red-500"></i>
+                    无效区域
                 </span>
                 <span class="flex items-center gap-1.5">
                     <i class="h-2.5 w-16 rounded-full bg-gradient-to-r from-yellow-400 to-green-500"></i>

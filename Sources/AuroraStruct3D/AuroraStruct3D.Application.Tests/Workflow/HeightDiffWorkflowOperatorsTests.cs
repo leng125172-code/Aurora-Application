@@ -1,4 +1,4 @@
-using System.Text.Json;
+using System.Text.Json.Nodes;
 using AuroraStruct3D.OpenCV.File.Images;
 using AuroraStruct3D.OpenCV.PointCloudFit;
 using AuroraStruct3D.OpenCV.PointCloudOps;
@@ -28,10 +28,7 @@ public class HeightDiffWorkflowOperatorsTests
             input => Assert.Equal("height_a", input.ParameterName),
             input => Assert.Equal("height_b", input.ParameterName)
         );
-        Assert.Contains(outputs!, output => output.ParameterName == "signed_diff");
-        Assert.Contains(outputs!, output => output.ParameterName == "abs_diff");
-        Assert.Contains(outputs!, output => output.ParameterName == "is_ok");
-        Assert.Contains(outputs!, output => output.ParameterName == "result_json");
+        Assert.Collection(outputs!, output => Assert.Equal("result", output.ParameterName));
         Assert.Contains(configs!, config => config.Name == "minDiff");
         Assert.Contains(configs!, config => config.Name == "maxDiff");
     }
@@ -49,10 +46,7 @@ public class HeightDiffWorkflowOperatorsTests
         Assert.Contains(inputs!, input => input.ParameterName == "input_mat");
         Assert.Contains(inputs!, input => input.ParameterName == "roi_metadata_a");
         Assert.Contains(inputs!, input => input.ParameterName == "roi_metadata_b");
-        Assert.Contains(inputs!, input => input.ParameterName == "height_a");
-        Assert.Contains(inputs!, input => input.ParameterName == "height_b");
-        Assert.Contains(inputs!, input => input.ParameterName == "signed_diff");
-        Assert.Contains(inputs!, input => input.ParameterName == "is_ok");
+        Assert.Contains(inputs!, input => input.ParameterName == "inspection_result");
         Assert.Single(outputs!);
         Assert.Equal("output_mat", outputs[0].ParameterName);
         Assert.Contains(configs!, config => config.Name == "okText");
@@ -65,10 +59,8 @@ public class HeightDiffWorkflowOperatorsTests
         using Mat input = Mat.Zeros(160, 320, MatType.CV_8UC3);
         using WorkflowContext context = new();
         context.Set("input_mat", input);
-        context.Set("height_a", 12.345);
-        context.Set("height_b", 10.125);
-        context.Set("signed_diff", 2.22);
-        context.Set("is_ok", false);
+        context.Set("inspection_result", InspectionResults.CreateTyped(true, false,
+            new HeightDiffInspectionDetails(12.345, 10.125, 2.22, 2.22, 0, 1, false)));
         context.Set(
             "roi_metadata_a",
             """{"rois":[{"name":"b","index":0}]}"""
@@ -95,10 +87,8 @@ public class HeightDiffWorkflowOperatorsTests
         using WorkflowContext context = new();
         context.Set("input_mat", input);
         context.Set("roi_metadata_a", "{invalid");
-        context.Set("height_a", 1d);
-        context.Set("height_b", 0d);
-        context.Set("signed_diff", 1d);
-        context.Set("is_ok", true);
+        context.Set("inspection_result", InspectionResults.CreateTyped(true, true,
+            new HeightDiffInspectionDetails(1, 0, 1, 1, 0, 2, true)));
 
         using var annotate = new annotate_height_diff_result();
         InvalidOperationException exception = Assert.Throws<InvalidOperationException>(
@@ -144,16 +134,15 @@ public class HeightDiffWorkflowOperatorsTests
         );
         withMetadata.Execute(metadataContext);
 
-        using JsonDocument metadataResult = JsonDocument.Parse(
-            Assert.IsType<string>(metadataContext.Get<string>("result_json"))
-        );
+        InspectionResultBase metadataResult = Assert.IsAssignableFrom<InspectionResultBase>(metadataContext.Get("result"));
+        JsonNode metadataDetails = metadataResult.ToDetailsNode()!;
         Assert.Equal(
             "基准 区域",
-            metadataResult.RootElement.GetProperty("refRegion").GetProperty("name").GetString()
+            metadataDetails["refRegion"]!["name"]!.GetValue<string>()
         );
         Assert.Equal(
             "Target-b",
-            metadataResult.RootElement.GetProperty("targetRegion").GetProperty("name").GetString()
+            metadataDetails["targetRegion"]!["name"]!.GetValue<string>()
         );
 
         using WorkflowContext fallbackContext = CreatePlaneHeightContext(
@@ -165,16 +154,15 @@ public class HeightDiffWorkflowOperatorsTests
         using var withoutMetadata = new plane_height_diff("配置基准", "配置目标", -5, 5);
         withoutMetadata.Execute(fallbackContext);
 
-        using JsonDocument fallbackResult = JsonDocument.Parse(
-            Assert.IsType<string>(fallbackContext.Get<string>("result_json"))
-        );
+        InspectionResultBase fallbackResult = Assert.IsAssignableFrom<InspectionResultBase>(fallbackContext.Get("result"));
+        JsonNode fallbackDetails = fallbackResult.ToDetailsNode()!;
         Assert.Equal(
             "配置基准",
-            fallbackResult.RootElement.GetProperty("refRegion").GetProperty("name").GetString()
+            fallbackDetails["refRegion"]!["name"]!.GetValue<string>()
         );
         Assert.Equal(
             "配置目标",
-            fallbackResult.RootElement.GetProperty("targetRegion").GetProperty("name").GetString()
+            fallbackDetails["targetRegion"]!["name"]!.GetValue<string>()
         );
     }
 

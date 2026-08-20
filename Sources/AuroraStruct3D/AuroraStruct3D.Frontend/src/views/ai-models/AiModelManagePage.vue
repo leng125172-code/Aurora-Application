@@ -2072,7 +2072,11 @@ onBeforeUnmount(() => {
                                     class="inline-flex items-center gap-1 rounded-full bg-primary/10 px-3 py-1 text-sm text-foreground"
                                 >
                                     <span>{{ identifierName }}</span>
-                                    <Button unstyled type="button"
+                                    <Button
+                                        size="small"
+                                        text
+                                        severity="secondary"
+                                        type="button"
                                         class="inline-flex size-4 items-center justify-center rounded-full text-muted-foreground transition hover:bg-black/5 hover:text-foreground"
                                         @click="removeUploadIdentifierName(identifierName)"
                                     >
@@ -2094,7 +2098,11 @@ onBeforeUnmount(() => {
                                     v-if="uploadIdentifierSuggestions.length"
                                     class="absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-xl border border-border/60 bg-card p-1 shadow-lg"
                                 >
-                                    <Button unstyled type="button"
+                                    <Button
+                                        size="small"
+                                        text
+                                        severity="secondary"
+                                        type="button"
                                         v-for="suggestion in uploadIdentifierSuggestions"
                                         :key="suggestion"
                                         class="block w-full rounded-lg px-3 py-2 text-left text-sm transition hover:bg-muted"
@@ -2318,7 +2326,11 @@ onBeforeUnmount(() => {
                                     class="inline-flex items-center gap-1 rounded-full bg-primary/10 px-3 py-1 text-sm text-foreground"
                                 >
                                     <span>{{ identifierName }}</span>
-                                    <Button unstyled type="button"
+                                    <Button
+                                        size="small"
+                                        text
+                                        severity="secondary"
+                                        type="button"
                                         class="inline-flex size-4 items-center justify-center rounded-full text-muted-foreground transition hover:bg-black/5 hover:text-foreground"
                                         @click="removeEditIdentifierName(identifierName)"
                                     >
@@ -2340,7 +2352,11 @@ onBeforeUnmount(() => {
                                     v-if="editIdentifierSuggestions.length"
                                     class="absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-xl border border-border/60 bg-card p-1 shadow-lg"
                                 >
-                                    <Button unstyled type="button"
+                                    <Button
+                                        size="small"
+                                        text
+                                        severity="secondary"
+                                        type="button"
                                         v-for="suggestion in editIdentifierSuggestions"
                                         :key="suggestion"
                                         class="block w-full rounded-lg px-3 py-2 text-left text-sm transition hover:bg-muted"

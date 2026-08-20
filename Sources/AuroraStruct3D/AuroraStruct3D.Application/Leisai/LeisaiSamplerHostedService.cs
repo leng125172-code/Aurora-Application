@@ -3,6 +3,7 @@ using AuroraStruct3D.Motors;
 using AuroraStruct3D.RS485;
 using AuroraStruct3D.RS485.Leisai;
 using AuroraStruct3D.RS485.Protocol;
+using AuroraStruct3D.Realtime;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -18,6 +19,7 @@ public class LeisaiSamplerHostedService : BackgroundService
 {
     /// <summary>采样周期（毫秒），约 4Hz。</summary>
     private const int SamplePeriodMs = 250;
+    private const int IdleSamplePeriodMs = 5000;
 
     /// <summary>每隔多少个采样周期写一次数据库（250ms × 12 ≈ 3 秒）。</summary>
     private const int DbUpdateEvery = 12;
@@ -33,6 +35,7 @@ public class LeisaiSamplerHostedService : BackgroundService
     private readonly ILeisaiMotorNotifier _notifier;
     private readonly LeisaiSamplerStateStore _samplerStateStore;
     private readonly ILogger<LeisaiSamplerHostedService> _logger;
+    private readonly RealtimeSubscriberTracker _subscribers;
 
     /// <summary>各轴累计成功采样次数，用于节流写库。</summary>
     private readonly Dictionary<Guid, int> _sampleCounters = new();
@@ -48,7 +51,8 @@ public class LeisaiSamplerHostedService : BackgroundService
         IMotorControlService motorControlService,
         ILeisaiMotorNotifier notifier,
         LeisaiSamplerStateStore samplerStateStore,
-        ILogger<LeisaiSamplerHostedService> logger
+        ILogger<LeisaiSamplerHostedService> logger,
+        RealtimeSubscriberTracker subscribers
     )
     {
         _scopeFactory = scopeFactory;
@@ -56,6 +60,7 @@ public class LeisaiSamplerHostedService : BackgroundService
         _notifier = notifier;
         _samplerStateStore = samplerStateStore;
         _logger = logger;
+        _subscribers = subscribers;
     }
 
     /// <inheritdoc/>
@@ -75,10 +80,21 @@ public class LeisaiSamplerHostedService : BackgroundService
         Dictionary<int, Guid> slaveToAxisId = new();
         DateTime lastMapRefreshUtc = DateTime.MinValue;
         TimeSpan mapRefreshInterval = TimeSpan.FromSeconds(10);
+        DateTime nextIdleSampleUtc = DateTime.MinValue;
 
         while (!stoppingToken.IsCancellationRequested)
         {
             DateTime cycleStart = DateTime.UtcNow;
+
+            bool hasSubscribers = _subscribers.HasSubscribers(RealtimeSubscriberTracker.LeisaiMotor);
+            if (!hasSubscribers && cycleStart < nextIdleSampleUtc)
+            {
+                await Task.Delay(SamplePeriodMs, stoppingToken);
+                continue;
+            }
+            nextIdleSampleUtc = hasSubscribers
+                ? cycleStart
+                : cycleStart.AddMilliseconds(IdleSamplePeriodMs);
 
             try
             {

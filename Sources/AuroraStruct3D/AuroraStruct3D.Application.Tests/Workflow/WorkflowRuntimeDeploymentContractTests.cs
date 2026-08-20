@@ -195,8 +195,49 @@ public class WorkflowRuntimeDeploymentContractTests
             items,
             frozenGraphs: [],
             frozenVariables: [],
+            frozenTaskConfig: new WorkflowProjectFrozenTaskConfig(),
             snapshotHash: "snapshot-hash"
         );
+    }
+
+    [Fact]
+    public void Apply_To_Device_Contracts_Should_Expose_Stable_Routes_And_Result()
+    {
+        MethodInfo statusMethod = typeof(WorkflowRuntimeAppService).GetMethod(
+            nameof(WorkflowRuntimeAppService.GetProjectApplicationStatusAsync))!;
+        MethodInfo applyMethod = typeof(WorkflowRuntimeAppService).GetMethod(
+            nameof(WorkflowRuntimeAppService.ApplyProjectToDeviceAsync))!;
+
+        Assert.Equal("projects/{projectId:guid}/application-status",
+            statusMethod.GetCustomAttribute<HttpGetAttribute>()?.Template);
+        Assert.Equal("projects/{projectId:guid}/apply",
+            applyMethod.GetCustomAttribute<HttpPostAttribute>()?.Template);
+
+        var input = new ApplyWorkflowProjectInput();
+        var result = new ApplyWorkflowProjectResultDto();
+        var status = new WorkflowProjectApplicationStatusDto();
+        Assert.NotNull(input.TaskConfig);
+        Assert.NotNull(result.Deployment);
+        Assert.Empty(status.ValidationMessages);
+    }
+
+    [Fact]
+    public void Project_Task_Registration_Should_Only_Require_Project_And_Enabled_State()
+    {
+        string[] properties = typeof(CreateWorkflowProjectTaskInput).GetProperties()
+            .Select(x => x.Name).OrderBy(x => x, StringComparer.Ordinal).ToArray();
+        Assert.Equal(new[] { "IsEnabled", "Name", "PlcHandshake", "ProjectId" }, properties);
+
+        MethodInfo createMethod = typeof(WorkflowRuntimeAppService).GetMethod(
+            nameof(WorkflowRuntimeAppService.CreateProjectTaskAsync))!;
+        MethodInfo enabledMethod = typeof(WorkflowRuntimeAppService).GetMethod(
+            nameof(WorkflowRuntimeAppService.SetProjectTaskEnabledAsync))!;
+        Assert.Equal("project-tasks", createMethod.GetCustomAttribute<HttpPostAttribute>()?.Template);
+        Assert.Equal("project-tasks/{taskId:guid}/enabled",
+            enabledMethod.GetCustomAttribute<HttpPutAttribute>()?.Template);
+        MethodInfo updateMethod = typeof(WorkflowRuntimeAppService).GetMethod("UpdateProjectTaskAsync")!;
+        Assert.Equal("project-tasks/{taskId:guid}",
+            updateMethod.GetCustomAttribute<HttpPutAttribute>()?.Template);
     }
 
     private static WorkflowProjectDeploymentDto MapDeployment(WorkflowProjectDeployment deployment)

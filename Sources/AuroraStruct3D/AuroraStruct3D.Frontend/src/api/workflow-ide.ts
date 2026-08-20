@@ -19,6 +19,62 @@ interface PagedResult<T> {
     items?: T[] | null
 }
 
+export interface OperatorPortDefinition {
+    name?: string
+    displayName?: string
+    description: string
+    portTypeName: string
+    defaultValue?: unknown
+    valueLimit?: unknown
+    jsonSchema?: string
+    typeSymbol?: WorkflowTypeSymbol
+    errorCheck: boolean
+    controlType: number
+    matType: number
+}
+
+export interface WorkflowTypeSymbol {
+    kind: number
+    name: string
+    nullable: boolean
+    elementType?: WorkflowTypeSymbol
+    properties: Record<string, WorkflowTypeSymbol>
+    enumValues: string[]
+    documentation?: string
+}
+
+export interface OperatorConfigFieldDefinition {
+    name: string
+    displayName?: string
+    description: string
+    valueTypeName: string
+    defaultValue?: unknown
+    valueLimit?: unknown
+    required: boolean
+    controlType: number
+}
+
+export interface WorkflowNodeDefinition {
+    id: string
+    nodeType: string
+    displayName: string
+    description?: string
+    hasBody: boolean
+    isBoundary: boolean
+    overlayMode?: string
+    inputPorts: OperatorPortDefinition[]
+    outputPorts: OperatorPortDefinition[]
+    configFields: OperatorConfigFieldDefinition[]
+}
+
+export interface WorkflowNodePalette {
+    categories: Array<{ name: string; nodes: WorkflowNodeDefinition[] }>
+}
+
+export async function getWorkflowNodePalette(): Promise<WorkflowNodePalette> {
+    return (await httpClient.get<WorkflowNodePalette>('/api/app/workflow-node-palette')).data
+}
+
 export async function listProjects(filter?: string): Promise<ProjectBrief[]> {
     const response = await httpClient.get<PagedResult<ProjectBrief>>('/api/app/project-info', {
         params: {
@@ -60,6 +116,56 @@ export interface WorkflowGraph {
         sourceNodeId?: string
         targetNodeId?: string
     }>
+}
+
+export interface WorkflowMigrationItem {
+    snapshotId?: string
+    workflowId: string
+    workflowName: string
+    success: boolean
+    diagnostic?: string
+    changes: string[]
+    portChanges: Array<{
+        nodeId: string
+        operatorId: string
+        oldPort: string
+        oldVariable: string
+        newPort: string
+        newExpression: string
+    }>
+    sourceChanges: Array<{
+        startLine: number
+        deleteLineCount: number
+        newLines: string[]
+    }>
+    rolledBack: boolean
+}
+
+export interface WorkflowMigrationBatch {
+    batchId: string
+    scannedCount: number
+    migratedCount: number
+    failedCount: number
+    items: WorkflowMigrationItem[]
+}
+
+export async function previewWorkflowMigration(batchSize = 100) {
+    return (await httpClient.get<{ scannedCount: number; migratableCount: number; items: WorkflowMigrationItem[] }>(
+        `${BASE}/migration-batches/preview`, { params: { batchSize } })).data
+}
+
+export async function startWorkflowMigration(batchSize = 100) {
+    return (await httpClient.post<WorkflowMigrationBatch>(`${BASE}/migration-batches`, undefined,
+        { params: { batchSize } })).data
+}
+
+export async function retryWorkflowMigration(batchId: string) {
+    return (await httpClient.post<WorkflowMigrationBatch>(`${BASE}/migration-batches/${batchId}/retry`)).data
+}
+
+export async function rollbackWorkflowMigration(batchId: string, workflowId?: string) {
+    const suffix = workflowId ? `/items/${workflowId}/rollback` : '/rollback'
+    return (await httpClient.post<WorkflowMigrationBatch>(`${BASE}/migration-batches/${batchId}${suffix}`)).data
 }
 
 export interface IdePosition {
@@ -187,9 +293,57 @@ export async function completions(input: IdeDocument) {
                 insertText: string
                 detail?: string
                 documentation?: string
+                sortText?: string
             }>
         }>(`${BASE}/source/completions`, input)
     ).data
+}
+
+export interface IdeLocation {
+    name: string
+    kind: string
+    nodeId?: string
+    statementId?: string
+    range: IdeRange
+    uri?: string
+    virtualSource?: string
+}
+
+export async function definition(input: IdeDocument) {
+    return (await httpClient.post<{ documentVersion: number; locations: IdeLocation[] }>(
+        `${BASE}/source/definition`, input)).data
+}
+
+export async function references(input: IdeDocument) {
+    return (await httpClient.post<{ documentVersion: number; locations: IdeLocation[] }>(
+        `${BASE}/source/references`, input)).data
+}
+
+export async function semanticTokens(input: IdeDocument) {
+    return (await httpClient.post<{
+        documentVersion: number
+        tokens: Array<{ range: IdeRange; type: string }>
+    }>(`${BASE}/source/semantic-tokens`, input)).data
+}
+
+export async function mapPosition(input: IdeDocument & { nodeId?: string; statementId?: string; portName?: string; portDirection?: string }) {
+    return (await httpClient.post<{
+        documentVersion: number
+        nodeId?: string
+        statementId?: string
+        portName?: string
+        portDirection?: string
+        range?: IdeRange
+    }>(`${BASE}/source/map-position`, input)).data
+}
+
+export async function renameSymbol(input: IdeDocument & { oldName: string; newName: string }) {
+    return (await httpClient.post<{
+        documentVersion: number
+        sourceCode: string
+        edits: Array<{ range: IdeRange; newText: string }>
+        diagnostics: IdeDiagnostic[]
+    }>(`${BASE}/source/rename`, input)).data
 }
 
 export async function signatureHelp(input: IdeDocument) {

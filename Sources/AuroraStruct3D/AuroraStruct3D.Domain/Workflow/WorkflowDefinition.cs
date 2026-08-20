@@ -120,4 +120,21 @@ public class WorkflowDefinition : FullAuditedAggregateRoot<Guid>
         LanguageVersion = languageVersion;
         SourceRevision++;
     }
+
+    public void RestoreSourceSnapshot(string name, string? sourceCode, string graphData,
+        string? sourceHash, string? programHash, int languageVersion,
+        string? semanticHash, string? operatorContractHash)
+    {
+        Check.NotNullOrWhiteSpace(name, nameof(name), WorkflowDefinitionConsts.MaxNameLength);
+        Check.NotNullOrWhiteSpace(graphData, nameof(graphData));
+        Name = name;
+        SourceCode = sourceCode;
+        GraphData = graphData;
+        SourceHash = sourceHash;
+        ProgramHash = programHash;
+        LanguageVersion = languageVersion;
+        SemanticHash = semanticHash;
+        OperatorContractHash = operatorContractHash;
+        SourceRevision++;
+    }
 }

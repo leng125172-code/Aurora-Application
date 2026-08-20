@@ -1,4 +1,5 @@
 using AuroraStruct3D.Workflow.Dtos;
+using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 
 namespace AuroraStruct3D.Workflow;
@@ -22,13 +23,23 @@ public interface IWorkflowRuntimeAppService : IApplicationService
     /// <param name="input">任务配置（项目级触发 + 工作流行项）。</param>
     /// <returns>更新后的任务配置。</returns>
     Task<WorkflowProjectTaskBatchDto> UpdateProjectTasksAsync(WorkflowProjectTaskBatchDto input);
+    Task<List<WorkflowProjectTaskRegistrationDto>> GetProjectTaskRegistrationsAsync(Guid? projectId = null);
+    Task<WorkflowProjectTaskRegistrationDto> CreateProjectTaskAsync(CreateWorkflowProjectTaskInput input);
+    Task<WorkflowProjectTaskRegistrationDto> UpdateProjectTaskAsync(Guid taskId, UpdateWorkflowProjectTaskInput input);
+    Task<WorkflowProjectTaskRegistrationDto> SetProjectTaskEnabledAsync(
+        Guid taskId, UpdateWorkflowProjectTaskEnabledInput input);
 
     /// <summary>
     /// 查询项目部署。
     /// </summary>
     /// <param name="projectId">项目 ID。</param>
     /// <returns>部署信息。</returns>
-    Task<WorkflowProjectDeploymentDto> GetProjectDeploymentsAsync(Guid projectId);
+    Task<WorkflowProjectDeploymentDto?> GetProjectDeploymentsAsync(Guid projectId);
+    Task<PagedResultDto<WorkflowProjectDeploymentDto>> GetProjectDeploymentHistoryAsync(
+        Guid projectId, WorkflowProjectDeploymentHistoryInput input);
+    Task<WorkflowProjectApplicationStatusDto> GetProjectApplicationStatusAsync(Guid projectId);
+    Task<ApplyWorkflowProjectResultDto> ApplyProjectToDeviceAsync(
+        Guid projectId, ApplyWorkflowProjectInput input);
 
     /// <summary>
     /// 根据当前配置发布项目部署快照（按内容幂等并支持原地更新）。

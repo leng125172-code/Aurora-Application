@@ -887,16 +887,10 @@ def build_graph_data() -> dict:
                         "target_cloud": "variable",
                     },
                     output_bindings={
-                        "signed_diff": f"signed_diff_{target_idx}",
-                        "abs_diff": f"abs_diff_{target_idx}",
-                        "is_ok": f"is_ok_{target_idx}",
-                        "result_json": f"result_json_{target_idx}",
+                        "result": f"inspection_result_{target_idx}",
                     },
                     output_sources={
-                        "signed_diff": "variable",
-                        "abs_diff": "variable",
-                        "is_ok": "variable",
-                        "result_json": "variable",
+                        "result": "variable",
                     },
                 ),
             )
@@ -1037,18 +1031,18 @@ def build_graph_data() -> dict:
         ),
         node(
             id_annotate,
-            OP_ANNOTATE_HEIGHT_DIFF,
+            OP_ANNOTATE_TILTED_VIEW,
             560,
             1060 + (region_count - 1) * 80,
             "结果图标注",
             make_properties(
                 input_bindings={
                     "input_mat": "outlined_top_image",
-                    "is_ok": "is_ok_2",
+                    "inspection_result": "inspection_result_2",
                 },
                 input_sources={
                     "input_mat": "variable",
-                    "is_ok": "variable",
+                    "inspection_result": "variable",
                 },
                 output_bindings={"output_mat": "annotated_result_image"},
                 output_sources={"output_mat": "variable"},
@@ -1138,11 +1132,11 @@ def build_graph_data() -> dict:
             make_properties(
                 input_bindings={
                     "input_mat": "outlined_tilted_image",
-                    "is_ok": "is_ok_2",
+                    "inspection_result": "inspection_result_2",
                 },
                 input_sources={
                     "input_mat": "variable",
-                    "is_ok": "variable",
+                    "inspection_result": "variable",
                 },
                 output_bindings={"output_mat": "annotated_tilted_image"},
                 output_sources={"output_mat": "variable"},
@@ -1174,15 +1168,13 @@ def build_graph_data() -> dict:
                     "coloredPointCloudUrl": "colored_cloud_download_url",
                     "resultImageUrl": "result_image_download_url",
                     "tiltedImageUrl": "tilted_image_download_url",
-                    "resultJson": "result_json_2",
-                    "isOk": "is_ok_2",
+                    "inspectionResult": "inspection_result_2",
                 },
                 input_sources={
                     "coloredPointCloudUrl": "variable",
                     "resultImageUrl": "variable",
                     "tiltedImageUrl": "variable",
-                    "resultJson": "variable",
-                    "isOk": "variable",
+                    "inspectionResult": "variable",
                 },
             ),
         ),
@@ -1245,7 +1237,7 @@ def create_workflow(project_id: str) -> dict:
         print(json.dumps(payload, ensure_ascii=False, indent=2))
 
     region_count = len(ROIS_JSON)
-    output_variables = [f"abs_diff_{i}" for i in range(2, region_count + 1)]
+    output_variables = [f"inspection_result_{i}" for i in range(2, region_count + 1)]
 
     existed = find_workflow_by_name(project_id, WORKFLOW_NAME)
     if existed is not None:

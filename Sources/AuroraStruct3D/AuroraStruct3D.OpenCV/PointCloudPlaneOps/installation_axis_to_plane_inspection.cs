@@ -80,37 +80,24 @@ public sealed class installation_axis_to_plane_inspection : IOperator
         bool valid = reasons.Count == 0;
         bool ok = valid && Math.Abs(dx) <= _maxX && Math.Abs(dy) <= _maxY && total <= _maxTotal;
         string status = !valid ? "UNKNOWN" : ok ? "OK" : "NG";
-        Set(context, "tilt_x", tiltX); Set(context, "tilt_y", tiltY);
-        Set(context, "axis_to_normal_angle", normalAngle); Set(context, "axis_to_plane_angle", planeAngle);
-        SetResult(context, status, valid, ok, new
+        SetResult(context, status, valid, ok, new InstallationAxisInspectionDetails
         {
             tiltX = InstallationAngleMath.Round(tiltX), tiltY = InstallationAngleMath.Round(tiltY),
             axisToNormalAngle = InstallationAngleMath.Round(normalAngle),
             axisToPlaneAngle = InstallationAngleMath.Round(planeAngle),
             deviationX = InstallationAngleMath.Round(dx), deviationY = InstallationAngleMath.Round(dy),
-            totalDeviation = InstallationAngleMath.Round(total), planeRmse, axisRmse, reasons
+            totalDeviation = InstallationAngleMath.Round(total), planeRmse = planeRmse,
+            axisRmse = axisRmse, reasons = reasons
         });
     }
 
-    internal static List<IVisionParameter> InspectionOutputs(params (string Name, string Display)[] numbers)
-    {
-        List<IVisionParameter> result = numbers.Select(x => (IVisionParameter)new VisionParameter<double>
-        { ParameterName = x.Name, DisplayName = x.Display, ParameterType = typeof(double) }).ToList();
-        result.Add(new VisionParameter<bool> { ParameterName = "is_valid", DisplayName = "结果是否可信", ParameterType = typeof(bool) });
-        result.Add(new VisionParameter<bool> { ParameterName = "is_ok", DisplayName = "是否OK", ParameterType = typeof(bool) });
-        result.Add(new VisionParameter<string> { ParameterName = "inspection_status", DisplayName = "检测状态", ParameterType = typeof(string) });
-        result.Add(new VisionParameter<string> { ParameterName = "result_json", DisplayName = "检测结果", ParameterType = typeof(string), ControlType = PortControlType.Download });
-        return result;
-    }
+    internal static List<IVisionParameter> InspectionOutputs(params (string Name, string Display)[] numbers) =>
+        [InspectionResults.Output<InstallationAxisInspectionDetails>("检测结果")];
     internal static ConfigParameter NumberConfig(string name, string display, double value) => new()
     { Name = name, DisplayName = display, ParameterType = typeof(double), DefaultValue = value.ToString(System.Globalization.CultureInfo.InvariantCulture), ControlType = PortControlType.Input };
     internal static ConfigParameter IntegerConfig(string name, string display, int value) => new()
     { Name = name, DisplayName = display, ParameterType = typeof(int), DefaultValue = value.ToString(), ControlType = PortControlType.Input };
-    internal static void Set(IWorkflowContext context, string name, double value) => context.Set(name, InstallationAngleMath.Round(value));
-    internal static void SetResult(IWorkflowContext context, string status, bool valid, bool ok, object detail)
-    {
-        context.Set("is_valid", valid); context.Set("is_ok", ok); context.Set("inspection_status", status);
-        context.Set("result_json", JsonSerializer.Serialize(new { status, isValid = valid, isOk = ok, detail }));
-    }
+    internal static void SetResult(IWorkflowContext context, string status, bool valid, bool ok, InstallationAxisInspectionDetails detail)
+        => context.Set("result", InspectionResults.CreateTyped(valid, ok, detail, status));
     public void Dispose() { if (_disposed) return; _disposed = true; GC.SuppressFinalize(this); }
 }

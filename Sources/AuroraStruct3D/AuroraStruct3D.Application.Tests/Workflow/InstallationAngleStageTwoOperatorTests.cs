@@ -29,9 +29,9 @@ public class InstallationAngleStageTwoOperatorTests
             maxTotalDeviation: 0.7, maxFitRmse: 0.001, minPointCount: 20);
         op.Execute(context);
 
-        Assert.Equal("NG", context.Get<string>("inspection_status"));
-        Assert.InRange(context.Get<double>("tilt_x"), 2.999, 3.001);
-        Assert.InRange(context.Get<double>("axis_to_plane_angle"), 86.999, 87.001);
+        Assert.Equal(InspectionResultCode.NG, Result(context).resultCode);
+        Assert.InRange(Number(context, "tiltX"), 2.999, 3.001);
+        Assert.InRange(Number(context, "axisToPlaneAngle"), 86.999, 87.001);
     }
 
     [Fact]
@@ -49,8 +49,8 @@ public class InstallationAngleStageTwoOperatorTests
             maxFitRmse: 0.001, minPointCount: 20);
         op.Execute(context);
 
-        Assert.Equal("OK", context.Get<string>("inspection_status"));
-        Assert.True(context.Get<bool>("is_valid"));
+        Assert.Equal(InspectionResultCode.OK, Result(context).resultCode);
+        Assert.True(Result(context).isValid);
     }
 
     [Fact]
@@ -72,8 +72,8 @@ public class InstallationAngleStageTwoOperatorTests
             maxFitRmse: 0.001, minPointCount: 20);
         op.Execute(context);
 
-        Assert.Equal("OK", context.Get<string>("inspection_status"));
-        Assert.InRange(context.Get<double>("axis_angle"), 9.999, 10.001);
+        Assert.Equal(InspectionResultCode.OK, Result(context).resultCode);
+        Assert.InRange(Number(context, "axisAngle"), 9.999, 10.001);
     }
 
     [Fact]
@@ -97,9 +97,15 @@ public class InstallationAngleStageTwoOperatorTests
             maxFitRmse: 0.001, minPointCount: 20);
         op.Execute(context);
 
-        Assert.Equal("OK", context.Get<string>("inspection_status"));
-        Assert.InRange(context.Get<double>("twist_z"), 14.999, 15.001);
+        Assert.Equal(InspectionResultCode.OK, Result(context).resultCode);
+        Assert.InRange(Number(context, "twistZ"), 14.999, 15.001);
     }
+
+    private static InspectionResultBase Result(WorkflowContext context) =>
+        Assert.IsAssignableFrom<InspectionResultBase>(context.Get("result"));
+
+    private static double Number(WorkflowContext context, string name) =>
+        Result(context).ToDetailsNode()![name]!.GetValue<double>();
 
     private static Mat Plane(double[] normal)
     {

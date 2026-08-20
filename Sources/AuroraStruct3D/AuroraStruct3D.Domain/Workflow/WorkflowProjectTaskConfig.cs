@@ -8,6 +8,11 @@ namespace AuroraStruct3D.Workflow;
 /// </summary>
 public class WorkflowProjectTaskConfig : FullAuditedAggregateRoot<Guid>
 {
+    public const int MaxNameLength = 128;
+
+    /// <summary>任务名称，用于同项目下区分多条任务。</summary>
+    public string Name { get; private set; } = string.Empty;
+
     /// <summary>项目 ID。</summary>
     public Guid ProjectId { get; private set; }
 
@@ -23,6 +28,12 @@ public class WorkflowProjectTaskConfig : FullAuditedAggregateRoot<Guid>
     /// <summary>正式任务最终 OK/NG 判定布尔变量名。</summary>
     public string? ResultVariableName { get; private set; }
 
+    public WorkflowProjectRunOnErrorAction OnErrorAction { get; private set; } =
+        WorkflowProjectRunOnErrorAction.StopRun;
+
+    /// <summary>项目任务是否启用。</summary>
+    public bool IsEnabled { get; private set; } = true;
+
     protected WorkflowProjectTaskConfig() { }
 
     /// <summary>
@@ -32,7 +43,9 @@ public class WorkflowProjectTaskConfig : FullAuditedAggregateRoot<Guid>
         Guid id,
         Guid projectId,
         WorkflowProjectTaskType taskType = WorkflowProjectTaskType.Immediate,
-        int? cycleIntervalSeconds = null
+        int? cycleIntervalSeconds = null,
+        bool isEnabled = true,
+        string name = "默认任务"
     )
     {
         if (projectId == Guid.Empty)
@@ -44,8 +57,10 @@ public class WorkflowProjectTaskConfig : FullAuditedAggregateRoot<Guid>
         {
             Id = id,
             ProjectId = projectId,
+            Name = Check.NotNullOrWhiteSpace(name, nameof(name), MaxNameLength).Trim(),
             TaskType = taskType,
             CycleIntervalSeconds = NormalizeCycleInterval(taskType, cycleIntervalSeconds),
+            IsEnabled = isEnabled,
         };
     }
 
@@ -58,6 +73,11 @@ public class WorkflowProjectTaskConfig : FullAuditedAggregateRoot<Guid>
         CycleIntervalSeconds = NormalizeCycleInterval(taskType, cycleIntervalSeconds);
     }
 
+    public void SetEnabled(bool isEnabled) => IsEnabled = isEnabled;
+
+    public void SetName(string name) =>
+        Name = Check.NotNullOrWhiteSpace(name, nameof(name), MaxNameLength).Trim();
+
     public void SetResultBinding(Guid? workflowId, string? variableName)
     {
         if (workflowId is null || workflowId == Guid.Empty || string.IsNullOrWhiteSpace(variableName))
@@ -68,6 +88,13 @@ public class WorkflowProjectTaskConfig : FullAuditedAggregateRoot<Guid>
         }
         ResultWorkflowId = workflowId;
         ResultVariableName = Check.NotNullOrWhiteSpace(variableName, nameof(variableName), 128);
+    }
+
+    public void SetOnErrorAction(WorkflowProjectRunOnErrorAction action)
+    {
+        if (!Enum.IsDefined(action))
+            throw new BusinessException("Workflow.ProjectTask.OnErrorAction.Invalid");
+        OnErrorAction = action;
     }
 
     private static int? NormalizeCycleInterval(

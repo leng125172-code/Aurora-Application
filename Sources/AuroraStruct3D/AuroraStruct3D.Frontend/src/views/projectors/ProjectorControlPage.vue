@@ -95,7 +95,11 @@ async function onSelectMonoColor(color: ProjectorColor) {
 }
 // 单色亮度应用
 async function onApplyMonoBrightness() {
-    await run(() => store.setLight({ projectorDeviceId: deviceId.value, light: colorBrightness.value }))
+    await run(async () => {
+        const ok = await store.setLight({ projectorDeviceId: deviceId.value, light: colorBrightness.value })
+        if (ok) toast.success(t('projector.brightnessSaved'))
+        return ok
+    })
 }
 // 仅切换到 Aura RGB tab（不发送命令，等用户选色后 apply）
 function onSelectAuraRgb() {
@@ -430,7 +434,7 @@ watch(device, (d) => {
                                 :disabled="!isConnected || busy"
                                 @click="onApplyMonoBrightness"
                             >
-                                {{ t('projector.apply') }}
+                                {{ t('projector.saveBrightness') }}
                             </Button>
                         </div>
                     </div>

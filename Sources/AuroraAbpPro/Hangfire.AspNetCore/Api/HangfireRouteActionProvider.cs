@@ -64,6 +64,28 @@ namespace Hangfire.Api
     }
 
     /// <summary>
+    /// 可安全通过 System.Text.Json 返回的周期性作业视图。
+    /// 不直接暴露 Hangfire 的 Job 对象，避免序列化 System.Type、MethodInfo 等运行时类型。
+    /// </summary>
+    internal sealed class RecurringJobApiDto
+    {
+        public string? Id { get; init; }
+        public string? Cron { get; init; }
+        public string? Queue { get; init; }
+        public DateTime? NextExecution { get; init; }
+        public string? LastJobId { get; init; }
+        public string? LastJobState { get; init; }
+        public DateTime? LastExecution { get; init; }
+        public DateTime? CreatedAt { get; init; }
+        public bool Removed { get; init; }
+        public string? TimeZoneId { get; init; }
+        public string? Error { get; init; }
+        public int RetryAttempt { get; init; }
+        public string? JobType { get; init; }
+        public string? Method { get; init; }
+    }
+
+    /// <summary>
     /// Hangfire 监控 REST API 的路由注册提供者。
     /// 所有接口统一挂载在指定路径前缀下，默认 /api/hangfire。
     /// </summary>
@@ -324,7 +346,25 @@ namespace Hangfire.Api
                     {
                         using IStorageConnection connection = GetStorage(sp)
                             .GetReadOnlyConnection();
-                        var jobs = connection.GetRecurringJobs();
+                        var jobs = connection
+                            .GetRecurringJobs()
+                            .ConvertAll(job => new RecurringJobApiDto
+                            {
+                                Id = job.Id,
+                                Cron = job.Cron,
+                                Queue = job.Queue,
+                                NextExecution = job.NextExecution,
+                                LastJobId = job.LastJobId,
+                                LastJobState = job.LastJobState,
+                                LastExecution = job.LastExecution,
+                                CreatedAt = job.CreatedAt,
+                                Removed = job.Removed,
+                                TimeZoneId = job.TimeZoneId,
+                                Error = job.Error ?? job.LoadException?.Message,
+                                RetryAttempt = job.RetryAttempt,
+                                JobType = job.Job?.Type?.FullName,
+                                Method = job.Job?.Method?.Name,
+                            });
                         return Results.Ok(jobs);
                     }
                 )

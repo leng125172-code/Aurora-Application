@@ -6,6 +6,7 @@ namespace AuroraStruct3D.Workflow;
 /// <summary>项目级 OPC UA 生产任务握手配置及持久化协议状态。</summary>
 public class WorkflowPlcHandshakeConfig : FullAuditedAggregateRoot<Guid>
 {
+    public Guid TaskConfigId { get; private set; }
     public Guid ProjectId { get; private set; }
     public Guid PlcDeviceId { get; private set; }
     public Guid CaptureRequestTagId { get; private set; }
@@ -22,6 +23,20 @@ public class WorkflowPlcHandshakeConfig : FullAuditedAggregateRoot<Guid>
     public Guid ResultRequestIdTagId { get; private set; }
     public Guid ResultCodeTagId { get; private set; }
     public Guid ErrorCodeTagId { get; private set; }
+    public string CaptureRequestAddress { get; private set; } = string.Empty;
+    public string RequestIdAddress { get; private set; } = string.Empty;
+    public string ResultAckAddress { get; private set; } = string.Empty;
+    public string ResultAckIdAddress { get; private set; } = string.Empty;
+    public string HeartbeatAddress { get; private set; } = string.Empty;
+    public string DeviceStatusAddress { get; private set; } = string.Empty;
+    public string TaskStatusAddress { get; private set; } = string.Empty;
+    public string CanCaptureAddress { get; private set; } = string.Empty;
+    public string CaptureAckAddress { get; private set; } = string.Empty;
+    public string AckRequestIdAddress { get; private set; } = string.Empty;
+    public string ResultValidAddress { get; private set; } = string.Empty;
+    public string ResultRequestIdAddress { get; private set; } = string.Empty;
+    public string ResultCodeAddress { get; private set; } = string.Empty;
+    public string ErrorCodeAddress { get; private set; } = string.Empty;
     public bool IsEnabled { get; private set; }
     public WorkflowPlcHandshakePhase Phase { get; private set; }
     public int CurrentRequestId { get; private set; }
@@ -35,36 +50,38 @@ public class WorkflowPlcHandshakeConfig : FullAuditedAggregateRoot<Guid>
 
     protected WorkflowPlcHandshakeConfig() { }
 
-    public WorkflowPlcHandshakeConfig(Guid id, Guid projectId) : base(id)
+    public WorkflowPlcHandshakeConfig(Guid id, Guid projectId, Guid taskConfigId = default) : base(id)
     {
         if (projectId == Guid.Empty) throw new BusinessException("Workflow.PlcHandshake.ProjectId.Empty");
         ProjectId = projectId;
+        TaskConfigId = taskConfigId;
         Phase = WorkflowPlcHandshakePhase.Idle;
     }
 
     public void Configure(
         Guid plcDeviceId,
-        Guid captureRequestTagId, Guid requestIdTagId, Guid resultAckTagId, Guid resultAckIdTagId,
-        Guid heartbeatTagId, Guid deviceStatusTagId, Guid taskStatusTagId, Guid canCaptureTagId,
-        Guid captureAckTagId, Guid ackRequestIdTagId, Guid resultValidTagId,
-        Guid resultRequestIdTagId, Guid resultCodeTagId, Guid errorCodeTagId,
+        string captureRequestAddress, string requestIdAddress, string resultAckAddress, string resultAckIdAddress,
+        string heartbeatAddress, string deviceStatusAddress, string taskStatusAddress, string canCaptureAddress,
+        string captureAckAddress, string ackRequestIdAddress, string resultValidAddress,
+        string resultRequestIdAddress, string resultCodeAddress, string errorCodeAddress,
         bool isEnabled)
     {
-        Guid[] ids = [plcDeviceId, captureRequestTagId, requestIdTagId, resultAckTagId,
-            resultAckIdTagId, heartbeatTagId, deviceStatusTagId, taskStatusTagId,
-            canCaptureTagId, captureAckTagId, ackRequestIdTagId, resultValidTagId,
-            resultRequestIdTagId, resultCodeTagId, errorCodeTagId];
-        if (ids.Any(x => x == Guid.Empty)) throw new BusinessException("Workflow.PlcHandshake.Tag.Empty");
-        if (ids.Skip(1).Distinct().Count() != ids.Length - 1)
+        string[] addresses = [captureRequestAddress, requestIdAddress, resultAckAddress,
+            resultAckIdAddress, heartbeatAddress, deviceStatusAddress, taskStatusAddress,
+            canCaptureAddress, captureAckAddress, ackRequestIdAddress, resultValidAddress,
+            resultRequestIdAddress, resultCodeAddress, errorCodeAddress];
+        if (plcDeviceId == Guid.Empty || addresses.Any(string.IsNullOrWhiteSpace))
+            throw new BusinessException("Workflow.PlcHandshake.Tag.Empty");
+        if (addresses.Distinct(StringComparer.Ordinal).Count() != addresses.Length)
             throw new BusinessException("Workflow.PlcHandshake.Tag.Duplicate");
         PlcDeviceId = plcDeviceId;
-        CaptureRequestTagId = captureRequestTagId; RequestIdTagId = requestIdTagId;
-        ResultAckTagId = resultAckTagId; ResultAckIdTagId = resultAckIdTagId;
-        HeartbeatTagId = heartbeatTagId; DeviceStatusTagId = deviceStatusTagId;
-        TaskStatusTagId = taskStatusTagId; CanCaptureTagId = canCaptureTagId;
-        CaptureAckTagId = captureAckTagId; AckRequestIdTagId = ackRequestIdTagId;
-        ResultValidTagId = resultValidTagId; ResultRequestIdTagId = resultRequestIdTagId;
-        ResultCodeTagId = resultCodeTagId; ErrorCodeTagId = errorCodeTagId;
+        CaptureRequestAddress = captureRequestAddress.Trim(); RequestIdAddress = requestIdAddress.Trim();
+        ResultAckAddress = resultAckAddress.Trim(); ResultAckIdAddress = resultAckIdAddress.Trim();
+        HeartbeatAddress = heartbeatAddress.Trim(); DeviceStatusAddress = deviceStatusAddress.Trim();
+        TaskStatusAddress = taskStatusAddress.Trim(); CanCaptureAddress = canCaptureAddress.Trim();
+        CaptureAckAddress = captureAckAddress.Trim(); AckRequestIdAddress = ackRequestIdAddress.Trim();
+        ResultValidAddress = resultValidAddress.Trim(); ResultRequestIdAddress = resultRequestIdAddress.Trim();
+        ResultCodeAddress = resultCodeAddress.Trim(); ErrorCodeAddress = errorCodeAddress.Trim();
         IsEnabled = isEnabled;
     }
 

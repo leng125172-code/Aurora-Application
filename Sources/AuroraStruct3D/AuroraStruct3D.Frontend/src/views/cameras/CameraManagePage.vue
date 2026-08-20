@@ -61,7 +61,7 @@ async function handleScan() {
         const failedDrivers = result.drivers.filter((driver) => driver.error)
         if (failedDrivers.length > 0 || result.conflicts > 0) {
             toast.warning(
-                `扫描到 ${result.totalDiscovered} 台，冲突 ${result.conflicts} 台，驱动失败 ${failedDrivers.length} 个`,
+                `扫描到 ${result.totalDiscovered} 台，冲突 ${result.conflicts} 台，驱动失败 ${failedDrivers.length} 个`
             )
         } else {
             toast.success(t('camera.scanSuccess', { count: result.totalDiscovered }))
@@ -122,9 +122,7 @@ const capabilityNames: Array<[CameraCapability, string]> = [
 ]
 
 function cameraCapabilities(capabilities: CameraCapability): string[] {
-    return capabilityNames
-        .filter(([flag]) => (capabilities & flag) !== 0)
-        .map(([, name]) => name)
+    return capabilityNames.filter(([flag]) => (capabilities & flag) !== 0).map(([, name]) => name)
 }
 
 function statusClass(status: CameraStatus): string {

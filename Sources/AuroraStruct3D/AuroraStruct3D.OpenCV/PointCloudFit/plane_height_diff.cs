@@ -38,40 +38,7 @@ public class plane_height_diff : IOperator
         };
 
     public static List<IVisionParameter>? OutputVisionParameters =>
-        new()
-        {
-            new VisionParameter<double>
-            {
-                ParameterName = "signed_diff",
-                ParameterType = typeof(double),
-                DisplayName = "带符号差值",
-            },
-            new VisionParameter<string>
-            {
-                ParameterName = "abs_diff",
-                ParameterType = typeof(string),
-                DisplayName = "绝对差值明细（兼容）",
-            },
-            new VisionParameter<double>
-            {
-                ParameterName = "abs_diff_value",
-                ParameterType = typeof(double),
-                DisplayName = "绝对差值",
-            },
-            new VisionParameter<bool>
-            {
-                ParameterName = "is_ok",
-                ParameterType = typeof(bool),
-                DisplayName = "是否OK",
-            },
-            new VisionParameter<string>
-            {
-                ParameterName = "result_json",
-                ParameterType = typeof(string),
-                ControlType = PortControlType.Download,
-                DisplayName = "判定结果",
-            },
-        };
+        [InspectionResults.Output<PlaneHeightDiffInspectionDetails>("平面高度差结果")];
 
     public static List<IConfigParameter>? ConfigParameters =>
         new()
@@ -281,34 +248,16 @@ public class plane_height_diff : IOperator
             heightDiff = absDiff,
         };
 
-        var result = new
-        {
-            refRegion = new
-            {
-                name = refRegionName,
-                x = Math.Round(refCx, 4),
-                y = Math.Round(refCy, 4),
-                z = Math.Round(refCz, 4),
-            },
-            targetRegion = new
-            {
-                name = targetRegionName,
-                x = Math.Round(cx, 4),
-                y = Math.Round(cy, 4),
-                z = Math.Round(cz, 4),
-            },
+        var result = new PlaneHeightDiffInspectionDetails(
+            new RegionPointDetails(refRegionName, Math.Round(refCx, 4), Math.Round(refCy, 4), Math.Round(refCz, 4)),
+            new RegionPointDetails(targetRegionName, Math.Round(cx, 4), Math.Round(cy, 4), Math.Round(cz, 4)),
             signedDiff,
             absDiff,
-            minDiff = _minDiff,
-            maxDiff = _maxDiff,
-            isOk,
-        };
+            _minDiff,
+            _maxDiff,
+            isOk);
 
-        context.Set("signed_diff", signedDiff);
-        context.Set("abs_diff", JsonSerializer.Serialize(absDiffResult));
-        context.Set("abs_diff_value", absDiff);
-        context.Set("is_ok", isOk);
-        context.Set("result_json", JsonSerializer.Serialize(result));
+        context.Set("result", InspectionResults.CreateTyped(true, isOk, result));
     }
 
     public void Dispose()

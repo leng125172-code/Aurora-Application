@@ -85,13 +85,13 @@ const faultLevelOptions = computed<Array<{ value: DeviceFaultLevel | null; label
     { value: DeviceFaultLevel.SafetyFault, label: t('deviceState.faultLevel.safetyFault') },
 ])
 
-const faultSourceOptions = [
-    { value: null, label: '全部来源' },
-    { value: DeviceFaultSource.System, label: '系统' },
-    { value: DeviceFaultSource.Camera, label: '相机' },
-    { value: DeviceFaultSource.Plc, label: 'PLC' },
-    { value: DeviceFaultSource.Workflow, label: '工作流' },
-]
+const faultSourceOptions = computed(() => [
+    { value: null, label: t('deviceState.allSources') },
+    { value: DeviceFaultSource.System, label: t('deviceState.faultSource.system') },
+    { value: DeviceFaultSource.Camera, label: t('deviceState.faultSource.camera') },
+    { value: DeviceFaultSource.Plc, label: t('deviceState.faultSource.plc') },
+    { value: DeviceFaultSource.Workflow, label: t('deviceState.faultSource.workflow') },
+])
 
 const faultLevelI18nKeys: Record<DeviceFaultLevel, string> = {
     [DeviceFaultLevel.Warning]: 'deviceState.faultLevel.warning',
@@ -104,15 +104,15 @@ function faultLevelLabel(level: DeviceFaultLevel): string {
     return t(faultLevelI18nKeys[level] ?? '')
 }
 
-const faultSourceLabels: Record<DeviceFaultSource, string> = {
-    [DeviceFaultSource.System]: '系统',
-    [DeviceFaultSource.Camera]: '相机',
-    [DeviceFaultSource.Plc]: 'PLC',
-    [DeviceFaultSource.Workflow]: '工作流',
+const faultSourceI18nKeys: Record<DeviceFaultSource, string> = {
+    [DeviceFaultSource.System]: 'deviceState.faultSource.system',
+    [DeviceFaultSource.Camera]: 'deviceState.faultSource.camera',
+    [DeviceFaultSource.Plc]: 'deviceState.faultSource.plc',
+    [DeviceFaultSource.Workflow]: 'deviceState.faultSource.workflow',
 }
 
 function faultSourceLabel(source: DeviceFaultSource): string {
-    return faultSourceLabels[source] ?? '系统'
+    return t(faultSourceI18nKeys[source] ?? 'deviceState.faultSource.system')
 }
 
 function faultAssociation(data: DeviceFaultDto): string {
@@ -132,9 +132,9 @@ onMounted(() => {
 </script>
 
 <template>
-    <div class="space-y-4">
+    <div class="app-page" data-testid="fault-history-page">
         <!-- 标题 + 刷新 -->
-        <div class="flex items-center justify-between">
+        <div class="app-page-header">
             <h1 class="text-2xl font-bold tracking-tight">{{ t('deviceState.faultHistory') }}</h1>
             <Button severity="secondary" outlined size="small" :disabled="loading" @click="void loadAsync()">
                 <RefreshCw :class="['size-4', loading && 'animate-spin']" />
@@ -146,8 +146,7 @@ onMounted(() => {
             <!-- 筛选区 -->
             <div class="flex flex-col gap-3 border-b border-border/40 px-3 py-2">
                 <div
-                    class="grid items-center gap-x-3 gap-y-2"
-                    style="grid-template-columns: repeat(auto-fill, 5.5rem 13rem)"
+                    class="grid grid-cols-1 items-center gap-x-3 gap-y-2 sm:grid-cols-[5.5rem_minmax(0,1fr)] xl:grid-cols-[5.5rem_minmax(10rem,1fr)_5.5rem_minmax(10rem,1fr)]"
                 >
                     <span class="text-sm text-muted-foreground whitespace-nowrap">{{ t('deviceState.level') }}</span>
                     <Select
@@ -166,7 +165,7 @@ onMounted(() => {
                         }"
                         @change="onFilterChange"
                     />
-                    <span class="text-sm text-muted-foreground whitespace-nowrap">来源</span>
+                    <span class="text-sm text-muted-foreground whitespace-nowrap">{{ t('deviceState.source') }}</span>
                     <Select
                         v-model="filterSource"
                         :options="faultSourceOptions"
@@ -278,7 +277,7 @@ onMounted(() => {
                     </template>
                 </Column>
 
-                <Column header="来源 / 关联" style="min-width: 12rem; max-width: 20rem">
+                <Column :header="t('deviceState.sourceAssociation')" style="min-width: 12rem; max-width: 20rem">
                     <template #body="{ data }">
                         <div class="text-xs">
                             <div class="font-medium">{{ faultSourceLabel(data.source as DeviceFaultSource) }}</div>
@@ -317,7 +316,7 @@ onMounted(() => {
                     </template>
                 </Column>
 
-                <Column header="次数" style="min-width: 4.5rem">
+                <Column :header="t('deviceState.occurrences')" style="min-width: 4.5rem">
                     <template #body="{ data }">
                         <span class="tabular-nums">{{ data.occurrenceCount }}</span>
                     </template>

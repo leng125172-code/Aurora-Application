@@ -19,6 +19,14 @@ public interface IDeviceStateAppService : IApplicationService
     /// <exception cref="Volo.Abp.UserFriendlyException">当前状态不允许切换时</exception>
     Task SwitchModeAsync(SwitchModeInput input);
 
+    Task<DeviceStateDto> StartAsync(DeviceCommandInput input);
+    Task<DeviceStateDto> PauseAsync(DeviceCommandInput input);
+    Task<DeviceStateDto> ResumeAsync(DeviceCommandInput input);
+    Task<DeviceStateDto> StopAsync(DeviceCommandInput input);
+    Task<DeviceStateDto> AcknowledgeFaultAsync(DeviceCommandInput input);
+    Task<DeviceStateDto> ResetAsync(DeviceCommandInput input);
+    Task<DeviceStateDto> EmergencyStopAsync(EmergencyStopInput input);
+
     /// <summary>
     /// 获取当前活跃故障记录（无需登录，无故障时返回 null）
     /// </summary>

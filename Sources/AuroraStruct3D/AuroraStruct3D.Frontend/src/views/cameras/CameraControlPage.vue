@@ -29,11 +29,17 @@ const isOpen = computed(() => {
 })
 const previewUrl = computed(() => store.previewFrames.get(deviceId.value) ?? null)
 const metrics = computed<CameraLiveMetricsDto | null>(() => store.liveMetrics.get(deviceId.value) ?? null)
-const supportsParameterNodes = computed(() => !!device.value && (device.value.capabilities & CameraCapability.ParameterNodes) !== 0)
+const supportsParameterNodes = computed(
+    () => !!device.value && (device.value.capabilities & CameraCapability.ParameterNodes) !== 0
+)
 const supportsPreview = computed(() => !!device.value && (device.value.capabilities & CameraCapability.Preview) !== 0)
 const supportsSnapshot = computed(() => !!device.value && (device.value.capabilities & CameraCapability.Snapshot) !== 0)
-const supportsSoftwareTrigger = computed(() => !!device.value && (device.value.capabilities & CameraCapability.SoftwareTrigger) !== 0)
-const supportsTemperature = computed(() => !!device.value && (device.value.capabilities & CameraCapability.Temperature) !== 0)
+const supportsSoftwareTrigger = computed(
+    () => !!device.value && (device.value.capabilities & CameraCapability.SoftwareTrigger) !== 0
+)
+const supportsTemperature = computed(
+    () => !!device.value && (device.value.capabilities & CameraCapability.Temperature) !== 0
+)
 
 // ─── NodeMap ─────────────────────────────────────────────────────────────
 const nodeMap = computed(() => store.nodeMaps.get(deviceId.value) ?? null)
@@ -152,10 +158,10 @@ const rotationAngle = ref(0)
 const rotationSaving = ref(false)
 const rotationDirty = computed(() => savedRotationAngle.value !== rotationAngle.value)
 const rotationOptions = [
-    { value: 0, label: '0°' },
-    { value: 90, label: '90°' },
-    { value: 180, label: '180°' },
-    { value: 270, label: '270°' },
+    { value: 0, label: t('camera.clockwiseRotation', { angle: 0 }) },
+    { value: 90, label: t('camera.clockwiseRotation', { angle: 90 }) },
+    { value: 180, label: t('camera.clockwiseRotation', { angle: 180 }) },
+    { value: 270, label: t('camera.clockwiseRotation', { angle: 270 }) },
 ]
 
 async function loadImageParams() {
@@ -681,10 +687,10 @@ onUnmounted(() => {
                         !supportsParameterNodes
                             ? '当前相机驱动未提供动态参数节点'
                             : isOpen
-                            ? nodeMapLoading
-                                ? t('camera.nodMapLoadingFull')
-                                : t('camera.noNodeMap')
-                            : t('camera.cameraNotOpen')
+                              ? nodeMapLoading
+                                  ? t('camera.nodMapLoadingFull')
+                                  : t('camera.noNodeMap')
+                              : t('camera.cameraNotOpen')
                     }}
                 </div>
             </div>

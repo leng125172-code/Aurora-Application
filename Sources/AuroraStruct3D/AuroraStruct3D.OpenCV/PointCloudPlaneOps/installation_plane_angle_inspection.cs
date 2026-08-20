@@ -17,41 +17,7 @@ public sealed class installation_plane_angle_inspection : IOperator
         ];
 
     public static List<IVisionParameter>? OutputVisionParameters =>
-        [
-            NumberOutput("tilt_x", "X方向倾角(度)"),
-            NumberOutput("tilt_y", "Y方向倾角(度)"),
-            NumberOutput("total_tilt", "总倾角(度)"),
-            NumberOutput("deviation_x", "X方向偏差(度)"),
-            NumberOutput("deviation_y", "Y方向偏差(度)"),
-            NumberOutput("total_deviation", "合成偏差(度)"),
-            NumberOutput("reference_rmse", "基准面拟合RMSE"),
-            NumberOutput("measured_rmse", "安装面拟合RMSE"),
-            new VisionParameter<bool>
-            {
-                ParameterName = "is_valid",
-                DisplayName = "结果是否可信",
-                ParameterType = typeof(bool),
-            },
-            new VisionParameter<bool>
-            {
-                ParameterName = "is_ok",
-                DisplayName = "是否OK",
-                ParameterType = typeof(bool),
-            },
-            new VisionParameter<string>
-            {
-                ParameterName = "inspection_status",
-                DisplayName = "检测状态",
-                ParameterType = typeof(string),
-            },
-            new VisionParameter<string>
-            {
-                ParameterName = "result_json",
-                DisplayName = "安装角度结果",
-                ParameterType = typeof(string),
-                ControlType = PortControlType.Download,
-            },
-        ];
+        [InspectionResults.Output<InstallationPlaneInspectionDetails>("安装角度结果")];
 
     public static List<IConfigParameter>? ConfigParameters =>
         [
@@ -166,51 +132,20 @@ public sealed class installation_plane_angle_inspection : IOperator
             && totalDeviation <= _maxTotalDeviation;
         string status = !isValid ? "UNKNOWN" : isOk ? "OK" : "NG";
 
-        SetNumber(context, "tilt_x", tiltX);
-        SetNumber(context, "tilt_y", tiltY);
-        SetNumber(context, "total_tilt", totalTilt);
-        SetNumber(context, "deviation_x", deviationX);
-        SetNumber(context, "deviation_y", deviationY);
-        SetNumber(context, "total_deviation", totalDeviation);
-        SetNumber(context, "reference_rmse", referenceRmse);
-        SetNumber(context, "measured_rmse", measuredRmse);
-        context.Set("is_valid", isValid);
-        context.Set("is_ok", isOk);
-        context.Set("inspection_status", status);
-        context.Set(
-            "result_json",
-            JsonSerializer.Serialize(
-                new
-                {
+        context.Set("result", InspectionResults.CreateTyped(isValid, isOk,
+                new InstallationPlaneInspectionDetails(
                     status,
                     isValid,
                     isOk,
-                    tiltX = Round(tiltX),
-                    tiltY = Round(tiltY),
-                    totalTilt = Round(totalTilt),
-                    nominalTiltX = _nominalTiltX,
-                    nominalTiltY = _nominalTiltY,
-                    deviationX = Round(deviationX),
-                    deviationY = Round(deviationY),
-                    totalDeviation = Round(totalDeviation),
-                    referenceRmse = Round(referenceRmse),
-                    measuredRmse = Round(measuredRmse),
-                    referencePointCount = referencePoints.Rows,
-                    measuredPointCount = measuredPoints.Rows,
+                    Round(tiltX), Round(tiltY), Round(totalTilt),
+                    _nominalTiltX, _nominalTiltY,
+                    Round(deviationX), Round(deviationY), Round(totalDeviation),
+                    Round(referenceRmse), Round(measuredRmse),
+                    referencePoints.Rows, measuredPoints.Rows,
                     qualityReasons,
-                    tolerance = new
-                    {
-                        minDeviationX = _minDeviationX,
-                        maxDeviationX = _maxDeviationX,
-                        minDeviationY = _minDeviationY,
-                        maxDeviationY = _maxDeviationY,
-                        maxTotalDeviation = _maxTotalDeviation,
-                        maxFitRmse = _maxFitRmse,
-                        minPointCount = _minPointCount,
-                    },
-                }
-            )
-        );
+                    new InstallationPlaneToleranceDetails(_minDeviationX, _maxDeviationX,
+                        _minDeviationY, _maxDeviationY, _maxTotalDeviation, _maxFitRmse,
+                        _minPointCount)), status));
     }
 
     private static VisionParameter<double> NumberOutput(string name, string displayName) =>

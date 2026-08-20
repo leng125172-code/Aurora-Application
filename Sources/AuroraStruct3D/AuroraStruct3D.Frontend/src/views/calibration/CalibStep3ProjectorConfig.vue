@@ -222,9 +222,7 @@ watch(
                     </div>
 
                     <div>
-                        <label class="block text-xs text-muted-foreground mb-1">
-                            横向编码
-                        </label>
+                        <label class="block text-xs text-muted-foreground mb-1">横向编码</label>
                         <div
                             class="h-7 flex items-center text-xs px-2 rounded border border-border/40 bg-muted/20 text-muted-foreground"
                         >
@@ -233,9 +231,7 @@ watch(
                     </div>
 
                     <div>
-                        <label class="block text-xs text-muted-foreground mb-1">
-                            竖向编码
-                        </label>
+                        <label class="block text-xs text-muted-foreground mb-1">竖向编码</label>
                         <div
                             class="h-7 flex items-center text-xs px-2 rounded border border-border/40 bg-muted/20 text-muted-foreground"
                         >
@@ -244,9 +240,7 @@ watch(
                     </div>
 
                     <div>
-                        <label class="block text-xs text-muted-foreground mb-1">
-                            图像顺序
-                        </label>
+                        <label class="block text-xs text-muted-foreground mb-1">图像顺序</label>
                         <div
                             class="h-7 flex items-center text-xs px-2 rounded border border-border/40 bg-muted/20 text-muted-foreground"
                         >
@@ -255,9 +249,7 @@ watch(
                     </div>
 
                     <div>
-                        <label class="block text-xs text-muted-foreground mb-1">
-                            互补方式
-                        </label>
+                        <label class="block text-xs text-muted-foreground mb-1">互补方式</label>
                         <div
                             class="h-7 flex items-center text-xs px-2 rounded border border-border/40 bg-muted/20 text-muted-foreground"
                         >
@@ -339,7 +331,11 @@ watch(
                     >
                         {{ t('calib.step3NoImages') }}
                     </div>
-                    <Button unstyled type="button"
+                    <Button
+                        size="small"
+                        text
+                        severity="secondary"
+                        type="button"
                         v-for="img in props.generatedFringeImages"
                         :key="img.index"
                         :class="[

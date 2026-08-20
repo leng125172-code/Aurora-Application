@@ -160,6 +160,7 @@ namespace AuroraStruct3D.EntityFrameworkCore
         public DbSet<WorkflowSourceDraft> WorkflowSourceDrafts { get; set; }
         public DbSet<WorkflowSourceVersion> WorkflowSourceVersions { get; set; }
         public DbSet<WorkflowMigrationBatch> WorkflowMigrationBatches { get; set; }
+        public DbSet<WorkflowMigrationSnapshot> WorkflowMigrationSnapshots { get; set; }
         public DbSet<WorkflowProjectTaskConfig> WorkflowProjectTaskConfigs { get; set; }
         public DbSet<WorkflowProjectTask> WorkflowProjectTasks { get; set; }
         public DbSet<WorkflowProjectDeployment> WorkflowProjectDeployments { get; set; }

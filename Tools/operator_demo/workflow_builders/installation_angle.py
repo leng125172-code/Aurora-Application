@@ -22,6 +22,7 @@ from constants import (
     OP_VOXEL_DOWNSAMPLE,
     OP_Z_COLORIZE_POINT_CLOUD,
     OP_COLORED_CLOUD_TO_TILTED_IMAGE,
+    OP_COMBINE_INSPECTION_RESULTS,
     OP_SAVE_IMAGE_BLOB,
 )
 from utils import edge, make_properties, new_uuid, node
@@ -132,10 +133,7 @@ def _line_fit_properties(prefix):
             "inlier_points": f"{prefix}_axis_points",
             "outlier_points": f"{prefix}_axis_outliers",
             "fitting_error": f"{prefix}_axis_error",
-            "fitting_error_value": f"{prefix}_axis_rmse",
-            "angle_degrees": f"{prefix}_legacy_axis_angle",
-            "is_ok": f"{prefix}_legacy_axis_ok",
-            "result_json": f"{prefix}_legacy_axis_result",
+            "result": f"{prefix}_axis_result",
         },
         params={
             "distanceThreshold": 0.05,
@@ -149,43 +147,35 @@ def _line_fit_properties(prefix):
 
 
 def _inspection_outputs(prefix, number_ports):
-    outputs = {port: f"{prefix}_{port}" for port in number_ports}
-    outputs.update(
-        {
-            "is_valid": f"{prefix}_is_valid",
-            "is_ok": f"{prefix}_is_ok",
-            "inspection_status": f"{prefix}_status",
-            "result_json": f"{prefix}_result",
-        }
-    )
-    return outputs
+    return {"result": f"{prefix}_result"}
 
 
-def build_installation_angle_graph(point_cloud_path):
+def build_installation_angle_graph(point_cloud_path, relaxed_demo=False):
     ids = {
         name: new_uuid()
         for name in (
             "start read downsample denoise fit_a fit_b fit_c select_ref select_measured "
             "roi_ref roi_measured extract_ref extract_measured svd_ref svd_measured "
             "mesh_ref mesh_measured line_ref line_measured plane_angle axis_plane "
-            "axis_axis twist colorize tilted_view save_tilted end"
+            "axis_axis twist colorize tilted_view save_tilted combine_primary "
+            "combine_final end"
         ).split()
     }
 
     plane_angle_params = {
         "nominalTiltX": 0.0,
         "nominalTiltY": 0.0,
-        "minDeviationX": -0.5,
-        "maxDeviationX": 0.5,
-        "minDeviationY": -0.5,
-        "maxDeviationY": 0.5,
-        "maxTotalDeviation": 0.7,
-        "maxFitRmse": 0.05,
-        "minPointCount": 30,
+        "minDeviationX": -180.0 if relaxed_demo else -0.5,
+        "maxDeviationX": 180.0 if relaxed_demo else 0.5,
+        "minDeviationY": -180.0 if relaxed_demo else -0.5,
+        "maxDeviationY": 180.0 if relaxed_demo else 0.5,
+        "maxTotalDeviation": 360.0 if relaxed_demo else 0.7,
+        "maxFitRmse": 1000.0 if relaxed_demo else 0.05,
+        "minPointCount": 3 if relaxed_demo else 30,
     }
     common_angle_params = {
-        "maxFitRmse": 0.05,
-        "minPointCount": 20,
+        "maxFitRmse": 1000.0 if relaxed_demo else 0.05,
+        "minPointCount": 3 if relaxed_demo else 20,
     }
 
     nodes = [
@@ -325,9 +315,9 @@ def build_installation_angle_graph(point_cloud_path):
                     **common_angle_params,
                     "nominalTiltX": 0.0,
                     "nominalTiltY": 0.0,
-                    "maxDeviationX": 0.5,
-                    "maxDeviationY": 0.5,
-                    "maxTotalDeviation": 0.7,
+                    "maxDeviationX": 180.0 if relaxed_demo else 0.5,
+                    "maxDeviationY": 180.0 if relaxed_demo else 0.5,
+                    "maxTotalDeviation": 360.0 if relaxed_demo else 0.7,
                 },
             ),
         ),
@@ -348,7 +338,7 @@ def build_installation_angle_graph(point_cloud_path):
                 params={
                     **common_angle_params,
                     "nominalAngle": 0.0,
-                    "maxAngleDeviation": 0.5,
+                    "maxAngleDeviation": 180.0 if relaxed_demo else 0.5,
                 },
             ),
         ),
@@ -370,7 +360,7 @@ def build_installation_angle_graph(point_cloud_path):
                 params={
                     **common_angle_params,
                     "nominalTwist": 0.0,
-                    "maxTwistDeviation": 0.5,
+                    "maxTwistDeviation": 180.0 if relaxed_demo else 0.5,
                 },
             ),
         ),
@@ -426,38 +416,44 @@ def build_installation_angle_graph(point_cloud_path):
             ),
         ),
         node(
+            ids["combine_primary"],
+            OP_COMBINE_INSPECTION_RESULTS,
+            720,
+            1140,
+            "安装角前三项汇总",
+            _operator_properties(
+                inputs={
+                    "flatness_result": "plane_angle_result",
+                    "line_result": "axis_plane_result",
+                    "circle_result": "axis_axis_result",
+                },
+                outputs={"result": "installation_primary_result"},
+            ),
+        ),
+        node(
+            ids["combine_final"],
+            OP_COMBINE_INSPECTION_RESULTS,
+            1120,
+            1140,
+            "安装角最终汇总",
+            _operator_properties(
+                inputs={
+                    "flatness_result": "installation_primary_result",
+                    "line_result": "twist_result",
+                    "circle_result": "plane_angle_result",
+                },
+                outputs={"result": "installation_result"},
+            ),
+        ),
+        node(
             ids["end"],
             "end-node",
             940,
             1200,
             "结束/最终结果",
             make_properties(
-                input_bindings={
-                    "平面角度状态": "plane_angle_status",
-                    "平面角度结果": "plane_angle_result",
-                    "轴线与平面状态": "axis_plane_status",
-                    "轴线与平面结果": "axis_plane_result",
-                    "轴线夹角状态": "axis_axis_status",
-                    "轴线夹角结果": "axis_axis_result",
-                    "平面内旋转状态": "twist_status",
-                    "平面内旋转结果": "twist_result",
-                    "基准面ROI点数": "reference_selected_count",
-                    "安装面ROI点数": "measured_selected_count",
-                    "基准面网格信息": "reference_mesh_info",
-                    "安装面网格信息": "measured_mesh_info",
-                    "斜视图结果地址": "tilted_result_url",
-                    "斜视图映射": "tilted_projection_mapping",
-                },
-                input_sources={
-                    name: "variable"
-                    for name in (
-                        "平面角度状态", "平面角度结果", "轴线与平面状态",
-                        "轴线与平面结果", "轴线夹角状态", "轴线夹角结果",
-                        "平面内旋转状态", "平面内旋转结果", "基准面ROI点数",
-                        "安装面ROI点数", "基准面网格信息", "安装面网格信息",
-                        "斜视图结果地址", "斜视图映射",
-                    )
-                },
+                input_bindings={"安装角汇总结果": "installation_result"},
+                input_sources={"安装角汇总结果": "variable"},
             ),
         ),
     ]
@@ -501,8 +497,29 @@ def build_installation_angle_graph(point_cloud_path):
         edge(ids["axis_plane"], ids["end"]),
         edge(ids["axis_axis"], ids["end"]),
         edge(ids["twist"], ids["end"]),
+        edge(ids["plane_angle"], ids["combine_primary"]),
+        edge(ids["axis_plane"], ids["combine_primary"]),
+        edge(ids["axis_axis"], ids["combine_primary"]),
+        edge(ids["combine_primary"], ids["combine_final"]),
+        edge(ids["twist"], ids["combine_final"]),
+        edge(ids["combine_final"], ids["end"]),
         edge(ids["mesh_ref"], ids["end"]),
         edge(ids["mesh_measured"], ids["end"]),
         edge(ids["save_tilted"], ids["end"]),
     ]
+    if not relaxed_demo:
+        summary_ids = {ids["combine_primary"], ids["combine_final"]}
+        nodes = [item for item in nodes if item["id"] not in summary_ids]
+        edges = [
+            item
+            for item in edges
+            if item["sourceNodeId"] not in summary_ids
+            and item["targetNodeId"] not in summary_ids
+        ]
+        end_properties = next(
+            item["properties"] for item in nodes if item["id"] == ids["end"]
+        )
+        for display_name in ("安装角是否合格", "安装角汇总结果"):
+            end_properties["inputBindings"].pop(display_name, None)
+            end_properties["inputBindingSources"].pop(display_name, None)
     return {"nodes": nodes, "edges": edges}

@@ -2,6 +2,7 @@ using AuroraStruct3D.DeviceState;
 using Microsoft.AspNetCore.Authorization;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Users;
+using Microsoft.AspNetCore.Mvc;
 
 namespace AuroraStruct3D.DeviceState;
 
@@ -29,7 +30,10 @@ public class DeviceStateAppService : AuroraStruct3DAppService, IDeviceStateAppSe
     [AllowAnonymous]
     public Task<DeviceStateDto> GetCurrentStateAsync()
     {
-        DeviceStateDto dto = new DeviceStateDto
+        return Task.FromResult(MapCurrentState());
+    }
+
+    private DeviceStateDto MapCurrentState() => new()
         {
             Status = _deviceStateManager.Status,
             RunMode = _deviceStateManager.RunMode,
@@ -39,8 +43,53 @@ public class DeviceStateAppService : AuroraStruct3DAppService, IDeviceStateAppSe
             IsInTransition = _deviceStateManager.IsInTransition,
             CanAcceptProductionCommand = _deviceStateManager.CanAcceptProductionCommand,
             CanSwitchMode = _deviceStateManager.CanSwitchMode,
+            CanStart = !_deviceStateManager.IsInTransition
+                && _deviceStateManager.Status is DeviceStatus.Standby or DeviceStatus.Stopped
+                && _deviceStateManager.RunMode is DeviceRunMode.Online or DeviceRunMode.Auto,
+            CanPause = _deviceStateManager.Status == DeviceStatus.Running,
+            CanResume = _deviceStateManager.Status == DeviceStatus.Paused,
+            CanStop = _deviceStateManager.Status is DeviceStatus.Running or DeviceStatus.Paused,
+            CanAcknowledgeFault = _deviceStateManager.Status == DeviceStatus.Fault,
+            CanReset = _deviceStateManager.Status is DeviceStatus.Stopped or DeviceStatus.Fault or DeviceStatus.EmergencyStop,
+            CanEmergencyStop = _deviceStateManager.Status != DeviceStatus.EmergencyStop,
         };
-        return Task.FromResult(dto);
+
+    [Authorize, HttpPost("/api/app/device-state/start")]
+    public Task<DeviceStateDto> StartAsync(DeviceCommandInput input) => ExecuteAsync(_deviceStateManager.StartAsync, input.Reason);
+
+    [Authorize, HttpPost("/api/app/device-state/pause")]
+    public Task<DeviceStateDto> PauseAsync(DeviceCommandInput input) => ExecuteAsync(_deviceStateManager.PauseAsync, input.Reason);
+
+    [Authorize, HttpPost("/api/app/device-state/resume")]
+    public Task<DeviceStateDto> ResumeAsync(DeviceCommandInput input) => ExecuteAsync(_deviceStateManager.ResumeAsync, input.Reason);
+
+    [Authorize, HttpPost("/api/app/device-state/stop")]
+    public Task<DeviceStateDto> StopAsync(DeviceCommandInput input) => ExecuteAsync(_deviceStateManager.StopAsync, input.Reason);
+
+    [Authorize, HttpPost("/api/app/device-state/acknowledge-fault")]
+    public Task<DeviceStateDto> AcknowledgeFaultAsync(DeviceCommandInput input) => ExecuteAsync(_deviceStateManager.AcknowledgeFaultAsync, input.Reason);
+
+    [Authorize, HttpPost("/api/app/device-state/reset")]
+    public Task<DeviceStateDto> ResetAsync(DeviceCommandInput input) => ExecuteAsync(_deviceStateManager.ResetAsync, input.Reason);
+
+    [Authorize, HttpPost("/api/app/device-state/emergency-stop")]
+    public async Task<DeviceStateDto> EmergencyStopAsync(EmergencyStopInput input)
+    {
+        StateChangeContext context = StateChangeContext.Emergency("软件急停", input.Reason);
+        try { await _deviceStateManager.EmergencyStopAsync(context); }
+        catch (InvalidOperationException ex) { throw new Volo.Abp.UserFriendlyException(ex.Message); }
+        return MapCurrentState();
+    }
+
+    private async Task<DeviceStateDto> ExecuteAsync(Func<StateChangeContext, Task> command, string? reason)
+    {
+        StateChangeContext context = StateChangeContext.User(
+            CurrentUser.Id?.ToString() ?? "system",
+            CurrentUser.Name ?? CurrentUser.UserName ?? "system",
+            reason);
+        try { await command(context); }
+        catch (InvalidOperationException ex) { throw new Volo.Abp.UserFriendlyException(ex.Message); }
+        return MapCurrentState();
     }
 
     /// <inheritdoc/>

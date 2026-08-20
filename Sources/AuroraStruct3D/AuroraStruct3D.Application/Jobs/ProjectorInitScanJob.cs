@@ -161,8 +161,8 @@ public class ProjectorInitScanJob
                     ? ProjectorColor.White
                     : device.LastColor;
 
-            // 亮度当前处于白光模式，可直接写入
-            byte targetLight = device.LastLightValue > 0 ? device.LastLightValue : (byte)75;
+            // 亮度 0 是合法配置（关闭亮度），必须按数据库原值恢复，不能回退为默认值。
+            byte targetLight = device.LastLightValue;
             await _projectorDeviceAppService.SetLightAsync(
                 new SetProjectorLightDto
                 {

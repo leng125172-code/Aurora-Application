@@ -40,34 +40,7 @@ public class line_fit_3d : IOperator
             new PointCloudData() { ParameterName = "inlier_points", DisplayName = "内点点云" },
             new PointCloudData() { ParameterName = "outlier_points", DisplayName = "外点点云" },
             new MatImg() { ParameterName = "fitting_error", DisplayName = "拟合误差" },
-            new VisionParameter<double>
-            {
-                ParameterName = "fitting_error_value",
-                DisplayName = "拟合误差值",
-                ParameterType = typeof(double),
-                ControlType = PortControlType.Download,
-            },
-            new VisionParameter<double>
-            {
-                ParameterName = "angle_degrees",
-                DisplayName = "相对基准轴角度",
-                ParameterType = typeof(double),
-                ControlType = PortControlType.Download,
-            },
-            new VisionParameter<bool>
-            {
-                ParameterName = "is_ok",
-                DisplayName = "角度是否合格",
-                ParameterType = typeof(bool),
-                ControlType = PortControlType.Download,
-            },
-            new VisionParameter<string>
-            {
-                ParameterName = "result_json",
-                DisplayName = "直线检测结果",
-                ParameterType = typeof(string),
-                ControlType = PortControlType.Download,
-            },
+            InspectionResults.Output<LineFitInspectionDetails>("直线检测结果"),
         };
 
     public static List<IConfigParameter>? ConfigParameters =>
@@ -231,23 +204,14 @@ public class line_fit_3d : IOperator
         context.Set("inlier_points", PointCloudUtils.BuildCloud(inPts, inColors));
         context.Set("outlier_points", PointCloudUtils.BuildCloud(outPts, outColors));
         context.Set("fitting_error", errorMat);
-        context.Set("fitting_error_value", rmse);
-        context.Set("angle_degrees", angleDegrees);
-        context.Set("is_ok", isOk);
-        context.Set(
-            "result_json",
-            JsonSerializer.Serialize(
-                new
-                {
+        context.Set("result", InspectionResults.CreateTyped(true, isOk,
+                new LineFitInspectionDetails(
                     angleDegrees,
-                    referenceAxis = _referenceAxis,
-                    minAngle = _minAngle,
-                    maxAngle = _maxAngle,
+                    _referenceAxis,
+                    _minAngle,
+                    _maxAngle,
                     rmse,
-                    isOk,
-                }
-            )
-        );
+                    isOk)));
     }
 
     private static double CalculateAxisAngle(double[] direction, string axis)

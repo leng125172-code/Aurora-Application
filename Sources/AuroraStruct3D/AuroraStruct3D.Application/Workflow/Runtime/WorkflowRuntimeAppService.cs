@@ -1,10 +1,12 @@
 using System.Diagnostics;
+using System.Collections.Concurrent;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using AuroraStruct3D.OpenCV.File.Images;
+using AuroraStruct3D.DeviceState;
 using AuroraStruct3D.OpenCV.File.PointCloud;
 using AuroraStruct3D.OpenCV.Registry;
 using AuroraStruct3D.OpenCV.VisionParameters;
@@ -15,7 +17,6 @@ using AuroraStruct3D.OpenCV.Workflow.Statements;
 using AuroraStruct3D.OpenCV.Workflow.Scripting;
 using AuroraStruct3D.OpenCV.Workflow.Values;
 using AuroraStruct3D.OperatorFile;
-using AuroraStruct3D.Plcs;
 using AuroraStruct3D.ProductModels;
 using AuroraStruct3D.Variables;
 using AuroraStruct3D.Variables.Dtos;
@@ -35,6 +36,7 @@ using Volo.Abp.BlobStoring;
 using Volo.Abp.Data;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Validation;
+using Volo.Abp.Uow;
 using RuntimeWorkflowDefinition = AuroraStruct3D.OpenCV.Workflow.WorkflowDefinition;
 
 namespace AuroraStruct3D.Workflow.Runtime;
@@ -46,6 +48,9 @@ namespace AuroraStruct3D.Workflow.Runtime;
 [Route("api/app/workflow")]
 public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRuntimeAppService
 {
+    private static readonly ConcurrentDictionary<Guid, SemaphoreSlim> PublishLocks = new();
+    private static readonly ConcurrentDictionary<Guid, SemaphoreSlim> ApplyLocks = new();
+    private static readonly SemaphoreSlim ProductionRunLock = new(1, 1);
     private const string ExecutionErrorCodeInvalidInput = "EXECUTION_INVALID_INPUT";
     private const string ExecutionErrorCodeUnhandled = "EXECUTION_UNHANDLED";
     private const string ExecutionErrorCodeFault = "EXECUTION_FAULT";
@@ -73,7 +78,6 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
     private readonly IRepository<WorkflowProjectRun, Guid> _runRepository;
     private readonly IRepository<WorkflowPlcTrigger, Guid> _plcTriggerRepository;
     private readonly IRepository<WorkflowPlcHandshakeConfig, Guid> _plcHandshakeRepository;
-    private readonly IRepository<PlcTag, Guid> _plcTagRepository;
     private readonly IRepository<VariableDefinition, Guid> _variableDefinitionRepository;
     private readonly IBlobContainer<OperatorFileBlobContainer> _operatorFileBlobContainer;
     private readonly IOperatorFileRecordRepository _operatorFileRecordRepository;
@@ -82,6 +86,7 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
     private readonly IServiceScopeFactory _serviceScopeFactory;
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly WorkflowRuntimeSafetyOptions _safetyOptions;
+    private readonly IDeviceStateManager _deviceStateManager;
 
     private static readonly HashSet<string> UploadedFileExtensions = new(
         StringComparer.OrdinalIgnoreCase
@@ -124,7 +129,6 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
         IRepository<WorkflowProjectRun, Guid> runRepository,
         IRepository<WorkflowPlcTrigger, Guid> plcTriggerRepository,
         IRepository<WorkflowPlcHandshakeConfig, Guid> plcHandshakeRepository,
-        IRepository<PlcTag, Guid> plcTagRepository,
         IRepository<VariableDefinition, Guid> variableDefinitionRepository,
         IBlobContainer<OperatorFileBlobContainer> operatorFileBlobContainer,
         IOperatorFileRecordRepository operatorFileRecordRepository,
@@ -132,6 +136,7 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
         IBlobContainer<ProductModelBlobContainer> productModelBlobContainer,
         IServiceScopeFactory serviceScopeFactory,
         IHttpContextAccessor httpContextAccessor,
+        IDeviceStateManager deviceStateManager,
         IOptions<WorkflowRuntimeSafetyOptions>? safetyOptions = null
     )
     {
@@ -153,7 +158,6 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
         _runRepository = runRepository;
         _plcTriggerRepository = plcTriggerRepository;
         _plcHandshakeRepository = plcHandshakeRepository;
-        _plcTagRepository = plcTagRepository;
         _variableDefinitionRepository = variableDefinitionRepository;
         _operatorFileBlobContainer = operatorFileBlobContainer;
         _operatorFileRecordRepository = operatorFileRecordRepository;
@@ -161,6 +165,7 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
         _productModelBlobContainer = productModelBlobContainer;
         _serviceScopeFactory = serviceScopeFactory;
         _httpContextAccessor = httpContextAccessor;
+        _deviceStateManager = deviceStateManager;
         _safetyOptions = safetyOptions?.Value ?? new WorkflowRuntimeSafetyOptions();
     }
 
@@ -185,6 +190,16 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
         if (input.ProjectId == Guid.Empty || input.PlcDeviceId == Guid.Empty || input.PlcTagId == Guid.Empty)
             throw new UserFriendlyException("项目、PLC 和点位不能为空。");
         _ = JsonDocument.Parse(input.ExpectedValueJson);
+        if (input.IsEnabled)
+        {
+            WorkflowProjectTaskConfig? config = await AsyncExecuter.FirstOrDefaultAsync(
+                (await _taskConfigRepository.GetQueryableAsync()).Where(x => x.ProjectId == input.ProjectId));
+            if (config?.TaskType == WorkflowProjectTaskType.Cyclic)
+                throw new UserFriendlyException("周期调度与 PLC 点位触发不能同时启用。");
+            if (await AsyncExecuter.AnyAsync((await _plcHandshakeRepository.GetQueryableAsync())
+                .Where(x => x.ProjectId == input.ProjectId && x.IsEnabled)))
+                throw new UserFriendlyException("OPC UA 握手与 PLC 点位触发不能同时启用。");
+        }
         WorkflowPlcTrigger entity;
         if (id.HasValue && id.Value != Guid.Empty)
         {
@@ -208,8 +223,10 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
     [HttpGet("projects/{projectId:guid}/plc-handshake")]
     public async Task<WorkflowPlcHandshakeConfigDto> GetPlcHandshakeAsync(Guid projectId)
     {
+        WorkflowProjectTaskConfig? activeTask = await FindActiveProjectTaskAsync(projectId);
         WorkflowPlcHandshakeConfig? entity = await AsyncExecuter.FirstOrDefaultAsync(
-            (await _plcHandshakeRepository.GetQueryableAsync()).Where(x => x.ProjectId == projectId));
+            (await _plcHandshakeRepository.GetQueryableAsync()).Where(x => x.ProjectId == projectId
+                && (activeTask == null || x.TaskConfigId == activeTask.Id || x.TaskConfigId == Guid.Empty)));
         if (entity is null) throw new UserFriendlyException("当前项目尚未配置 OPC UA 任务握手。");
         return MapPlcHandshakeConfig(entity);
     }
@@ -219,31 +236,26 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
     {
         if (projectId == Guid.Empty || input.ProjectId != Guid.Empty && input.ProjectId != projectId)
             throw new UserFriendlyException("ProjectId 不一致。");
-        Guid[] tagIds = [input.CaptureRequestTagId, input.RequestIdTagId, input.ResultAckTagId,
-            input.ResultAckIdTagId, input.HeartbeatTagId, input.DeviceStatusTagId,
-            input.TaskStatusTagId, input.CanCaptureTagId, input.CaptureAckTagId,
-            input.AckRequestIdTagId, input.ResultValidTagId, input.ResultRequestIdTagId,
-            input.ResultCodeTagId, input.ErrorCodeTagId];
-        if (tagIds.Any(x => x == Guid.Empty) || tagIds.Distinct().Count() != tagIds.Length)
-            throw new UserFriendlyException("握手点位不能为空且不能重复使用。");
-        List<PlcTag> tags = await AsyncExecuter.ToListAsync((await _plcTagRepository.GetQueryableAsync())
-            .Where(x => tagIds.Contains(x.Id) && x.PlcDeviceId == input.PlcDeviceId && x.IsEnabled));
-        if (tags.Count != tagIds.Length) throw new UserFriendlyException("存在不属于所选 PLC 或已禁用的握手点位。");
-        HashSet<Guid> boolIds = [input.CaptureRequestTagId, input.ResultAckTagId,
-            input.CanCaptureTagId, input.CaptureAckTagId, input.ResultValidTagId];
-        if (tags.Any(x => boolIds.Contains(x.Id) && x.DataType != PlcTagDataType.Boolean)
-            || tags.Any(x => !boolIds.Contains(x.Id) && x.DataType is not (PlcTagDataType.Int32 or PlcTagDataType.UInt32 or PlcTagDataType.Int64 or PlcTagDataType.UInt64)))
-            throw new UserFriendlyException("握手 BOOL/DINT 点位类型与协议不一致。");
-        HashSet<Guid> plcOwned = [input.CaptureRequestTagId, input.RequestIdTagId, input.ResultAckTagId, input.ResultAckIdTagId];
-        if (tags.Any(x => plcOwned.Contains(x.Id) && !x.Access.HasFlag(PlcTagAccess.Read))
-            || tags.Any(x => !plcOwned.Contains(x.Id) && !x.Access.HasFlag(PlcTagAccess.Write)))
-            throw new UserFriendlyException("PLC 拥有点位必须可读，平台拥有点位必须可写。");
+        WorkflowProjectTaskConfig? taskConfig = await FindActiveProjectTaskAsync(projectId);
+        if (taskConfig is null) throw new UserFriendlyException("当前项目没有已启用的任务。");
+        string[] addresses = [input.CaptureRequestAddress, input.RequestIdAddress,
+            input.ResultAckAddress, input.ResultAckIdAddress, input.HeartbeatAddress,
+            input.DeviceStatusAddress, input.TaskStatusAddress, input.CanCaptureAddress,
+            input.CaptureAckAddress, input.AckRequestIdAddress, input.ResultValidAddress,
+            input.ResultRequestIdAddress, input.ResultCodeAddress, input.ErrorCodeAddress];
+        if (addresses.Any(string.IsNullOrWhiteSpace)
+            || addresses.Distinct(StringComparer.Ordinal).Count() != addresses.Length)
+            throw new UserFriendlyException("握手点位地址不能为空且不能重复使用。");
         if (input.IsEnabled)
         {
-            WorkflowProjectTaskConfig? taskConfig = await AsyncExecuter.FirstOrDefaultAsync(
-                (await _taskConfigRepository.GetQueryableAsync()).Where(x => x.ProjectId == projectId));
             if (taskConfig?.ResultWorkflowId is null || string.IsNullOrWhiteSpace(taskConfig.ResultVariableName))
                 throw new UserFriendlyException("启用 OPC UA 握手前必须配置正式任务的布尔结果变量。");
+            if (taskConfig.TaskType == WorkflowProjectTaskType.Cyclic)
+                throw new UserFriendlyException("循环任务不能同时启用 OPC UA 握手触发。");
+            bool hasPlcTrigger = await AsyncExecuter.AnyAsync(
+                (await _plcTriggerRepository.GetQueryableAsync()).Where(x => x.ProjectId == projectId && x.IsEnabled));
+            if (hasPlcTrigger)
+                throw new UserFriendlyException("同一项目只能启用一种自动触发方式，请先停用 PLC 点位触发。");
             bool deviceAlreadyUsed = await AsyncExecuter.AnyAsync(
                 (await _plcHandshakeRepository.GetQueryableAsync()).Where(x =>
                     x.ProjectId != projectId && x.PlcDeviceId == input.PlcDeviceId && x.IsEnabled));
@@ -251,13 +263,14 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
         }
 
         WorkflowPlcHandshakeConfig? entity = await AsyncExecuter.FirstOrDefaultAsync(
-            (await _plcHandshakeRepository.GetQueryableAsync()).Where(x => x.ProjectId == projectId));
-        entity ??= new WorkflowPlcHandshakeConfig(GuidGenerator.Create(), projectId);
-        entity.Configure(input.PlcDeviceId, input.CaptureRequestTagId, input.RequestIdTagId,
-            input.ResultAckTagId, input.ResultAckIdTagId, input.HeartbeatTagId,
-            input.DeviceStatusTagId, input.TaskStatusTagId, input.CanCaptureTagId,
-            input.CaptureAckTagId, input.AckRequestIdTagId, input.ResultValidTagId,
-            input.ResultRequestIdTagId, input.ResultCodeTagId, input.ErrorCodeTagId, input.IsEnabled);
+            (await _plcHandshakeRepository.GetQueryableAsync()).Where(x => x.ProjectId == projectId
+                && (x.TaskConfigId == taskConfig.Id || x.TaskConfigId == Guid.Empty)));
+        entity ??= new WorkflowPlcHandshakeConfig(GuidGenerator.Create(), projectId, taskConfig.Id);
+        entity.Configure(input.PlcDeviceId, input.CaptureRequestAddress, input.RequestIdAddress,
+            input.ResultAckAddress, input.ResultAckIdAddress, input.HeartbeatAddress,
+            input.DeviceStatusAddress, input.TaskStatusAddress, input.CanCaptureAddress,
+            input.CaptureAckAddress, input.AckRequestIdAddress, input.ResultValidAddress,
+            input.ResultRequestIdAddress, input.ResultCodeAddress, input.ErrorCodeAddress, input.IsEnabled);
         if (entity.Id == Guid.Empty) throw new InvalidOperationException();
         if (await _plcHandshakeRepository.FindAsync(entity.Id) is null)
             await _plcHandshakeRepository.InsertAsync(entity, autoSave: true);
@@ -268,8 +281,10 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
     [HttpGet("projects/{projectId:guid}/plc-handshake/status")]
     public async Task<WorkflowPlcHandshakeStatusDto> GetPlcHandshakeStatusAsync(Guid projectId)
     {
+        WorkflowProjectTaskConfig? activeTask = await FindActiveProjectTaskAsync(projectId);
         WorkflowPlcHandshakeConfig? entity = await AsyncExecuter.FirstOrDefaultAsync(
-            (await _plcHandshakeRepository.GetQueryableAsync()).Where(x => x.ProjectId == projectId));
+            (await _plcHandshakeRepository.GetQueryableAsync()).Where(x => x.ProjectId == projectId
+                && (activeTask == null || x.TaskConfigId == activeTask.Id || x.TaskConfigId == Guid.Empty)));
         return entity is null
             ? new WorkflowPlcHandshakeStatusDto
             {
@@ -284,8 +299,10 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
     [HttpPost("projects/{projectId:guid}/plc-handshake/reset")]
     public async Task<WorkflowPlcHandshakeStatusDto> ResetPlcHandshakeAsync(Guid projectId)
     {
+        WorkflowProjectTaskConfig? activeTask = await FindActiveProjectTaskAsync(projectId);
         WorkflowPlcHandshakeConfig? entity = await AsyncExecuter.FirstOrDefaultAsync(
-            (await _plcHandshakeRepository.GetQueryableAsync()).Where(x => x.ProjectId == projectId));
+            (await _plcHandshakeRepository.GetQueryableAsync()).Where(x => x.ProjectId == projectId
+                && (activeTask == null || x.TaskConfigId == activeTask.Id || x.TaskConfigId == Guid.Empty)));
         if (entity is null) throw new UserFriendlyException("当前项目尚未配置 OPC UA 任务握手，无需复位。");
         entity.Reset();
         await _plcHandshakeRepository.UpdateAsync(entity, autoSave: true);
@@ -333,6 +350,7 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
             CycleIntervalSeconds = cycleIntervalSeconds,
             ResultWorkflowId = taskConfig?.ResultWorkflowId,
             ResultVariableName = taskConfig?.ResultVariableName,
+            OnErrorAction = taskConfig?.OnErrorAction ?? WorkflowProjectRunOnErrorAction.StopRun,
             Items = workflows
                 .Select(x =>
                     taskMap.TryGetValue(x.Id, out WorkflowProjectTask? task)
@@ -381,6 +399,15 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
         {
             throw new UserFriendlyException("周期触发必须提供大于 0 的周期间隔（秒）。");
         }
+        if (input.TaskType == WorkflowProjectTaskType.Cyclic)
+        {
+            bool hasPlcTrigger = await AsyncExecuter.AnyAsync(
+                (await _plcTriggerRepository.GetQueryableAsync()).Where(x => x.ProjectId == input.ProjectId && x.IsEnabled));
+            bool hasHandshake = await AsyncExecuter.AnyAsync(
+                (await _plcHandshakeRepository.GetQueryableAsync()).Where(x => x.ProjectId == input.ProjectId && x.IsEnabled));
+            if (hasPlcTrigger || hasHandshake)
+                throw new UserFriendlyException("周期调度不能与 PLC 点位触发或 OPC UA 握手同时启用。");
+        }
 
         List<Guid> workflowIds = input.Items.Select(x => x.WorkflowId).Distinct().ToList();
         if (workflowIds.Any(x => x == Guid.Empty) || workflowIds.Count != input.Items.Count)
@@ -404,15 +431,21 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
                 throw new UserFriendlyException("结果绑定必须选择已启用的工作流和布尔输出变量。");
             WorkflowDefinition resultWorkflow = workflows.Single(x => x.Id == input.ResultWorkflowId.Value);
             List<string> declaredOutputs = DeserializeJson<List<string>>(resultWorkflow.OutputVariables ?? "[]") ?? [];
-            if (!declaredOutputs.Contains(input.ResultVariableName, StringComparer.Ordinal))
+            WorkflowOutputAccessor resultAccessor;
+            try { resultAccessor = WorkflowOutputAccessor.Compile(input.ResultVariableName); }
+            catch (FormatException ex) { throw new UserFriendlyException(ex.Message); }
+            if (!declaredOutputs.Contains(resultAccessor.RootVariableName, StringComparer.Ordinal))
                 throw new UserFriendlyException("结果变量不在所选工作流的正式输出中。");
             GraphDataModel resultGraph = JsonSerializer.Deserialize<GraphDataModel>(
                 resultWorkflow.GraphData, GraphJson.Options) ?? new GraphDataModel();
             VariableCompileRequestDto compileRequest = await _compileRequestFactory.BuildAsync(
                 input.ProjectId, resultWorkflow.Id, resultGraph);
             VariableDeclarationDto? declaration = compileRequest.Declarations.FirstOrDefault(x =>
-                string.Equals(x.Name, input.ResultVariableName, StringComparison.Ordinal));
-            if (declaration is null || WorkflowExecutionTypeNormalizer.NormalizeDeclaredType(declaration.TypeName) != "System.Boolean")
+                string.Equals(x.Name, resultAccessor.RootVariableName, StringComparison.Ordinal));
+            bool directBoolean = declaration is not null
+                && WorkflowExecutionTypeNormalizer.NormalizeDeclaredType(declaration.TypeName) == "System.Boolean";
+            bool booleanMember = await IsBooleanOutputPathAsync(resultGraph, resultAccessor);
+            if (!directBoolean && !booleanMember)
                 throw new UserFriendlyException("正式任务结果变量必须是布尔类型。");
         }
         else if (!string.IsNullOrWhiteSpace(input.ResultVariableName))
@@ -423,28 +456,26 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
         int? cycleIntervalSeconds =
             input.TaskType == WorkflowProjectTaskType.Cyclic ? input.CycleIntervalSeconds : null;
 
-        WorkflowProjectTaskConfig? taskConfig = await AsyncExecuter.FirstOrDefaultAsync(
-            (await _taskConfigRepository.GetQueryableAsync()).Where(x =>
-                x.ProjectId == input.ProjectId
-            )
-        );
-        if (taskConfig is null)
+        List<WorkflowProjectTaskConfig> taskConfigs = await AsyncExecuter.ToListAsync(
+            (await _taskConfigRepository.GetQueryableAsync()).Where(x => x.ProjectId == input.ProjectId));
+        if (taskConfigs.Count == 0)
         {
-            taskConfig = WorkflowProjectTaskConfig.Create(
+            WorkflowProjectTaskConfig taskConfig = WorkflowProjectTaskConfig.Create(
                 GuidGenerator.Create(),
                 input.ProjectId,
                 input.TaskType,
                 cycleIntervalSeconds
             );
             await _taskConfigRepository.InsertAsync(taskConfig, autoSave: true);
+            taskConfigs.Add(taskConfig);
         }
-        else
+        foreach (WorkflowProjectTaskConfig taskConfig in taskConfigs)
         {
             taskConfig.SetTrigger(input.TaskType, cycleIntervalSeconds);
-            await _taskConfigRepository.UpdateAsync(taskConfig, autoSave: true);
+            taskConfig.SetResultBinding(input.ResultWorkflowId, input.ResultVariableName);
+            taskConfig.SetOnErrorAction(input.OnErrorAction);
         }
-        taskConfig.SetResultBinding(input.ResultWorkflowId, input.ResultVariableName);
-        await _taskConfigRepository.UpdateAsync(taskConfig, autoSave: true);
+        await _taskConfigRepository.UpdateManyAsync(taskConfigs, autoSave: true);
 
         Dictionary<Guid, WorkflowProjectTask> existingMap = (
             await AsyncExecuter.ToListAsync(
@@ -479,9 +510,131 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
         return await GetProjectTasksAsync(input.ProjectId);
     }
 
+    private async Task<bool> IsBooleanOutputPathAsync(
+        GraphDataModel graph,
+        WorkflowOutputAccessor accessor)
+    {
+        if (accessor.Path == accessor.RootVariableName)
+            return false;
+        (Guid OperatorId, string PortName)? producer = FindResultOutputProducer(
+            graph, accessor.RootVariableName);
+        if (producer is null)
+            return false;
+        OperatorParametersDescriptor? descriptor = await _registry.GetParametersAsync(
+            producer.Value.OperatorId);
+        string? schemaText = descriptor?.Outputs.FirstOrDefault(x =>
+            x.ParameterName == producer.Value.PortName)?.JsonSchema;
+        if (string.IsNullOrWhiteSpace(schemaText))
+            return false;
+        try
+        {
+            JsonNode? schema = JsonNode.Parse(schemaText);
+            string suffix = accessor.Path[accessor.RootVariableName.Length..];
+            foreach (Match segment in Regex.Matches(suffix,
+                @"\.([A-Za-z_][A-Za-z0-9_]*)|\[(\d+)\]"))
+            {
+                schema = segment.Groups[1].Success
+                    ? schema?["properties"]?[segment.Groups[1].Value]
+                    : schema?["items"];
+                if (schema is null)
+                    return false;
+            }
+            return schema?["type"]?.GetValue<string>() == "boolean";
+        }
+        catch (JsonException) { return false; }
+    }
+
+    private static (Guid OperatorId, string PortName)? FindResultOutputProducer(
+        GraphDataModel graph, string variableName)
+    {
+        foreach (NodeModel node in graph.Nodes)
+        {
+            if (Guid.TryParse(node.Type, out Guid operatorId)
+                && node.Properties?.OutputBindings is { } outputs)
+                foreach ((string port, string variable) in outputs)
+                    if (variable == variableName) return (operatorId, port);
+            if (node.Properties?.InnerGraphData is { } inner
+                && FindResultOutputProducer(inner, variableName) is { } nested)
+                return nested;
+        }
+        return null;
+    }
+
+    [HttpGet("project-tasks")]
+    public async Task<List<WorkflowProjectTaskRegistrationDto>> GetProjectTaskRegistrationsAsync(Guid? projectId = null)
+    {
+        IQueryable<WorkflowProjectTaskConfig> query = await _taskConfigRepository.GetQueryableAsync();
+        if (projectId.HasValue) query = query.Where(x => x.ProjectId == projectId.Value);
+        List<WorkflowProjectTaskConfig> rows = await AsyncExecuter.ToListAsync(
+            query.OrderByDescending(x => x.CreationTime));
+        List<WorkflowPlcHandshakeConfig> handshakes = await _plcHandshakeRepository.GetListAsync();
+        Dictionary<Guid, WorkflowPlcHandshakeConfig> handshakeMap = handshakes
+            .Where(x => x.TaskConfigId != Guid.Empty).ToDictionary(x => x.TaskConfigId);
+        return rows.Select(x => MapProjectTaskRegistration(x,
+            handshakeMap.GetValueOrDefault(x.Id))).ToList();
+    }
+
+    [HttpPost("project-tasks")]
+    public async Task<WorkflowProjectTaskRegistrationDto> CreateProjectTaskAsync(
+        CreateWorkflowProjectTaskInput input)
+    {
+        if (input.ProjectId == Guid.Empty)
+            throw new UserFriendlyException("ProjectId 不能为空。");
+        WorkflowProjectTaskConfig entity = WorkflowProjectTaskConfig.Create(
+            GuidGenerator.Create(), input.ProjectId, isEnabled: input.IsEnabled, name: input.Name);
+        WorkflowProjectTaskConfig? template = await AsyncExecuter.FirstOrDefaultAsync(
+            (await _taskConfigRepository.GetQueryableAsync()).Where(x => x.ProjectId == input.ProjectId));
+        if (template is not null)
+        {
+            entity.SetTrigger(template.TaskType, template.CycleIntervalSeconds);
+            entity.SetResultBinding(template.ResultWorkflowId, template.ResultVariableName);
+            entity.SetOnErrorAction(template.OnErrorAction);
+        }
+        if (input.IsEnabled) await DisableOtherProjectTasksAsync(input.ProjectId, entity.Id);
+        await _taskConfigRepository.InsertAsync(entity, autoSave: true);
+        WorkflowPlcHandshakeConfig? handshake = input.PlcHandshake is null ? null
+            : await SaveTaskHandshakeAsync(entity, input.PlcHandshake);
+        return MapProjectTaskRegistration(entity, handshake);
+    }
+
+    [HttpPut("project-tasks/{taskId:guid}")]
+    public async Task<WorkflowProjectTaskRegistrationDto> UpdateProjectTaskAsync(
+        Guid taskId, UpdateWorkflowProjectTaskInput input)
+    {
+        WorkflowProjectTaskConfig entity = await _taskConfigRepository.GetAsync(taskId);
+        if (input.IsEnabled) await DisableOtherProjectTasksAsync(entity.ProjectId, entity.Id);
+        entity.SetName(input.Name);
+        entity.SetEnabled(input.IsEnabled);
+        await _taskConfigRepository.UpdateAsync(entity, autoSave: true);
+        WorkflowPlcHandshakeConfig? handshake = input.PlcHandshake is null
+            ? await FindTaskHandshakeAsync(entity)
+            : await SaveTaskHandshakeAsync(entity, input.PlcHandshake);
+        return MapProjectTaskRegistration(entity, handshake);
+    }
+
+    [HttpPut("project-tasks/{taskId:guid}/enabled")]
+    public async Task<WorkflowProjectTaskRegistrationDto> SetProjectTaskEnabledAsync(
+        Guid taskId, UpdateWorkflowProjectTaskEnabledInput input)
+    {
+        WorkflowProjectTaskConfig entity = await _taskConfigRepository.GetAsync(taskId);
+        if (input.IsEnabled) await DisableOtherProjectTasksAsync(entity.ProjectId, entity.Id);
+        entity.SetEnabled(input.IsEnabled);
+        await _taskConfigRepository.UpdateAsync(entity, autoSave: true);
+        if (!input.IsEnabled)
+            _recurringJobManager.RemoveIfExists(BuildRecurringJobId(entity.ProjectId));
+        else
+        {
+            WorkflowProjectDeployment? active = await AsyncExecuter.FirstOrDefaultAsync(
+                (await _deploymentRepository.GetQueryableAsync()).Where(x =>
+                    x.ProjectId == entity.ProjectId && x.Status == WorkflowProjectDeploymentStatus.Activated));
+            if (active is not null) SyncRecurringSchedule(active);
+        }
+        return MapProjectTaskRegistration(entity, await FindTaskHandshakeAsync(entity));
+    }
+
     /// <inheritdoc/>
     [HttpGet("projects/{projectId:guid}/deployments")]
-    public async Task<WorkflowProjectDeploymentDto> GetProjectDeploymentsAsync(Guid projectId)
+    public async Task<WorkflowProjectDeploymentDto?> GetProjectDeploymentsAsync(Guid projectId)
     {
         if (projectId == Guid.Empty)
         {
@@ -494,12 +647,109 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
                 .OrderByDescending(x => x.Revision)
         );
 
-        if (deployment is null)
-        {
-            throw new UserFriendlyException("当前项目尚未创建部署快照。");
-        }
+        return deployment is null ? null : MapDeploymentDto(deployment);
+    }
 
-        return MapDeploymentDto(deployment);
+    [HttpGet("projects/{projectId:guid}/deployments/history")]
+    public async Task<PagedResultDto<WorkflowProjectDeploymentDto>> GetProjectDeploymentHistoryAsync(
+        Guid projectId, WorkflowProjectDeploymentHistoryInput input)
+    {
+        IQueryable<WorkflowProjectDeployment> query =
+            (await _deploymentRepository.GetQueryableAsync()).Where(x => x.ProjectId == projectId);
+        long total = await AsyncExecuter.LongCountAsync(query);
+        List<WorkflowProjectDeployment> rows = await AsyncExecuter.ToListAsync(query
+            .OrderByDescending(x => x.Revision)
+            .Skip(input.SkipCount).Take(input.MaxResultCount));
+        return new PagedResultDto<WorkflowProjectDeploymentDto>(total,
+            rows.Select(MapDeploymentDto).ToList());
+    }
+
+    [HttpGet("projects/{projectId:guid}/application-status")]
+    public async Task<WorkflowProjectApplicationStatusDto> GetProjectApplicationStatusAsync(Guid projectId)
+    {
+        if (projectId == Guid.Empty) throw new UserFriendlyException("ProjectId 不能为空。");
+        List<WorkflowProjectDeployment> deployments = await AsyncExecuter.ToListAsync(
+            (await _deploymentRepository.GetQueryableAsync())
+                .Where(x => x.ProjectId == projectId)
+                .OrderByDescending(x => x.Revision));
+        WorkflowProjectDeployment? active = deployments.FirstOrDefault(x =>
+            x.Status == WorkflowProjectDeploymentStatus.Activated);
+        WorkflowProjectDeployment? latest = deployments.FirstOrDefault();
+        var result = new WorkflowProjectApplicationStatusDto
+        {
+            ProjectId = projectId,
+            ActiveDeployment = active is null ? null : MapDeploymentDto(active),
+            LatestDeployment = latest is null ? null : MapDeploymentDto(latest),
+        };
+        try
+        {
+            string draftHash = await ComputeCurrentProjectSnapshotHashAsync(projectId);
+            result.HasUnappliedChanges = active is null
+                || !string.Equals(active.SnapshotHash, draftHash, StringComparison.Ordinal);
+            result.CanApply = true;
+        }
+        catch (UserFriendlyException ex)
+        {
+            result.HasUnappliedChanges = true;
+            result.CanApply = false;
+            result.ValidationMessages.Add(ex.Message);
+        }
+        return result;
+    }
+
+    [HttpPost("projects/{projectId:guid}/apply")]
+    [UnitOfWork]
+    public async Task<ApplyWorkflowProjectResultDto> ApplyProjectToDeviceAsync(
+        Guid projectId, ApplyWorkflowProjectInput input)
+    {
+        if (projectId == Guid.Empty || input.TaskConfig.ProjectId != projectId)
+            throw new UserFriendlyException("ProjectId 不一致。");
+
+        SemaphoreSlim applyLock = ApplyLocks.GetOrAdd(projectId, _ => new SemaphoreSlim(1, 1));
+        await applyLock.WaitAsync();
+        try
+        {
+            WorkflowProjectDeployment? activeBefore = await AsyncExecuter.FirstOrDefaultAsync(
+                (await _deploymentRepository.GetQueryableAsync()).Where(x =>
+                    x.ProjectId == projectId && x.Status == WorkflowProjectDeploymentStatus.Activated));
+            if (activeBefore?.Id != input.ExpectedActiveDeploymentId)
+                throw new UserFriendlyException("设备生效版本已被其他操作人更新，请刷新后重试。");
+
+            await UpdateProjectTasksAsync(input.TaskConfig);
+            string draftHash = await ComputeCurrentProjectSnapshotHashAsync(projectId);
+            if (activeBefore is not null
+                && string.Equals(activeBefore.SnapshotHash, draftHash, StringComparison.Ordinal))
+            {
+                return new ApplyWorkflowProjectResultDto
+                {
+                    ProjectId = projectId,
+                    Deployment = MapDeploymentDto(activeBefore),
+                    Unchanged = true,
+                    AppliedAt = Clock.Now,
+                };
+            }
+
+            int previousRevision = (await AsyncExecuter.FirstOrDefaultAsync(
+                (await _deploymentRepository.GetQueryableAsync())
+                    .Where(x => x.ProjectId == projectId)
+                    .OrderByDescending(x => x.Revision)))?.Revision ?? 0;
+            WorkflowProjectDeploymentDto published = await PublishProjectDeploymentAsync(projectId);
+            WorkflowProjectDeployment deployment = await _deploymentRepository.GetAsync(published.Id);
+            WorkflowProjectDeploymentDto activated = await SwitchActiveDeploymentAsync(
+                deployment, "应用到设备", allowAlreadyActive: true);
+            return new ApplyWorkflowProjectResultDto
+            {
+                ProjectId = projectId,
+                Deployment = activated,
+                CreatedNewRevision = activated.Revision > previousRevision,
+                ActivationChanged = activeBefore?.Id != activated.Id,
+                AppliedAt = Clock.Now,
+            };
+        }
+        finally
+        {
+            applyLock.Release();
+        }
     }
 
     /// <inheritdoc/>
@@ -511,6 +761,10 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
             throw new UserFriendlyException("ProjectId 不能为空。");
         }
 
+        SemaphoreSlim publishLock = PublishLocks.GetOrAdd(projectId, _ => new SemaphoreSlim(1, 1));
+        await publishLock.WaitAsync();
+        try
+        {
         List<WorkflowProjectTask> tasks = await AsyncExecuter.ToListAsync(
             (await _taskRepository.GetQueryableAsync())
                 .Where(x => x.ProjectId == projectId && x.IsEnabled)
@@ -585,7 +839,19 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
             })
             .ToList();
 
-        string snapshotHash = ComputeSnapshotHash(items);
+        WorkflowProjectTaskConfig? taskConfig = await AsyncExecuter.FirstOrDefaultAsync(
+            (await _taskConfigRepository.GetQueryableAsync()).Where(x => x.ProjectId == projectId));
+        var frozenTaskConfig = new WorkflowProjectFrozenTaskConfig
+        {
+            TaskConfigId = taskConfig?.Id ?? Guid.Empty,
+            TaskType = taskConfig?.TaskType ?? WorkflowProjectTaskType.Immediate,
+            CycleIntervalSeconds = taskConfig?.CycleIntervalSeconds,
+            ResultWorkflowId = taskConfig?.ResultWorkflowId,
+            ResultVariableName = taskConfig?.ResultVariableName,
+            OnErrorAction = taskConfig?.OnErrorAction ?? WorkflowProjectRunOnErrorAction.StopRun,
+        };
+
+        string snapshotHash = ComputeSnapshotHash(items, frozenGraphs, frozenVariables, frozenTaskConfig);
 
         WorkflowProjectDeployment? existingDeployment;
         using (DataFilter.Disable<ISoftDelete>())
@@ -597,41 +863,28 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
             );
         }
 
-        if (existingDeployment is not null)
-        {
-            bool restored = false;
-            if (existingDeployment.IsDeleted)
-            {
-                existingDeployment.RestoreFromDeleted();
-                restored = true;
-            }
-
-            bool changed = existingDeployment.UpdatePublishedContent(
-                items,
-                frozenGraphs,
-                frozenVariables,
-                snapshotHash
-            );
-            if (changed || restored)
-            {
-                await _deploymentRepository.UpdateAsync(existingDeployment, autoSave: true);
-            }
-
+        if (existingDeployment is not null && !existingDeployment.IsDeleted
+            && string.Equals(existingDeployment.SnapshotHash, snapshotHash, StringComparison.Ordinal))
             return MapDeploymentDto(existingDeployment);
-        }
 
         WorkflowProjectDeployment deployment = WorkflowProjectDeployment.CreatePublished(
             GuidGenerator.Create(),
             projectId,
-            1,
+            (existingDeployment?.Revision ?? 0) + 1,
             items,
             frozenGraphs,
             frozenVariables,
+            frozenTaskConfig,
             snapshotHash
         );
         await _deploymentRepository.InsertAsync(deployment, autoSave: true);
 
         return MapDeploymentDto(deployment);
+        }
+        finally
+        {
+            publishLock.Release();
+        }
     }
 
     /// <inheritdoc/>
@@ -737,11 +990,31 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
 
         Guid projectId = input.ProjectId;
 
-        // 项目独占校验：同一项目已有 Queued 或 Running 运行时拒绝创建新运行。
+        List<WorkflowProjectTaskConfig> enabledTasks = await AsyncExecuter.ToListAsync(
+            (await _taskConfigRepository.GetQueryableAsync()).Where(x =>
+                x.ProjectId == projectId && x.IsEnabled
+                && (!input.TaskConfigId.HasValue || x.Id == input.TaskConfigId.Value)));
+        if (!input.TaskConfigId.HasValue && enabledTasks.Count > 1)
+            throw new UserFriendlyException("当前项目存在多个启用任务，请明确指定 TaskConfigId。");
+        WorkflowProjectTaskConfig? registeredTask = enabledTasks.SingleOrDefault();
+        if (registeredTask is null)
+            throw new UserFriendlyException("当前项目任务未启用，无法启动正式运行。");
+
+        if (_deviceStateManager.Status != DeviceStatus.Running
+            || _deviceStateManager.RunMode is not (DeviceRunMode.Online or DeviceRunMode.Auto))
+            throw new UserFriendlyException("正式运行仅允许在设备运行中且处于联机或自动模式时启动。");
+
+        if (input.StartType == WorkflowProjectRunStartType.Cyclic)
+            throw new UserFriendlyException("周期运行由项目任务配置和激活部署统一管理，请使用立即运行。");
+
+        await ProductionRunLock.WaitAsync();
+        try
+        {
+
+        // 单机生产独占：任意项目已有活动运行时拒绝创建新运行。
         bool hasActiveRun = await AsyncExecuter.AnyAsync(
             (await _runRepository.GetQueryableAsync()).Where(x =>
-                x.ProjectId == projectId
-                && (
+                (
                     x.Status == WorkflowProjectRunStatus.Queued
                     || x.Status == WorkflowProjectRunStatus.Running
                 )
@@ -750,7 +1023,7 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
         if (hasActiveRun)
         {
             throw new UserFriendlyException(
-                "该项目已有进行中的运行，请等待完成、取消或删除现有运行后再启动新运行。"
+                "设备已有进行中的正式运行，请等待完成或取消后再启动新运行。"
             );
         }
 
@@ -781,6 +1054,7 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
                 {
                     RunId = runId,
                     ProjectId = projectId,
+                    TaskConfigId = registeredTask.Id,
                     DeploymentId = deploymentId,
                     WorkflowIds = workflowIds,
                     ContinueOnError = continueOnError,
@@ -800,6 +1074,7 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
                         new WorkflowProjectRunRecurringArgs
                         {
                             ProjectId = projectId,
+                            TaskConfigId = registeredTask.Id,
                             DeploymentId = deploymentId,
                             DeploymentRevision = deploymentRevision,
                             ContinueOnError = continueOnError,
@@ -814,11 +1089,17 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
         {
             RunId = runId,
             ProjectId = projectId,
+            TaskConfigId = registeredTask.Id,
             WorkflowCount = workflowIds.Count,
             HangfireJobId = hangfireJobId,
             DeploymentId = deploymentId,
             DeploymentRevision = deploymentRevision,
         };
+        }
+        finally
+        {
+            ProductionRunLock.Release();
+        }
     }
 
     private async Task<(
@@ -4882,14 +5163,14 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
 
     private static WorkflowPlcHandshakeConfigDto MapPlcHandshakeConfig(WorkflowPlcHandshakeConfig x) => new()
     {
-        Id = x.Id, ProjectId = x.ProjectId, PlcDeviceId = x.PlcDeviceId,
-        CaptureRequestTagId = x.CaptureRequestTagId, RequestIdTagId = x.RequestIdTagId,
-        ResultAckTagId = x.ResultAckTagId, ResultAckIdTagId = x.ResultAckIdTagId,
-        HeartbeatTagId = x.HeartbeatTagId, DeviceStatusTagId = x.DeviceStatusTagId,
-        TaskStatusTagId = x.TaskStatusTagId, CanCaptureTagId = x.CanCaptureTagId,
-        CaptureAckTagId = x.CaptureAckTagId, AckRequestIdTagId = x.AckRequestIdTagId,
-        ResultValidTagId = x.ResultValidTagId, ResultRequestIdTagId = x.ResultRequestIdTagId,
-        ResultCodeTagId = x.ResultCodeTagId, ErrorCodeTagId = x.ErrorCodeTagId,
+        Id = x.Id, TaskConfigId = x.TaskConfigId, ProjectId = x.ProjectId, PlcDeviceId = x.PlcDeviceId,
+        CaptureRequestAddress = x.CaptureRequestAddress, RequestIdAddress = x.RequestIdAddress,
+        ResultAckAddress = x.ResultAckAddress, ResultAckIdAddress = x.ResultAckIdAddress,
+        HeartbeatAddress = x.HeartbeatAddress, DeviceStatusAddress = x.DeviceStatusAddress,
+        TaskStatusAddress = x.TaskStatusAddress, CanCaptureAddress = x.CanCaptureAddress,
+        CaptureAckAddress = x.CaptureAckAddress, AckRequestIdAddress = x.AckRequestIdAddress,
+        ResultValidAddress = x.ResultValidAddress, ResultRequestIdAddress = x.ResultRequestIdAddress,
+        ResultCodeAddress = x.ResultCodeAddress, ErrorCodeAddress = x.ErrorCodeAddress,
         IsEnabled = x.IsEnabled,
     };
 
@@ -4907,6 +5188,9 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
     {
         List<WorkflowProjectDeploymentItem> items =
             DeserializeJson<List<WorkflowProjectDeploymentItem>>(deployment.SnapshotJson) ?? [];
+        WorkflowProjectFrozenTaskConfig taskConfig =
+            DeserializeJson<WorkflowProjectFrozenTaskConfig>(deployment.FrozenTaskConfigJson)
+            ?? new WorkflowProjectFrozenTaskConfig();
 
         return new WorkflowProjectDeploymentDto
         {
@@ -4933,6 +5217,12 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
             ActivatedAt = deployment.ActivatedAt,
             ActivatedBy = deployment.ActivatedBy,
             CreationTime = deployment.CreationTime,
+            SnapshotSchemaVersion = deployment.SnapshotSchemaVersion,
+            TaskType = taskConfig.TaskType,
+            CycleIntervalSeconds = taskConfig.CycleIntervalSeconds,
+            ResultWorkflowId = taskConfig.ResultWorkflowId,
+            ResultVariableName = taskConfig.ResultVariableName,
+            OnErrorAction = taskConfig.OnErrorAction,
         };
     }
 
@@ -4959,6 +5249,7 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
                 throw new UserFriendlyException("目标部署已处于激活状态，无需回滚。");
             }
 
+            SyncRecurringSchedule(deployment);
             return MapDeploymentDto(deployment);
         }
 
@@ -4979,7 +5270,92 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
 
         deployment.Activate(CurrentUser.Id, Clock.Now);
         await _deploymentRepository.UpdateAsync(deployment, autoSave: true);
+        SyncRecurringSchedule(deployment);
         return MapDeploymentDto(deployment);
+    }
+
+    private static WorkflowProjectTaskRegistrationDto MapProjectTaskRegistration(
+        WorkflowProjectTaskConfig entity, WorkflowPlcHandshakeConfig? handshake = null) => new()
+    {
+        Id = entity.Id,
+        ProjectId = entity.ProjectId,
+        Name = entity.Name,
+        IsEnabled = entity.IsEnabled,
+        CreationTime = entity.CreationTime,
+        PlcHandshake = handshake is null ? null : MapPlcHandshakeConfig(handshake),
+    };
+
+    private async Task DisableOtherProjectTasksAsync(Guid projectId, Guid selectedTaskId)
+    {
+        List<WorkflowProjectTaskConfig> others = await AsyncExecuter.ToListAsync(
+            (await _taskConfigRepository.GetQueryableAsync()).Where(x =>
+                x.ProjectId == projectId && x.Id != selectedTaskId && x.IsEnabled));
+        foreach (WorkflowProjectTaskConfig other in others) other.SetEnabled(false);
+        if (others.Count > 0) await _taskConfigRepository.UpdateManyAsync(others, autoSave: true);
+    }
+
+    private async Task<WorkflowProjectTaskConfig?> FindActiveProjectTaskAsync(Guid projectId)
+    {
+        return await AsyncExecuter.FirstOrDefaultAsync(
+            (await _taskConfigRepository.GetQueryableAsync()).Where(x =>
+                x.ProjectId == projectId && x.IsEnabled));
+    }
+
+    private async Task<WorkflowPlcHandshakeConfig?> FindTaskHandshakeAsync(WorkflowProjectTaskConfig task)
+    {
+        return await AsyncExecuter.FirstOrDefaultAsync(
+            (await _plcHandshakeRepository.GetQueryableAsync()).Where(x =>
+                x.TaskConfigId == task.Id || x.TaskConfigId == Guid.Empty && x.ProjectId == task.ProjectId));
+    }
+
+    private async Task<WorkflowPlcHandshakeConfig> SaveTaskHandshakeAsync(
+        WorkflowProjectTaskConfig task, SaveWorkflowPlcHandshakeConfigInput input)
+    {
+        if (input.ProjectId != Guid.Empty && input.ProjectId != task.ProjectId)
+            throw new UserFriendlyException("PLC 握手配置的 ProjectId 与任务所属项目不一致。");
+        if (input.IsEnabled && (task.ResultWorkflowId is null
+            || string.IsNullOrWhiteSpace(task.ResultVariableName)))
+            throw new UserFriendlyException("启用 OPC UA 握手前必须配置正式任务的布尔结果变量。");
+        if (input.IsEnabled && task.TaskType == WorkflowProjectTaskType.Cyclic)
+            throw new UserFriendlyException("循环任务不能同时启用 OPC UA 握手触发。");
+        WorkflowPlcHandshakeConfig? entity = await FindTaskHandshakeAsync(task);
+        entity ??= new WorkflowPlcHandshakeConfig(GuidGenerator.Create(), task.ProjectId, task.Id);
+        entity.Configure(input.PlcDeviceId, input.CaptureRequestAddress, input.RequestIdAddress,
+            input.ResultAckAddress, input.ResultAckIdAddress, input.HeartbeatAddress,
+            input.DeviceStatusAddress, input.TaskStatusAddress, input.CanCaptureAddress,
+            input.CaptureAckAddress, input.AckRequestIdAddress, input.ResultValidAddress,
+            input.ResultRequestIdAddress, input.ResultCodeAddress, input.ErrorCodeAddress,
+            input.IsEnabled);
+        if (await _plcHandshakeRepository.FindAsync(entity.Id) is null)
+            await _plcHandshakeRepository.InsertAsync(entity, autoSave: true);
+        else await _plcHandshakeRepository.UpdateAsync(entity, autoSave: true);
+        return entity;
+    }
+
+    private void SyncRecurringSchedule(WorkflowProjectDeployment deployment)
+    {
+        WorkflowProjectFrozenTaskConfig config =
+            DeserializeJson<WorkflowProjectFrozenTaskConfig>(deployment.FrozenTaskConfigJson)
+            ?? new WorkflowProjectFrozenTaskConfig();
+        string jobId = BuildRecurringJobId(deployment.ProjectId);
+        if (config.TaskType != WorkflowProjectTaskType.Cyclic || config.CycleIntervalSeconds is null)
+        {
+            _recurringJobManager.RemoveIfExists(jobId);
+            return;
+        }
+
+        _recurringJobManager.AddOrUpdate<WorkflowProjectRunJob>(
+            jobId,
+            job => job.ExecuteRecurringAsync(new WorkflowProjectRunRecurringArgs
+            {
+                ProjectId = deployment.ProjectId,
+                TaskConfigId = config.TaskConfigId,
+                DeploymentId = deployment.Id,
+                DeploymentRevision = deployment.Revision,
+                ContinueOnError = config.OnErrorAction == WorkflowProjectRunOnErrorAction.ContinueRun,
+                NamePrefix = $"项目周期任务 R{deployment.Revision}",
+            }),
+            BuildCronExpression(config.CycleIntervalSeconds.Value));
     }
 
     private static string ComputeGraphHash(string graphData)
@@ -4988,6 +5364,68 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
         string normalized = NormalizeGraphDataForHash(graphData);
         byte[] bytes = SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(normalized));
         return Convert.ToHexString(bytes);
+    }
+
+    private async Task<string> ComputeCurrentProjectSnapshotHashAsync(Guid projectId)
+    {
+        List<WorkflowProjectTask> tasks = await AsyncExecuter.ToListAsync(
+            (await _taskRepository.GetQueryableAsync())
+                .Where(x => x.ProjectId == projectId && x.IsEnabled)
+                .OrderBy(x => x.OrderNo).ThenBy(x => x.CreationTime));
+        if (tasks.Count == 0)
+            throw new UserFriendlyException("当前项目没有已启用的工作流任务。");
+
+        List<Guid> workflowIds = tasks.Select(x => x.WorkflowId).Distinct().ToList();
+        List<WorkflowDefinition> workflows = await AsyncExecuter.ToListAsync(
+            (await _repository.GetQueryableAsync()).Where(x =>
+                x.ProjectId == projectId && workflowIds.Contains(x.Id)));
+        if (workflows.Count != workflowIds.Count)
+            throw new UserFriendlyException("存在已启用但已不存在的工作流。");
+        if (workflows.Any(x => string.IsNullOrWhiteSpace(x.SourceCode)
+                               || string.IsNullOrWhiteSpace(x.ProgramHash)))
+            throw new UserFriendlyException("存在尚未保存为脚本程序的工作流。");
+
+        Dictionary<Guid, WorkflowDefinition> workflowMap = workflows.ToDictionary(x => x.Id);
+        List<WorkflowProjectDeploymentItem> items = tasks.Select(x =>
+            new WorkflowProjectDeploymentItem
+            {
+                WorkflowId = x.WorkflowId,
+                WorkflowName = workflowMap[x.WorkflowId].Name,
+                OrderNo = x.OrderNo,
+                GraphHash = ComputeGraphHash(workflowMap[x.WorkflowId].GraphData),
+            }).ToList();
+        List<WorkflowProjectFrozenGraph> graphs = items.Select(x =>
+            new WorkflowProjectFrozenGraph
+            {
+                WorkflowId = x.WorkflowId,
+                GraphData = workflowMap[x.WorkflowId].GraphData,
+                SourceCode = workflowMap[x.WorkflowId].SourceCode!,
+                ProgramHash = workflowMap[x.WorkflowId].ProgramHash!,
+                LanguageVersion = workflowMap[x.WorkflowId].LanguageVersion,
+            }).ToList();
+        List<VariableDefinition> definitions = await AsyncExecuter.ToListAsync(
+            (await _variableDefinitionRepository.GetQueryableAsync())
+                .Where(x => x.ProjectId == projectId)
+                .OrderBy(x => x.OwnerWorkflowId).ThenBy(x => x.Name).ThenBy(x => x.TypeName));
+        List<WorkflowProjectFrozenVariable> variables = definitions.Select(x =>
+            new WorkflowProjectFrozenVariable
+            {
+                OwnerWorkflowId = x.OwnerWorkflowId,
+                Name = x.Name,
+                TypeName = x.TypeName,
+                DefaultValueJson = x.DefaultValueJson,
+            }).ToList();
+        WorkflowProjectTaskConfig? config = await AsyncExecuter.FirstOrDefaultAsync(
+            (await _taskConfigRepository.GetQueryableAsync()).Where(x => x.ProjectId == projectId));
+        var frozenConfig = new WorkflowProjectFrozenTaskConfig
+        {
+            TaskType = config?.TaskType ?? WorkflowProjectTaskType.Immediate,
+            CycleIntervalSeconds = config?.CycleIntervalSeconds,
+            ResultWorkflowId = config?.ResultWorkflowId,
+            ResultVariableName = config?.ResultVariableName,
+            OnErrorAction = config?.OnErrorAction ?? WorkflowProjectRunOnErrorAction.StopRun,
+        };
+        return ComputeSnapshotHash(items, graphs, variables, frozenConfig);
     }
 
     private static string ComputeSourceHash(string sourceCode)
@@ -5054,11 +5492,19 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
         }
     }
 
-    private static string ComputeSnapshotHash(IEnumerable<WorkflowProjectDeploymentItem> items)
+    private static string ComputeSnapshotHash(
+        IEnumerable<WorkflowProjectDeploymentItem> items,
+        IEnumerable<WorkflowProjectFrozenGraph> graphs,
+        IEnumerable<WorkflowProjectFrozenVariable> variables,
+        WorkflowProjectFrozenTaskConfig taskConfig)
     {
-        string json = JsonSerializer.Serialize(
-            items.OrderBy(x => x.OrderNo).ThenBy(x => x.WorkflowId)
-        );
+        string json = JsonSerializer.Serialize(new
+        {
+            Items = items.OrderBy(x => x.OrderNo).ThenBy(x => x.WorkflowId),
+            Graphs = graphs.OrderBy(x => x.WorkflowId),
+            Variables = variables.OrderBy(x => x.OwnerWorkflowId).ThenBy(x => x.Name),
+            TaskConfig = taskConfig,
+        });
         byte[] bytes = SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(json));
         return Convert.ToHexString(bytes);
     }

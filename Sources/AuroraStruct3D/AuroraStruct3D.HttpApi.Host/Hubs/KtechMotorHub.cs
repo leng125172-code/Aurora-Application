@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Authorization;
+using AuroraStruct3D.Realtime;
 using Volo.Abp.AspNetCore.SignalR;
 
 namespace AuroraStruct3D.Hubs;
@@ -9,4 +10,17 @@ namespace AuroraStruct3D.Hubs;
 /// </summary>
 [AllowAnonymous]
 [DisableAutoHubMap]
-public class KtechMotorHub : AbpHub<IKtechMotorHub> { }
+public class KtechMotorHub(RealtimeSubscriberTracker subscribers) : AbpHub<IKtechMotorHub>
+{
+    public override async Task OnConnectedAsync()
+    {
+        subscribers.Connected(RealtimeSubscriberTracker.KtechMotor);
+        await base.OnConnectedAsync();
+    }
+
+    public override async Task OnDisconnectedAsync(Exception? exception)
+    {
+        subscribers.Disconnected(RealtimeSubscriberTracker.KtechMotor);
+        await base.OnDisconnectedAsync(exception);
+    }
+}

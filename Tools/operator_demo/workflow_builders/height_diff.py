@@ -351,16 +351,10 @@ def build_height_diff_graph(point_cloud_path, extended_annotation=True):
                     "height_b": "variable",
                 },
                 output_bindings={
-                    "signed_diff": "signed_diff",
-                    "abs_diff": "abs_diff",
-                    "result_json": "height_diff_result",
-                    "is_ok": "is_ok",
+                    "result": "height_diff_result",
                 },
                 output_sources={
-                    "signed_diff": "variable",
-                    "abs_diff": "variable",
-                    "result_json": "variable",
-                    "is_ok": "variable",
+                    "result": "variable",
                 },
             ),
         ),
@@ -431,33 +425,15 @@ def build_height_diff_graph(point_cloud_path, extended_annotation=True):
             make_properties(
                 input_bindings={
                     "input_mat": "roi_overlay_image",
-                    "is_ok": "is_ok",
-                    **(
-                        {
-                            "roi_metadata_a": "measure_roi_metadata",
-                            "roi_metadata_b": "reference_roi_metadata",
-                            "height_a": "measure_height",
-                            "height_b": "reference_height",
-                            "signed_diff": "signed_diff",
-                        }
-                        if extended_annotation
-                        else {}
-                    ),
+                    "inspection_result": "height_diff_result",
+                    "roi_metadata_a": "measure_roi_metadata",
+                    "roi_metadata_b": "reference_roi_metadata",
                 },
                 input_sources={
                     "input_mat": "variable",
-                    "is_ok": "variable",
-                    **(
-                        {
-                            "roi_metadata_a": "variable",
-                            "roi_metadata_b": "variable",
-                            "height_a": "variable",
-                            "height_b": "variable",
-                            "signed_diff": "variable",
-                        }
-                        if extended_annotation
-                        else {}
-                    ),
+                    "inspection_result": "variable",
+                    "roi_metadata_a": "variable",
+                    "roi_metadata_b": "variable",
                 },
                 output_bindings={"output_mat": "annotated_image"},
                 output_sources={"output_mat": "variable"},
@@ -495,21 +471,11 @@ def build_height_diff_graph(point_cloud_path, extended_annotation=True):
                     "cloudUrl": "cloud_url",
                     "resultImageBlobName": "result_image_blob_name",
                     "heightDiffResult": "height_diff_result",
-                    "referenceHeight": "reference_height",
-                    "measureHeight": "measure_height",
-                    "signedDiff": "signed_diff",
-                    "absoluteDiff": "abs_diff",
-                    "isOk": "is_ok",
                 },
                 input_sources={
                     "cloudUrl": "variable",
                     "resultImageBlobName": "variable",
                     "heightDiffResult": "variable",
-                    "referenceHeight": "variable",
-                    "measureHeight": "variable",
-                    "signedDiff": "variable",
-                    "absoluteDiff": "variable",
-                    "isOk": "variable",
                 },
             ),
         ),

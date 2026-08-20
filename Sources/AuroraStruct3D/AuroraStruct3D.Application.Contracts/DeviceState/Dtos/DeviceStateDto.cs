@@ -28,4 +28,12 @@ public class DeviceStateDto
 
     /// <summary>设备是否可切换运行模式</summary>
     public bool CanSwitchMode { get; set; }
+
+    public bool CanStart { get; set; }
+    public bool CanPause { get; set; }
+    public bool CanResume { get; set; }
+    public bool CanStop { get; set; }
+    public bool CanAcknowledgeFault { get; set; }
+    public bool CanReset { get; set; }
+    public bool CanEmergencyStop { get; set; }
 }

@@ -43,8 +43,14 @@ export function showErrorToastOnce(error: unknown): void {
 httpClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
     const auth = useAuthStore()
     const theme = useThemeStore()
-    if (auth.token) {
+    const isRefreshRequest = config.url?.includes('/api/app/account/refresh-token') === true
+    const isWellFormedJwt = auth.token?.split('.').length === 3
+    // Refresh token is carried in the JSON body. Sending an expired/malformed access token
+    // here only triggers noisy Bearer validation failures and is not required by the endpoint.
+    if (!isRefreshRequest && isWellFormedJwt) {
         config.headers.set('Authorization', `Bearer ${auth.token}`)
+    } else {
+        config.headers.delete('Authorization')
     }
     if (auth.tenantId) {
         // ABP 多租户解析头

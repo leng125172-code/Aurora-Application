@@ -96,7 +96,11 @@ const visibleChildren = computed(() => props.category.children.filter(hasVisible
             <template v-for="child in visibleChildren" :key="child.name">
                 <div>
                     <!-- 子分类标题行：点击折叠/展开 -->
-                    <Button unstyled type="button"
+                    <Button
+                        size="small"
+                        text
+                        severity="secondary"
+                        type="button"
                         class="flex w-full items-center gap-1.5 px-3 py-1.5 text-left text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
                         @click="toggleChild(child.name)"
                     >
@@ -143,7 +147,11 @@ const visibleChildren = computed(() => props.category.children.filter(hasVisible
                         <!-- 孙子分类：递归使用同组件（通过 defineComponent 自引用） -->
                         <template v-for="grandchild in child.children.filter(hasVisibleContent)" :key="grandchild.name">
                             <div>
-                                <Button unstyled type="button"
+                                <Button
+                                    size="small"
+                                    text
+                                    severity="secondary"
+                                    type="button"
                                     class="flex w-full items-center gap-1.5 px-3 py-1.5 text-left text-xs text-muted-foreground/80 hover:text-foreground transition-colors"
                                     @click="toggleChild(grandchild.name)"
                                 >

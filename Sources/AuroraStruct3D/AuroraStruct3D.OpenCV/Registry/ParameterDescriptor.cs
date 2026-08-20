@@ -18,6 +18,9 @@ public sealed class ParameterDescriptor
     /// </summary>
     public string? DisplayName { get; init; }
 
+    /// <summary>端口配置指南，说明如何连接、默认值、范围及输出使用方式；接口响应中保证非空。</summary>
+    public string Description { get; init; } = string.Empty;
+
     /// <summary>参数值的 CLR 类型全名，用于引擎进行连线类型兼容性校验。</summary>
     public required string ParameterTypeName { get; init; }
 

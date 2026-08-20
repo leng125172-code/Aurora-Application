@@ -164,12 +164,12 @@ def build_2d_image_processing_graph(image_path, include_angle_feature=False):
                 output_bindings={
                     "contours_json": "contour_result",
                     "contour_count": "contour_count",
-                    "is_ok": "contour_ok",
+                    "result": "contour_inspection_result",
                 },
                 output_sources={
                     "contours_json": "variable",
                     "contour_count": "variable",
-                    "is_ok": "variable",
+                    "result": "variable",
                 },
             ),
         ),
@@ -205,13 +205,13 @@ def build_2d_image_processing_graph(image_path, include_angle_feature=False):
                     "edgeImageUrl": "edge_image_url",
                     "contourCount": "contour_count",
                     "contours": "contour_result",
-                    "isOk": "contour_ok",
+                    "inspectionResult": "contour_inspection_result",
                 },
                 input_sources={
                     "edgeImageUrl": "variable",
                     "contourCount": "variable",
                     "contours": "variable",
-                    "isOk": "variable",
+                    "inspectionResult": "variable",
                 },
             ),
         ),
@@ -249,21 +249,11 @@ def build_2d_image_processing_graph(image_path, include_angle_feature=False):
                         input_sources={"actual_image": "variable"},
                         output_bindings={
                             "result_image": "angle_result_image",
-                            "measured_angle": "angle_measured",
-                            "angle_deviation": "angle_deviation",
-                            "is_valid": "angle_is_valid",
-                            "is_ok": "angle_is_ok",
-                            "inspection_status": "angle_status",
-                            "result_json": "angle_result_json",
+                            "result": "angle_result",
                         },
                         output_sources={
                             "result_image": "variable",
-                            "measured_angle": "variable",
-                            "angle_deviation": "variable",
-                            "is_valid": "variable",
-                            "is_ok": "variable",
-                            "inspection_status": "variable",
-                            "result_json": "variable",
+                            "result": "variable",
                         },
                     ),
                 ),
@@ -296,18 +286,12 @@ def build_2d_image_processing_graph(image_path, include_angle_feature=False):
         end_properties["inputBindings"].update(
             {
                 "angleResultImageBlobName": "angle_result_image_blob_name",
-                "angleStatus": "angle_status",
-                "measuredAngle": "angle_measured",
-                "angleDeviation": "angle_deviation",
-                "angleResult": "angle_result_json",
+                "angleResult": "angle_result",
             }
         )
         end_properties["inputBindingSources"].update(
             {
                 "angleResultImageBlobName": "variable",
-                "angleStatus": "variable",
-                "measuredAngle": "variable",
-                "angleDeviation": "variable",
                 "angleResult": "variable",
             }
         )

@@ -51,6 +51,7 @@ export interface ProjectTaskBatch {
     cycleIntervalSeconds?: number
     resultWorkflowId?: string
     resultVariableName?: string
+    onErrorAction: 0 | 1
     items: Array<{
         id: string
         projectId: string
@@ -71,6 +72,30 @@ export interface ProjectDeployment {
     canReactivate: boolean
     canRollback: boolean
     snapshotHash: string
+    snapshotSchemaVersion: number
+    taskType: number
+    cycleIntervalSeconds?: number
+    resultWorkflowId?: string
+    resultVariableName?: string
+    onErrorAction: 0 | 1
+}
+
+export interface ProjectApplicationStatus {
+    projectId: string
+    activeDeployment?: ProjectDeployment | null
+    latestDeployment?: ProjectDeployment | null
+    hasUnappliedChanges: boolean
+    canApply: boolean
+    validationMessages: string[]
+}
+
+export interface ApplyProjectResult {
+    projectId: string
+    deployment: ProjectDeployment
+    createdNewRevision: boolean
+    activationChanged: boolean
+    unchanged: boolean
+    appliedAt: string
 }
 
 export interface WorkflowPlcTrigger {
@@ -108,26 +133,27 @@ export interface ProjectRun {
 
 export interface WorkflowPlcHandshakeConfig {
     id: string
+    taskConfigId: string
     projectId: string
     plcDeviceId: string
-    captureRequestTagId: string
-    requestIdTagId: string
-    resultAckTagId: string
-    resultAckIdTagId: string
-    heartbeatTagId: string
-    deviceStatusTagId: string
-    taskStatusTagId: string
-    canCaptureTagId: string
-    captureAckTagId: string
-    ackRequestIdTagId: string
-    resultValidTagId: string
-    resultRequestIdTagId: string
-    resultCodeTagId: string
-    errorCodeTagId: string
+    captureRequestAddress: string
+    requestIdAddress: string
+    resultAckAddress: string
+    resultAckIdAddress: string
+    heartbeatAddress: string
+    deviceStatusAddress: string
+    taskStatusAddress: string
+    canCaptureAddress: string
+    captureAckAddress: string
+    ackRequestIdAddress: string
+    resultValidAddress: string
+    resultRequestIdAddress: string
+    resultCodeAddress: string
+    errorCodeAddress: string
     isEnabled: boolean
 }
 
-export type SaveWorkflowPlcHandshakeConfig = Omit<WorkflowPlcHandshakeConfig, 'id'>
+export type SaveWorkflowPlcHandshakeConfig = Omit<WorkflowPlcHandshakeConfig, 'id' | 'taskConfigId'>
 
 export interface WorkflowPlcHandshakeStatus {
     projectId: string
@@ -212,10 +238,75 @@ export async function updateProjectTasks(input: ProjectTaskBatch): Promise<Proje
     return (await httpClient.put<ProjectTaskBatch>(`${BASE}/projects/tasks`, input)).data
 }
 
-export async function getProjectDeployments(projectId: string): Promise<ProjectDeployment> {
+export interface ProjectTaskRegistration {
+    id: string
+    projectId: string
+    name: string
+    isEnabled: boolean
+    creationTime: string
+    plcHandshake?: WorkflowPlcHandshakeConfig
+}
+
+export async function getProjectTaskRegistrations(projectId?: string): Promise<ProjectTaskRegistration[]> {
+    return (await httpClient.get<ProjectTaskRegistration[]>(`${BASE}/project-tasks`, {
+        params: projectId ? { projectId } : undefined,
+    })).data
+}
+
+export async function createProjectTask(
+    input: { projectId: string; name: string; isEnabled: boolean; plcHandshake?: SaveWorkflowPlcHandshakeConfig }
+): Promise<ProjectTaskRegistration> {
+    return (await httpClient.post<ProjectTaskRegistration>(`${BASE}/project-tasks`, input)).data
+}
+
+export async function updateProjectTask(
+    taskId: string,
+    input: { name: string; isEnabled: boolean; plcHandshake?: SaveWorkflowPlcHandshakeConfig }
+): Promise<ProjectTaskRegistration> {
+    return (await httpClient.put<ProjectTaskRegistration>(
+        `${BASE}/project-tasks/${taskId}`, input
+    )).data
+}
+
+export async function setProjectTaskEnabled(
+    taskId: string, isEnabled: boolean
+): Promise<ProjectTaskRegistration> {
+    return (await httpClient.put<ProjectTaskRegistration>(
+        `${BASE}/project-tasks/${taskId}/enabled`, { isEnabled }
+    )).data
+}
+
+export async function getProjectDeployments(projectId: string): Promise<ProjectDeployment | null> {
     return (
-        await httpClient.get<ProjectDeployment>(`${BASE}/projects/${projectId}/deployments`)
+        await httpClient.get<ProjectDeployment | null>(`${BASE}/projects/${projectId}/deployments`)
     ).data
+}
+
+export async function getProjectDeploymentHistory(
+    projectId: string,
+    skipCount = 0,
+    maxResultCount = 20
+): Promise<{ totalCount: number; items: ProjectDeployment[] }> {
+    return (await httpClient.get(`${BASE}/projects/${projectId}/deployments/history`, {
+        params: { skipCount, maxResultCount },
+    })).data
+}
+
+export async function getProjectApplicationStatus(projectId: string): Promise<ProjectApplicationStatus> {
+    return (await httpClient.get<ProjectApplicationStatus>(
+        `${BASE}/projects/${projectId}/application-status`
+    )).data
+}
+
+export async function applyProjectToDevice(
+    projectId: string,
+    taskConfig: ProjectTaskBatch,
+    expectedActiveDeploymentId?: string | null
+): Promise<ApplyProjectResult> {
+    return (await httpClient.post<ApplyProjectResult>(`${BASE}/projects/${projectId}/apply`, {
+        expectedActiveDeploymentId: expectedActiveDeploymentId ?? null,
+        taskConfig,
+    })).data
 }
 
 export async function getWorkflowPlcHandshake(projectId: string): Promise<WorkflowPlcHandshakeConfig> {

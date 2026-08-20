@@ -23,43 +23,7 @@ public class cloud_compare : IOperator
             new MatImg() { ParameterName = "transform_matrix", DisplayName = "变换矩阵" },
             new MatImg() { ParameterName = "distance_mat", DisplayName = "距离矩阵" },
             new MatImg() { ParameterName = "distance_image", DisplayName = "距离图像" },
-            new VisionParameter<string>
-            {
-                ParameterName = "result_json",
-                DisplayName = "比较结果",
-                ParameterType = typeof(string),
-                ControlType = PortControlType.Download,
-            },
-            new VisionParameter<bool>
-            {
-                ParameterName = "is_ok",
-                DisplayName = "是否OK",
-                ParameterType = typeof(bool),
-            },
-            new VisionParameter<double>
-            {
-                ParameterName = "max_distance",
-                DisplayName = "最大偏差",
-                ParameterType = typeof(double),
-            },
-            new VisionParameter<double>
-            {
-                ParameterName = "mean_distance",
-                DisplayName = "平均偏差",
-                ParameterType = typeof(double),
-            },
-            new VisionParameter<double>
-            {
-                ParameterName = "defect_ratio",
-                DisplayName = "超差点比例",
-                ParameterType = typeof(double),
-            },
-            new VisionParameter<double>
-            {
-                ParameterName = "missing_ratio",
-                DisplayName = "缺失点比例",
-                ParameterType = typeof(double),
-            },
+            InspectionResults.Output<CloudCompareResult>("点云比较结果"),
         };
 
     public static List<IConfigParameter>? ConfigParameters =>
@@ -411,8 +375,6 @@ public class cloud_compare : IOperator
             MaxMissingRatio = _maxMissingRatio,
         };
 
-        string resultJson = JsonSerializer.Serialize(result, JsonOptions);
-
         var outputCloud = new PointCloudData();
         outputCloud.Value = alignedCloud;
         if (sourceData.HasColors && sourceData.Colors != null)
@@ -422,12 +384,7 @@ public class cloud_compare : IOperator
         context.Set("transform_matrix", transformMatrix);
         context.Set("distance_mat", distances);
         context.Set("distance_image", distanceImage);
-        context.Set("result_json", resultJson);
-        context.Set("is_ok", isOk);
-        context.Set("max_distance", maxDist);
-        context.Set("mean_distance", meanDist);
-        context.Set("defect_ratio", defectRatio);
-        context.Set("missing_ratio", missingRatio);
+        context.Set("result", InspectionResults.CreateTyped(true, isOk, result));
     }
 
     private static (double[] R, double[] T) ComposeTransform(

@@ -21,8 +21,23 @@ public static class WorkflowDefinitionDbContextModelCreatingExtensions
             b.ToTable("AbpProWorkflowPlcHandshakeConfigs");
             b.ConfigureByConvention();
             b.Property(x => x.LastError).HasMaxLength(1024);
-            b.HasIndex(x => x.ProjectId).IsUnique();
-            b.HasIndex(x => x.PlcDeviceId).IsUnique().HasFilter("\"IsEnabled\" = true AND \"IsDeleted\" = false");
+            b.Property(x => x.CaptureRequestAddress).HasMaxLength(1024);
+            b.Property(x => x.RequestIdAddress).HasMaxLength(1024);
+            b.Property(x => x.ResultAckAddress).HasMaxLength(1024);
+            b.Property(x => x.ResultAckIdAddress).HasMaxLength(1024);
+            b.Property(x => x.HeartbeatAddress).HasMaxLength(1024);
+            b.Property(x => x.DeviceStatusAddress).HasMaxLength(1024);
+            b.Property(x => x.TaskStatusAddress).HasMaxLength(1024);
+            b.Property(x => x.CanCaptureAddress).HasMaxLength(1024);
+            b.Property(x => x.CaptureAckAddress).HasMaxLength(1024);
+            b.Property(x => x.AckRequestIdAddress).HasMaxLength(1024);
+            b.Property(x => x.ResultValidAddress).HasMaxLength(1024);
+            b.Property(x => x.ResultRequestIdAddress).HasMaxLength(1024);
+            b.Property(x => x.ResultCodeAddress).HasMaxLength(1024);
+            b.Property(x => x.ErrorCodeAddress).HasMaxLength(1024);
+            b.HasIndex(x => x.ProjectId);
+            b.HasIndex(x => x.TaskConfigId).IsUnique();
+            b.HasIndex(x => x.PlcDeviceId);
             b.HasIndex(x => x.CurrentRunId);
         });
         builder.Entity<WorkflowPlcTrigger>(b =>
@@ -89,6 +104,16 @@ public static class WorkflowDefinitionDbContextModelCreatingExtensions
             b.ConfigureByConvention();
             b.Property(x => x.ResultsJson).IsRequired();
             b.HasIndex(x => new { x.Status, x.CreationTime });
+        });
+        builder.Entity<WorkflowMigrationSnapshot>(b =>
+        {
+            b.ToTable("AbpProWorkflowMigrationSnapshots");
+            b.ConfigureByConvention();
+            b.Property(x => x.WorkflowName).IsRequired().HasMaxLength(256);
+            b.Property(x => x.GraphData).IsRequired().HasColumnType("text");
+            b.Property(x => x.SourceCode).HasColumnType("text");
+            b.HasIndex(x => new { x.BatchId, x.WorkflowId }).IsUnique();
+            b.HasIndex(x => x.WorkflowId);
         });
     }
 }

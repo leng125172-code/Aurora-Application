@@ -27,32 +27,12 @@ public class annotate_height_diff_result : IOperator
                 DisplayName = "区域B元数据",
                 ControlType = PortControlType.Variable,
             },
-            new VisionParameter<double>
+            new VisionParameter<InspectionResult<HeightDiffInspectionDetails>>
             {
-                ParameterName = "height_a",
-                ParameterType = typeof(double),
-                DisplayName = "区域A高度",
-                ControlType = PortControlType.Variable,
-            },
-            new VisionParameter<double>
-            {
-                ParameterName = "height_b",
-                ParameterType = typeof(double),
-                DisplayName = "区域B高度",
-                ControlType = PortControlType.Variable,
-            },
-            new VisionParameter<double>
-            {
-                ParameterName = "signed_diff",
-                ParameterType = typeof(double),
-                DisplayName = "有符号高度差",
-                ControlType = PortControlType.Variable,
-            },
-            new VisionParameter<bool>
-            {
-                ParameterName = "is_ok",
-                ParameterType = typeof(bool),
-                DisplayName = "判定结果",
+                ParameterName = "inspection_result",
+                ParameterType = typeof(InspectionResult<HeightDiffInspectionDetails>),
+                JsonSchema = WorkflowJsonSchema.For<InspectionResult<HeightDiffInspectionDetails>>(),
+                DisplayName = "检测结果",
                 ControlType = PortControlType.Variable,
             },
         };
@@ -110,10 +90,12 @@ public class annotate_height_diff_result : IOperator
             throw new InvalidOperationException("输入图像为空，无法绘制结果标注。");
         }
 
-        bool isOk = context.Get<bool>("is_ok");
-        double heightA = context.Get<double>("height_a");
-        double heightB = context.Get<double>("height_b");
-        double signedDiff = context.Get<double>("signed_diff");
+        InspectionResult<HeightDiffInspectionDetails> inspectionResult = context.Get<InspectionResult<HeightDiffInspectionDetails>>("inspection_result")
+            ?? throw new InvalidOperationException("上下文变量 'inspection_result' 为空。");
+        bool isOk = inspectionResult.isOk;
+        double heightA = inspectionResult.details?.heightA ?? 0d;
+        double heightB = inspectionResult.details?.heightB ?? 0d;
+        double signedDiff = inspectionResult.details?.signedDiff ?? 0d;
         string nameA = RoiMetadataNameResolver.Resolve(
             context.Get<string>("roi_metadata_a"),
             "A",

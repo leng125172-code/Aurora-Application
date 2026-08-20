@@ -2,6 +2,7 @@ using AuroraStruct3D.Ktech.Dtos;
 using AuroraStruct3D.Motors;
 using AuroraStruct3D.RS485;
 using AuroraStruct3D.RS485.Ktech;
+using AuroraStruct3D.Realtime;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -17,6 +18,7 @@ public class KtechSamplerHostedService : BackgroundService
 {
     /// <summary>采样周期（毫秒）。默认 250ms（4Hz），可后续提为配置项。</summary>
     private const int SamplePeriodMs = 250;
+    private const int IdleSamplePeriodMs = 5000;
 
     /// <summary>启动延迟（毫秒），等待 MotorControlService 完成初始化。</summary>
     private const int StartupDelayMs = 5000;
@@ -26,13 +28,15 @@ public class KtechSamplerHostedService : BackgroundService
     private readonly IKtechMotorNotifier _notifier;
     private readonly KtechSamplerStateStore _samplerStateStore;
     private readonly ILogger<KtechSamplerHostedService> _logger;
+    private readonly RealtimeSubscriberTracker _subscribers;
 
     public KtechSamplerHostedService(
         IServiceScopeFactory scopeFactory,
         IMotorControlService motorControlService,
         IKtechMotorNotifier notifier,
         KtechSamplerStateStore samplerStateStore,
-        ILogger<KtechSamplerHostedService> logger
+        ILogger<KtechSamplerHostedService> logger,
+        RealtimeSubscriberTracker subscribers
     )
     {
         _scopeFactory = scopeFactory;
@@ -40,6 +44,7 @@ public class KtechSamplerHostedService : BackgroundService
         _notifier = notifier;
         _samplerStateStore = samplerStateStore;
         _logger = logger;
+        _subscribers = subscribers;
     }
 
     /// <inheritdoc/>
@@ -60,10 +65,21 @@ public class KtechSamplerHostedService : BackgroundService
         Dictionary<int, Guid> slaveToAxisId = new();
         DateTime lastMapRefreshUtc = DateTime.MinValue;
         TimeSpan mapRefreshInterval = TimeSpan.FromSeconds(10);
+        DateTime nextIdleSampleUtc = DateTime.MinValue;
 
         while (!stoppingToken.IsCancellationRequested)
         {
             DateTime cycleStart = DateTime.UtcNow;
+
+            bool hasSubscribers = _subscribers.HasSubscribers(RealtimeSubscriberTracker.KtechMotor);
+            if (!hasSubscribers && cycleStart < nextIdleSampleUtc)
+            {
+                await Task.Delay(SamplePeriodMs, stoppingToken);
+                continue;
+            }
+            nextIdleSampleUtc = hasSubscribers
+                ? cycleStart
+                : cycleStart.AddMilliseconds(IdleSamplePeriodMs);
 
             try
             {

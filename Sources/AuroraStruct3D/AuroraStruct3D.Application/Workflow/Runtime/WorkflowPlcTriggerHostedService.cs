@@ -45,6 +45,12 @@ internal sealed class WorkflowPlcTriggerHostedService : BackgroundService
             {
                 PlcTagValueDto? value = (await accessor.ReadByCodesAsync(trigger.PlcDeviceId, [tag.Code], cancellationToken)).SingleOrDefault();
                 bool matches = value is not null && value.Error is null && Matches(value.EngineeringValue, trigger.ExpectedValueJson, trigger.Tolerance);
+                if (!_matched.ContainsKey(trigger.Id))
+                {
+                    // 服务启动后的首个样本只建立边沿基线，避免点位持续为高时重复启动任务。
+                    _matched[trigger.Id] = matches;
+                    continue;
+                }
                 bool previous = _matched.GetValueOrDefault(trigger.Id);
                 _matched[trigger.Id] = matches;
                 if (!matches || previous) continue;

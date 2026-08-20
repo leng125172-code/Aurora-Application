@@ -8,7 +8,7 @@ import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import * as signalR from '@microsoft/signalr'
-import * as echarts from 'echarts'
+import { echarts } from '@/lib/echarts'
 import { RefreshCw, PlayCircle, Trash2, RotateCcw } from '@lucide/vue'
 import Button from 'primevue/button'
 import Tag from 'primevue/tag'
@@ -63,7 +63,11 @@ interface RecurringJob {
     LastExecution?: string
     lastExecution?: string
     JobType?: string
+    jobType?: string
+    Method?: string
+    method?: string
     Queue?: string
+    queue?: string
 }
 interface ServerItem {
     Name?: string
@@ -414,6 +418,11 @@ function rNext(j: RecurringJob): string {
 function rLast(j: RecurringJob): string {
     return j.LastExecution ?? j.lastExecution ?? ''
 }
+function rJobDescription(j: RecurringJob): string {
+    const jobType = j.JobType ?? j.jobType ?? ''
+    const method = j.Method ?? j.method ?? ''
+    return [jobType, method].filter(Boolean).join('.')
+}
 
 // ServerItem 大小写字段兼容
 function sName(s: ServerItem): string {
@@ -468,7 +477,7 @@ onUnmounted(async () => {
     <div class="space-y-4">
         <div class="flex items-center justify-between">
             <h1 class="text-2xl font-bold tracking-tight">{{ t('menu.hangfire') }}</h1>
-            <Button severity="secondary" outlined :disabled="loading" @click="loadCurrentTab">
+            <Button size="small" severity="secondary" outlined :disabled="loading" @click="loadCurrentTab">
                 <RefreshCw :class="['size-4', loading && 'animate-spin']" />
             </Button>
         </div>
@@ -646,6 +655,13 @@ onUnmounted(async () => {
                                 <td>
                                     <div class="max-w-[200px] truncate font-mono text-sm" :title="rId(job)">
                                         {{ rId(job) }}
+                                    </div>
+                                    <div
+                                        v-if="rJobDescription(job)"
+                                        class="max-w-[240px] truncate text-xs text-muted-foreground"
+                                        :title="rJobDescription(job)"
+                                    >
+                                        {{ rJobDescription(job) }}
                                     </div>
                                 </td>
                                 <td>

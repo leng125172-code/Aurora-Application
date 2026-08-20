@@ -121,14 +121,16 @@ public static class CalibImageUtils
         {
             case 90:
                 Cv2.Transpose(grayMat, rotated);
-                Cv2.Flip(rotated, rotated, FlipMode.X);
+                // Transpose + horizontal flip = 90 degrees clockwise.
+                Cv2.Flip(rotated, rotated, FlipMode.Y);
                 break;
             case 180:
                 Cv2.Flip(grayMat, rotated, FlipMode.XY);
                 break;
             case 270:
                 Cv2.Transpose(grayMat, rotated);
-                Cv2.Flip(rotated, rotated, FlipMode.Y);
+                // Transpose + vertical flip = 270 degrees clockwise.
+                Cv2.Flip(rotated, rotated, FlipMode.X);
                 break;
             default:
                 grayMat.CopyTo(rotated);

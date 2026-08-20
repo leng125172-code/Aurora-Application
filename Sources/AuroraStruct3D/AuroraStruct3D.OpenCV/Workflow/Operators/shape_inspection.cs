@@ -28,13 +28,7 @@ public sealed class shape_inspection : IOperator
         ];
 
     public static List<IVisionParameter>? OutputVisionParameters =>
-        [
-            NumberOutput("detected_count", "实际数量"),
-            BoolOutput("is_valid", "结果是否有效"),
-            BoolOutput("is_ok", "是否合格"),
-            StringOutput("inspection_status", "检测状态"),
-            StringOutput("result_json", "形状判定结果", PortControlType.Download),
-        ];
+        [InspectionResults.Output<ShapeInspectionDetails>("形状判定结果")];
 
     public static List<IConfigParameter>? ConfigParameters =>
         [
@@ -105,26 +99,16 @@ public sealed class shape_inspection : IOperator
         string status = !isValid ? "UNKNOWN" : isOk ? "OK" : "NG";
         JsonElement? detail = ParseJson(context.Get<string>("detection_json"));
 
-        context.Set("detected_count", detectedCount);
-        context.Set("is_valid", isValid);
-        context.Set("is_ok", isOk);
-        context.Set("inspection_status", status);
-        context.Set(
-            "result_json",
-            JsonSerializer.Serialize(
-                new
-                {
+        context.Set("result", InspectionResults.CreateTyped(isValid, isOk,
+                new ShapeInspectionDetails(
                     status,
                     isValid,
                     isOk,
-                    expectedShape = _expectedShape,
-                    expectedCount = _expectedCount,
+                    _expectedShape,
+                    _expectedCount,
                     detectedCount,
-                    allowAdditional = _allowAdditional,
-                    detection = detail,
-                }
-            )
-        );
+                    _allowAdditional,
+                    detail), status));
     }
 
     public void Dispose() { }

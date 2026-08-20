@@ -128,10 +128,10 @@ function handleDelete(role: RoleDto): void {
         <div class="flex items-center justify-between">
             <h1 class="text-2xl font-bold tracking-tight">{{ t('menu.roles') }}</h1>
             <div class="flex gap-2">
-                <Button severity="secondary" outlined :disabled="loading" @click="loadRoles">
+                <Button size="small" severity="secondary" outlined :disabled="loading" @click="loadRoles">
                     <RefreshCw :class="['size-4', loading && 'animate-spin']" />
                 </Button>
-                <Button @click="openCreate">
+                <Button size="small" @click="openCreate">
                     <Plus class="mr-1 size-4" />
                     {{ t('management.createRole') }}
                 </Button>
@@ -145,7 +145,7 @@ function handleDelete(role: RoleDto): void {
                 class="max-w-xs"
                 @keydown.enter="handleSearch"
             />
-            <Button severity="secondary" outlined @click="handleSearch">
+            <Button size="small" severity="secondary" outlined @click="handleSearch">
                 <Search class="mr-1 size-4" />
                 {{ t('common.search') }}
             </Button>

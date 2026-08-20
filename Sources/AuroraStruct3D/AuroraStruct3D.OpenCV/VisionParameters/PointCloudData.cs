@@ -31,6 +31,8 @@ public class PointCloudData : IVisionParameter
     /// <summary>端口 UI 显示名（实例级），为 null 时回退到类型上的 [DisplayName] 特性。</summary>
     public string? DisplayName { get; set; }
 
+    public string? Description { get; set; }
+
     /// <summary>
     /// 端口声明类型：工作流图与变量编译阶段按 <see cref="PointCloudData"/> 识别，
     /// 内部坐标矩阵仍通过 <see cref="Value"/> / <see cref="PointCloud"/> 访问。

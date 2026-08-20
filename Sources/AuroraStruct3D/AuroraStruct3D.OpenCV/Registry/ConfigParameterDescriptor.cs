@@ -12,6 +12,9 @@ public sealed class ConfigParameterDescriptor
     /// <summary>UI 显示名，可为 null（前端回退到 Name）。</summary>
     public string? DisplayName { get; init; }
 
+    /// <summary>配置指南，说明如何填写、是否必填、默认值和允许范围；接口响应中保证非空。</summary>
+    public string Description { get; init; } = string.Empty;
+
     /// <summary>参数 CLR 类型全名（含命名空间）。</summary>
     public required string ParameterTypeName { get; init; }
 

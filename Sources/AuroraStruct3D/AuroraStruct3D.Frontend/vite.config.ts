@@ -122,13 +122,10 @@ export default defineConfig(({ mode }) => {
                     warn(warning)
                 },
                 output: {
-                    // 👇 禁用所有文件名哈希（核心配置）
-                    // 入口文件名称（无哈希）
-                    entryFileNames: "assets/[name].js",
-                    // 代码分包文件名称（无哈希）
-                    chunkFileNames: "assets/[name].js",
-                    // 静态资源文件名称（无哈希）
-                    assetFileNames: "assets/[name].[ext]",
+                    // 内容哈希确保新版本不会命中旧缓存，并允许静态资源使用 immutable 长缓存。
+                    entryFileNames: "assets/[name]-[hash].js",
+                    chunkFileNames: "assets/[name]-[hash].js",
+                    assetFileNames: "assets/[name]-[hash].[ext]",
 
                     // 代码分包，避免单 chunk 过大（Vite 8 / rolldown 要求函数形式）
                     manualChunks(id: string) {
@@ -177,8 +174,10 @@ export default defineConfig(({ mode }) => {
                             )
                         )
                             return "motion";
-                        // 其他第三方库统一打包到 vendor
-                        return "vendor";
+                        // Monaco / Three 只在工作流或模型页面需要，保持为懒路由依赖，
+                        // 不再把所有第三方库汇总为首屏预加载的巨型 vendor chunk。
+                        // 其余依赖交给 Rolldown 根据路由引用关系自动拆分。
+                        return;
                     },
                 },
             },

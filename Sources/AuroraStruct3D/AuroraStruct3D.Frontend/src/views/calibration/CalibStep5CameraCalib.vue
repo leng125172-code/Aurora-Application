@@ -1266,7 +1266,11 @@ onMounted(async () => {
         <div v-else class="flex flex-col gap-2">
             <div v-for="cam in cameras" :key="cam.id" class="overflow-hidden rounded-lg border border-border/50">
                 <!-- 相机卡片头部（可折叠） -->
-                <Button unstyled type="button"
+                <Button
+                    size="small"
+                    text
+                    severity="secondary"
+                    type="button"
                     class="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/20"
                     :class="{ 'bg-muted/20': expandedCameraId === cam.id }"
                     @click="toggleCameraExpand(cam.id)"
@@ -1786,7 +1790,11 @@ onMounted(async () => {
                                                     </div>
 
                                                     <!-- 删除按钮（hover 显示） -->
-                                                    <Button unstyled type="button"
+                                                    <Button
+                                                        size="small"
+                                                        text
+                                                        severity="secondary"
+                                                        type="button"
                                                         class="absolute right-1 top-1 rounded bg-black/60 p-0.5 opacity-0 transition-opacity group-hover:opacity-100"
                                                         @click.stop="doDeletePhoto(photo, cam.id)"
                                                     >
@@ -1940,7 +1948,11 @@ onMounted(async () => {
                                                         </div>
                                                     </div>
 
-                                                    <Button unstyled type="button"
+                                                    <Button
+                                                        size="small"
+                                                        text
+                                                        severity="secondary"
+                                                        type="button"
                                                         class="absolute right-1 top-1 rounded bg-black/60 p-0.5 opacity-0 transition-opacity group-hover:opacity-100"
                                                         @click.stop="doDeletePhoto(sample.projectorOffPhoto, cam.id)"
                                                     >
@@ -1997,7 +2009,11 @@ onMounted(async () => {
                                                         }}
                                                     </div>
 
-                                                    <Button unstyled type="button"
+                                                    <Button
+                                                        size="small"
+                                                        text
+                                                        severity="secondary"
+                                                        type="button"
                                                         class="absolute right-1 top-1 rounded bg-black/60 p-0.5 opacity-0 transition-opacity group-hover:opacity-100"
                                                         @click.stop="doDeletePhoto(photo, cam.id)"
                                                     >

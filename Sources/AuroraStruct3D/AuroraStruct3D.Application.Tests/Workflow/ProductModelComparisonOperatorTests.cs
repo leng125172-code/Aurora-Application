@@ -1,6 +1,7 @@
 using AuroraStruct3D.OpenCV.File.PointCloud;
 using AuroraStruct3D.OpenCV.PointCloudDistance;
 using AuroraStruct3D.OpenCV.VisionParameters;
+using AuroraStruct3D.OpenCV.Workflow;
 using AuroraStruct3D.Workflow;
 using Xunit;
 
@@ -25,26 +26,8 @@ public class ProductModelComparisonOperatorTests
     [Fact]
     public void CloudCompare_Should_Expose_Industrial_Judgement_Outputs()
     {
-        Assert.Contains(
-            cloud_compare.OutputVisionParameters!,
-            output => output.ParameterName == "is_ok"
-        );
-        Assert.Contains(
-            cloud_compare.OutputVisionParameters!,
-            output => output.ParameterName == "max_distance"
-        );
-        Assert.Contains(
-            cloud_compare.OutputVisionParameters!,
-            output => output.ParameterName == "mean_distance"
-        );
-        Assert.Contains(
-            cloud_compare.OutputVisionParameters!,
-            output => output.ParameterName == "defect_ratio"
-        );
-        Assert.Contains(
-            cloud_compare.OutputVisionParameters!,
-            output => output.ParameterName == "missing_ratio"
-        );
+        Assert.Contains(cloud_compare.OutputVisionParameters!, output =>
+            output.ParameterName == "result" && typeof(InspectionResultBase).IsAssignableFrom(output.ParameterType));
         Assert.Contains(
             cloud_compare.ConfigParameters!,
             config => config.Name == "maxDefectRatio"

@@ -20,42 +20,7 @@ public sealed class installation_angle_feature_inspection : IOperator
     public static List<IVisionParameter>? OutputVisionParameters =>
         [
             new MatImg { ParameterName = "result_image", DisplayName = "角度结果图" },
-            new VisionParameter<double>
-            {
-                ParameterName = "measured_angle",
-                DisplayName = "实测角度(度)",
-                ParameterType = typeof(double),
-            },
-            new VisionParameter<double>
-            {
-                ParameterName = "angle_deviation",
-                DisplayName = "角度偏差(度)",
-                ParameterType = typeof(double),
-            },
-            new VisionParameter<bool>
-            {
-                ParameterName = "is_valid",
-                DisplayName = "结果有效",
-                ParameterType = typeof(bool),
-            },
-            new VisionParameter<bool>
-            {
-                ParameterName = "is_ok",
-                DisplayName = "是否合格",
-                ParameterType = typeof(bool),
-            },
-            new VisionParameter<string>
-            {
-                ParameterName = "inspection_status",
-                DisplayName = "检测状态",
-                ParameterType = typeof(string),
-            },
-            new VisionParameter<string>
-            {
-                ParameterName = "result_json",
-                DisplayName = "检测详情",
-                ParameterType = typeof(string),
-            },
+            InspectionResults.Output<ResultPayload>("安装角特征检测结果"),
         ];
 
     public static List<IConfigParameter>? ConfigParameters =>
@@ -357,12 +322,7 @@ public sealed class installation_angle_feature_inspection : IOperator
     )
     {
         context.Set("result_image", result);
-        context.Set("measured_angle", measured);
-        context.Set("angle_deviation", deviation);
-        context.Set("is_valid", isValid);
-        context.Set("is_ok", isOk);
-        context.Set("inspection_status", status);
-        context.Set("result_json", JsonSerializer.Serialize(payload, JsonOptions));
+        context.Set("result", InspectionResults.CreateTyped(isValid, isOk, payload, status));
     }
 
     private static double CalculateAngle(DetectedLine first, DetectedLine second, string angleType)

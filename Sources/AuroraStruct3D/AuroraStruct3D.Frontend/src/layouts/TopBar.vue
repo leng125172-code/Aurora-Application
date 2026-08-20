@@ -92,7 +92,10 @@ onMounted(() => {
 </script>
 
 <template>
-    <header class="flex h-14 items-center justify-between gap-2 border-b bg-card/40 px-2 backdrop-blur sm:px-4">
+    <header
+        data-testid="app-topbar"
+        class="flex h-14 shrink-0 items-center justify-between gap-1 border-b bg-card/90 px-2 backdrop-blur-xl sm:gap-2 sm:px-4"
+    >
         <div class="flex min-w-0 items-center gap-2">
             <Button
                 type="button"
@@ -108,10 +111,12 @@ onMounted(() => {
         </div>
         <div class="flex min-w-0 items-center gap-1 sm:gap-2">
             <!-- 设备状态徽章 + 模式切换 -->
-            <DeviceStatusBadge :status="deviceStateStore.state?.status" />
+            <div class="max-w-24 overflow-hidden sm:max-w-none">
+                <DeviceStatusBadge :status="deviceStateStore.state?.status" />
+            </div>
             <div class="hidden md:block"><DeviceModeSwitcher :device-state="deviceStateStore.state" /></div>
             <label
-                class="flex items-center gap-2 rounded-full border border-border/60 bg-background/70 px-2.5 py-1"
+                class="hidden items-center gap-2 rounded-md border border-border/70 bg-background/70 px-2 py-1 sm:flex"
                 :class="isServoSamplingLoading ? 'opacity-60' : ''"
                 v-tooltip.bottom="t('layout.allServoRealtimeSampling')"
                 for="topbar-all-servo-sampling"

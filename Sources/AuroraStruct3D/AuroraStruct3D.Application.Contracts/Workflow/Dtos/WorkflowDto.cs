@@ -125,6 +125,7 @@ public class WorkflowSourceMigrationResultDto
 
 public class WorkflowMigrationItemDto
 {
+    public Guid? SnapshotId { get; set; }
     public Guid WorkflowId { get; set; }
     public Guid ProjectId { get; set; }
     public string WorkflowName { get; set; } = string.Empty;
@@ -133,6 +134,42 @@ public class WorkflowMigrationItemDto
     public string? BeforeContentHash { get; set; }
     public string? AfterContentHash { get; set; }
     public string? ProgramHash { get; set; }
+    public string? BeforeSourceCode { get; set; }
+    public string? BeforeGraphData { get; set; }
+    public int BeforeLanguageVersion { get; set; }
+    public string? BeforeSemanticHash { get; set; }
+    public string? BeforeProgramHash { get; set; }
+    public string? BeforeOperatorContractHash { get; set; }
+    public string? AfterSourceCode { get; set; }
+    public string? AfterGraphData { get; set; }
+    public List<string> Changes { get; set; } = [];
+    public List<WorkflowMigrationPortChangeDto> PortChanges { get; set; } = [];
+    public List<WorkflowMigrationTextChangeDto> SourceChanges { get; set; } = [];
+    public bool RolledBack { get; set; }
+}
+
+public class WorkflowMigrationPortChangeDto
+{
+    public string NodeId { get; set; } = string.Empty;
+    public Guid OperatorId { get; set; }
+    public string OldPort { get; set; } = string.Empty;
+    public string OldVariable { get; set; } = string.Empty;
+    public string NewPort { get; set; } = "result";
+    public string NewExpression { get; set; } = string.Empty;
+}
+
+public class WorkflowMigrationTextChangeDto
+{
+    public int StartLine { get; set; }
+    public int DeleteLineCount { get; set; }
+    public List<string> NewLines { get; set; } = [];
+}
+
+public class WorkflowMigrationPreviewDto
+{
+    public int ScannedCount { get; set; }
+    public int MigratableCount { get; set; }
+    public List<WorkflowMigrationItemDto> Items { get; set; } = [];
 }
 
 public class WorkflowMigrationBatchDto

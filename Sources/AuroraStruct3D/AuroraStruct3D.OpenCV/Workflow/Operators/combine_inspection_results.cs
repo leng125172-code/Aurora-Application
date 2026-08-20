@@ -1,126 +1,39 @@
-using System.Text.Json;
-
 namespace AuroraStruct3D.OpenCV.Workflow.Operators;
 
-/// <summary>
-/// 汇总多个检测分支的 OK/NG 与结构化结果，形成稳定的工作流业务出口。
-/// </summary>
 [Guid("7f3a2c10-6b95-4e8c-9a41-2d53f670c901")]
 [Category("流程控制")]
 [DisplayName("检测结果汇总")]
-[Description("汇总平面度、角度和圆形检测结果，输出整体 OK/NG 及结构化 JSON。")]
+[Description("将三个检测分支汇总为唯一强类型 InspectionResult。")]
 public sealed class combine_inspection_results : IOperator
 {
     public static List<IVisionParameter>? InputVisionParameters =>
-        new()
-        {
-            BoolInput("flatness_ok", "平面度是否合格"),
-            BoolInput("line_ok", "角度是否合格"),
-            BoolInput("circle_ok", "圆形是否合格"),
-            StringInput("flatness_result", "平面度结果"),
-            StringInput("line_result", "角度结果"),
-            StringInput("circle_result", "圆形结果"),
-        };
+    [
+        Result("flatness_result"), Result("line_result"), Result("circle_result"),
+    ];
 
     public static List<IVisionParameter>? OutputVisionParameters =>
-        new()
-        {
-            new VisionParameter<bool>
-            {
-                ParameterName = "is_ok",
-                DisplayName = "整体是否合格",
-                ParameterType = typeof(bool),
-                ControlType = PortControlType.Download,
-            },
-            new VisionParameter<string>
-            {
-                ParameterName = "result_json",
-                DisplayName = "检测汇总结果",
-                ParameterType = typeof(string),
-                JsonSchema =
-                    """
-                    {
-                      "type": "object",
-                      "properties": {
-                        "isOk": { "type": "boolean", "title": "整体是否合格" },
-                        "resultCode": { "type": "string", "title": "结果代码" },
-                        "measurements": {
-                          "type": "object",
-                          "title": "测量结果",
-                          "properties": {
-                            "flatness": { "type": "object", "title": "平面度" },
-                            "line": { "type": "object", "title": "角度" },
-                            "circle": { "type": "object", "title": "圆形" }
-                          }
-                        }
-                      }
-                    }
-                    """,
-                ControlType = PortControlType.Download,
-            },
-        };
+    [
+        InspectionResults.Output<CombinedInspectionDetails>("检测结果"),
+    ];
 
     public static List<IConfigParameter>? ConfigParameters => null;
 
     public void Execute(IWorkflowContext context)
     {
-        bool flatnessOk = context.Get<bool>("flatness_ok");
-        bool lineOk = context.Get<bool>("line_ok");
-        bool circleOk = context.Get<bool>("circle_ok");
-        bool isOk = flatnessOk && lineOk && circleOk;
-
-        context.Set("is_ok", isOk);
-        context.Set(
-            "result_json",
-            JsonSerializer.Serialize(
-                new
-                {
-                    isOk,
-                    resultCode = isOk ? "OK" : "NG",
-                    measurements = new
-                    {
-                        flatness = ParseJson(context.Get<string>("flatness_result")),
-                        line = ParseJson(context.Get<string>("line_result")),
-                        circle = ParseJson(context.Get<string>("circle_result")),
-                    },
-                }
-            )
-        );
+        InspectionResultBase flatness = Required(context, "flatness_result");
+        InspectionResultBase line = Required(context, "line_result");
+        InspectionResultBase circle = Required(context, "circle_result");
+        InspectionResultBase[] branch = [flatness, line, circle];
+        bool isValid = branch.All(x => x.isValid);
+        bool isOk = isValid && branch.All(x => x.isOk);
+        context.Set("result", InspectionResults.CreateTyped(isValid, isOk,
+            new CombinedInspectionDetails(flatness, line, circle),
+            isOk ? "Inspection passed" : "Inspection failed"));
     }
 
+    private static VisionParameter<InspectionResultBase> Result(string name) => new()
+        { ParameterName = name, ParameterType = typeof(InspectionResultBase), JsonSchema = InspectionResultSchema.Inspection };
+    private static InspectionResultBase Required(IWorkflowContext context, string name) =>
+        context.Get<InspectionResultBase>(name) ?? throw new InvalidOperationException($"检测结果 '{name}' 为空。");
     public void Dispose() { }
-
-    private static VisionParameter<bool> BoolInput(string name, string displayName) =>
-        new()
-        {
-            ParameterName = name,
-            DisplayName = displayName,
-            ParameterType = typeof(bool),
-        };
-
-    private static VisionParameter<string> StringInput(string name, string displayName) =>
-        new()
-        {
-            ParameterName = name,
-            DisplayName = displayName,
-            ParameterType = typeof(string),
-        };
-
-    private static JsonElement? ParseJson(string? json)
-    {
-        if (string.IsNullOrWhiteSpace(json))
-        {
-            return null;
-        }
-
-        try
-        {
-            using JsonDocument document = JsonDocument.Parse(json);
-            return document.RootElement.Clone();
-        }
-        catch (JsonException)
-        {
-            return null;
-        }
-    }
 }

@@ -2,6 +2,7 @@ using AuroraStruct3D.AI;
 using AuroraStruct3D.DeviceState;
 using AuroraStruct3D.Ktech;
 using AuroraStruct3D.Leisai;
+using AuroraStruct3D.Realtime;
 using AuroraStruct3D.OpenCV;
 using AuroraStruct3D.Projectors;
 using AuroraStruct3D.RS485;
@@ -40,6 +41,7 @@ namespace AuroraStruct3D
     {
         public override void ConfigureServices(ServiceConfigurationContext context)
         {
+            context.Services.AddSingleton<RealtimeSubscriberTracker>();
             IConfiguration configuration = context.Services.GetConfiguration();
             context.Services.Configure<WorkflowRuntimeSafetyOptions>(
                 configuration.GetSection("Workflow:RuntimeSafety")

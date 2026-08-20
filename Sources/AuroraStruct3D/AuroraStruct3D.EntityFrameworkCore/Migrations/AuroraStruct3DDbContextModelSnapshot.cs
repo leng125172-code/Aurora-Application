@@ -731,21 +731,11 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                     b.Property<int>("HomingMode")
                         .HasColumnType("integer");
 
-                    b.Property<bool>("MoveAfterHome")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false);
-
                     b.Property<bool>("IsDeleted")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
                         .HasDefaultValue(false)
                         .HasColumnName("IsDeleted");
-
-                    b.Property<bool>("WithZSignal")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false);
 
                     b.Property<bool>("IsOriginLocked")
                         .HasColumnType("boolean");
@@ -768,6 +758,11 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                     b.Property<Guid>("MotorAxisId")
                         .HasColumnType("uuid");
 
+                    b.Property<bool>("MoveAfterHome")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
                     b.Property<decimal>("NegativeSoftLimit")
                         .HasPrecision(18, 6)
                         .HasColumnType("numeric(18,6)");
@@ -778,6 +773,11 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                     b.Property<decimal>("PositiveSoftLimit")
                         .HasPrecision(18, 6)
                         .HasColumnType("numeric(18,6)");
+
+                    b.Property<bool>("WithZSignal")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
 
                     b.HasKey("Id");
 
@@ -3527,19 +3527,66 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                     b.ToTable("AbpProWorkflowMigrationBatches", (string)null);
                 });
 
+            modelBuilder.Entity("AuroraStruct3D.Workflow.WorkflowMigrationSnapshot", b =>
+                {
+                    b.Property<Guid>("Id").HasColumnType("uuid");
+                    b.Property<Guid>("BatchId").HasColumnType("uuid");
+                    b.Property<string>("ConcurrencyStamp").IsConcurrencyToken().IsRequired()
+                        .HasMaxLength(40).HasColumnType("character varying(40)").HasColumnName("ConcurrencyStamp");
+                    b.Property<DateTime>("CreationTime").HasColumnType("timestamp without time zone").HasColumnName("CreationTime");
+                    b.Property<Guid?>("CreatorId").HasColumnType("uuid").HasColumnName("CreatorId");
+                    b.Property<string>("ExtraProperties").IsRequired().HasColumnType("text").HasColumnName("ExtraProperties");
+                    b.Property<string>("GraphData").IsRequired().HasColumnType("text");
+                    b.Property<int>("LanguageVersion").HasColumnType("integer");
+                    b.Property<string>("OperatorContractHash").HasColumnType("text");
+                    b.Property<string>("ProgramHash").HasColumnType("text");
+                    b.Property<DateTime?>("RolledBackAt").HasColumnType("timestamp without time zone");
+                    b.Property<string>("SemanticHash").HasColumnType("text");
+                    b.Property<string>("SourceCode").HasColumnType("text");
+                    b.Property<string>("SourceHash").HasColumnType("text");
+                    b.Property<int>("SourceRevision").HasColumnType("integer");
+                    b.Property<Guid>("WorkflowId").HasColumnType("uuid");
+                    b.Property<string>("WorkflowName").IsRequired().HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+                    b.HasKey("Id");
+                    b.HasIndex("WorkflowId");
+                    b.HasIndex("BatchId", "WorkflowId").IsUnique();
+                    b.ToTable("AbpProWorkflowMigrationSnapshots", (string)null);
+                });
+
             modelBuilder.Entity("AuroraStruct3D.Workflow.WorkflowPlcHandshakeConfig", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("AckRequestIdAddress")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
+
                     b.Property<Guid>("AckRequestIdTagId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("CanCaptureAddress")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
 
                     b.Property<Guid>("CanCaptureTagId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("CaptureAckAddress")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
+
                     b.Property<Guid>("CaptureAckTagId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("CaptureRequestAddress")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
 
                     b.Property<Guid>("CaptureRequestTagId")
                         .HasColumnType("uuid");
@@ -3573,11 +3620,21 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                         .HasColumnType("timestamp without time zone")
                         .HasColumnName("DeletionTime");
 
+                    b.Property<string>("DeviceStatusAddress")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
+
                     b.Property<Guid>("DeviceStatusTagId")
                         .HasColumnType("uuid");
 
                     b.Property<int>("ErrorCode")
                         .HasColumnType("integer");
+
+                    b.Property<string>("ErrorCodeAddress")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
 
                     b.Property<Guid>("ErrorCodeTagId")
                         .HasColumnType("uuid");
@@ -3586,6 +3643,11 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                         .IsRequired()
                         .HasColumnType("text")
                         .HasColumnName("ExtraProperties");
+
+                    b.Property<string>("HeartbeatAddress")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
 
                     b.Property<Guid>("HeartbeatTagId")
                         .HasColumnType("uuid");
@@ -3629,8 +3691,26 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                     b.Property<Guid>("ProjectId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid>("TaskConfigId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("RequestIdAddress")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
+
                     b.Property<Guid>("RequestIdTagId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("ResultAckAddress")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
+
+                    b.Property<string>("ResultAckIdAddress")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
 
                     b.Property<Guid>("ResultAckIdTagId")
                         .HasColumnType("uuid");
@@ -3641,14 +3721,34 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                     b.Property<int>("ResultCode")
                         .HasColumnType("integer");
 
+                    b.Property<string>("ResultCodeAddress")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
+
                     b.Property<Guid>("ResultCodeTagId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("ResultRequestIdAddress")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
 
                     b.Property<Guid>("ResultRequestIdTagId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("ResultValidAddress")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
+
                     b.Property<Guid>("ResultValidTagId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("TaskStatusAddress")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
 
                     b.Property<Guid>("TaskStatusTagId")
                         .HasColumnType("uuid");
@@ -3657,11 +3757,11 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
 
                     b.HasIndex("CurrentRunId");
 
-                    b.HasIndex("PlcDeviceId")
-                        .IsUnique()
-                        .HasFilter("\"IsEnabled\" = true AND \"IsDeleted\" = false");
+                    b.HasIndex("PlcDeviceId");
 
-                    b.HasIndex("ProjectId")
+                    b.HasIndex("ProjectId");
+
+                    b.HasIndex("TaskConfigId")
                         .IsUnique();
 
                     b.ToTable("AbpProWorkflowPlcHandshakeConfigs", (string)null);
@@ -3794,6 +3894,11 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                         .HasMaxLength(4194304)
                         .HasColumnType("character varying(4194304)");
 
+                    b.Property<string>("FrozenTaskConfigJson")
+                        .IsRequired()
+                        .HasMaxLength(4096)
+                        .HasColumnType("character varying(4096)");
+
                     b.Property<string>("FrozenVariablesJson")
                         .IsRequired()
                         .HasMaxLength(1048576)
@@ -3828,6 +3933,9 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                         .IsRequired()
                         .HasMaxLength(131072)
                         .HasColumnType("character varying(131072)");
+
+                    b.Property<int>("SnapshotSchemaVersion")
+                        .HasColumnType("integer");
 
                     b.Property<int>("Status")
                         .HasColumnType("integer");
@@ -4093,6 +4201,17 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("LastModifierId");
 
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<int>("OnErrorAction")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsEnabled")
+                        .HasColumnType("boolean");
+
                     b.Property<Guid>("ProjectId")
                         .HasColumnType("uuid");
 
@@ -4108,8 +4227,11 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("ProjectId")
-                        .IsUnique();
+                    b.HasIndex("ProjectId");
+
+                    b.HasIndex("ProjectId", "IsEnabled")
+                        .IsUnique()
+                        .HasFilter("\"IsEnabled\" = true AND \"IsDeleted\" = false");
 
                     b.ToTable("AbpProWorkflowProjectTaskConfigs", (string)null);
                 });

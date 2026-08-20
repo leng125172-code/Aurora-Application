@@ -1,5 +1,6 @@
 using AuroraStruct3D.Hubs;
 using AuroraStruct3D.Services;
+using AuroraStruct3D.Realtime;
 using DotNetCore.CAP.Monitoring;
 using DotNetCore.CAP.Persistence;
 using Hangfire;
@@ -21,6 +22,7 @@ public class DashboardBroadcastService : BackgroundService
     private readonly IHubContext<DashboardHub> _hubContext;
     private readonly ILogger<DashboardBroadcastService> _logger;
     private readonly SystemMetricsCollector _metrics;
+    private readonly RealtimeSubscriberTracker _subscribers;
 
     /// <summary>
     /// 构造函数
@@ -33,13 +35,15 @@ public class DashboardBroadcastService : BackgroundService
         IServiceScopeFactory scopeFactory,
         IHubContext<DashboardHub> hubContext,
         ILogger<DashboardBroadcastService> logger,
-        SystemMetricsCollector metrics
+        SystemMetricsCollector metrics,
+        RealtimeSubscriberTracker subscribers
     )
     {
         _scopeFactory = scopeFactory;
         _hubContext = hubContext;
         _logger = logger;
         _metrics = metrics;
+        _subscribers = subscribers;
     }
 
     /// <inheritdoc />
@@ -50,6 +54,12 @@ public class DashboardBroadcastService : BackgroundService
 
         while (!stoppingToken.IsCancellationRequested)
         {
+            if (!_subscribers.HasSubscribers(RealtimeSubscriberTracker.Dashboard))
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(250), stoppingToken);
+                continue;
+            }
+
             try
             {
                 await BroadcastAsync(stoppingToken);

@@ -18,16 +18,7 @@ public sealed class dimension_angle_inspection : IOperator
         ];
 
     public static List<IVisionParameter>? OutputVisionParameters =>
-        [
-            NumberOutput("length_deviation", "尺寸偏差"),
-            NumberOutput("angle_deviation", "角度偏差"),
-            BoolOutput("length_ok", "尺寸是否合格"),
-            BoolOutput("angle_ok", "角度是否合格"),
-            BoolOutput("is_valid", "结果是否有效"),
-            BoolOutput("is_ok", "是否合格"),
-            StringOutput("inspection_status", "检测状态"),
-            StringOutput("result_json", "尺寸角度判定结果", PortControlType.Download),
-        ];
+        [InspectionResults.Output<DimensionAngleInspectionDetails>("尺寸角度判定结果")];
 
     public static List<IConfigParameter>? ConfigParameters =>
         [
@@ -107,44 +98,15 @@ public sealed class dimension_angle_inspection : IOperator
         bool isOk = isValid && lengthOk && angleOk;
         string status = !isValid ? "UNKNOWN" : isOk ? "OK" : "NG";
 
-        context.Set("length_deviation", lengthDeviation);
-        context.Set("angle_deviation", angleDeviation);
-        context.Set("length_ok", lengthOk);
-        context.Set("angle_ok", angleOk);
-        context.Set("is_valid", isValid);
-        context.Set("is_ok", isOk);
-        context.Set("inspection_status", status);
-        context.Set(
-            "result_json",
-            JsonSerializer.Serialize(
-                new
-                {
+        context.Set("result", InspectionResults.CreateTyped(isValid, isOk,
+                new DimensionAngleInspectionDetails(
                     status,
                     isValid,
                     isOk,
-                    length = new
-                    {
-                        enabled = _checkLength,
-                        measured = measuredLength,
-                        nominal = _nominalLength,
-                        deviation = lengthDeviation,
-                        minDeviation = _minLengthDeviation,
-                        maxDeviation = _maxLengthDeviation,
-                        isOk = lengthOk,
-                    },
-                    angle = new
-                    {
-                        enabled = _checkAngle,
-                        measured = measuredAngle,
-                        nominal = _nominalAngle,
-                        deviation = angleDeviation,
-                        minDeviation = _minAngleDeviation,
-                        maxDeviation = _maxAngleDeviation,
-                        isOk = angleOk,
-                    },
-                }
-            )
-        );
+                    new ToleranceMeasurementDetails(_checkLength, measuredLength, _nominalLength,
+                        lengthDeviation, _minLengthDeviation, _maxLengthDeviation, lengthOk),
+                    new ToleranceMeasurementDetails(_checkAngle, measuredAngle, _nominalAngle,
+                        angleDeviation, _minAngleDeviation, _maxAngleDeviation, angleOk)), status));
     }
 
     public void Dispose() { }

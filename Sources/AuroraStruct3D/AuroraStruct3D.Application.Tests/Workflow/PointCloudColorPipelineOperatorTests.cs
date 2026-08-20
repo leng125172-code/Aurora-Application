@@ -308,10 +308,8 @@ public class PointCloudColorPipelineOperatorTests
         context.Set("input_mat", input);
         context.Set("roi_metadata_a", roiMetadata);
         context.Set("roi_metadata_b", roiMetadata);
-        context.Set("height_a", 1.2d);
-        context.Set("height_b", 1.0d);
-        context.Set("signed_diff", 0.2d);
-        context.Set("is_ok", true);
+        context.Set("inspection_result", InspectionResults.CreateTyped(true, true,
+            new HeightDiffInspectionDetails(1.2, 1.0, 0.2, 0.2, 0, 1, true)));
 
         using var op = new annotate_height_diff_result();
         op.Execute(context);

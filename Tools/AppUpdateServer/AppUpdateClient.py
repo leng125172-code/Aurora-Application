@@ -8,12 +8,16 @@ AppUpdateClient.py
     - 每块独立 MD5 校验，上传后服务端验证
     - 合并后全文件 MD5 二次校验
     - 四阶段进度条：发布 / 压缩 / 上传 / 解压
+    - remotelog / rl 自动发现设备并彩色跟随 .NET systemd 日志
 
 用法：
     python AppUpdateClient.py [-dr | -rr]
                               [--host 10.127.135.143] [--port 9211]
                               [--projects AuroraStruct3D.HttpApi.Host,AuroraStruct3D.DbMigrator]
                               [--workers 4] [--chunk-mb 8]
+    python AppUpdateClient.py remotelog [--host 10.127.135.143]
+                              [--ssh-user linaro] [--service AuroraStruct3D.HttpApi.Host.service]
+    python AppUpdateClient.py rl
 
 发布模式：
     无参数  不重新发布，直接打包并推送已有 Publish 目录
@@ -28,7 +32,9 @@ import argparse
 import concurrent.futures
 import hashlib
 import json
+import os
 import re
+import shutil
 import socket
 import struct
 import subprocess
@@ -60,8 +66,176 @@ DEFAULT_HOST = "10.127.135.143"
 DEFAULT_PORT = 9211
 DEFAULT_WORKERS = 4
 DEFAULT_CHUNK_MB = 8
+DEFAULT_SSH_USER = "linaro"
+DEFAULT_SSH_PORT = 22
+DEFAULT_LOG_SERVICE = "AuroraStruct3D.HttpApi.Host.service"
 # UDP 发现端口 = TCP 端口 - 1
 DISCOVERY_PORT = DEFAULT_PORT - 1
+
+
+class _Ansi:
+    RESET = "\033[0m"
+    DIM = "\033[2m"
+    GRAY = "\033[90m"
+    RED = "\033[31m"
+    BRIGHT_RED = "\033[91m"
+    YELLOW = "\033[33m"
+    GREEN = "\033[32m"
+    CYAN = "\033[36m"
+    MAGENTA = "\033[35m"
+
+
+_LEVEL_RE = re.compile(
+    r"\[(?P<bracket>VRB|DBG|INF|WRN|ERR|FTL)\]"
+    r"|\b(?P<word>Trace|Debug|Information|Warning|Error|Critical)\b",
+    re.IGNORECASE,
+)
+_LEVEL_ALIASES = {
+    "TRACE": "VRB",
+    "DEBUG": "DBG",
+    "INFORMATION": "INF",
+    "WARNING": "WRN",
+    "ERROR": "ERR",
+    "CRITICAL": "FTL",
+}
+_LEVEL_COLORS = {
+    "VRB": _Ansi.DIM,
+    "DBG": _Ansi.GRAY,
+    "INF": _Ansi.GREEN,
+    "WRN": _Ansi.YELLOW,
+    "ERR": _Ansi.RED,
+    "FTL": _Ansi.BRIGHT_RED,
+}
+
+
+def _color_enabled() -> bool:
+    """当前终端是否支持 ANSI 颜色；NO_COLOR 环境变量可显式关闭。"""
+    if "NO_COLOR" in os.environ or not sys.stdout.isatty():
+        return False
+    if sys.platform == "win32":
+        os.system("")
+    return True
+
+
+def _parse_log_level(line: str) -> str | None:
+    match = _LEVEL_RE.search(line)
+    if not match:
+        if "Exception" in line or line.lstrip().startswith("at "):
+            return "ERR"
+        return None
+    raw = (match.group("bracket") or match.group("word")).upper()
+    return _LEVEL_ALIASES.get(raw, raw)
+
+
+def _format_remote_log_line(line: str, use_color: bool) -> tuple[str, str | None]:
+    """解析一行 .NET 日志，返回（格式化文本，级别）。"""
+    level = _parse_log_level(line)
+    if not use_color:
+        return line, level
+
+    color = _LEVEL_COLORS.get(level or "", "")
+    if not color:
+        color = _Ansi.RED if "Exception" in line else _Ansi.RESET
+    rendered = f"{color}{line}{_Ansi.RESET}"
+
+    # 在整行级别色之上突出 HTTP 状态码和明显的慢请求。
+    rendered = re.sub(
+        r"(?i)(\bstatus(?:\s+code)?\s*[=:]?\s*|-\s+)([1-5]\d{2})(?=\s|$)",
+        lambda m: m.group(1)
+        + (
+            f"{_Ansi.BRIGHT_RED}{m.group(2)}{color}"
+            if m.group(2).startswith("5")
+            else f"{_Ansi.YELLOW}{m.group(2)}{color}"
+            if m.group(2).startswith("4")
+            else f"{_Ansi.CYAN}{m.group(2)}{color}"
+            if m.group(2).startswith("2")
+            else m.group(2)
+        ),
+        rendered,
+    )
+    duration = re.search(r"\b(\d+(?:\.\d+)?)ms\b", line)
+    if duration and float(duration.group(1)) >= 1000:
+        token = duration.group(0)
+        rendered = rendered.replace(token, f"{_Ansi.MAGENTA}{token}{color}", 1)
+    return rendered, level
+
+
+def stream_remote_logs(
+    host: str,
+    ssh_user: str,
+    ssh_port: int,
+    service: str,
+    lines: int,
+    follow: bool,
+) -> None:
+    """通过 SSH 跟随远端 systemd 日志，在本地解析并着色。"""
+    ssh = shutil.which("ssh")
+    if not ssh:
+        print("[错误] 未找到 ssh，请安装或启用 Windows OpenSSH 客户端。", file=sys.stderr)
+        sys.exit(1)
+    if not re.fullmatch(r"[A-Za-z0-9_.@-]+", service):
+        print(f"[错误] 非法的 systemd 服务名：{service}", file=sys.stderr)
+        sys.exit(1)
+
+    remote_command = f"journalctl -u {service} -n {lines} --no-pager -o cat"
+    if follow:
+        remote_command += " -f"
+    target = f"{ssh_user}@{host}" if ssh_user else host
+    command = [
+        ssh,
+        "-T",
+        "-p",
+        str(ssh_port),
+        "-o",
+        "ConnectTimeout=8",
+        "-o",
+        "ServerAliveInterval=15",
+        target,
+        remote_command,
+    ]
+
+    print("=" * 72)
+    print(f"  远端设备 : {target}:{ssh_port}")
+    print(f"  日志服务 : {service}")
+    print(f"  日志模式 : 最近 {lines} 行" + ("，持续跟随" if follow else ""))
+    print("  退出方式 : Ctrl+C")
+    print("=" * 72)
+
+    counts: Counter[str] = Counter()
+    use_color = _color_enabled()
+    process: subprocess.Popen[str] | None = None
+    try:
+        process = subprocess.Popen(
+            command,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            bufsize=1,
+        )
+        assert process.stdout is not None
+        for raw_line in process.stdout:
+            rendered, level = _format_remote_log_line(raw_line.rstrip("\r\n"), use_color)
+            if level:
+                counts[level] += 1
+            print(rendered, flush=True)
+        return_code = process.wait()
+        if return_code != 0:
+            raise RuntimeError(f"ssh 退出码 {return_code}")
+    except KeyboardInterrupt:
+        print("\n已停止远端日志跟随。")
+    finally:
+        if process and process.poll() is None:
+            process.terminate()
+            try:
+                process.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                process.kill()
+        if counts:
+            order = ("VRB", "DBG", "INF", "WRN", "ERR", "FTL")
+            summary = "  ".join(f"{level}={counts[level]}" for level in order if counts[level])
+            print(f"[日志统计] {summary}")
 
 
 def _send_msg(sock: socket.socket, data: dict) -> None:
@@ -561,7 +735,13 @@ def upload_and_deploy(
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="一键发布并部署到 RK3588（分块并行上传）"
+        description="发布部署到 RK3588，或查看远端 .NET 运行日志"
+    )
+    parser.add_argument(
+        "command",
+        nargs="?",
+        choices=("remotelog", "rl"),
+        help="remotelog/rl：自动发现设备并跟随远端 .NET 日志",
     )
     parser.add_argument(
         "--host", default="", help="RK3588 IP 地址（不指定则自动扫描局域网）"
@@ -609,7 +789,39 @@ def main() -> None:
         default=DEFAULT_CHUNK_MB,
         help=f"每个分块大小 MB（默认：{DEFAULT_CHUNK_MB}）",
     )
+    parser.add_argument(
+        "--ssh-user",
+        default=DEFAULT_SSH_USER,
+        help=f"远端 SSH 用户（默认：{DEFAULT_SSH_USER}）",
+    )
+    parser.add_argument(
+        "--ssh-port",
+        type=int,
+        default=DEFAULT_SSH_PORT,
+        help=f"远端 SSH 端口（默认：{DEFAULT_SSH_PORT}）",
+    )
+    parser.add_argument(
+        "--service",
+        default=DEFAULT_LOG_SERVICE,
+        help=f"systemd 服务名（默认：{DEFAULT_LOG_SERVICE}）",
+    )
+    parser.add_argument(
+        "--lines",
+        type=int,
+        default=200,
+        help="首次读取的历史日志行数（默认：200）",
+    )
+    parser.add_argument(
+        "--no-follow",
+        action="store_true",
+        help="仅读取历史日志，不持续跟随",
+    )
     args = parser.parse_args()
+
+    if args.lines < 0:
+        parser.error("--lines 不能小于 0")
+    if not 1 <= args.ssh_port <= 65535:
+        parser.error("--ssh-port 必须在 1..65535 之间")
 
     # 自动发现服务端
     host = args.host.strip()
@@ -640,6 +852,21 @@ def main() -> None:
                         break
                 except (ValueError, KeyboardInterrupt):
                     pass
+
+    if args.command in ("remotelog", "rl"):
+        try:
+            stream_remote_logs(
+                host=host,
+                ssh_user=args.ssh_user.strip(),
+                ssh_port=args.ssh_port,
+                service=args.service.strip(),
+                lines=args.lines,
+                follow=not args.no_follow,
+            )
+        except RuntimeError as exc:
+            print(f"[错误] 远端日志读取失败：{exc}", file=sys.stderr)
+            sys.exit(1)
+        return
 
     projects = [p.strip() for p in args.projects.split(",") if p.strip()]
     publish_dir = WORKSPACE_ROOT / "Publish"

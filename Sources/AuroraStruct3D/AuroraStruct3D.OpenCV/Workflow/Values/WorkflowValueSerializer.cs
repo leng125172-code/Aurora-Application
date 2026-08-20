@@ -30,6 +30,10 @@ public static class WorkflowValueSerializer
             decimal => WorkflowValueTypes.Decimal,
             DateTime or DateTimeOffset => WorkflowValueTypes.DateTime,
             Guid => WorkflowValueTypes.Guid,
+            string or char or Enum => WorkflowValueTypes.String,
+            InspectionResultBase or ProductInspectionResult => WorkflowValueTypes.Object,
+            object registered when WorkflowTypeRegistry.IsRegistered(registered.GetType()) =>
+                WorkflowValueTypes.Object,
             System.Collections.IDictionary => WorkflowValueTypes.Object,
             JsonArray or Array or System.Collections.IEnumerable
                 when value is not string => WorkflowValueTypes.Array,
@@ -123,7 +127,7 @@ public static class WorkflowValueSerializer
             Array or System.Collections.IEnumerable when value is not string =>
                 TrySerializeJson(value, out string? json) ? json : null,
             IFormattable f => f.ToString(null, CultureInfo.InvariantCulture),
-            _ => value.ToString(),
+            _ => TrySerializeJson(value, out string? json) ? json : value.ToString(),
         };
 
     /// <summary>

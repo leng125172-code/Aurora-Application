@@ -17,6 +17,9 @@ public sealed class NodePortDto
     /// </summary>
     public string? DisplayName { get; init; }
 
+    /// <summary>入参或出参的配置指南，直接用于指导用户如何连接或使用该参数。</summary>
+    public string Description { get; init; } = string.Empty;
+
     /// <summary>端口数据类型 CLR 全名，用于连线时的类型兼容性校验。</summary>
     public required string PortTypeName { get; init; }
 
@@ -27,6 +30,12 @@ public sealed class NodePortDto
     /// 值范围约束：文件路径类型为允许扩展名数组；数值类型为 [Min, Max]；可为 null。
     /// </summary>
     public object? ValueLimit { get; init; }
+
+    /// <summary>Structured port schema used by member completion and type checking.</summary>
+    public string? JsonSchema { get; init; }
+
+    /// <summary>IDE-friendly structural type of this port.</summary>
+    public WorkflowTypeSymbolDto? TypeSymbol { get; init; }
 
     /// <summary>是否在赋值时进行类型/合法性校验。</summary>
     public bool ErrorCheck { get; init; }

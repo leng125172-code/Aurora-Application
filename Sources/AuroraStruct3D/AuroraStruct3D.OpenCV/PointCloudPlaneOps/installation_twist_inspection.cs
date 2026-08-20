@@ -62,10 +62,8 @@ public sealed class installation_twist_inspection : IOperator
         bool valid = reasons.Count == 0;
         bool ok = valid && Math.Abs(deviation) <= _maxDeviation;
         string status = !valid ? "UNKNOWN" : ok ? "OK" : "NG";
-        installation_axis_to_plane_inspection.Set(context, "twist_z", twist);
-        installation_axis_to_plane_inspection.Set(context, "twist_deviation", deviation);
         installation_axis_to_plane_inspection.SetResult(context, status, valid, ok,
-            new { twistZ = InstallationAngleMath.Round(twist), twistDeviation = InstallationAngleMath.Round(deviation), referenceRmse, measuredRmse, reasons });
+            new InstallationAxisInspectionDetails { twistZ = InstallationAngleMath.Round(twist), twistDeviation = InstallationAngleMath.Round(deviation), referenceRmse = referenceRmse, measuredRmse = measuredRmse, reasons = reasons });
     }
     private static double NormalizeAngle(double value)
     {

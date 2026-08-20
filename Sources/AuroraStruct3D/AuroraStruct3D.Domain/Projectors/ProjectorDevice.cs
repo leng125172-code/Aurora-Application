@@ -57,7 +57,7 @@ public class ProjectorDevice : FullAuditedAggregateRoot<Guid>
     /// <summary>LED 灯状态（最后已知）</summary>
     public ProjectorLedStatus LedStatus { get; private set; }
 
-    /// <summary>最后设置的亮度值（10~200，0 表示未设置）</summary>
+    /// <summary>保存到数据库的灯光亮度（0~175，新设备默认 75）</summary>
     public byte LastLightValue { get; private set; }
 
     /// <summary>最后设置的显示模式（0=黑屏,1=白屏,2=十字,3=棋盘）</summary>
@@ -138,6 +138,7 @@ public class ProjectorDevice : FullAuditedAggregateRoot<Guid>
         // 默认状态
         ConnectionStatus = ProjectorConnectionStatus.Unknown;
         LedStatus = ProjectorLedStatus.Unknown;
+        LastLightValue = 75;
         IsEnabled = true;
         DeviceHardwareId = -1;
         LastColor = ProjectorColor.White;
@@ -176,6 +177,7 @@ public class ProjectorDevice : FullAuditedAggregateRoot<Guid>
         // 默认状态
         ConnectionStatus = ProjectorConnectionStatus.Unknown;
         LedStatus = ProjectorLedStatus.Unknown;
+        LastLightValue = 75;
         IsEnabled = true;
         DeviceHardwareId = -1;
         LastColor = ProjectorColor.White;

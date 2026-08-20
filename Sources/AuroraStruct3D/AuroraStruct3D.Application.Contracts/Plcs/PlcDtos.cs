@@ -158,6 +158,34 @@ public class PlcBrowseInput
     public int MaxResults { get; set; } = 200;
 }
 
+public class PlcBrowseTreeInput
+{
+    public string? RootAddress { get; set; }
+    [Range(1, 16)]
+    public int MaxDepth { get; set; } = 8;
+    [Range(1, 10000)]
+    public int MaxNodes { get; set; } = 3000;
+}
+
+public class PlcBrowseTreeNodeDto
+{
+    public string Address { get; set; } = string.Empty;
+    public string BrowseName { get; set; } = string.Empty;
+    public string DisplayName { get; set; } = string.Empty;
+    public string NodeClass { get; set; } = string.Empty;
+    public PlcTagDataType? DataType { get; set; }
+    public PlcTagAccess Access { get; set; }
+    public bool HasChildren { get; set; }
+    public List<PlcBrowseTreeNodeDto> Children { get; set; } = [];
+}
+
+public class PlcBrowseTreeResultDto
+{
+    public List<PlcBrowseTreeNodeDto> Items { get; set; } = [];
+    public int NodeCount { get; set; }
+    public bool Truncated { get; set; }
+}
+
 public class PlcConnectionTestResultDto
 {
     public bool Success { get; set; }

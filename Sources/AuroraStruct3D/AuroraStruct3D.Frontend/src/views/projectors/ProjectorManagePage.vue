@@ -8,6 +8,7 @@ import Column from 'primevue/column'
 import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
 import InputText from 'primevue/inputtext'
+import InputNumber from 'primevue/inputnumber'
 import ToggleSwitch from 'primevue/toggleswitch'
 import { AppCard } from '@/components/primevue'
 import { useProjectorStore } from '@/stores/projectors'
@@ -44,15 +45,32 @@ const showEditDialog = ref(false)
 const editingProjector = ref<ProjectorDeviceDto | null>(null)
 const editForm = ref<UpdateProjectorDeviceDto>({ name: '', description: '', isEnabled: true })
 const updating = ref(false)
+const isEditingUsbProjector = computed(
+    () => editingProjector.value?.connectionType === ProjectorConnectionType.UsbHid
+)
+const canUpdate = computed(() => {
+    if (!editForm.value.name.trim()) return false
+    if (!isEditingUsbProjector.value) return true
+    const identity = editForm.value.deviceHardwareId
+    return identity != null && Number.isInteger(identity) && identity >= 1 && identity <= 255
+})
 
 function handleEdit(p: ProjectorDeviceDto) {
     editingProjector.value = p
-    editForm.value = { name: p.name, description: p.description ?? '', isEnabled: p.isEnabled }
+    editForm.value = {
+        name: p.name,
+        description: p.description ?? '',
+        isEnabled: p.isEnabled,
+        deviceHardwareId:
+            p.connectionType === ProjectorConnectionType.UsbHid && p.deviceHardwareId >= 1
+                ? p.deviceHardwareId
+                : null,
+    }
     showEditDialog.value = true
 }
 
 async function handleUpdate() {
-    if (!editingProjector.value) return
+    if (!editingProjector.value || !canUpdate.value) return
     updating.value = true
     const id = editingProjector.value.id
     try {
@@ -227,6 +245,14 @@ onMounted(() => {
                         </span>
                     </template>
                 </Column>
+                <Column :header="t('projector.deviceHardwareId')" style="min-width: 7rem">
+                    <template #body="{ data }">
+                        <span v-if="data.connectionType === ProjectorConnectionType.UsbHid" class="font-mono text-xs">
+                            {{ data.deviceHardwareId >= 1 ? data.deviceHardwareId : t('projector.unassigned') }}
+                        </span>
+                        <span v-else class="text-muted-foreground">—</span>
+                    </template>
+                </Column>
                 <Column :header="t('projector.connectionStatus')" style="min-width: 8rem">
                     <template #body="{ data }">
                         <span :class="connectionStatusClass(data.connectionStatus)">
@@ -341,6 +367,18 @@ onMounted(() => {
                     <span>{{ t('common.description') }}</span>
                     <InputText v-model="editForm.description" size="small" />
                 </label>
+                <label v-if="isEditingUsbProjector" class="flex flex-col gap-1 text-sm">
+                    <span>{{ t('projector.deviceHardwareId') }}</span>
+                    <InputNumber
+                        v-model="editForm.deviceHardwareId"
+                        :min="1"
+                        :max="255"
+                        :use-grouping="false"
+                        show-buttons
+                        size="small"
+                    />
+                    <span class="text-xs text-muted-foreground">{{ t('projector.deviceHardwareIdHint') }}</span>
+                </label>
                 <label class="flex items-center gap-2 text-sm">
                     <ToggleSwitch v-model="editForm.isEnabled" />
                     <span>{{ t('projector.enabled') }}</span>
@@ -350,7 +388,7 @@ onMounted(() => {
                 <Button severity="secondary" outlined size="small" @click="showEditDialog = false">
                     {{ t('common.cancel') }}
                 </Button>
-                <Button :loading="updating" size="small" @click="handleUpdate">
+                <Button :loading="updating" :disabled="!canUpdate" size="small" @click="handleUpdate">
                     {{ updating ? t('common.saving') : t('common.save') }}
                 </Button>
             </template>

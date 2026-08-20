@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import Button from 'primevue/button'
@@ -14,7 +14,7 @@ import { getApplicationConfigurationAsync } from '@/api/abp-application'
 import { useAuthStore } from '@/stores/auth'
 import { useAppToast } from '@/composables/useAppToast'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const router = useRouter()
 const route = useRoute()
 const auth = useAuthStore()
@@ -26,6 +26,11 @@ const tenantName = ref('')
 const submitting = ref(false)
 const usernameError = ref('')
 const passwordError = ref('')
+
+watch(locale, () => {
+    usernameError.value = ''
+    passwordError.value = ''
+})
 
 async function handleSubmit(): Promise<void> {
     if (submitting.value) return
@@ -92,9 +97,12 @@ async function handleSubmit(): Promise<void> {
     />
 
     <!-- 登录卡片 -->
-    <div class="relative z-[1] flex h-full w-full flex-col items-center justify-center gap-8 px-4">
+    <div
+        data-testid="login-page"
+        class="relative z-[1] flex h-full w-full flex-col items-center justify-center gap-5 overflow-y-auto px-4 pb-6 pt-20 sm:gap-8"
+    >
         <!-- 顶部 Glitch 大标题（保留 Inspira UI 视觉效果） -->
-        <SparklesText :text="t('login.title')" class="!text-4xl md:!text-5xl" />
+        <SparklesText :text="t('login.title')" class="max-w-full text-center !text-3xl sm:!text-4xl md:!text-5xl" />
 
         <AppCard class="w-full max-w-md shadow-2xl" :beam-size="160">
             <template #subtitle>
@@ -130,7 +138,14 @@ async function handleSubmit(): Promise<void> {
                             aria-describedby="login-username-error"
                             @update:model-value="usernameError = ''"
                         />
-                        <small v-if="usernameError" id="login-username-error" class="text-xs text-destructive" role="alert">{{ usernameError }}</small>
+                        <small
+                            v-if="usernameError"
+                            id="login-username-error"
+                            class="text-xs text-destructive"
+                            role="alert"
+                        >
+                            {{ usernameError }}
+                        </small>
                     </div>
                     <!-- 密码 -->
                     <div class="flex flex-col gap-2">
@@ -146,10 +161,20 @@ async function handleSubmit(): Promise<void> {
                             input-class="w-full"
                             class="w-full"
                             :invalid="!!passwordError"
-                            :input-props="{ 'aria-invalid': !!passwordError, 'aria-describedby': 'login-password-error' }"
+                            :input-props="{
+                                'aria-invalid': !!passwordError,
+                                'aria-describedby': 'login-password-error',
+                            }"
                             @update:model-value="passwordError = ''"
                         />
-                        <small v-if="passwordError" id="login-password-error" class="text-xs text-destructive" role="alert">{{ passwordError }}</small>
+                        <small
+                            v-if="passwordError"
+                            id="login-password-error"
+                            class="text-xs text-destructive"
+                            role="alert"
+                        >
+                            {{ passwordError }}
+                        </small>
                     </div>
                 </form>
             </template>

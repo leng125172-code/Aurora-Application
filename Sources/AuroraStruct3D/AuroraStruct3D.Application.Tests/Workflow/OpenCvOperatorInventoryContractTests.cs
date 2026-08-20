@@ -89,6 +89,12 @@ public class OpenCvOperatorInventoryContractTests
             Assert.NotNull(parameters.Inputs);
             Assert.NotNull(parameters.Outputs);
             Assert.NotNull(parameters.Config);
+            Assert.All(parameters.Inputs, x => Assert.False(string.IsNullOrWhiteSpace(x.Description),
+                $"{descriptor.DisplayName} 的输入参数 {x.ParameterName} 缺少说明。"));
+            Assert.All(parameters.Outputs, x => Assert.False(string.IsNullOrWhiteSpace(x.Description),
+                $"{descriptor.DisplayName} 的输出参数 {x.ParameterName} 缺少说明。"));
+            Assert.All(parameters.Config, x => Assert.False(string.IsNullOrWhiteSpace(x.Description),
+                $"{descriptor.DisplayName} 的配置参数 {x.Name} 缺少说明。"));
         }
     }
 
@@ -242,7 +248,7 @@ public class OpenCvOperatorInventoryContractTests
         IDistributedCache cache = provider.GetRequiredService<IDistributedCache>();
 
         _ = await registry.GetAllOperatorsAsync();
-        await cache.RemoveAsync($"opencv:op:{expected.OperatorId:N}:params");
+        await cache.RemoveAsync($"opencv:v4:op:{expected.OperatorId:N}:params");
 
         OperatorParametersDescriptor? rebuilt = await registry.GetParametersAsync(
             expected.OperatorId
@@ -250,7 +256,7 @@ public class OpenCvOperatorInventoryContractTests
 
         Assert.NotNull(rebuilt);
         Assert.Equal(expected.OperatorId, rebuilt!.OperatorId);
-        Assert.NotNull(await cache.GetAsync($"opencv:op:{expected.OperatorId:N}:params"));
+        Assert.NotNull(await cache.GetAsync($"opencv:v4:op:{expected.OperatorId:N}:params"));
     }
 
     private static void AssertStaticProperty(Type type, string propertyName)

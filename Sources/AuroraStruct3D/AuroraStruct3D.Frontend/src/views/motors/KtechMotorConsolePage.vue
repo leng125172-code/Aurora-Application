@@ -915,7 +915,11 @@ function goBack() {
 
         <!-- Tab 切换按钮组 -->
         <div class="flex flex-wrap gap-2 border-b">
-            <Button unstyled type="button"
+            <Button
+                size="small"
+                text
+                severity="secondary"
+                type="button"
                 v-for="tab in [
                     { key: 'info', label: t('ktechConsole.tabInfo') },
                     { key: 'params', label: t('ktechConsole.tabParams') },

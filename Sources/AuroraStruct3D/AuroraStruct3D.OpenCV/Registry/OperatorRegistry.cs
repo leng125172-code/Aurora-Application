@@ -13,8 +13,8 @@ namespace AuroraStruct3D.OpenCV.Registry;
 internal sealed class OperatorRegistry : IOperatorRegistry
 {
     // Redis Key 约定
-    private const string AllOperatorsCacheKey = "opencv:operators";
-    private const string ParamsCacheKeyFmt = "opencv:op:{0:N}:params";
+    private const string AllOperatorsCacheKey = "opencv:v4:operators";
+    private const string ParamsCacheKeyFmt = "opencv:v4:op:{0:N}:params";
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -325,8 +325,8 @@ internal sealed class OperatorRegistry : IOperatorRegistry
         new()
         {
             OperatorId = operatorId,
-            Inputs = ReadStaticParameters(operatorType, "InputVisionParameters"),
-            Outputs = ReadStaticParameters(operatorType, "OutputVisionParameters"),
+            Inputs = ReadStaticParameters(operatorType, "InputVisionParameters", "输入"),
+            Outputs = ReadStaticParameters(operatorType, "OutputVisionParameters", "输出"),
             Config = ReadConfigParameters(operatorType),
         };
 
@@ -349,7 +349,8 @@ internal sealed class OperatorRegistry : IOperatorRegistry
 
     private static IReadOnlyList<ParameterDescriptor> ReadStaticParameters(
         Type operatorType,
-        string propertyName
+        string propertyName,
+        string direction
     )
     {
         var property = operatorType.GetProperty(
@@ -382,6 +383,10 @@ internal sealed class OperatorRegistry : IOperatorRegistry
                 {
                     ParameterName = p.ParameterName,
                     DisplayName = displayName,
+                    Description = BuildPortConfigurationGuide(
+                        p.Description ?? p.GetType().GetCustomAttribute<DescriptionAttribute>()?.Description,
+                        direction, displayName ?? p.ParameterName ?? p.ParameterType.Name,
+                        p.ParameterType, p.DefaultValue, p.ValueLimit),
                     ParameterTypeName = p.ParameterType.FullName ?? p.ParameterType.Name,
                     DefaultValue = p.DefaultValue,
                     ValueLimit = p.ValueLimit,
@@ -414,6 +419,7 @@ internal sealed class OperatorRegistry : IOperatorRegistry
             {
                 Name = c.Name,
                 DisplayName = c.DisplayName,
+                Description = BuildConfigConfigurationGuide(c),
                 ParameterTypeName = c.ParameterType.FullName ?? c.ParameterType.Name,
                 DefaultValue = c.DefaultValue,
                 ValueLimit = c.ValueLimit,
@@ -422,5 +428,53 @@ internal sealed class OperatorRegistry : IOperatorRegistry
             })
             .ToList()
             .AsReadOnly();
+    }
+
+    private static string BuildPortConfigurationGuide(string? purpose, string direction,
+        string name, Type type, object? defaultValue, object? valueLimit)
+    {
+        List<string> parts = [];
+        if (!string.IsNullOrWhiteSpace(purpose)) parts.Add(CompactPurpose(purpose));
+        parts.Add(direction == "输入"
+            ? $"连接 {FriendlyTypeName(type)} 类型的“{name}”"
+            : $"输出 {FriendlyTypeName(type)} 类型的“{name}”，可接下游或绑定变量");
+        if (defaultValue is not null) parts.Add($"默认 {FormatMetadataValue(defaultValue)}");
+        if (valueLimit is not null) parts.Add($"范围/选项 {FormatMetadataValue(valueLimit)}");
+        return string.Join("；", parts).TrimEnd('；', '。') + "。";
+    }
+
+    private static string BuildConfigConfigurationGuide(IConfigParameter config)
+    {
+        List<string> parts = [];
+        if (!string.IsNullOrWhiteSpace(config.Description)) parts.Add(CompactPurpose(config.Description));
+        parts.Add($"{(config.Required ? "必填" : "可选")} {FriendlyTypeName(config.ParameterType)}“{config.DisplayName ?? config.Name}”");
+        if (config.DefaultValue is not null)
+            parts.Add($"默认 {FormatMetadataValue(config.DefaultValue)}");
+        if (config.ValueLimit is not null)
+            parts.Add($"范围/选项 {FormatMetadataValue(config.ValueLimit)}");
+        return string.Join("；", parts).TrimEnd('；', '。') + "。";
+    }
+
+    private static string CompactPurpose(string value)
+    {
+        string text = value.Trim().TrimEnd('。');
+        return text.Length <= 48 ? text : text[..47] + "…";
+    }
+
+    private static string FormatMetadataValue(object value)
+    {
+        try { return JsonSerializer.Serialize(value, JsonOptions); }
+        catch { return Convert.ToString(value, System.Globalization.CultureInfo.InvariantCulture) ?? "空"; }
+    }
+
+    private static string FriendlyTypeName(Type type)
+    {
+        Type actual = Nullable.GetUnderlyingType(type) ?? type;
+        if (actual == typeof(string)) return "文本";
+        if (actual == typeof(bool)) return "布尔值";
+        if (actual == typeof(int) || actual == typeof(long)) return "整数";
+        if (actual == typeof(float) || actual == typeof(double) || actual == typeof(decimal)) return "数值";
+        if (actual.IsEnum) return $"枚举 {actual.Name}";
+        return actual.Name;
     }
 }

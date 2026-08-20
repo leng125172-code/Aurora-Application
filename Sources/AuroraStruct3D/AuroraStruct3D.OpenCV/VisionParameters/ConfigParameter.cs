@@ -12,6 +12,9 @@ public sealed class ConfigParameter : IConfigParameter
     public string? DisplayName { get; init; }
 
     /// <inheritdoc/>
+    public string? Description { get; init; }
+
+    /// <inheritdoc/>
     public required Type ParameterType { get; init; }
 
     /// <inheritdoc/>

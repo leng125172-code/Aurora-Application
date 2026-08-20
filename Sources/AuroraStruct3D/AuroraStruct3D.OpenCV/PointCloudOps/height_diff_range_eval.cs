@@ -29,34 +29,7 @@ public class height_diff_range_eval : IOperator
         };
 
     public static List<IVisionParameter>? OutputVisionParameters =>
-        new()
-        {
-            new VisionParameter<double>
-            {
-                ParameterName = "signed_diff",
-                ParameterType = typeof(double),
-                DisplayName = "带符号差值",
-            },
-            new VisionParameter<double>
-            {
-                ParameterName = "abs_diff",
-                ParameterType = typeof(double),
-                DisplayName = "绝对差值",
-            },
-            new VisionParameter<bool>
-            {
-                ParameterName = "is_ok",
-                ParameterType = typeof(bool),
-                DisplayName = "是否OK",
-            },
-            new VisionParameter<string>
-            {
-                ParameterName = "result_json",
-                ParameterType = typeof(string),
-                ControlType = PortControlType.Download,
-                DisplayName = "判定结果",
-            },
-        };
+        [InspectionResults.Output<HeightDiffInspectionDetails>("高度差判定结果")];
 
     public static List<IConfigParameter>? ConfigParameters =>
         new()
@@ -101,21 +74,16 @@ public class height_diff_range_eval : IOperator
         double absDiff = Math.Round(Math.Abs(signedDiff), 6);
         bool isOk = signedDiff >= _minDiff && signedDiff <= _maxDiff;
 
-        var result = new
-        {
-            heightA = Math.Round(heightA, 6),
-            heightB = Math.Round(heightB, 6),
+        var result = new HeightDiffInspectionDetails(
+            Math.Round(heightA, 6),
+            Math.Round(heightB, 6),
             signedDiff,
             absDiff,
-            minDiff = _minDiff,
-            maxDiff = _maxDiff,
-            isOk,
-        };
+            _minDiff,
+            _maxDiff,
+            isOk);
 
-        context.Set("signed_diff", signedDiff);
-        context.Set("abs_diff", absDiff);
-        context.Set("is_ok", isOk);
-        context.Set("result_json", JsonSerializer.Serialize(result));
+        context.Set("result", InspectionResults.CreateTyped(true, isOk, result));
     }
 
     public void Dispose()

@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 using AuroraStruct3D.OpenCV.Registry;
 using AuroraStruct3D.OpenCV.Workflow.Compilation;
 using AuroraStruct3D.OpenCV.Workflow.Compilation.Model;
@@ -412,6 +413,7 @@ public class WorkflowAppService : AuroraStruct3DAppService, IWorkflowAppService
             throw CreateConcurrencyException(workflow);
         }
 
+        RequireV3Source(input.SourceCode);
         (string name, GraphDataModel graph) = CSharpWorkflowScript.Parse(input.SourceCode);
         await ValidateBeforeSaveAsync(workflow.ProjectId, workflow.Id, graph);
         string graphData = JsonSerializer.Serialize(graph, GraphJson.Options);
@@ -523,7 +525,8 @@ public class WorkflowAppService : AuroraStruct3DAppService, IWorkflowAppService
         batchSize = Math.Clamp(batchSize, 1, 1000);
         List<WorkflowDefinition> workflows = await AsyncExecuter.ToListAsync(
             (await _repository.GetQueryableAsync())
-                .Where(x => x.SourceCode == null || x.SourceCode == string.Empty)
+                .Where(x => x.SourceCode == null || x.SourceCode == string.Empty
+                    || x.LanguageVersion < CSharpWorkflowScript.LanguageVersion)
                 .OrderBy(x => x.CreationTime)
                 .Take(batchSize)
         );
@@ -535,13 +538,14 @@ public class WorkflowAppService : AuroraStruct3DAppService, IWorkflowAppService
                 (_, GraphDataModel graph) = WorkflowGraphCompiler.ParseContent(
                     workflow.GraphData
                 );
+                await UpgradeLegacyResultBindingsAsync(graph, _operatorRegistry);
                 string source = CSharpWorkflowScript.Generate(workflow.Name, graph);
                 (string sourceHash, string programHash) = ComputeSourceHashes(source);
                 await _programCache.GetOrAddAsync(programHash, source);
                 workflow.UpdateSource(
                     workflow.Name,
                     source,
-                    workflow.GraphData,
+                    JsonSerializer.Serialize(graph, GraphJson.Options),
                     sourceHash,
                     programHash,
                     CSharpWorkflowScript.LanguageVersion,
@@ -557,6 +561,103 @@ public class WorkflowAppService : AuroraStruct3DAppService, IWorkflowAppService
             }
         }
         return result;
+    }
+
+    internal static async Task<List<WorkflowMigrationPortChangeDto>> UpgradeLegacyResultBindingsAsync(GraphDataModel graph, IOperatorRegistry operatorRegistry)
+    {
+        List<WorkflowMigrationPortChangeDto> changes = [];
+        Dictionary<string, string> replacements = new(StringComparer.Ordinal);
+        foreach (NodeModel node in EnumerateNodes(graph))
+        {
+            if (!Guid.TryParse(node.Type, out Guid operatorId)
+                || node.Properties?.OutputBindings is not { } bindings)
+                continue;
+            OperatorParametersDescriptor? descriptor =
+                await operatorRegistry.GetParametersAsync(operatorId);
+            HashSet<string> currentPorts = (descriptor?.Outputs ?? [])
+                .Select(x => x.ParameterName ?? string.Empty)
+                .ToHashSet(StringComparer.Ordinal);
+            ParameterDescriptor? resultPort = descriptor?.Outputs
+                .FirstOrDefault(x => x.ParameterName == "result");
+            if (!currentPorts.Contains("result")
+                || resultPort?.JsonSchema?.Contains("\"resultCode\"", StringComparison.Ordinal) != true)
+                continue;
+
+            string resultVariable = bindings.GetValueOrDefault("result")
+                ?? bindings.GetValueOrDefault("result_json")
+                ?? bindings.GetValueOrDefault("stats_json")
+                ?? $"result_{Regex.Replace(node.Id, "[^A-Za-z0-9_]", "_")}";
+            foreach ((string oldPort, string oldVariable) in bindings.ToList())
+            {
+                if (currentPorts.Contains(oldPort))
+                    continue;
+                string member = oldPort switch
+                {
+                    "result_json" or "stats_json" => string.Empty,
+                    "is_ok" => ".isOk",
+                    "is_valid" => ".isValid",
+                    "inspection_status" => ".resultCode",
+                    _ => ".details." + SnakeToCamel(oldPort),
+                };
+                replacements[oldVariable] = resultVariable + member;
+                changes.Add(new WorkflowMigrationPortChangeDto
+                {
+                    NodeId = node.Id,
+                    OperatorId = operatorId,
+                    OldPort = oldPort,
+                    OldVariable = oldVariable,
+                    NewExpression = resultVariable + member,
+                });
+                bindings.Remove(oldPort);
+                node.Properties.OutputBindingSources?.Remove(oldPort);
+            }
+            if (!bindings.ContainsKey("result")) bindings["result"] = resultVariable;
+            node.Properties.OutputBindingSources ??= new(StringComparer.Ordinal);
+            node.Properties.OutputBindingSources["result"] = "variable";
+        }
+        foreach (NodeModel node in EnumerateNodes(graph))
+        {
+            foreach (string section in new[] { "input" })
+            {
+                if (node.Properties?.InputBindings is not { } inputs) continue;
+                foreach (string port in inputs.Keys.ToList())
+                    inputs[port] = ReplaceRoot(inputs[port], replacements);
+            }
+            if (node.Properties?.Params is { } parameters)
+                foreach (string name in parameters.Keys.ToList())
+                    if (node.Properties.ParamSources?.GetValueOrDefault(name) == "variable")
+                    {
+                        string old = parameters[name].GetProperty("$var").GetString()!;
+                        parameters[name] = JsonSerializer.SerializeToElement(
+                            new Dictionary<string, string> { ["$var"] = ReplaceRoot(old, replacements) });
+                    }
+        }
+        return changes;
+    }
+
+    private static IEnumerable<NodeModel> EnumerateNodes(GraphDataModel graph)
+    {
+        foreach (NodeModel node in graph.Nodes)
+        {
+            yield return node;
+            if (node.Properties?.InnerGraphData is { } inner)
+                foreach (NodeModel child in EnumerateNodes(inner)) yield return child;
+        }
+    }
+
+    private static string ReplaceRoot(string expression, IReadOnlyDictionary<string, string> replacements)
+    {
+        int end = expression.IndexOfAny(['.', '[']);
+        string root = end < 0 ? expression : expression[..end];
+        return replacements.TryGetValue(root, out string? replacement)
+            ? replacement + (end < 0 ? string.Empty : expression[end..]) : expression;
+    }
+
+    private static string SnakeToCamel(string value)
+    {
+        string[] parts = value.Split('_', StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length == 0 ? value : parts[0] + string.Concat(parts.Skip(1)
+            .Select(x => char.ToUpperInvariant(x[0]) + x[1..]));
     }
 
     /// <inheritdoc/>
@@ -605,6 +706,15 @@ public class WorkflowAppService : AuroraStruct3DAppService, IWorkflowAppService
             workflow.ProgramHash!
         );
         await _sourceVersionRepository.InsertAsync(version, autoSave: true);
+    }
+
+    private static void RequireV3Source(string sourceCode)
+    {
+        if (!Regex.IsMatch(sourceCode,
+            "^\\s*Workflow\\s*\\(\\s*\"(?:\\\\.|[^\"])*\"\\s*,\\s*3\\s*\\)\\s*;",
+            RegexOptions.Multiline))
+            throw new UserFriendlyException(
+                "V1/V2 工作流仅允许通过迁移工具读取，不能保存、发布或执行。");
     }
 
     private static (Guid OperatorId, string PortName)? FindOutputProducer(

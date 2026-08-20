@@ -220,6 +220,83 @@ public class PlcDeviceAppService
         );
     }
 
+    [HttpPost("/api/app/plc-device/{id:guid}/browse-tree")]
+    public async Task<PlcBrowseTreeResultDto> BrowseTreeAsync(
+        Guid id,
+        PlcBrowseTreeInput input)
+    {
+        PlcDevice device = await _devices.GetAsync(id);
+        IPlcDriver driver = Resolve(device);
+        if (driver is not IPlcBrowsableDriver browsable)
+            throw new UserFriendlyException($"驱动 {device.DriverId} 不支持节点浏览");
+
+        IPlcConnection connection = await ConnectCoreAsync(device);
+        var visited = new HashSet<string>(StringComparer.Ordinal);
+        int nodeCount = 0;
+        bool truncated = false;
+
+        async Task<List<PlcBrowseTreeNodeDto>> LoadChildrenAsync(string? parentAddress, int depth)
+        {
+            if (depth > input.MaxDepth || nodeCount >= input.MaxNodes)
+            {
+                truncated = true;
+                return [];
+            }
+
+            var result = new List<PlcBrowseTreeNodeDto>();
+            string? continuationToken = null;
+            do
+            {
+                int remaining = input.MaxNodes - nodeCount;
+                if (remaining <= 0)
+                {
+                    truncated = true;
+                    break;
+                }
+                PlcBrowseResult level = await browsable.BrowseAsync(
+                    connection,
+                    new PlcBrowseRequest(parentAddress, continuationToken, Math.Min(remaining, 1000))
+                );
+                continuationToken = level.ContinuationToken;
+                foreach (PlcBrowseNode node in level.Items)
+                {
+                    if (nodeCount >= input.MaxNodes)
+                    {
+                        truncated = true;
+                        break;
+                    }
+                    if (!visited.Add(node.Address))
+                        continue;
+
+                    nodeCount++;
+                    var dto = new PlcBrowseTreeNodeDto
+                    {
+                        Address = node.Address,
+                        BrowseName = node.BrowseName,
+                        DisplayName = node.DisplayName,
+                        NodeClass = node.NodeClass,
+                        DataType = node.DataType,
+                        Access = node.Access,
+                        HasChildren = node.HasChildren,
+                    };
+                    if (node.HasChildren)
+                        dto.Children = await LoadChildrenAsync(node.Address, depth + 1);
+                    result.Add(dto);
+                }
+            } while (!string.IsNullOrWhiteSpace(continuationToken) && nodeCount < input.MaxNodes);
+            if (!string.IsNullOrWhiteSpace(continuationToken)) truncated = true;
+            return result;
+        }
+
+        List<PlcBrowseTreeNodeDto> items = await LoadChildrenAsync(input.RootAddress, 1);
+        return new PlcBrowseTreeResultDto
+        {
+            Items = items,
+            NodeCount = nodeCount,
+            Truncated = truncated,
+        };
+    }
+
     public async Task<ListResultDto<PlcTagDto>> GetTagsAsync(Guid id)
     {
         List<PlcTag> tags = await AsyncExecuter.ToListAsync(
@@ -267,6 +344,7 @@ public class PlcDeviceAppService
         return ToDto(tag);
     }
 
+    [HttpDelete("/api/app/plc-device/{id:guid}/tag/{tagId:guid}")]
     public async Task DeleteTagAsync(Guid id, Guid tagId)
     {
         await EnsureWriteControlAsync(id);
@@ -330,6 +408,7 @@ public class PlcDeviceAppService
         return new PlcSubscriptionResultDto { SubscriptionId = subscriptionId };
     }
 
+    [HttpPost("/api/app/plc-device/{id:guid}/unsubscribe")]
     public async Task UnsubscribeAsync(Guid id, string subscriptionId)
     {
         try
@@ -398,6 +477,32 @@ public class PlcDeviceAppService
             (await _tags.GetQueryableAsync()).Where(x => x.PlcDeviceId == plcDeviceId && values.Keys.Contains(x.Code)), cancellationToken);
         return await WriteCoreAsync(plcDeviceId, tags, values, cancellationToken,
             $"工作流写入 run={context.ProjectRunId}; execution={context.ExecutionId}; node={context.NodeId}");
+    }
+
+    [RemoteService(false)]
+    [NonAction]
+    public async Task<IReadOnlyList<PlcValue>> ReadRawAsync(
+        Guid plcDeviceId,
+        IReadOnlyList<PlcReadRequest> requests,
+        CancellationToken cancellationToken = default)
+    {
+        PlcDevice device = await _devices.GetAsync(plcDeviceId);
+        IPlcDriver driver = Resolve(device);
+        IPlcConnection connection = await ConnectCoreAsync(device, cancellationToken);
+        return await driver.ReadAsync(connection, requests, cancellationToken);
+    }
+
+    [RemoteService(false)]
+    [NonAction]
+    public async Task<IReadOnlyList<PlcWriteResult>> WriteRawAsync(
+        Guid plcDeviceId,
+        IReadOnlyList<PlcWriteRequest> requests,
+        CancellationToken cancellationToken = default)
+    {
+        PlcDevice device = await _devices.GetAsync(plcDeviceId);
+        IPlcDriver driver = Resolve(device);
+        IPlcConnection connection = await ConnectCoreAsync(device, cancellationToken);
+        return await driver.WriteAsync(connection, requests, cancellationToken);
     }
 
     private async Task<IReadOnlyList<PlcTagValueDto>> ReadCoreAsync(

@@ -50,34 +50,7 @@ public class point_to_plane_distance : IOperator
         {
             new MatImg() { ParameterName = "distance_mat", DisplayName = "距离矩阵" },
             new MatImg() { ParameterName = "distance_image", DisplayName = "距离图像" },
-            new VisionParameter<string>
-            {
-                ParameterName = "stats_json",
-                DisplayName = "统计信息",
-                ParameterType = typeof(string),
-                ControlType = PortControlType.Download,
-            },
-            new VisionParameter<double>
-            {
-                ParameterName = "flatness",
-                DisplayName = "平面度(PV)",
-                ParameterType = typeof(double),
-                ControlType = PortControlType.Download,
-            },
-            new VisionParameter<double>
-            {
-                ParameterName = "max_absolute_distance",
-                DisplayName = "最大绝对偏差",
-                ParameterType = typeof(double),
-                ControlType = PortControlType.Download,
-            },
-            new VisionParameter<bool>
-            {
-                ParameterName = "is_ok",
-                DisplayName = "是否合格",
-                ParameterType = typeof(bool),
-                ControlType = PortControlType.Download,
-            },
+            InspectionResults.Output<DistanceStats>("平面距离检测结果"),
         };
 
     public static List<IConfigParameter>? ConfigParameters =>
@@ -235,14 +208,9 @@ public class point_to_plane_distance : IOperator
             IsOk = isOk,
         };
 
-        string statsJson = JsonSerializer.Serialize(stats, JsonOptions);
-
         context.Set("distance_mat", distances);
         context.Set("distance_image", distanceImage);
-        context.Set("stats_json", statsJson);
-        context.Set("flatness", flatness);
-        context.Set("max_absolute_distance", maxDist);
-        context.Set("is_ok", isOk);
+        context.Set("result", InspectionResults.CreateTyped(true, isOk, stats));
     }
 
     /// <summary>

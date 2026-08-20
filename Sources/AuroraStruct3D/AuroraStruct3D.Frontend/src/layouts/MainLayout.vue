@@ -44,7 +44,7 @@ onMounted(async () => {
 </script>
 
 <template>
-    <div class="relative z-[1] flex h-full w-full overflow-hidden">
+    <div data-testid="app-shell" class="relative z-[1] flex h-full w-full overflow-hidden bg-background">
         <Button
             v-if="mobileNavOpen"
             unstyled
@@ -54,14 +54,17 @@ onMounted(async () => {
             @click="mobileNavOpen = false"
         />
         <div
-            class="fixed inset-y-0 left-0 z-40 transition-transform duration-200 lg:static lg:z-auto lg:translate-x-0"
+            class="fixed inset-y-0 left-0 z-40 shadow-2xl transition-transform duration-200 lg:static lg:z-auto lg:translate-x-0 lg:shadow-none"
             :class="mobileNavOpen ? 'translate-x-0' : '-translate-x-full'"
         >
             <Sidebar />
         </div>
         <div class="flex flex-1 flex-col overflow-hidden">
             <TopBar @toggle-navigation="mobileNavOpen = !mobileNavOpen" />
-            <main class="flex-1 overflow-auto p-3 sm:p-4 lg:p-6">
+            <main
+                data-testid="page-content"
+                class="min-w-0 flex-1 overflow-auto overscroll-contain p-3 sm:p-4 lg:p-5 xl:p-6"
+            >
                 <RouterView />
             </main>
         </div>

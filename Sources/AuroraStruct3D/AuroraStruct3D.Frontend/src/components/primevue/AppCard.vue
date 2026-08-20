@@ -4,7 +4,7 @@
  *
  * 视觉契约：
  *  - 基于 PrimeVue <Card>，外层 wrapper 承载 Inspira BorderBeam 光束装饰
- *  - 默认开启 BorderBeam（可通过 :beam="false" 关闭，例如嵌套卡片场景）
+ *  - 工业控制台默认关闭装饰光束；品牌展示卡可通过 :beam="true" 开启
  *  - BorderBeam 参数通过 beamSize / beamDuration / beamDelay 暴露，便于多卡错峰
  *  - 保留原 Aurora 视觉：玻璃态背景 + 圆角 + 边框光束
  *
@@ -34,7 +34,7 @@ interface AppCardProps {
 }
 
 const props = withDefaults(defineProps<AppCardProps>(), {
-    beam: true,
+    beam: false,
     beamSize: 120,
     beamDuration: 10,
     beamDelay: 0,
@@ -54,14 +54,15 @@ const restAttrs = computed(() => {
 <template>
     <!-- 外层 wrapper：overflow-hidden 阻止 BorderBeam::after 的布局溢出触发滚动条；clip-path 保留以裁切视觉边界 -->
     <div
-        :class="['relative overflow-hidden rounded-xl', props.class]"
+        data-testid="app-card"
+        :class="['relative min-w-0 overflow-hidden rounded-xl', props.class]"
         style="clip-path: inset(0 round 0.75rem)"
         v-bind="restAttrs"
     >
         <!-- PrimeVue Card：承载边框、玻璃态背景；自身 overflow-hidden 裁切 Card 内容到圆角范围 -->
         <PrimeCard
             :pt="{
-                root: { class: 'bg-card/40 backdrop-blur border border-border shadow-sm rounded-xl overflow-hidden' },
+                root: { class: 'bg-card/90 backdrop-blur border border-border shadow-sm rounded-xl overflow-hidden' },
                 body: { class: '!p-0' },
                 caption: { class: 'p-4 pb-0' },
                 content: { class: 'p-4' },

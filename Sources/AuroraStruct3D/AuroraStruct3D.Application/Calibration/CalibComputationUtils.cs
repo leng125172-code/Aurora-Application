@@ -7,6 +7,110 @@ namespace AuroraStruct3D.Calibration;
 
 public static class CalibComputationUtils
 {
+    public const double MinimumRectificationCoveragePercent = 5d;
+
+    public static bool TryValidateCameraModel(
+        Mat cameraMatrix,
+        Mat distCoeffs,
+        Size imageSize,
+        out string reason
+    )
+    {
+        reason = string.Empty;
+        if (cameraMatrix.Empty() || cameraMatrix.Rows != 3 || cameraMatrix.Cols != 3)
+        {
+            reason = "内参矩阵尺寸不是 3x3";
+            return false;
+        }
+
+        double fx = cameraMatrix.At<double>(0, 0);
+        double fy = cameraMatrix.At<double>(1, 1);
+        double cx = cameraMatrix.At<double>(0, 2);
+        double cy = cameraMatrix.At<double>(1, 2);
+        double maxDimension = Math.Max(imageSize.Width, imageSize.Height);
+        if (!double.IsFinite(fx) || !double.IsFinite(fy) || fx <= 0 || fy <= 0)
+        {
+            reason = "焦距不是有限正数";
+            return false;
+        }
+        if (fx < maxDimension * 0.25d || fy < maxDimension * 0.25d
+            || fx > maxDimension * 10d || fy > maxDimension * 10d)
+        {
+            reason = $"焦距超出图像尺度合理范围：fx={fx:F3}, fy={fy:F3}";
+            return false;
+        }
+        double aspectRatio = fx / fy;
+        if (aspectRatio < 0.5d || aspectRatio > 2d)
+        {
+            reason = $"焦距纵横比异常：fx/fy={aspectRatio:F3}";
+            return false;
+        }
+        if (!double.IsFinite(cx) || !double.IsFinite(cy)
+            || cx < 0 || cx >= imageSize.Width || cy < 0 || cy >= imageSize.Height)
+        {
+            reason = $"主点位于图像外：cx={cx:F3}, cy={cy:F3}";
+            return false;
+        }
+
+        double[] limits = [2d, 20d, 0.1d, 0.1d, 100d];
+        int coefficientCount = Math.Min((int)distCoeffs.Total(), limits.Length);
+        for (int index = 0; index < coefficientCount; index++)
+        {
+            double value = distCoeffs.At<double>(index);
+            if (!double.IsFinite(value) || Math.Abs(value) > limits[index])
+            {
+                reason = $"畸变系数 d{index} 异常：{value:G6}";
+                return false;
+            }
+        }
+        return true;
+    }
+
+    public static (double MainPercent, double SecondaryPercent, double OverlapPercent)
+        ComputeRectificationMapCoverage(
+            Mat map1x,
+            Mat map1y,
+            Mat map2x,
+            Mat map2y,
+            int sourceWidth,
+            int sourceHeight,
+            int sampleStep = 8
+        )
+    {
+        if (map1x.Empty() || map1y.Empty() || map2x.Empty() || map2y.Empty()
+            || map1x.Size() != map1y.Size() || map1x.Size() != map2x.Size()
+            || map1x.Size() != map2y.Size())
+            return (0, 0, 0);
+        if (sourceWidth <= 1 || sourceHeight <= 1 || sampleStep <= 0)
+            return (0, 0, 0);
+
+        long sampled = 0, mainValid = 0, secondaryValid = 0, overlapValid = 0;
+        int rows = map1x.Rows;
+        int columns = map1x.Cols;
+        for (int y = 0; y < rows; y += sampleStep)
+        for (int x = 0; x < columns; x += sampleStep)
+        {
+            sampled++;
+            float mainX = map1x.At<float>(y, x);
+            float mainY = map1y.At<float>(y, x);
+            float secondaryX = map2x.At<float>(y, x);
+            float secondaryY = map2y.At<float>(y, x);
+            bool mainInside = float.IsFinite(mainX) && float.IsFinite(mainY)
+                && mainX >= 0 && mainX < sourceWidth - 1
+                && mainY >= 0 && mainY < sourceHeight - 1;
+            bool secondaryInside = float.IsFinite(secondaryX) && float.IsFinite(secondaryY)
+                && secondaryX >= 0 && secondaryX < sourceWidth - 1
+                && secondaryY >= 0 && secondaryY < sourceHeight - 1;
+            if (mainInside) mainValid++;
+            if (secondaryInside) secondaryValid++;
+            if (mainInside && secondaryInside) overlapValid++;
+        }
+        return sampled == 0
+            ? (0, 0, 0)
+            : (mainValid * 100d / sampled, secondaryValid * 100d / sampled,
+                overlapValid * 100d / sampled);
+    }
+
     public static double GetMaxSingleCameraReprojectionError(CalibProject project)
     {
         return project.BoardType == CalibrationBoardType.Chessboard
