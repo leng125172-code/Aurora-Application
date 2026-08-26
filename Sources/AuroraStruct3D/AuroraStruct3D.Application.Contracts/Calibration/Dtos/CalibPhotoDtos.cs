@@ -210,6 +210,12 @@ public class CalibPhotoDto
     /// <summary>检测到的角点数量</summary>
     public int CornerCountDetected { get; set; }
 
+    /// <summary>曝光质量评分（1-100，仅新拍摄的内参照片有值）</summary>
+    public int? ExposureScore { get; set; }
+
+    /// <summary>清晰度评分（1-100，仅新拍摄的内参照片有值）</summary>
+    public int? SharpnessScore { get; set; }
+
     /// <summary>拍摄时间</summary>
     public DateTime CapturedAt { get; set; }
 
@@ -273,6 +279,15 @@ public class CalibComputeResultDto
 /// </summary>
 public class CalibStereoComputeResultDto
 {
+    /// <summary>本次计算完成角点重检、首次联合求解使用的照片组数（历史结果查询时为 0）</summary>
+    public int InputPairCount { get; set; }
+
+    /// <summary>本次联合标定实际使用的照片组数（历史结果查询时为 0）</summary>
+    public int UsedPairCount { get; set; }
+
+    /// <summary>本次计算按联合模型极线误差排除的照片组；不持久化到照片状态</summary>
+    public List<CalibStereoRejectedPairDto> RejectedPairs { get; set; } = [];
+
     /// <summary>主相机设备ID</summary>
     public Guid MainCameraDeviceId { get; set; }
 
@@ -323,6 +338,16 @@ public class CalibStereoComputeResultDto
 
     /// <summary>右相机 map2y 数据 Blob Key</summary>
     public string Map2YBlobKey { get; set; } = string.Empty;
+}
+
+/// <summary>双目标定计算期间按联合模型排除的极线误差离群组。</summary>
+public class CalibStereoRejectedPairDto
+{
+    public Guid PairGroupId { get; set; }
+    public double EpipolarErrorPx { get; set; }
+    public double RejectionThresholdPx { get; set; }
+    public int RejectionIteration { get; set; }
+    public string Reason { get; set; } = string.Empty;
 }
 
 /// <summary>

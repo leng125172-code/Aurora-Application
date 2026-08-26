@@ -145,6 +145,54 @@ public class CalibComputationUtilsTests
         Assert.Equal(100d, coverage.OverlapPercent, 6);
     }
 
+    [Fact]
+    public void StereoRectifyMaximizeUsefulArea_ConvergingCamerasKeepCommonCoverage()
+    {
+        Size imageSize = new(2048, 2448);
+        using Mat mainCamera = CreateMatrix(3, 3,
+            3669.547241808708, 0, 982.9604995534988,
+            0, 3666.094964190975, 1246.2956595011628,
+            0, 0, 1);
+        using Mat secondaryCamera = CreateMatrix(3, 3,
+            3655.6036911052615, 0, 1045.070195545117,
+            0, 3654.302755370544, 1251.9208688856393,
+            0, 0, 1);
+        using Mat mainDistortion = CreateMatrix(5, 1,
+            -0.08256228791496271, 0.23847364820515607,
+            -0.0010108787300751652, -0.00017304551273752906, 0);
+        using Mat secondaryDistortion = CreateMatrix(5, 1,
+            -0.07505449221291191, 0.22890059196148566,
+            0.0011100787125713993, 0.0012936763150976816, 0);
+        using Mat rotation = CreateMatrix(3, 3,
+            0.846168211824049, -0.017574155584872363, 0.5326260473859405,
+            0.01872485975187174, 0.9998194192781241, 0.0032416757436986186,
+            -0.5325868351036891, 0.0072303450701366725, 0.8463444837561137);
+        using Mat translation = CreateMatrix(3, 1,
+            -164.61408003199193, 0.46696521948036934, 47.45219026333754);
+        using Mat r1 = new(), r2 = new(), p1 = new(), p2 = new(), q = new();
+
+        CalibComputationUtils.StereoRectifyMaximizeUsefulArea(
+            mainCamera, mainDistortion, secondaryCamera, secondaryDistortion,
+            imageSize, rotation, translation, r1, r2, p1, p2, q
+        );
+
+        using Mat map1x = new(), map1y = new(), map2x = new(), map2y = new();
+        Cv2.InitUndistortRectifyMap(
+            mainCamera, mainDistortion, r1, p1, imageSize,
+            MatType.CV_32FC1, map1x, map1y
+        );
+        Cv2.InitUndistortRectifyMap(
+            secondaryCamera, secondaryDistortion, r2, p2, imageSize,
+            MatType.CV_32FC1, map2x, map2y
+        );
+        var coverage = CalibComputationUtils.ComputeRectificationMapCoverage(
+            map1x, map1y, map2x, map2y, imageSize.Width, imageSize.Height
+        );
+
+        Assert.True(coverage.OverlapPercent > 95d, $"共同覆盖率仅 {coverage.OverlapPercent:F2}%");
+        Assert.True(Math.Abs(p1.At<double>(0, 2) - p2.At<double>(0, 2)) > 1000d);
+    }
+
     // ─── CreateProjectorPixelPoints ─────────────────────────────────────────
 
     [Fact]
@@ -171,5 +219,15 @@ public class CalibComputationUtilsTests
 
         Assert.Equal((3 + 2) * 10, size.Width);
         Assert.Equal((2 + 2) * 10, size.Height);
+    }
+
+    private static Mat CreateMatrix(int rows, int columns, params double[] values)
+    {
+        Assert.Equal(rows * columns, values.Length);
+        Mat result = new(rows, columns, MatType.CV_64FC1);
+        for (int row = 0; row < rows; row++)
+        for (int column = 0; column < columns; column++)
+            result.Set(row, column, values[row * columns + column]);
+        return result;
     }
 }

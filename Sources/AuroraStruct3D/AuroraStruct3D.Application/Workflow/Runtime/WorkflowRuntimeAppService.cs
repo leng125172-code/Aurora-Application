@@ -36,6 +36,7 @@ using Volo.Abp.BlobStoring;
 using Volo.Abp.Data;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Validation;
+using Volo.Abp.DistributedLocking;
 using Volo.Abp.Uow;
 using RuntimeWorkflowDefinition = AuroraStruct3D.OpenCV.Workflow.WorkflowDefinition;
 
@@ -50,7 +51,6 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
 {
     private static readonly ConcurrentDictionary<Guid, SemaphoreSlim> PublishLocks = new();
     private static readonly ConcurrentDictionary<Guid, SemaphoreSlim> ApplyLocks = new();
-    private static readonly SemaphoreSlim ProductionRunLock = new(1, 1);
     private const string ExecutionErrorCodeInvalidInput = "EXECUTION_INVALID_INPUT";
     private const string ExecutionErrorCodeUnhandled = "EXECUTION_UNHANDLED";
     private const string ExecutionErrorCodeFault = "EXECUTION_FAULT";
@@ -87,6 +87,7 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly WorkflowRuntimeSafetyOptions _safetyOptions;
     private readonly IDeviceStateManager _deviceStateManager;
+    private readonly IAbpDistributedLock _distributedLock;
 
     private static readonly HashSet<string> UploadedFileExtensions = new(
         StringComparer.OrdinalIgnoreCase
@@ -137,6 +138,7 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
         IServiceScopeFactory serviceScopeFactory,
         IHttpContextAccessor httpContextAccessor,
         IDeviceStateManager deviceStateManager,
+        IAbpDistributedLock distributedLock,
         IOptions<WorkflowRuntimeSafetyOptions>? safetyOptions = null
     )
     {
@@ -166,6 +168,7 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
         _serviceScopeFactory = serviceScopeFactory;
         _httpContextAccessor = httpContextAccessor;
         _deviceStateManager = deviceStateManager;
+        _distributedLock = distributedLock;
         _safetyOptions = safetyOptions?.Value ?? new WorkflowRuntimeSafetyOptions();
     }
 
@@ -797,6 +800,26 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
                 throw new UserFriendlyException(
                     $"工作流“{workflow.Name}”尚未迁移为脚本程序，不能发布部署；请先执行迁移并重新保存。"
                 );
+            GraphDataModel graph;
+            try
+            {
+                (_, graph) = CSharpWorkflowScript.Parse(workflow.SourceCode);
+            }
+            catch (Exception ex) when (ex is WorkflowScriptException or FormatException or JsonException)
+            {
+                throw new UserFriendlyException(
+                    $"工作流“{workflow.Name}”源码无法解析，不能发布部署：{ex.Message}"
+                );
+            }
+            WorkflowValidationResult validation = await new WorkflowGraphValidator(_registry)
+                .ValidateAsync(graph);
+            if (validation.HasErrors)
+            {
+                throw new UserFriendlyException(
+                    $"工作流“{workflow.Name}”不满足当前算子发布契约："
+                    + string.Join(" | ", validation.Errors.Select(x => x.Message).Take(10))
+                );
+            }
             await _programCache.GetOrAddAsync(workflow.ProgramHash, workflow.SourceCode);
         }
         List<WorkflowProjectDeploymentItem> items = tasks
@@ -875,7 +898,8 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
             frozenGraphs,
             frozenVariables,
             frozenTaskConfig,
-            snapshotHash
+            snapshotHash,
+            taskConfig?.Id
         );
         await _deploymentRepository.InsertAsync(deployment, autoSave: true);
 
@@ -1007,9 +1031,10 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
         if (input.StartType == WorkflowProjectRunStartType.Cyclic)
             throw new UserFriendlyException("周期运行由项目任务配置和激活部署统一管理，请使用立即运行。");
 
-        await ProductionRunLock.WaitAsync();
-        try
-        {
+        await using IAbpDistributedLockHandle? productionLock =
+            await _distributedLock.TryAcquireAsync("workflow:production-run", TimeSpan.FromSeconds(10));
+        if (productionLock is null)
+            throw new UserFriendlyException("设备生产运行正在被其他请求占用，请稍后重试。");
 
         // 单机生产独占：任意项目已有活动运行时拒绝创建新运行。
         bool hasActiveRun = await AsyncExecuter.AnyAsync(
@@ -1028,7 +1053,7 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
         }
 
         (List<Guid> workflowIds, Guid deploymentId, int deploymentRevision) =
-            await ResolveActiveDeploymentAsync(projectId);
+            await ResolveActiveDeploymentAsync(projectId, registeredTask.Id);
 
         bool continueOnError = input.OnErrorAction == WorkflowProjectRunOnErrorAction.ContinueRun;
 
@@ -1044,7 +1069,11 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
             deploymentId,
             deploymentRevision,
             workflowIds,
-            continueOnError
+            continueOnError,
+            registeredTask.Id,
+            input.PlcHandshakeConfigId,
+            input.PlcRequestId,
+            input.PlcRequestSequence
         );
         await _runRepository.InsertAsync(run, autoSave: true);
 
@@ -1095,24 +1124,20 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
             DeploymentId = deploymentId,
             DeploymentRevision = deploymentRevision,
         };
-        }
-        finally
-        {
-            ProductionRunLock.Release();
-        }
     }
 
     private async Task<(
         List<Guid> WorkflowIds,
         Guid DeploymentId,
         int DeploymentRevision
-    )> ResolveActiveDeploymentAsync(Guid projectId)
+    )> ResolveActiveDeploymentAsync(Guid projectId, Guid taskConfigId)
     {
         WorkflowProjectDeployment? activeDeployment = await AsyncExecuter.FirstOrDefaultAsync(
             (await _deploymentRepository.GetQueryableAsync())
                 .Where(x =>
                     x.ProjectId == projectId
                     && x.Status == WorkflowProjectDeploymentStatus.Activated
+                    && x.TaskConfigId == taskConfigId
                 )
                 .OrderByDescending(x => x.Revision)
         );
@@ -1223,6 +1248,7 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
         WorkflowProjectRun run = await _runRepository.GetAsync(runId);
         run.RequestCancel();
         await _runRepository.UpdateAsync(run, autoSave: true);
+        WorkflowRunCancellationRegistry.Cancel(runId);
 
         if (run.StartType == WorkflowProjectRunStartType.Cyclic)
         {
@@ -1573,7 +1599,7 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
                 using IServiceScope infrastructureScope = _serviceScopeFactory.CreateScope();
                 using IDisposable workflowServiceScope = WorkflowServiceProviderAmbient.Push(infrastructureScope.ServiceProvider);
                 using IDisposable workflowDisplayThemeScope = WorkflowDisplayThemeAmbient.Push(CurrentDisplayTheme);
-                _kernel.ExecuteToCompletion(session);
+                await _kernel.ExecuteToCompletionAsync(session);
 
                 if (isPlaneRoi)
                 {
@@ -2325,12 +2351,17 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
                         or WorkflowExecutionStatus.Stopped
                 )
                 {
+                    WorkflowExecutionStatusDto terminalStatus = BuildStatusDto(
+                        session,
+                        input.IncludeVariables
+                    );
                     return new WorkflowExecutionStepResultDto
                     {
-                        Error = false,
+                        Error = session.Status == WorkflowExecutionStatus.Faulted,
+                        ErrorCode = terminalStatus.ErrorCode,
                         Message = session.ErrorMessage,
                         ExecutionId = executionId,
-                        Status = BuildStatusDto(session, input.IncludeVariables),
+                        Status = terminalStatus,
                     };
                 }
 
@@ -2346,7 +2377,11 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
                     using IServiceScope infrastructureScope = _serviceScopeFactory.CreateScope();
                     using IDisposable workflowServiceScope = WorkflowServiceProviderAmbient.Push(infrastructureScope.ServiceProvider);
                     using IDisposable workflowDisplayThemeScope = WorkflowDisplayThemeAmbient.Push(session.DisplayTheme);
-                    _kernel.ExecuteSteps(session, input.Steps, markCompleted: false);
+                    await _kernel.ExecuteStepsAsync(
+                        session,
+                        input.Steps,
+                        markCompleted: false
+                    );
                     if (
                         session.Status == WorkflowExecutionStatus.Running
                         && session.StepCursor < session.StatementNodeIds.Count
@@ -2404,7 +2439,7 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
                     Error = session.Status == WorkflowExecutionStatus.Faulted,
                     ErrorCode =
                         session.Status == WorkflowExecutionStatus.Faulted
-                            ? ExecutionErrorCodeFault
+                            ? stepStatus.ErrorCode ?? ExecutionErrorCodeFault
                             : null,
                     Message = session.ErrorMessage,
                     ExecutionId = executionId,
@@ -2508,7 +2543,7 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
             using IServiceScope infrastructureScope = _serviceScopeFactory.CreateScope();
             using IDisposable workflowServiceScope = WorkflowServiceProviderAmbient.Push(infrastructureScope.ServiceProvider);
             using IDisposable workflowDisplayThemeScope = WorkflowDisplayThemeAmbient.Push(session.DisplayTheme);
-            _kernel.Continue(session, markCompleted: false);
+            await _kernel.ContinueAsync(session, markCompleted: false);
             if (session.StepCursor >= session.RuntimeWorkflow.Statements.Count)
             {
                 PersistOutputs(session);
@@ -2601,7 +2636,7 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
             using IServiceScope infrastructureScope = _serviceScopeFactory.CreateScope();
             using IDisposable workflowServiceScope = WorkflowServiceProviderAmbient.Push(infrastructureScope.ServiceProvider);
             using IDisposable workflowDisplayThemeScope = WorkflowDisplayThemeAmbient.Push(session.DisplayTheme);
-            _kernel.Continue(session, nodeId, markCompleted: false);
+            await _kernel.ContinueAsync(session, nodeId, markCompleted: false);
             if (session.StepCursor >= session.RuntimeWorkflow.Statements.Count)
             {
                 PersistOutputs(session);
@@ -2958,7 +2993,11 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
             {
                 string code = session.Status switch
                 {
-                    WorkflowExecutionStatus.Faulted => ExecutionErrorCodeFault,
+                    WorkflowExecutionStatus.Faulted =>
+                        WorkflowRuntimeErrorCodeResolver.Resolve(
+                            session.ErrorMessage,
+                            ExecutionErrorCodeFault
+                        )!,
                     WorkflowExecutionStatus.Stopped => ExecutionErrorCodeStopped,
                     _ => ExecutionErrorCodeNotCompleted,
                 };
@@ -3102,7 +3141,7 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
     public async Task StopDebugAsync(Guid executionId)
     {
         WorkflowExecutionSession session = _sessionStore.Get(executionId);
-        session.StopRequested = true;
+        session.RequestStop();
         if (session.IsExecuting)
         {
             await NotifyDebugStateSafelyAsync(
@@ -3179,12 +3218,19 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
             using IServiceScope infrastructureScope = _serviceScopeFactory.CreateScope();
             using IDisposable workflowServiceScope = WorkflowServiceProviderAmbient.Push(infrastructureScope.ServiceProvider);
             using IDisposable workflowDisplayThemeScope = WorkflowDisplayThemeAmbient.Push(CurrentDisplayTheme);
-            _kernel.ExecuteToCompletion(session);
-            PersistOutputs(session);
-            session.FrozenVariables = session.VariablePool.Snapshot(
-                session.Context,
-                session.OutputStagedKeys
-            );
+            await _kernel.ExecuteToCompletionAsync(session);
+            if (session.Status == WorkflowExecutionStatus.Stopped)
+            {
+                session.FrozenVariables = session.VariablePool.Snapshot(session.Context);
+            }
+            else
+            {
+                PersistOutputs(session);
+                session.FrozenVariables = session.VariablePool.Snapshot(
+                    session.Context,
+                    session.OutputStagedKeys
+                );
+            }
         }
         catch (WorkflowNodeExecutionException ex)
         {
@@ -3245,7 +3291,7 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
                 using IServiceScope infrastructureScope = _serviceScopeFactory.CreateScope();
                 using IDisposable workflowServiceScope = WorkflowServiceProviderAmbient.Push(infrastructureScope.ServiceProvider);
                 using IDisposable workflowDisplayThemeScope = WorkflowDisplayThemeAmbient.Push(CurrentDisplayTheme);
-                _kernel.ExecuteToCompletion(session);
+                await _kernel.ExecuteToCompletionAsync(session);
                 finalVariables = CollectDeclaredVariables(session);
                 lastSession = session;
             }
@@ -3370,7 +3416,7 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
         return new WorkflowExecutionTriggerResultDto
         {
             Error = true,
-            ErrorCode = errorCode,
+            ErrorCode = WorkflowRuntimeErrorCodeResolver.Resolve(message, errorCode),
             Message = message,
         };
     }
@@ -3384,7 +3430,7 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
         return new WorkflowExecutionStepResultDto
         {
             Error = true,
-            ErrorCode = errorCode,
+            ErrorCode = WorkflowRuntimeErrorCodeResolver.Resolve(message, errorCode),
             Message = message,
             ExecutionId = executionId,
         };
@@ -3399,7 +3445,10 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
         return new WorkflowExecutionTriggerResultDto
         {
             Error = true,
-            ErrorCode = ExecutionErrorCodeFault,
+            ErrorCode = WorkflowRuntimeErrorCodeResolver.Resolve(
+                session.ErrorMessage,
+                ExecutionErrorCodeFault
+            ),
             Message = message,
             ExecutionId = session.ExecutionId,
             ResultImageUrls = ResolveResultImageUrls(session),
@@ -3418,7 +3467,10 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
         return new WorkflowExecutionTriggerResultDto
         {
             Error = true,
-            ErrorCode = ExecutionErrorCodeLoopFault,
+            ErrorCode = WorkflowRuntimeErrorCodeResolver.Resolve(
+                session.ErrorMessage,
+                ExecutionErrorCodeLoopFault
+            ),
             Message = message,
             ExecutionId = session.ExecutionId,
             ResultImageUrls = ResolveResultImageUrls(session),
@@ -4942,6 +4994,14 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
             LoopCount = session.LoopCount,
             CompletedLoops = session.CompletedLoops,
             ErrorMessage = session.ErrorMessage,
+            ErrorCode = session.Status == WorkflowExecutionStatus.Faulted
+                ? WorkflowRuntimeErrorCodeResolver.Resolve(
+                    session.ErrorMessage,
+                    ExecutionErrorCodeFault
+                )
+                : session.Status == WorkflowExecutionStatus.Stopped
+                    ? ExecutionErrorCodeStopped
+                    : null,
             DurationMs = session.DurationMs,
             ConfiguredOutputs = session.ConfiguredOutputNames.Select(name =>
             {
@@ -5104,6 +5164,7 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
         {
             RunId = run.Id,
             ProjectId = run.ProjectId,
+            TaskConfigId = run.TaskConfigId,
             Name = run.Name,
             HangfireJobId = run.HangfireJobId,
             Status = run.Status,
@@ -5123,6 +5184,7 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
             StartedAt = run.StartedAt,
             FinishedAt = run.FinishedAt,
             ErrorMessage = run.ErrorMessage,
+            ErrorCode = WorkflowRuntimeErrorCodeResolver.Resolve(run.ErrorMessage),
             InspectionDecision = run.InspectionDecision,
             InspectionErrorCode = run.InspectionErrorCode,
             InspectionErrorMessage = run.InspectionErrorMessage,
@@ -5133,6 +5195,7 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
                     Status = x.Status,
                     ExecutionId = x.ExecutionId,
                     ErrorMessage = x.ErrorMessage,
+                    ErrorCode = WorkflowRuntimeErrorCodeResolver.Resolve(x.ErrorMessage),
                     StartedAt = x.StartedAt,
                     FinishedAt = x.FinishedAt,
                 })
@@ -5196,6 +5259,7 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
         {
             Id = deployment.Id,
             ProjectId = deployment.ProjectId,
+            TaskConfigId = deployment.TaskConfigId,
             Revision = deployment.Revision,
             Status = deployment.Status,
             IsCurrentActive = deployment.Status == WorkflowProjectDeploymentStatus.Activated,

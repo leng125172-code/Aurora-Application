@@ -16,6 +16,13 @@ public class StartCalibScanInput
     /// 不发送 T/N 指令，扫描按普通双目采集运行。
     /// </summary>
     public bool SuppressProjectorControl { get; set; }
+
+    /// <summary>是否自动拟合并过滤机台台面。</summary>
+    public bool EnableTableFilter { get; set; } = true;
+
+    /// <summary>删除台面及其上方安全余量（mm）。</summary>
+    [Range(0d, 50d)]
+    public double TableClearanceMm { get; set; } = 3d;
 }
 
 /// <summary>
@@ -62,6 +69,19 @@ public class CalibScanMetricsDto
 
     /// <summary>十字图检测结果（混合模式确认用，true 表示检测到十字图）</summary>
     public bool IsCrosshairDetected { get; set; }
+
+    public CalibScanExposureMetricsDto? MainExposure { get; set; }
+
+    public CalibScanExposureMetricsDto? SecondaryExposure { get; set; }
+}
+
+public class CalibScanExposureMetricsDto
+{
+    public double SaturatedRatio { get; set; }
+    public double CrushedRatio { get; set; }
+    public byte P01 { get; set; }
+    public byte P50 { get; set; }
+    public byte P99 { get; set; }
 }
 
 /// <summary>

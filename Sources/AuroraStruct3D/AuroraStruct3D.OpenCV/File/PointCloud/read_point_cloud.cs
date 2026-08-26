@@ -240,7 +240,7 @@ public class read_point_cloud : IOperator
                         point[1] = float.Parse(values[1]);
                         point[2] = float.Parse(values[2]);
 
-                        int offset = 3;
+                        int normalValueOffset = 3;
                         if (hasColor && values.Length >= 6)
                         {
                             colors.Add(
@@ -251,14 +251,16 @@ public class read_point_cloud : IOperator
                                     (byte)float.Parse(values[3]), // R
                                 }
                             );
-                            offset = 6;
+                            normalValueOffset = 6;
                         }
 
-                        if (hasNormal && values.Length >= offset + 3)
+                        if (hasNormal && values.Length >= normalValueOffset + 3)
                         {
-                            point[offset] = float.Parse(values[offset]);
-                            point[offset + 1] = float.Parse(values[offset + 1]);
-                            point[offset + 2] = float.Parse(values[offset + 2]);
+                            // 坐标 Mat 的法向量始终位于列 3..5；normalValueOffset 仅表示
+                            // PLY 文本中的法向量位置（颜色存在时为 6..8）。
+                            point[3] = float.Parse(values[normalValueOffset]);
+                            point[4] = float.Parse(values[normalValueOffset + 1]);
+                            point[5] = float.Parse(values[normalValueOffset + 2]);
                         }
 
                         points.Add(point);

@@ -92,6 +92,24 @@ public class WorkflowProjectRunRefactorTests
     }
 
     [Fact]
+    public void Run_TryClaim_Should_Be_Idempotent_And_Keep_Request_Identity()
+    {
+        Guid taskConfigId = Guid.NewGuid();
+        Guid handshakeId = Guid.NewGuid();
+        WorkflowProjectRun run = WorkflowProjectRun.Create(
+            Guid.NewGuid(), Guid.NewGuid(), "plc-run", WorkflowProjectRunStartType.Immediate,
+            null, Guid.NewGuid(), 1, [Guid.NewGuid()], false,
+            taskConfigId, handshakeId, plcRequestId: 17, plcRequestSequence: 99);
+
+        Assert.True(run.TryClaim(DateTime.UtcNow));
+        Assert.False(run.TryClaim(DateTime.UtcNow.AddSeconds(1)));
+        Assert.Equal(taskConfigId, run.TaskConfigId);
+        Assert.Equal(handshakeId, run.PlcHandshakeConfigId);
+        Assert.Equal(17, run.PlcRequestId);
+        Assert.Equal(99, run.PlcRequestSequence);
+    }
+
+    [Fact]
     public void Deployment_CreatePublished_Should_Persist_Frozen_Graphs_And_Variables()
     {
         Guid workflowId = Guid.NewGuid();
@@ -132,7 +150,8 @@ public class WorkflowProjectRunRefactorTests
             frozenGraphs,
             frozenVariables,
             new WorkflowProjectFrozenTaskConfig(),
-            snapshotHash: "snap"
+            snapshotHash: "snap",
+            taskConfigId: workflowId
         );
 
         List<WorkflowProjectFrozenGraph> graphs = JsonSerializer.Deserialize<
@@ -147,6 +166,7 @@ public class WorkflowProjectRunRefactorTests
         Assert.Equal("{\"nodes\":[],\"edges\":[]}", graphs[0].GraphData);
         Assert.Single(variables);
         Assert.Equal("v1", variables[0].Name);
+        Assert.Equal(workflowId, deployment.TaskConfigId);
     }
 
     [Theory]

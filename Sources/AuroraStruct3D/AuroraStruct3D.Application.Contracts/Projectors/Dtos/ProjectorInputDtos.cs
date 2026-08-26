@@ -306,13 +306,19 @@ public class DownloadFringePatternInputDto
     [Required]
     public Guid ProjectorId { get; set; }
 
-    /// <summary>条纹方向：horizontal=横条纹，vertical=竖条纹</summary>
+    /// <summary>兼容字段；标定流程固定按横条纹、竖条纹两组生成</summary>
     [Required]
     public string FringeMode { get; set; } = "horizontal";
 
     /// <summary>条纹类型：bw=黑白（首色黑），wb=白黑（首色白）</summary>
     [Required]
     public string FringeType { get; set; } = "bw";
+
+    [Range(0, 254)]
+    public byte DarkLevel { get; set; } = 24;
+
+    [Range(1, 255)]
+    public byte BrightLevel { get; set; } = 220;
 
     /// <summary>投影宽度（像素）</summary>
     [Range(1, 4096)]
@@ -322,15 +328,15 @@ public class DownloadFringePatternInputDto
     [Range(1, 4096)]
     public int HeightPixels { get; set; }
 
-    /// <summary>兼容旧接口；固定条纹配置下不参与图像计算</summary>
+    /// <summary>条纹周期数</summary>
     [Range(1, 100)]
     public int PeriodCount { get; set; }
 
-    /// <summary>兼容旧接口；固定条纹配置下不参与图像计算</summary>
-    [Range(1, 64)]
+    /// <summary>每个方向的相移图像数量；实际下载帧数为其两倍</summary>
+    [Range(3, 64)]
     public int ImageCount { get; set; }
 
-    /// <summary>兼容旧接口；固定条纹配置下不参与计算，互补图直接逐像素取反</summary>
+    /// <summary>相邻图像的相移像素数</summary>
     [Range(1, 4096)]
     public int PhaseShift { get; set; }
 

@@ -24,6 +24,12 @@ public class TucamCameraService :
     IDisposable
 {
     private const string LogTag = "[Cameras]";
+    // TUFRM_FMT_RGB888。相机不提供直接灰度帧，统一请求 SDK 输出三通道显示帧；
+    // 标定等灰度场景在解码后由 OpenCV 转换，避免向硬件请求不支持的灰度格式。
+    private const byte Rgb888FrameFormat = 0x12;
+
+    private static TUCamFrame CreateRgbFrameRequest() =>
+        new() { uiRsdSize = 1, ucFormatGet = Rgb888FrameFormat };
 
     private readonly ILogger<TucamCameraService> _logger;
     private readonly IServiceScopeFactory? _serviceScopeFactory;
@@ -50,11 +56,10 @@ public class TucamCameraService :
     private static readonly SemaphoreSlim _globalSdkLock = new(1, 1);
 
     /// <summary>
-    /// 进程级单活采集锁：同一时刻仅允许一台相机处于 Cap_Start 活跃状态。
-    /// TUCam SDK 在 RK3588 USB 环境下不支持多相机并发 Cap_Start，USB 带宽竞争会导致采集失败。
-    /// 第二台相机的 StartCaptureAsync 会阻塞等待（最长 30s），直到前一台调用 StopCaptureAsync 后释放。
+    /// 进程级采集生命周期锁。只串行化 Buf_Alloc/Cap_Start 与 Cap_Stop/Buf_Release 调用，
+    /// 不在整个采集期间持有，因此 usbfs 缓冲充足时允许两台相机同时处于硬触发等待状态。
     /// </summary>
-    private static readonly SemaphoreSlim _capStartActiveLock = new(1, 1);
+    private static readonly SemaphoreSlim _captureLifecycleLock = new(1, 1);
 
     /// <summary>GenICam 节点探测/枚举互斥锁，避免同一相机并发探测污染选择器状态</summary>
     private readonly ConcurrentDictionary<int, SemaphoreSlim> _nodeMapProbeLocks = new();
@@ -151,6 +156,22 @@ public class TucamCameraService :
         _runtimeIndexByHardwareId.Clear();
         foreach (CameraDiscovery device in devices)
             _runtimeIndexByHardwareId[device.HardwareId] = device.RuntimeIndex;
+
+        // 所有相机均已打开后，再按主→从顺序串行预加载 NodeMap。
+        // 不在 OpenCameraAsync 内启动后台任务，避免枚举与后续相机 Open/Close/采集形成 native 竞态。
+        foreach (int index in devices.Select(x => x.RuntimeIndex).Distinct().OrderBy(x => x))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (_nodeMapCache.ContainsKey(index) || !_cameraHandles.TryGetValue(index, out IntPtr handle))
+            {
+                continue;
+            }
+
+            Task prewarmTask = PrewarmGenICamNodeMapAsync(index, handle);
+            _prewarmTasks[index] = prewarmTask;
+            await prewarmTask.ConfigureAwait(false);
+        }
+
         return devices;
     }
 
@@ -514,9 +535,8 @@ public class TucamCameraService :
             _globalSdkLock.Release();
         }
 
-        // NodeMap 改为首次打开参数面板时按需加载。厂商 SDK 的 GenICam 枚举耗时较长，
-        // 在 Open 后后台预热会与关闭、重扫和其他相机操作形成原生句柄竞态，
-        // 双相机反复开关时可能导致 AccessViolation。
+        // NodeMap 在 ScanAsync 完成全部相机 Open 后统一按索引串行预热。
+        // 此处不启动后台枚举，避免与下一台相机 Open/Close 形成原生句柄竞态。
 
         return Task.CompletedTask;
     }
@@ -1140,7 +1160,11 @@ public class TucamCameraService :
     }
 
     /// <inheritdoc/>
-    public Task StartCaptureAsync(int cameraIndex)
+    public Task StartCaptureAsync(int cameraIndex) =>
+        StartCaptureAsync(cameraIndex, TUCamCaptureMode.Sequence);
+
+    /// <inheritdoc/>
+    public Task StartCaptureAsync(int cameraIndex, TUCamCaptureMode captureMode)
     {
         ThrowIfDisposed();
         IntPtr handle = GetHandle(cameraIndex);
@@ -1169,28 +1193,35 @@ public class TucamCameraService :
             }
         }
 
-        // 快速幂等检查：相机已在采集中则直接返回，无需竞争单活锁
+        // 快速幂等检查：相机已使用相同模式采集时直接返回。
         lock (captureState.SyncRoot)
         {
             if (captureState.IsCapturing && captureState.Frame.pBuffer != IntPtr.Zero)
             {
+                if (captureState.CaptureMode != captureMode)
+                {
+                    throw new InvalidOperationException(
+                        $"{LogTag} Camera {cameraIndex} is already capturing in "
+                            + $"{captureState.CaptureMode}; stop it before switching to {captureMode}."
+                    );
+                }
                 _logger.LogDebug(
-                    "{Tag} Camera {Index} continuous capture already started",
+                    "{Tag} Camera {Index} capture already started in {Mode}",
                     LogTag,
-                    cameraIndex
+                    cameraIndex,
+                    captureMode
                 );
                 return Task.CompletedTask;
             }
         }
 
-        // 单活采集锁：同一时刻仅允许一台相机处于 Cap_Start 活跃状态（USB 带宽限制）
-        if (!_capStartActiveLock.Wait(30_000))
+        // 只串行化生命周期调用；Start 返回后立即释放，允许多台相机同时保持采集。
+        if (!_captureLifecycleLock.Wait(30_000))
         {
             string lockTimeoutMsg =
-                $"{LogTag} Camera {cameraIndex} 等待单活 Cap_Start 锁超时（30s），"
-                + "另一台相机正在采集中，请先停止其他相机的采集再试。";
+                $"{LogTag} Camera {cameraIndex} 等待采集生命周期锁超时（30s）。";
             _logger.LogWarning(
-                "{Tag} Camera {Index} 单活 Cap_Start 锁等待超时",
+                "{Tag} Camera {Index} 采集生命周期锁等待超时",
                 LogTag,
                 cameraIndex
             );
@@ -1204,9 +1235,7 @@ public class TucamCameraService :
             throw new InvalidOperationException(lockTimeoutMsg);
         }
 
-        // capStartLockAcquired 用于失败路径的 catch 块释放锁；
-        // 成功路径将其置 false，表示锁已转移给 StopCaptureAsync 持有。
-        bool capStartLockAcquired = true;
+        bool lifecycleLockAcquired = true;
         Stopwatch sw = Stopwatch.StartNew();
         try
         {
@@ -1219,15 +1248,20 @@ public class TucamCameraService :
 
                 if (captureState.IsCapturing && captureState.Frame.pBuffer != IntPtr.Zero)
                 {
+                    if (captureState.CaptureMode != captureMode)
+                    {
+                        throw new InvalidOperationException(
+                            $"{LogTag} Camera {cameraIndex} is already capturing in "
+                                + $"{captureState.CaptureMode}; stop it before switching to {captureMode}."
+                        );
+                    }
                     sw.Stop();
                     _logger.LogDebug(
-                        "{Tag} Camera {Index} continuous capture already started",
+                        "{Tag} Camera {Index} capture already started in {Mode}",
                         LogTag,
-                        cameraIndex
+                        cameraIndex,
+                        captureMode
                     );
-                    // 已在采集中：释放单活锁后幂等返回
-                    _capStartActiveLock.Release();
-                    capStartLockAcquired = false;
                     return Task.CompletedTask;
                 }
 
@@ -1239,7 +1273,7 @@ public class TucamCameraService :
                 // 先分配帧缓冲区，再启动连续采集。WaitForFrame 必须复用此处返回的 pBuffer。
                 // 多相机并发场景下，另一台相机大流量 USB 传输会导致本相机的 Buf_Alloc 控制
                 // 传输被抢占而返回 Excluded。采用指数退避重试，最多 5 次（约 1.5s 总等待）。
-                var frame = new TUCamFrame { uiRsdSize = 1 };
+                var frame = CreateRgbFrameRequest();
                 TUCamRet allocRet = TUCamRet.Failure;
                 int[] retryDelaysMs = { 0, 100, 200, 400, 800 };
                 for (int attempt = 0; attempt < retryDelaysMs.Length; attempt++)
@@ -1300,7 +1334,7 @@ public class TucamCameraService :
                         Thread.Sleep(capRetryDelaysMs[attempt]);
                     }
 
-                    ret = TUCamNative.TUCAM_Cap_Start(handle, (uint)TUCamCaptureMode.Sequence);
+                    ret = TUCamNative.TUCAM_Cap_Start(handle, (uint)captureMode);
                     if (ret == TUCamRet.Success)
                     {
                         if (attempt > 0)
@@ -1453,7 +1487,7 @@ public class TucamCameraService :
 
                     // 重新分配缓冲区（新句柄上 SDK 状态干净，Buf_Alloc 通常一次即成功）
                     TUCamNative.TUCAM_Buf_Release(handle);
-                    frame = new TUCamFrame { uiRsdSize = 1 };
+                    frame = CreateRgbFrameRequest();
                     allocRet = TUCamNative.TUCAM_Buf_Alloc(handle, ref frame);
                     if (allocRet != TUCamRet.Success)
                     {
@@ -1473,7 +1507,7 @@ public class TucamCameraService :
                     }
 
                     // 重新启动采集
-                    ret = TUCamNative.TUCAM_Cap_Start(handle, (uint)TUCamCaptureMode.Sequence);
+                    ret = TUCamNative.TUCAM_Cap_Start(handle, (uint)captureMode);
                     if (ret == TUCamRet.Success)
                     {
                         _logger.LogInformation(
@@ -1506,8 +1540,7 @@ public class TucamCameraService :
                 captureState.Faulted = false;
                 captureState.FaultReason = null;
                 captureState.StopRequested = false;
-                captureState.HoldsCapStartLock = true;
-                capStartLockAcquired = false; // 单活锁转移给 StopCaptureAsync 持有并释放
+                captureState.CaptureMode = captureMode;
 
                 // 缓存像素格式信息，避免每帧调用 GenICam 读取
                 captureState.CachedPixelFormat = GenICamGetString(handle, "PixelFormat");
@@ -1549,9 +1582,10 @@ public class TucamCameraService :
 
             sw.Stop();
             _logger.LogInformation(
-                "{Tag} Camera {Index} started continuous capture",
+                "{Tag} Camera {Index} started capture in {Mode}",
                 LogTag,
-                cameraIndex
+                cameraIndex,
+                captureMode
             );
             RecordCameraLog(
                 cameraIndex,
@@ -1561,19 +1595,17 @@ public class TucamCameraService :
             );
             return Task.CompletedTask;
         }
-        catch
+        finally
         {
-            // 采集启动失败：释放单活锁（成功路径已将 capStartLockAcquired 置 false，锁由 Stop 负责释放）
-            if (capStartLockAcquired)
+            if (lifecycleLockAcquired)
             {
-                _capStartActiveLock.Release();
+                _captureLifecycleLock.Release();
                 _logger.LogDebug(
-                    "{Tag} Camera {Index} 单活 Cap_Start 锁已在失败路径中释放",
+                    "{Tag} Camera {Index} 已释放采集生命周期锁",
                     LogTag,
                     cameraIndex
                 );
             }
-            throw;
         }
     }
 
@@ -1584,119 +1616,116 @@ public class TucamCameraService :
         IntPtr handle = GetHandle(cameraIndex);
         CameraCaptureState captureState = GetCaptureState(cameraIndex);
 
-        Stopwatch sw = Stopwatch.StartNew();
+        if (!_captureLifecycleLock.Wait(30_000))
+        {
+            throw new InvalidOperationException(
+                $"{LogTag} Camera {cameraIndex} 等待采集生命周期锁超时（30s）。"
+            );
+        }
+
         try
         {
-            lock (captureState.SyncRoot)
+            Stopwatch sw = Stopwatch.StartNew();
+            try
             {
-                if (!captureState.IsCapturing)
+                lock (captureState.SyncRoot)
                 {
-                    sw.Stop();
+                    if (!captureState.IsCapturing)
+                    {
+                        sw.Stop();
+                        _logger.LogDebug(
+                            "{Tag} Camera {Index} continuous capture already stopped",
+                            LogTag,
+                            cameraIndex
+                        );
+                        return Task.CompletedTask;
+                    }
+
+                    captureState.StopRequested = true;
+                }
+
+                // 对应 StartCaptureAsync 的 AcquisitionStart，软发 AcquisitionStop（失败仅 Debug 日志）
+                try
+                {
+                    TUCamRet acqRet = GenICamSetInt(handle, "AcquisitionStop", 1);
+                    if (acqRet != TUCamRet.Success)
+                    {
+                        _logger.LogDebug(
+                            "{Tag} Camera {Index} AcquisitionStop 命令返回 {Ret}，已忽略",
+                            LogTag,
+                            cameraIndex,
+                            acqRet
+                        );
+                    }
+                }
+                catch (Exception ex)
+                {
                     _logger.LogDebug(
-                        "{Tag} Camera {Index} continuous capture already stopped",
+                        ex,
+                        "{Tag} Camera {Index} AcquisitionStop 命令异常，已忽略",
                         LogTag,
                         cameraIndex
                     );
-                    return Task.CompletedTask;
                 }
 
-                captureState.StopRequested = true;
-            }
+                TUCamNative.TUCAM_Buf_AbortWait(handle);
 
-            // 对应 StartCaptureAsync 的 AcquisitionStart，软发 AcquisitionStop（失败仅 Debug 日志）
-            try
-            {
-                TUCamRet acqRet = GenICamSetInt(handle, "AcquisitionStop", 1);
-                if (acqRet != TUCamRet.Success)
+                lock (captureState.SyncRoot)
                 {
-                    _logger.LogDebug(
-                        "{Tag} Camera {Index} AcquisitionStop 命令返回 {Ret}，已忽略",
-                        LogTag,
-                        cameraIndex,
-                        acqRet
-                    );
+                    long waitDeadline = Environment.TickCount64 + 5000;
+                    while (captureState.ActiveWaiters > 0)
+                    {
+                        int remainingMs = (int)Math.Max(0, waitDeadline - Environment.TickCount64);
+                        if (remainingMs == 0 || !Monitor.Wait(captureState.SyncRoot, remainingMs))
+                        {
+                            string timeoutMessage =
+                                $"{LogTag} Timeout waiting frame waiter to exit before stopping capture (index={cameraIndex})";
+                            throw new InvalidOperationException(timeoutMessage);
+                        }
+                    }
+
+                    TUCamNative.TUCAM_Cap_Stop(handle);
+                    TUCamNative.TUCAM_Buf_Release(handle);
+                    captureState.Frame = default;
+                    captureState.IsCapturing = false;
+                    captureState.StopRequested = false;
+                    Monitor.PulseAll(captureState.SyncRoot);
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogDebug(
-                    ex,
-                    "{Tag} Camera {Index} AcquisitionStop 命令异常，已忽略",
-                    LogTag,
-                    cameraIndex
+                lock (captureState.SyncRoot)
+                {
+                    // 超时或底层 Stop 失败后采集状态不可再视为有效。否则下一次 Start 会
+                    // 因幂等检查直接返回，既不会重分配缓冲区也不会恢复 SDK 采集状态。
+                    // 后续 StartCaptureAsync 会执行既有的防御性 Buf_Release 后重新启动。
+                    captureState.IsCapturing = false;
+                    captureState.Frame = default;
+                    captureState.Faulted = true;
+                    captureState.FaultReason = ex.Message;
+                    captureState.StopRequested = false;
+                    Monitor.PulseAll(captureState.SyncRoot);
+                }
+                sw.Stop();
+                RecordCameraLog(
+                    cameraIndex,
+                    CameraOperationType.StopCapture,
+                    false,
+                    sw.ElapsedMilliseconds,
+                    ex.Message
                 );
+                throw;
             }
 
-            TUCamNative.TUCAM_Buf_AbortWait(handle);
-
-            lock (captureState.SyncRoot)
-            {
-                long waitDeadline = Environment.TickCount64 + 5000;
-                while (captureState.ActiveWaiters > 0)
-                {
-                    int remainingMs = (int)Math.Max(0, waitDeadline - Environment.TickCount64);
-                    if (remainingMs == 0 || !Monitor.Wait(captureState.SyncRoot, remainingMs))
-                    {
-                        string timeoutMessage =
-                            $"{LogTag} Timeout waiting frame waiter to exit before stopping capture (index={cameraIndex})";
-                        throw new InvalidOperationException(timeoutMessage);
-                    }
-                }
-
-                TUCamNative.TUCAM_Cap_Stop(handle);
-                TUCamNative.TUCAM_Buf_Release(handle);
-                captureState.Frame = default;
-                captureState.IsCapturing = false;
-                captureState.StopRequested = false;
-                // 释放单活采集锁，允许下一台相机执行 Cap_Start
-                if (captureState.HoldsCapStartLock)
-                {
-                    captureState.HoldsCapStartLock = false;
-                    _capStartActiveLock.Release();
-                    _logger.LogInformation(
-                        "{Tag} Camera {Index} 已释放单活 Cap_Start 锁",
-                        LogTag,
-                        cameraIndex
-                    );
-                }
-                Monitor.PulseAll(captureState.SyncRoot);
-            }
-        }
-        catch (Exception ex)
-        {
-            lock (captureState.SyncRoot)
-            {
-                // 超时或底层 Stop 失败后采集状态不可再视为有效。否则下一次 Start 会
-                // 因幂等检查直接返回，既不会重分配缓冲区也不会恢复 SDK 采集状态。
-                // 后续 StartCaptureAsync 会执行既有的防御性 Buf_Release 后重新启动。
-                captureState.IsCapturing = false;
-                captureState.Frame = default;
-                captureState.Faulted = true;
-                captureState.FaultReason = ex.Message;
-                captureState.StopRequested = false;
-                // 即使 Stop 失败也释放单活锁，避免系统永久阻塞
-                if (captureState.HoldsCapStartLock)
-                {
-                    captureState.HoldsCapStartLock = false;
-                    _capStartActiveLock.Release();
-                }
-                Monitor.PulseAll(captureState.SyncRoot);
-            }
             sw.Stop();
-            RecordCameraLog(
-                cameraIndex,
-                CameraOperationType.StopCapture,
-                false,
-                sw.ElapsedMilliseconds,
-                ex.Message
-            );
-            throw;
+            _logger.LogInformation("{Tag} Camera {Index} stopped capture", LogTag, cameraIndex);
+            RecordCameraLog(cameraIndex, CameraOperationType.StopCapture, true, sw.ElapsedMilliseconds);
+            return Task.CompletedTask;
         }
-
-        sw.Stop();
-        _logger.LogInformation("{Tag} Camera {Index} stopped capture", LogTag, cameraIndex);
-        RecordCameraLog(cameraIndex, CameraOperationType.StopCapture, true, sw.ElapsedMilliseconds);
-        return Task.CompletedTask;
+        finally
+        {
+            _captureLifecycleLock.Release();
+        }
     }
 
     /// <inheritdoc/>
@@ -2177,9 +2206,11 @@ public class TucamCameraService :
         int timeoutMs = 3000,
         int maxWidth = 0,
         int jpegQuality = 85,
-        int imageRotationAngle = 0
+        int imageRotationAngle = 0,
+        CancellationToken cancellationToken = default
     )
     {
+        cancellationToken.ThrowIfCancellationRequested();
         ThrowIfDisposed();
         IntPtr handle = GetHandle(cameraIndex);
         ref TUCamFrame frame = ref BeginFrameWait(cameraIndex, out CameraCaptureState captureState);
@@ -2207,6 +2238,8 @@ public class TucamCameraService :
                 );
             }
 
+            cancellationToken.ThrowIfCancellationRequested();
+
             width = frame.usWidth;
             height = frame.usHeight;
             channels = frame.ucChannels;
@@ -2231,6 +2264,7 @@ public class TucamCameraService :
             EndFrameWait(captureState, frame);
         }
 
+        cancellationToken.ThrowIfCancellationRequested();
         // 查询像素格式（用于区分 BayGB12Packed 与 16bit 容器格式）
         // 使用缓存的像素格式信息，避免每帧调用 GenICam 读取
         string? pixelFormat = captureState.CachedPixelFormat;
@@ -2283,6 +2317,7 @@ public class TucamCameraService :
             jpegQuality,
             imageRotationAngle
         );
+        cancellationToken.ThrowIfCancellationRequested();
         return Task.FromResult(bmpBytes);
     }
 
@@ -4363,11 +4398,8 @@ public class TucamCameraService :
 
         public TUCamFrame Frame;
 
-        /// <summary>
-        /// 当前相机是否持有进程级单活 Cap_Start 锁（_capStartActiveLock）。
-        /// StartCaptureAsync 成功后置 true，StopCaptureAsync 释放锁时置 false。
-        /// </summary>
-        public bool HoldsCapStartLock { get; set; }
+        /// <summary>当前 TUCam SDK 采集模式。</summary>
+        public TUCamCaptureMode CaptureMode { get; set; } = TUCamCaptureMode.Sequence;
 
         /// <summary>上一次停止失败后，底层采集状态是否不可再信任。</summary>
         public bool Faulted { get; set; }
@@ -5073,7 +5105,7 @@ public class TucamCameraService :
     {
         try
         {
-            var frame = new TUCamFrame { uiRsdSize = 1 };
+            var frame = CreateRgbFrameRequest();
             TUCamRet ret = TUCamNative.TUCAM_Buf_Alloc(handle, ref frame);
             if (ret != TUCamRet.Success)
             {

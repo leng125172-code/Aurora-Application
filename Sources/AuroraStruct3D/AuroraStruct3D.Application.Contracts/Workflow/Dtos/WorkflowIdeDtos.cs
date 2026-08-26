@@ -81,6 +81,25 @@ public class WorkflowIdeCompletionListDto
     public List<WorkflowIdeCompletionDto> Items { get; set; } = [];
 }
 
+/// <summary>
+/// Requests a canonical Monaco snippet for an operator. Configuration values supplied here are
+/// emitted as fixed workflow literals; remaining inputs, outputs and optional configuration values
+/// keep their normal snippet placeholders.
+/// </summary>
+public class WorkflowOperatorSnippetInput : WorkflowIdeDocumentInput
+{
+    public Guid OperatorId { get; set; }
+
+    public Dictionary<string, JsonElement> ConfigValues { get; set; } =
+        new(StringComparer.Ordinal);
+}
+
+public class WorkflowOperatorSnippetDto
+{
+    public int DocumentVersion { get; set; }
+    public string InsertText { get; set; } = string.Empty;
+}
+
 public class WorkflowIdeHoverDto
 {
     public int DocumentVersion { get; set; }

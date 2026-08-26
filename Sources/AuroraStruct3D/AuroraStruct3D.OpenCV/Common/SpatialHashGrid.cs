@@ -20,7 +20,7 @@ public sealed class SpatialHashGrid
     private readonly int _gridSizeX,
         _gridSizeY,
         _gridSizeZ;
-    private readonly Dictionary<int, List<int>> _cells;
+    private readonly Dictionary<(int X, int Y, int Z), List<int>> _cells;
 
     /// <summary>
     /// 用点云坐标数组构建空间哈希网格。网格持有数组引用（不复制），
@@ -36,10 +36,16 @@ public sealed class SpatialHashGrid
         _xs = xs;
         _ys = ys;
         _zs = zs;
+        ArgumentNullException.ThrowIfNull(xs);
+        ArgumentNullException.ThrowIfNull(ys);
+        ArgumentNullException.ThrowIfNull(zs);
+
         int count = pointCount < 0 ? xs.Length : pointCount;
 
-        if (cellSize <= 0)
+        if (!double.IsFinite(cellSize) || cellSize <= 0)
             throw new ArgumentException("单元格边长必须为正数。", nameof(cellSize));
+        if (count <= 0 || count > xs.Length || count > ys.Length || count > zs.Length)
+            throw new ArgumentOutOfRangeException(nameof(pointCount), "参与建立索引的点数无效。");
 
         _invCellSize = 1.0f / (float)cellSize;
 
@@ -51,6 +57,8 @@ public sealed class SpatialHashGrid
             maxZ = float.MinValue;
         for (int i = 0; i < count; i++)
         {
+            if (!float.IsFinite(xs[i]) || !float.IsFinite(ys[i]) || !float.IsFinite(zs[i]))
+                throw new ArgumentException("空间索引不接受 NaN 或无穷坐标。");
             if (xs[i] < _minX)
                 _minX = xs[i];
             if (ys[i] < _minY)
@@ -69,10 +77,10 @@ public sealed class SpatialHashGrid
         _gridSizeY = Math.Max(1, (int)((maxY - _minY) * _invCellSize) + 1);
         _gridSizeZ = Math.Max(1, (int)((maxZ - _minZ) * _invCellSize) + 1);
 
-        _cells = new Dictionary<int, List<int>>();
+        _cells = new Dictionary<(int X, int Y, int Z), List<int>>();
         for (int i = 0; i < count; i++)
         {
-            int key = GetCellKey(xs[i], ys[i], zs[i]);
+            (int X, int Y, int Z) key = GetCellKey(xs[i], ys[i], zs[i]);
             if (!_cells.TryGetValue(key, out var list))
             {
                 list = new List<int>();
@@ -92,64 +100,84 @@ public sealed class SpatialHashGrid
     /// <returns>最近点索引，或 -1。</returns>
     public int FindNearestNeighbor(float qx, float qy, float qz, out double bestDistSq)
     {
-        int cx = (int)((qx - _minX) * _invCellSize);
-        int cy = (int)((qy - _minY) * _invCellSize);
-        int cz = (int)((qz - _minZ) * _invCellSize);
+        return FindNearestNeighborCore(qx, qy, qz, 2, double.PositiveInfinity, out bestDistSq);
+    }
+
+    /// <summary>
+    /// 在指定最大距离内查找真正的最近邻。方法会遍历与搜索球相交的全部网格单元，
+    /// 不会因为当前单元已有候选点而提前结束。
+    /// </summary>
+    public int FindNearestNeighborWithin(
+        float qx,
+        float qy,
+        float qz,
+        double maxDistance,
+        out double bestDistSq
+    )
+    {
+        if (!double.IsFinite(maxDistance) || maxDistance <= 0)
+            throw new ArgumentOutOfRangeException(nameof(maxDistance), "最大搜索距离必须为正数。");
+
+        int cellRadius = Math.Max(1, (int)Math.Ceiling(maxDistance * _invCellSize));
+        return FindNearestNeighborCore(
+            qx,
+            qy,
+            qz,
+            cellRadius,
+            maxDistance * maxDistance,
+            out bestDistSq
+        );
+    }
+
+    private int FindNearestNeighborCore(
+        float qx,
+        float qy,
+        float qz,
+        int cellRadius,
+        double maxDistanceSq,
+        out double bestDistSq
+    )
+    {
+        int cx = (int)Math.Floor((qx - _minX) * _invCellSize);
+        int cy = (int)Math.Floor((qy - _minY) * _invCellSize);
+        int cz = (int)Math.Floor((qz - _minZ) * _invCellSize);
 
         int bestIdx = -1;
-        float best = float.MaxValue;
+        double best = maxDistanceSq;
 
-        for (int radius = 0; radius < 3; radius++)
+        for (int dx = -cellRadius; dx <= cellRadius; dx++)
+        for (int dy = -cellRadius; dy <= cellRadius; dy++)
+        for (int dz = -cellRadius; dz <= cellRadius; dz++)
         {
-            bool found = false;
+            int nx = cx + dx;
+            int ny = cy + dy;
+            int nz = cz + dz;
+            if (
+                nx < 0
+                || nx >= _gridSizeX
+                || ny < 0
+                || ny >= _gridSizeY
+                || nz < 0
+                || nz >= _gridSizeZ
+            )
+                continue;
 
-            for (int dx = -radius; dx <= radius; dx++)
-            for (int dy = -radius; dy <= radius; dy++)
-            for (int dz = -radius; dz <= radius; dz++)
+            var key = (nx, ny, nz);
+            if (!_cells.TryGetValue(key, out var cell))
+                continue;
+
+            foreach (int idx in cell)
             {
-                // 仅遍历当前半径的“壳层”，避免重复扫描内层
-                if (
-                    radius > 0
-                    && Math.Abs(dx) < radius
-                    && Math.Abs(dy) < radius
-                    && Math.Abs(dz) < radius
-                )
-                    continue;
-
-                int nx = cx + dx;
-                int ny = cy + dy;
-                int nz = cz + dz;
-                if (
-                    nx < 0
-                    || nx >= _gridSizeX
-                    || ny < 0
-                    || ny >= _gridSizeY
-                    || nz < 0
-                    || nz >= _gridSizeZ
-                )
-                    continue;
-
-                int key = nz * _gridSizeY * _gridSizeX + ny * _gridSizeX + nx;
-                if (!_cells.TryGetValue(key, out var cell))
-                    continue;
-
-                found = true;
-                foreach (int idx in cell)
+                double ex = _xs[idx] - qx;
+                double ey = _ys[idx] - qy;
+                double ez = _zs[idx] - qz;
+                double distSq = ex * ex + ey * ey + ez * ez;
+                if (distSq <= best)
                 {
-                    float ex = _xs[idx] - qx;
-                    float ey = _ys[idx] - qy;
-                    float ez = _zs[idx] - qz;
-                    float distSq = ex * ex + ey * ey + ez * ez;
-                    if (distSq < best)
-                    {
-                        best = distSq;
-                        bestIdx = idx;
-                    }
+                    best = distSq;
+                    bestIdx = idx;
                 }
             }
-
-            if (found)
-                break;
         }
 
         bestDistSq = bestIdx < 0 ? double.MaxValue : best;
@@ -189,7 +217,7 @@ public sealed class SpatialHashGrid
             )
                 continue;
 
-            int key = nz * _gridSizeY * _gridSizeX + ny * _gridSizeX + nx;
+            var key = (nx, ny, nz);
             if (_cells.TryGetValue(key, out var cell))
                 result.AddRange(cell);
         }
@@ -197,11 +225,11 @@ public sealed class SpatialHashGrid
         return result;
     }
 
-    private int GetCellKey(float x, float y, float z)
+    private (int X, int Y, int Z) GetCellKey(float x, float y, float z)
     {
         int cx = Math.Clamp((int)((x - _minX) * _invCellSize), 0, _gridSizeX - 1);
         int cy = Math.Clamp((int)((y - _minY) * _invCellSize), 0, _gridSizeY - 1);
         int cz = Math.Clamp((int)((z - _minZ) * _invCellSize), 0, _gridSizeZ - 1);
-        return cz * _gridSizeY * _gridSizeX + cy * _gridSizeX + cx;
+        return (cx, cy, cz);
     }
 }

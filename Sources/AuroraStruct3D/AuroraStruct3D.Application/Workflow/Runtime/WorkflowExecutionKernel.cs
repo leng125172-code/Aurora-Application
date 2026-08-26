@@ -188,6 +188,17 @@ public sealed class WorkflowExecutionKernel : ITransientDependency
         int steps,
         bool markCompleted = true
     )
+        => ExecuteStepsAsync(session, steps, markCompleted).GetAwaiter().GetResult();
+
+    /// <summary>
+    /// 异步执行指定步数。异步算子会收到会话停止、调用方取消和节点超时组成的联合令牌。
+    /// </summary>
+    public async Task ExecuteStepsAsync(
+        WorkflowExecutionSession session,
+        int steps,
+        bool markCompleted = true,
+        CancellationToken cancellationToken = default
+    )
     {
         if (steps <= 0)
         {
@@ -196,6 +207,11 @@ public sealed class WorkflowExecutionKernel : ITransientDependency
 
         EnsureCanRun(session);
         session.StartIfNeeded();
+        using CancellationTokenSource executionCancellation =
+            CancellationTokenSource.CreateLinkedTokenSource(
+                session.CancellationToken,
+                cancellationToken
+            );
 
         while (steps > 0 && session.StepCursor < session.RuntimeWorkflow.Statements.Count)
         {
@@ -238,12 +254,65 @@ public sealed class WorkflowExecutionKernel : ITransientDependency
             Stopwatch statementTimer = Stopwatch.StartNew();
             try
             {
-                statement.Execute(session.Context);
-                if (statementTimer.Elapsed > _options.NodeTimeout)
+                TimeSpan workflowRemaining = _options.WorkflowTimeout
+                    - TimeSpan.FromMilliseconds(session.DurationMs);
+                if (workflowRemaining <= TimeSpan.Zero)
                     throw new TimeoutException(
-                        $"[WORKFLOW_NODE_TIMEOUT] 节点执行耗时 {statementTimer.ElapsedMilliseconds}ms，"
-                        + $"超过限制 {_options.NodeTimeout.TotalMilliseconds:0}ms；同步节点已在返回后终止工作流。"
+                        $"[WORKFLOW_TIMEOUT] 工作流执行超过 {_options.WorkflowTimeout.TotalSeconds:0} 秒。"
                     );
+                TimeSpan requestedNodeTimeout =
+                    statement is IWorkflowStatementTimeoutProvider timeoutProvider
+                    && timeoutProvider.GetRequestedTimeout(session.Context) is { } requested
+                        ? requested
+                        : _options.NodeTimeout;
+                TimeSpan effectiveNodeTimeout =
+                    requestedNodeTimeout <= workflowRemaining
+                        ? requestedNodeTimeout
+                        : workflowRemaining;
+                using CancellationTokenSource nodeCancellation =
+                    CancellationTokenSource.CreateLinkedTokenSource(
+                        executionCancellation.Token
+                    );
+                nodeCancellation.CancelAfter(effectiveNodeTimeout);
+                try
+                {
+                    await statement.ExecuteAsync(
+                        session.Context,
+                        nodeCancellation.Token
+                    ).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                    when (session.StopRequested || session.CancellationToken.IsCancellationRequested)
+                {
+                    session.Trace.Add(
+                        new WorkflowTraceEventDto
+                        {
+                            Step = session.ExecutedSteps + 1,
+                            NodeId = nodeId,
+                            StatementId = string.IsNullOrWhiteSpace(nodeId)
+                                ? null
+                                : WorkflowSyntaxParser.GetNodeStatementId(nodeId),
+                            StartedAt = startedAt,
+                            DurationMs = statementTimer.ElapsedMilliseconds,
+                            Status = "stopped",
+                            EventType = "cancelled",
+                        }
+                    );
+                    session.MarkStopped();
+                    session.ProgressChanged?.Invoke("session-stopped", session);
+                    return;
+                }
+                catch (OperationCanceledException ex)
+                    when (
+                        nodeCancellation.IsCancellationRequested
+                        && !executionCancellation.IsCancellationRequested
+                    )
+                {
+                    throw new TimeoutException(
+                        $"[WORKFLOW_NODE_TIMEOUT] 节点执行超过 {effectiveNodeTimeout.TotalMilliseconds:0}ms，已请求取消。",
+                        ex
+                    );
+                }
                 session.VariablePool.SyncFromContext(session.Context, nodeId);
                 session.StepCursor++;
                 session.ExecutedSteps++;
@@ -298,15 +367,35 @@ public sealed class WorkflowExecutionKernel : ITransientDependency
     /// </summary>
     /// <param name="session">会话。</param>
     public void ExecuteToCompletion(WorkflowExecutionSession session)
+        => ExecuteToCompletionAsync(session).GetAwaiter().GetResult();
+
+    /// <summary>异步执行到结束。</summary>
+    public Task ExecuteToCompletionAsync(
+        WorkflowExecutionSession session,
+        CancellationToken cancellationToken = default
+    )
     {
         int remaining = session.RuntimeWorkflow.Statements.Count - session.StepCursor;
-        ExecuteSteps(session, Math.Max(remaining, 0));
+        return ExecuteStepsAsync(
+            session,
+            Math.Max(remaining, 0),
+            cancellationToken: cancellationToken
+        );
     }
 
     public void Continue(
         WorkflowExecutionSession session,
         string? runToNodeId = null,
         bool markCompleted = true
+    )
+        => ContinueAsync(session, runToNodeId, markCompleted).GetAwaiter().GetResult();
+
+    /// <summary>异步继续执行，保留断点、运行到节点和暂停语义。</summary>
+    public async Task ContinueAsync(
+        WorkflowExecutionSession session,
+        string? runToNodeId = null,
+        bool markCompleted = true,
+        CancellationToken cancellationToken = default
     )
     {
         EnsureCanRun(session);
@@ -358,7 +447,12 @@ public sealed class WorkflowExecutionKernel : ITransientDependency
             }
 
             int cursorBeforeStep = session.StepCursor;
-            ExecuteSteps(session, 1, markCompleted);
+            await ExecuteStepsAsync(
+                session,
+                1,
+                markCompleted,
+                cancellationToken
+            ).ConfigureAwait(false);
             if (
                 session.Status != WorkflowExecutionStatus.Running
                 || session.StepCursor == cursorBeforeStep
@@ -415,6 +509,54 @@ public sealed class WorkflowNodeExecutionException : Exception
 }
 
 /// <summary>
+/// 当前进程内正式运行会话的取消注册表。HTTP 取消请求可借此立即中断正在等待硬件的异步算子；
+/// 数据库中的 CancelRequested 仍是跨进程和工作流边界的最终一致性保障。
+/// </summary>
+public static class WorkflowRunCancellationRegistry
+{
+    private static readonly ConcurrentDictionary<
+        Guid,
+        ConcurrentDictionary<Guid, WorkflowExecutionSession>
+    > ActiveRuns = new();
+
+    internal static void Register(WorkflowExecutionSession session)
+    {
+        if (!session.RunId.HasValue || session.RunId.Value == Guid.Empty)
+            return;
+        ActiveRuns
+            .GetOrAdd(session.RunId.Value, _ => new ConcurrentDictionary<Guid, WorkflowExecutionSession>())
+            [session.ExecutionId] = session;
+    }
+
+    internal static void Unregister(WorkflowExecutionSession session)
+    {
+        if (!session.RunId.HasValue || session.RunId.Value == Guid.Empty)
+            return;
+        if (!ActiveRuns.TryGetValue(session.RunId.Value, out var sessions))
+            return;
+        sessions.TryRemove(session.ExecutionId, out _);
+        if (sessions.IsEmpty)
+            ActiveRuns.TryRemove(
+                new KeyValuePair<Guid, ConcurrentDictionary<Guid, WorkflowExecutionSession>>(
+                    session.RunId.Value,
+                    sessions
+                )
+            );
+    }
+
+    /// <summary>向指定正式运行在当前进程中的全部活动会话发送停止请求。</summary>
+    public static int Cancel(Guid runId)
+    {
+        if (!ActiveRuns.TryGetValue(runId, out var sessions))
+            return 0;
+        WorkflowExecutionSession[] snapshot = sessions.Values.ToArray();
+        foreach (WorkflowExecutionSession session in snapshot)
+            session.RequestStop();
+        return snapshot.Length;
+    }
+}
+
+/// <summary>
 /// 执行会话。
 /// </summary>
 public sealed class WorkflowExecutionSession : IDisposable
@@ -424,12 +566,18 @@ public sealed class WorkflowExecutionSession : IDisposable
     private long _executionCommandId;
     private long _pauseRequestedCommandId;
     private long _statusVersion;
+    private readonly CancellationTokenSource _cancellation = new();
+    private int _registeredForRunCancellation;
+    private int _disposed;
 
     /// <summary>执行会话锁。</summary>
     public SemaphoreSlim Gate { get; } = new(1, 1);
     public DateTime CreatedAt { get; } = DateTime.UtcNow;
     public DateTime LastAccessAt { get; private set; } = DateTime.UtcNow;
     public volatile bool StopRequested;
+
+    /// <summary>传递给异步语句的会话级取消令牌。</summary>
+    public CancellationToken CancellationToken => _cancellation.Token;
 
     /// <summary>执行会话 ID。</summary>
     public Guid ExecutionId { get; init; }
@@ -598,6 +746,22 @@ public sealed class WorkflowExecutionSession : IDisposable
         {
             Status = WorkflowExecutionStatus.Running;
             _stopwatch.Start();
+            if (Interlocked.Exchange(ref _registeredForRunCancellation, 1) == 0)
+                WorkflowRunCancellationRegistry.Register(this);
+        }
+    }
+
+    /// <summary>请求停止，并立即唤醒支持取消的异步节点。</summary>
+    public void RequestStop()
+    {
+        StopRequested = true;
+        try
+        {
+            _cancellation.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+            // 会话已结束；停止请求保持幂等。
         }
     }
 
@@ -613,6 +777,7 @@ public sealed class WorkflowExecutionSession : IDisposable
     {
         Status = WorkflowExecutionStatus.Completed;
         _stopwatch.Stop();
+        UnregisterRunCancellation();
     }
 
     /// <summary>
@@ -626,6 +791,7 @@ public sealed class WorkflowExecutionSession : IDisposable
         ErrorMessage = message;
         Status = WorkflowExecutionStatus.Faulted;
         _stopwatch.Stop();
+        UnregisterRunCancellation();
     }
 
     /// <summary>
@@ -635,11 +801,22 @@ public sealed class WorkflowExecutionSession : IDisposable
     {
         Status = WorkflowExecutionStatus.Stopped;
         _stopwatch.Stop();
+        UnregisterRunCancellation();
+    }
+
+    private void UnregisterRunCancellation()
+    {
+        if (Interlocked.Exchange(ref _registeredForRunCancellation, 0) != 0)
+            WorkflowRunCancellationRegistry.Unregister(this);
     }
 
     /// <inheritdoc/>
     public void Dispose()
     {
+        if (Interlocked.Exchange(ref _disposed, 1) != 0)
+            return;
+        UnregisterRunCancellation();
+        _cancellation.Dispose();
         Gate.Dispose();
         Context.Dispose();
     }

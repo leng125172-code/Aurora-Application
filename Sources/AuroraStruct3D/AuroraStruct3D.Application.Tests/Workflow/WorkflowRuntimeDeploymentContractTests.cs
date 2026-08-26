@@ -110,6 +110,15 @@ public class WorkflowRuntimeDeploymentContractTests
         PropertyInfo statusErrorMessageProperty = typeof(WorkflowExecutionStatusDto).GetProperty(
             nameof(WorkflowExecutionStatusDto.ErrorMessage)
         )!;
+        PropertyInfo statusErrorCodeProperty = typeof(WorkflowExecutionStatusDto).GetProperty(
+            nameof(WorkflowExecutionStatusDto.ErrorCode)
+        )!;
+        PropertyInfo runErrorCodeProperty = typeof(WorkflowProjectRunStatusDto).GetProperty(
+            nameof(WorkflowProjectRunStatusDto.ErrorCode)
+        )!;
+        PropertyInfo runItemErrorCodeProperty = typeof(WorkflowProjectRunItemDto).GetProperty(
+            nameof(WorkflowProjectRunItemDto.ErrorCode)
+        )!;
 
         Assert.Equal(typeof(bool), triggerErrorProperty.PropertyType);
         Assert.Equal(typeof(string), triggerErrorCodeProperty.PropertyType);
@@ -119,6 +128,9 @@ public class WorkflowRuntimeDeploymentContractTests
         Assert.Equal(typeof(string), stepErrorCodeProperty.PropertyType);
         Assert.Equal(typeof(string), stepMessageProperty.PropertyType);
         Assert.Equal(typeof(string), statusErrorMessageProperty.PropertyType);
+        Assert.Equal(typeof(string), statusErrorCodeProperty.PropertyType);
+        Assert.Equal(typeof(string), runErrorCodeProperty.PropertyType);
+        Assert.Equal(typeof(string), runItemErrorCodeProperty.PropertyType);
     }
 
     [Fact]

@@ -36,6 +36,10 @@ export interface StartCalibScanInput {
     calibProjectId: string
     /** 仅打开投影仪灯光，不发送显示模式、B2、T、N 等控制命令 */
     suppressProjectorControl?: boolean
+    /** 自动拟合并过滤机台台面 */
+    enableTableFilter?: boolean
+    /** 台面过滤余量，单位 mm，范围 0–50 */
+    tableClearanceMm?: number
 }
 
 /** 停止扫描输入 */
@@ -63,6 +67,16 @@ export interface CalibScanMetricsDto {
     patternCount: number
     /** 十字图检测结果（true 表示检测到十字图，本轮播放完毕） */
     isCrosshairDetected: boolean
+    mainExposure: CalibScanExposureMetricsDto | null
+    secondaryExposure: CalibScanExposureMetricsDto | null
+}
+
+export interface CalibScanExposureMetricsDto {
+    saturatedRatio: number
+    crushedRatio: number
+    p01: number
+    p50: number
+    p99: number
 }
 
 /** 扫描状态 */
@@ -107,5 +121,14 @@ export async function stopCalibScan(input: StopCalibScanInput): Promise<CalibSca
 /** 获取在线扫描状态 */
 export async function getCalibScanStatus(calibProjectId: string): Promise<CalibScanStatusDto> {
     const res = await httpClient.get<CalibScanStatusDto>(`${BASE}/status/${calibProjectId}`)
+    return res.data
+}
+
+/** 下载指定扫描轮次的主从相机原始图片诊断包。 */
+export async function downloadCalibScanRound(calibProjectId: string, roundIndex: number): Promise<Blob> {
+    const res = await httpClient.get<Blob>(
+        `${BASE}/download-round/${calibProjectId}/${roundIndex}`,
+        { responseType: 'blob' }
+    )
     return res.data
 }

@@ -2,6 +2,22 @@ import { httpClient } from '@/api/client'
 
 const BASE = '/api/app/workflow'
 
+/** Must stay numerically aligned with the backend PortControlType enum. */
+export enum PortControlType {
+    Input = 0,
+    Select = 1,
+    ImageUpload = 2,
+    PointCloudUpload = 3,
+    Download = 4,
+    Switch = 5,
+    Number = 6,
+    Color = 7,
+    Variable = 8,
+    ProductModelSelect = 9,
+    PlaneRoiEditor = 10,
+    CalibProjectSelect = 11,
+}
+
 export interface WorkflowBrief {
     id: string
     name: string
@@ -29,7 +45,7 @@ export interface OperatorPortDefinition {
     jsonSchema?: string
     typeSymbol?: WorkflowTypeSymbol
     errorCheck: boolean
-    controlType: number
+    controlType: PortControlType
     matType: number
 }
 
@@ -51,7 +67,7 @@ export interface OperatorConfigFieldDefinition {
     defaultValue?: unknown
     valueLimit?: unknown
     required: boolean
-    controlType: number
+    controlType: PortControlType
 }
 
 export interface WorkflowNodeDefinition {
@@ -103,19 +119,32 @@ export interface WorkflowSource {
 }
 
 export interface WorkflowGraph {
-    nodes: Array<{
-        id: string
-        type: string
-        x?: number
-        y?: number
-        text?: { value?: string }
-        properties?: Record<string, unknown>
-    }>
+    nodes: WorkflowGraphNode[]
     edges: Array<{
         id: string
         sourceNodeId?: string
         targetNodeId?: string
     }>
+}
+
+export interface WorkflowGraphNode {
+    id: string
+    type: string
+    x?: number
+    y?: number
+    text?: { value?: string }
+    properties?: WorkflowGraphNodeProperties
+}
+
+export interface WorkflowGraphNodeProperties {
+    params?: Record<string, unknown>
+    paramSources?: Record<string, string>
+    inputBindings?: Record<string, string>
+    inputBindingSources?: Record<string, string>
+    outputBindings?: Record<string, string>
+    outputBindingSources?: Record<string, string>
+    innerGraphData?: WorkflowGraph
+    [key: string]: unknown
 }
 
 export interface WorkflowMigrationItem {
@@ -216,6 +245,7 @@ export interface DebugStatus {
     currentStatementId?: string
     faultNodeId?: string
     errorMessage?: string
+    errorCode?: string
     executedSteps: number
     totalSteps: number
     durationMs?: number
@@ -371,6 +401,23 @@ export async function formatSource(input: IdeDocument) {
         await httpClient.post<{ documentVersion: number; sourceCode: string }>(
             `${BASE}/source/format`,
             input
+        )
+    ).data
+}
+
+export async function sourceToGraph(sourceCode: string): Promise<WorkflowGraph> {
+    return (
+        await httpClient.post<WorkflowGraph>(`${BASE}/source/to-graph`, { sourceCode })
+    ).data
+}
+
+export async function operatorSnippet(
+    input: IdeDocument & { operatorId: string; configValues: Record<string, unknown> },
+) {
+    return (
+        await httpClient.post<{ documentVersion: number; insertText: string }>(
+            `${BASE}/source/operator-snippet`,
+            input,
         )
     ).data
 }

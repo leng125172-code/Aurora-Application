@@ -17,6 +17,7 @@ import { useI18n } from 'vue-i18n'
 import { useConfirm } from 'primevue/useconfirm'
 import Button from 'primevue/button'
 import InputText from 'primevue/inputtext'
+import InputNumber from 'primevue/inputnumber'
 import Select from 'primevue/select'
 import DatePicker from 'primevue/datepicker'
 import DataTable from 'primevue/datatable'
@@ -50,6 +51,7 @@ import Progress from 'primevue/progressbar'
 import {
     ProductModelFormat,
     ProductModelConversionStatus,
+    ProductModelLengthUnit,
     getProductModelListAsync,
     uploadProductModelAsync,
     updateProductModelNameAsync,
@@ -104,6 +106,13 @@ const statusOptions = computed(() => [
     { label: t('productModel.statusSuccess'), value: ProductModelConversionStatus.Success },
     { label: t('productModel.statusFailed'), value: ProductModelConversionStatus.Failed },
 ])
+
+const lengthUnitOptions = [
+    { label: '毫米 (mm)', value: ProductModelLengthUnit.Millimeter },
+    { label: '厘米 (cm)', value: ProductModelLengthUnit.Centimeter },
+    { label: '米 (m)', value: ProductModelLengthUnit.Meter },
+    { label: '英寸 (in)', value: ProductModelLengthUnit.Inch },
+]
 
 /** 转换状态 Tag severity 映射 */
 function statusVariant(status: ProductModelConversionStatus): 'success' | 'secondary' | 'danger' | 'info' {
@@ -222,6 +231,8 @@ interface UploadQueueItem {
 const showUpload = ref(false)
 const isDragging = ref(false)
 const uploadQueue = ref<UploadQueueItem[]>([])
+const uploadLengthUnit = ref(ProductModelLengthUnit.Millimeter)
+const uploadSamplingSpacingMm = ref(0.5)
 
 /** SignalR 连接（转换进度推送） */
 let conversionHub: signalR.HubConnection | null = null
@@ -283,6 +294,8 @@ function openUpload(): void {
     showUpload.value = true
     uploadQueue.value = []
     isDragging.value = false
+    uploadLengthUnit.value = ProductModelLengthUnit.Millimeter
+    uploadSamplingSpacingMm.value = 0.5
 }
 
 function addFilesToQueue(files: FileList | File[]): void {
@@ -339,7 +352,9 @@ async function startUploadAll(): Promise<void> {
                     (pct) => {
                         item.progress = pct
                     },
-                    ac.signal
+                    ac.signal,
+                    uploadLengthUnit.value,
+                    uploadSamplingSpacingMm.value
                 )
                 item.state = 'done'
                 item.progress = 100
@@ -752,6 +767,9 @@ onBeforeUnmount(() => {
                 <Column :header="t('productModel.fileSize')" style="min-width: 6rem">
                     <template #body="{ data }">{{ formatFileSize(data.fileSizeBytes) }}</template>
                 </Column>
+                <Column :header="t('productModel.lengthUnit')" style="min-width: 7rem">
+                    <template #body="{ data }">{{ data.lengthUnitDisplay || '毫米 (mm)' }}</template>
+                </Column>
                 <Column :header="t('productModel.conversionStatus')" style="min-width: 8rem">
                     <template #body="{ data }">
                         <Tag
@@ -903,6 +921,34 @@ onBeforeUnmount(() => {
         :style="{ width: '720px', maxWidth: '90vw' }"
         @hide="loadList"
     >
+        <div class="mb-4 grid grid-cols-2 gap-4 rounded-lg border border-border/50 p-3">
+            <label class="flex flex-col gap-1 text-sm">
+                <span>{{ t('productModel.lengthUnit') }}</span>
+                <Select
+                    v-model="uploadLengthUnit"
+                    :options="lengthUnitOptions"
+                    option-label="label"
+                    option-value="value"
+                    size="small"
+                />
+            </label>
+            <label class="flex flex-col gap-1 text-sm">
+                <span>{{ t('productModel.surfaceSamplingSpacing') }}</span>
+                <InputNumber
+                    v-model="uploadSamplingSpacingMm"
+                    :min="0.05"
+                    :max="10"
+                    :min-fraction-digits="2"
+                    :max-fraction-digits="3"
+                    suffix=" mm"
+                    size="small"
+                />
+            </label>
+            <p class="col-span-2 text-xs text-muted-foreground">
+                {{ t('productModel.unitHint') }}
+            </p>
+        </div>
+
         <!-- 拖拽区域 -->
         <div
             :class="[

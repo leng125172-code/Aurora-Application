@@ -23,6 +23,15 @@ public class ProductModelDto : FullAuditedEntityDto<Guid>
     /// <summary>文件大小（字节数）</summary>
     public long FileSizeBytes { get; set; }
 
+    /// <summary>原始数模坐标的长度单位</summary>
+    public ProductModelLengthUnit LengthUnit { get; set; }
+
+    /// <summary>长度单位显示名称</summary>
+    public string LengthUnitDisplay { get; set; } = string.Empty;
+
+    /// <summary>网格表面采样间距（毫米）</summary>
+    public double SurfaceSamplingSpacingMm { get; set; }
+
     /// <summary>格式转换状态</summary>
     public ProductModelConversionStatus ConversionStatus { get; set; }
 

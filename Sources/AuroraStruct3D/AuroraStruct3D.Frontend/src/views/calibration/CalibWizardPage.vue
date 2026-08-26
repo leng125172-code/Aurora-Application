@@ -527,7 +527,9 @@ async function saveProjectorConfigAsync(): Promise<void> {
             resolutionHeight: projectorHeightInput.value,
             periodCount: fringe3PeriodCount.value,
             fringeType: fringeType.value,
-            patternCount: 16,
+            darkLevel: fringeDarkLevel.value,
+            brightLevel: fringeBrightLevel.value,
+            patternCount: fringe3ImageCount.value,
             phaseShift: fringe3PhaseShift.value,
         }
         await updateCalibProjectorParam(projectId, input)
@@ -559,9 +561,11 @@ const projectorReading = ref(false)
 
 /** 条纹类型：bw=黑白（首色黑）wb=白黑（首色白） */
 const fringeType = ref<'bw' | 'wb'>('bw')
+const fringeDarkLevel = ref(24)
+const fringeBrightLevel = ref(220)
 const projectorHeightInput = ref<number>(720)
 const fringe3PeriodCount = ref<number>(8)
-const fringe3ImageCount = ref<number>(16)
+const fringe3ImageCount = ref<number>(4)
 const fringe3PhaseShift = ref<number>(2)
 const horizontalPaddingPosition = ref<'start' | 'end'>('end')
 
@@ -596,13 +600,33 @@ async function refreshCurrentFringeDownloadStatus(): Promise<void> {
     }
 }
 
-/** 固定多尺度互补条纹配置不再使用周期和相移参数。 */
-const fringe3PeriodError = computed<string | null>(() => null)
-const fringe3PhaseError = computed<string | null>(() => null)
+const fringe3PeriodError = computed<string | null>(() => {
+    const width = projectorWidthPixels.value
+    const height = projectorHeightInput.value
+    const period = fringe3PeriodCount.value
+    if (!width || width <= 0 || height <= 0 || period <= 0) return null
+    if (width % period !== 0 || height % period !== 0) return t('calib.step3PeriodError')
+    return null
+})
+
+const fringe3PhaseError = computed<string | null>(() => {
+    const width = projectorWidthPixels.value
+    const height = projectorHeightInput.value
+    const period = fringe3PeriodCount.value
+    const shift = fringe3PhaseShift.value
+    if (!width || width <= 0 || height <= 0 || period <= 0) return null
+    const shortestFullPeriod = Math.min(width / period, height / period) * 2
+    if (!Number.isInteger(shift) || shift <= 0 || shift >= shortestFullPeriod) {
+        return t('calib.step3PhaseError')
+    }
+    return null
+})
 
 /** 是否可生成图像 */
 const fringe3CanGenerate = computed(() => {
-    return projectorWidthPixels.value === 1280 && projectorHeightInput.value === 720 && fringe3ImageCount.value === 16
+    if (fringe3PeriodError.value || fringe3PhaseError.value) return false
+    if (fringeDarkLevel.value < 0 || fringeBrightLevel.value > 255 || fringeDarkLevel.value >= fringeBrightLevel.value) return false
+    return projectorWidthPixels.value != null && projectorHeightInput.value > 0 && fringe3ImageCount.value >= 3
 })
 
 async function initStep3Hub(): Promise<void> {
@@ -653,16 +677,26 @@ async function initStep3(): Promise<void> {
             try {
                 const saved = await getCalibProjectorParam(projectId)
                 if (saved) {
+                    if (saved.resolutionWidth > 0) {
+                        projectorWidthPixels.value = saved.resolutionWidth
+                    }
+                    if (saved.resolutionHeight > 0) {
+                        projectorHeightInput.value = saved.resolutionHeight
+                    }
                     if (saved.periodCount > 0) {
                         fringe3PeriodCount.value = saved.periodCount
                     }
-                    fringe3ImageCount.value = 16
+                    if (saved.patternCount >= 3) {
+                        fringe3ImageCount.value = saved.patternCount
+                    }
                     if (saved.phaseShift != null && saved.phaseShift > 0) {
                         fringe3PhaseShift.value = saved.phaseShift
                     }
                     if (saved.fringeType === 'bw' || saved.fringeType === 'wb') {
                         fringeType.value = saved.fringeType
                     }
+                    fringeDarkLevel.value = saved.darkLevel ?? 24
+                    fringeBrightLevel.value = saved.brightLevel ?? 220
                     if (saved.projectorDeviceId) {
                         selectedProjectorId.value = saved.projectorDeviceId
                     }
@@ -672,8 +706,6 @@ async function initStep3(): Promise<void> {
             }
         }
 
-        projectorWidthPixels.value = 1280
-        projectorHeightInput.value = 720
         await refreshCurrentFringeDownloadStatus()
     } catch (e) {
         showErrorToastOnce(e)
@@ -720,8 +752,10 @@ async function generateFringeImages(): Promise<void> {
             projectorId: selectedProjectorId.value,
             fringeMode: 'horizontal',
             fringeType: fringeType.value,
-            widthPixels: 1280,
-            heightPixels: 720,
+            darkLevel: fringeDarkLevel.value,
+            brightLevel: fringeBrightLevel.value,
+            widthPixels: projectorWidthPixels.value,
+            heightPixels: projectorHeightInput.value,
             periodCount: fringe3PeriodCount.value,
             imageCount: fringe3ImageCount.value,
             phaseShift: fringe3PhaseShift.value,
@@ -747,12 +781,28 @@ async function triggerFringeDownload(): Promise<void> {
     downloadingFringe.value = true
     fringeDownloadProgress.value = 0
     try {
+        const projectId = project.value?.id
+        if (!projectId) throw new Error('标定项目不存在')
+        await updateCalibProjectorParam(projectId, {
+            calibProjectId: projectId,
+            projectorDeviceId: selectedProjectorId.value,
+            resolutionWidth: projectorWidthPixels.value,
+            resolutionHeight: projectorHeightInput.value,
+            periodCount: fringe3PeriodCount.value,
+            fringeType: fringeType.value,
+            darkLevel: fringeDarkLevel.value,
+            brightLevel: fringeBrightLevel.value,
+            patternCount: fringe3ImageCount.value,
+            phaseShift: fringe3PhaseShift.value,
+        })
         await downloadFringePattern({
             projectorId: selectedProjectorId.value,
             fringeMode: 'horizontal',
             fringeType: fringeType.value,
-            widthPixels: 1280,
-            heightPixels: 720,
+            darkLevel: fringeDarkLevel.value,
+            brightLevel: fringeBrightLevel.value,
+            widthPixels: projectorWidthPixels.value,
+            heightPixels: projectorHeightInput.value,
             periodCount: fringe3PeriodCount.value,
             imageCount: fringe3ImageCount.value,
             phaseShift: fringe3PhaseShift.value,
@@ -869,6 +919,8 @@ onUnmounted(() => {
                                 :projector-pixel-mode="projectorPixelMode"
                                 :projector-reading="projectorReading"
                                 :fringe-type="fringeType"
+                                :dark-level="fringeDarkLevel"
+                                :bright-level="fringeBrightLevel"
                                 :projector-height-input="projectorHeightInput"
                                 :fringe3-period-count="fringe3PeriodCount"
                                 :fringe3-image-count="fringe3ImageCount"
@@ -890,6 +942,8 @@ onUnmounted(() => {
                                 @next="handleStep3Next"
                                 @update:selected-projector-id="selectedProjectorId = $event"
                                 @update:fringe-type="fringeType = $event"
+                                @update:dark-level="fringeDarkLevel = $event"
+                                @update:bright-level="fringeBrightLevel = $event"
                                 @update:projector-height-input="projectorHeightInput = $event"
                                 @update:fringe3-period-count="fringe3PeriodCount = $event"
                                 @update:fringe3-image-count="fringe3ImageCount = $event"

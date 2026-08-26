@@ -41,6 +41,7 @@ public class WorkflowPlcHandshakeConfig : FullAuditedAggregateRoot<Guid>
     public WorkflowPlcHandshakePhase Phase { get; private set; }
     public int CurrentRequestId { get; private set; }
     public int LastCompletedRequestId { get; private set; }
+    public long RequestSequence { get; private set; }
     public Guid? CurrentRunId { get; private set; }
     public WorkflowInspectionDecision ResultCode { get; private set; }
     public WorkflowPlcHandshakeErrorCode ErrorCode { get; private set; }
@@ -92,6 +93,12 @@ public class WorkflowPlcHandshakeConfig : FullAuditedAggregateRoot<Guid>
         Phase = WorkflowPlcHandshakePhase.Accepted; LastRequestAt = now;
         ResultCode = WorkflowInspectionDecision.None; ErrorCode = WorkflowPlcHandshakeErrorCode.None;
         LastError = null;
+    }
+
+    public long AllocateRequestSequence()
+    {
+        RequestSequence = RequestSequence == long.MaxValue ? 1 : RequestSequence + 1;
+        return RequestSequence;
     }
 
     public void MarkRunning() => Phase = WorkflowPlcHandshakePhase.Running;

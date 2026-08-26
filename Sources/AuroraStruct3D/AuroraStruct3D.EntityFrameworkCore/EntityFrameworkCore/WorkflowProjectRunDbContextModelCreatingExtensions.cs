@@ -22,6 +22,10 @@ public static class WorkflowProjectRunDbContextModelCreatingExtensions
             b.ConfigureByConvention();
 
             b.Property(x => x.ProjectId).IsRequired();
+            b.Property(x => x.TaskConfigId);
+            b.Property(x => x.PlcHandshakeConfigId);
+            b.Property(x => x.PlcRequestId);
+            b.Property(x => x.PlcRequestSequence);
             b.Property(x => x.Name)
                 .IsRequired()
                 .HasMaxLength(WorkflowProjectRunConsts.MaxNameLength);
@@ -54,6 +58,11 @@ public static class WorkflowProjectRunDbContextModelCreatingExtensions
             b.HasIndex(x => x.DeploymentId);
             b.HasIndex(x => x.HangfireJobId);
             b.HasIndex(x => x.Status);
+            b.HasIndex(x => x.TaskConfigId);
+            b.HasIndex(x => x.PlcHandshakeConfigId);
+            b.HasIndex(x => new { x.PlcHandshakeConfigId, x.PlcRequestSequence })
+                .IsUnique()
+                .HasFilter("\"PlcHandshakeConfigId\" IS NOT NULL AND \"PlcRequestSequence\" IS NOT NULL");
         });
     }
 }

@@ -41,6 +41,12 @@ public class CalibPhotoRecord : AuditedEntity<Guid>
     /// <summary>检测到的角点数量（内角点总数 = rows × cols，无效时为 0）</summary>
     public int CornerCountDetected { get; private set; }
 
+    /// <summary>曝光质量评分（1-100，仅内参照片）</summary>
+    public int? ExposureScore { get; private set; }
+
+    /// <summary>清晰度评分（1-100，仅内参照片）</summary>
+    public int? SharpnessScore { get; private set; }
+
     /// <summary>图像差分分数（0-1，与同组另一张照片的差异程度）</summary>
     public double? ImageDiffScore { get; private set; }
 
@@ -77,7 +83,9 @@ public class CalibPhotoRecord : AuditedEntity<Guid>
         StereoPhotoRole? stereoRole = null,
         ExtrinsicPhotoPhase? extrinsicPhase = null,
         double? imageDiffScore = null,
-        bool? imageDiffSignificant = null
+        bool? imageDiffSignificant = null,
+        int? exposureScore = null,
+        int? sharpnessScore = null
     )
         : base(id)
     {
@@ -93,7 +101,16 @@ public class CalibPhotoRecord : AuditedEntity<Guid>
         ExtrinsicPhase = extrinsicPhase;
         ImageDiffScore = imageDiffScore;
         ImageDiffSignificant = imageDiffSignificant;
+        ExposureScore = ValidateScore(exposureScore, nameof(exposureScore));
+        SharpnessScore = ValidateScore(sharpnessScore, nameof(sharpnessScore));
         CapturedAt = DateTime.UtcNow;
+    }
+
+    private static int? ValidateScore(int? score, string parameterName)
+    {
+        if (score is < 1 or > 100)
+            throw new ArgumentOutOfRangeException(parameterName, "图像质量评分必须在 1 到 100 之间。");
+        return score;
     }
 
     /// <summary>设置 BLOB 键</summary>

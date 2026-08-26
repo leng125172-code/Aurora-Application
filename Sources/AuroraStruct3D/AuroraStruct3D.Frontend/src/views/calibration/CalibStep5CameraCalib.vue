@@ -655,6 +655,7 @@ const stereoStatus = ref<CalibStereoStatusDto | null>(null)
 const stereoComputing = ref(false)
 const stereoTaking = ref(false)
 const stereoResult = ref<CalibStereoComputeResultDto | null>(null)
+const stereoComputeFailure = ref<string | null>(null)
 
 const canTakeStereoPair = computed(() => {
     return isStereoProject.value && !!props.project.mainCameraDeviceId && !!props.project.secondaryCameraDeviceId
@@ -750,13 +751,24 @@ async function doTakeStereoPair(): Promise<void> {
 async function doComputeStereo(): Promise<void> {
     if (!canComputeStereo.value || stereoComputing.value) return
     stereoComputing.value = true
+    stereoComputeFailure.value = null
     try {
         const result = await computeStereoCalibration(props.project.id)
-        stereoResult.value = result
         await loadStereoStatusData()
-        toast.success(`双目联合计算完成，误差 ${result.stereoReprojectionError.toFixed(3)} px`)
+        // 状态接口中的历史结果不包含本次输入/使用/剔除明细，刷新状态后恢复计算响应。
+        stereoResult.value = result
+        if (result.rejectedPairs.length > 0) {
+            toast.warn(
+                `输入 ${result.inputPairCount} 组，按极线误差排除 ${result.rejectedPairs.length} 组，最终使用 ${result.usedPairCount} 组，误差 ${result.stereoReprojectionError.toFixed(4)} px`,
+            )
+        } else {
+            toast.success(
+                `输入并使用 ${result.usedPairCount} 组完成双目联合计算，误差 ${result.stereoReprojectionError.toFixed(4)} px`,
+            )
+        }
     } catch (e: unknown) {
-        toast.error(e instanceof Error ? e.message : String(e))
+        stereoComputeFailure.value = e instanceof Error ? e.message : String(e)
+        toast.error(stereoComputeFailure.value)
     } finally {
         stereoComputing.value = false
     }
@@ -1611,6 +1623,21 @@ onMounted(async () => {
 
                                 <template
                                     v-if="
+                                        isStereoProject &&
+                                        cam.id === props.project.mainCameraDeviceId &&
+                                        stereoComputeFailure
+                                    "
+                                >
+                                    <div
+                                        class="mt-3 whitespace-pre-wrap break-all rounded border border-red-500/30 bg-red-500/10 p-2 text-xs text-red-300"
+                                    >
+                                        <p class="mb-1 font-semibold">本次双目计算未通过</p>
+                                        {{ stereoComputeFailure }}
+                                    </div>
+                                </template>
+
+                                <template
+                                    v-if="
                                         isStereoProject && cam.id === props.project.mainCameraDeviceId && stereoResult
                                     "
                                 >
@@ -1626,8 +1653,29 @@ onMounted(async () => {
                                                         : 'text-red-400'
                                                 "
                                             >
-                                                {{ stereoResult.stereoReprojectionError.toFixed(3) }} px
+                                                {{ stereoResult.stereoReprojectionError.toFixed(4) }} px
                                             </span>
+                                        </div>
+                                        <div v-if="stereoResult.inputPairCount > 0" class="mt-1">
+                                            <span class="text-muted-foreground">照片组：</span>
+                                            <span class="font-mono">
+                                                输入 {{ stereoResult.inputPairCount }} / 使用
+                                                {{ stereoResult.usedPairCount }} / 剔除
+                                                {{ stereoResult.rejectedPairs.length }}
+                                            </span>
+                                        </div>
+                                        <div
+                                            v-if="stereoResult.rejectedPairs.length > 0"
+                                            class="mt-1 space-y-0.5 text-amber-300"
+                                        >
+                                            <div
+                                                v-for="pair in stereoResult.rejectedPairs"
+                                                :key="pair.pairGroupId"
+                                                class="font-mono text-[10px]"
+                                            >
+                                                <span class="break-all">{{ pair.pairGroupId }}</span>：
+                                                {{ pair.reason }}
+                                            </div>
                                         </div>
                                         <div class="mt-1">
                                             <span class="text-muted-foreground">矫正 map：</span>
@@ -1800,6 +1848,26 @@ onMounted(async () => {
                                                     >
                                                         <Trash2 class="size-3 text-white" />
                                                     </Button>
+
+                                                    <div
+                                                        v-if="photo.exposureScore !== null || photo.sharpnessScore !== null"
+                                                        class="absolute inset-x-1 bottom-1 flex justify-between gap-1 text-[9px] font-semibold text-white"
+                                                    >
+                                                        <span
+                                                            v-if="photo.exposureScore !== null"
+                                                            class="rounded bg-black/70 px-1 py-0.5"
+                                                            :title="t('camera.apertureScore')"
+                                                        >
+                                                            {{ t('camera.apertureScore') }} {{ photo.exposureScore }}
+                                                        </span>
+                                                        <span
+                                                            v-if="photo.sharpnessScore !== null"
+                                                            class="rounded bg-black/70 px-1 py-0.5"
+                                                            :title="t('camera.focusScore')"
+                                                        >
+                                                            {{ t('camera.focusScore') }} {{ photo.sharpnessScore }}
+                                                        </span>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>

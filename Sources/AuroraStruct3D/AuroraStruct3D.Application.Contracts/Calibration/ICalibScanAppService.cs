@@ -26,4 +26,9 @@ public interface ICalibScanAppService : IApplicationService
     /// GET /api/app/calib-scan/status/{calibProjectId}
     /// </summary>
     Task<CalibScanStatusDto> GetStatusAsync(Guid calibProjectId);
+
+    /// <summary>
+    /// 将指定扫描轮次的主、从相机条纹帧及纹理帧打包为 ZIP。
+    /// </summary>
+    Task<byte[]> DownloadRoundImagesAsync(Guid calibProjectId, long roundIndex);
 }

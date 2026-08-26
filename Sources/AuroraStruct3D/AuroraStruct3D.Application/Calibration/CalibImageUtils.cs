@@ -7,6 +7,28 @@ namespace AuroraStruct3D.Calibration;
 
 public static class CalibImageUtils
 {
+    /// <summary>复制单通道 8 位 Mat 的紧密排列灰度像素。</summary>
+    public static byte[] CopyGrayPixels(Mat gray)
+    {
+        ArgumentNullException.ThrowIfNull(gray);
+        if (gray.Empty() || gray.Type() != MatType.CV_8UC1)
+            throw new ArgumentException("图像必须是非空的 8 位单通道灰度图。", nameof(gray));
+
+        Mat continuous = gray.IsContinuous() ? gray : gray.Clone();
+        try
+        {
+            int byteLength = checked((int)(continuous.Total() * continuous.ElemSize()));
+            var pixels = new byte[byteLength];
+            Marshal.Copy(continuous.Data, pixels, 0, byteLength);
+            return pixels;
+        }
+        finally
+        {
+            if (!ReferenceEquals(continuous, gray))
+                continuous.Dispose();
+        }
+    }
+
     public static Mat LoadGrayMatWithRotation(byte[] imageBytes, int rotationAngle)
     {
         using Mat mat = Cv2.ImDecode(imageBytes, ImreadModes.Grayscale);

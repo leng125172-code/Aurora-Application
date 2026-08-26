@@ -38,6 +38,47 @@ public class CalibBoardDetector : ITransientDependency
     /// <summary>圆点 BLOB 面积自适应缩放的参考分辨率（标定相机全画幅 2448×2048）</summary>
     private const double ReferenceImagePixels = 2448.0 * 2048.0;
 
+    public (bool isValid, int cornerCount, Point2f[] points) DetectIntrinsicBoardFeaturePoints(
+        Mat gray,
+        CalibProject project
+    )
+    {
+        try
+        {
+            Size patternSize = GetBoardPatternSize(project, isProjectedBoard: false);
+            CalibrationBoardType boardType = GetDetectionBoardType(
+                project,
+                isProjectedBoard: false
+            );
+            Point2f[] points =
+                FindBoardPointsSubpixGray(gray, patternSize, boardType, project)
+                ?? Array.Empty<Point2f>();
+            int expectedCount = patternSize.Width * patternSize.Height;
+            if (boardType == CalibrationBoardType.MarkedSymmetricCircleGrid)
+                expectedCount--;
+
+            bool isValid = points.Length == expectedCount;
+            if (!isValid)
+            {
+                _logger.LogWarning(
+                    "内参标定板检测失败或点数不完整: BoardType={BoardType}, Pattern={Cols}x{Rows}, Expected={Expected}, Actual={Actual}",
+                    boardType,
+                    patternSize.Width,
+                    patternSize.Height,
+                    expectedCount,
+                    points.Length
+                );
+            }
+
+            return (isValid, points.Length, points);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "内参标定板检测异常");
+            return (false, 0, Array.Empty<Point2f>());
+        }
+    }
+
     public (bool isValid, int cornerCount) DetectBoardFeaturePoints(
         byte[] imageBytes,
         CalibProject project,

@@ -59,7 +59,23 @@ public sealed class read_product_model : IOperator
         PointCloudData model =
             nestedContext.Get<PointCloudData>("output_point_cloud")
             ?? throw new InvalidOperationException("工艺模型读取失败。");
-        context.Set("model_point_cloud", model);
+        Mat coordinates =
+            model.PointCloud?.Clone()
+            ?? throw new InvalidOperationException("工艺模型点云坐标为空。");
+        var detachedModel = new PointCloudData { Value = coordinates };
+        try
+        {
+            if (model.HasColors && model.Colors is not null)
+                detachedModel.SetColors(model.Colors.Clone());
+        }
+        catch
+        {
+            detachedModel.DisposePointCloud();
+            throw;
+        }
+
+        // nestedContext 在本方法结束时会释放其点云，因此必须向外层传递独立副本。
+        context.Set("model_point_cloud", detachedModel);
         context.Set("model_id", _productModelId.ToString("D"));
     }
 

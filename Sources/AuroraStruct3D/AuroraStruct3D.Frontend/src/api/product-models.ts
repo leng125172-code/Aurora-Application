@@ -40,6 +40,14 @@ export enum ProductModelConversionStatus {
     Failed = 4,
 }
 
+/** 产品数模坐标单位（工作流内统一换算为毫米） */
+export enum ProductModelLengthUnit {
+    Millimeter = 0,
+    Centimeter = 1,
+    Meter = 2,
+    Inch = 3,
+}
+
 /** 三维数模操作类型 */
 export enum ProductModelOperationType {
     Upload = 0,
@@ -59,6 +67,9 @@ export interface ProductModelDto {
     readonly fileFormat: ProductModelFormat
     readonly fileFormatDisplay: string
     readonly fileSizeBytes: number
+    readonly lengthUnit: ProductModelLengthUnit
+    readonly lengthUnitDisplay: string
+    readonly surfaceSamplingSpacingMm: number
     readonly conversionStatus: ProductModelConversionStatus
     readonly conversionErrorMessage: string | null
     readonly isReady: boolean
@@ -154,18 +165,24 @@ export async function getProductModelLogsAsync(
  * @param name 可选显示名称（不传则用文件名）
  * @param onProgress 上传进度回调（0-100）
  * @param signal AbortController 信号，用于取消上传
+ * @param lengthUnit 原始模型坐标单位
+ * @param surfaceSamplingSpacingMm 网格表面采样间距（毫米）
  */
 export async function uploadProductModelAsync(
     file: File,
     name?: string | null,
     onProgress?: (percent: number) => void,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    lengthUnit: ProductModelLengthUnit = ProductModelLengthUnit.Millimeter,
+    surfaceSamplingSpacingMm = 0.5
 ): Promise<ProductModelDto> {
     const formData = new FormData()
     formData.append('file', file)
     if (name) {
         formData.append('name', name)
     }
+    formData.append('lengthUnit', String(lengthUnit))
+    formData.append('surfaceSamplingSpacingMm', String(surfaceSamplingSpacingMm))
     const response = await httpClient.post<ProductModelDto>(`${BASE}/upload`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
         onUploadProgress: (event) => {

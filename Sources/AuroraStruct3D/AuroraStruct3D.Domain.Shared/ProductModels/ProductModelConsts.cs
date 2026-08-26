@@ -20,6 +20,18 @@ public static class ProductModelConsts
     /// <summary>转换错误信息最大长度</summary>
     public const int MaxErrorMessageLength = 2048;
 
+    /// <summary>网格表面采样的默认点间距（毫米）</summary>
+    public const double DefaultSurfaceSamplingSpacingMm = 0.5d;
+
+    /// <summary>网格表面采样的最小点间距（毫米）</summary>
+    public const double MinSurfaceSamplingSpacingMm = 0.05d;
+
+    /// <summary>网格表面采样的最大点间距（毫米）</summary>
+    public const double MaxSurfaceSamplingSpacingMm = 10d;
+
+    /// <summary>单个参考模型点云的最大点数</summary>
+    public const int MaxReferencePointCount = 1_000_000;
+
     /// <summary>操作日志中的数模名称最大长度</summary>
     public const int MaxOperationLogModelNameLength = MaxNameLength;
 

@@ -24,6 +24,10 @@ public class PointCloudSessionState
     public bool IsIncrementalMode { get; set; }
     public int TotalPointCount { get; set; }
     public List<byte[]> AccumulatedPointCloudChunks { get; } = new();
+    public long AccumulatedPointCloudBytes { get; set; }
+    public bool EnableTableFilter { get; set; } = true;
+    public double TableClearanceMm { get; set; } = 3d;
+    internal TablePlaneModel? CachedTablePlane { get; set; }
 
     public PointCloudStatusDto ToDto() =>
         new()
@@ -46,6 +50,7 @@ public class PointCloudSessionState
 /// </summary>
 public class CalibPointCloudStateStore
 {
+    internal long MaximumAccumulatedPointCloudBytes { get; set; } = 512L * 1024 * 1024;
     private readonly ConcurrentDictionary<Guid, PointCloudSessionState> _sessions = new();
     private readonly ConcurrentDictionary<Guid, CancellationTokenSource> _runningJobs = new();
 
@@ -257,6 +262,7 @@ public class CalibPointCloudStateStore
                     old.LastUpdatedAt = now;
                     old.TotalPointCount = 0;
                     old.AccumulatedPointCloudChunks.Clear();
+                    old.AccumulatedPointCloudBytes = 0;
                 }
                 return old;
             }
@@ -277,8 +283,16 @@ public class CalibPointCloudStateStore
             {
                 return false;
             }
+            if (
+                chunkBytes.LongLength > MaximumAccumulatedPointCloudBytes
+                    - session.AccumulatedPointCloudBytes
+            )
+            {
+                return false;
+            }
 
             session.AccumulatedPointCloudChunks.Add(chunkBytes);
+            session.AccumulatedPointCloudBytes += chunkBytes.LongLength;
             session.TotalPointCount += pointCount;
             session.LastUpdatedAt = DateTime.UtcNow;
         }
@@ -322,6 +336,41 @@ public class CalibPointCloudStateStore
         lock (session.SyncRoot)
         {
             return session.AccumulatedPointCloudChunks.ToList();
+        }
+    }
+
+    /// <summary>配置本次在线扫描的台面过滤；启动新会话时清除旧平面。</summary>
+    public void ConfigureTableFilter(Guid calibProjectId, bool enabled, double clearanceMm)
+    {
+        PointCloudSessionState session = GetOrCreate(calibProjectId);
+        lock (session.SyncRoot)
+        {
+            session.EnableTableFilter = enabled;
+            session.TableClearanceMm = Math.Clamp(clearanceMm, 0d, 50d);
+            session.CachedTablePlane = null;
+        }
+    }
+
+    internal TablePlaneModel? GetCachedTablePlane(Guid calibProjectId)
+    {
+        PointCloudSessionState session = GetOrCreate(calibProjectId);
+        lock (session.SyncRoot) return session.CachedTablePlane;
+    }
+
+    internal void CacheTablePlane(Guid calibProjectId, TablePlaneModel plane)
+    {
+        PointCloudSessionState session = GetOrCreate(calibProjectId);
+        lock (session.SyncRoot) session.CachedTablePlane ??= plane;
+    }
+
+    public void ReleaseAccumulatedPointCloudChunks(Guid calibProjectId)
+    {
+        if (!_sessions.TryGetValue(calibProjectId, out PointCloudSessionState? session))
+            return;
+        lock (session.SyncRoot)
+        {
+            session.AccumulatedPointCloudChunks.Clear();
+            session.AccumulatedPointCloudBytes = 0;
         }
     }
 

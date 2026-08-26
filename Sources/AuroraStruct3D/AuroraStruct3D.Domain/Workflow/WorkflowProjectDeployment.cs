@@ -9,6 +9,8 @@ namespace AuroraStruct3D.Workflow;
 /// </summary>
 public class WorkflowProjectDeployment : FullAuditedAggregateRoot<Guid>
 {
+    /// <summary>该部署冻结的任务配置；历史部署可能为空。</summary>
+    public Guid? TaskConfigId { get; private set; }
     /// <summary>项目 ID。</summary>
     public Guid ProjectId { get; private set; }
 
@@ -53,7 +55,8 @@ public class WorkflowProjectDeployment : FullAuditedAggregateRoot<Guid>
         IEnumerable<WorkflowProjectFrozenGraph> frozenGraphs,
         IEnumerable<WorkflowProjectFrozenVariable> frozenVariables,
         WorkflowProjectFrozenTaskConfig frozenTaskConfig,
-        string snapshotHash
+        string snapshotHash,
+        Guid? taskConfigId = null
     )
     {
         if (projectId == Guid.Empty)
@@ -103,6 +106,7 @@ public class WorkflowProjectDeployment : FullAuditedAggregateRoot<Guid>
         {
             Id = id,
             ProjectId = projectId,
+            TaskConfigId = taskConfigId,
             Revision = revision,
             Status = WorkflowProjectDeploymentStatus.Published,
             SnapshotJson = snapshotJson,

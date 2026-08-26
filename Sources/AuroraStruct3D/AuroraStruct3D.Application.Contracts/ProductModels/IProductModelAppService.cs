@@ -41,7 +41,14 @@ public interface IProductModelAppService : IApplicationService
     /// </summary>
     /// <param name="file">文件流（IRemoteStreamContent，含原始文件名）</param>
     /// <param name="name">用户指定的显示名称（为空时使用文件名去除扩展名）</param>
-    Task<ProductModelDto> UploadAsync(IRemoteStreamContent file, string? name);
+    /// <param name="lengthUnit">原始数模使用的长度单位</param>
+    /// <param name="surfaceSamplingSpacingMm">网格表面采样间距（毫米）</param>
+    Task<ProductModelDto> UploadAsync(
+        IRemoteStreamContent file,
+        string? name,
+        ProductModelLengthUnit lengthUnit = ProductModelLengthUnit.Millimeter,
+        double surfaceSamplingSpacingMm = ProductModelConsts.DefaultSurfaceSamplingSpacingMm
+    );
 
     /// <summary>
     /// 仅修改数模的显示名称（不影响文件内容和转换状态）。

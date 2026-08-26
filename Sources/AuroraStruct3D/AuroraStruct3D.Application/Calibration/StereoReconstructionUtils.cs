@@ -29,63 +29,52 @@ public static class StereoReconstructionUtils
         int numDisparities = 64,
         int blockSize = 15)
     {
-        int rows = leftPhase.Rows;
-        int cols = leftPhase.Cols;
+        if (leftPhase.Size() != rightPhase.Size())
+            throw new ArgumentException("主从相机相位图尺寸不一致");
 
-        Mat disparity = new(rows, cols, MatType.CV_64FC1);
+        numDisparities = Math.Max(16, numDisparities / 16 * 16);
+        blockSize = Math.Max(3, blockSize | 1);
 
-        numDisparities = numDisparities / 16 * 16;
-        if (numDisparities <= 0)
-            numDisparities = 64;
-
-        for (int y = blockSize / 2; y < rows - blockSize / 2; y++)
+        int remainingWidth = leftPhase.Cols - (minDisparity + numDisparities);
+        if (remainingWidth <= blockSize / 2)
         {
-            for (int x = blockSize / 2; x < cols - blockSize / 2; x++)
-            {
-                double minCost = double.MaxValue;
-                int bestDisp = 0;
-
-                int searchEnd = Math.Min(x - minDisparity, numDisparities);
-                for (int d = 0; d <= searchEnd; d++)
-                {
-                    int rightX = x - d;
-                    if (rightX < blockSize / 2)
-                        break;
-
-                    double cost = 0;
-                    int count = 0;
-
-                    for (int by = -blockSize / 2; by <= blockSize / 2; by++)
-                    {
-                        for (int bx = -blockSize / 2; bx <= blockSize / 2; bx++)
-                        {
-                            double lVal = leftPhase.At<double>(y + by, x + bx);
-                            double rVal = rightPhase.At<double>(y + by, rightX + bx);
-
-                            double diff = Math.Abs(lVal - rVal);
-                            if (diff > Math.PI)
-                            {
-                                diff = Math.Abs(diff - 2 * Math.PI);
-                            }
-
-                            cost += diff;
-                            count++;
-                        }
-                    }
-
-                    cost /= count;
-
-                    if (cost < minCost)
-                    {
-                        minCost = cost;
-                        bestDisp = d;
-                    }
-                }
-
-                disparity.Set(y, x, bestDisp);
-            }
+            throw new ArgumentOutOfRangeException(
+                nameof(numDisparities),
+                $"SGBM 视差窗口超出图像宽度：width={leftPhase.Cols}, "
+                    + $"minDisparity={minDisparity}, numDisparities={numDisparities}, "
+                    + $"blockSize={blockSize}。要求 width-(minDisparity+numDisparities)>{blockSize / 2}。"
+            );
         }
 
+        Cv2.MinMaxLoc(leftPhase, out double leftMin, out double leftMax);
+        Cv2.MinMaxLoc(rightPhase, out double rightMin, out double rightMax);
+        double minimum = Math.Min(leftMin, rightMin);
+        double maximum = Math.Max(leftMax, rightMax);
+        double scale = maximum - minimum > 1e-9 ? 255d / (maximum - minimum) : 1d;
+
+        using Mat left8 = new();
+        using Mat right8 = new();
+        using Mat disparity16 = new();
+        leftPhase.ConvertTo(left8, MatType.CV_8UC1, scale, -minimum * scale);
+        rightPhase.ConvertTo(right8, MatType.CV_8UC1, scale, -minimum * scale);
+
+        using StereoSGBM matcher = StereoSGBM.Create(
+            minDisparity,
+            numDisparities,
+            blockSize,
+            8 * blockSize * blockSize,
+            32 * blockSize * blockSize,
+            1,
+            31,
+            10,
+            100,
+            2,
+            StereoSGBMMode.SGBM
+        );
+        matcher.Compute(left8, right8, disparity16);
+
+        Mat disparity = new();
+        disparity16.ConvertTo(disparity, MatType.CV_64FC1, 1d / 16d);
         return disparity;
     }
 
@@ -100,6 +89,8 @@ public static class StereoReconstructionUtils
         int cols = disparity.Cols;
 
         double fx = projectionP1.At<double>(0, 0);
+        double principalPointDifference =
+            projectionP1.At<double>(0, 2) - projectionP2.At<double>(0, 2);
 
         Mat depth = new(rows, cols, MatType.CV_64FC1);
 
@@ -108,10 +99,13 @@ public static class StereoReconstructionUtils
             for (int x = 0; x < cols; x++)
             {
                 double disp = disparity.At<double>(y, x);
-                double signedDisparity = disp * disparitySign;
-                if (signedDisparity > 0.1)
+                // 非 ZeroDisparity 整平会保留 cx1 != cx2。此时几何视差为
+                // d - (cx1-cx2)，不能直接用图像坐标差 d 计算深度。
+                double signedGeometricDisparity =
+                    (disp - principalPointDifference) * disparitySign;
+                if (signedGeometricDisparity > 0.1)
                 {
-                    double z = fx * Math.Abs(baselineMm) / signedDisparity;
+                    double z = fx * Math.Abs(baselineMm) / signedGeometricDisparity;
                     depth.Set(y, x, z);
                 }
                 else

@@ -49,6 +49,8 @@ export interface CalibPhotoDto {
     photoType: CalibPhotoType
     isValid: boolean
     cornerCountDetected: number
+    exposureScore: number | null
+    sharpnessScore: number | null
     capturedAt: string
     thumbnailBase64: string | null
     pairGroupId: string | null
@@ -164,6 +166,12 @@ export interface CalibComputeResultDto {
 
 /** 双目联合标定计算结果 */
 export interface CalibStereoComputeResultDto {
+    /** 本次角点重检成功、首次联合求解使用的照片组数 */
+    inputPairCount: number
+    /** 排除极线误差离群组后，联合标定最终使用的照片组数 */
+    usedPairCount: number
+    /** 本次计算按联合模型极线误差排除的照片组；不会改变照片有效状态 */
+    rejectedPairs: CalibStereoRejectedPairDto[]
     mainCameraDeviceId: string
     secondaryCameraDeviceId: string
     stereoReprojectionError: number
@@ -181,6 +189,14 @@ export interface CalibStereoComputeResultDto {
     map1YBlobKey: string
     map2XBlobKey: string
     map2YBlobKey: string
+}
+
+export interface CalibStereoRejectedPairDto {
+    pairGroupId: string
+    epipolarErrorPx: number
+    rejectionThresholdPx: number
+    rejectionIteration: number
+    reason: string
 }
 
 /** 相机标定汇总（照片计数 + 最新结果） */

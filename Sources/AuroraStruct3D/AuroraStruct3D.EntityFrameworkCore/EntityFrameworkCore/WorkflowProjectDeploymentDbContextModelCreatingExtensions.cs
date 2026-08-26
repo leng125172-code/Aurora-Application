@@ -22,6 +22,7 @@ public static class WorkflowProjectDeploymentDbContextModelCreatingExtensions
             b.ConfigureByConvention();
 
             b.Property(x => x.ProjectId).IsRequired();
+            b.Property(x => x.TaskConfigId);
             b.Property(x => x.Revision).IsRequired();
             b.Property(x => x.Status).IsRequired();
             b.Property(x => x.SnapshotJson)
@@ -44,6 +45,7 @@ public static class WorkflowProjectDeploymentDbContextModelCreatingExtensions
 
             b.HasIndex(x => new { x.ProjectId, x.Revision }).IsUnique();
             b.HasIndex(x => new { x.ProjectId, x.Status });
+            b.HasIndex(x => new { x.ProjectId, x.TaskConfigId, x.Status });
         });
     }
 }

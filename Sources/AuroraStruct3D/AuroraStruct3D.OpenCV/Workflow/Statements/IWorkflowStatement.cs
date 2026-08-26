@@ -28,3 +28,9 @@ public interface IWorkflowStatement
         return Task.CompletedTask;
     }
 }
+
+/// <summary>可按当前上下文为单个语句提供覆盖默认节点超时的请求值。</summary>
+public interface IWorkflowStatementTimeoutProvider
+{
+    TimeSpan? GetRequestedTimeout(IWorkflowContext context);
+}

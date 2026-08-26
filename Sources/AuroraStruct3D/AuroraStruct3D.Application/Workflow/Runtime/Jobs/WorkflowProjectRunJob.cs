@@ -8,6 +8,7 @@ using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Guids;
 using Volo.Abp.Linq;
 using Volo.Abp.Uow;
+using Volo.Abp.DistributedLocking;
 
 namespace AuroraStruct3D.Workflow.Runtime.Jobs;
 
@@ -27,6 +28,7 @@ public class WorkflowProjectRunJob : ITransientDependency
     private readonly IDeviceFaultReporter _faultReporter;
     private readonly IDeviceStateManager _deviceStateManager;
     private readonly ILogger<WorkflowProjectRunJob> _logger;
+    private readonly IAbpDistributedLock _distributedLock;
 
     /// <summary>
     /// 初始化 Job。
@@ -41,6 +43,7 @@ public class WorkflowProjectRunJob : ITransientDependency
         IGuidGenerator guidGenerator,
         IDeviceFaultReporter faultReporter,
         IDeviceStateManager deviceStateManager,
+        IAbpDistributedLock distributedLock,
         ILogger<WorkflowProjectRunJob> logger
     )
     {
@@ -53,6 +56,7 @@ public class WorkflowProjectRunJob : ITransientDependency
         _guidGenerator = guidGenerator;
         _faultReporter = faultReporter;
         _deviceStateManager = deviceStateManager;
+        _distributedLock = distributedLock;
         _logger = logger;
     }
 
@@ -61,13 +65,20 @@ public class WorkflowProjectRunJob : ITransientDependency
     /// </summary>
     /// <param name="args">运行参数。</param>
     [Queue("workflow-project-task")]
-    [AutomaticRetry(Attempts = 2)]
+    [AutomaticRetry(Attempts = 0)]
     [UnitOfWork]
     public async Task ExecuteAsync(WorkflowProjectRunJobArgs args)
     {
+        await using IAbpDistributedLockHandle? productionLock =
+            await _distributedLock.TryAcquireAsync("workflow:production-run", TimeSpan.FromSeconds(30));
+        if (productionLock is null)
+            throw new InvalidOperationException("无法取得生产运行分布式锁。");
         WorkflowProjectDeployment deployment = await _deploymentRepository.GetAsync(
             args.DeploymentId
         );
+        if (deployment.ProjectId != args.ProjectId
+            || deployment.TaskConfigId != args.TaskConfigId)
+            throw new InvalidOperationException("运行任务与部署快照的 TaskConfigId 不一致。");
         await RunProjectAsync(args.RunId, deployment, args.WorkflowIds, args.ContinueOnError);
     }
 
@@ -80,6 +91,9 @@ public class WorkflowProjectRunJob : ITransientDependency
     [UnitOfWork]
     public async Task ExecuteRecurringAsync(WorkflowProjectRunRecurringArgs args)
     {
+        await using IAbpDistributedLockHandle? productionLock =
+            await _distributedLock.TryAcquireAsync("workflow:production-run", TimeSpan.Zero);
+        if (productionLock is null) return;
         WorkflowProjectTaskConfig? registeredTask = await _asyncExecuter.FirstOrDefaultAsync(
             (await _taskConfigRepository.GetQueryableAsync()).Where(x =>
                 x.ProjectId == args.ProjectId && x.IsEnabled
@@ -119,6 +133,7 @@ public class WorkflowProjectRunJob : ITransientDependency
                 .Where(x =>
                     x.ProjectId == args.ProjectId
                     && x.Status == WorkflowProjectDeploymentStatus.Activated
+                    && x.TaskConfigId == registeredTask.Id
                 )
                 .OrderByDescending(x => x.Revision)
         );
@@ -155,7 +170,8 @@ public class WorkflowProjectRunJob : ITransientDependency
             deployment.Id,
             deployment.Revision,
             workflowIds,
-            args.ContinueOnError
+            args.ContinueOnError,
+            registeredTask.Id
         );
         await _runRepository.InsertAsync(run, autoSave: true);
 
@@ -169,11 +185,18 @@ public class WorkflowProjectRunJob : ITransientDependency
         bool continueOnError
     )
     {
+        using IDisposable variableScope = _runtimeVariablePool.BeginRunScope(runId);
         WorkflowProjectRun run = await _runRepository.GetAsync(runId);
         WorkflowProjectFrozenTaskConfig taskConfig =
             Deserialize<WorkflowProjectFrozenTaskConfig>(deployment.FrozenTaskConfigJson)
             ?? new WorkflowProjectFrozenTaskConfig();
-        run.MarkRunning(DateTime.UtcNow);
+        if (run.TaskConfigId != taskConfig.TaskConfigId)
+            throw new InvalidOperationException("运行记录与冻结任务配置不一致。");
+        if (!run.TryClaim(DateTime.UtcNow))
+        {
+            _logger.LogInformation("[WorkflowProjectRunJob] duplicate job ignored for run {RunId} in state {Status}", runId, run.Status);
+            return;
+        }
         await _runRepository.UpdateAsync(run, autoSave: true);
 
         // 从冻结变量定义初始化单例内存变量池。
@@ -294,6 +317,25 @@ public class WorkflowProjectRunJob : ITransientDependency
                             : frozenGraph.SourceCode
                     );
 
+                // 即使执行失败也保留会话 ID，便于由项目运行结果追溯到具体节点与日志。
+                item.ExecutionId = result.ExecutionId;
+
+                if (result.Status?.Status == Dtos.WorkflowExecutionStatus.Stopped)
+                {
+                    item.Status = WorkflowProjectRunItemStatus.Canceled;
+                    item.FinishedAt = DateTime.UtcNow;
+                    run = await _runRepository.GetAsync(runId);
+                    run.MarkCanceled(DateTime.UtcNow);
+                    run.SetInspectionResult(
+                        WorkflowInspectionDecision.Canceled,
+                        WorkflowPlcHandshakeErrorCode.Canceled,
+                        "任务已取消。"
+                    );
+                    await SaveProgressAsync(run, itemMap.Values);
+                    _runtimeVariablePool.Clear();
+                    return;
+                }
+
                 if (result.Error)
                 {
                     await ReportPlcWorkflowFaultIfNeededAsync(
@@ -332,7 +374,6 @@ public class WorkflowProjectRunJob : ITransientDependency
 
                 await RecoverPlcWorkflowFaultsAsync(run.ProjectId, workflowId);
 
-                item.ExecutionId = result.ExecutionId;
                 item.Status = WorkflowProjectRunItemStatus.Succeeded;
                 item.FinishedAt = DateTime.UtcNow;
                 await SaveProgressAsync(run, itemMap.Values);
@@ -363,11 +404,19 @@ public class WorkflowProjectRunJob : ITransientDependency
         }
 
         run = await _runRepository.GetAsync(runId);
-        if (taskConfig.ResultWorkflowId is not null && run.InspectionDecision == WorkflowInspectionDecision.None)
+        bool hasFailures = itemMap.Values.Any(x => x.Status == WorkflowProjectRunItemStatus.Failed);
+        if (hasFailures)
+        {
+            string message = "一个或多个工作流执行失败；已按 ContinueOnError 完成剩余工作流。";
+            run.SetInspectionResult(WorkflowInspectionDecision.Error,
+                WorkflowPlcHandshakeErrorCode.WorkflowFailed, message);
+            run.MarkFailed(DateTime.UtcNow, message);
+        }
+        else if (taskConfig.ResultWorkflowId is not null && run.InspectionDecision == WorkflowInspectionDecision.None)
             run.SetInspectionResult(WorkflowInspectionDecision.Error,
                 WorkflowPlcHandshakeErrorCode.ResultVariableMissing,
                 "任务已完成，但未取得配置的最终判定变量。");
-        run.MarkSucceeded(DateTime.UtcNow);
+        if (!hasFailures) run.MarkSucceeded(DateTime.UtcNow);
         await SaveProgressAsync(run, itemMap.Values);
         _runtimeVariablePool.Clear();
 

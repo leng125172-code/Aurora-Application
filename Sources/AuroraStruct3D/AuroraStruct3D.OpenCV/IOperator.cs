@@ -67,3 +67,13 @@ public interface IAsyncWorkflowOperator
 {
     Task ExecuteAsync(IWorkflowContext context, CancellationToken cancellationToken = default);
 }
+
+/// <summary>
+/// 声明长时运行算子的超时来自某个构造配置参数（单位：秒）。
+/// 运行时仍会取该值与工作流剩余总时长的较小值。
+/// </summary>
+[AttributeUsage(AttributeTargets.Class, AllowMultiple = false, Inherited = false)]
+public sealed class WorkflowNodeTimeoutAttribute(string configParameterName) : Attribute
+{
+    public string ConfigParameterName { get; } = configParameterName;
+}

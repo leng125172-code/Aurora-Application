@@ -49,6 +49,29 @@ public class WorkflowPlcHandshakeTests
         Assert.Throws<BusinessException>(() => config.Accept(0, Guid.NewGuid(), DateTime.UtcNow));
     }
 
+    [Fact]
+    public void Request_Sequence_Should_Be_Monotonic_Per_Handshake()
+    {
+        WorkflowPlcHandshakeConfig config = CreateConfigured();
+
+        Assert.Equal(1, config.AllocateRequestSequence());
+        Assert.Equal(2, config.AllocateRequestSequence());
+        Assert.Equal(2, config.RequestSequence);
+    }
+
+    [Fact]
+    public void Communication_Failure_Should_Be_Visible_In_Handshake_Status()
+    {
+        WorkflowPlcHandshakeConfig config = CreateConfigured();
+
+        config.MarkProtocolFault("Handshake output 'CaptureAck (i=113)' is not writable: BadNotWritable");
+
+        Assert.Equal(WorkflowPlcHandshakePhase.Fault, config.Phase);
+        Assert.Equal(WorkflowPlcHandshakeErrorCode.PlcCommunicationFailed, config.ErrorCode);
+        Assert.Contains("CaptureAck (i=113)", config.LastError);
+        Assert.Contains("BadNotWritable", config.LastError);
+    }
+
     private static WorkflowPlcHandshakeConfig CreateConfigured()
     {
         string[] addresses = Enumerable.Range(0, 14).Select(x => $"ns=2;s=Point{x}").ToArray();

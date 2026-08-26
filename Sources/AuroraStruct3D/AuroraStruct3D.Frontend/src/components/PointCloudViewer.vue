@@ -15,6 +15,7 @@ let camera: THREE.PerspectiveCamera
 let renderer: THREE.WebGLRenderer
 let controls: OrbitControls
 let pointCloud: THREE.Points
+let animationFrameId: number | null = null
 
 const pointCount = ref(0)
 const bounds = ref({ x: 0, y: 0, z: 0 })
@@ -56,7 +57,7 @@ function initScene() {
 }
 
 function animate() {
-    requestAnimationFrame(animate)
+    animationFrameId = requestAnimationFrame(animate)
     controls.update()
     renderer.render(scene, camera)
 }
@@ -165,6 +166,7 @@ onMounted(() => {
 
 onUnmounted(() => {
     window.removeEventListener('resize', handleResize)
+    if (animationFrameId !== null) cancelAnimationFrame(animationFrameId)
 
     if (pointCloud) {
         ;(pointCloud.geometry as THREE.BufferGeometry).dispose()

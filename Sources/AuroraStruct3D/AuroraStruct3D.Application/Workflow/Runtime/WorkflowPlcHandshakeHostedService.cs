@@ -39,7 +39,7 @@ internal sealed class WorkflowPlcHandshakeHostedService : BackgroundService
         await using AsyncServiceScope scope = _scopeFactory.CreateAsyncScope();
         IUnitOfWorkManager uowManager =
             scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
-        using IUnitOfWork uow = uowManager.Begin(requiresNew: true, isTransactional: false);
+        using IUnitOfWork uow = uowManager.Begin(requiresNew: true, isTransactional: true);
         var configs = scope.ServiceProvider.GetRequiredService<IRepository<WorkflowPlcHandshakeConfig, Guid>>();
         var runs = scope.ServiceProvider.GetRequiredService<IRepository<WorkflowProjectRun, Guid>>();
         var deployments = scope.ServiceProvider.GetRequiredService<IRepository<WorkflowProjectDeployment, Guid>>();
@@ -120,8 +120,8 @@ internal sealed class WorkflowPlcHandshakeHostedService : BackgroundService
                     string runName = $"PLC request {requestId}";
                     // 恢复“运行已创建、握手状态尚未来得及持久化”这一极窄崩溃窗口。
                     WorkflowProjectRun? recoveredRun = await executer.FirstOrDefaultAsync(
-                        (await runs.GetQueryableAsync()).Where(x => x.ProjectId == config.ProjectId
-                            && x.Name == runName
+                        (await runs.GetQueryableAsync()).Where(x => x.PlcHandshakeConfigId == config.Id
+                            && x.PlcRequestId == requestId
                             && (x.Status == WorkflowProjectRunStatus.Queued
                                 || x.Status == WorkflowProjectRunStatus.Running))
                             .OrderByDescending(x => x.CreationTime));
@@ -131,9 +131,12 @@ internal sealed class WorkflowPlcHandshakeHostedService : BackgroundService
                         if (recoveredRun is not null) runId = recoveredRun.Id;
                         else
                         {
+                            long requestSequence = config.AllocateRequestSequence();
                             WorkflowProjectRunEnqueueResultDto enqueued = await runtime.EnqueueProjectRunAsync(
                                 new WorkflowProjectRunEnqueueInput { ProjectId = config.ProjectId,
                                     TaskConfigId = taskConfig.Id, Name = runName,
+                                    PlcHandshakeConfigId = config.Id, PlcRequestId = requestId,
+                                    PlcRequestSequence = requestSequence,
                                     StartType = WorkflowProjectRunStartType.Immediate });
                             runId = enqueued.RunId;
                         }
@@ -162,6 +165,8 @@ internal sealed class WorkflowPlcHandshakeHostedService : BackgroundService
             catch (Exception ex)
             {
                 _nextAttempt[config.Id] = DateTime.UtcNow.AddSeconds(10);
+                config.MarkProtocolFault(ex.Message);
+                await configs.UpdateAsync(config, autoSave: true, cancellationToken);
                 _logger.LogWarning(ex, "OPC UA handshake {ConfigId} failed; retry suppressed for 10 seconds", config.Id);
             }
         }

@@ -3,17 +3,17 @@
 
 功能：
   1. 在指定服务上创建检测项目
-  2. 为该项目创建3D比较检测工作流
+  2. 创建“真实扫描 + 模型库模型”或“固定 PLY + 模型库模型”的3D比较检测工作流
 
 工作流流程：
-  读取参考点云 → 读取待检测点云 → 3D比较（配准+距离计算）
-                                          ↓
-                                   距离热力图 + 结果统计
+  生产3D扫描 / 读取测试 PLY ─┐
+                             ├→ 3D比较（配准+距离计算）→ 距离热力图 + 结果统计
+  读取工艺模型 ──────────────┘
 
 用法：
-    python create_3d_compare_workflow.py
-    python create_3d_compare_workflow.py --host 10.127.135.143 --api-port 5000
-    python create_3d_compare_workflow.py --reference-cloud /data/pointclouds/reference.ply --target-cloud /data/pointclouds/target.ply
+    python create_3d_compare_workflow.py --calib-project-id <标定项目ID> --product-model-id <工艺模型ID>
+    python create_3d_compare_workflow.py --input-ply <本地PLY路径> --product-model-id <工艺模型ID>
+    python create_3d_compare_workflow.py --host 10.127.135.143 --api-port 5000 --calib-project-id <标定项目ID> --product-model-id <工艺模型ID>
 
 配置优先级：
     1) --base-url / --host
@@ -28,6 +28,11 @@ import socket
 import uuid
 import sys
 import requests
+
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 DEFAULT_SCHEME = "http"
 DEFAULT_API_PORT = 5000
@@ -47,10 +52,6 @@ PROJECT = {
 
 WORKFLOW_NAME = "3D比较检测"
 
-REFERENCE_CLOUD_PATH = "/data/pointclouds/reference.ply"
-TARGET_CLOUD_PATH = "/data/pointclouds/target.ply"
-
-PROJECTION_BOUNDS = {"minX": -80.0, "maxX": 80.0, "minY": -60.0, "maxY": 60.0}
 IMAGE_RESOLUTION = 512
 
 REGISTRATION_METHOD = "point_to_plane"
@@ -61,6 +62,12 @@ MAX_ITERATIONS = 50
 MAX_CORRESPONDENCE_DISTANCE = 0.1
 DISTANCE_THRESHOLD = 0.05
 VOXEL_SIZE = 0.2
+MAX_DEFECT_RATIO = 0.05
+MAX_MEAN_DISTANCE = 0.05
+MAX_MISSING_RATIO = 0.05
+MIN_COARSE_INLIER_RATIO = 0.1
+MIN_FINE_CORRESPONDENCE_RATIO = 0.15
+MAX_REGISTRATION_RMSE = 0.0
 
 _access_token = None
 _session = None
@@ -180,8 +187,18 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--username", default=os.getenv("AURORA_USERNAME", "admin"))
     parser.add_argument("--password", default=os.getenv("AURORA_PASSWORD", ""))
-    parser.add_argument("--reference-cloud", default=REFERENCE_CLOUD_PATH)
-    parser.add_argument("--target-cloud", default=TARGET_CLOUD_PATH)
+    source_group = parser.add_mutually_exclusive_group(required=True)
+    source_group.add_argument("--calib-project-id", help="真实扫描使用的标定项目 ID")
+    source_group.add_argument(
+        "--input-ply",
+        help="跳过拍照，上传并固定使用本地 PLY 点云文件",
+    )
+    parser.add_argument("--product-model-id", required=True, help="模型库中已就绪的工艺模型 ID")
+    parser.add_argument("--scan-cycles", type=int, default=1, help="每次运行的扫描周期数（1-20）")
+    parser.add_argument("--scan-timeout", type=int, default=300, help="扫描超时秒数（10-3600）")
+    parser.add_argument("--no-table-filter", dest="enable_table_filter", action="store_false")
+    parser.add_argument("--table-clearance-mm", type=float, default=3.0)
+    parser.set_defaults(enable_table_filter=True)
     parser.add_argument("--workflow-name", default=WORKFLOW_NAME)
     parser.add_argument("--project-name", default=PROJECT["name"])
     parser.add_argument("--project-code", default=PROJECT["projectCode"])
@@ -204,10 +221,56 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-correspondence-distance", type=float, default=MAX_CORRESPONDENCE_DISTANCE)
     parser.add_argument("--distance-threshold", type=float, default=DISTANCE_THRESHOLD)
     parser.add_argument("--voxel-size", type=float, default=VOXEL_SIZE)
-    return parser.parse_args()
+    parser.add_argument("--max-defect-ratio", type=float, default=MAX_DEFECT_RATIO)
+    parser.add_argument("--max-mean-distance", type=float, default=MAX_MEAN_DISTANCE)
+    parser.add_argument("--max-missing-ratio", type=float, default=MAX_MISSING_RATIO)
+    parser.add_argument("--min-coarse-inlier-ratio", type=float, default=MIN_COARSE_INLIER_RATIO)
+    parser.add_argument("--min-fine-correspondence-ratio", type=float, default=MIN_FINE_CORRESPONDENCE_RATIO)
+    parser.add_argument("--max-registration-rmse", type=float, default=MAX_REGISTRATION_RMSE)
+    args = parser.parse_args()
+    uuid_options = [("--product-model-id", args.product_model_id)]
+    if args.calib_project_id:
+        uuid_options.append(("--calib-project-id", args.calib_project_id))
+    for option, value in uuid_options:
+        try:
+            if uuid.UUID(value).int == 0:
+                raise ValueError
+        except (ValueError, AttributeError):
+            parser.error(f"{option} 必须是非空 UUID")
+
+    if args.input_ply:
+        args.input_ply = os.path.abspath(args.input_ply)
+        if not os.path.isfile(args.input_ply):
+            parser.error(f"--input-ply 文件不存在：{args.input_ply}")
+        if os.path.splitext(args.input_ply)[1].lower() != ".ply":
+            parser.error("--input-ply 当前只接受 .ply 文件")
+
+    if not 1 <= args.scan_cycles <= 20:
+        parser.error("--scan-cycles 必须在 1 到 20 之间")
+    if not 10 <= args.scan_timeout <= 3600:
+        parser.error("--scan-timeout 必须在 10 到 3600 之间")
+    if not 0 <= args.table_clearance_mm <= 50:
+        parser.error("--table-clearance-mm 必须在 0 到 50 之间")
+    for option, value in (
+        ("--max-defect-ratio", args.max_defect_ratio),
+        ("--max-missing-ratio", args.max_missing_ratio),
+        ("--min-coarse-inlier-ratio", args.min_coarse_inlier_ratio),
+        ("--min-fine-correspondence-ratio", args.min_fine_correspondence_ratio),
+    ):
+        if not 0 <= value <= 1:
+            parser.error(f"{option} 必须在 0 到 1 之间")
+    if args.min_fine_correspondence_ratio == 0:
+        parser.error("--min-fine-correspondence-ratio 必须大于 0")
+    if args.max_mean_distance <= 0:
+        parser.error("--max-mean-distance 必须大于 0")
+    if args.max_registration_rmse < 0:
+        parser.error("--max-registration-rmse 不能小于 0")
+    return args
 
 
+OP_SCAN_POINT_CLOUD = "3a15ec1c-6978-4b72-9e6a-e749387b3f11"
 OP_READ_POINT_CLOUD = "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+OP_READ_PRODUCT_MODEL = "ec67f5da-e934-4e0e-9eb5-46e7f8e02101"
 OP_CLOUD_COMPARE = "a1b2c3d4-0003-4000-8000-000000000015"
 OP_COLORED_CLOUD_TO_IMAGE = "1dd66555-a882-436b-bf30-dab8c680a201"
 OP_SAVE_POINT_CLOUD_BLOB = "a1b2c3d4-e5f6-7890-abcd-ef1234567891"
@@ -224,6 +287,8 @@ def _get_session() -> requests.Session:
         return _session
 
     _session = requests.Session()
+    # Aurora 服务通过局域网直连；系统 HTTP 代理常会拦截私网地址并导致超时。
+    _session.trust_env = False
     config_url = f"{BASE_URL}/api/abp/application-configuration"
     resp = _session.get(config_url, timeout=30)
     resp.raise_for_status()
@@ -270,7 +335,7 @@ def api_post(path: str, body: dict) -> dict:
     url = f"{BASE_URL}{path}"
     resp = session.post(url, json=body, timeout=30)
     resp.raise_for_status()
-    return resp.json()
+    return resp.json() if resp.content else {}
 
 
 def api_get(path: str, params: dict | None = None) -> dict:
@@ -292,7 +357,55 @@ def api_put(path: str, body: dict) -> dict:
     url = f"{BASE_URL}{path}"
     resp = session.put(url, json=body, timeout=30)
     resp.raise_for_status()
-    return resp.json()
+    return resp.json() if resp.content else {}
+
+
+def upload_operator_file(project_id: str, operator_id: str, file_path: str) -> dict:
+    session = _get_session()
+    url = f"{BASE_URL}/api/app/operator-file/upload"
+    file_name = os.path.basename(file_path)
+    file_size = os.path.getsize(file_path)
+    print(f"      上传测试点云：{file_name} ({file_size} bytes) ...")
+    with open(file_path, "rb") as stream:
+        resp = session.post(
+            url,
+            params={"projectId": project_id, "operatorId": operator_id},
+            files={"file": (file_name, stream, "application/octet-stream")},
+            timeout=300,
+        )
+    resp.raise_for_status()
+    result = resp.json()
+    if not result.get("success") or not result.get("blobName"):
+        raise RuntimeError(f"测试点云上传响应无效：{result}")
+    print(f"      ✓ 测试点云上传成功，BlobName：{result['blobName']}")
+    return result
+
+
+def confirm_operator_file(project_id: str, operator_id: str, blob_name: str) -> None:
+    api_post(
+        "/api/app/operator-file/confirm",
+        {
+            "projectId": project_id,
+            "operatorId": operator_id,
+            "blobName": blob_name,
+        },
+    )
+    print("      ✓ 测试点云已绑定到工作流")
+
+
+def validate_product_model(product_model_id: str) -> dict:
+    model = api_get(f"/api/app/product-model/{product_model_id}")
+    if not model.get("isReady"):
+        status = model.get("conversionStatus")
+        error = model.get("conversionErrorMessage") or "无"
+        raise RuntimeError(
+            f"工艺模型尚未就绪：conversionStatus={status}，error={error}"
+        )
+    print(
+        f"✓ 工艺模型已就绪：{model.get('name') or product_model_id} "
+        f"({model.get('originalFileName') or '未知文件'})"
+    )
+    return model
 
 
 def find_project_by_code(project_code: str) -> dict | None:
@@ -438,42 +551,99 @@ def edge(source_id: str, target_id: str) -> dict:
     }
 
 
-def build_graph_data(reference_cloud_path: str, target_cloud_path: str, args) -> dict:
+def build_graph_data(
+    args: argparse.Namespace, input_point_cloud_blob: str | None = None
+) -> dict:
     id_start = new_uuid()
-    id_read_reference = new_uuid()
-    id_read_target = new_uuid()
+    id_scan = new_uuid()
+    id_read_model = new_uuid()
     id_compare = new_uuid()
     id_preview = new_uuid()
     id_export_cloud = new_uuid()
     id_export_image = new_uuid()
     id_end = new_uuid()
 
-    nodes = [
-        node(id_start, "start-node", 560, 40, "开始", make_properties()),
-        node(
-            id_read_reference,
+    if input_point_cloud_blob:
+        input_cloud_node = node(
+            id_scan,
             OP_READ_POINT_CLOUD,
             380,
             120,
-            "读取参考点云",
+            "读取测试点云（跳过拍照）",
             make_properties(
-                input_bindings={"point_cloud_path": reference_cloud_path},
+                input_bindings={"point_cloud_path": input_point_cloud_blob},
                 input_sources={"point_cloud_path": "literal"},
-                output_bindings={"output_point_cloud": "reference_cloud"},
+                output_bindings={"output_point_cloud": "scanned_cloud"},
                 output_sources={"output_point_cloud": "variable"},
             ),
-        ),
+        )
+    else:
+        input_cloud_node = node(
+            id_scan,
+            OP_SCAN_POINT_CLOUD,
+            380,
+            120,
+            "生产3D扫描",
+            make_properties(
+                params={
+                    "calibProjectId": args.calib_project_id,
+                    "cycleCount": args.scan_cycles,
+                    "timeoutSeconds": args.scan_timeout,
+                    "enableTableFilter": args.enable_table_filter,
+                    "tableClearanceMm": args.table_clearance_mm,
+                },
+                param_sources={name: "literal" for name in (
+                    "calibProjectId", "cycleCount", "timeoutSeconds",
+                    "enableTableFilter", "tableClearanceMm",
+                )},
+                output_bindings={
+                    "output_point_cloud": "scanned_cloud",
+                    "point_count": "scan_point_count",
+                    "completed_cycles": "scan_completed_cycles",
+                    "duration_ms": "scan_duration_ms",
+                },
+                output_sources={name: "variable" for name in (
+                    "output_point_cloud", "point_count", "completed_cycles", "duration_ms",
+                )},
+            ),
+        )
+
+    end_input_bindings = {
+        "alignedPointCloudUrl": "aligned_cloud_download_url",
+        "distanceImageUrl": "distance_image_download_url",
+        "inspectionResult": "inspection_result",
+        "modelId": "selected_model_id",
+    }
+    if not input_point_cloud_blob:
+        end_input_bindings.update(
+            {
+                "scanPointCount": "scan_point_count",
+                "scanCompletedCycles": "scan_completed_cycles",
+                "scanDurationMs": "scan_duration_ms",
+            }
+        )
+    end_input_sources = {name: "variable" for name in end_input_bindings}
+
+    nodes = [
+        node(id_start, "start-node", 560, 40, "开始", make_properties()),
+        input_cloud_node,
         node(
-            id_read_target,
-            OP_READ_POINT_CLOUD,
+            id_read_model,
+            OP_READ_PRODUCT_MODEL,
             740,
             120,
-            "读取待检测点云",
+            "读取工艺模型",
             make_properties(
-                input_bindings={"point_cloud_path": target_cloud_path},
-                input_sources={"point_cloud_path": "literal"},
-                output_bindings={"output_point_cloud": "target_cloud"},
-                output_sources={"output_point_cloud": "variable"},
+                params={"productModelId": args.product_model_id},
+                param_sources={"productModelId": "literal"},
+                output_bindings={
+                    "model_point_cloud": "model_cloud",
+                    "model_id": "selected_model_id",
+                },
+                output_sources={
+                    "model_point_cloud": "variable",
+                    "model_id": "variable",
+                },
             ),
         ),
         node(
@@ -491,6 +661,12 @@ def build_graph_data(reference_cloud_path: str, target_cloud_path: str, args) ->
                     "distanceThreshold": args.distance_threshold,
                     "imageResolution": IMAGE_RESOLUTION,
                     "voxelSize": args.voxel_size,
+                    "maxDefectRatio": args.max_defect_ratio,
+                    "maxMeanDistance": args.max_mean_distance,
+                    "maxMissingRatio": args.max_missing_ratio,
+                    "minCoarseInlierRatio": args.min_coarse_inlier_ratio,
+                    "minFineCorrespondenceRatio": args.min_fine_correspondence_ratio,
+                    "maxRegistrationRmse": args.max_registration_rmse,
                 },
                 param_sources={
                     "useCoarseRegistration": "literal",
@@ -500,10 +676,16 @@ def build_graph_data(reference_cloud_path: str, target_cloud_path: str, args) ->
                     "distanceThreshold": "literal",
                     "imageResolution": "literal",
                     "voxelSize": "literal",
+                    "maxDefectRatio": "literal",
+                    "maxMeanDistance": "literal",
+                    "maxMissingRatio": "literal",
+                    "minCoarseInlierRatio": "literal",
+                    "minFineCorrespondenceRatio": "literal",
+                    "maxRegistrationRmse": "literal",
                 },
                 input_bindings={
-                    "source_cloud": "target_cloud",
-                    "target_cloud": "reference_cloud",
+                    "source_cloud": "scanned_cloud",
+                    "target_cloud": "model_cloud",
                 },
                 input_sources={
                     "source_cloud": "variable",
@@ -563,8 +745,14 @@ def build_graph_data(reference_cloud_path: str, target_cloud_path: str, args) ->
                 param_sources={"fileName": "literal"},
                 input_bindings={"input_point_cloud": "aligned_cloud"},
                 input_sources={"input_point_cloud": "variable"},
-                output_bindings={"download_url": "aligned_cloud_download_url"},
-                output_sources={"download_url": "variable"},
+                output_bindings={
+                    "blob_name": "aligned_cloud_blob_name",
+                    "download_url": "aligned_cloud_download_url",
+                },
+                output_sources={
+                    "blob_name": "variable",
+                    "download_url": "variable",
+                },
             ),
         ),
         node(
@@ -578,8 +766,14 @@ def build_graph_data(reference_cloud_path: str, target_cloud_path: str, args) ->
                 param_sources={"fileName": "literal"},
                 input_bindings={"input_mat": "distance_image"},
                 input_sources={"input_mat": "variable"},
-                output_bindings={"download_url": "distance_image_download_url"},
-                output_sources={"download_url": "variable"},
+                output_bindings={
+                    "blob_name": "distance_image_blob_name",
+                    "download_url": "distance_image_download_url",
+                },
+                output_sources={
+                    "blob_name": "variable",
+                    "download_url": "variable",
+                },
             ),
         ),
         node(
@@ -589,25 +783,17 @@ def build_graph_data(reference_cloud_path: str, target_cloud_path: str, args) ->
             520,
             "结束",
             make_properties(
-                input_bindings={
-                    "alignedPointCloudUrl": "aligned_cloud_download_url",
-                    "distanceImageUrl": "distance_image_download_url",
-                    "resultJson": "result_json",
-                },
-                input_sources={
-                    "alignedPointCloudUrl": "variable",
-                    "distanceImageUrl": "variable",
-                    "resultJson": "variable",
-                },
+                input_bindings=end_input_bindings,
+                input_sources=end_input_sources,
             ),
         ),
     ]
 
     edges = [
-        edge(id_start, id_read_reference),
-        edge(id_start, id_read_target),
-        edge(id_read_reference, id_compare),
-        edge(id_read_target, id_compare),
+        edge(id_start, id_scan),
+        edge(id_start, id_read_model),
+        edge(id_scan, id_compare),
+        edge(id_read_model, id_compare),
         edge(id_compare, id_preview),
         edge(id_compare, id_export_cloud),
         edge(id_compare, id_export_image),
@@ -619,10 +805,14 @@ def build_graph_data(reference_cloud_path: str, target_cloud_path: str, args) ->
     return {"nodes": nodes, "edges": edges}
 
 
-def create_workflow(project_id: str, reference_cloud_path: str, target_cloud_path: str, args) -> dict:
+def create_workflow(
+    project_id: str,
+    args: argparse.Namespace,
+    input_point_cloud_blob: str | None = None,
+) -> dict:
     print(f"[2/2] 创建工作流：{WORKFLOW_NAME} ...")
 
-    graph_data = build_graph_data(reference_cloud_path, target_cloud_path, args)
+    graph_data = build_graph_data(args, input_point_cloud_blob)
     payload = {
         "projectId": project_id,
         "name": WORKFLOW_NAME,
@@ -669,8 +859,13 @@ def main():
     print("  3D比较检测工作流自动创建")
     print(f"  目标服务：{BASE_URL}")
     print(f"  登录用户：{USERNAME}")
-    print(f"  参考点云：{args.reference_cloud}")
-    print(f"  待检测点云：{args.target_cloud}")
+    if args.input_ply:
+        print(f"  测试点云：{args.input_ply}")
+        print("  输入模式：固定 PLY（跳过拍照）")
+    else:
+        print(f"  标定项目：{args.calib_project_id}")
+        print(f"  扫描周期：{args.scan_cycles}")
+    print(f"  工艺模型：{args.product_model_id}")
     print(f"  配准方法：{args.registration_method}")
     print(f"  启用粗配准：{args.use_coarse}")
     print("=" * 60)
@@ -679,8 +874,28 @@ def main():
     try:
         login()
         print()
+        validate_product_model(args.product_model_id)
+        print()
         project_id = create_project()
-        workflow = create_workflow(project_id, args.reference_cloud, args.target_cloud, args)
+        uploaded_point_cloud = None
+        if args.input_ply:
+            uploaded_point_cloud = upload_operator_file(
+                project_id,
+                OP_READ_POINT_CLOUD,
+                args.input_ply,
+            )
+            print()
+        workflow = create_workflow(
+            project_id,
+            args,
+            uploaded_point_cloud["blobName"] if uploaded_point_cloud else None,
+        )
+        if uploaded_point_cloud:
+            confirm_operator_file(
+                project_id,
+                OP_READ_POINT_CLOUD,
+                uploaded_point_cloud["blobName"],
+            )
         print()
         print("=" * 60)
         print("  创建完成！")

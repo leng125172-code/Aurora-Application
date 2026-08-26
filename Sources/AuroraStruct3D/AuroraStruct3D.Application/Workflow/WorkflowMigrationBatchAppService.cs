@@ -205,8 +205,11 @@ public sealed class WorkflowMigrationBatchAppService : ApplicationService
                     || node.Properties?.OutputBindings is not { } bindings) continue;
                 OperatorParametersDescriptor? descriptor = await _operatorRegistry.GetParametersAsync(operatorId);
                 ParameterDescriptor? result = descriptor?.Outputs.FirstOrDefault(x => x.ParameterName == "result");
+                HashSet<string> currentPorts = (descriptor?.Outputs ?? [])
+                    .Select(x => x.ParameterName ?? string.Empty)
+                    .ToHashSet(StringComparer.Ordinal);
                 if (result?.JsonSchema?.Contains("\"resultCode\"", StringComparison.Ordinal) == true
-                    && bindings.Keys.Any(x => x is "is_ok" or "is_valid" or "inspection_status" or "result_json"))
+                    && bindings.Keys.Any(x => !currentPorts.Contains(x)))
                     return true;
             }
         }

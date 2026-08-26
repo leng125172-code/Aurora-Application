@@ -449,6 +449,11 @@ onUnmounted(() => {
                                 class="h-full w-full object-contain"
                                 :alt="t('camera.tabVideo')"
                             />
+                            <div
+                                v-if="previewTab === 'video' && previewUrl && previewing"
+                                class="preview-crosshair"
+                                aria-hidden="true"
+                            />
                             <img
                                 v-else-if="previewTab === 'snapshot' && snapshotUri"
                                 :src="snapshotUri"
@@ -712,6 +717,11 @@ onUnmounted(() => {
                         class="w-full h-full object-contain"
                         :alt="t('camera.tabVideo')"
                     />
+                    <div
+                        v-if="previewTab === 'video' && previewUrl && previewing"
+                        class="preview-crosshair"
+                        aria-hidden="true"
+                    />
                     <img
                         v-else-if="previewTab === 'snapshot' && snapshotUri"
                         :src="snapshotUri"
@@ -757,6 +767,37 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+.preview-crosshair {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+}
+
+.preview-crosshair::before,
+.preview-crosshair::after {
+    position: absolute;
+    content: '';
+    background: rgb(255 64 64 / 95%);
+    box-shadow: 0 0 0 1px rgb(0 0 0 / 70%), 0 0 5px rgb(255 255 255 / 70%);
+}
+
+.preview-crosshair::before {
+    top: 0;
+    bottom: 0;
+    left: 50%;
+    width: 1px;
+    transform: translateX(-50%);
+}
+
+.preview-crosshair::after {
+    top: 50%;
+    right: 0;
+    left: 0;
+    height: 1px;
+    transform: translateY(-50%);
+}
+
 .fade-enter-active,
 .fade-leave-active {
     transition: opacity 0.2s ease;

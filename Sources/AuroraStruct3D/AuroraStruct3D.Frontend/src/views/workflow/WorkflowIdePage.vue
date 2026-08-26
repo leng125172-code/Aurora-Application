@@ -34,6 +34,7 @@ import {
     getWorkflowSource,
     listProjects,
     listWorkflows,
+    operatorSnippet,
     patchGraph,
     pauseDebug,
     references,
@@ -48,6 +49,7 @@ import {
     saveWorkflowSource,
     setBreakpoints,
     signatureHelp,
+    sourceToGraph,
     step,
     stepInto,
     stepOut,
@@ -60,10 +62,13 @@ import {
     type ProjectBrief,
     type WorkflowBrief,
     type WorkflowGraph,
+    type WorkflowGraphNode,
     type WorkflowSource,
     type WorkflowNodeDefinition,
+    type OperatorConfigFieldDefinition,
     type WorkflowMigrationBatch,
     type WorkflowMigrationItem,
+    PortControlType,
 } from '@/api/workflow-ide'
 import { useAuthStore } from '@/stores/auth'
 import { Bug, CircleStop, Code2, GitBranch, Play, Save, StepForward, WandSparkles } from '@lucide/vue'
@@ -76,6 +81,16 @@ import {
 } from '@/utils/workflow-result'
 import { useAppToast } from '@/composables/useAppToast'
 import { useAppConfirm } from '@/composables/useAppConfirm'
+import {
+    ProductModelConversionStatus,
+    getProductModelListAsync,
+    type ProductModelDto,
+} from '@/api/product-models'
+import {
+    CalibDeviceType,
+    getCalibProjectListAsync,
+    type CalibProjectDto,
+} from '@/api/calibration'
 import {
     applyProjectToDevice,
     deleteWorkflowPlcTrigger,
@@ -218,6 +233,34 @@ const operatorDocsLoading = ref(false)
 const operatorDocsSearch = ref('')
 const operatorDefinitions = ref<WorkflowNodeDefinition[]>([])
 const selectedOperator = ref<WorkflowNodeDefinition>()
+type ConfigValue = string | number | boolean | null | undefined
+type ProductModelWithUnit = ProductModelDto & {
+    unit?: string | number | null
+    unitDisplay?: string | null
+    lengthUnit?: string | number | null
+    lengthUnitDisplay?: string | null
+    surfaceSamplingSpacingMm?: number | null
+}
+interface ResourceOption {
+    value: string
+    label: string
+    detail: string
+    disabled?: boolean
+}
+const operatorConfigOpen = ref(false)
+const operatorConfigMode = ref<'insert' | 'edit'>('insert')
+const operatorConfigDefinition = ref<WorkflowNodeDefinition>()
+const operatorConfigNodeId = ref<string>()
+const operatorConfigValues = ref<Record<string, ConfigValue>>({})
+const operatorConfigVariableSources = ref<Record<string, string>>({})
+const convertedVariableFields = ref<Set<string>>(new Set())
+const operatorConfigBusy = ref(false)
+const operatorConfigError = ref('')
+const productModelOptions = ref<ResourceOption[]>([])
+const calibProjectOptions = ref<ResourceOption[]>([])
+const resourceOptionsLoading = ref(false)
+const resourceOptionsError = ref('')
+let operatorInsertPosition: monaco.Position | null = null
 const filteredOperatorDefinitions = computed(() => {
     const keyword = operatorDocsSearch.value.trim().toLocaleLowerCase()
     return operatorDefinitions.value.filter(
@@ -229,8 +272,8 @@ const filteredOperatorDefinitions = computed(() => {
     )
 })
 
-async function openOperatorDocs(): Promise<void> {
-    operatorDocsOpen.value = true
+async function loadOperatorDefinitions(force = false): Promise<void> {
+    if (!force && operatorDefinitions.value.length) return
     operatorDocsLoading.value = true
     try {
         const palette = await getWorkflowNodePalette()
@@ -245,9 +288,474 @@ async function openOperatorDocs(): Promise<void> {
     }
 }
 
+async function openOperatorDocs(): Promise<void> {
+    operatorDocsOpen.value = true
+    await loadOperatorDefinitions(true)
+}
+
 function metadataText(value: unknown): string {
     if (value === undefined || value === null) return ''
     return typeof value === 'string' ? value : JSON.stringify(value)
+}
+
+function isResourceField(field: OperatorConfigFieldDefinition): boolean {
+    return (
+        field.controlType === PortControlType.ProductModelSelect ||
+        field.controlType === PortControlType.CalibProjectSelect
+    )
+}
+
+function isNumberField(field: OperatorConfigFieldDefinition): boolean {
+    return (
+        field.controlType === PortControlType.Number ||
+        (field.controlType !== PortControlType.Select && isNumericValueType(field))
+    )
+}
+
+function isNumericValueType(field: OperatorConfigFieldDefinition): boolean {
+    return ['System.Int16', 'System.Int32', 'System.Int64', 'System.Single', 'System.Double', 'System.Decimal'].includes(
+        field.valueTypeName,
+    )
+}
+
+function isBooleanField(field: OperatorConfigFieldDefinition): boolean {
+    return field.controlType === PortControlType.Switch || field.valueTypeName === 'System.Boolean'
+}
+
+function isSelectField(field: OperatorConfigFieldDefinition): boolean {
+    return field.controlType === PortControlType.Select && Array.isArray(field.valueLimit)
+}
+
+function selectOptions(field: OperatorConfigFieldDefinition): Array<{ label: string; value: ConfigValue }> {
+    return Array.isArray(field.valueLimit)
+        ? field.valueLimit.map((value) => ({ label: String(value), value: coerceConfigValue(field, value) }))
+        : []
+}
+
+function coerceConfigValue(field: OperatorConfigFieldDefinition, value: unknown): ConfigValue {
+    if (isNumericValueType(field) && value !== undefined && value !== null && value !== '') {
+        const number = Number(value)
+        return Number.isFinite(number) ? number : undefined
+    }
+    if (isBooleanField(field)) {
+        if (typeof value === 'boolean') return value
+        if (typeof value === 'string') {
+            if (value.toLocaleLowerCase() === 'true') return true
+            if (value.toLocaleLowerCase() === 'false') return false
+        }
+    }
+    return typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'
+        ? value
+        : value === null
+          ? null
+          : undefined
+}
+
+function numericBounds(field: OperatorConfigFieldDefinition): { min?: number; max?: number } {
+    if (!Array.isArray(field.valueLimit) || field.valueLimit.length < 2) return {}
+    const min = Number(field.valueLimit[0])
+    const max = Number(field.valueLimit[1])
+    return {
+        min: Number.isFinite(min) ? min : undefined,
+        max: Number.isFinite(max) ? max : undefined,
+    }
+}
+
+function isIntegerField(field: OperatorConfigFieldDefinition): boolean {
+    return ['System.Int16', 'System.Int32', 'System.Int64'].includes(field.valueTypeName)
+}
+
+function isGuid(value: ConfigValue): value is string {
+    return (
+        typeof value === 'string' &&
+        !/^0{8}-0{4}-0{4}-0{4}-0{12}$/i.test(value) &&
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)
+    )
+}
+
+function productModelStatusLabel(status: ProductModelConversionStatus): string {
+    switch (status) {
+        case ProductModelConversionStatus.NotRequired:
+            return '无需转换'
+        case ProductModelConversionStatus.Pending:
+            return '等待转换'
+        case ProductModelConversionStatus.Converting:
+            return '转换中'
+        case ProductModelConversionStatus.Success:
+            return '转换完成'
+        case ProductModelConversionStatus.Failed:
+            return '转换失败'
+        default:
+            return String(status)
+    }
+}
+
+function productModelUnit(model: ProductModelWithUnit): string {
+    if (model.lengthUnitDisplay) return model.lengthUnitDisplay
+    if (model.lengthUnit !== undefined && model.lengthUnit !== null)
+        return String(model.lengthUnit)
+    if (model.unitDisplay) return model.unitDisplay
+    if (model.unit !== undefined && model.unit !== null && model.unit !== '') return String(model.unit)
+    return '单位未标注'
+}
+
+function productModelSampling(model: ProductModelWithUnit): string {
+    return typeof model.surfaceSamplingSpacingMm === 'number'
+        ? `采样 ${model.surfaceSamplingSpacingMm} mm`
+        : '采样间距未标注'
+}
+
+function calibDeviceTypeLabel(type: CalibDeviceType): string {
+    switch (type) {
+        case CalibDeviceType.TwoCamera0Light:
+            return '双目无光'
+        case CalibDeviceType.OneCamera1Light:
+            return '单目单光'
+        case CalibDeviceType.TwoCamera1Light:
+            return '双目单光'
+        default:
+            return String(type)
+    }
+}
+
+function appendUnavailableOption(options: ResourceOption[], id: string, label: string): ResourceOption[] {
+    if (!id || options.some((option) => option.value === id)) return options
+    return [
+        ...options,
+        {
+            value: id,
+            label: `${label}（不可用）`,
+            detail: `原配置 GUID：${id}`,
+            disabled: true,
+        },
+    ]
+}
+
+function findGraphNode(graph: WorkflowGraph, nodeId: string): WorkflowGraphNode | undefined {
+    for (const node of graph.nodes) {
+        if (node.id === nodeId) return node
+        const inner = node.properties?.innerGraphData
+        if (inner) {
+            const match = findGraphNode(inner, nodeId)
+            if (match) return match
+        }
+    }
+    return undefined
+}
+
+function initialConfigValue(field: OperatorConfigFieldDefinition): ConfigValue {
+    return coerceConfigValue(field, field.defaultValue)
+}
+
+function resetOperatorConfig(
+    definition: WorkflowNodeDefinition,
+    mode: 'insert' | 'edit',
+    node?: WorkflowGraphNode,
+): void {
+    operatorConfigDefinition.value = definition
+    operatorConfigMode.value = mode
+    operatorConfigNodeId.value = node?.id
+    operatorConfigError.value = ''
+    resourceOptionsError.value = ''
+    convertedVariableFields.value = new Set()
+    const params = node?.properties?.params ?? {}
+    const sources = node?.properties?.paramSources ?? {}
+    const values: Record<string, ConfigValue> = {}
+    const variables: Record<string, string> = {}
+    for (const field of definition.configFields) {
+        if (sources[field.name] === 'variable') {
+            const raw = params[field.name]
+            variables[field.name] =
+                typeof raw === 'object' && raw !== null && '$var' in raw
+                    ? String((raw as { $var?: unknown }).$var ?? '')
+                    : String(raw ?? '')
+            values[field.name] = undefined
+            continue
+        }
+        const raw = params[field.name]
+        values[field.name] =
+            typeof raw === 'string' || typeof raw === 'number' || typeof raw === 'boolean' || raw === null
+                ? raw
+                : initialConfigValue(field)
+    }
+    operatorConfigValues.value = values
+    operatorConfigVariableSources.value = variables
+}
+
+async function loadConfigResourceOptions(): Promise<void> {
+    const definition = operatorConfigDefinition.value
+    if (!definition) return
+    const needsModels = definition.configFields.some(
+        (field) => field.controlType === PortControlType.ProductModelSelect,
+    )
+    const needsCalibProjects = definition.configFields.some(
+        (field) => field.controlType === PortControlType.CalibProjectSelect,
+    )
+    productModelOptions.value = []
+    calibProjectOptions.value = []
+    resourceOptionsError.value = ''
+    if (!needsModels && !needsCalibProjects) return
+
+    resourceOptionsLoading.value = true
+    const failures: string[] = []
+    await Promise.all([
+        needsModels
+            ? getProductModelListAsync({
+                  skipCount: 0,
+                  maxResultCount: 1000,
+                  sorting: 'Name',
+              })
+                  .then((result) => {
+                      const allModels = result.items as ProductModelWithUnit[]
+                      let options: ResourceOption[] = allModels
+                          .filter((model) => model.isReady)
+                          .map((model) => ({
+                              value: model.id,
+                              label: model.name,
+                              detail: `${model.fileFormatDisplay} · ${productModelUnit(model)} · ${productModelSampling(model)} · ${productModelStatusLabel(model.conversionStatus)}`,
+                          }))
+                      const currentId = String(
+                          operatorConfigValues.value[
+                              definition.configFields.find(
+                                  (field) => field.controlType === PortControlType.ProductModelSelect,
+                              )?.name ?? ''
+                          ] ?? '',
+                      )
+                      const current = allModels.find((model) => model.id === currentId)
+                      if (current && !current.isReady) {
+                          options.push({
+                              value: current.id,
+                              label: `${current.name}（不可用）`,
+                              detail: `${current.fileFormatDisplay} · ${productModelUnit(current)} · ${productModelSampling(current)} · ${productModelStatusLabel(current.conversionStatus)}`,
+                              disabled: true,
+                          })
+                      } else if (currentId) {
+                          options = appendUnavailableOption(options, currentId, '原工艺模型')
+                      }
+                      productModelOptions.value = options
+                  })
+                  .catch((error) => failures.push(`工艺模型：${String(error)}`))
+            : Promise.resolve(),
+        needsCalibProjects
+            ? getCalibProjectListAsync({
+                  skipCount: 0,
+                  maxResultCount: 1000,
+                  sorting: 'Name',
+              })
+                  .then((result) => {
+                      let options = result.items.map((project: CalibProjectDto) => ({
+                          value: project.id,
+                          label: project.name,
+                          detail: `${calibDeviceTypeLabel(project.deviceType)} · 状态 ${project.calibStatus} · ${project.id.slice(0, 8)}`,
+                      }))
+                      const currentId = String(
+                          operatorConfigValues.value[
+                              definition.configFields.find(
+                                  (field) => field.controlType === PortControlType.CalibProjectSelect,
+                              )?.name ?? ''
+                          ] ?? '',
+                      )
+                      if (currentId) options = appendUnavailableOption(options, currentId, '原标定项目')
+                      calibProjectOptions.value = options
+                  })
+                  .catch((error) => failures.push(`标定项目：${String(error)}`))
+            : Promise.resolve(),
+    ])
+    resourceOptionsLoading.value = false
+    resourceOptionsError.value = failures.join('；')
+}
+
+function resourceOptionsFor(field: OperatorConfigFieldDefinition): ResourceOption[] {
+    return field.controlType === PortControlType.ProductModelSelect
+        ? productModelOptions.value
+        : calibProjectOptions.value
+}
+
+function isVariableProtected(fieldName: string): boolean {
+    return (
+        Object.prototype.hasOwnProperty.call(operatorConfigVariableSources.value, fieldName) &&
+        !convertedVariableFields.value.has(fieldName)
+    )
+}
+
+function convertVariableField(field: OperatorConfigFieldDefinition): void {
+    const next = new Set(convertedVariableFields.value)
+    next.add(field.name)
+    convertedVariableFields.value = next
+    operatorConfigValues.value[field.name] = initialConfigValue(field)
+}
+
+function configFieldError(field: OperatorConfigFieldDefinition): string {
+    if (isVariableProtected(field.name)) return ''
+    const value = operatorConfigValues.value[field.name]
+    const empty = value === undefined || value === null || value === ''
+    if (field.required && empty) return '此配置为必填项。'
+    if (empty) return ''
+    if (isResourceField(field)) {
+        if (!isGuid(value)) return '请选择有效资源，源码中必须保存 GUID。'
+        if (!resourceOptionsLoading.value) {
+            const option = resourceOptionsFor(field).find((item) => item.value === value)
+            if (!option || option.disabled) return '原资源已删除或当前不可用，请重新选择。'
+        }
+    }
+    if (isNumericValueType(field)) {
+        const number = Number(value)
+        if (!Number.isFinite(number)) return '请输入有效数值。'
+        if (isIntegerField(field) && !Number.isInteger(number)) return '请输入整数。'
+        if (field.controlType === PortControlType.Number) {
+            const { min, max } = numericBounds(field)
+            if (min !== undefined && number < min) return `不能小于 ${min}。`
+            if (max !== undefined && number > max) return `不能大于 ${max}。`
+        }
+    }
+    if (isBooleanField(field) && typeof value !== 'boolean') return '请选择启用或禁用。'
+    if (isSelectField(field) && !selectOptions(field).some((option) => option.value === value))
+        return '请选择允许的配置值。'
+    return ''
+}
+
+function hasConfigErrors(): boolean {
+    const definition = operatorConfigDefinition.value
+    if (!definition) return true
+    return (
+        !!resourceOptionsError.value ||
+        definition.configFields.some((field) => !!configFieldError(field))
+    )
+}
+
+function literalConfigValues(): Record<string, unknown> {
+    const result: Record<string, unknown> = {}
+    for (const field of operatorConfigDefinition.value?.configFields ?? []) {
+        if (isVariableProtected(field.name)) continue
+        const value = operatorConfigValues.value[field.name]
+        if (value === undefined || value === null || value === '') continue
+        result[field.name] = isNumericValueType(field) ? Number(value) : value
+    }
+    return result
+}
+
+async function openInsertOperatorConfig(definition: WorkflowNodeDefinition): Promise<void> {
+    operatorInsertPosition = editor?.getPosition() ?? null
+    resetOperatorConfig(definition, 'insert')
+    operatorDocsOpen.value = false
+    operatorConfigOpen.value = true
+    await loadConfigResourceOptions()
+}
+
+async function openSelectedNodeConfig(): Promise<void> {
+    if (!source.value || !selectedNodeId.value) return
+    operatorConfigBusy.value = true
+    try {
+        await loadOperatorDefinitions()
+        const version = documentVersion.value
+        const graph = await sourceToGraph(source.value.sourceCode)
+        if (documentVersion.value !== version) throw new Error('源码已变化，请重新打开节点配置。')
+        source.value.graphData = graph
+        jsonText.value = JSON.stringify(graph, null, 2)
+        const node = findGraphNode(graph, selectedNodeId.value)
+        if (!node) throw new Error('当前源码中找不到所选节点。')
+        const definition = operatorDefinitions.value.find(
+            (item) => item.id.toLocaleLowerCase() === node.type.toLocaleLowerCase(),
+        )
+        if (!definition || definition.nodeType !== 'Operator')
+            throw new Error('所选节点不是可配置的算子节点。')
+        resetOperatorConfig(definition, 'edit', node)
+        operatorConfigOpen.value = true
+        await loadConfigResourceOptions()
+    } catch (error) {
+        toast.error(`打开节点配置失败：${String(error)}`)
+    } finally {
+        operatorConfigBusy.value = false
+    }
+}
+
+async function insertConfiguredOperator(): Promise<void> {
+    const definition = operatorConfigDefinition.value
+    if (!definition || !source.value || !editor) return
+    const version = documentVersion.value
+    const position = operatorInsertPosition ?? editor.getPosition()
+    const offset = position ? editor.getModel()?.getOffsetAt(position) ?? 0 : 0
+    const result = await operatorSnippet({
+        ...ideInput(offset),
+        operatorId: definition.id,
+        configValues: literalConfigValues(),
+    })
+    if (result.documentVersion !== version || documentVersion.value !== version)
+        throw new Error('源码已变化，未插入过期的算子配置。')
+    activeView.value = 'source'
+    await nextTick()
+    if (position) editor.setPosition(position)
+    editor.focus()
+    editor.trigger('workflow-operator-config', 'editor.action.insertSnippet', {
+        snippet: result.insertText,
+    })
+    operatorConfigOpen.value = false
+}
+
+async function patchConfiguredNode(): Promise<void> {
+    if (!source.value || !operatorConfigNodeId.value) return
+    const version = documentVersion.value
+    const sourceSnapshot = { ...source.value }
+    const graph = await sourceToGraph(sourceSnapshot.sourceCode)
+    if (documentVersion.value !== version) throw new Error('源码已变化，请重新应用配置。')
+    const node = findGraphNode(graph, operatorConfigNodeId.value)
+    if (!node) throw new Error('当前源码中找不到所选节点。')
+    node.properties ??= {}
+    node.properties.params = { ...(node.properties.params ?? {}) }
+    node.properties.paramSources = { ...(node.properties.paramSources ?? {}) }
+    for (const field of operatorConfigDefinition.value?.configFields ?? []) {
+        if (isVariableProtected(field.name)) continue
+        const value = operatorConfigValues.value[field.name]
+        if (value === undefined || value === null || value === '') {
+            delete node.properties.params[field.name]
+            delete node.properties.paramSources[field.name]
+            continue
+        }
+        node.properties.params[field.name] = isNumericValueType(field) ? Number(value) : value
+        node.properties.paramSources[field.name] = 'literal'
+    }
+    const patchVersion = version + 1
+    const result = await patchGraph(sourceSnapshot, graph, patchVersion)
+    if (documentVersion.value !== version || result.documentVersion !== patchVersion)
+        throw new Error('源码已变化，未应用过期的配置结果。')
+    if (result.hasConflict) throw new Error('配置与服务器版本冲突，请重新加载工作流后再应用。')
+
+    documentVersion.value = patchVersion
+    source.value.sourceCode = result.sourceCode
+    source.value.graphData = result.graphData
+    jsonText.value = JSON.stringify(result.graphData, null, 2)
+    dirty.value = true
+    const model = editor?.getModel()
+    if (editor && model && model.getValue() !== result.sourceCode) {
+        editor.pushUndoStop()
+        editor.executeEdits('workflow-operator-config', [
+            {
+                range: model.getFullModelRange(),
+                text: result.sourceCode,
+                forceMoveMarkers: true,
+            },
+        ])
+        editor.pushUndoStop()
+    }
+    scheduleValidation()
+    operatorConfigOpen.value = false
+}
+
+async function applyOperatorConfig(): Promise<void> {
+    operatorConfigError.value = ''
+    if (hasConfigErrors()) {
+        operatorConfigError.value = '请先修正配置项错误。'
+        return
+    }
+    operatorConfigBusy.value = true
+    try {
+        if (operatorConfigMode.value === 'insert') await insertConfiguredOperator()
+        else await patchConfiguredNode()
+    } catch (error) {
+        operatorConfigError.value = error instanceof Error ? error.message : String(error)
+    } finally {
+        operatorConfigBusy.value = false
+    }
 }
 const taskLoading = ref(false)
 const taskSaving = ref(false)
@@ -339,22 +847,59 @@ const handshakeFields = [
     ['resultCodeAddress', '结果码 ResultCode', 'DINT；平台写入 OK/NG/Error'],
     ['errorCodeAddress', '错误码 ErrorCode', 'DINT；平台写入错误原因'],
 ] as const
-const handshakeVariableOptions = computed(() => {
-    const result: Array<{ address: string; label: string }> = []
-    const visit = (nodes: PlcBrowseTreeNode[], depth: number) => {
+type HandshakeFieldName = (typeof handshakeFields)[number][0]
+const handshakeInputFields = new Set<HandshakeFieldName>([
+    'captureRequestAddress',
+    'requestIdAddress',
+    'resultAckAddress',
+    'resultAckIdAddress',
+])
+const handshakeBooleanFields = new Set<HandshakeFieldName>([
+    'captureRequestAddress',
+    'resultAckAddress',
+    'canCaptureAddress',
+    'captureAckAddress',
+    'resultValidAddress',
+])
+const handshakeVariableNodes = computed(() => {
+    const result: PlcBrowseTreeNode[] = []
+    const visit = (nodes: PlcBrowseTreeNode[]) => {
         for (const node of nodes) {
-            if (node.nodeClass.toLowerCase() === 'variable') {
-                result.push({
-                    address: node.address,
-                    label: `${'　'.repeat(depth)}${node.displayName || node.browseName} · ${node.address}`,
-                })
-            }
-            visit(node.children || [], depth + 1)
+            if (node.nodeClass.toLowerCase() === 'variable') result.push(node)
+            visit(node.children || [])
         }
     }
-    visit(handshakeNodeTree.value, 0)
+    visit(handshakeNodeTree.value)
     return result
 })
+function handshakeVariableOptionsFor(field: HandshakeFieldName) {
+    const requiredAccess = handshakeInputFields.has(field) ? PlcTagAccess.Read : PlcTagAccess.Write
+    const requiredType = handshakeBooleanFields.has(field) ? PlcTagDataType.Boolean : PlcTagDataType.Int32
+    return handshakeVariableNodes.value
+        .filter((node) => (node.access & requiredAccess) !== 0 && node.dataType === requiredType)
+        .map((node) => ({
+            address: node.address,
+            label: `${node.displayName || node.browseName} · ${node.address} · ${
+                node.access === PlcTagAccess.ReadWrite
+                    ? 'RW'
+                    : (node.access & PlcTagAccess.Write) !== 0
+                      ? 'WO'
+                      : 'RO'
+            } · ${PlcTagDataType[node.dataType!]}`,
+        }))
+}
+
+function validateHandshakeNode(field: HandshakeFieldName) {
+    const address = handshakeForm.value[field]
+    const node = handshakeVariableNodes.value.find((item) => item.address === address)
+    if (!node) return
+    const requiredAccess = handshakeInputFields.has(field) ? PlcTagAccess.Read : PlcTagAccess.Write
+    if ((node.access & requiredAccess) === 0)
+        throw new Error(`${handshakeFields.find(([name]) => name === field)?.[1]} 节点权限不符合握手方向。`)
+    const requiredType = handshakeBooleanFields.has(field) ? PlcTagDataType.Boolean : PlcTagDataType.Int32
+    if (node.dataType !== requiredType)
+        throw new Error(`${handshakeFields.find(([name]) => name === field)?.[1]} 节点类型必须为 ${PlcTagDataType[requiredType]}。`)
+}
 let editor: monaco.editor.IStandaloneCodeEditor | undefined
 let validationTimer: ReturnType<typeof setTimeout> | undefined
 let cursorMapTimer: ReturnType<typeof setTimeout> | undefined
@@ -584,6 +1129,9 @@ async function saveHandshake() {
     if (!projectId.value) return
     try {
         taskSaving.value = true
+        if (handshakeForm.value.isEnabled) {
+            for (const [field] of handshakeFields) validateHandshakeNode(field)
+        }
         handshakeForm.value.projectId = projectId.value
         await saveWorkflowPlcHandshake(projectId.value, handshakeForm.value)
         handshakeStatus.value = await getWorkflowPlcHandshakeStatus(projectId.value)
@@ -871,6 +1419,18 @@ async function validateNow() {
             endColumn: Math.max(1, item.range.end.column),
         }))
     )
+    if (!result.diagnostics.some((item) => item.severity === 'error')) {
+        try {
+            const sourceCode = source.value?.sourceCode
+            if (!sourceCode) return
+            const graph = await sourceToGraph(sourceCode)
+            if (documentVersion.value !== version || source.value?.sourceCode !== sourceCode) return
+            source.value.graphData = graph
+            jsonText.value = JSON.stringify(graph, null, 2)
+        } catch {
+            // Diagnostics remain the source of truth while a document is incomplete.
+        }
+    }
 }
 
 function scheduleValidation() {
@@ -1760,6 +2320,15 @@ async function rollbackMigration(workflowId?: string) {
                         任务配置
                     </Button>
                     <Button size="small" severity="secondary" outlined @click="openOperatorDocs">算子说明</Button>
+                    <Button
+                        size="small"
+                        severity="secondary"
+                        outlined
+                        :disabled="!selectedNodeId || operatorConfigBusy"
+                        @click="openSelectedNodeConfig"
+                    >
+                        节点配置
+                    </Button>
                     <Button size="small" severity="secondary" outlined :loading="migrationBusy" @click="previewMigration">
                         V1/V2 迁移
                     </Button>
@@ -2013,6 +2582,11 @@ async function rollbackMigration(workflowId?: string) {
                         <p class="mt-1 text-sm text-muted-foreground">
                             {{ selectedOperator.description || '暂无算子功能说明' }}
                         </p>
+                        <div class="mt-3 flex justify-end">
+                            <Button size="small" @click="openInsertOperatorConfig(selectedOperator)">
+                                配置并插入到光标
+                            </Button>
+                        </div>
                         <template
                             v-for="group in [
                                 { title: '入参', empty: '无入参', items: selectedOperator.inputPorts, config: false },
@@ -2071,6 +2645,174 @@ async function rollbackMigration(workflowId?: string) {
                         请选择一个算子查看配置说明。
                     </section>
                 </div>
+            </aside>
+        </div>
+
+        <div v-if="operatorConfigOpen" class="plc-trigger-mask" @click.self="operatorConfigOpen = false">
+            <aside class="plc-trigger-drawer operator-config-drawer">
+                <header class="drawer-header">
+                    <div class="min-w-0">
+                        <div class="font-medium">
+                            {{ operatorConfigMode === 'insert' ? '配置并插入算子' : '节点参数配置' }}
+                        </div>
+                        <div class="truncate text-xs text-muted-foreground">
+                            {{ operatorConfigDefinition?.displayName }}
+                            <template v-if="operatorConfigNodeId"> · {{ operatorConfigNodeId }}</template>
+                        </div>
+                    </div>
+                    <Button size="small" text severity="secondary" @click="operatorConfigOpen = false">
+                        关闭
+                    </Button>
+                </header>
+                <div class="min-h-0 flex-1 space-y-4 overflow-auto p-4">
+                    <div
+                        v-if="resourceOptionsError"
+                        class="rounded border border-red-300 bg-red-50 p-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300"
+                    >
+                        <div>资源列表加载失败：{{ resourceOptionsError }}</div>
+                        <Button size="small" text severity="danger" class="mt-1 px-0" @click="loadConfigResourceOptions">
+                            重试
+                        </Button>
+                    </div>
+                    <div v-if="resourceOptionsLoading" class="text-sm text-muted-foreground">
+                        正在加载可用资源…
+                    </div>
+                    <div
+                        v-if="operatorConfigDefinition?.configFields.length === 0"
+                        class="rounded border border-dashed p-4 text-sm text-muted-foreground"
+                    >
+                        此算子没有构造配置参数，插入后可继续填写输入和输出变量。
+                    </div>
+                    <section
+                        v-for="field in operatorConfigDefinition?.configFields ?? []"
+                        :key="field.name"
+                        class="rounded border p-3"
+                    >
+                        <div class="mb-2 flex flex-wrap items-center gap-2">
+                            <strong class="text-sm">{{ field.displayName || field.name }}</strong>
+                            <code class="text-xs">{{ field.name }}</code>
+                            <span :class="field.required ? 'text-red-600' : 'text-muted-foreground'" class="text-xs">
+                                {{ field.required ? '必填' : '可选' }}
+                            </span>
+                        </div>
+                        <p v-if="field.description" class="mb-2 text-xs leading-5 text-muted-foreground">
+                            {{ field.description }}
+                        </p>
+
+                        <div
+                            v-if="isVariableProtected(field.name)"
+                            class="rounded border border-amber-300 bg-amber-50 p-3 text-sm dark:border-amber-800 dark:bg-amber-950/30"
+                        >
+                            <div>
+                                当前由变量 <code>{{ operatorConfigVariableSources[field.name] }}</code> 绑定，配置面板不会自动覆盖。
+                            </div>
+                            <Button size="small" text severity="warn" class="mt-1 px-0" @click="convertVariableField(field)">
+                                改为固定配置
+                            </Button>
+                        </div>
+
+                        <template v-else>
+                            <Select
+                                v-if="isResourceField(field)"
+                                v-model="operatorConfigValues[field.name]"
+                                filter
+                                size="small"
+                                class="w-full"
+                                :loading="resourceOptionsLoading"
+                                :options="resourceOptionsFor(field)"
+                                option-label="label"
+                                option-value="value"
+                                option-disabled="disabled"
+                                :placeholder="
+                                    field.controlType === PortControlType.ProductModelSelect
+                                        ? '选择已就绪工艺模型'
+                                        : '选择标定参数与设备来源'
+                                "
+                            >
+                                <template #option="{ option }">
+                                    <div class="min-w-0 py-0.5">
+                                        <div class="truncate font-medium">{{ option.label }}</div>
+                                        <div class="truncate text-xs text-muted-foreground">{{ option.detail }}</div>
+                                    </div>
+                                </template>
+                            </Select>
+                            <InputNumber
+                                v-else-if="isNumberField(field)"
+                                :model-value="
+                                    typeof operatorConfigValues[field.name] === 'number'
+                                        ? (operatorConfigValues[field.name] as number)
+                                        : null
+                                "
+                                @update:model-value="operatorConfigValues[field.name] = $event"
+                                class="w-full"
+                                :min="numericBounds(field).min"
+                                :max="numericBounds(field).max"
+                                :min-fraction-digits="isIntegerField(field) ? 0 : undefined"
+                                :max-fraction-digits="isIntegerField(field) ? 0 : undefined"
+                                :use-grouping="false"
+                            />
+                            <Select
+                                v-else-if="isSelectField(field)"
+                                v-model="operatorConfigValues[field.name]"
+                                size="small"
+                                class="w-full"
+                                :options="selectOptions(field)"
+                                option-label="label"
+                                option-value="value"
+                            />
+                            <label v-else-if="isBooleanField(field)" class="flex items-center gap-2 text-sm">
+                                <Checkbox v-model="operatorConfigValues[field.name]" binary />
+                                {{ operatorConfigValues[field.name] ? '启用' : '禁用' }}
+                            </label>
+                            <InputText
+                                v-else
+                                :model-value="String(operatorConfigValues[field.name] ?? '')"
+                                @update:model-value="operatorConfigValues[field.name] = $event"
+                                size="small"
+                                class="w-full"
+                                :placeholder="field.required ? '请输入必填值' : '留空使用算子默认值'"
+                            />
+                            <div v-if="configFieldError(field)" class="mt-1 text-xs text-red-600">
+                                {{ configFieldError(field) }}
+                            </div>
+                            <div
+                                v-else-if="isResourceField(field) && resourceOptionsFor(field).length === 0 && !resourceOptionsLoading"
+                                class="mt-2 rounded border border-dashed p-2 text-xs text-muted-foreground"
+                            >
+                                当前没有可选资源。
+                                <Button
+                                    v-if="field.controlType === PortControlType.ProductModelSelect"
+                                    size="small"
+                                    text
+                                    class="px-1"
+                                    @click="router.push('/product-models')"
+                                >
+                                    前往工艺模型管理
+                                </Button>
+                            </div>
+                        </template>
+                    </section>
+
+                    <div
+                        v-if="operatorConfigError"
+                        class="rounded border border-red-300 bg-red-50 p-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300"
+                    >
+                        {{ operatorConfigError }}
+                    </div>
+                </div>
+                <footer class="flex justify-end gap-2 border-t p-3">
+                    <Button size="small" severity="secondary" outlined @click="operatorConfigOpen = false">
+                        取消
+                    </Button>
+                    <Button
+                        size="small"
+                        :loading="operatorConfigBusy"
+                        :disabled="resourceOptionsLoading"
+                        @click="applyOperatorConfig"
+                    >
+                        {{ operatorConfigMode === 'insert' ? '插入到源码' : '应用到源码' }}
+                    </Button>
+                </footer>
             </aside>
         </div>
 
@@ -2228,7 +2970,7 @@ async function rollbackMigration(workflowId?: string) {
                                     size="small"
                                     :disabled="!handshakeForm.plcDeviceId || handshakeTreeLoading"
                                     class="mt-1 w-full font-mono"
-                                    :options="handshakeVariableOptions"
+                                    :options="handshakeVariableOptionsFor(field[0])"
                                     option-label="label"
                                     option-value="address"
                                     placeholder="请选择 OPC UA 节点"
@@ -2967,6 +3709,9 @@ async function rollbackMigration(workflowId?: string) {
 .operator-docs-drawer {
     width: min(72rem, 100vw);
 }
+.operator-config-drawer {
+    width: min(38rem, 100vw);
+}
 .operator-docs-body {
     display: flex;
     min-height: 0;
@@ -3143,7 +3888,8 @@ async function rollbackMigration(workflowId?: string) {
     }
     .plc-trigger-drawer,
     .task-config-drawer,
-    .operator-docs-drawer {
+    .operator-docs-drawer,
+    .operator-config-drawer {
         width: 100vw;
         border-left: 0;
     }

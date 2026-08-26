@@ -132,6 +132,13 @@ public static class CalibrationDbContextModelCreatingExtensions
             b.Property(x => x.Description).HasMaxLength(CalibConsts.MaxDescriptionLength);
             b.Property(x => x.TemplateCategory).HasMaxLength(CalibConsts.MaxTemplateCategoryLength);
             b.Property(x => x.PatternType).HasConversion<int>();
+            b.Property(x => x.DarkLevel).HasDefaultValue((byte)24);
+            b.Property(x => x.BrightLevel).HasDefaultValue((byte)220);
+            b.ToTable(
+                $"{TablePrefix}CalibProjectorParams",
+                tableBuilder => tableBuilder.HasCheckConstraint(
+                    "CK_AbpProCalibProjectorParams_GrayLevels",
+                    "\"DarkLevel\" >= 0 AND \"BrightLevel\" <= 255 AND \"DarkLevel\" < \"BrightLevel\""));
             b.Property(x => x.ProjectionRatio).HasPrecision(10, 4);
             b.Property(x => x.PhaseShift).HasPrecision(10, 6);
             // Step3 投影仪参数配置页新增字段
@@ -172,6 +179,22 @@ public static class CalibrationDbContextModelCreatingExtensions
             b.Property(x => x.PhotoType).HasConversion<int>();
             b.Property(x => x.StereoRole).HasConversion<int>().IsRequired(false);
             b.Property(x => x.ExtrinsicPhase).HasConversion<int>().IsRequired(false);
+            b.Property(x => x.ExposureScore).IsRequired(false);
+            b.Property(x => x.SharpnessScore).IsRequired(false);
+            b.ToTable(
+                $"{TablePrefix}CalibPhotoRecords",
+                tableBuilder =>
+                {
+                    tableBuilder.HasCheckConstraint(
+                        "CK_AbpProCalibPhotoRecords_ExposureScore",
+                        "\"ExposureScore\" IS NULL OR (\"ExposureScore\" >= 1 AND \"ExposureScore\" <= 100)"
+                    );
+                    tableBuilder.HasCheckConstraint(
+                        "CK_AbpProCalibPhotoRecords_SharpnessScore",
+                        "\"SharpnessScore\" IS NULL OR (\"SharpnessScore\" >= 1 AND \"SharpnessScore\" <= 100)"
+                    );
+                }
+            );
             // ThumbnailBase64 为 nvarchar(max)，不限制长度
 
             b.HasIndex(x => x.CalibProjectId);

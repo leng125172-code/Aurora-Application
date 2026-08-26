@@ -212,6 +212,12 @@ public class WorkflowNodePerformanceDto
 /// </summary>
 public class WorkflowProjectRunEnqueueInput
 {
+    [System.Text.Json.Serialization.JsonIgnore]
+    public Guid? PlcHandshakeConfigId { get; set; }
+    [System.Text.Json.Serialization.JsonIgnore]
+    public int? PlcRequestId { get; set; }
+    [System.Text.Json.Serialization.JsonIgnore]
+    public long? PlcRequestSequence { get; set; }
     /// <summary>运行名称。</summary>
     [Required]
     [StringLength(128)]
@@ -352,6 +358,7 @@ public class WorkflowProjectDeploymentDto
 
     /// <summary>项目 ID。</summary>
     public Guid ProjectId { get; set; }
+    public Guid? TaskConfigId { get; set; }
 
     /// <summary>版本号。</summary>
     public int Revision { get; set; }
@@ -513,6 +520,9 @@ public class WorkflowProjectRunItemDto
     /// <summary>错误信息。</summary>
     public string? ErrorMessage { get; set; }
 
+    /// <summary>从算子错误中提取的机器可识别错误码。</summary>
+    public string? ErrorCode { get; set; }
+
     /// <summary>开始时间。</summary>
     public DateTime? StartedAt { get; set; }
 
@@ -530,6 +540,7 @@ public class WorkflowProjectRunStatusDto
 
     /// <summary>项目 ID。</summary>
     public Guid ProjectId { get; set; }
+    public Guid? TaskConfigId { get; set; }
 
     /// <summary>运行名称。</summary>
     public string Name { get; set; } = string.Empty;
@@ -581,6 +592,9 @@ public class WorkflowProjectRunStatusDto
 
     /// <summary>错误信息。</summary>
     public string? ErrorMessage { get; set; }
+
+    /// <summary>从运行错误中提取的机器可识别错误码。</summary>
+    public string? ErrorCode { get; set; }
 
     public WorkflowInspectionDecision InspectionDecision { get; set; }
     public WorkflowPlcHandshakeErrorCode InspectionErrorCode { get; set; }
@@ -849,6 +863,9 @@ public class WorkflowExecutionStatusDto
 
     /// <summary>错误信息。</summary>
     public string? ErrorMessage { get; set; }
+
+    /// <summary>机器可识别的执行错误码；非故障状态时为空。</summary>
+    public string? ErrorCode { get; set; }
 
     /// <summary>耗时毫秒。</summary>
     public long DurationMs { get; set; }

@@ -32,6 +32,12 @@ public static class ProductModelDbContextModelCreatingExtensions
 
             b.Property(x => x.FileSizeBytes).IsRequired();
 
+            b.Property(x => x.LengthUnit).HasConversion<int>().IsRequired();
+
+            b.Property(x => x.SurfaceSamplingSpacingMm)
+                .IsRequired()
+                .HasDefaultValue(ProductModelConsts.DefaultSurfaceSamplingSpacingMm);
+
             // ── BLOB 存储键名 ─────────────────────────────────────────────────────
             b.Property(x => x.OriginalBlobName)
                 .IsRequired()

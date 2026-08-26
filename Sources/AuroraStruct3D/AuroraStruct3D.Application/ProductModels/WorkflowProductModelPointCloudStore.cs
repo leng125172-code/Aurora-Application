@@ -11,6 +11,7 @@ internal sealed class WorkflowProductModelPointCloudStore(
     IBlobContainer<ProductModelBlobContainer> blobContainer
 ) : IProductModelPointCloudStore
 {
+    private const string NormalizerVersion = "v2-mm-surface";
     private static readonly HashSet<string> SupportedExtensions = new(
         [".ply", ".pcd", ".xyz", ".txt", ".pts", ".asc", ".obj"],
         StringComparer.OrdinalIgnoreCase
@@ -38,23 +39,42 @@ internal sealed class WorkflowProductModelPointCloudStore(
 
         string cacheRoot = Path.Combine(Path.GetTempPath(), "aurora-product-model-cache");
         Directory.CreateDirectory(cacheRoot);
+        string cacheIdentity = string.Join(
+            '|',
+            NormalizerVersion,
+            blobName,
+            (int)model.LengthUnit,
+            model.SurfaceSamplingSpacingMm.ToString(
+                "R",
+                System.Globalization.CultureInfo.InvariantCulture
+            )
+        );
         string hash = Convert
-            .ToHexString(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(blobName)))
+            .ToHexString(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(cacheIdentity)))
             .ToLowerInvariant();
-        string localPath = Path.Combine(cacheRoot, $"{hash}{extension}");
-        if (File.Exists(localPath))
+        string localPath = Path.Combine(cacheRoot, $"{hash}.ply");
+        if (File.Exists(localPath) && new FileInfo(localPath).Length > 0)
             return localPath;
 
         await using Stream source = await blobContainer.GetAsync(blobName);
-        await using FileStream target = new(
-            localPath,
-            FileMode.Create,
-            FileAccess.Write,
-            FileShare.Read,
-            64 * 1024,
-            FileOptions.Asynchronous
-        );
-        await source.CopyToAsync(target);
+        string temporaryPath = Path.Combine(cacheRoot, $"{hash}.{Guid.NewGuid():N}.tmp");
+        try
+        {
+            ProductModelPointCloudNormalizer.Normalize(
+                source,
+                extension,
+                temporaryPath,
+                model.LengthUnit,
+                model.SurfaceSamplingSpacingMm,
+                ProductModelConsts.MaxReferencePointCount
+            );
+            File.Move(temporaryPath, localPath, overwrite: true);
+        }
+        finally
+        {
+            if (File.Exists(temporaryPath))
+                File.Delete(temporaryPath);
+        }
         return localPath;
     }
 }

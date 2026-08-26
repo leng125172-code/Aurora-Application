@@ -23,6 +23,8 @@ export interface CalibProjectorParamDto {
     periodCount: number
     /** 条纹类型：bw=黑白（首色黑），wb=白黑（首色白） */
     fringeType: 'bw' | 'wb'
+    darkLevel: number
+    brightLevel: number
     /** 图案数量（相移步数） */
     patternCount: number
     /** 相位偏移量 */
@@ -40,6 +42,8 @@ export interface SaveCalibProjectorParamInput {
     resolutionHeight: number
     periodCount: number
     fringeType: 'bw' | 'wb'
+    darkLevel: number
+    brightLevel: number
     patternCount: number
     phaseShift?: number | null
 }

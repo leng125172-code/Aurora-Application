@@ -374,25 +374,116 @@ public sealed class OpcUaPlcDriver : IPlcDriver, IPlcBrowsableDriver, IPlcSubscr
             session.BrowseNext(null, true, continuationPoint, out _, out _);
         }
 
+        Dictionary<string, BrowseVariableMetadata> metadata =
+            ReadBrowseVariableMetadata(session, allReferences);
         var items = allReferences
             .Take(request.MaxResults)
             .Select(x =>
-                new PlcBrowseNode(
-                    ExpandedNodeId.ToNodeId(x.NodeId, session.NamespaceUris)?.ToString()
-                        ?? x.NodeId.ToString(),
+            {
+                string address = ExpandedNodeId.ToNodeId(x.NodeId, session.NamespaceUris)?.ToString()
+                    ?? x.NodeId.ToString();
+                metadata.TryGetValue(address, out BrowseVariableMetadata? variable);
+                return new PlcBrowseNode(
+                    address,
                     x.BrowseName.Name ?? string.Empty,
                     x.DisplayName.Text ?? x.BrowseName.Name ?? string.Empty,
                     x.NodeClass.ToString(),
-                    null,
-                    x.NodeClass == NodeClass.Variable
-                        ? PlcTagAccess.ReadWrite
-                        : PlcTagAccess.None,
+                    variable?.DataType,
+                    variable?.Access ?? PlcTagAccess.None,
                     x.NodeClass == NodeClass.Object
-                )
-            )
+                );
+            })
             .ToArray();
         return Task.FromResult(new PlcBrowseResult(items, null));
     }
+
+    private static Dictionary<string, BrowseVariableMetadata> ReadBrowseVariableMetadata(
+        Session session,
+        IReadOnlyList<ReferenceDescription> references)
+    {
+        var variables = references
+            .Where(x => x.NodeClass == NodeClass.Variable)
+            .Select(x => ExpandedNodeId.ToNodeId(x.NodeId, session.NamespaceUris))
+            .Where(x => x is not null)
+            .Cast<NodeId>()
+            .ToList();
+        if (variables.Count == 0)
+            return new Dictionary<string, BrowseVariableMetadata>(StringComparer.Ordinal);
+
+        var reads = new ReadValueIdCollection();
+        foreach (NodeId nodeId in variables)
+        {
+            reads.Add(new ReadValueId { NodeId = nodeId, AttributeId = Attributes.DataType });
+            reads.Add(new ReadValueId { NodeId = nodeId, AttributeId = Attributes.AccessLevel });
+            reads.Add(new ReadValueId { NodeId = nodeId, AttributeId = Attributes.UserAccessLevel });
+        }
+        session.Read(null, 0, TimestampsToReturn.Neither, reads, out DataValueCollection values, out _);
+
+        var result = new Dictionary<string, BrowseVariableMetadata>(StringComparer.Ordinal);
+        for (int i = 0; i < variables.Count; i++)
+        {
+            DataValue dataTypeValue = values[i * 3];
+            DataValue accessValue = values[i * 3 + 1];
+            DataValue userAccessValue = values[i * 3 + 2];
+            NodeId? dataTypeId = StatusCode.IsGood(dataTypeValue.StatusCode)
+                ? dataTypeValue.Value as NodeId
+                : null;
+            byte accessLevel = StatusCode.IsGood(accessValue.StatusCode)
+                ? ReadAccessLevel(accessValue)
+                : ReadAccessLevel(userAccessValue);
+            byte userAccessLevel = StatusCode.IsGood(userAccessValue.StatusCode)
+                ? ReadAccessLevel(userAccessValue)
+                : accessLevel;
+            result[variables[i].ToString()] = new BrowseVariableMetadata(
+                MapDataType(dataTypeId),
+                MapAccess((byte)(accessLevel & userAccessLevel))
+            );
+        }
+        return result;
+    }
+
+    private static byte ReadAccessLevel(DataValue value) => value.Value switch
+    {
+        byte b => b,
+        sbyte b => unchecked((byte)b),
+        ushort s => (byte)s,
+        uint i => (byte)i,
+        _ => 0,
+    };
+
+    private static PlcTagAccess MapAccess(byte accessLevel)
+    {
+        PlcTagAccess result = PlcTagAccess.None;
+        if ((accessLevel & AccessLevels.CurrentRead) != 0) result |= PlcTagAccess.Read;
+        if ((accessLevel & AccessLevels.CurrentWrite) != 0) result |= PlcTagAccess.Write;
+        return result;
+    }
+
+    private static PlcTagDataType? MapDataType(NodeId? dataTypeId)
+    {
+        if (dataTypeId is null || dataTypeId.NamespaceIndex != 0)
+            return null;
+        return Convert.ToUInt32(dataTypeId.Identifier) switch
+        {
+            1 => PlcTagDataType.Boolean,
+            2 => PlcTagDataType.SByte,
+            3 => PlcTagDataType.Byte,
+            4 => PlcTagDataType.Int16,
+            5 => PlcTagDataType.UInt16,
+            6 => PlcTagDataType.Int32,
+            7 => PlcTagDataType.UInt32,
+            8 => PlcTagDataType.Int64,
+            9 => PlcTagDataType.UInt64,
+            10 => PlcTagDataType.Float,
+            11 => PlcTagDataType.Double,
+            12 => PlcTagDataType.String,
+            13 => PlcTagDataType.DateTime,
+            15 => PlcTagDataType.ByteString,
+            _ => null,
+        };
+    }
+
+    private sealed record BrowseVariableMetadata(PlcTagDataType? DataType, PlcTagAccess Access);
 
     public Task<string> SubscribeAsync(
         IPlcConnection connection,

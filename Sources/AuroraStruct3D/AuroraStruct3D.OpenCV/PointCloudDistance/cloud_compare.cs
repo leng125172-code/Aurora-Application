@@ -34,7 +34,7 @@ public class cloud_compare : IOperator
                 Name = "useCoarseRegistration",
                 DisplayName = "启用粗配准",
                 ParameterType = typeof(bool),
-                DefaultValue = "false",
+                DefaultValue = "true",
                 Required = false,
                 ControlType = PortControlType.Switch,
             },
@@ -61,9 +61,9 @@ public class cloud_compare : IOperator
             new ConfigParameter
             {
                 Name = "maxCorrespondenceDistance",
-                DisplayName = "最大对应点距离",
+                DisplayName = "最大对应点距离(mm，0=自动)",
                 ParameterType = typeof(double),
-                DefaultValue = "0.1",
+                DefaultValue = "0",
                 Required = false,
                 ControlType = PortControlType.Input,
             },
@@ -72,8 +72,8 @@ public class cloud_compare : IOperator
                 Name = "distanceThreshold",
                 DisplayName = "缺陷阈值",
                 ParameterType = typeof(double),
-                DefaultValue = "0.05",
-                Required = false,
+                DefaultValue = null,
+                Required = true,
                 ControlType = PortControlType.Input,
             },
             new ConfigParameter
@@ -100,8 +100,8 @@ public class cloud_compare : IOperator
                 Name = "maxDefectRatio",
                 DisplayName = "最大超差点比例",
                 ParameterType = typeof(double),
-                DefaultValue = "0",
-                Required = false,
+                DefaultValue = null,
+                Required = true,
                 ControlType = PortControlType.Input,
             },
             new ConfigParameter
@@ -109,14 +109,41 @@ public class cloud_compare : IOperator
                 Name = "maxMeanDistance",
                 DisplayName = "最大平均偏差",
                 ParameterType = typeof(double),
-                DefaultValue = "1.7976931348623157E+308",
-                Required = false,
+                DefaultValue = null,
+                Required = true,
                 ControlType = PortControlType.Input,
             },
             new ConfigParameter
             {
                 Name = "maxMissingRatio",
                 DisplayName = "最大缺失点比例",
+                ParameterType = typeof(double),
+                DefaultValue = null,
+                Required = true,
+                ControlType = PortControlType.Input,
+            },
+            new ConfigParameter
+            {
+                Name = "minCoarseInlierRatio",
+                DisplayName = "粗配准最小内点比例",
+                ParameterType = typeof(double),
+                DefaultValue = "0.1",
+                Required = false,
+                ControlType = PortControlType.Input,
+            },
+            new ConfigParameter
+            {
+                Name = "minFineCorrespondenceRatio",
+                DisplayName = "精配准最小对应比例",
+                ParameterType = typeof(double),
+                DefaultValue = "0.15",
+                Required = false,
+                ControlType = PortControlType.Input,
+            },
+            new ConfigParameter
+            {
+                Name = "maxRegistrationRmse",
+                DisplayName = "最大配准RMSE(mm，0=自动)",
                 ParameterType = typeof(double),
                 DefaultValue = "0",
                 Required = false,
@@ -134,7 +161,12 @@ public class cloud_compare : IOperator
     private readonly double _maxDefectRatio;
     private readonly double _maxMeanDistance;
     private readonly double _maxMissingRatio;
+    private readonly double _minCoarseInlierRatio;
+    private readonly double _minFineCorrespondenceRatio;
+    private readonly double _maxRegistrationRmse;
     private bool _disposed;
+
+    private const int RegistrationPointLimit = 2_000;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -143,16 +175,19 @@ public class cloud_compare : IOperator
     };
 
     public cloud_compare(
-        bool useCoarseRegistration = false,
+        bool useCoarseRegistration = true,
         string registrationMethod = "point_to_plane",
         int maxIterations = 50,
-        double maxCorrespondenceDistance = 0.1,
+        double maxCorrespondenceDistance = 0,
         double distanceThreshold = 0.05,
         int imageResolution = 512,
         double voxelSize = 0,
         double maxDefectRatio = 0,
         double maxMeanDistance = double.MaxValue,
-        double maxMissingRatio = 0
+        double maxMissingRatio = 0,
+        double minCoarseInlierRatio = 0.1,
+        double minFineCorrespondenceRatio = 0.15,
+        double maxRegistrationRmse = 0
     )
     {
         _useCoarseRegistration = useCoarseRegistration;
@@ -163,7 +198,12 @@ public class cloud_compare : IOperator
         _imageResolution = imageResolution;
         _voxelSize = voxelSize;
         if (
-            !double.IsFinite(distanceThreshold)
+            maxIterations <= 0
+            || !double.IsFinite(maxCorrespondenceDistance)
+            || maxCorrespondenceDistance < 0
+            || !double.IsFinite(voxelSize)
+            || voxelSize < 0
+            || !double.IsFinite(distanceThreshold)
             || distanceThreshold <= 0
             || maxDefectRatio < 0
             || maxDefectRatio > 1
@@ -171,11 +211,24 @@ public class cloud_compare : IOperator
             || maxMissingRatio > 1
             || double.IsNaN(maxMeanDistance)
             || maxMeanDistance <= 0
+            || minCoarseInlierRatio < 0
+            || minCoarseInlierRatio > 1
+            || minFineCorrespondenceRatio <= 0
+            || minFineCorrespondenceRatio > 1
+            || !double.IsFinite(maxRegistrationRmse)
+            || maxRegistrationRmse < 0
         )
             throw new ArgumentException("3D比较阈值配置无效。");
+        if (!new[] { "icp", "point_to_plane", "ndt" }.Contains(registrationMethod, StringComparer.OrdinalIgnoreCase))
+            throw new ArgumentException("3D比较精配准方法无效。", nameof(registrationMethod));
+        if (imageResolution <= 0)
+            throw new ArgumentOutOfRangeException(nameof(imageResolution));
         _maxDefectRatio = maxDefectRatio;
         _maxMeanDistance = maxMeanDistance;
         _maxMissingRatio = maxMissingRatio;
+        _minCoarseInlierRatio = minCoarseInlierRatio;
+        _minFineCorrespondenceRatio = minFineCorrespondenceRatio;
+        _maxRegistrationRmse = maxRegistrationRmse;
     }
 
     public void Execute(IWorkflowContext context)
@@ -184,117 +237,160 @@ public class cloud_compare : IOperator
 
         PointCloudData sourceData =
             context.Get<PointCloudData>("source_cloud")
-            ?? throw new InvalidOperationException(
+            ?? throw Failure(
+                "POINT_CLOUD_SOURCE_NOT_AVAILABLE",
                 "上下文变量 'source_cloud' 为空，请确认输入绑定已正确设置。"
             );
 
         PointCloudData targetData =
             context.Get<PointCloudData>("target_cloud")
-            ?? throw new InvalidOperationException(
+            ?? throw Failure(
+                "PRODUCT_MODEL_UNAVAILABLE",
                 "上下文变量 'target_cloud' 为空，请确认输入绑定已正确设置。"
             );
 
-        Mat sourceCloud = sourceData.PointCloud!;
-        Mat targetCloud = targetData.PointCloud!;
-
-        if (sourceCloud is null || sourceCloud.Empty())
-            throw new InvalidOperationException("源点云为空，无法执行 3D 比较。");
-        if (targetCloud is null || targetCloud.Empty())
-            throw new InvalidOperationException("目标点云为空，无法执行 3D 比较。");
-
+        Mat sourceCloud = ValidateCloud(sourceData.PointCloud, "源", "POINT_CLOUD_SOURCE_NOT_AVAILABLE");
+        Mat targetCloud = ValidateCloud(targetData.PointCloud, "目标", "PRODUCT_MODEL_UNAVAILABLE");
         int sourceCount = sourceCloud.Rows;
         int targetCount = targetCloud.Rows;
 
-        if (sourceCount < 3)
-            throw new InvalidOperationException("源点云点数不足（< 3），无法执行比较。");
-        if (targetCount < 3)
-            throw new InvalidOperationException("目标点云点数不足（< 3），无法执行比较。");
+        double sourceDiagonal = BoundingBoxDiagonal(sourceCloud);
+        double targetDiagonal = BoundingBoxDiagonal(targetCloud);
+        double scaleRatio = sourceDiagonal / targetDiagonal;
+        if (!double.IsFinite(scaleRatio) || scaleRatio < 0.01 || scaleRatio > 100)
+            throw Failure(
+                "POINT_CLOUD_UNIT_MISMATCH",
+                $"源点云与目标点云尺寸相差过大（对角线 {sourceDiagonal:F4} mm / {targetDiagonal:F4} mm），请检查模型单位。"
+            );
 
-        Mat workingSource = sourceCloud.Clone();
-        Mat workingTarget = targetCloud.Clone();
+        double spacing = EstimatePointSpacing(targetCloud, targetDiagonal);
+        double effectiveVoxelSize = _voxelSize > 0
+            ? _voxelSize
+            : Math.Clamp(2 * spacing, targetDiagonal / 1000.0, targetDiagonal / 100.0);
+        double featureRadius = Math.Min(
+            Math.Max(5 * effectiveVoxelSize, targetDiagonal * 0.03),
+            targetDiagonal * 0.10
+        );
+        double coarseDistanceThreshold = Math.Min(
+            Math.Max(2 * effectiveVoxelSize, targetDiagonal * 0.01),
+            targetDiagonal * 0.05
+        );
+        double effectiveMaxCorrespondenceDistance = _maxCorrespondenceDistance > 0
+            ? _maxCorrespondenceDistance
+            : Math.Min(
+                Math.Max(3 * effectiveVoxelSize, targetDiagonal * 0.02),
+                targetDiagonal * 0.10
+            );
+        double effectiveMaxRegistrationRmse = _maxRegistrationRmse > 0
+            ? _maxRegistrationRmse
+            : Math.Max(_distanceThreshold, effectiveMaxCorrespondenceDistance * 0.5);
 
-        if (_voxelSize > 0)
-        {
-            workingSource = VoxelDownsample(workingSource, _voxelSize);
-            workingTarget = VoxelDownsample(workingTarget, _voxelSize);
-            sourceCount = workingSource.Rows;
-            targetCount = workingTarget.Rows;
-        }
+        using Mat workingSource = CreateRegistrationCloud(
+            sourceCloud,
+            effectiveVoxelSize,
+            RegistrationPointLimit
+        );
+        using Mat workingTarget = CreateRegistrationCloud(
+            targetCloud,
+            effectiveVoxelSize,
+            RegistrationPointLimit
+        );
+        if (workingSource.Rows < 3 || workingTarget.Rows < 3)
+            throw Failure(
+                "POINT_CLOUD_INVALID",
+                "点云经配准降采样后点数不足，请减小体素尺寸。"
+            );
 
-        float[] srcX = new float[sourceCount];
-        float[] srcY = new float[sourceCount];
-        float[] srcZ = new float[sourceCount];
-        for (int i = 0; i < sourceCount; i++)
-        {
-            srcX[i] = workingSource.Get<float>(i, 0);
-            srcY[i] = workingSource.Get<float>(i, 1);
-            srcZ[i] = workingSource.Get<float>(i, 2);
-        }
+        (float[] srcX, float[] srcY, float[] srcZ) = ExtractCoordinates(workingSource);
+        (float[] tgtX, float[] tgtY, float[] tgtZ) = ExtractCoordinates(workingTarget);
 
-        float[] tgtX = new float[targetCount];
-        float[] tgtY = new float[targetCount];
-        float[] tgtZ = new float[targetCount];
-        for (int i = 0; i < targetCount; i++)
-        {
-            tgtX[i] = workingTarget.Get<float>(i, 0);
-            tgtY[i] = workingTarget.Get<float>(i, 1);
-            tgtZ[i] = workingTarget.Get<float>(i, 2);
-        }
-
-        double[] accumR = { 1, 0, 0, 0, 1, 0, 0, 0, 1 };
-        double[] accumT = { 0, 0, 0 };
-        double[] coarseR = (double[])accumR.Clone();
-        double[] coarseT = (double[])accumT.Clone();
-
+        double[] coarseR = IdentityRotation();
+        double[] coarseT = new double[3];
+        CoarseRegistrationOutcome coarseOutcome = CoarseRegistrationOutcome.NotUsed;
         if (_useCoarseRegistration)
         {
-            (accumR, accumT) = CoarseRegistration(srcX, srcY, srcZ, tgtX, tgtY, tgtZ);
-            coarseR = (double[])accumR.Clone();
-            coarseT = (double[])accumT.Clone();
+            coarseOutcome = CoarseRegistration(
+                srcX,
+                srcY,
+                srcZ,
+                tgtX,
+                tgtY,
+                tgtZ,
+                featureRadius,
+                coarseDistanceThreshold
+            );
+            if (
+                coarseOutcome.CorrespondenceCount < 3
+                || coarseOutcome.InlierCount < 3
+                || coarseOutcome.InlierRatio < _minCoarseInlierRatio
+            )
+                throw Failure(
+                    "CLOUD_COMPARE_COARSE_REGISTRATION_FAILED",
+                    $"粗配准质量不足：内点 {coarseOutcome.InlierCount}/{coarseOutcome.CorrespondenceCount}，"
+                        + $"比例 {coarseOutcome.InlierRatio:P2}，要求至少 {_minCoarseInlierRatio:P2}。"
+                );
 
-            for (int i = 0; i < sourceCount; i++)
-            {
-                double x = srcX[i], y = srcY[i], z = srcZ[i];
-                srcX[i] = (float)(accumR[0] * x + accumR[1] * y + accumR[2] * z + accumT[0]);
-                srcY[i] = (float)(accumR[3] * x + accumR[4] * y + accumR[5] * z + accumT[1]);
-                srcZ[i] = (float)(accumR[6] * x + accumR[7] * y + accumR[8] * z + accumT[2]);
-            }
+            coarseR = coarseOutcome.Rotation;
+            coarseT = coarseOutcome.Translation;
+            ApplyTransform(srcX, srcY, srcZ, coarseR, coarseT);
         }
 
-        switch (_registrationMethod.ToLower())
+        RegistrationOutcome fineOutcome = _registrationMethod.ToLowerInvariant() switch
         {
-            case "icp":
-                (accumR, accumT) = IcpRegistration(srcX, srcY, srcZ, tgtX, tgtY, tgtZ, _maxCorrespondenceDistance, _maxIterations);
-                break;
-            case "point_to_plane":
-                (accumR, accumT) = PointToPlaneIcp(srcX, srcY, srcZ, tgtX, tgtY, tgtZ, _maxCorrespondenceDistance, _maxIterations);
-                break;
-            case "ndt":
-                (accumR, accumT) = NdtRegistration(srcX, srcY, srcZ, tgtX, tgtY, tgtZ);
-                break;
-            default:
-                throw new InvalidOperationException($"未知的配准方法: {_registrationMethod}");
-        }
+            "icp" => IcpRegistration(
+                srcX,
+                srcY,
+                srcZ,
+                tgtX,
+                tgtY,
+                tgtZ,
+                effectiveMaxCorrespondenceDistance,
+                _maxIterations
+            ),
+            "point_to_plane" => PointToPlaneIcp(
+                srcX,
+                srcY,
+                srcZ,
+                tgtX,
+                tgtY,
+                tgtZ,
+                effectiveMaxCorrespondenceDistance,
+                _maxIterations
+            ),
+            "ndt" => NdtRegistration(
+                srcX,
+                srcY,
+                srcZ,
+                tgtX,
+                tgtY,
+                tgtZ,
+                effectiveMaxCorrespondenceDistance,
+                _maxIterations
+            ),
+            _ => throw new InvalidOperationException($"未知的配准方法: {_registrationMethod}"),
+        };
 
-        for (int i = 0; i < sourceCount; i++)
-        {
-            double x = srcX[i], y = srcY[i], z = srcZ[i];
-            srcX[i] = (float)(accumR[0] * x + accumR[1] * y + accumR[2] * z + accumT[0]);
-            srcY[i] = (float)(accumR[3] * x + accumR[4] * y + accumR[5] * z + accumT[1]);
-            srcZ[i] = (float)(accumR[6] * x + accumR[7] * y + accumR[8] * z + accumT[2]);
-        }
+        double fineCorrespondenceRatio =
+            srcX.Length > 0 ? (double)fineOutcome.CorrespondenceCount / srcX.Length : 0;
+        if (
+            fineOutcome.CorrespondenceCount < 3
+            || fineCorrespondenceRatio < _minFineCorrespondenceRatio
+            || !double.IsFinite(fineOutcome.Rmse)
+            || fineOutcome.Rmse > effectiveMaxRegistrationRmse
+        )
+            throw Failure(
+                "CLOUD_COMPARE_FINE_REGISTRATION_FAILED",
+                $"精配准质量不足：对应点 {fineOutcome.CorrespondenceCount}/{srcX.Length}，"
+                    + $"比例 {fineCorrespondenceRatio:P2}，RMSE {fineOutcome.Rmse:F4} mm；"
+                    + $"要求比例至少 {_minFineCorrespondenceRatio:P2}、RMSE 不超过 {effectiveMaxRegistrationRmse:F4} mm。"
+            );
 
-        // 点坐标已经依次应用粗、精变换；输出矩阵则组合为针对原始扫描点的一次变换。
+        double[] accumR = fineOutcome.Rotation;
+        double[] accumT = fineOutcome.Translation;
         if (_useCoarseRegistration)
             (accumR, accumT) = ComposeTransform(accumR, accumT, coarseR, coarseT);
 
-        Mat alignedCloud = new Mat(sourceCount, 3, MatType.CV_32FC1);
-        for (int i = 0; i < sourceCount; i++)
-        {
-            alignedCloud.Set(i, 0, srcX[i]);
-            alignedCloud.Set(i, 1, srcY[i]);
-            alignedCloud.Set(i, 2, srcZ[i]);
-        }
+        Mat alignedCloud = TransformPointCloud(sourceCloud, accumR, accumT);
 
         Mat transformMatrix = Mat.Eye(4, 4, MatType.CV_64FC1);
         for (int r = 0; r < 3; r++)
@@ -304,23 +400,47 @@ public class cloud_compare : IOperator
             transformMatrix.Set(r, 3, accumT[r]);
         }
 
-        var (distances, maxDist, meanDist, stdDev, defectCount) = ComputeCloudToCloudDistance(
-            srcX, srcY, srcZ, tgtX, tgtY, tgtZ, _maxCorrespondenceDistance, _distanceThreshold
-        );
-        var (reverseDistances, _, _, _, missingCount) = ComputeCloudToCloudDistance(
-            tgtX,
-            tgtY,
-            tgtZ,
-            srcX,
-            srcY,
-            srcZ,
-            _maxCorrespondenceDistance,
+        (float[] alignedX, float[] alignedY, float[] alignedZ) = ExtractCoordinates(alignedCloud);
+        (float[] fullTargetX, float[] fullTargetY, float[] fullTargetZ) =
+            ExtractCoordinates(targetCloud);
+        DistanceOutcome forwardDistance = ComputeCloudToCloudDistance(
+            alignedX,
+            alignedY,
+            alignedZ,
+            fullTargetX,
+            fullTargetY,
+            fullTargetZ,
+            effectiveMaxCorrespondenceDistance,
             _distanceThreshold
         );
-        reverseDistances.Dispose();
+        DistanceOutcome reverseDistance = ComputeCloudToCloudDistance(
+            fullTargetX,
+            fullTargetY,
+            fullTargetZ,
+            alignedX,
+            alignedY,
+            alignedZ,
+            effectiveMaxCorrespondenceDistance,
+            _distanceThreshold
+        );
+        reverseDistance.Distances.Dispose();
+
+        if (forwardDistance.MatchedCount == 0)
+        {
+            forwardDistance.Distances.Dispose();
+            alignedCloud.Dispose();
+            transformMatrix.Dispose();
+            throw Failure(
+                "CLOUD_COMPARE_FINE_REGISTRATION_FAILED",
+                "配准后完整源点云没有有效目标对应点。"
+            );
+        }
 
         Mat distanceImage = GenerateDistanceHeatmap(
-            alignedCloud, distances, _imageResolution, maxDist
+            alignedCloud,
+            forwardDistance.Distances,
+            _imageResolution,
+            Math.Max(forwardDistance.MaxDistance, _distanceThreshold)
         );
 
         double rotationAngle = ComputeRotationAngle(accumR);
@@ -328,20 +448,26 @@ public class cloud_compare : IOperator
             accumT[0] * accumT[0] + accumT[1] * accumT[1] + accumT[2] * accumT[2]
         );
 
-        double minDist = double.MaxValue;
-        for (int i = 0; i < distances.Rows; i++)
-        {
-            double d = distances.Get<double>(i, 0);
-            if (d >= 0 && d < minDist)
-                minDist = d;
-        }
-        if (minDist == double.MaxValue) minDist = 0;
+        int defectCount = forwardDistance.OverThresholdCount + forwardDistance.UnmatchedCount;
         double defectRatio = sourceCount > 0 ? (double)defectCount / sourceCount : 1;
-        double missingRatio = targetCount > 0 ? (double)missingCount / targetCount : 1;
+        int missingCount = reverseDistance.OverThresholdCount + reverseDistance.UnmatchedCount;
+        double missingRatio = targetCount > 0
+            ? (double)missingCount / targetCount
+            : 1;
         bool isOk =
             defectRatio <= _maxDefectRatio
             && missingRatio <= _maxMissingRatio
-            && meanDist <= _maxMeanDistance;
+            && forwardDistance.MeanDistance <= _maxMeanDistance;
+
+        List<string> reasons = [];
+        if (defectRatio > _maxDefectRatio)
+            reasons.Add($"超差点比例 {defectRatio:P2} > {_maxDefectRatio:P2}");
+        if (missingRatio > _maxMissingRatio)
+            reasons.Add($"缺失点比例 {missingRatio:P2} > {_maxMissingRatio:P2}");
+        if (forwardDistance.MeanDistance > _maxMeanDistance)
+            reasons.Add(
+                $"平均偏差 {forwardDistance.MeanDistance:F4} mm > {_maxMeanDistance:F4} mm"
+            );
 
         var result = new CloudCompareResult
         {
@@ -349,13 +475,16 @@ public class cloud_compare : IOperator
             TargetPointCount = targetCount,
             HeightDifference = new HeightDifferenceStats
             {
-                MaxDistance = maxDist,
-                MeanDistance = meanDist,
-                StdDev = stdDev,
-                MinDistance = minDist,
+                MaxDistance = forwardDistance.MaxDistance,
+                MeanDistance = forwardDistance.MeanDistance,
+                StdDev = forwardDistance.StdDev,
+                MinDistance = forwardDistance.MinDistance,
+                P95Distance = forwardDistance.P95Distance,
                 DefectCount = defectCount,
                 DefectRatio = defectRatio,
                 Threshold = _distanceThreshold,
+                MatchedPointCount = forwardDistance.MatchedCount,
+                UnmatchedPointCount = forwardDistance.UnmatchedCount,
             },
             PositionDifference = new PositionDifferenceStats
             {
@@ -373,6 +502,23 @@ public class cloud_compare : IOperator
             MaxMeanDistance = _maxMeanDistance,
             MissingRatio = missingRatio,
             MaxMissingRatio = _maxMissingRatio,
+            EffectiveVoxelSizeMm = effectiveVoxelSize,
+            EffectiveMaxCorrespondenceDistanceMm = effectiveMaxCorrespondenceDistance,
+            SourceRegistrationPointCount = workingSource.Rows,
+            TargetRegistrationPointCount = workingTarget.Rows,
+            CoarseCorrespondenceCount = coarseOutcome.CorrespondenceCount,
+            CoarseInlierCount = coarseOutcome.InlierCount,
+            CoarseInlierRatio = coarseOutcome.InlierRatio,
+            FineIterations = fineOutcome.Iterations,
+            FineConverged = fineOutcome.Converged,
+            FineCorrespondenceCount = fineOutcome.CorrespondenceCount,
+            FineCorrespondenceRatio = fineCorrespondenceRatio,
+            RegistrationRmseMm = fineOutcome.Rmse,
+            MatchedSourcePointCount = forwardDistance.MatchedCount,
+            UnmatchedSourcePointCount = forwardDistance.UnmatchedCount,
+            MatchedTargetPointCount = reverseDistance.MatchedCount,
+            UnmatchedTargetPointCount = reverseDistance.UnmatchedCount,
+            MissingTargetPointCount = missingCount,
         };
 
         var outputCloud = new PointCloudData();
@@ -382,10 +528,303 @@ public class cloud_compare : IOperator
 
         context.Set("aligned_cloud", outputCloud);
         context.Set("transform_matrix", transformMatrix);
-        context.Set("distance_mat", distances);
+        context.Set("distance_mat", forwardDistance.Distances);
         context.Set("distance_image", distanceImage);
-        context.Set("result", InspectionResults.CreateTyped(true, isOk, result));
+        context.Set(
+            "result",
+            new InspectionResult<CloudCompareResult>
+            {
+                isValid = true,
+                isOk = isOk,
+                resultCode = isOk ? InspectionResultCode.OK : InspectionResultCode.NG,
+                message = isOk ? "OK" : "3D比较超出质量阈值。",
+                reasons = reasons,
+                details = result,
+            }
+        );
     }
+
+    private static InvalidOperationException Failure(string code, string message) =>
+        new($"[{code}] {message}");
+
+    private static Mat ValidateCloud(Mat? cloud, string displayName, string missingCode)
+    {
+        if (cloud is null || cloud.Empty())
+            throw Failure(missingCode, $"{displayName}点云为空，无法执行 3D 比较。");
+        if (cloud.Type() != MatType.CV_32FC1 || cloud.Cols < 3)
+            throw Failure(
+                "POINT_CLOUD_INVALID",
+                $"{displayName}点云必须是至少三列的 CV_32FC1 矩阵。"
+            );
+        if (cloud.Rows < 3)
+            throw Failure(
+                "POINT_CLOUD_INVALID",
+                $"{displayName}点云点数不足（{cloud.Rows} < 3），无法执行比较。"
+            );
+
+        for (int row = 0; row < cloud.Rows; row++)
+        for (int col = 0; col < 3; col++)
+            if (!float.IsFinite(cloud.Get<float>(row, col)))
+                throw Failure(
+                    "POINT_CLOUD_INVALID",
+                    $"{displayName}点云包含 NaN 或无穷坐标（第 {row + 1} 点）。"
+                );
+        return cloud;
+    }
+
+    private static double BoundingBoxDiagonal(Mat cloud)
+    {
+        double minX = double.PositiveInfinity,
+            minY = double.PositiveInfinity,
+            minZ = double.PositiveInfinity;
+        double maxX = double.NegativeInfinity,
+            maxY = double.NegativeInfinity,
+            maxZ = double.NegativeInfinity;
+        for (int row = 0; row < cloud.Rows; row++)
+        {
+            double x = cloud.Get<float>(row, 0);
+            double y = cloud.Get<float>(row, 1);
+            double z = cloud.Get<float>(row, 2);
+            minX = Math.Min(minX, x);
+            minY = Math.Min(minY, y);
+            minZ = Math.Min(minZ, z);
+            maxX = Math.Max(maxX, x);
+            maxY = Math.Max(maxY, y);
+            maxZ = Math.Max(maxZ, z);
+        }
+        double dx = maxX - minX,
+            dy = maxY - minY,
+            dz = maxZ - minZ;
+        double diagonal = Math.Sqrt(dx * dx + dy * dy + dz * dz);
+        if (!double.IsFinite(diagonal) || diagonal <= 1e-9)
+            throw Failure("POINT_CLOUD_INVALID", "点云包围盒退化，无法估计配准尺度。");
+        return diagonal;
+    }
+
+    private static double EstimatePointSpacing(Mat cloud, double diagonal)
+    {
+        int comparisonCount = Math.Min(cloud.Rows, 2_000);
+        int queryCount = Math.Min(comparisonCount, 256);
+        int[] comparisonIndices = UniformSample(cloud.Rows, comparisonCount);
+        int[] queryIndices = UniformSample(cloud.Rows, queryCount);
+        List<double> nearestDistances = new(queryCount);
+
+        foreach (int queryIndex in queryIndices)
+        {
+            double qx = cloud.Get<float>(queryIndex, 0);
+            double qy = cloud.Get<float>(queryIndex, 1);
+            double qz = cloud.Get<float>(queryIndex, 2);
+            double bestSq = double.PositiveInfinity;
+            foreach (int candidateIndex in comparisonIndices)
+            {
+                double dx = cloud.Get<float>(candidateIndex, 0) - qx;
+                double dy = cloud.Get<float>(candidateIndex, 1) - qy;
+                double dz = cloud.Get<float>(candidateIndex, 2) - qz;
+                double distanceSq = dx * dx + dy * dy + dz * dz;
+                if (distanceSq > 1e-18 && distanceSq < bestSq)
+                    bestSq = distanceSq;
+            }
+            if (double.IsFinite(bestSq))
+                nearestDistances.Add(Math.Sqrt(bestSq));
+        }
+
+        if (nearestDistances.Count == 0)
+            return diagonal / 500.0;
+        nearestDistances.Sort();
+        double median = nearestDistances[nearestDistances.Count / 2];
+        return double.IsFinite(median) && median > 0 ? median : diagonal / 500.0;
+    }
+
+    private static Mat CreateRegistrationCloud(Mat cloud, double voxelSize, int pointLimit)
+    {
+        Mat voxelized = VoxelDownsample(cloud, voxelSize);
+        if (voxelized.Rows <= pointLimit)
+            return voxelized;
+
+        Mat limited = UniformDownsampleCloud(voxelized, pointLimit);
+        voxelized.Dispose();
+        return limited;
+    }
+
+    private static Mat UniformDownsampleCloud(Mat cloud, int maxPoints)
+    {
+        int count = Math.Min(cloud.Rows, maxPoints);
+        int[] indices = UniformSample(cloud.Rows, count);
+        Mat result = new(count, 3, MatType.CV_32FC1);
+        for (int row = 0; row < indices.Length; row++)
+        for (int col = 0; col < 3; col++)
+            result.Set(row, col, cloud.Get<float>(indices[row], col));
+        return result;
+    }
+
+    private static (float[] X, float[] Y, float[] Z) ExtractCoordinates(Mat cloud)
+    {
+        float[] x = new float[cloud.Rows];
+        float[] y = new float[cloud.Rows];
+        float[] z = new float[cloud.Rows];
+        for (int row = 0; row < cloud.Rows; row++)
+        {
+            x[row] = cloud.Get<float>(row, 0);
+            y[row] = cloud.Get<float>(row, 1);
+            z[row] = cloud.Get<float>(row, 2);
+        }
+        return (x, y, z);
+    }
+
+    private static double[] IdentityRotation() =>
+        [1, 0, 0, 0, 1, 0, 0, 0, 1];
+
+    private static void ApplyTransform(
+        float[] x,
+        float[] y,
+        float[] z,
+        double[] rotation,
+        double[] translation
+    )
+    {
+        for (int i = 0; i < x.Length; i++)
+        {
+            double px = x[i],
+                py = y[i],
+                pz = z[i];
+            x[i] = (float)(
+                rotation[0] * px + rotation[1] * py + rotation[2] * pz + translation[0]
+            );
+            y[i] = (float)(
+                rotation[3] * px + rotation[4] * py + rotation[5] * pz + translation[1]
+            );
+            z[i] = (float)(
+                rotation[6] * px + rotation[7] * py + rotation[8] * pz + translation[2]
+            );
+        }
+    }
+
+    private static Mat TransformPointCloud(Mat source, double[] rotation, double[] translation)
+    {
+        Mat result = new(source.Rows, source.Cols, MatType.CV_32FC1);
+        for (int row = 0; row < source.Rows; row++)
+        {
+            double x = source.Get<float>(row, 0);
+            double y = source.Get<float>(row, 1);
+            double z = source.Get<float>(row, 2);
+            result.Set(
+                row,
+                0,
+                (float)(rotation[0] * x + rotation[1] * y + rotation[2] * z + translation[0])
+            );
+            result.Set(
+                row,
+                1,
+                (float)(rotation[3] * x + rotation[4] * y + rotation[5] * z + translation[1])
+            );
+            result.Set(
+                row,
+                2,
+                (float)(rotation[6] * x + rotation[7] * y + rotation[8] * z + translation[2])
+            );
+
+            int copyStart = 3;
+            if (source.Cols >= 6)
+            {
+                double nx = source.Get<float>(row, 3);
+                double ny = source.Get<float>(row, 4);
+                double nz = source.Get<float>(row, 5);
+                double rnx = rotation[0] * nx + rotation[1] * ny + rotation[2] * nz;
+                double rny = rotation[3] * nx + rotation[4] * ny + rotation[5] * nz;
+                double rnz = rotation[6] * nx + rotation[7] * ny + rotation[8] * nz;
+                double length = Math.Sqrt(rnx * rnx + rny * rny + rnz * rnz);
+                if (length > 1e-12)
+                {
+                    rnx /= length;
+                    rny /= length;
+                    rnz /= length;
+                }
+                result.Set(row, 3, (float)rnx);
+                result.Set(row, 4, (float)rny);
+                result.Set(row, 5, (float)rnz);
+                copyStart = 6;
+            }
+
+            for (int col = copyStart; col < source.Cols; col++)
+                result.Set(row, col, source.Get<float>(row, col));
+        }
+        return result;
+    }
+
+    private static CorrespondenceQuality EvaluateCorrespondences(
+        float[] srcX,
+        float[] srcY,
+        float[] srcZ,
+        float[] tgtX,
+        float[] tgtY,
+        float[] tgtZ,
+        double maxCorrespondenceDistance
+    )
+    {
+        var grid = new SpatialHashGrid(
+            tgtX,
+            tgtY,
+            tgtZ,
+            maxCorrespondenceDistance,
+            tgtX.Length
+        );
+        int count = 0;
+        double sumSq = 0;
+        for (int i = 0; i < srcX.Length; i++)
+        {
+            int nearest = grid.FindNearestNeighborWithin(
+                srcX[i],
+                srcY[i],
+                srcZ[i],
+                maxCorrespondenceDistance,
+                out double distanceSq
+            );
+            if (nearest < 0)
+                continue;
+            count++;
+            sumSq += distanceSq;
+        }
+        return new CorrespondenceQuality(
+            count,
+            count > 0 ? Math.Sqrt(sumSq / count) : double.PositiveInfinity
+        );
+    }
+
+    private sealed record CoarseRegistrationOutcome(
+        double[] Rotation,
+        double[] Translation,
+        int CorrespondenceCount,
+        int InlierCount
+    )
+    {
+        public static CoarseRegistrationOutcome NotUsed { get; } =
+            new(IdentityRotation(), new double[3], 0, 0);
+        public double InlierRatio =>
+            CorrespondenceCount > 0 ? (double)InlierCount / CorrespondenceCount : 0;
+    }
+
+    private sealed record RegistrationOutcome(
+        double[] Rotation,
+        double[] Translation,
+        int Iterations,
+        int CorrespondenceCount,
+        double Rmse,
+        bool Converged
+    );
+
+    private readonly record struct CorrespondenceQuality(int Count, double Rmse);
+
+    private sealed record DistanceOutcome(
+        Mat Distances,
+        int MatchedCount,
+        int UnmatchedCount,
+        int OverThresholdCount,
+        double MinDistance,
+        double MaxDistance,
+        double MeanDistance,
+        double StdDev,
+        double P95Distance
+    );
 
     private static (double[] R, double[] T) ComposeTransform(
         double[] fineR,
@@ -450,9 +889,11 @@ public class cloud_compare : IOperator
         return result;
     }
 
-    private static (double[], double[]) CoarseRegistration(
+    private static CoarseRegistrationOutcome CoarseRegistration(
         float[] srcX, float[] srcY, float[] srcZ,
-        float[] tgtX, float[] tgtY, float[] tgtZ
+        float[] tgtX, float[] tgtY, float[] tgtZ,
+        double featureRadius,
+        double distanceThreshold
     )
     {
         int srcCount = srcX.Length;
@@ -462,11 +903,25 @@ public class cloud_compare : IOperator
         int[] srcSamples = UniformSample(srcCount, sampleCount);
         int[] tgtSamples = UniformSample(tgtCount, sampleCount);
 
-        var srcGrid = new SpatialHashGrid(srcX, srcY, srcZ, 0.05f, srcCount);
-        var tgtGrid = new SpatialHashGrid(tgtX, tgtY, tgtZ, 0.05f, tgtCount);
+        var srcGrid = new SpatialHashGrid(srcX, srcY, srcZ, featureRadius, srcCount);
+        var tgtGrid = new SpatialHashGrid(tgtX, tgtY, tgtZ, featureRadius, tgtCount);
 
-        var srcFeat = ComputeFpfhFeatures(srcX, srcY, srcZ, srcGrid, srcSamples, 0.05);
-        var tgtFeat = ComputeFpfhFeatures(tgtX, tgtY, tgtZ, tgtGrid, tgtSamples, 0.05);
+        var srcFeat = ComputeFpfhFeatures(
+            srcX,
+            srcY,
+            srcZ,
+            srcGrid,
+            srcSamples,
+            featureRadius
+        );
+        var tgtFeat = ComputeFpfhFeatures(
+            tgtX,
+            tgtY,
+            tgtZ,
+            tgtGrid,
+            tgtSamples,
+            featureRadius
+        );
 
         var correspondences = new List<(int, int)>();
         for (int i = 0; i < srcSamples.Length; i++)
@@ -483,17 +938,22 @@ public class cloud_compare : IOperator
                 }
             }
             if (bestJ >= 0)
-                correspondences.Add((srcSamples[i], tgtSamples[i]));
+                correspondences.Add((srcSamples[i], tgtSamples[bestJ]));
         }
 
         if (correspondences.Count < 3)
-            return (new[] { 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0 }, new[] { 0.0, 0.0, 0.0 });
+            return new CoarseRegistrationOutcome(
+                IdentityRotation(),
+                new double[3],
+                correspondences.Count,
+                0
+            );
 
-        Random rng = new Random();
-        double[] bestR = { 1, 0, 0, 0, 1, 0, 0, 0, 1 };
-        double[] bestT = { 0, 0, 0 };
+        Random rng = new(0);
+        double[] bestR = IdentityRotation();
+        double[] bestT = new double[3];
         int bestInliers = -1;
-        double threshSq = 0.05 * 0.05;
+        double threshSq = distanceThreshold * distanceThreshold;
 
         for (int iter = 0; iter < 1000; iter++)
         {
@@ -533,10 +993,15 @@ public class cloud_compare : IOperator
             }
         }
 
-        return (bestR, bestT);
+        return new CoarseRegistrationOutcome(
+            bestR,
+            bestT,
+            correspondences.Count,
+            Math.Max(bestInliers, 0)
+        );
     }
 
-    private static (double[], double[]) IcpRegistration(
+    private static RegistrationOutcome IcpRegistration(
         float[] srcX, float[] srcY, float[] srcZ,
         float[] tgtX, float[] tgtY, float[] tgtZ,
         double maxCorrespondenceDistance, int maxIterations
@@ -551,13 +1016,24 @@ public class cloud_compare : IOperator
 
         double maxCorrDistSq = maxCorrespondenceDistance * maxCorrespondenceDistance;
         double prevRmse = double.MaxValue;
+        double finalRmse = double.PositiveInfinity;
+        int finalCorrespondenceCount = 0;
+        int actualIterations = 0;
+        bool converged = false;
 
         for (int iter = 0; iter < maxIterations; iter++)
         {
+            actualIterations = iter + 1;
             var correspondences = new List<(int, int)>();
             for (int i = 0; i < srcCount; i++)
             {
-                int nearest = grid.FindNearestNeighbor(srcX[i], srcY[i], srcZ[i], out _);
+                int nearest = grid.FindNearestNeighborWithin(
+                    srcX[i],
+                    srcY[i],
+                    srcZ[i],
+                    maxCorrespondenceDistance,
+                    out _
+                );
                 if (nearest < 0) continue;
                 float dx = srcX[i] - tgtX[nearest];
                 float dy = srcY[i] - tgtY[nearest];
@@ -567,7 +1043,9 @@ public class cloud_compare : IOperator
                     correspondences.Add((i, nearest));
             }
 
-            if (correspondences.Count < 3) break;
+            finalCorrespondenceCount = correspondences.Count;
+            if (correspondences.Count < 3)
+                break;
 
             double srcCx = 0, srcCy = 0, srcCz = 0;
             double tgtCx = 0, tgtCy = 0, tgtCz = 0;
@@ -624,15 +1102,41 @@ public class cloud_compare : IOperator
                 rmse += dx * dx + dy * dy + dz * dz;
             }
             rmse = Math.Sqrt(rmse / corrCount);
+            finalRmse = rmse;
 
-            if (Math.Abs(prevRmse - rmse) < 1e-6) break;
+            if (Math.Abs(prevRmse - rmse) < 1e-6)
+            {
+                converged = true;
+                break;
+            }
             prevRmse = rmse;
         }
 
-        return (R, t);
+        CorrespondenceQuality quality = EvaluateCorrespondences(
+            srcX,
+            srcY,
+            srcZ,
+            tgtX,
+            tgtY,
+            tgtZ,
+            maxCorrespondenceDistance
+        );
+        if (quality.Count > 0)
+        {
+            finalCorrespondenceCount = quality.Count;
+            finalRmse = quality.Rmse;
+        }
+        return new RegistrationOutcome(
+            R,
+            t,
+            actualIterations,
+            finalCorrespondenceCount,
+            finalRmse,
+            converged
+        );
     }
 
-    private static (double[], double[]) PointToPlaneIcp(
+    private static RegistrationOutcome PointToPlaneIcp(
         float[] srcX, float[] srcY, float[] srcZ,
         float[] tgtX, float[] tgtY, float[] tgtZ,
         double maxCorrespondenceDistance, int maxIterations
@@ -664,16 +1168,26 @@ public class cloud_compare : IOperator
         double[] t = { 0, 0, 0 };
 
         double maxCorrDistSq = maxCorrespondenceDistance * maxCorrespondenceDistance;
+        int actualIterations = 0;
+        int finalCorrespondenceCount = 0;
+        bool converged = false;
 
         for (int iter = 0; iter < maxIterations; iter++)
         {
+            actualIterations = iter + 1;
             double[,] A = new double[6, 6];
             double[] b = new double[6];
             int corrCount = 0;
 
             for (int i = 0; i < srcCount; i++)
             {
-                int nn = grid.FindNearestNeighbor(srcX[i], srcY[i], srcZ[i], out double distSq);
+                int nn = grid.FindNearestNeighborWithin(
+                    srcX[i],
+                    srcY[i],
+                    srcZ[i],
+                    maxCorrespondenceDistance,
+                    out double distSq
+                );
                 if (nn < 0 || distSq > maxCorrDistSq) continue;
 
                 corrCount++;
@@ -695,7 +1209,9 @@ public class cloud_compare : IOperator
                 }
             }
 
-            if (corrCount < 6) break;
+            finalCorrespondenceCount = corrCount;
+            if (corrCount < 6)
+                break;
 
             double[] x = Solve6(A, b);
             double[] dR = RodriguesToMatrix(x[0], x[1], x[2]);
@@ -722,29 +1238,54 @@ public class cloud_compare : IOperator
             t = newT;
 
             double transformChange = Math.Abs(dt[0]) + Math.Abs(dt[1]) + Math.Abs(dt[2]) + Math.Abs(x[0]) + Math.Abs(x[1]) + Math.Abs(x[2]);
-            if (transformChange < 1e-8) break;
+            if (transformChange < 1e-8)
+            {
+                converged = true;
+                break;
+            }
         }
 
-        return (R, t);
+        CorrespondenceQuality quality = EvaluateCorrespondences(
+            srcX,
+            srcY,
+            srcZ,
+            tgtX,
+            tgtY,
+            tgtZ,
+            maxCorrespondenceDistance
+        );
+        return new RegistrationOutcome(
+            R,
+            t,
+            actualIterations,
+            quality.Count > 0 ? quality.Count : finalCorrespondenceCount,
+            quality.Rmse,
+            converged
+        );
     }
 
-    private static (double[], double[]) NdtRegistration(
+    private static RegistrationOutcome NdtRegistration(
         float[] srcX, float[] srcY, float[] srcZ,
-        float[] tgtX, float[] tgtY, float[] tgtZ
+        float[] tgtX, float[] tgtY, float[] tgtZ,
+        double maxCorrespondenceDistance,
+        int maxIterations
     )
     {
         int srcCount = srcX.Length;
         int tgtCount = tgtX.Length;
 
-        double resolution = 1.0;
+        double resolution = maxCorrespondenceDistance;
         var voxels = BuildNdtVoxels(tgtX, tgtY, tgtZ, resolution);
 
         double[] p = new double[6];
         double[] hStep = { 1e-3, 1e-3, 1e-3, 1e-4, 1e-4, 1e-4 };
         double prevScore = NdtScore(p, srcX, srcY, srcZ, voxels, resolution);
 
-        for (int iter = 0; iter < 35; iter++)
+        int actualIterations = 0;
+        bool converged = false;
+        for (int iter = 0; iter < maxIterations; iter++)
         {
+            actualIterations = iter + 1;
             double[] g = NumericalGradient(p, hStep, srcX, srcY, srcZ, voxels, resolution);
             double[,] H = NumericalHessian(p, hStep, srcX, srcY, srcZ, voxels, resolution);
 
@@ -782,16 +1323,36 @@ public class cloud_compare : IOperator
             p = bestP;
             prevScore = bestScore;
 
-            if (change < 1e-8) break;
+            if (change < 1e-8)
+            {
+                converged = true;
+                break;
+            }
         }
 
         double[] R = RodriguesToMatrix(p[3], p[4], p[5]);
         double[] t = { p[0], p[1], p[2] };
-
-        return (R, t);
+        ApplyTransform(srcX, srcY, srcZ, R, t);
+        CorrespondenceQuality quality = EvaluateCorrespondences(
+            srcX,
+            srcY,
+            srcZ,
+            tgtX,
+            tgtY,
+            tgtZ,
+            maxCorrespondenceDistance
+        );
+        return new RegistrationOutcome(
+            R,
+            t,
+            actualIterations,
+            quality.Count,
+            quality.Rmse,
+            converged
+        );
     }
 
-    private static (Mat, double, double, double, int) ComputeCloudToCloudDistance(
+    private static DistanceOutcome ComputeCloudToCloudDistance(
         float[] srcX, float[] srcY, float[] srcZ,
         float[] tgtX, float[] tgtY, float[] tgtZ,
         double maxCorrespondenceDistance, double distanceThreshold
@@ -803,54 +1364,69 @@ public class cloud_compare : IOperator
         var grid = new SpatialHashGrid(tgtX, tgtY, tgtZ, (float)maxCorrespondenceDistance, tgtCount);
 
         Mat distances = new Mat(srcCount, 1, MatType.CV_64FC1);
-        double maxDist = 0, sumDist = 0;
-        int defectCount = 0;
-        int validCount = 0;
+        double maxDist = 0;
+        double minDist = double.PositiveInfinity;
+        double sumDist = 0;
+        int overThresholdCount = 0;
+        int matchedCount = 0;
+        int unmatchedCount = 0;
+        List<double> validDistances = new(srcCount);
 
         for (int i = 0; i < srcCount; i++)
         {
-            int nearestIdx = grid.FindNearestNeighbor(srcX[i], srcY[i], srcZ[i], out _);
-            double dist;
-
+            int nearestIdx = grid.FindNearestNeighborWithin(
+                srcX[i],
+                srcY[i],
+                srcZ[i],
+                maxCorrespondenceDistance,
+                out double distSq
+            );
             if (nearestIdx >= 0)
             {
-                float dx = srcX[i] - tgtX[nearestIdx];
-                float dy = srcY[i] - tgtY[nearestIdx];
-                float dz = srcZ[i] - tgtZ[nearestIdx];
-                dist = Math.Sqrt(dx * dx + dy * dy + dz * dz);
-            }
-            else
-            {
-                dist = -1;
-            }
-
-            if (dist >= 0)
-            {
+                double dist = Math.Sqrt(distSq);
                 distances.Set(i, 0, dist);
                 sumDist += dist;
-                validCount++;
-                if (dist > maxDist) maxDist = dist;
-                if (dist > distanceThreshold) defectCount++;
+                matchedCount++;
+                validDistances.Add(dist);
+                if (dist > maxDist)
+                    maxDist = dist;
+                if (dist < minDist)
+                    minDist = dist;
+                if (dist > distanceThreshold)
+                    overThresholdCount++;
             }
             else
             {
                 distances.Set(i, 0, double.MaxValue);
-                defectCount++;
+                unmatchedCount++;
             }
         }
 
-        double meanDist = validCount > 0 ? sumDist / validCount : 0;
+        double meanDist = matchedCount > 0 ? sumDist / matchedCount : double.PositiveInfinity;
 
         double sumSq = 0;
-        for (int i = 0; i < srcCount; i++)
+        foreach (double distance in validDistances)
         {
-            double d = distances.Get<double>(i, 0);
-            if (d >= 0 && d < double.MaxValue)
-                sumSq += Math.Pow(d - meanDist, 2);
+            double delta = distance - meanDist;
+            sumSq += delta * delta;
         }
-        double stdDev = validCount > 1 ? Math.Sqrt(sumSq / validCount) : 0;
+        double stdDev = matchedCount > 1 ? Math.Sqrt(sumSq / matchedCount) : 0;
+        validDistances.Sort();
+        double p95 = validDistances.Count > 0
+            ? validDistances[Math.Clamp((int)Math.Ceiling(validDistances.Count * 0.95) - 1, 0, validDistances.Count - 1)]
+            : double.PositiveInfinity;
 
-        return (distances, maxDist, meanDist, stdDev, defectCount);
+        return new DistanceOutcome(
+            distances,
+            matchedCount,
+            unmatchedCount,
+            overThresholdCount,
+            matchedCount > 0 ? minDist : double.PositiveInfinity,
+            maxDist,
+            meanDist,
+            stdDev,
+            p95
+        );
     }
 
     private static Mat GenerateDistanceHeatmap(Mat pointCloud, Mat distances, int resolution, double maxDist)
@@ -1269,6 +1845,23 @@ public class cloud_compare : IOperator
         public double MaxMeanDistance { get; set; }
         public double MissingRatio { get; set; }
         public double MaxMissingRatio { get; set; }
+        public double EffectiveVoxelSizeMm { get; set; }
+        public double EffectiveMaxCorrespondenceDistanceMm { get; set; }
+        public int SourceRegistrationPointCount { get; set; }
+        public int TargetRegistrationPointCount { get; set; }
+        public int CoarseCorrespondenceCount { get; set; }
+        public int CoarseInlierCount { get; set; }
+        public double CoarseInlierRatio { get; set; }
+        public int FineIterations { get; set; }
+        public bool FineConverged { get; set; }
+        public int FineCorrespondenceCount { get; set; }
+        public double FineCorrespondenceRatio { get; set; }
+        public double RegistrationRmseMm { get; set; }
+        public int MatchedSourcePointCount { get; set; }
+        public int UnmatchedSourcePointCount { get; set; }
+        public int MatchedTargetPointCount { get; set; }
+        public int UnmatchedTargetPointCount { get; set; }
+        public int MissingTargetPointCount { get; set; }
     }
 
     public class HeightDifferenceStats
@@ -1277,9 +1870,12 @@ public class cloud_compare : IOperator
         public double MeanDistance { get; set; }
         public double StdDev { get; set; }
         public double MinDistance { get; set; }
+        public double P95Distance { get; set; }
         public int DefectCount { get; set; }
         public double DefectRatio { get; set; }
         public double Threshold { get; set; }
+        public int MatchedPointCount { get; set; }
+        public int UnmatchedPointCount { get; set; }
     }
 
     public class PositionDifferenceStats

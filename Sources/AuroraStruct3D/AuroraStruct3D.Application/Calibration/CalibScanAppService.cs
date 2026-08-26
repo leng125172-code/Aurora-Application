@@ -2,8 +2,11 @@ using AuroraStruct3D.Calibration.Dtos;
 using AuroraStruct3D.Cameras;
 using AuroraStruct3D.Projectors;
 using AuroraStruct3D.Cameras.Tucam;
+using AuroraStruct3D.Sessions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using System.IO.Compression;
+using System.Text.Json;
 using Volo.Abp;
 using Volo.Abp.BlobStoring;
 using Volo.Abp.Domain.Repositories;
@@ -19,7 +22,9 @@ namespace AuroraStruct3D.Calibration;
 [Authorize]
 public class CalibScanAppService : AuroraStruct3DAppService, ICalibScanAppService
 {
-    private const int PatternFrameSettleDelayMs = 50;
+    // HID 写入成功并不代表 DLP 已完成换帧。120 fps 只是光机刷新率，
+    // 控制板解析命令、切换序列还需要额外时间；过短会把默认十字图当成条纹帧。
+    private const int TriggerModeSettleDelayMs = 100;
     private const int TextureFrameSettleDelayMs = 80;
 
     private readonly IRepository<CalibProject, Guid> _projectRepository;
@@ -35,7 +40,113 @@ public class CalibScanAppService : AuroraStruct3DAppService, ICalibScanAppServic
     private readonly ILogger<CalibScanAppService> _logger;
     private readonly IBlobContainer<CalibPhotoBlobContainer> _blobContainer;
     private readonly ICalibPointCloudAppService _pointCloudAppService;
+    private readonly CalibPointCloudStateStore _pointCloudStateStore;
     private readonly IServiceScopeFactory _serviceScopeFactory;
+    private readonly IDeviceOperationSessionManager _deviceSessions;
+
+    /// <inheritdoc/>
+    public async Task<byte[]> DownloadRoundImagesAsync(Guid calibProjectId, long roundIndex)
+    {
+        if (roundIndex <= 0)
+            throw new UserFriendlyException("扫描轮次必须从 1 开始");
+
+        CalibProject project = await _projectRepository.GetAsync(calibProjectId);
+        if (!project.MainCameraDeviceId.HasValue)
+            throw new UserFriendlyException("标定项目尚未绑定主相机");
+
+        CalibScanMode mode = ResolveScanMode(project);
+        int frameCount = 1;
+        int periodCount = 0;
+        int phaseCount = 0;
+        if (mode is CalibScanMode.OneCamera1Light or CalibScanMode.TwoCamera1Light)
+        {
+            CalibProjectorParam param = await GetProjectorParamAsync(project);
+            periodCount = param.PeriodCount;
+            phaseCount = param.PatternCount;
+            frameCount = GrayPhasePatternLayout.GetTotalFrameCount(periodCount, phaseCount);
+        }
+
+        using MemoryStream output = new();
+        int imageCount = 0;
+        List<object> entries = [];
+        using (ZipArchive archive = new(output, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            async Task AddFrameAsync(Guid cameraId, CalibScanCameraRole role, int frameIndex)
+            {
+                string blobKey = BuildScanBlobKey(
+                    project.Id, cameraId, roundIndex, frameIndex, role);
+                if (!await _blobContainer.ExistsAsync(blobKey)) return;
+
+                byte[] bytes = await _blobContainer.GetAllBytesAsync(blobKey);
+                string roleName = role == CalibScanCameraRole.Main ? "main" : "secondary";
+                string extension = DetectImageExtension(bytes);
+                string fileName = $"{roleName}/{roleName}_r{roundIndex:0000}_f{frameIndex:000}{extension}";
+                ZipArchiveEntry entry = archive.CreateEntry(fileName, CompressionLevel.Fastest);
+                await using Stream stream = entry.Open();
+                await stream.WriteAsync(bytes);
+                imageCount++;
+                entries.Add(new
+                {
+                    fileName,
+                    cameraRole = roleName,
+                    frameIndex,
+                    label = periodCount > 0
+                        ? GrayPhasePatternLayout.GetFrameLabel(frameIndex, periodCount, phaseCount)
+                        : "普通双目帧",
+                    byteLength = bytes.Length,
+                });
+            }
+
+            for (int frame = 0; frame < frameCount; frame++)
+            {
+                await AddFrameAsync(project.MainCameraDeviceId.Value, CalibScanCameraRole.Main, frame);
+                if (project.SecondaryCameraDeviceId.HasValue)
+                    await AddFrameAsync(project.SecondaryCameraDeviceId.Value,
+                        CalibScanCameraRole.Secondary, frame);
+            }
+
+            string textureKey = BuildTextureBlobKey(
+                project.Id, project.MainCameraDeviceId.Value, roundIndex);
+            if (await _blobContainer.ExistsAsync(textureKey))
+            {
+                byte[] bytes = await _blobContainer.GetAllBytesAsync(textureKey);
+                string fileName = $"main/main_r{roundIndex:0000}_texture{DetectImageExtension(bytes)}";
+                ZipArchiveEntry entry = archive.CreateEntry(fileName, CompressionLevel.Fastest);
+                await using Stream stream = entry.Open();
+                await stream.WriteAsync(bytes);
+                imageCount++;
+                entries.Add(new { fileName, cameraRole = "main", frameIndex = -1,
+                    label = "白光纹理帧", byteLength = bytes.Length });
+            }
+
+            if (imageCount == 0)
+                throw new UserFriendlyException($"第 {roundIndex} 轮没有可下载的扫描图片");
+
+            ZipArchiveEntry manifestEntry = archive.CreateEntry("manifest.json");
+            await using Stream manifestStream = manifestEntry.Open();
+            await JsonSerializer.SerializeAsync(manifestStream, new
+            {
+                formatVersion = 1,
+                calibProjectId = project.Id,
+                roundIndex,
+                scanMode = mode.ToString(),
+                periodCount,
+                phaseCount,
+                expectedPatternFrameCount = frameCount,
+                imageCount,
+                entries,
+            }, new JsonSerializerOptions { WriteIndented = true });
+        }
+        return output.ToArray();
+    }
+
+    private static string DetectImageExtension(byte[] bytes)
+    {
+        if (bytes.Length >= 2 && bytes[0] == (byte)'B' && bytes[1] == (byte)'M') return ".bmp";
+        if (bytes.Length >= 8 && bytes.AsSpan(0, 8).SequenceEqual(
+                new byte[] { 137, 80, 78, 71, 13, 10, 26, 10 })) return ".png";
+        return ".jpg";
+    }
 
     /// <summary>构造注入</summary>
     public CalibScanAppService(
@@ -49,7 +160,9 @@ public class CalibScanAppService : AuroraStruct3DAppService, ICalibScanAppServic
         ILogger<CalibScanAppService> logger,
         IBlobContainer<CalibPhotoBlobContainer> blobContainer,
         ICalibPointCloudAppService pointCloudAppService,
-        IServiceScopeFactory serviceScopeFactory
+        CalibPointCloudStateStore pointCloudStateStore,
+        IServiceScopeFactory serviceScopeFactory,
+        IDeviceOperationSessionManager deviceSessions
     )
     {
         _projectRepository = projectRepository;
@@ -62,7 +175,9 @@ public class CalibScanAppService : AuroraStruct3DAppService, ICalibScanAppServic
         _logger = logger;
         _blobContainer = blobContainer;
         _pointCloudAppService = pointCloudAppService;
+        _pointCloudStateStore = pointCloudStateStore;
         _serviceScopeFactory = serviceScopeFactory;
+        _deviceSessions = deviceSessions;
     }
 
     /// <inheritdoc/>
@@ -75,23 +190,32 @@ public class CalibScanAppService : AuroraStruct3DAppService, ICalibScanAppServic
         }
 
         CalibProject project = await _projectRepository.GetAsync(input.CalibProjectId);
+        _pointCloudStateStore.ConfigureTableFilter(
+            input.CalibProjectId,
+            input.EnableTableFilter,
+            input.TableClearanceMm
+        );
         CalibScanMode mode = ResolveScanMode(project);
 
         ValidateBindingsForScanMode(project, mode);
+        string hardwareSessionId = BuildHardwareSessionId(project.Id);
+        AcquireHardwareSessions(project, mode, hardwareSessionId);
+        using PreviewHardwareLeaseGuard startupLease = new(() =>
+            ReleaseHardwareSessions(project, mode, hardwareSessionId)
+        );
         bool suppressProjectorControl =
             input.SuppressProjectorControl
             && mode is not (CalibScanMode.OneCamera1Light or CalibScanMode.TwoCamera1Light);
         if (input.SuppressProjectorControl && !suppressProjectorControl)
         {
             _logger.LogWarning(
-                "Step6 已忽略屏蔽投影仪控制参数：ProjectId={ProjectId}, Mode={Mode}。当前配置强制使用 {FrameCount} 帧结构光流程。",
+                "Step6 已忽略屏蔽投影仪控制参数：ProjectId={ProjectId}, Mode={Mode}。结构光模式必须控制投影仪。",
                 project.Id,
-                mode,
-                GrayCodePatternLayout.TotalFrameCount
+                mode
             );
         }
 
-        // 投影图案固定为多尺度互补条纹，数据库中的旧 PatternCount 不再参与帧数计算。
+        // PatternCount 是 Step3 配置的每方向图像数，一轮依次采集横、竖两个方向。
         int patternCount = 0;
         int totalFrameCount = 0;
         IDlpProjectorService? projectorService = null;
@@ -111,26 +235,33 @@ public class CalibScanAppService : AuroraStruct3DAppService, ICalibScanAppServic
                 "LedOnAsync"
             );
 
-            // 设置主从相机为软件触发模式（TriggerSource=Software=1, TriggerMode=On=2）
-            await EnsureSoftwareTriggerModeAsync(project.MainCameraDeviceId!.Value);
+            // 结构光由投影仪 TRIG_OUT 同时触发相机，必须使用 Standard 外触发模式。
+            await EnsureHardwareTriggerModeAsync(project.MainCameraDeviceId!.Value);
             if (project.SecondaryCameraDeviceId.HasValue)
             {
-                await EnsureSoftwareTriggerModeAsync(project.SecondaryCameraDeviceId.Value);
+                await EnsureHardwareTriggerModeAsync(project.SecondaryCameraDeviceId.Value);
             }
 
             if (!suppressProjectorControl)
             {
-                await GetProjectorParamAsync(project);
-                patternCount = GrayCodePatternLayout.TotalFrameCount;
-                totalFrameCount = GrayCodePatternLayout.TotalFrameCount;
+                CalibProjectorParam param = await GetProjectorParamAsync(project);
+                patternCount = param.PatternCount;
+                if (patternCount < 3)
+                {
+                    throw new UserFriendlyException("每个方向至少需要 3 张相移条纹图像");
+                }
+                totalFrameCount = GrayPhasePatternLayout.GetTotalFrameCount(
+                    param.PeriodCount,
+                    patternCount
+                );
                 projectorService = connectedProjector;
 
-                await SafeProjectorInvokeAsync(
+                await RequireProjectorInvokeAsync(
                     connectedProjector,
                     svc => svc.SetBootImageAsync(ProjectorBootImage.Cross),
                     "SetBootImageAsync(Cross)"
                 );
-                await SafeProjectorInvokeAsync(
+                await RequireProjectorInvokeAsync(
                     connectedProjector,
                     svc => svc.SetDisplayModeAsync(ProjectorDisplayMode.Cross),
                     "SetDisplayModeAsync(Cross)"
@@ -157,16 +288,53 @@ public class CalibScanAppService : AuroraStruct3DAppService, ICalibScanAppServic
                 await using AsyncServiceScope scope = _serviceScopeFactory.CreateAsyncScope();
                 CalibScanAppService scopedService =
                     scope.ServiceProvider.GetRequiredService<CalibScanAppService>();
-                await scopedService.ScanLoopAsync(
-                    project,
-                    mode,
-                    totalFrameCount,
-                    patternCount,
-                    projectorService,
-                    ct
-                );
+                try
+                {
+                    await scopedService.ScanLoopAsync(
+                        project,
+                        mode,
+                        totalFrameCount,
+                        patternCount,
+                        projectorService,
+                        ct
+                    );
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    scopedService._logger.LogError(
+                        ex,
+                        "Step6 扫描循环失败：ProjectId={ProjectId}",
+                        project.Id
+                    );
+                    CalibScanSessionState failed = scopedService._stateStore.Fail(
+                        project.Id,
+                        ex.Message
+                    );
+                    await scopedService._scanNotifier.NotifyStateAsync(ToStatusDto(failed));
+                    throw;
+                }
+                finally
+                {
+                    try
+                    {
+                        await scopedService.CleanupScanHardwareAsync(project);
+                    }
+                    finally
+                    {
+                        scopedService.ReleaseHardwareSessions(
+                            project,
+                            mode,
+                            hardwareSessionId
+                        );
+                    }
+                }
             }
         );
+        startupLease.TransferToScanLoop();
 
         _logger.LogInformation(
             "Step6 扫描启动：ProjectId={ProjectId}, Mode={Mode}, SuppressProjectorControl={SuppressProjectorControl}, PatternCount={PatternCount}, TotalFrameCount={TotalFrameCount}",
@@ -188,8 +356,8 @@ public class CalibScanAppService : AuroraStruct3DAppService, ICalibScanAppServic
     /// 条纹采集结束后直接进入纹理采集与重建，不检测十字图。
     /// 无投影仪模式：直接循环抓拍主从相机推送。
     /// </summary>
-    /// <param name="totalFrameCount">每轮总帧数；使用当前固定多尺度互补条纹布局</param>
-    /// <param name="patternCount">兼容状态字段，结构光模式下等于总帧数</param>
+    /// <param name="totalFrameCount">每轮总帧数；等于横、竖两组的配置帧数之和</param>
+    /// <param name="patternCount">Step3 配置的每方向条纹帧数</param>
     private async Task ScanLoopAsync(
         CalibProject project,
         CalibScanMode mode,
@@ -216,66 +384,48 @@ public class CalibScanAppService : AuroraStruct3DAppService, ICalibScanAppServic
                 if (cancellationToken.IsCancellationRequested)
                     break;
 
-                // 第 1 张：T 指令触发
-                await SafeProjectorInvokeAsync(
-                    projectorService,
-                    svc => svc.TriggerOnceAsync(),
-                    "TriggerOnceAsync(T)"
-                );
-                if (cancellationToken.IsCancellationRequested)
-                    break;
+                // 白光纹理帧会把主相机临时切回 FreeRunning，因此每轮重新确认两台相机
+                // 均为 Standard 外触发，再让它们同时保持 Cap_Start(TriggerStandard)。
+                await EnsureHardwareTriggerModeAsync(project.MainCameraDeviceId!.Value);
+                if (project.SecondaryCameraDeviceId.HasValue)
+                    await EnsureHardwareTriggerModeAsync(project.SecondaryCameraDeviceId.Value);
 
-                // T 仅表示 HID 命令已写入；等待光机跨过数个 120fps 刷新周期，
-                // 避免首张相机图仍抓到进入 B2 前的十字图或上一轮末帧。
-                await Task.Delay(PatternFrameSettleDelayMs, cancellationToken);
-                await CaptureAndPushFrameAsync(
-                    project,
-                    mode,
-                    roundIndex,
-                    frameIndexInRound,
-                    totalFrameCount,
-                    cancellationToken
-                );
-                lastMetricAt = await PushMetricsAsync(
-                    project.Id,
-                    roundIndex,
-                    frameIndexInRound,
-                    totalFrameCount,
-                    false,
-                    lastMetricAt
-                );
-                frameIndexInRound++;
+                await using TucamHardwareTriggerCaptureSession triggerSession =
+                    await CreateHardwareTriggerSessionAsync(project, mode, cancellationToken);
 
-                // 第 2~TotalFrameCount 张：N 指令推进
-                for (int i = 1; i < totalFrameCount; i++)
+                for (int i = 0; i < totalFrameCount; i++)
                 {
                     if (cancellationToken.IsCancellationRequested)
                         break;
 
-                    await SafeProjectorInvokeAsync(
-                        projectorService,
-                        svc => svc.NextFrameAsync(),
-                        "NextFrameAsync(N)"
-                    );
-                    if (cancellationToken.IsCancellationRequested)
-                        break;
-
-                    await Task.Delay(PatternFrameSettleDelayMs, cancellationToken);
-                    await CaptureAndPushFrameAsync(
-                        project,
-                        mode,
-                        roundIndex,
-                        frameIndexInRound,
-                        totalFrameCount,
-                        cancellationToken
-                    );
+                    bool firstFrame = i == 0;
+                    ScanFrameQualityPair frameQuality =
+                        await CaptureAndPushHardwareTriggeredFrameAsync(
+                            triggerSession,
+                            ct =>
+                                RequireProjectorInvokeAsync(
+                                    projectorService,
+                                    svc =>
+                                        firstFrame
+                                            ? svc.TriggerOnceAsync(ct)
+                                            : svc.NextFrameAsync(ct),
+                                    firstFrame ? "TriggerOnceAsync(T)" : "NextFrameAsync(N)"
+                                ),
+                            project,
+                            mode,
+                            roundIndex,
+                            frameIndexInRound,
+                            totalFrameCount,
+                            cancellationToken
+                        );
                     lastMetricAt = await PushMetricsAsync(
                         project.Id,
                         roundIndex,
                         frameIndexInRound,
                         totalFrameCount,
                         false,
-                        lastMetricAt
+                        lastMetricAt,
+                        frameQuality
                     );
                     frameIndexInRound++;
                 }
@@ -283,14 +433,18 @@ public class CalibScanAppService : AuroraStruct3DAppService, ICalibScanAppServic
                 if (cancellationToken.IsCancellationRequested)
                     break;
 
+                // 离开 using 前显式停止双相机硬触发会话，随后才能切换主相机为
+                // FreeRunning 拍摄白光纹理；DisposeAsync 是幂等的。
+                await triggerSession.DisposeAsync();
+
                 // 条纹序列完成后切换白屏，仅由主相机采集一张独立纹理帧。
-                // 纹理帧不参与相位计算，只用于为重建点云采样真实 RGB；
-                // 不同时启动主从预览，避免 RK3588 USB 总线被两路连续流占满。
+                // 纹理帧不参与相位计算，只用于为重建点云采样真实 RGB。
                 await SafeProjectorInvokeAsync(
                     projectorService,
                     svc => svc.SetDisplayModeAsync(ProjectorDisplayMode.White),
                     "SetDisplayModeAsync(White)"
                 );
+                await EnsureFreeRunningModeAsync(project.MainCameraDeviceId!.Value);
                 await Task.Delay(TextureFrameSettleDelayMs, cancellationToken);
                 await CaptureTextureFrameAsync(
                     project,
@@ -332,7 +486,7 @@ public class CalibScanAppService : AuroraStruct3DAppService, ICalibScanAppServic
             else
             {
                 // 无投影仪模式（TwoCamera0Light）：简单双目抓拍推送
-                await CaptureAndPushFrameAsync(
+                ScanFrameQualityPair frameQuality = await CaptureAndPushFrameAsync(
                     project,
                     mode,
                     roundIndex,
@@ -346,7 +500,8 @@ public class CalibScanAppService : AuroraStruct3DAppService, ICalibScanAppServic
                     0,
                     1,
                     false,
-                    lastMetricAt
+                    lastMetricAt,
+                    frameQuality
                 );
 
                 if (
@@ -390,11 +545,42 @@ public class CalibScanAppService : AuroraStruct3DAppService, ICalibScanAppServic
     }
 
     /// <summary>
-    /// 抓拍主从相机并推送原图到前端。
-    /// 遵循 _capStartActiveLock 顺序单活采集：主相机先拍完，从相机再拍。
+    /// 两台相机先并行进入 WaitForFrame，再由投影仪的一次 T/N 硬件沿同步曝光。
     /// 同时保存图像到 Blob 存储，供后续点云合成使用。
     /// </summary>
-    private async Task CaptureAndPushFrameAsync(
+    private async Task<ScanFrameQualityPair> CaptureAndPushHardwareTriggeredFrameAsync(
+        TucamHardwareTriggerCaptureSession triggerSession,
+        Func<CancellationToken, Task> triggerAsync,
+        CalibProject project,
+        CalibScanMode mode,
+        long roundIndex,
+        int frameIndexInRound,
+        int totalFrameCount,
+        CancellationToken cancellationToken
+    )
+    {
+        IReadOnlyList<byte[]> frames = await triggerSession.CaptureAsync(
+            triggerAsync,
+            cancellationToken
+        );
+        byte[]? mainBytes = frames.Count > 0 ? frames[0] : null;
+        byte[]? secondaryBytes = frames.Count > 1 ? frames[1] : null;
+        return await PublishCapturedFramesAsync(
+            project,
+            mode,
+            mainBytes,
+            secondaryBytes,
+            roundIndex,
+            frameIndexInRound,
+            totalFrameCount,
+            cancellationToken
+        );
+    }
+
+    /// <summary>
+    /// 无投影仪模式使用原有的主→从短会话抓拍。
+    /// </summary>
+    private async Task<ScanFrameQualityPair> CaptureAndPushFrameAsync(
         CalibProject project,
         CalibScanMode mode,
         long roundIndex,
@@ -404,73 +590,103 @@ public class CalibScanAppService : AuroraStruct3DAppService, ICalibScanAppServic
     )
     {
         if (cancellationToken.IsCancellationRequested)
-            return;
+            return default;
 
+        byte[]? mainBytes = project.MainCameraDeviceId.HasValue
+            ? await GrabScanFrameAsync(project.MainCameraDeviceId.Value)
+            : null;
+        byte[]? secondaryBytes = null;
+        if (
+            !cancellationToken.IsCancellationRequested
+            && mode is CalibScanMode.TwoCamera0Light or CalibScanMode.TwoCamera1Light
+            && project.SecondaryCameraDeviceId.HasValue
+        )
+        {
+            secondaryBytes = await GrabScanFrameAsync(project.SecondaryCameraDeviceId.Value);
+        }
+
+        return await PublishCapturedFramesAsync(
+            project,
+            mode,
+            mainBytes,
+            secondaryBytes,
+            roundIndex,
+            frameIndexInRound,
+            totalFrameCount,
+            cancellationToken
+        );
+    }
+
+    private async Task<ScanFrameQualityPair> PublishCapturedFramesAsync(
+        CalibProject project,
+        CalibScanMode mode,
+        byte[]? mainBytes,
+        byte[]? secondaryBytes,
+        long roundIndex,
+        int frameIndexInRound,
+        int totalFrameCount,
+        CancellationToken cancellationToken
+    )
+    {
+        ScanFrameExposureMetrics? mainQuality = null;
+        ScanFrameExposureMetrics? secondaryQuality = null;
         long accumulatedFrameCount = (roundIndex - 1) * totalFrameCount + frameIndexInRound;
 
-        // 主相机抓拍
-        if (project.MainCameraDeviceId.HasValue)
+        if (mainBytes != null && project.MainCameraDeviceId.HasValue)
         {
-            byte[]? mainBytes = await GrabScanFrameAsync(project.MainCameraDeviceId.Value);
-            if (mainBytes != null)
-            {
-                await _scanNotifier.NotifyFrameAsync(
-                    project.Id,
-                    (int)CalibScanCameraRole.Main,
-                    mainBytes,
-                    roundIndex,
-                    frameIndexInRound,
-                    totalFrameCount,
-                    accumulatedFrameCount,
-                    false
-                );
-
-                await SaveScanImageToBlobAsync(
-                    project.Id,
-                    project.MainCameraDeviceId.Value,
-                    mainBytes,
-                    roundIndex,
-                    frameIndexInRound,
-                    CalibScanCameraRole.Main
-                );
-            }
+            mainQuality = ScanFrameExposureAnalyzer.Analyze(mainBytes);
+            await _scanNotifier.NotifyFrameAsync(
+                project.Id,
+                (int)CalibScanCameraRole.Main,
+                mainBytes,
+                roundIndex,
+                frameIndexInRound,
+                totalFrameCount,
+                accumulatedFrameCount,
+                false
+            );
+            await SaveScanImageToBlobAsync(
+                project.Id,
+                project.MainCameraDeviceId.Value,
+                mainBytes,
+                roundIndex,
+                frameIndexInRound,
+                CalibScanCameraRole.Main
+            );
         }
 
         if (cancellationToken.IsCancellationRequested)
-            return;
+            return new ScanFrameQualityPair(mainQuality, secondaryQuality);
 
-        // 从相机抓拍（双目模式）
         if (
+            secondaryBytes != null
+            &&
             mode is CalibScanMode.TwoCamera0Light or CalibScanMode.TwoCamera1Light
             && project.SecondaryCameraDeviceId.HasValue
         )
         {
-            byte[]? secondaryBytes = await GrabScanFrameAsync(
-                project.SecondaryCameraDeviceId.Value
+            secondaryQuality = ScanFrameExposureAnalyzer.Analyze(secondaryBytes);
+            await _scanNotifier.NotifyFrameAsync(
+                project.Id,
+                (int)CalibScanCameraRole.Secondary,
+                secondaryBytes,
+                roundIndex,
+                frameIndexInRound,
+                totalFrameCount,
+                accumulatedFrameCount,
+                false
             );
-            if (secondaryBytes != null)
-            {
-                await _scanNotifier.NotifyFrameAsync(
-                    project.Id,
-                    (int)CalibScanCameraRole.Secondary,
-                    secondaryBytes,
-                    roundIndex,
-                    frameIndexInRound,
-                    totalFrameCount,
-                    accumulatedFrameCount,
-                    false
-                );
-
-                await SaveScanImageToBlobAsync(
-                    project.Id,
-                    project.SecondaryCameraDeviceId.Value,
-                    secondaryBytes,
-                    roundIndex,
-                    frameIndexInRound,
-                    CalibScanCameraRole.Secondary
-                );
-            }
+            await SaveScanImageToBlobAsync(
+                project.Id,
+                project.SecondaryCameraDeviceId.Value,
+                secondaryBytes,
+                roundIndex,
+                frameIndexInRound,
+                CalibScanCameraRole.Secondary
+            );
         }
+
+        return new ScanFrameQualityPair(mainQuality, secondaryQuality);
     }
 
     /// <summary>
@@ -592,7 +808,8 @@ public class CalibScanAppService : AuroraStruct3DAppService, ICalibScanAppServic
         int frameIndexInRound,
         int patternCount,
         bool isCrosshairDetected,
-        DateTime lastMetricAt
+        DateTime lastMetricAt,
+        ScanFrameQualityPair frameQuality
     )
     {
         DateTime now = DateTime.UtcNow;
@@ -611,17 +828,45 @@ public class CalibScanAppService : AuroraStruct3DAppService, ICalibScanAppServic
             FrameIndexInRound = frameIndexInRound,
             PatternCount = patternCount,
             IsCrosshairDetected = isCrosshairDetected,
+            MainExposure = ToExposureDto(frameQuality.Main),
+            SecondaryExposure = ToExposureDto(frameQuality.Secondary),
         };
+
+        LogExposure(projectId, roundIndex, frameIndexInRound, "Main", frameQuality.Main);
+        LogExposure(projectId, roundIndex, frameIndexInRound, "Secondary", frameQuality.Secondary);
 
         _stateStore.UpdateMetrics(projectId, metrics);
         await _scanNotifier.NotifyMetricsAsync(projectId, metrics);
         return now;
     }
 
+    private static CalibScanExposureMetricsDto? ToExposureDto(ScanFrameExposureMetrics? value) =>
+        value is { } v ? new CalibScanExposureMetricsDto
+        {
+            SaturatedRatio = v.SaturatedRatio,
+            CrushedRatio = v.CrushedRatio,
+            P01 = v.P01,
+            P50 = v.P50,
+            P99 = v.P99,
+        } : null;
+
+    private void LogExposure(Guid projectId, long round, int frame, string role,
+        ScanFrameExposureMetrics? value)
+    {
+        if (value is not { } v) return;
+        _logger.LogInformation(
+            "结构光曝光：ProjectId={ProjectId}, Round={Round}, Frame={Frame}, Camera={Camera}, SaturatedRatio={SaturatedRatio}, CrushedRatio={CrushedRatio}, P01={P01}, P50={P50}, P99={P99}",
+            projectId, round, frame, role, v.SaturatedRatio, v.CrushedRatio,
+            v.P01, v.P50, v.P99);
+    }
+
+    private readonly record struct ScanFrameQualityPair(
+        ScanFrameExposureMetrics? Main,
+        ScanFrameExposureMetrics? Secondary);
+
     /// <summary>
-    /// Step6 扫描帧抓取：软件触发 + 应用 ImageRotationAngle 旋转。
-    /// 遵循测试结论（TucamMultiCameraProbe）：Cap_Start → 软件触发 → WaitForFrame → Cap_Stop，
-    /// _capStartActiveLock 自动保证同一时刻仅一台相机处于活跃采集状态。
+    /// Step6 普通双目或白光纹理帧抓取：短生命周期采集并应用 ImageRotationAngle 旋转。
+    /// 结构光条纹帧不走此方法，而由 TucamHardwareTriggerCaptureSession 同步抓取。
     /// </summary>
     private async Task<byte[]?> GrabScanFrameAsync(Guid cameraDeviceId)
     {
@@ -725,22 +970,6 @@ public class CalibScanAppService : AuroraStruct3DAppService, ICalibScanAppServic
         CalibProject project = await _projectRepository.GetAsync(input.CalibProjectId);
         CalibScanSessionState? stopped = await _stateStore.StopAsync(project.Id);
 
-        // 投影仪清理：关灯（LL）
-        if (project.BoundProjectorDeviceId.HasValue)
-        {
-            IDlpProjectorService? svc = _projectorConnectionPool.TryGet(
-                project.BoundProjectorDeviceId.Value
-            );
-            if (svc != null)
-            {
-                await SafeProjectorInvokeAsync(svc, s => s.LedOffAsync(), "LedOffAsync");
-            }
-        }
-
-        // 相机清理：停止主从相机采集（容错）
-        await SafeStopCameraAsync(project.MainCameraDeviceId);
-        await SafeStopCameraAsync(project.SecondaryCameraDeviceId);
-
         if (stopped is null)
         {
             CalibScanStatusDto idleStatus = new()
@@ -762,6 +991,25 @@ public class CalibScanAppService : AuroraStruct3DAppService, ICalibScanAppServic
         await _pointCloudAppService.CompleteIncrementalPointCloudAsync(project.Id);
 
         return status;
+    }
+
+    private async Task CleanupScanHardwareAsync(CalibProject project)
+    {
+        if (project.BoundProjectorDeviceId.HasValue)
+        {
+            IDlpProjectorService? projector = _projectorConnectionPool.TryGet(
+                project.BoundProjectorDeviceId.Value
+            );
+            if (projector is not null)
+                await SafeProjectorInvokeAsync(
+                    projector,
+                    service => service.LedOffAsync(),
+                    "LedOffAsync"
+                );
+        }
+
+        await SafeStopCameraAsync(project.MainCameraDeviceId);
+        await SafeStopCameraAsync(project.SecondaryCameraDeviceId);
     }
 
     /// <inheritdoc/>
@@ -817,41 +1065,137 @@ public class CalibScanAppService : AuroraStruct3DAppService, ICalibScanAppServic
         {
             throw new UserFriendlyException("请先在 Step3 完成投影仪参数配置");
         }
-        if (param.PatternCount != GrayCodePatternLayout.TotalFrameCount)
+        if (param.PatternCount < 3)
         {
             throw new UserFriendlyException(
-                $"当前项目保存的条纹数量为 {param.PatternCount}，"
-                + $"当前配置要求 {GrayCodePatternLayout.TotalFrameCount} 张。"
-                + "请在 Step3 重新保存配置并重新下载条纹到投影仪。"
+                $"当前项目每方向条纹数量为 {param.PatternCount}，至少需要 3 张。"
+                + "请在 Step3 修正配置并重新下载条纹到投影仪。"
             );
+        }
+        if (param.ProjectorDeviceId != project.BoundProjectorDeviceId.Value)
+        {
+            throw new UserFriendlyException("Step3 投影仪配置与当前项目绑定的投影仪不一致，请重新保存配置");
+        }
+        if (
+            param.ResolutionWidth <= 0
+            || param.ResolutionHeight <= 0
+            || param.PeriodCount <= 0
+            || param.ResolutionWidth % param.PeriodCount != 0
+            || param.ResolutionHeight % param.PeriodCount != 0
+            || !param.PhaseShift.HasValue
+            || param.PhaseShift.Value <= 0
+        )
+        {
+            throw new UserFriendlyException("Step3 投影仪条纹配置无效，请重新保存并下载条纹");
         }
 
         return param;
     }
 
-    /// <summary>
-    /// 设置指定相机为软件触发模式（TriggerSource=Software=1, TriggerMode=On=2）。
-    /// </summary>
-    private async Task EnsureSoftwareTriggerModeAsync(Guid cameraDeviceId)
+    private async Task<TucamHardwareTriggerCaptureSession> CreateHardwareTriggerSessionAsync(
+        CalibProject project,
+        CalibScanMode mode,
+        CancellationToken cancellationToken
+    )
     {
+        var cameras = new List<TucamTriggeredCamera>(2)
+        {
+            await CreateTriggeredCameraAsync(
+                project.MainCameraDeviceId!.Value,
+                cancellationToken
+            ),
+        };
+        if (
+            mode == CalibScanMode.TwoCamera1Light
+            && project.SecondaryCameraDeviceId.HasValue
+        )
+        {
+            cameras.Add(
+                await CreateTriggeredCameraAsync(
+                    project.SecondaryCameraDeviceId.Value,
+                    cancellationToken
+                )
+            );
+        }
+        return await TucamHardwareTriggerCaptureSession.StartAsync(cameras, cancellationToken);
+    }
+
+    private async Task<TucamTriggeredCamera> CreateTriggeredCameraAsync(
+        Guid cameraDeviceId,
+        CancellationToken cancellationToken
+    )
+    {
+        cancellationToken.ThrowIfCancellationRequested();
         CameraDevice camera = await _cameraDeviceRepository.GetAsync(cameraDeviceId);
         int idx = ResolveTucamRuntimeIndex(camera);
-
         if (!_tucamService.IsCameraOpen(idx))
-        {
             throw new UserFriendlyException($"相机 {idx} 未打开，请先在设备管理页打开相机");
-        }
 
+        int timeoutMs = 8000;
         try
         {
-            // 先设置触发源为软件（1=Software），再启用触发模式（2=On）
-            await _tucamService.SetGenICamIntAsync(idx, "TriggerSource", 1);
-            await _tucamService.SetGenICamIntAsync(idx, "TriggerMode", 2);
-            _logger.LogInformation("Step6 相机 {Index} 已切换到软件触发模式", idx);
+            long exposureUs = await _tucamService.GetGenICamIntAsync(idx, "ExposureTime");
+            timeoutMs = (int)Math.Clamp(exposureUs / 1000L * 2 + 1000L, 8000L, 30000L);
         }
         catch (Exception ex)
         {
-            throw new UserFriendlyException($"相机 {idx} 切换软件触发模式失败：{ex.Message}");
+            _logger.LogDebug(
+                ex,
+                "Step6 相机 {Index} 读取曝光时间失败，硬触发等待使用默认 {TimeoutMs}ms",
+                idx,
+                timeoutMs
+            );
+        }
+
+        return new TucamTriggeredCamera(
+            _tucamService,
+            idx,
+            timeoutMs,
+            camera.ImageRotationAngle
+        );
+    }
+
+    /// <summary>设置相机为投影仪 TRIG_OUT 使用的 Standard 外触发模式。</summary>
+    private Task EnsureHardwareTriggerModeAsync(Guid cameraDeviceId) =>
+        EnsureTriggerModeAsync(cameraDeviceId, expectedMode: 1, "Standard 外触发");
+
+    /// <summary>设置相机为白光纹理抓拍使用的自由运行模式。</summary>
+    private Task EnsureFreeRunningModeAsync(Guid cameraDeviceId) =>
+        EnsureTriggerModeAsync(cameraDeviceId, expectedMode: 0, "FreeRunning");
+
+    private async Task EnsureTriggerModeAsync(
+        Guid cameraDeviceId,
+        long expectedMode,
+        string modeName
+    )
+    {
+        CameraDevice camera = await _cameraDeviceRepository.GetAsync(cameraDeviceId);
+        int idx = ResolveTucamRuntimeIndex(camera);
+        if (!_tucamService.IsCameraOpen(idx))
+            throw new UserFriendlyException($"相机 {idx} 未打开，请先在设备管理页打开相机");
+
+        try
+        {
+            if (_tucamService.IsCapturing(idx))
+                await _tucamService.StopCaptureAsync(idx);
+            await _tucamService.SetGenICamIntAsync(idx, "TriggerMode", expectedMode);
+            long actualMode = await _tucamService.GetGenICamIntAsync(idx, "TriggerMode");
+            if (actualMode != expectedMode)
+                throw new InvalidOperationException(
+                    $"TriggerMode 写入 {expectedMode} 后读回 {actualMode}"
+                );
+            _logger.LogInformation(
+                "Step6 相机 {Index} 已切换到 {Mode}（TriggerMode={TriggerMode}）",
+                idx,
+                modeName,
+                expectedMode
+            );
+        }
+        catch (Exception ex)
+        {
+            throw new UserFriendlyException(
+                $"相机 {idx} 切换到 {modeName} 失败：{ex.Message}"
+            );
         }
     }
 
@@ -900,7 +1244,7 @@ public class CalibScanAppService : AuroraStruct3DAppService, ICalibScanAppServic
         catch (Exception ex)
         {
             _logger.LogError(ex, "Step6 投影仪必要指令 {Op} 执行失败，扫描终止", operationName);
-            throw new UserFriendlyException($"投影仪切换单帧触发模式 B 2 失败：{ex.Message}");
+            throw new UserFriendlyException($"投影仪必要指令 {operationName} 失败：{ex.Message}");
         }
     }
 
@@ -929,6 +1273,9 @@ public class CalibScanAppService : AuroraStruct3DAppService, ICalibScanAppServic
             ),
             "SetTriggerModeAsync(SingleFrame/B 2)"
         );
+        // B2 命令完成写入后等待固件真正进入单帧状态，再发送 T。
+        // 否则 T 可能仍按 B0 处理，序列播放后回落到默认十字图。
+        await Task.Delay(TriggerModeSettleDelayMs, cancellationToken);
     }
 
     /// <summary>
@@ -938,10 +1285,22 @@ public class CalibScanAppService : AuroraStruct3DAppService, ICalibScanAppServic
     {
         if (!cameraDeviceId.HasValue)
             return;
+
+        CameraDevice camera;
+        int runtimeIndex;
         try
         {
-            CameraDevice camera = await _cameraDeviceRepository.GetAsync(cameraDeviceId.Value);
-            int runtimeIndex = ResolveTucamRuntimeIndex(camera);
+            camera = await _cameraDeviceRepository.GetAsync(cameraDeviceId.Value);
+            runtimeIndex = ResolveTucamRuntimeIndex(camera);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Step6 无法解析相机 {Id}，跳过停止与触发模式恢复", cameraDeviceId);
+            return;
+        }
+
+        try
+        {
             if (_tucamService.IsCameraOpen(runtimeIndex))
             {
                 await _tucamService.StopCaptureAsync(runtimeIndex);
@@ -950,6 +1309,21 @@ public class CalibScanAppService : AuroraStruct3DAppService, ICalibScanAppServic
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Step6 停止相机 {Id} 采集失败", cameraDeviceId);
+        }
+
+        try
+        {
+            if (_tucamService.IsCameraOpen(runtimeIndex))
+            {
+                // 结构光扫描会把相机切到 TriggerMode=On(2)。调试页使用连续流，
+                // 因此退出扫描时必须切回 Off(0)，否则预览已启动但相机一直等待软件触发。
+                await _tucamService.SetGenICamIntAsync(runtimeIndex, "TriggerMode", 0);
+                _logger.LogInformation("Step6 相机 {Index} 已恢复连续采集模式", runtimeIndex);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Step6 恢复相机 {Id} 连续采集模式失败", cameraDeviceId);
         }
     }
 
@@ -962,6 +1336,86 @@ public class CalibScanAppService : AuroraStruct3DAppService, ICalibScanAppServic
             CalibDeviceType.TwoCamera1Light => CalibScanMode.TwoCamera1Light,
             _ => throw new UserFriendlyException("当前项目设备类型不支持在线扫描"),
         };
+    }
+
+    private static string BuildHardwareSessionId(Guid projectId) =>
+        $"calib-scan:{projectId:N}";
+
+    private sealed class PreviewHardwareLeaseGuard(Action release) : IDisposable
+    {
+        private int _transferred;
+
+        public void TransferToScanLoop() => Interlocked.Exchange(ref _transferred, 1);
+
+        public void Dispose()
+        {
+            if (Interlocked.Exchange(ref _transferred, 1) == 0)
+                release();
+        }
+    }
+
+    private void AcquireHardwareSessions(
+        CalibProject project,
+        CalibScanMode mode,
+        string sessionId
+    )
+    {
+        List<(Guid Id, DeviceType Type)> devices = GetHardwareDevices(project, mode);
+        List<Guid> acquired = [];
+        try
+        {
+            foreach ((Guid id, DeviceType type) in devices)
+            {
+                _deviceSessions.TryAcquire(
+                    id,
+                    type,
+                    sessionId,
+                    userId: null,
+                    userName: "标定在线预览",
+                    force: false,
+                    neverExpire: true
+                );
+                acquired.Add(id);
+            }
+        }
+        catch
+        {
+            foreach (Guid id in acquired.AsEnumerable().Reverse())
+                _deviceSessions.Release(id, sessionId);
+            throw;
+        }
+    }
+
+    private void ReleaseHardwareSessions(
+        CalibProject project,
+        CalibScanMode mode,
+        string sessionId
+    )
+    {
+        foreach ((Guid id, _) in GetHardwareDevices(project, mode).AsEnumerable().Reverse())
+            _deviceSessions.Release(id, sessionId);
+    }
+
+    private static List<(Guid Id, DeviceType Type)> GetHardwareDevices(
+        CalibProject project,
+        CalibScanMode mode
+    )
+    {
+        List<(Guid Id, DeviceType Type)> devices = [];
+        if (project.MainCameraDeviceId.HasValue)
+            devices.Add((project.MainCameraDeviceId.Value, DeviceType.Camera));
+        if (project.SecondaryCameraDeviceId.HasValue)
+            devices.Add((project.SecondaryCameraDeviceId.Value, DeviceType.Camera));
+        if (
+            mode is CalibScanMode.OneCamera1Light or CalibScanMode.TwoCamera1Light
+            && project.BoundProjectorDeviceId.HasValue
+        )
+            devices.Add((project.BoundProjectorDeviceId.Value, DeviceType.Projector));
+        return devices
+            .Distinct()
+            .OrderBy(x => x.Id)
+            .ThenBy(x => x.Type)
+            .ToList();
     }
 
     private int ResolveTucamRuntimeIndex(CameraDevice camera)

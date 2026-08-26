@@ -44,6 +44,8 @@ public class CalibProjectorParamAppService : AuroraStruct3DAppService,
             );
         }
 
+        ValidateFringeConfiguration(input);
+
         IQueryable<CalibProjectorParam> query = await _repository.GetQueryableAsync();
         CalibProjectorParam? existing = await AsyncExecuter.FirstOrDefaultAsync(
             query.Where(x => x.CalibProjectId == calibProjectId)
@@ -56,8 +58,10 @@ public class CalibProjectorParamAppService : AuroraStruct3DAppService,
             existing.SetFringeParams(
                 input.PeriodCount,
                 input.FringeType,
-                GrayCodePatternLayout.TotalFrameCount,
-                input.PhaseShift
+                input.PatternCount,
+                input.PhaseShift,
+                input.DarkLevel,
+                input.BrightLevel
             );
             // ProjectorDeviceId 允许变更（用户切换投影仪后重新保存）
             // 由于 ProjectorDeviceId 是 private set，需通过反射或新增 setter；
@@ -94,10 +98,44 @@ public class CalibProjectorParamAppService : AuroraStruct3DAppService,
         entity.SetFringeParams(
             input.PeriodCount,
             input.FringeType,
-            GrayCodePatternLayout.TotalFrameCount,
-            input.PhaseShift
+            input.PatternCount,
+            input.PhaseShift,
+            input.DarkLevel,
+            input.BrightLevel
         );
         return Task.FromResult(entity);
+    }
+
+    private static void ValidateFringeConfiguration(SaveCalibProjectorParamInput input)
+    {
+        if (input.ResolutionWidth <= 0 || input.ResolutionHeight <= 0)
+            throw new UserFriendlyException("投影分辨率必须大于 0");
+        if (
+            input.PeriodCount <= 0
+            || input.ResolutionWidth % input.PeriodCount != 0
+            || input.ResolutionHeight % input.PeriodCount != 0
+        )
+            throw new UserFriendlyException("条纹周期数必须同时整除投影宽度和高度");
+        if (input.PatternCount < 3 || input.PatternCount > 64)
+            throw new UserFriendlyException("每个方向的相移图像数量必须在 3 到 64 之间");
+        if (!string.Equals(input.FringeType, "bw", StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(input.FringeType, "wb", StringComparison.OrdinalIgnoreCase))
+            throw new UserFriendlyException("条纹类型仅支持 bw 或 wb");
+        if (input.DarkLevel >= input.BrightLevel)
+            throw new UserFriendlyException("暗部灰阶必须小于亮部灰阶");
+
+        decimal shortestFullPeriod =
+            Math.Min(
+                input.ResolutionWidth / input.PeriodCount,
+                input.ResolutionHeight / input.PeriodCount
+            ) * 2m;
+        if (
+            !input.PhaseShift.HasValue
+            || input.PhaseShift.Value != decimal.Truncate(input.PhaseShift.Value)
+            || input.PhaseShift.Value <= 0
+            || input.PhaseShift.Value >= shortestFullPeriod
+        )
+            throw new UserFriendlyException("相移量必须为正整数，且小于最短条纹的完整黑白周期");
     }
 
     /// <summary>实体转 DTO</summary>
@@ -114,6 +152,8 @@ public class CalibProjectorParamAppService : AuroraStruct3DAppService,
             ResolutionHeight = entity.ResolutionHeight,
             PeriodCount = entity.PeriodCount,
             FringeType = entity.FringeType,
+            DarkLevel = entity.DarkLevel,
+            BrightLevel = entity.BrightLevel,
             PatternCount = entity.PatternCount,
             PhaseShift = entity.PhaseShift,
             IsEnabled = entity.IsEnabled,

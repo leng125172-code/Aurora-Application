@@ -822,6 +822,9 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                     b.Property<int?>("ExtrinsicPhase")
                         .HasColumnType("integer");
 
+                    b.Property<int?>("ExposureScore")
+                        .HasColumnType("integer");
+
                     b.Property<double?>("ImageDiffScore")
                         .HasColumnType("double precision");
 
@@ -848,6 +851,9 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                     b.Property<int?>("StereoRole")
                         .HasColumnType("integer");
 
+                    b.Property<int?>("SharpnessScore")
+                        .HasColumnType("integer");
+
                     b.Property<string>("ThumbnailBase64")
                         .HasColumnType("text");
 
@@ -863,7 +869,12 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
 
                     b.HasIndex("CalibProjectId", "CameraDeviceId", "PhotoType");
 
-                    b.ToTable("AbpProCalibPhotoRecords", (string)null);
+                    b.ToTable("AbpProCalibPhotoRecords", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_AbpProCalibPhotoRecords_ExposureScore", "\"ExposureScore\" IS NULL OR (\"ExposureScore\" >= 1 AND \"ExposureScore\" <= 100)");
+
+                            t.HasCheckConstraint("CK_AbpProCalibPhotoRecords_SharpnessScore", "\"SharpnessScore\" IS NULL OR (\"SharpnessScore\" >= 1 AND \"SharpnessScore\" <= 100)");
+                        });
                 });
 
             modelBuilder.Entity("AuroraStruct3D.Calibration.CalibProject", b =>
@@ -1025,6 +1036,11 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                     b.Property<Guid>("CalibProjectId")
                         .HasColumnType("uuid");
 
+                    b.Property<byte>("BrightLevel")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("smallint")
+                        .HasDefaultValue((byte)220);
+
                     b.Property<DateTime>("CreationTime")
                         .HasColumnType("timestamp without time zone")
                         .HasColumnName("CreationTime");
@@ -1044,6 +1060,11 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                     b.Property<string>("Description")
                         .HasMaxLength(1024)
                         .HasColumnType("character varying(1024)");
+
+                    b.Property<byte>("DarkLevel")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("smallint")
+                        .HasDefaultValue((byte)24);
 
                     b.Property<string>("FringeType")
                         .IsRequired()
@@ -1123,7 +1144,10 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
 
                     b.HasIndex("IsTemplateMode", "TemplateCategory");
 
-                    b.ToTable("AbpProCalibProjectorParams", (string)null);
+                    b.ToTable("AbpProCalibProjectorParams", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_AbpProCalibProjectorParams_GrayLevels", "\"DarkLevel\" >= 0 AND \"BrightLevel\" <= 255 AND \"DarkLevel\" < \"BrightLevel\"");
+                        });
                 });
 
             modelBuilder.Entity("AuroraStruct3D.Calibration.CalibStereoResult", b =>
@@ -2674,6 +2698,9 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                     b.Property<long>("FileSizeBytes")
                         .HasColumnType("bigint");
 
+                    b.Property<int>("LengthUnit")
+                        .HasColumnType("integer");
+
                     b.Property<bool>("IsDeleted")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
@@ -2702,6 +2729,11 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                         .IsRequired()
                         .HasMaxLength(512)
                         .HasColumnType("character varying(512)");
+
+                    b.Property<double>("SurfaceSamplingSpacingMm")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("double precision")
+                        .HasDefaultValue(0.5);
 
                     b.HasKey("Id");
 
@@ -3691,9 +3723,6 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                     b.Property<Guid>("ProjectId")
                         .HasColumnType("uuid");
 
-                    b.Property<Guid>("TaskConfigId")
-                        .HasColumnType("uuid");
-
                     b.Property<string>("RequestIdAddress")
                         .IsRequired()
                         .HasMaxLength(1024)
@@ -3701,6 +3730,9 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
 
                     b.Property<Guid>("RequestIdTagId")
                         .HasColumnType("uuid");
+
+                    b.Property<long>("RequestSequence")
+                        .HasColumnType("bigint");
 
                     b.Property<string>("ResultAckAddress")
                         .IsRequired()
@@ -3743,6 +3775,9 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                         .HasColumnType("character varying(1024)");
 
                     b.Property<Guid>("ResultValidTagId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TaskConfigId")
                         .HasColumnType("uuid");
 
                     b.Property<string>("TaskStatusAddress")
@@ -3940,12 +3975,17 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                     b.Property<int>("Status")
                         .HasColumnType("integer");
 
+                    b.Property<Guid?>("TaskConfigId")
+                        .HasColumnType("uuid");
+
                     b.HasKey("Id");
 
                     b.HasIndex("ProjectId", "Revision")
                         .IsUnique();
 
                     b.HasIndex("ProjectId", "Status");
+
+                    b.HasIndex("ProjectId", "TaskConfigId", "Status");
 
                     b.ToTable("AbpProWorkflowProjectDeployments", (string)null);
                 });
@@ -3989,6 +4029,15 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
 
                     b.Property<int?>("DeploymentRevision")
                         .HasColumnType("integer");
+
+                    b.Property<Guid?>("PlcHandshakeConfigId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int?>("PlcRequestId")
+                        .HasColumnType("integer");
+
+                    b.Property<long?>("PlcRequestSequence")
+                        .HasColumnType("bigint");
 
                     b.Property<string>("ErrorMessage")
                         .HasMaxLength(2048)
@@ -4064,6 +4113,9 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                     b.Property<int>("SuccessCount")
                         .HasColumnType("integer");
 
+                    b.Property<Guid?>("TaskConfigId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("WorkflowIdsJson")
                         .IsRequired()
                         .HasMaxLength(16384)
@@ -4075,9 +4127,17 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
 
                     b.HasIndex("HangfireJobId");
 
+                    b.HasIndex("PlcHandshakeConfigId");
+
+                    b.HasIndex("TaskConfigId");
+
                     b.HasIndex("Status");
 
                     b.HasIndex("ProjectId", "CreationTime");
+
+                    b.HasIndex("PlcHandshakeConfigId", "PlcRequestSequence")
+                        .IsUnique()
+                        .HasFilter("\"PlcHandshakeConfigId\" IS NOT NULL AND \"PlcRequestSequence\" IS NOT NULL");
 
                     b.ToTable("AbpProWorkflowProjectRuns", (string)null);
                 });
@@ -4193,6 +4253,9 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
                         .HasDefaultValue(false)
                         .HasColumnName("IsDeleted");
 
+                    b.Property<bool>("IsEnabled")
+                        .HasColumnType("boolean");
+
                     b.Property<DateTime?>("LastModificationTime")
                         .HasColumnType("timestamp without time zone")
                         .HasColumnName("LastModificationTime");
@@ -4208,9 +4271,6 @@ namespace AuroraStruct3D.EntityFrameworkCore.Migrations
 
                     b.Property<int>("OnErrorAction")
                         .HasColumnType("integer");
-
-                    b.Property<bool>("IsEnabled")
-                        .HasColumnType("boolean");
 
                     b.Property<Guid>("ProjectId")
                         .HasColumnType("uuid");

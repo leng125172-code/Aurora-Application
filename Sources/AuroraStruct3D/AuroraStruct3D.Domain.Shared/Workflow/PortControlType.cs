@@ -18,4 +18,6 @@ public enum PortControlType
     ProductModelSelect,
     /// <summary>在已选择平面的局部 UV 坐标中编辑 ROI。</summary>
     PlaneRoiEditor,
+    /// <summary>从已完成标定的项目中选择生产扫描配置。</summary>
+    CalibProjectSelect = 11,
 }

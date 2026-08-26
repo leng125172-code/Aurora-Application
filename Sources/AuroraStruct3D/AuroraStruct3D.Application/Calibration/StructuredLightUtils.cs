@@ -6,8 +6,17 @@ public static class StructuredLightUtils
 {
     public static Mat ComputeWrappedPhase(List<Mat> fringeImages)
     {
+        return ComputeWrappedPhase(fringeImages, 2d * Math.PI / fringeImages.Count);
+    }
+
+    public static Mat ComputeWrappedPhase(
+        List<Mat> fringeImages,
+        double phaseStepRadians)
+    {
         if (fringeImages == null || fringeImages.Count < 3)
             throw new ArgumentException("至少需要3幅条纹图像进行相位计算");
+        if (!double.IsFinite(phaseStepRadians) || phaseStepRadians <= 0)
+            throw new ArgumentOutOfRangeException(nameof(phaseStepRadians));
 
         int rows = fringeImages[0].Rows;
         int cols = fringeImages[0].Cols;
@@ -22,10 +31,10 @@ public static class StructuredLightUtils
         {
             using Mat gray = new();
             Cv2.CvtColor(fringeImages[i], gray, ColorConversionCodes.BGR2GRAY);
-            Mat gray64 = new();
+            using Mat gray64 = new();
             gray.ConvertTo(gray64, MatType.CV_64FC1, 1.0 / 255.0);
 
-            double phaseShift = 2 * Math.PI * i / n;
+            double phaseShift = phaseStepRadians * i;
 
             for (int y = 0; y < rows; y++)
             {

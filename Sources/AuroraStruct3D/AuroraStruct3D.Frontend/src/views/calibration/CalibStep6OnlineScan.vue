@@ -3,13 +3,17 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import * as signalR from '@microsoft/signalr'
 import { MessagePackHubProtocol } from '@microsoft/signalr-protocol-msgpack'
 import Button from 'primevue/button'
+import InputNumber from 'primevue/inputnumber'
 import Tag from 'primevue/tag'
+import ToggleSwitch from 'primevue/toggleswitch'
+import PointCloudViewer from '@/components/PointCloudViewer.vue'
 import { showErrorToastOnce } from '@/api/client'
 import { useAppToast } from '@/composables/useAppToast'
 import type { CalibProjectDto } from '@/api/calibration'
 import {
     CalibScanCameraRole,
     CalibScanRunState,
+    downloadCalibScanRound,
     getCalibScanStatus,
     startCalibScan,
     stopCalibScan,
@@ -23,11 +27,14 @@ const props = defineProps<{
 const { success: toastSuccess } = useAppToast()
 
 const loading = ref(false)
+const downloadingRound = ref(false)
 const status = ref<CalibScanStatusDto | null>(null)
 const hubConnected = ref(false)
 const reconnecting = ref(false)
 const conflictHint = ref<string | null>(null)
 const suppressProjectorControl = false
+const enableTableFilter = ref(true)
+const tableClearanceMm = ref(3)
 
 // 主/从相机原图 Blob URL（每帧覆盖，旧 URL 在更新前 revoke）
 const mainImageUrl = ref<string | null>(null)
@@ -41,6 +48,11 @@ const minimumDepthMm = ref(0)
 const maximumDepthMm = ref(0)
 const reconstructionMessage = ref('等待首轮采集')
 const reconstructionError = ref<string | null>(null)
+const pointCloudData = ref<Float32Array | null>(null)
+const receivedPointCount = ref(0)
+const displayedPointCount = ref(0)
+
+const MAX_DISPLAYED_POINTS = 500_000
 
 let hubConnection: signalR.HubConnection | null = null
 let statusPollTimer: ReturnType<typeof setInterval> | null = null
@@ -85,6 +97,40 @@ const canStop = computed(() => {
 
 const metrics = computed(() => status.value?.latestMetrics ?? null)
 
+async function onDownloadRound(): Promise<void> {
+    const roundIndex = metrics.value?.roundIndex ?? 0
+    if (roundIndex <= 0 || downloadingRound.value) return
+    downloadingRound.value = true
+    try {
+        const blob = await downloadCalibScanRound(props.project.id, roundIndex)
+        const url = URL.createObjectURL(blob)
+        const anchor = document.createElement('a')
+        anchor.href = url
+        anchor.download = `calib-scan-${props.project.id}-round-${String(roundIndex).padStart(4, '0')}.zip`
+        document.body.appendChild(anchor)
+        anchor.click()
+        anchor.remove()
+        URL.revokeObjectURL(url)
+        toastSuccess(`第 ${roundIndex} 轮扫描图片已下载`)
+    } catch (error) {
+        showErrorToastOnce(error)
+    } finally {
+        downloadingRound.value = false
+    }
+}
+
+function exposureState(value: { saturatedRatio: number; crushedRatio: number } | null | undefined): string {
+    if (!value) return '等待指标'
+    if (value.saturatedRatio >= 0.01) return '过曝'
+    if (value.crushedRatio >= 0.15) return '欠曝'
+    return '正常'
+}
+
+function exposureSeverity(value: { saturatedRatio: number; crushedRatio: number } | null | undefined): 'success' | 'warn' | 'secondary' {
+    const state = exposureState(value)
+    return state === '正常' ? 'success' : state === '等待指标' ? 'secondary' : 'warn'
+}
+
 function revokeUrl(slot: 'main' | 'secondary'): void {
     if (slot === 'main' && mainImageUrl.value) {
         URL.revokeObjectURL(mainImageUrl.value)
@@ -111,6 +157,52 @@ function appendBytes(left: Uint8Array<ArrayBufferLike>, right: Uint8Array<ArrayB
     merged.set(left)
     merged.set(right, left.length)
     return merged
+}
+
+/** 将后端推送的 ASCII PLY 转成查看器使用的 XYZRGB 浮点数组。 */
+function parseAsciiPly(bytes: Uint8Array): Float32Array | null {
+    const text = new TextDecoder('ascii').decode(bytes)
+    const headerEnd = text.indexOf('end_header')
+    if (headerEnd < 0 || !text.startsWith('ply')) return null
+
+    const header = text.slice(0, headerEnd)
+    const countMatch = /element\s+vertex\s+(\d+)/i.exec(header)
+    const expectedCount = countMatch ? Number(countMatch[1]) : 0
+    const hasColor = /property\s+uchar\s+red/i.test(header)
+    const lines = text.slice(headerEnd + 'end_header'.length).trim().split(/\r?\n/)
+    const count = Math.min(expectedCount || lines.length, lines.length)
+    const data = new Float32Array(count * 6)
+    let written = 0
+
+    for (let i = 0; i < count; i++) {
+        const values = lines[i].trim().split(/\s+/).map(Number)
+        if (values.length < 3 || !values.slice(0, 3).every(Number.isFinite)) continue
+        const target = written * 6
+        data[target] = values[0]
+        data[target + 1] = values[1]
+        data[target + 2] = values[2]
+        data[target + 3] = hasColor && Number.isFinite(values[3]) ? values[3] / 255 : 0
+        data[target + 4] = hasColor && Number.isFinite(values[4]) ? values[4] / 255 : 0.8
+        data[target + 5] = hasColor && Number.isFinite(values[5]) ? values[5] / 255 : 1
+        written++
+    }
+    return written === count ? data : data.slice(0, written * 6)
+}
+
+function appendPointCloudChunk(chunk: Float32Array, totalPointCount: number): void {
+    const previous = pointCloudData.value
+    const maxValues = MAX_DISPLAYED_POINTS * 6
+    const combinedLength = Math.min((previous?.length ?? 0) + chunk.length, maxValues)
+    const combined = new Float32Array(combinedLength)
+    const chunkValues = Math.min(chunk.length, combinedLength)
+    const previousValues = combinedLength - chunkValues
+    if (previous && previousValues > 0) {
+        combined.set(previous.subarray(Math.max(0, previous.length - previousValues)), 0)
+    }
+    combined.set(chunk.subarray(chunk.length - chunkValues), previousValues)
+    pointCloudData.value = combined
+    receivedPointCount.value = totalPointCount
+    displayedPointCount.value = combined.length / 6
 }
 
 /** 通过 HTTP Multipart BMP 流读取 Step6 主/从相机图像。 */
@@ -295,6 +387,16 @@ async function startHub(): Promise<void> {
         }
     )
 
+    hubConnection.on(
+        'ReceiveIncrementalPointCloudAsync',
+        (projectId: string, plyBytes: Uint8Array, _pointCount: number, totalPointCount: number) => {
+            if (projectId !== props.project.id || !plyBytes?.length) return
+            const chunk = parseAsciiPly(Uint8Array.from(plyBytes))
+            if (!chunk?.length) return
+            appendPointCloudChunk(chunk, totalPointCount)
+        }
+    )
+
     try {
         await hubConnection.start()
         hubConnected.value = true
@@ -374,6 +476,8 @@ async function onStart(): Promise<void> {
         const res = await startCalibScan({
             calibProjectId: props.project.id,
             suppressProjectorControl: false,
+            enableTableFilter: enableTableFilter.value,
+            tableClearanceMm: tableClearanceMm.value,
         })
         status.value = res
         if (depthQualityMapUrl.value) URL.revokeObjectURL(depthQualityMapUrl.value)
@@ -384,6 +488,9 @@ async function onStart(): Promise<void> {
         maximumDepthMm.value = 0
         reconstructionMessage.value = '正在串行采集首轮条纹'
         reconstructionError.value = null
+        pointCloudData.value = null
+        receivedPointCount.value = 0
+        displayedPointCount.value = 0
         reconcileStatusPolling()
         void refreshStatus(false)
         toastSuccess('已启动在线扫描会话')
@@ -448,6 +555,25 @@ onUnmounted(async () => {
             </div>
 
             <div class="grid grid-cols-1 gap-3 md:grid-cols-3">
+                <div class="flex items-center gap-3 rounded-lg border border-border/50 px-3 py-2">
+                    <ToggleSwitch v-model="enableTableFilter" :disabled="isActiveScanState()" />
+                    <div>
+                        <div class="text-sm font-medium">过滤机台台面</div>
+                        <div class="text-xs text-muted-foreground">自动拟合台面，失败时保留原点云</div>
+                    </div>
+                </div>
+                <div>
+                    <label class="mb-1 block text-xs text-muted-foreground">台面余量（mm）</label>
+                    <InputNumber
+                        v-model="tableClearanceMm"
+                        :min="0"
+                        :max="50"
+                        :min-fraction-digits="0"
+                        :max-fraction-digits="2"
+                        :disabled="!enableTableFilter || isActiveScanState()"
+                        class="w-full"
+                    />
+                </div>
                 <div class="md:col-span-3 flex items-end gap-2">
                     <Button
                         label="开始采集"
@@ -471,6 +597,15 @@ onUnmounted(async () => {
                         icon="pi pi-refresh"
                         :loading="loading"
                         @click="refreshStatus(true)"
+                    />
+                    <Button
+                        label="下载本轮图片"
+                        severity="secondary"
+                        outlined
+                        icon="pi pi-download"
+                        :loading="downloadingRound"
+                        :disabled="(metrics?.roundIndex ?? 0) <= 0"
+                        @click="onDownloadRound"
                     />
                 </div>
             </div>
@@ -540,6 +675,12 @@ onUnmounted(async () => {
                         暂无图像，请启动扫描并等待首帧推送
                     </div>
                 </div>
+                <div class="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                    <Tag :severity="exposureSeverity(metrics?.mainExposure)" :value="exposureState(metrics?.mainExposure)" />
+                    <span>高光 {{ ((metrics?.mainExposure?.saturatedRatio ?? 0) * 100).toFixed(2) }}%</span>
+                    <span>黑位 {{ ((metrics?.mainExposure?.crushedRatio ?? 0) * 100).toFixed(2) }}%</span>
+                    <span>P1/P50/P99 {{ metrics?.mainExposure?.p01 ?? '-' }}/{{ metrics?.mainExposure?.p50 ?? '-' }}/{{ metrics?.mainExposure?.p99 ?? '-' }}</span>
+                </div>
             </div>
 
             <div class="rounded-xl border border-border/60 bg-card/40 p-4">
@@ -557,6 +698,12 @@ onUnmounted(async () => {
                     <div v-else class="flex h-full items-center justify-center text-xs text-muted-foreground">
                         暂无图像，请启动扫描并等待首帧推送
                     </div>
+                </div>
+                <div class="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                    <Tag :severity="exposureSeverity(metrics?.secondaryExposure)" :value="exposureState(metrics?.secondaryExposure)" />
+                    <span>高光 {{ ((metrics?.secondaryExposure?.saturatedRatio ?? 0) * 100).toFixed(2) }}%</span>
+                    <span>黑位 {{ ((metrics?.secondaryExposure?.crushedRatio ?? 0) * 100).toFixed(2) }}%</span>
+                    <span>P1/P50/P99 {{ metrics?.secondaryExposure?.p01 ?? '-' }}/{{ metrics?.secondaryExposure?.p50 ?? '-' }}/{{ metrics?.secondaryExposure?.p99 ?? '-' }}</span>
                 </div>
             </div>
         </div>
@@ -600,6 +747,28 @@ onUnmounted(async () => {
                 />
                 <div v-else class="flex h-full items-center justify-center text-xs text-muted-foreground">
                     暂无深度数据，完成一轮扫描后生成二维质量拟合图
+                </div>
+            </div>
+        </div>
+
+
+        <div class="rounded-xl border border-border/60 bg-card/40 p-4">
+            <div class="mb-3 flex items-center justify-between">
+                <h4 class="text-sm font-semibold">准实时彩色点云</h4>
+                <div class="flex items-center gap-2">
+                    <Tag :severity="pointCloudData ? 'success' : 'secondary'" :value="pointCloudData ? '实时更新' : '等待中'" />
+                    <span class="text-xs text-muted-foreground">
+                        累计 {{ receivedPointCount.toLocaleString() }} 点
+                        <template v-if="receivedPointCount > displayedPointCount">
+                            （显示最近 {{ displayedPointCount.toLocaleString() }} 点）
+                        </template>
+                    </span>
+                </div>
+            </div>
+            <div class="h-[28rem] w-full overflow-hidden rounded bg-black/70">
+                <PointCloudViewer v-if="pointCloudData" :point-data="pointCloudData" :has-color="true" />
+                <div v-else class="flex h-full items-center justify-center text-xs text-muted-foreground">
+                    暂无点云，完成一轮扫描后自动显示
                 </div>
             </div>
         </div>

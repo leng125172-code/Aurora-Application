@@ -165,6 +165,14 @@ public interface ITucamCameraService
     Task StartCaptureAsync(int cameraIndex);
 
     /// <summary>
+    /// 使用指定 SDK 采集模式开始采集。
+    /// 硬件触发扫描应使用 <see cref="TUCamCaptureMode.TriggerStandard"/>。
+    /// </summary>
+    /// <param name="cameraIndex">相机索引</param>
+    /// <param name="captureMode">TUCam SDK 采集模式</param>
+    Task StartCaptureAsync(int cameraIndex, TUCamCaptureMode captureMode);
+
+    /// <summary>
     /// 停止采集
     /// </summary>
     /// <param name="cameraIndex">相机索引</param>
@@ -273,13 +281,15 @@ public interface ITucamCameraService
     /// <param name="maxWidth">BMP 输出最大宽度，0 表示保持原始宽度</param>
     /// <param name="jpegQuality">未使用（保留参数兼容性）</param>
     /// <param name="imageRotationAngle">图像顺时针旋转角度（度，支持 0/90/180/270）</param>
+    /// <param name="cancellationToken">等待帧前后检查的取消令牌；SDK 原生等待仍受 timeoutMs 上限约束</param>
     /// <returns>BMP 字节数组</returns>
     Task<byte[]> GrabFrameRawAsync(
         int cameraIndex,
         int timeoutMs = 3000,
         int maxWidth = 0,
         int jpegQuality = 85,
-        int imageRotationAngle = 0
+        int imageRotationAngle = 0,
+        CancellationToken cancellationToken = default
     );
 
     /// <summary>

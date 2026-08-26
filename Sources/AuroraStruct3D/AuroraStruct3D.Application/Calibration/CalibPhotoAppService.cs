@@ -16,6 +16,7 @@ using SkiaSharp;
 using Volo.Abp;
 using Volo.Abp.BlobStoring;
 using Volo.Abp.Content;
+using Volo.Abp.Data;
 using Volo.Abp.Domain.Repositories;
 
 namespace AuroraStruct3D.Calibration;
@@ -41,6 +42,7 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
     private readonly ILogger<CalibPhotoAppService> _logger;
     private readonly CalibBoardDetector _boardDetector;
     private readonly CalibExtrinsicSampler _extrinsicSampler;
+    private readonly IDataFilter _dataFilter;
 
     /// <summary>
     /// 进程级每相机触发模式锁：串行化 <see cref="GrabCalibFrameRawAsync"/> 的「读取→切换→恢复」序列。
@@ -60,7 +62,8 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
         IProjectorDeviceAppService projectorService,
         ILogger<CalibPhotoAppService> logger,
         CalibBoardDetector boardDetector,
-        CalibExtrinsicSampler extrinsicSampler
+        CalibExtrinsicSampler extrinsicSampler,
+        IDataFilter dataFilter
     )
     {
         _projectRepo = projectRepo;
@@ -74,6 +77,7 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
         _logger = logger;
         _boardDetector = boardDetector;
         _extrinsicSampler = extrinsicSampler;
+        _dataFilter = dataFilter;
     }
 
     /// <inheritdoc/>
@@ -244,11 +248,23 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
         long captureMs = phaseSw.ElapsedMilliseconds;
 
         phaseSw.Restart();
-        (bool isValid, int cornerCount) = _boardDetector.DetectBoardFeaturePoints(
-            jpegBytes,
-            project,
-            isProjectedBoard: false
-        );
+        using Mat gray = CalibImageUtils.LoadGrayMat(jpegBytes);
+        (bool isValid, int cornerCount, Point2f[] featurePoints) =
+            _boardDetector.DetectIntrinsicBoardFeaturePoints(gray, project);
+        CameraImageQualityCalculator.Scores? qualityScores = null;
+        if (isValid)
+        {
+            Rect qualityRoi = BuildQualityRoi(featurePoints, gray.Cols, gray.Rows);
+            qualityScores = CameraImageQualityCalculator.ComputeGray(
+                CalibImageUtils.CopyGrayPixels(gray),
+                gray.Cols,
+                gray.Rows,
+                qualityRoi.X,
+                qualityRoi.Y,
+                qualityRoi.Width,
+                qualityRoi.Height
+            );
+        }
         long detectionMs = phaseSw.ElapsedMilliseconds;
 
         string blobKey = BuildBlobKey(
@@ -271,13 +287,15 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
             blobKey,
             isValid,
             cornerCount,
-            imageBase64
+            imageBase64,
+            exposureScore: qualityScores?.ExposureScore,
+            sharpnessScore: qualityScores?.SharpnessScore
         );
         await _photoRepo.InsertAsync(record);
         long recordSaveMs = phaseSw.ElapsedMilliseconds;
 
         _logger.LogInformation(
-            "内参拍照耗时: Metadata={MetadataMs}ms, Capture={CaptureMs}ms, Detect={DetectionMs}ms, BlobSave={BlobSaveMs}ms, RecordAndBase64={RecordSaveMs}ms, Total={TotalMs}ms, ImageBytes={ImageBytes}, Valid={Valid}",
+            "内参拍照耗时: Metadata={MetadataMs}ms, Capture={CaptureMs}ms, Detect={DetectionMs}ms, BlobSave={BlobSaveMs}ms, RecordAndBase64={RecordSaveMs}ms, Total={TotalMs}ms, ImageBytes={ImageBytes}, Valid={Valid}, Exposure={ExposureScore}, Sharpness={SharpnessScore}",
             metadataMs,
             captureMs,
             detectionMs,
@@ -285,7 +303,9 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
             recordSaveMs,
             totalSw.ElapsedMilliseconds,
             jpegBytes.Length,
-            isValid
+            isValid,
+            qualityScores?.ExposureScore,
+            qualityScores?.SharpnessScore
         );
 
         return ToPhotoDto(record);
@@ -596,6 +616,8 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
 
         await _photoRepo.InsertAsync(mainRecord);
         await _photoRepo.InsertAsync(secondaryRecord);
+        if (mainRecord.IsValid && secondaryRecord.IsValid)
+            await InvalidateStereoCalibrationAsync(input.CalibProjectId, "新增双目有效照片组");
 
         return new CalibStereoPairPhotoDto
         {
@@ -653,6 +675,23 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
     public async Task DeleteAsync(Guid id)
     {
         CalibPhotoRecord record = await _photoRepo.GetAsync(id);
+        if (
+            record.PhotoType == CalibPhotoType.StereoExtrinsicPair
+            && record.PairGroupId.HasValue
+        )
+        {
+            IQueryable<CalibPhotoRecord> stereoQuery = await _photoRepo.GetQueryableAsync();
+            List<CalibPhotoRecord> stereoPair = await AsyncExecuter.ToListAsync(
+                stereoQuery.Where(x =>
+                    x.CalibProjectId == record.CalibProjectId
+                    && x.PhotoType == CalibPhotoType.StereoExtrinsicPair
+                    && x.PairGroupId == record.PairGroupId
+                )
+            );
+            await DeletePhotoRecordsAsync(stereoPair);
+            await InvalidateStereoCalibrationAsync(record.CalibProjectId, "删除双目照片组");
+            return;
+        }
         if (record.PhotoType == CalibPhotoType.Extrinsic && record.PairGroupId.HasValue)
         {
             IQueryable<CalibPhotoRecord> query = await _photoRepo.GetQueryableAsync();
@@ -858,6 +897,7 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
             newParam.SetCalibResult(intrinsicJson, distJson, reprojError);
             await _cameraParamRepo.InsertAsync(newParam);
         }
+        await InvalidateStereoCalibrationAsync(calibProjectId, "相机内参已重新计算");
 
         _logger.LogInformation(
             "[内参标定] 完成，重投影误差 {Error:F4} px（阈值 {Threshold:F2} px），fx={Fx:F3}, fy={Fy:F3}, cx={Cx:F3}, cy={Cy:F3}, 畸变={Dist}",
@@ -1683,6 +1723,7 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
             camParam.SetCalibResult(intrinsicJson, distJson, reprojError, rvecJson, tvecJson);
             await _cameraParamRepo.UpdateAsync(camParam);
         }
+        await InvalidateStereoCalibrationAsync(calibProjectId, "相机标定参数已重新计算");
 
         return new CalibComputeResultDto
         {
@@ -1892,6 +1933,7 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
         List<Mat> imagePointsSecondary = [];
         List<Point2f[]> detectedPointsMain = [];
         List<Point2f[]> detectedPointsSecondary = [];
+        List<Guid> detectedPairGroupIds = [];
         Size imageSize = default;
 
         System.Diagnostics.Stopwatch phaseSwS = new();
@@ -1985,6 +2027,7 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
             imagePointsSecondary.Add(Mat.FromArray(secondaryCorners));
             detectedPointsMain.Add(mainCorners);
             detectedPointsSecondary.Add(secondaryCorners);
+            detectedPairGroupIds.Add(mainPhoto.PairGroupId!.Value);
         }
 
         if (objectPoints.Count < CalibConsts.MinValidPhotoCount)
@@ -2010,6 +2053,11 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
             secondaryParam.DistCoeffsJson!
         );
 
+        // 所有通过左右角点重检的照片组必须先进入联合模型。不能在联合标定之前根据
+        // 单组平面 SolvePnP 位姿硬剔除：平面 PnP 的姿态歧义会把正常的新照片整批误判。
+        List<int> calibrationIndices = Enumerable.Range(0, objectPoints.Count).ToList();
+        List<CalibStereoRejectedPairDto> rejectedPairs = [];
+
         _logger.LogInformation(
             "[双目标定] 主相机内参 — fx={Fx:F2}, fy={Fy:F2}, cx={Cx:F2}, cy={Cy:F2}",
             mainCameraMatrix.At<double>(0, 0),
@@ -2033,7 +2081,7 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
 
         _logger.LogInformation(
             "[双目标定] 开始 StereoCalibrate — {Count} 组样本，分辨率 {W}x{H}",
-            objectPoints.Count,
+            calibrationIndices.Count,
             imageSize.Width,
             imageSize.Height
         );
@@ -2041,10 +2089,13 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
 
         try
         {
-            stereoError = Cv2.StereoCalibrate(
+            stereoError = CalibrateStereoWithOutlierRejection(
                 objectPoints,
                 imagePointsMain,
                 imagePointsSecondary,
+                detectedPointsMain,
+                detectedPointsSecondary,
+                detectedPairGroupIds,
                 mainCameraMatrix,
                 mainDistCoeffs,
                 secondaryCameraMatrix,
@@ -2054,8 +2105,8 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
                 t,
                 e,
                 f,
-                CalibrationFlags.FixIntrinsic,
-                new TermCriteria(CriteriaTypes.Eps | CriteriaTypes.MaxIter, 100, 1e-5)
+                out calibrationIndices,
+                out rejectedPairs
             );
         }
         finally
@@ -2073,6 +2124,11 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
             phaseSwS.ElapsedMilliseconds,
             stereoError
         );
+
+        List<Point2f[]> calibrationDetectedPointsMain = calibrationIndices
+            .Select(i => detectedPointsMain[i]).ToList();
+        List<Point2f[]> calibrationDetectedPointsSecondary = calibrationIndices
+            .Select(i => detectedPointsSecondary[i]).ToList();
 
         if (stereoError > 10)
         {
@@ -2094,7 +2150,7 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
             );
             _logger.LogError(
                 "[双目标定] 异常诊断 — 样本数={Count}, 图像尺寸={W}x{H}, 主相机内参有效性={MainValid}, 从相机内参有效性={SecValid}",
-                objectPoints.Count,
+                calibrationIndices.Count,
                 imageSize.Width,
                 imageSize.Height,
                 mainParam.ReprojectionError.HasValue && mainParam.ReprojectionError.Value < 1,
@@ -2108,7 +2164,7 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
         using Mat p1 = new();
         using Mat p2 = new();
         using Mat q = new();
-        Cv2.StereoRectify(
+        CalibComputationUtils.StereoRectifyMaximizeUsefulArea(
             mainCameraMatrix,
             mainDistCoeffs,
             secondaryCameraMatrix,
@@ -2166,12 +2222,12 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
 
         List<double> verticalErrors = [];
         List<double> horizontalDisparities = [];
-        for (int pairIndex = 0; pairIndex < detectedPointsMain.Count; pairIndex++)
+        for (int pairIndex = 0; pairIndex < calibrationDetectedPointsMain.Count; pairIndex++)
         {
             using Mat rectifiedMainPoints = new();
             using Mat rectifiedSecondaryPoints = new();
             Cv2.UndistortPoints(
-                InputArray.Create(detectedPointsMain[pairIndex]),
+                InputArray.Create(calibrationDetectedPointsMain[pairIndex]),
                 rectifiedMainPoints,
                 mainCameraMatrix,
                 mainDistCoeffs,
@@ -2179,7 +2235,7 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
                 p1
             );
             Cv2.UndistortPoints(
-                InputArray.Create(detectedPointsSecondary[pairIndex]),
+                InputArray.Create(calibrationDetectedPointsSecondary[pairIndex]),
                 rectifiedSecondaryPoints,
                 secondaryCameraMatrix,
                 secondaryDistCoeffs,
@@ -2222,8 +2278,20 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
 
         if (stereoError > CalibConsts.MaxStereoReprojectionError)
         {
+            string rejectedSummary = rejectedPairs.Count == 0
+                ? "无照片组被稳健剔除"
+                : string.Join(
+                    Environment.NewLine,
+                    rejectedPairs.Select(pair => $"- {pair.PairGroupId}：{pair.Reason}")
+                );
             throw new UserFriendlyException(
-                $"双目重投影误差为 {stereoError:F4} px，超过阈值 {CalibConsts.MaxStereoReprojectionError:F1} px，请补拍后重算"
+                $"双目重投影误差为 {stereoError:F4} px，超过阈值 {CalibConsts.MaxStereoReprojectionError:F1} px。"
+                    + Environment.NewLine
+                    + $"输入 {objectPoints.Count} 组，使用 {calibrationIndices.Count} 组，剔除 {rejectedPairs.Count} 组。"
+                    + Environment.NewLine
+                    + $"剔除明细：{Environment.NewLine}{rejectedSummary}"
+                    + Environment.NewLine
+                    + "请检查被剔除照片后重算"
             );
         }
 
@@ -2307,10 +2375,15 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
         string p1Json = CalibImageUtils.SerializeMatToJson(p1);
         string p2Json = CalibImageUtils.SerializeMatToJson(p2);
 
-        IQueryable<CalibStereoResult> stereoQuery = await _stereoResultRepo.GetQueryableAsync();
-        CalibStereoResult? stereoResult = await AsyncExecuter.FirstOrDefaultAsync(
-            stereoQuery.Where(x => x.CalibProjectId == calibProjectId)
-        );
+        CalibStereoResult? stereoResult;
+        using (_dataFilter.Disable<ISoftDelete>())
+        {
+            IQueryable<CalibStereoResult> stereoQuery =
+                await _stereoResultRepo.GetQueryableAsync();
+            stereoResult = await AsyncExecuter.FirstOrDefaultAsync(
+                stereoQuery.Where(x => x.CalibProjectId == calibProjectId)
+            );
+        }
 
         if (stereoResult == null)
         {
@@ -2339,6 +2412,7 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
         }
         else
         {
+            stereoResult.Restore();
             stereoResult.SetResult(
                 stereoError,
                 rJson,
@@ -2365,7 +2439,234 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
             stereoError
         );
 
-        return ToStereoResultDto(stereoResult);
+        CalibStereoComputeResultDto result = ToStereoResultDto(stereoResult);
+        result.InputPairCount = objectPoints.Count;
+        result.UsedPairCount = calibrationIndices.Count;
+        result.RejectedPairs = rejectedPairs;
+        return result;
+    }
+
+    /// <summary>
+    /// 先用全部有效照片组建立双目模型，再按该模型的逐组对称极线 RMS 做稳健剔除。
+    /// 每轮最多剔除 20%，避免一次被偏置模型误删整批样本；最终一次计算一定使用最终保留集。
+    /// </summary>
+    private double CalibrateStereoWithOutlierRejection(
+        List<Mat> objectPoints,
+        List<Mat> imagePointsMain,
+        List<Mat> imagePointsSecondary,
+        List<Point2f[]> detectedPointsMain,
+        List<Point2f[]> detectedPointsSecondary,
+        List<Guid> pairGroupIds,
+        Mat mainCameraMatrix,
+        Mat mainDistCoeffs,
+        Mat secondaryCameraMatrix,
+        Mat secondaryDistCoeffs,
+        Size imageSize,
+        Mat rotation,
+        Mat translation,
+        Mat essential,
+        Mat fundamental,
+        out List<int> usedIndices,
+        out List<CalibStereoRejectedPairDto> rejectedPairs
+    )
+    {
+        const int maximumIterations = 3;
+        const double minimumErrorMarginPx = 0.25d;
+        const double robustSigmaMultiplier = 3.5d;
+
+        List<int> activeIndices = Enumerable.Range(0, objectPoints.Count).ToList();
+        usedIndices = activeIndices;
+        rejectedPairs = [];
+        double stereoError = double.NaN;
+
+        for (int iteration = 0; iteration < maximumIterations; iteration++)
+        {
+            List<Mat> subsetObjects = activeIndices.Select(i => objectPoints[i]).ToList();
+            List<Mat> subsetMain = activeIndices.Select(i => imagePointsMain[i]).ToList();
+            List<Mat> subsetSecondary = activeIndices.Select(i => imagePointsSecondary[i]).ToList();
+
+            stereoError = Cv2.StereoCalibrate(
+                subsetObjects,
+                subsetMain,
+                subsetSecondary,
+                mainCameraMatrix,
+                mainDistCoeffs,
+                secondaryCameraMatrix,
+                secondaryDistCoeffs,
+                imageSize,
+                rotation,
+                translation,
+                essential,
+                fundamental,
+                CalibrationFlags.FixIntrinsic,
+                new TermCriteria(CriteriaTypes.Eps | CriteriaTypes.MaxIter, 100, 1e-5)
+            );
+
+            double[] errors = activeIndices
+                .Select(i => ComputeSymmetricEpipolarRms(
+                    detectedPointsMain[i],
+                    detectedPointsSecondary[i],
+                    fundamental,
+                    mainCameraMatrix,
+                    mainDistCoeffs,
+                    secondaryCameraMatrix,
+                    secondaryDistCoeffs
+                ))
+                .ToArray();
+            double median = ComputeMedian(errors);
+            double mad = ComputeMedian(errors.Select(error => Math.Abs(error - median)));
+            double robustSigma = 1.4826d * mad;
+            double threshold = median
+                + Math.Max(minimumErrorMarginPx, robustSigmaMultiplier * robustSigma);
+
+            _logger.LogInformation(
+                "[双目标定] 第 {Iteration} 轮 — 输入={Count}, RMS={Rms:F6}px, "
+                    + "逐组极线误差 min={Min:F4}, median={Median:F4}, max={Max:F4}, "
+                    + "MAD={Mad:F4}, 剔除阈值={Threshold:F4}px",
+                iteration + 1,
+                activeIndices.Count,
+                stereoError,
+                errors.Min(),
+                median,
+                errors.Max(),
+                mad,
+                threshold
+            );
+
+            if (iteration == maximumIterations - 1)
+                break;
+
+            int maximumRejectCount = Math.Max(1, (int)Math.Floor(activeIndices.Count * 0.2d));
+            int allowableRejectCount = activeIndices.Count - CalibConsts.MinValidPhotoCount;
+            List<(int UsedPosition, int OriginalIndex, double Error)> candidates = errors
+                .Select((error, position) => new
+                {
+                    UsedPosition = position,
+                    OriginalIndex = activeIndices[position],
+                    Error = error,
+                })
+                .Where(item => item.Error > threshold)
+                .OrderByDescending(item => item.Error)
+                .Take(Math.Min(maximumRejectCount, Math.Max(0, allowableRejectCount)))
+                .Select(item => (item.UsedPosition, item.OriginalIndex, item.Error))
+                .ToList();
+
+            if (candidates.Count == 0)
+                break;
+
+            foreach (var candidate in candidates)
+            {
+                Guid groupId = pairGroupIds[candidate.OriginalIndex];
+                rejectedPairs.Add(new CalibStereoRejectedPairDto
+                {
+                    PairGroupId = groupId,
+                    EpipolarErrorPx = candidate.Error,
+                    RejectionThresholdPx = threshold,
+                    RejectionIteration = iteration + 1,
+                    Reason = $"第 {iteration + 1} 轮对称极线 RMS {candidate.Error:F4} px 超过剔除阈值 {threshold:F4} px",
+                });
+                _logger.LogWarning(
+                    "[双目标定] 第 {Iteration} 轮排除照片组 [{GroupId}] — "
+                        + "对称极线 RMS={Error:F4}px，阈值={Threshold:F4}px",
+                    iteration + 1,
+                    groupId,
+                    candidate.Error,
+                    threshold
+                );
+            }
+
+            foreach (var candidate in candidates.OrderByDescending(x => x.UsedPosition))
+                activeIndices.RemoveAt(candidate.UsedPosition);
+        }
+
+        return stereoError;
+    }
+
+    private static double ComputeSymmetricEpipolarRms(
+        Point2f[] mainPoints,
+        Point2f[] secondaryPoints,
+        Mat fundamental,
+        Mat mainCameraMatrix,
+        Mat mainDistCoeffs,
+        Mat secondaryCameraMatrix,
+        Mat secondaryDistCoeffs
+    )
+    {
+        if (mainPoints.Length != secondaryPoints.Length || mainPoints.Length == 0)
+            throw new ArgumentException("双目角点数量必须一致且不能为空");
+
+        using Mat undistortedMainMat = new();
+        using Mat undistortedSecondaryMat = new();
+        using InputArray mainInput = InputArray.Create(mainPoints);
+        using InputArray secondaryInput = InputArray.Create(secondaryPoints);
+        Cv2.UndistortPoints(
+            mainInput,
+            undistortedMainMat,
+            mainCameraMatrix,
+            mainDistCoeffs,
+            null,
+            mainCameraMatrix
+        );
+        Cv2.UndistortPoints(
+            secondaryInput,
+            undistortedSecondaryMat,
+            secondaryCameraMatrix,
+            secondaryDistCoeffs,
+            null,
+            secondaryCameraMatrix
+        );
+        undistortedMainMat.GetArray(out Point2f[] undistortedMain);
+        undistortedSecondaryMat.GetArray(out Point2f[] undistortedSecondary);
+
+        double f00 = fundamental.At<double>(0, 0);
+        double f01 = fundamental.At<double>(0, 1);
+        double f02 = fundamental.At<double>(0, 2);
+        double f10 = fundamental.At<double>(1, 0);
+        double f11 = fundamental.At<double>(1, 1);
+        double f12 = fundamental.At<double>(1, 2);
+        double f20 = fundamental.At<double>(2, 0);
+        double f21 = fundamental.At<double>(2, 1);
+        double f22 = fundamental.At<double>(2, 2);
+        double sumSquaredDistance = 0d;
+
+        for (int index = 0; index < undistortedMain.Length; index++)
+        {
+            double x1 = undistortedMain[index].X;
+            double y1 = undistortedMain[index].Y;
+            double x2 = undistortedSecondary[index].X;
+            double y2 = undistortedSecondary[index].Y;
+
+            double line2A = f00 * x1 + f01 * y1 + f02;
+            double line2B = f10 * x1 + f11 * y1 + f12;
+            double line2C = f20 * x1 + f21 * y1 + f22;
+            double line1A = f00 * x2 + f10 * y2 + f20;
+            double line1B = f01 * x2 + f11 * y2 + f21;
+            double numerator = x2 * line2A + y2 * line2B + line2C;
+            double denominator1 = line1A * line1A + line1B * line1B;
+            double denominator2 = line2A * line2A + line2B * line2B;
+            if (denominator1 <= 1e-18d || denominator2 <= 1e-18d)
+            {
+                sumSquaredDistance += 1e6d;
+                continue;
+            }
+
+            double numeratorSquared = numerator * numerator;
+            sumSquaredDistance += 0.5d
+                * (numeratorSquared / denominator1 + numeratorSquared / denominator2);
+        }
+
+        return Math.Sqrt(sumSquaredDistance / undistortedMain.Length);
+    }
+
+    private static double ComputeMedian(IEnumerable<double> values)
+    {
+        double[] sorted = values.OrderBy(value => value).ToArray();
+        if (sorted.Length == 0)
+            throw new ArgumentException("无法计算空集合的中位数");
+        int middle = sorted.Length / 2;
+        return sorted.Length % 2 == 0
+            ? (sorted[middle - 1] + sorted[middle]) / 2d
+            : sorted[middle];
     }
 
     /// <inheritdoc/>
@@ -2448,19 +2749,34 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
         bool stableModelValid = CalibComputationUtils.TryValidateCameraModel(
             cameraMatrix, distCoeffs, imageSize, out string stableReason
         );
-        if (stableError <= maximumReprojectionError && stableModelValid)
+        if (stableModelValid)
         {
-            _logger.LogInformation(
-                "{Prefix} 采用 FixK3 稳定模型，RMS={Error:F4}px",
-                logPrefix,
-                stableError
-            );
+            if (stableError <= maximumReprojectionError)
+            {
+                _logger.LogInformation(
+                    "{Prefix} 采用 FixK3 稳定模型，RMS={Error:F4}px",
+                    logPrefix,
+                    stableError
+                );
+            }
+            else
+            {
+                // 参数有效但 RMS 超限时仍保留稳定模型，由调用方统一报告重投影误差。
+                // 不能仅为降低 RMS 解锁 K3：平面标定数据对高阶径向畸变约束不足，
+                // 完整模型可能把 K3 拟合到极端值并产生同一数据重复计算结果不一致。
+                _logger.LogWarning(
+                    "{Prefix} FixK3 模型参数有效但 RMS={Error:F4}px 超过阈值 {Threshold:F4}px；保留稳定模型并交由上层判定，不尝试完整高阶畸变模型",
+                    logPrefix,
+                    stableError,
+                    maximumReprojectionError
+                );
+            }
             return stableError;
         }
 
         _logger.LogWarning(
-            "{Prefix} FixK3 模型未通过，RMS={Error:F4}px，参数有效={Valid}，原因={Reason}；尝试完整模型",
-            logPrefix, stableError, stableModelValid, stableReason
+            "{Prefix} FixK3 模型参数无效，RMS={Error:F4}px，原因={Reason}；尝试完整模型",
+            logPrefix, stableError, stableReason
         );
         foreach (Mat mat in rvecArray) mat.Dispose();
         foreach (Mat mat in tvecArray) mat.Dispose();
@@ -3120,6 +3436,8 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
             PhotoType = record.PhotoType,
             IsValid = record.IsValid,
             CornerCountDetected = record.CornerCountDetected,
+            ExposureScore = record.ExposureScore,
+            SharpnessScore = record.SharpnessScore,
             CapturedAt = record.CapturedAt,
             ThumbnailBase64 = thumbnail,
             BlobKey = record.BlobKey,
@@ -3380,7 +3698,7 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
             if (string.IsNullOrWhiteSpace(param?.IntrinsicMatrixJson))
                 return false;
 
-            if (project.DeviceSeries == DeviceSeries.SingleLight)
+            if (project.IsProjectorCalibrationRequired())
             {
                 if (string.IsNullOrWhiteSpace(param.ExtrinsicRvecJson))
                     return false;
@@ -3389,18 +3707,88 @@ public class CalibPhotoAppService : AuroraStruct3DAppService, ICalibPhotoAppServ
 
         if (project.SecondaryCameraDeviceId.HasValue)
         {
+            if (!project.MainCameraDeviceId.HasValue)
+                return false;
             IQueryable<CalibStereoResult> stereoQuery = await _stereoResultRepo.GetQueryableAsync();
             CalibStereoResult? stereoResult = await AsyncExecuter.FirstOrDefaultAsync(
                 stereoQuery.Where(x => x.CalibProjectId == calibProjectId)
             );
 
-            if (stereoResult == null || string.IsNullOrWhiteSpace(stereoResult.RotationMatrixJson))
+            if (
+                stereoResult == null
+                || string.IsNullOrWhiteSpace(stereoResult.RotationMatrixJson)
+                || stereoResult.MainCameraDeviceId != project.MainCameraDeviceId.Value
+                || stereoResult.SecondaryCameraDeviceId != project.SecondaryCameraDeviceId.Value
+                || stereoResult.StereoReprojectionError > CalibConsts.MaxStereoReprojectionError
+            )
                 return false;
             if (!await HasUsableStereoMapsAsync(stereoResult))
                 return false;
         }
 
         return true;
+    }
+
+    private async Task InvalidateStereoCalibrationAsync(Guid calibProjectId, string reason)
+    {
+        IQueryable<CalibStereoResult> query = await _stereoResultRepo.GetQueryableAsync();
+        CalibStereoResult? result = await AsyncExecuter.FirstOrDefaultAsync(
+            query.Where(x => x.CalibProjectId == calibProjectId)
+        );
+        if (result is null)
+            return;
+
+        foreach (
+            string blobKey in new[]
+            {
+                result.Map1XBlobKey,
+                result.Map1YBlobKey,
+                result.Map2XBlobKey,
+                result.Map2YBlobKey,
+            }
+        )
+        {
+            if (string.IsNullOrWhiteSpace(blobKey))
+                continue;
+            try
+            {
+                await _blobContainer.DeleteAsync(blobKey);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(
+                    ex,
+                    "双目标定失效时删除矫正映射失败：ProjectId={ProjectId}, BlobKey={BlobKey}",
+                    calibProjectId,
+                    blobKey
+                );
+            }
+        }
+
+        await _stereoResultRepo.DeleteAsync(result.Id);
+        _logger.LogInformation(
+            "双目标定结果已失效：ProjectId={ProjectId}, Reason={Reason}",
+            calibProjectId,
+            reason
+        );
+    }
+
+    private static Rect BuildQualityRoi(Point2f[] points, int imageWidth, int imageHeight)
+    {
+        if (points.Length == 0)
+            return new Rect(0, 0, imageWidth, imageHeight);
+
+        float minX = points.Min(point => point.X);
+        float maxX = points.Max(point => point.X);
+        float minY = points.Min(point => point.Y);
+        float maxY = points.Max(point => point.Y);
+        double paddingX = Math.Max(1, (maxX - minX) * 0.1);
+        double paddingY = Math.Max(1, (maxY - minY) * 0.1);
+        int left = Math.Clamp((int)Math.Floor(minX - paddingX), 0, imageWidth - 1);
+        int top = Math.Clamp((int)Math.Floor(minY - paddingY), 0, imageHeight - 1);
+        int right = Math.Clamp((int)Math.Ceiling(maxX + paddingX), left + 1, imageWidth);
+        int bottom = Math.Clamp((int)Math.Ceiling(maxY + paddingY), top + 1, imageHeight);
+        return new Rect(left, top, right - left, bottom - top);
     }
 
     private async Task<bool> HasUsableStereoMapsAsync(CalibStereoResult result)

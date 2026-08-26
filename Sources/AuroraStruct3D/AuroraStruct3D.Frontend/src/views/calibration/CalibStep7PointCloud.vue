@@ -12,6 +12,7 @@ import type { CalibProjectDto } from '@/api/calibration'
 import {
     PointCloudRunState,
     cancelPointCloud,
+    downloadPointCloud,
     generatePointCloud,
     getPointCloudStatus,
     type PointCloudStatusDto,
@@ -158,13 +159,25 @@ async function onCancel(): Promise<void> {
     }
 }
 
-function onDownload(): void {
-    const url = status.value?.plyDownloadUrl
-    if (!url) return
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `point-cloud-${props.project.id}.ply`
-    a.click()
+async function onDownload(): Promise<void> {
+    if (!status.value?.plyDownloadUrl) return
+    loading.value = true
+    try {
+        const blob = await downloadPointCloud(props.project.id)
+        const objectUrl = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = objectUrl
+        a.download = `point-cloud-${props.project.id}.ply`
+        document.body.appendChild(a)
+        a.click()
+        a.remove()
+        window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000)
+        toastSuccess('点云下载已开始')
+    } catch (e) {
+        showErrorToastOnce(e)
+    } finally {
+        loading.value = false
+    }
 }
 
 // ===================== 生命周期 =====================

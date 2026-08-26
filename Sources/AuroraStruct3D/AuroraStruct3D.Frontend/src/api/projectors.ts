@@ -383,6 +383,8 @@ export interface DownloadFringePatternInput {
     fringeMode: FringeMode
     /** 条纹类型 */
     fringeType: FringeType
+    darkLevel: number
+    brightLevel: number
     /** 投影宽度像素（通过 Fp 指令读取） */
     widthPixels: number
     /** 投影高度像素（用户设置） */

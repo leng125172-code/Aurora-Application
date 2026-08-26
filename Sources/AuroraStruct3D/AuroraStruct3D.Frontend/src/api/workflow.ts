@@ -128,6 +128,7 @@ export interface ProjectRun {
     inspectionDecision: number
     inspectionErrorCode: number
     inspectionErrorMessage?: string
+    errorCode?: string
     [key: string]: unknown
 }
 

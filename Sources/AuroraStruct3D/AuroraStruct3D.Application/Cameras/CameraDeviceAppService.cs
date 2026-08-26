@@ -1025,8 +1025,14 @@ public class CameraDeviceAppService : AuroraStruct3DAppService, ICameraDeviceApp
 
         if (nodeMap == null)
         {
-            // 缓存尚未就绪：返回空骨架，前端可轮询或调用 Refresh
-            return new CameraNodeMapDto { CameraId = id, EnumeratedAt = DateTime.UtcNow };
+            // 启动预热尚未完成或曾失败时自动补载，不再要求用户手动点击“获取”。
+            await _tucamService.RefreshGenICamNodeMapAsync(idx);
+            nodeMap = _tucamService.GetCachedNodeMap(idx);
+            depGraph = _tucamService.GetCachedDependencyGraph(idx);
+            if (nodeMap == null)
+            {
+                throw new UserFriendlyException("GenICam NodeMap 自动加载失败，请检查相机连接状态。");
+            }
         }
 
         return MapNodeMapToDto(id, nodeMap, depGraph);

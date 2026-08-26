@@ -112,6 +112,18 @@ dmypy.json
 .venv/
 venv/
 env/
+.conda/
+
+# 本地诊断、硬件探针与可再生成产物
+.codex-tmp-*/
+.tmp/
+Artifacts/
+frame-probe-output/
+frame-probe-visual*/
+projector-hardware-observe/
+projector-hardware-test*/
+MvSDKLog/
+Tools/TucamFrameConcurrencyProbe/publish-linux-arm64/
 
 # ------------------------------------------------------------
 # 日志文件

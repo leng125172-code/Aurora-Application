@@ -29,7 +29,7 @@ namespace AuroraStruct3D.OpenCV.Workflow.Statements;
 /// </list>
 /// </para>
 /// </summary>
-public sealed class OperatorCallStatement : IWorkflowStatement
+public sealed class OperatorCallStatement : IWorkflowStatement, IWorkflowStatementTimeoutProvider
 {
     /// <summary>算子的 CLR 类型，必须实现 <see cref="IOperator"/>。</summary>
     public Type OperatorType { get; }
@@ -266,6 +266,52 @@ public sealed class OperatorCallStatement : IWorkflowStatement
                 else context.Remove(portName);
             }
         }
+    }
+
+    /// <inheritdoc/>
+    public TimeSpan? GetRequestedTimeout(IWorkflowContext context)
+    {
+        WorkflowNodeTimeoutAttribute? timeoutAttribute =
+            OperatorType.GetCustomAttribute<WorkflowNodeTimeoutAttribute>();
+        if (timeoutAttribute is null)
+            return null;
+
+        ConstructorInfo? constructor = OperatorType
+            .GetConstructors(BindingFlags.Instance | BindingFlags.Public)
+            .FirstOrDefault(x => x.GetParameters().Length == ConfigArgBindings.Count);
+        ParameterInfo[] parameters = constructor?.GetParameters() ?? [];
+        int index = Array.FindIndex(
+            parameters,
+            x => string.Equals(
+                x.Name,
+                timeoutAttribute.ConfigParameterName,
+                StringComparison.Ordinal
+            )
+        );
+        if (index < 0 || index >= ConfigArgBindings.Count)
+            throw new InvalidOperationException(
+                $"算子 {OperatorType.Name} 声明的超时参数 "
+                    + $"'{timeoutAttribute.ConfigParameterName}' 不存在。"
+            );
+
+        object? raw = ConfigArgBindings[index].Resolve(context);
+        double seconds;
+        try
+        {
+            seconds = Convert.ToDouble(raw, System.Globalization.CultureInfo.InvariantCulture);
+        }
+        catch (Exception ex) when (ex is FormatException or InvalidCastException or OverflowException)
+        {
+            throw new InvalidOperationException(
+                $"算子 {OperatorType.Name} 的超时参数不是有效秒数。",
+                ex
+            );
+        }
+        if (!double.IsFinite(seconds) || seconds <= 0)
+            throw new InvalidOperationException(
+                $"算子 {OperatorType.Name} 的超时参数必须大于 0 秒。"
+            );
+        return TimeSpan.FromSeconds(seconds);
     }
 
     private static string FormatValue(object? value)

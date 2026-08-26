@@ -1066,7 +1066,6 @@ public class DlpProjectorService : IDlpProjectorService, IDisposable
         await Task.Delay(100, cancellationToken).ConfigureAwait(false);
 
         // 2. MD 参数表示序列开头连续的横条纹数量，其余帧全部为竖条纹。
-        //    不再使用 MF 方向位图命令。
         string mdCmd =
             $"{TjProjectorCommands.SetFringeDirectionPrefix}{horizontalFrameCount}{NewLine}";
         _logger.LogDebug(
@@ -1077,6 +1076,27 @@ public class DlpProjectorService : IDlpProjectorService, IDisposable
         );
         await SendCommandAndReadCoreAsync(mdCmd, cancellationToken).ConfigureAwait(false);
         await Task.Delay(50, cancellationToken).ConfigureAwait(false);
+
+        // MF 才是固件逐帧解释横/竖条纹数据长度的方向位图。每个块覆盖 32 帧，
+        // bit=1 表示横条纹，bit=0 表示竖条纹。当前布局是前 H 帧横、其余帧竖，
+        // 不能继续使用旧版 1-2-1-2 横竖交替位图。
+        int orientationBlockCount = (imageCount + 31) / 32;
+        for (int blockIndex = 0; blockIndex < orientationBlockCount; blockIndex++)
+        {
+            string mfCmd = BuildFringeOrientationCommand(
+                imageCount,
+                horizontalFrameCount,
+                blockIndex
+            );
+            _logger.LogInformation(
+                "{Tag} [Device {Device}] Set fringe orientation: cmd={Cmd}",
+                LogTag,
+                DeviceId,
+                mfCmd.TrimEnd('\r', '\n')
+            );
+            await SendCommandAndReadCoreAsync(mfCmd, cancellationToken).ConfigureAwait(false);
+            await Task.Delay(50, cancellationToken).ConfigureAwait(false);
+        }
 
         // 方向配置单独持久化；不要在下载时用 MA 覆盖 B2 单帧触发参数。
         await SendCommandAndReadCoreAsync(TjProjectorCommands.SaveFringeParams + NewLine, cancellationToken)
@@ -1256,33 +1276,38 @@ public class DlpProjectorService : IDlpProjectorService, IDisposable
     /// <summary>
     /// 构建条纹方向位图配置命令（MF）。
     /// </summary>
-    /// <param name="imageCount">图像幅数</param>
+    /// <param name="imageCount">图像总幅数</param>
+    /// <param name="horizontalFrameCount">序列开头连续的横条纹幅数</param>
     /// <param name="blockIndex">MF 块索引，新型光机使用 0，旧型号使用 1</param>
     /// <returns>完整 MF 命令字符串（含 \r\n 结尾）</returns>
-    internal static string BuildFringeOrientationCommand(int imageCount, int blockIndex)
+    internal static string BuildFringeOrientationCommand(
+        int imageCount,
+        int horizontalFrameCount,
+        int blockIndex)
     {
         if (blockIndex is < 0 or > 3)
             throw new ArgumentOutOfRangeException(nameof(blockIndex));
+        if (imageCount is < 0 or > 128)
+            throw new ArgumentOutOfRangeException(nameof(imageCount));
+        if (horizontalFrameCount < 0 || horizontalFrameCount > imageCount)
+            throw new ArgumentOutOfRangeException(nameof(horizontalFrameCount));
 
-        byte[] bits = BuildAlternatingFringeOrientationBits(imageCount);
+        byte[] bits = BuildFringeOrientationBits(imageCount, horizontalFrameCount);
         int offset = blockIndex * 4;
         return $"{TjProjectorCommands.SetFringeOrientationBitmapPrefix}{blockIndex} {bits[offset]} {bits[offset + 1]} {bits[offset + 2]} {bits[offset + 3]}\r\n";
     }
 
-    private static byte[] BuildAlternatingFringeOrientationBits(int imageCount)
+    private static byte[] BuildFringeOrientationBits(
+        int imageCount,
+        int horizontalFrameCount)
     {
         const int maxImages = 128;
         byte[] bits = new byte[16];
         int usableCount = Math.Clamp(imageCount, 0, maxImages);
+        int horizontalCount = Math.Clamp(horizontalFrameCount, 0, usableCount);
 
-        for (int frame = 0; frame < usableCount; frame++)
+        for (int frame = 0; frame < horizontalCount; frame++)
         {
-            bool isHorizontalFrame = frame % 2 == 0;
-            if (!isHorizontalFrame)
-            {
-                continue;
-            }
-
             int byteIndex = frame / 8;
             int bitPosition = frame % 8;
             bits[byteIndex] = (byte)(bits[byteIndex] | (1 << bitPosition));

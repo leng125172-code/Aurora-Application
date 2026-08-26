@@ -26,6 +26,12 @@ public class ProductModel : FullAuditedAggregateRoot<Guid>
     /// <summary>文件大小（字节数）</summary>
     public long FileSizeBytes { get; private set; }
 
+    /// <summary>原始数模坐标的长度单位</summary>
+    public ProductModelLengthUnit LengthUnit { get; private set; }
+
+    /// <summary>网格转换为参考点云时使用的表面采样间距（毫米）</summary>
+    public double SurfaceSamplingSpacingMm { get; private set; }
+
     // ─────────────────────────── BLOB 存储 ───────────────────────────
 
     /// <summary>
@@ -68,12 +74,28 @@ public class ProductModel : FullAuditedAggregateRoot<Guid>
         string originalFileName,
         ProductModelFormat fileFormat,
         long fileSizeBytes,
-        string originalBlobName
+        string originalBlobName,
+        ProductModelLengthUnit lengthUnit = ProductModelLengthUnit.Millimeter,
+        double surfaceSamplingSpacingMm = ProductModelConsts.DefaultSurfaceSamplingSpacingMm
     )
     {
         Check.NotNullOrWhiteSpace(name, nameof(name), ProductModelConsts.MaxNameLength);
         Check.NotNullOrWhiteSpace(originalFileName, nameof(originalFileName));
         Check.NotNullOrWhiteSpace(originalBlobName, nameof(originalBlobName));
+        if (!Enum.IsDefined(lengthUnit))
+            throw new BusinessException("ProductModel:InvalidLengthUnit").WithData(
+                "lengthUnit",
+                lengthUnit
+            );
+        if (
+            !double.IsFinite(surfaceSamplingSpacingMm)
+            || surfaceSamplingSpacingMm < ProductModelConsts.MinSurfaceSamplingSpacingMm
+            || surfaceSamplingSpacingMm > ProductModelConsts.MaxSurfaceSamplingSpacingMm
+        )
+            throw new BusinessException("ProductModel:InvalidSurfaceSamplingSpacing").WithData(
+                "surfaceSamplingSpacingMm",
+                surfaceSamplingSpacingMm
+            );
 
         ProductModelConversionStatus initialStatus = ProductModelConsts.NeedsConversion(fileFormat)
             ? ProductModelConversionStatus.Pending
@@ -86,6 +108,8 @@ public class ProductModel : FullAuditedAggregateRoot<Guid>
             OriginalFileName = originalFileName,
             FileFormat = fileFormat,
             FileSizeBytes = fileSizeBytes,
+            LengthUnit = lengthUnit,
+            SurfaceSamplingSpacingMm = surfaceSamplingSpacingMm,
             OriginalBlobName = originalBlobName,
             ConversionStatus = initialStatus,
         };

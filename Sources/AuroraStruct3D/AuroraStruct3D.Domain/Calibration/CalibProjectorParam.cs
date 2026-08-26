@@ -51,6 +51,10 @@ public class CalibProjectorParam : FullAuditedEntity<Guid>
     /// <summary>条纹类型：bw=黑白（首色黑），wb=白黑（首色白）</summary>
     public string FringeType { get; private set; } = "bw";
 
+    public byte DarkLevel { get; private set; }
+
+    public byte BrightLevel { get; private set; }
+
     /// <summary>相位偏移量（正弦条纹时有效）</summary>
     public decimal? PhaseShift { get; private set; }
 
@@ -83,6 +87,8 @@ public class CalibProjectorParam : FullAuditedEntity<Guid>
         PatternCount = 4;
         PeriodCount = 8;
         FringeType = "bw";
+        DarkLevel = 24;
+        BrightLevel = 220;
         IsEnabled = true;
         IsTemplateMode = false;
     }
@@ -147,13 +153,20 @@ public class CalibProjectorParam : FullAuditedEntity<Guid>
         int periodCount,
         string fringeType,
         int patternCount,
-        decimal? phaseShift = null
+        decimal? phaseShift = null,
+        byte darkLevel = 24,
+        byte brightLevel = 220
     )
     {
+        if (darkLevel >= brightLevel)
+            throw new BusinessException("Calib:InvalidFringeGrayLevels")
+                .WithData("DarkLevel", darkLevel).WithData("BrightLevel", brightLevel);
         PeriodCount = periodCount;
         FringeType = string.IsNullOrEmpty(fringeType) ? "bw" : fringeType;
         PatternCount = patternCount;
         PhaseShift = phaseShift;
+        DarkLevel = darkLevel;
+        BrightLevel = brightLevel;
         return this;
     }
 

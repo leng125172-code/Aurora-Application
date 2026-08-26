@@ -383,8 +383,26 @@ public class WorkflowAppService : AuroraStruct3DAppService, IWorkflowAppService
                 workflow.Name,
                 WorkflowGraphCompiler.ParseContent(workflow.GraphData).Graph
             );
-        (string sourceHash, string programHash) = ComputeSourceHashes(source);
-        return MapSourceDto(workflow, source, sourceHash, programHash);
+        string sourceHash = WorkflowProgramHash.ComputeSourceHash(source);
+        try
+        {
+            string programHash = WorkflowProgramHash.ComputeProgramHash(source);
+            return MapSourceDto(workflow, source, sourceHash, programHash);
+        }
+        catch (WorkflowScriptException)
+        {
+            // Operator contracts can make persisted historical source temporarily invalid.
+            // Reading must still return the source so the IDE and migration tools can repair it.
+            return MapSourceDto(
+                workflow,
+                source,
+                sourceHash,
+                workflow.ProgramHash ?? string.Empty,
+                workflow.SemanticHash ?? string.Empty,
+                workflow.OperatorContractHash ?? string.Empty,
+                workflow.LanguageVersion
+            );
+        }
     }
 
     [HttpPut("{id:guid}/source")]
@@ -778,7 +796,10 @@ public class WorkflowAppService : AuroraStruct3DAppService, IWorkflowAppService
         WorkflowDefinition workflow,
         string source,
         string sourceHash,
-        string programHash
+        string programHash,
+        string? semanticHash = null,
+        string? operatorContractHash = null,
+        int? languageVersion = null
     )
     {
         using JsonDocument graph = JsonDocument.Parse(workflow.GraphData);
@@ -789,12 +810,12 @@ public class WorkflowAppService : AuroraStruct3DAppService, IWorkflowAppService
             SourceCode = source,
             SourceHash = sourceHash,
             ContentHash = sourceHash,
-            SemanticHash = workflow.SemanticHash
+            SemanticHash = semanticHash ?? workflow.SemanticHash
                 ?? WorkflowProgramHash.ComputeSemanticHash(source),
             ProgramHash = programHash,
-            OperatorContractHash = workflow.OperatorContractHash
+            OperatorContractHash = operatorContractHash ?? workflow.OperatorContractHash
                 ?? WorkflowProgramHash.ComputeOperatorContractHash(),
-            LanguageVersion = CSharpWorkflowScript.LanguageVersion,
+            LanguageVersion = languageVersion ?? CSharpWorkflowScript.LanguageVersion,
             Revision = workflow.SourceRevision,
             ConcurrencyStamp = workflow.ConcurrencyStamp,
             GraphData = graph.RootElement.Clone(),

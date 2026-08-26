@@ -9,6 +9,10 @@ namespace AuroraStruct3D.Workflow;
 /// </summary>
 public class WorkflowProjectRun : FullAuditedAggregateRoot<Guid>
 {
+    public Guid? TaskConfigId { get; private set; }
+    public Guid? PlcHandshakeConfigId { get; private set; }
+    public int? PlcRequestId { get; private set; }
+    public long? PlcRequestSequence { get; private set; }
     /// <summary>项目 ID。</summary>
     public Guid ProjectId { get; private set; }
 
@@ -82,7 +86,11 @@ public class WorkflowProjectRun : FullAuditedAggregateRoot<Guid>
         Guid deploymentId,
         int deploymentRevision,
         IEnumerable<Guid> workflowIds,
-        bool continueOnError
+        bool continueOnError,
+        Guid? taskConfigId = null,
+        Guid? plcHandshakeConfigId = null,
+        int? plcRequestId = null,
+        long? plcRequestSequence = null
     )
     {
         Check.NotNullOrWhiteSpace(name, nameof(name), WorkflowProjectRunConsts.MaxNameLength);
@@ -98,6 +106,10 @@ public class WorkflowProjectRun : FullAuditedAggregateRoot<Guid>
         {
             Id = id,
             ProjectId = projectId,
+            TaskConfigId = taskConfigId,
+            PlcHandshakeConfigId = plcHandshakeConfigId,
+            PlcRequestId = plcRequestId,
+            PlcRequestSequence = plcRequestSequence,
             Name = name,
             Status = WorkflowProjectRunStatus.Queued,
             StartType = startType,
@@ -133,6 +145,13 @@ public class WorkflowProjectRun : FullAuditedAggregateRoot<Guid>
             WorkflowProjectRunConsts.MaxHangfireJobIdLength
         );
         HangfireJobId = jobId;
+    }
+
+    public bool TryClaim(DateTime now)
+    {
+        if (Status != WorkflowProjectRunStatus.Queued) return false;
+        MarkRunning(now);
+        return true;
     }
 
     /// <summary>

@@ -8,6 +8,7 @@ AppUpdateClient.py
     - 每块独立 MD5 校验，上传后服务端验证
     - 合并后全文件 MD5 二次校验
     - 四阶段进度条：发布 / 压缩 / 上传 / 解压
+    - 复用 Codex CLI 的 3dai-led：更新时黄色流水，完成后绿色，失败时红色闪烁
     - remotelog / rl 自动发现设备并彩色跟随 .NET systemd 日志
 
 用法：
@@ -71,6 +72,92 @@ DEFAULT_SSH_PORT = 22
 DEFAULT_LOG_SERVICE = "AuroraStruct3D.HttpApi.Host.service"
 # UDP 发现端口 = TCP 端口 - 1
 DISCOVERY_PORT = DEFAULT_PORT - 1
+
+# 与当前 Codex CLI hooks 共用同一个 3dai-led 发送入口。可通过环境变量覆盖，
+# 方便其他开发机使用不同安装位置。
+LED_SEND_SCRIPT_ENV = "AURORA_LED_SEND_SCRIPT"
+LED_PLATFORM = "codex"
+LED_BUSY_REFRESH_SECONDS = 45.0
+
+
+def _find_led_send_script() -> Path | None:
+    configured = os.environ.get(LED_SEND_SCRIPT_ENV, "").strip()
+    candidates = [
+        Path(configured).expanduser() if configured else None,
+        Path.home() / ".local" / "share" / "3dai-led" / "transport" / "send.py",
+    ]
+    return next((path for path in candidates if path is not None and path.is_file()), None)
+
+
+def _send_led_state(script: Path, state: str) -> bool:
+    """通过 Codex CLI 使用的 send.py 发送状态；失败不得影响程序更新。"""
+    command = [
+        sys.executable,
+        str(script),
+        state,
+        "--project",
+        WORKSPACE_ROOT.name,
+        "--platform",
+        LED_PLATFORM,
+    ]
+    startupinfo = None
+    creationflags = 0
+    if sys.platform == "win32":
+        startupinfo = subprocess.STARTUPINFO()
+        startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        creationflags = subprocess.CREATE_NO_WINDOW
+    try:
+        completed = subprocess.run(
+            command,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=10,
+            check=False,
+            startupinfo=startupinfo,
+            creationflags=creationflags,
+        )
+        return completed.returncode == 0
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+
+
+class _UpdateLedIndicator:
+    """更新期间保持黄色流水灯，结束后切换到成功或错误状态。"""
+
+    def __init__(self) -> None:
+        self._script = _find_led_send_script()
+        self._stop_event = threading.Event()
+        self._refresh_thread: threading.Thread | None = None
+
+    def start(self) -> None:
+        if self._script is None:
+            print(
+                f"[流水灯] 未找到 Codex LED 发送脚本；可设置 {LED_SEND_SCRIPT_ENV}。",
+                file=sys.stderr,
+            )
+            return
+        if not _send_led_state(self._script, "busy"):
+            print("[流水灯] 无法发送更新状态，更新流程将继续。", file=sys.stderr)
+        self._refresh_thread = threading.Thread(
+            target=self._refresh_busy,
+            name="app-update-led-refresh",
+            daemon=True,
+        )
+        self._refresh_thread.start()
+
+    def _refresh_busy(self) -> None:
+        assert self._script is not None
+        while not self._stop_event.wait(LED_BUSY_REFRESH_SECONDS):
+            _send_led_state(self._script, "busy")
+
+    def finish(self, success: bool) -> None:
+        if self._script is None:
+            return
+        self._stop_event.set()
+        if self._refresh_thread is not None:
+            self._refresh_thread.join(timeout=12)
+        _send_led_state(self._script, "success" if success else "error")
 
 
 class _Ansi:
@@ -910,5 +997,26 @@ def main() -> None:
     print("=" * 60)
 
 
+def _is_update_invocation(argv: list[str]) -> bool:
+    """远端日志和帮助命令不属于程序更新，不占用更新状态灯。"""
+    return not any(arg in ("remotelog", "rl", "-h", "--help") for arg in argv[1:])
+
+
 if __name__ == "__main__":
-    main()
+    led_indicator = _UpdateLedIndicator() if _is_update_invocation(sys.argv) else None
+    if led_indicator is not None:
+        led_indicator.start()
+    try:
+        main()
+    except SystemExit as exc:
+        if led_indicator is not None:
+            exit_code = exc.code if isinstance(exc.code, int) else 1
+            led_indicator.finish(success=exit_code == 0)
+        raise
+    except BaseException:
+        if led_indicator is not None:
+            led_indicator.finish(success=False)
+        raise
+    else:
+        if led_indicator is not None:
+            led_indicator.finish(success=True)

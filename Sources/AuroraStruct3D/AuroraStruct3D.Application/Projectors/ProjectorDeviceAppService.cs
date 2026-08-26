@@ -601,7 +601,11 @@ public class ProjectorDeviceAppService : AuroraStruct3DAppService, IProjectorDev
                     new FringePreviewImageDto
                     {
                         Index = index,
-                        Label = GrayCodePatternLayout.GetFrameLabel(index),
+                        Label = GrayPhasePatternLayout.GetFrameLabel(
+                            index,
+                            input.PeriodCount,
+                            input.ImageCount
+                        ),
                         Pixels = pixels,
                     }
             )
@@ -664,7 +668,10 @@ public class ProjectorDeviceAppService : AuroraStruct3DAppService, IProjectorDev
 
                 await svc.DownloadFringePatternAsync(
                         images,
-                        GetHorizontalFringeCount(),
+                        GrayPhasePatternLayout.GetFramesPerDirection(
+                            input.PeriodCount,
+                            input.ImageCount
+                        ),
                         input.HorizontalPaddingPosition,
                         reportProgress
                     )
@@ -707,29 +714,71 @@ public class ProjectorDeviceAppService : AuroraStruct3DAppService, IProjectorDev
     }
 
     /// <summary>
-    /// 按与设备下载完全一致的规则生成条纹图一维像素数据。
-    /// 固定生成 16 张多尺度二值条纹：横向 6、12、24、48 px，
-    /// 竖向 8、16、32、64 px，每种宽度均为原图和逐像素取反的互补图。
+    /// 按 Step3 保存/提交的参数生成条纹图一维像素数据。
+    /// 前 ImageCount 张为横条纹，后 ImageCount 张为竖条纹。
     /// 投影仪 Flash 地址空间为 1280×1280：
     /// 竖条纹沿水平方向变化，数据长度为 1280；横条纹沿垂直方向变化，数据长度为 720，
     /// 下载时由 DlpProjectorService 补 560 列黑色填充到 1280 列。
-    /// 下载参数中的周期、图像数及相移量不参与计算；互补图不做坐标偏移，直接对原图逐像素取反。
     /// </summary>
     private static byte[][] BuildFringeImagePixels(DownloadFringePatternInputDto input)
     {
-        if (
-            input.WidthPixels != GrayCodePatternLayout.ProjectorWidth
-            || input.HeightPixels != GrayCodePatternLayout.ProjectorHeight
-        )
+        if (input.WidthPixels <= 0 || input.HeightPixels <= 0)
         {
-            throw new UserFriendlyException("当前投影仪条纹配置固定为 1280×720。");
+            throw new UserFriendlyException("投影分辨率无效，无法生成条纹图像。");
         }
 
-        return GrayCodePatternLayout.BuildFrames();
+        if (input.PeriodCount <= 0)
+            throw new UserFriendlyException("条纹周期数必须大于 0。");
+        if (input.ImageCount < 3 || input.ImageCount > 64)
+            throw new UserFriendlyException("每个方向的相移图像数量必须在 3 到 64 之间。");
+        if (!input.FringeType.Equals("bw", StringComparison.OrdinalIgnoreCase)
+            && !input.FringeType.Equals("wb", StringComparison.OrdinalIgnoreCase))
+            throw new UserFriendlyException("条纹类型仅支持 bw 或 wb。");
+        if (input.DarkLevel >= input.BrightLevel)
+            throw new UserFriendlyException("暗部灰阶必须小于亮部灰阶。");
+
+        if (
+            input.WidthPixels % input.PeriodCount != 0
+            || input.HeightPixels % input.PeriodCount != 0
+        )
+        {
+            throw new UserFriendlyException("条纹周期数必须同时整除投影宽度和高度。");
+        }
+
+        return GrayPhasePatternLayout.BuildFrames(
+            input.WidthPixels,
+            input.HeightPixels,
+            input.PeriodCount,
+            input.ImageCount,
+            input.FringeType.Equals("wb", StringComparison.OrdinalIgnoreCase),
+            input.DarkLevel,
+            input.BrightLevel
+        );
     }
 
-    private static int GetHorizontalFringeCount() =>
-        GrayCodePatternLayout.HorizontalFrameCount;
+    private static byte[] BuildShiftedStripeLine(
+        int pixelCount,
+        int stripeWidth,
+        int offset,
+        byte firstColor)
+    {
+        byte[] pixels = new byte[pixelCount];
+        int fullPeriod = checked(stripeWidth * 2);
+        for (int position = 0; position < pixelCount; position++)
+        {
+            int shifted = (position + offset) % fullPeriod;
+            pixels[position] = shifted < stripeWidth ? firstColor : (byte)(255 - firstColor);
+        }
+
+        return pixels;
+    }
+
+    private static string GetFringeFrameLabel(int index, int imageCount)
+    {
+        string direction = index < imageCount ? "横条纹" : "竖条纹";
+        int directionIndex = index < imageCount ? index : index - imageCount;
+        return $"{direction} {directionIndex + 1}/{imageCount}";
+    }
 
     // ─── 辅助 ─────────────────────────────────────────────────────────────
 

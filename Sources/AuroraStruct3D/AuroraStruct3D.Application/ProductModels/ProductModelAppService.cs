@@ -139,9 +139,25 @@ public class ProductModelAppService : AuroraStruct3DAppService, IProductModelApp
 
     /// <inheritdoc/>
     [Authorize(ProductModelPermissions.Upload)]
-    public async Task<ProductModelDto> UploadAsync(IRemoteStreamContent file, string? name)
+    public async Task<ProductModelDto> UploadAsync(
+        IRemoteStreamContent file,
+        string? name,
+        ProductModelLengthUnit lengthUnit = ProductModelLengthUnit.Millimeter,
+        double surfaceSamplingSpacingMm = ProductModelConsts.DefaultSurfaceSamplingSpacingMm
+    )
     {
         Check.NotNull(file, nameof(file));
+        if (!Enum.IsDefined(lengthUnit))
+            throw new BusinessException("ProductModel:InvalidLengthUnit");
+        if (
+            !double.IsFinite(surfaceSamplingSpacingMm)
+            || surfaceSamplingSpacingMm < ProductModelConsts.MinSurfaceSamplingSpacingMm
+            || surfaceSamplingSpacingMm > ProductModelConsts.MaxSurfaceSamplingSpacingMm
+        )
+            throw new BusinessException("ProductModel:InvalidSurfaceSamplingSpacing").WithData(
+                "surfaceSamplingSpacingMm",
+                surfaceSamplingSpacingMm
+            );
 
         Stopwatch stopwatch = Stopwatch.StartNew();
         ProductModel? productModel = null;
@@ -172,7 +188,9 @@ public class ProductModelAppService : AuroraStruct3DAppService, IProductModelApp
                 originalFileName,
                 format,
                 fileSizeBytes,
-                originalBlobName
+                originalBlobName,
+                lengthUnit,
+                surfaceSamplingSpacingMm
             );
 
             await _productModelRepository.InsertAsync(productModel, autoSave: true);
@@ -200,7 +218,7 @@ public class ProductModelAppService : AuroraStruct3DAppService, IProductModelApp
                     productModel.Name,
                     productModel.OriginalFileName,
                     ProductModelOperationType.Upload,
-                    $"格式={GetFormatDisplay(format)}，大小={fileSizeBytes} B，需转换={(needsConversion ? "是" : "否")}",
+                    $"格式={GetFormatDisplay(format)}，单位={lengthUnit.GetDisplayName()}，采样间距={surfaceSamplingSpacingMm:G} mm，大小={fileSizeBytes} B，需转换={(needsConversion ? "是" : "否")}",
                     (int)stopwatch.ElapsedMilliseconds
                 )
             );
@@ -743,6 +761,9 @@ public class ProductModelAppService : AuroraStruct3DAppService, IProductModelApp
             FileFormat = productModel.FileFormat,
             FileFormatDisplay = formatDisplay,
             FileSizeBytes = productModel.FileSizeBytes,
+            LengthUnit = productModel.LengthUnit,
+            LengthUnitDisplay = productModel.LengthUnit.GetDisplayName(),
+            SurfaceSamplingSpacingMm = productModel.SurfaceSamplingSpacingMm,
             ConversionStatus = productModel.ConversionStatus,
             ConversionErrorMessage = productModel.ConversionErrorMessage,
             IsReady = isReady,

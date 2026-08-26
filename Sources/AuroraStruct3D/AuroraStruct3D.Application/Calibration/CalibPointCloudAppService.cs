@@ -130,14 +130,19 @@ public class CalibPointCloudAppService : AuroraStruct3DAppService, ICalibPointCl
                 _stateStore.StartIncrementalMode(calibProjectId);
             }
 
-            var calibrationData = await LoadCalibrationDataAsync(project, CancellationToken.None);
+            using CalibrationData? calibrationData = await LoadCalibrationDataAsync(
+                project,
+                CancellationToken.None
+            );
             if (calibrationData == null)
             {
-                _logger.LogWarning("Step7 增量点云生成：标定数据不完整，跳过本轮 {Round}", roundIndex);
-                return;
+                throw new InvalidOperationException("双目标定数据不完整，无法生成结构光点云");
             }
 
-            int expectedFrameCount = GrayCodePatternLayout.TotalFrameCount;
+            int expectedFrameCount = GrayPhasePatternLayout.GetTotalFrameCount(
+                calibrationData.PeriodCount,
+                calibrationData.PatternCount
+            );
             if (totalFrameCount != expectedFrameCount)
             {
                 throw new InvalidOperationException(
@@ -179,53 +184,55 @@ public class CalibPointCloudAppService : AuroraStruct3DAppService, ICalibPointCl
                 await _notifier.NotifyStatusAsync(reconstructing);
             }
 
-            GrayCodeDecodeResult mainCode = DecodeGrayCodeForCamera(
+            GrayPhaseDecodeResult mainDecode = GrayPhaseStructuredLightDecoder.Decode(
                 scanImages.MainImages,
+                calibrationData.PeriodCount,
+                calibrationData.PatternCount,
+                calibrationData.ProjectorWidth,
+                calibrationData.ProjectorHeight,
+                calibrationData.InvertedPatterns,
                 calibrationData.Map1x,
                 calibrationData.Map1y,
                 CancellationToken.None
             );
-            GrayCodeDecodeResult secondaryCode = DecodeGrayCodeForCamera(
+            GrayPhaseDecodeResult secondaryDecode = GrayPhaseStructuredLightDecoder.Decode(
                 scanImages.SecondaryImages,
+                calibrationData.PeriodCount,
+                calibrationData.PatternCount,
+                calibrationData.ProjectorWidth,
+                calibrationData.ProjectorHeight,
+                calibrationData.InvertedPatterns,
                 calibrationData.Map2x,
                 calibrationData.Map2y,
                 CancellationToken.None
-            );
-            LogStructuredLightDiagnostics(
-                calibProjectId,
-                roundIndex,
-                "Main",
-                mainCode
-            );
-            LogStructuredLightDiagnostics(
-                calibProjectId,
-                roundIndex,
-                "Secondary",
-                secondaryCode
             );
 
             int disparitySign = StereoReconstructionUtils.ComputeDisparitySign(
                 calibrationData.ProjectionP1,
                 calibrationData.ProjectionP2
             );
-            using Mat disparity = BuildGrayCodeDisparity(
-                mainCode,
-                secondaryCode,
+            using Mat disparity = GrayPhaseStructuredLightDecoder.Match(
+                mainDecode,
+                secondaryDecode,
                 disparitySign,
-                out int matchedPixelCount,
-                out GrayCodeMatchDiagnostics matchDiagnostics
+                out GrayPhaseMatchDiagnostics matchDiagnostics
             );
-            LogStructuredLightMatchDiagnostics(
-                calibProjectId,
-                roundIndex,
-                disparitySign,
-                matchDiagnostics
+            int matchedPixelCount = checked((int)matchDiagnostics.MatchedPixels);
+            LogGrayPhaseDecodeDiagnostics(roundIndex, "Main", mainDecode);
+            LogGrayPhaseDecodeDiagnostics(roundIndex, "Secondary", secondaryDecode);
+            _logger.LogInformation(
+                "Gray+相移匹配：Round={Round}, MainValid={MainValid}, SecondaryValid={SecondaryValid}, "
+                    + "Attempted={Attempted}, Matched={Matched}, RejectY={RejectY}, RejectGap={RejectGap}, RejectDisparity={RejectDisparity}",
+                roundIndex, mainDecode.ValidCount, secondaryDecode.ValidCount,
+                matchDiagnostics.AttemptedPixels, matchDiagnostics.MatchedPixels,
+                matchDiagnostics.ProjectorYRejected, matchDiagnostics.InterpolationGapRejected,
+                matchDiagnostics.DisparityRejected
             );
             if (matchedPixelCount == 0)
             {
                 throw new InvalidOperationException(
-                    $"第 {roundIndex} 轮多尺度条纹未找到有效双目对应点；"
-                    + $"请检查 {GrayCodePatternLayout.TotalFrameCount} 帧顺序、投影曝光、相机同步和双目极线矫正。"
+                    $"第 {roundIndex} 轮相移条纹未找到有效双目对应点；"
+                    + $"请检查 {expectedFrameCount} 帧顺序、投影曝光、相机同步和双目极线矫正。"
                 );
             }
 
@@ -236,6 +243,7 @@ public class CalibPointCloudAppService : AuroraStruct3DAppService, ICalibPointCl
                 calibrationData.BaselineMm,
                 disparitySign
             );
+            await ApplyTableFilterAsync(calibProjectId, roundIndex, depth, calibrationData.ProjectionP1);
             byte[] qualityTextureBytes =
                 scanImages.TextureImage is { Length: > 0 } capturedTexture
                     ? capturedTexture
@@ -252,7 +260,7 @@ public class CalibPointCloudAppService : AuroraStruct3DAppService, ICalibPointCl
             );
             DepthQualityPreview depthPreview = BuildDepthQualityPreview(
                 depth,
-                mainCode.Valid,
+                null,
                 qualityTextureRectified
             );
             await _notifier.NotifyDepthQualityMapAsync(
@@ -267,19 +275,25 @@ public class CalibPointCloudAppService : AuroraStruct3DAppService, ICalibPointCl
             {
                 throw new InvalidOperationException(
                     $"第 {roundIndex} 轮结构光匹配点过少：{matchedPixelCount}/"
-                    + $"{MinimumReliableStructuredLightMatches}。二维质量图已保留用于诊断，"
-                    + $"主相机解码有效率={mainCode.ValidCount * 100d / mainCode.Valid.Length:F2}%，"
-                    + $"从相机解码有效率={secondaryCode.ValidCount * 100d / secondaryCode.Valid.Length:F2}%。"
-                    + "请优先改善从相机曝光、对焦和投影覆盖，并确认主从相机采集同一条纹帧。"
+                    + $"{MinimumReliableStructuredLightMatches}。"
+                    + $"主相机有效解码={mainDecode.ValidCount}，"
+                    + $"从相机有效解码={secondaryDecode.ValidCount}；"
+                    + $"尝试匹配={matchDiagnostics.AttemptedPixels}，"
+                    + $"投影Y不一致={matchDiagnostics.ProjectorYRejected}，"
+                    + $"插值间隙过大={matchDiagnostics.InterpolationGapRejected}，"
+                    + $"视差方向/范围错误={matchDiagnostics.DisparityRejected}。"
+                    + "二维质量图已保留用于诊断。"
+                    + "请优先改善曝光、对焦和投影覆盖，并确认主从相机采集同一条纹帧。"
                 );
             }
 
             _logger.LogInformation(
-                "Step7 多尺度条纹解码匹配完成：ProjectId={ProjectId}, Round={Round}, MainValid={MainValid}, SecondaryValid={SecondaryValid}, Matched={Matched}, Direction={Direction}",
+                "Step7 配置相移条纹匹配完成：ProjectId={ProjectId}, Round={Round}, PatternCount={PatternCount}, PeriodCount={PeriodCount}, PhaseShift={PhaseShift}, Matched={Matched}, Direction={Direction}",
                 calibProjectId,
                 roundIndex,
-                mainCode.ValidCount,
-                secondaryCode.ValidCount,
+                calibrationData.PatternCount,
+                calibrationData.PeriodCount,
+                calibrationData.PhaseShift,
                 matchedPixelCount,
                 disparitySign > 0 ? "Positive" : "Negative"
             );
@@ -298,7 +312,8 @@ public class CalibPointCloudAppService : AuroraStruct3DAppService, ICalibPointCl
                 var (pointCloud, colors) = StereoReconstructionUtils.GeneratePointCloud(
                     depth,
                     rectifiedTexture,
-                    calibrationData.ProjectionP1
+                    calibrationData.ProjectionP1,
+                    sampleStep: 1
                 );
                 using (pointCloud)
                 using (colors)
@@ -307,10 +322,22 @@ public class CalibPointCloudAppService : AuroraStruct3DAppService, ICalibPointCl
 
                     int totalPointCount =
                         _stateStore.GetTotalPointCount(calibProjectId) + pointCloud.Rows;
-                    _stateStore.AddIncrementalPointCloud(
+                    if (!_stateStore.AddIncrementalPointCloud(
+                            calibProjectId,
+                            plyBytes,
+                            pointCloud.Rows
+                        ))
+                    {
+                        throw new InvalidOperationException(
+                            "增量点云内存缓存已达到安全上限，请停止扫描并保存当前点云"
+                        );
+                    }
+
+                    await _notifier.NotifyIncrementalPointCloudAsync(
                         calibProjectId,
                         plyBytes,
-                        pointCloud.Rows
+                        pointCloud.Rows,
+                        totalPointCount
                     );
 
 
@@ -339,15 +366,12 @@ public class CalibPointCloudAppService : AuroraStruct3DAppService, ICalibPointCl
         catch (Exception ex)
         {
             _logger.LogError(ex, "Step7 增量点云生成失败：ProjectId={ProjectId}, Round={Round}", calibProjectId, roundIndex);
-            PointCloudStatusDto? failedRound = _stateStore.UpdateProgress(
+            PointCloudStatusDto failedRound = _stateStore.Fail(
                 calibProjectId,
-                0,
                 $"第 {roundIndex} 轮重建失败：{ex.Message}"
             );
-            if (failedRound is not null)
-            {
-                await _notifier.NotifyStatusAsync(failedRound);
-            }
+            await _notifier.NotifyStatusAsync(failedRound);
+            throw;
         }
     }
 
@@ -373,7 +397,7 @@ public class CalibPointCloudAppService : AuroraStruct3DAppService, ICalibPointCl
                 _stateStore.StartIncrementalMode(calibProjectId);
             }
 
-            CalibrationData? calibrationData = await LoadCalibrationDataAsync(
+            using CalibrationData? calibrationData = await LoadCalibrationDataAsync(
                 project,
                 CancellationToken.None,
                 requireProjectorParameters: false
@@ -583,6 +607,7 @@ public class CalibPointCloudAppService : AuroraStruct3DAppService, ICalibPointCl
                     calibrationData.BaselineMm,
                     disparitySign
                 );
+                await ApplyTableFilterAsync(calibProjectId, roundIndex, depth, calibrationData.ProjectionP1);
                 DepthQualityPreview depthPreview = BuildDepthQualityPreview(
                     depth,
                     textureImage: rectifiedMain
@@ -627,10 +652,21 @@ public class CalibPointCloudAppService : AuroraStruct3DAppService, ICalibPointCl
                     byte[] plyBytes = StereoReconstructionUtils.WritePly(pointCloud, colors);
                     int totalPointCount =
                         _stateStore.GetTotalPointCount(calibProjectId) + pointCloud.Rows;
-                    _stateStore.AddIncrementalPointCloud(
+                    if (!_stateStore.AddIncrementalPointCloud(
+                            calibProjectId,
+                            plyBytes,
+                            pointCloud.Rows
+                        ))
+                    {
+                        throw new InvalidOperationException(
+                            "增量点云内存缓存已达到安全上限，请停止扫描并保存当前点云"
+                        );
+                    }
+                    await _notifier.NotifyIncrementalPointCloudAsync(
                         calibProjectId,
                         plyBytes,
-                        pointCloud.Rows
+                        pointCloud.Rows,
+                        totalPointCount
                     );
                     PointCloudStatusDto? waiting = _stateStore.UpdateProgress(
                         calibProjectId,
@@ -665,15 +701,12 @@ public class CalibPointCloudAppService : AuroraStruct3DAppService, ICalibPointCl
                 calibProjectId,
                 roundIndex
             );
-            PointCloudStatusDto? failedRound = _stateStore.UpdateProgress(
+            PointCloudStatusDto failedRound = _stateStore.Fail(
                 calibProjectId,
-                0,
                 $"第 {roundIndex} 轮普通双目重建失败：{ex.Message}"
             );
-            if (failedRound is not null)
-            {
-                await _notifier.NotifyStatusAsync(failedRound);
-            }
+            await _notifier.NotifyStatusAsync(failedRound);
+            throw;
         }
     }
 
@@ -732,6 +765,7 @@ public class CalibPointCloudAppService : AuroraStruct3DAppService, ICalibPointCl
 
             string plyBlobKey = $"{calibProjectId}/pointcloud/{DateTime.UtcNow:yyyyMMddHHmmss}.ply";
             await _blobContainer.SaveAsync(plyBlobKey, mergedPly, overrideExisting: false);
+            _stateStore.ReleaseAccumulatedPointCloudChunks(calibProjectId);
 
             string plyDownloadUrl = $"/api/app/calib-point-cloud/download/{calibProjectId}";
 
@@ -814,6 +848,163 @@ public class CalibPointCloudAppService : AuroraStruct3DAppService, ICalibPointCl
         }
 
         return result;
+    }
+
+    private static Mat ComputePhaseForCamera(
+        List<byte[]> images,
+        CalibrationData calibrationData,
+        Mat mapX,
+        Mat mapY,
+        CancellationToken cancellationToken)
+    {
+        int patternCount = calibrationData.PatternCount;
+        int totalFrameCount = checked(patternCount * 2);
+        if (patternCount < 3 || images.Count != totalFrameCount)
+        {
+            throw new InvalidOperationException(
+                $"相移条纹解码需要横、竖各 {patternCount} 帧，共 {totalFrameCount} 帧；实际 {images.Count} 帧"
+            );
+        }
+
+        if (
+            calibrationData.PeriodCount <= 0
+            || calibrationData.ProjectorWidth % calibrationData.PeriodCount != 0
+        )
+        {
+            throw new InvalidOperationException("投影仪周期配置无效，无法进行相位解码");
+        }
+
+        int stripeWidth = calibrationData.ProjectorWidth / calibrationData.PeriodCount;
+        double phaseStepRadians =
+            2d * Math.PI * calibrationData.PhaseShift / (stripeWidth * 2d);
+        List<Mat> verticalImages = new(patternCount);
+        try
+        {
+            // 极线矫正后视差只沿 X 方向搜索，使用随 X 变化的竖条纹组。
+            for (int frame = 0; frame < patternCount; frame++)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                using Mat source = CalibImageUtils.LoadBgrMat(images[patternCount + frame]);
+                Mat rectified = new();
+                Cv2.Remap(source, rectified, mapX, mapY, InterpolationFlags.Linear);
+                verticalImages.Add(rectified);
+            }
+
+            using Mat wrappedPhase = StructuredLightUtils.ComputeWrappedPhase(
+                verticalImages,
+                phaseStepRadians
+            );
+            return StructuredLightUtils.UnwrapPhase(wrappedPhase, calibrationData.PeriodCount);
+        }
+        finally
+        {
+            foreach (Mat image in verticalImages)
+            {
+                image.Dispose();
+            }
+        }
+    }
+
+    private static int AlignDisparityRange(int requestedRange)
+    {
+        return Math.Max(16, requestedRange / 16 * 16);
+    }
+
+    private static (int MinimumDisparity, int DisparityRange) EstimatePhaseDisparityWindow(
+        Mat mainPhase,
+        Mat secondaryPhase,
+        int disparitySign)
+    {
+        // ComputeDisparity 当前使用 5x5 SGBM 窗口。OpenCV 要求：
+        // width - (minDisparity + numDisparities) > blockSize / 2。
+        // 不能把正视差窗口的右边界贴到图像宽度，否则 2048px 图像上会得到
+        // width - (0 + 2048) == 0，并由 OpenCV 拒绝执行。
+        const int disparityBlockSize = 5;
+        int width = mainPhase.Cols;
+        int height = mainPhase.Rows;
+        int maximumExclusiveDisparity = width - disparityBlockSize / 2 - 1;
+        if (maximumExclusiveDisparity < 16)
+        {
+            throw new InvalidOperationException(
+                $"相位图宽度 {width}px 过小，无法建立至少 16px 的 SGBM 视差搜索窗口"
+            );
+        }
+        int maximumMagnitude = Math.Min(
+            (int)Math.Ceiling(MaxStructuredLightDisparity),
+            maximumExclusiveDisparity - 1
+        );
+        int pixelCount = checked(width * height);
+        double[] mainValues = new double[pixelCount];
+        double[] secondaryValues = new double[pixelCount];
+        System.Runtime.InteropServices.Marshal.Copy(mainPhase.Data, mainValues, 0, pixelCount);
+        System.Runtime.InteropServices.Marshal.Copy(
+            secondaryPhase.Data,
+            secondaryValues,
+            0,
+            pixelCount
+        );
+
+        int bestMagnitude = 1;
+        double bestCost = double.PositiveInfinity;
+        Search(start: 1, end: maximumMagnitude, step: 4);
+        Search(
+            Math.Max(1, bestMagnitude - 8),
+            Math.Min(maximumMagnitude, bestMagnitude + 8),
+            step: 1
+        );
+
+        int range = AlignDisparityRange(Math.Min(256, maximumMagnitude));
+        int center = disparitySign * bestMagnitude;
+        int minimum = center - range / 2;
+        if (disparitySign > 0)
+        {
+            minimum = Math.Clamp(
+                minimum,
+                0,
+                Math.Max(0, maximumExclusiveDisparity - range)
+            );
+        }
+        else
+        {
+            minimum = Math.Clamp(minimum, -maximumMagnitude, Math.Min(-1, -range));
+        }
+
+        return (minimum, range);
+
+        void Search(int start, int end, int step)
+        {
+            const int sampleX = 16;
+            const int sampleY = 32;
+            for (int magnitude = start; magnitude <= end; magnitude += step)
+            {
+                int signedDisparity = disparitySign * magnitude;
+                double cost = 0;
+                int samples = 0;
+                for (int y = sampleY / 2; y < height; y += sampleY)
+                {
+                    int rowOffset = y * width;
+                    for (int x = sampleX / 2; x < width; x += sampleX)
+                    {
+                        int secondaryX = x - signedDisparity;
+                        if (secondaryX < 0 || secondaryX >= width)
+                            continue;
+                        double difference = Math.Abs(
+                            mainValues[rowOffset + x] - secondaryValues[rowOffset + secondaryX]
+                        );
+                        if (!double.IsFinite(difference))
+                            continue;
+                        cost += Math.Min(difference, 4d * Math.PI);
+                        samples++;
+                    }
+                }
+
+                if (samples > 0 && cost / samples < bestCost)
+                {
+                    bestCost = cost / samples;
+                    bestMagnitude = magnitude;
+                }
+            }
+        }
     }
 
     private static GrayCodeDecodeResult DecodeGrayCodeForCamera(
@@ -1016,10 +1207,9 @@ public class CalibPointCloudAppService : AuroraStruct3DAppService, ICalibPointCl
                 rowsWithSecondaryCodes++;
             }
 
-            // 当前竖条纹编码每 128px 重复一次，单个像素通常会命中多个周期候选。
-            // 结构光物体在同一条极线上的视差应当连续，因此用上一有效点的视差
-            // 维持同一周期分支。每行的第一个点优先选择较大的合法视差，符合当前
-            // 近距离设备布局；后续点再按连续性跟踪，避免逐像素跳到不同周期。
+            // 绝对 GrayCode 保证每个投影单元的编码唯一。同一编码仍可能覆盖多个
+            // 相邻相机像素；每行首点取候选视差中位数，后续按连续性跟踪，避免
+            // 固定选择单元边缘造成系统性的深度偏差。
             double previousSignedDisparity = double.NaN;
             for (int x = 0; x < main.Width; x++)
             {
@@ -1040,10 +1230,7 @@ public class CalibPointCloudAppService : AuroraStruct3DAppService, ICalibPointCl
                 codeFoundPixels++;
                 candidateCount += candidates.Count;
 
-                double bestDisparity = double.NaN;
-                double bestContinuityCost = double.PositiveInfinity;
-                double bestSignedDisparity = double.NaN;
-                int admissibleCandidateCount = 0;
+                List<(double Disparity, double Signed)> admissibleCandidates = [];
                 foreach (int secondaryX in candidates)
                 {
                     double candidateDisparity = x - secondaryX;
@@ -1060,11 +1247,38 @@ public class CalibPointCloudAppService : AuroraStruct3DAppService, ICalibPointCl
                         overRangeRejected++;
                         continue;
                     }
-                    admissibleCandidateCount++;
+                    admissibleCandidates.Add((candidateDisparity, signed));
+                }
 
-                    double continuityCost = double.IsFinite(previousSignedDisparity)
-                        ? Math.Abs(signed - previousSignedDisparity)
-                        : MaxStructuredLightDisparity - signed;
+                int admissibleCandidateCount = admissibleCandidates.Count;
+                if (admissibleCandidateCount > 1)
+                {
+                    ambiguousPixelCount++;
+                }
+                if (admissibleCandidateCount == 0)
+                {
+                    continue;
+                }
+
+                double targetSignedDisparity = previousSignedDisparity;
+                if (!double.IsFinite(targetSignedDisparity))
+                {
+                    double[] ordered = admissibleCandidates
+                        .Select(candidate => candidate.Signed)
+                        .OrderBy(value => value)
+                        .ToArray();
+                    int middle = ordered.Length / 2;
+                    targetSignedDisparity = ordered.Length % 2 == 0
+                        ? (ordered[middle - 1] + ordered[middle]) / 2d
+                        : ordered[middle];
+                }
+
+                double bestDisparity = double.NaN;
+                double bestSignedDisparity = double.NaN;
+                double bestContinuityCost = double.PositiveInfinity;
+                foreach ((double candidateDisparity, double signed) in admissibleCandidates)
+                {
+                    double continuityCost = Math.Abs(signed - targetSignedDisparity);
                     if (continuityCost > bestContinuityCost)
                     {
                         continue;
@@ -1081,11 +1295,7 @@ public class CalibPointCloudAppService : AuroraStruct3DAppService, ICalibPointCl
                     bestContinuityCost = continuityCost;
                 }
 
-                if (admissibleCandidateCount > 1)
-                {
-                    ambiguousPixelCount++;
-                }
-                if (admissibleCandidateCount == 0 || !double.IsFinite(bestDisparity))
+                if (!double.IsFinite(bestDisparity))
                 {
                     continue;
                 }
@@ -1192,13 +1402,65 @@ public class CalibPointCloudAppService : AuroraStruct3DAppService, ICalibPointCl
         return merged.ToArray();
     }
 
+    private async Task ApplyTableFilterAsync(
+        Guid calibProjectId,
+        long roundIndex,
+        Mat depth,
+        Mat projectionP1)
+    {
+        PointCloudSessionState session = _stateStore.GetOrCreate(calibProjectId);
+        if (!session.EnableTableFilter) return;
+
+        TablePlaneModel? cached = _stateStore.GetCachedTablePlane(calibProjectId);
+        TablePlaneFilterResult result = TablePlaneFilter.Apply(
+            depth,
+            projectionP1,
+            session.TableClearanceMm,
+            cached
+        );
+        if (!result.Applied || result.Plane is null)
+        {
+            string message = $"第 {roundIndex} 轮未应用台面过滤：{result.FailureReason}，已保留原点云";
+            _logger.LogWarning(
+                "{Message}; Candidates={Candidates}, Inliers={Inliers}",
+                message,
+                result.CandidateCount,
+                result.InlierCount
+            );
+            PointCloudStatusDto? status = _stateStore.UpdateProgress(calibProjectId, 68, message);
+            if (status is not null) await _notifier.NotifyStatusAsync(status);
+            return;
+        }
+
+        if (cached is null) _stateStore.CacheTablePlane(calibProjectId, result.Plane);
+        _logger.LogInformation(
+            "台面过滤完成：ProjectId={ProjectId}, Round={Round}, Cached={Cached}, "
+                + "Plane=[{A:F6},{B:F6},{C:F6},{D:F3}], Clearance={Clearance:F2}mm, "
+                + "Candidates={Candidates}, Inliers={Inliers}, Removed={Removed}",
+            calibProjectId,
+            roundIndex,
+            cached is not null,
+            result.Plane.A,
+            result.Plane.B,
+            result.Plane.C,
+            result.Plane.D,
+            session.TableClearanceMm,
+            result.CandidateCount,
+            result.InlierCount,
+            result.RemovedPointCount
+        );
+    }
+
     private async Task RunGenerationAsync(CalibProject project, CancellationToken cancellationToken)
     {
         try
         {
             await ReportProgressAsync(project.Id, 5, "正在加载标定参数...", cancellationToken);
 
-            var calibrationData = await LoadCalibrationDataAsync(project, cancellationToken);
+            using CalibrationData? calibrationData = await LoadCalibrationDataAsync(
+                project,
+                cancellationToken
+            );
             if (calibrationData == null)
             {
                 throw new UserFriendlyException("标定数据不完整，请先完成相机标定和双目标定");
@@ -1208,11 +1470,11 @@ public class CalibPointCloudAppService : AuroraStruct3DAppService, ICalibPointCl
 
             await ReportProgressAsync(project.Id, 15, "正在加载扫描图像...", cancellationToken);
 
-            var scanImages = await LoadScanImagesAsync(
-                project,
-                GrayCodePatternLayout.TotalFrameCount,
-                cancellationToken
+            int expectedFrameCount = GrayPhasePatternLayout.GetTotalFrameCount(
+                calibrationData.PeriodCount,
+                calibrationData.PatternCount
             );
+            var scanImages = await LoadScanImagesAsync(project, expectedFrameCount, cancellationToken);
             if (scanImages.MainImages.Count == 0 || scanImages.SecondaryImages.Count == 0)
             {
                 throw new UserFriendlyException("未找到扫描图像，请先执行在线扫描采集");
@@ -1221,41 +1483,50 @@ public class CalibPointCloudAppService : AuroraStruct3DAppService, ICalibPointCl
             await ReportProgressAsync(project.Id, 25, "扫描图像加载完成，共 {MainCount} 张主相机图，{SecondaryCount} 张从相机图", cancellationToken,
                 scanImages.MainImages.Count, scanImages.SecondaryImages.Count);
 
-            await ReportProgressAsync(project.Id, 30, "正在解码多尺度互补条纹...", cancellationToken);
+            await ReportProgressAsync(project.Id, 30, "正在解码配置的相移条纹...", cancellationToken);
 
-            GrayCodeDecodeResult mainCode = DecodeGrayCodeForCamera(
+            GrayPhaseDecodeResult mainDecode = GrayPhaseStructuredLightDecoder.Decode(
                 scanImages.MainImages,
+                calibrationData.PeriodCount,
+                calibrationData.PatternCount,
+                calibrationData.ProjectorWidth,
+                calibrationData.ProjectorHeight,
+                calibrationData.InvertedPatterns,
                 calibrationData.Map1x,
                 calibrationData.Map1y,
                 cancellationToken
             );
-            GrayCodeDecodeResult secondaryCode = DecodeGrayCodeForCamera(
+            GrayPhaseDecodeResult secondaryDecode = GrayPhaseStructuredLightDecoder.Decode(
                 scanImages.SecondaryImages,
+                calibrationData.PeriodCount,
+                calibrationData.PatternCount,
+                calibrationData.ProjectorWidth,
+                calibrationData.ProjectorHeight,
+                calibrationData.InvertedPatterns,
                 calibrationData.Map2x,
                 calibrationData.Map2y,
                 cancellationToken
             );
-            LogStructuredLightDiagnostics(project.Id, 1, "Main", mainCode);
-            LogStructuredLightDiagnostics(project.Id, 1, "Secondary", secondaryCode);
 
-            await ReportProgressAsync(project.Id, 50, "多尺度条纹解码完成", cancellationToken);
-            await ReportProgressAsync(project.Id, 55, "正在按投影坐标进行立体匹配...", cancellationToken);
+            await ReportProgressAsync(project.Id, 50, "相移条纹解码完成", cancellationToken);
+            await ReportProgressAsync(project.Id, 55, "正在进行相位立体匹配...", cancellationToken);
 
             int disparitySign = StereoReconstructionUtils.ComputeDisparitySign(
                 calibrationData.ProjectionP1,
                 calibrationData.ProjectionP2
             );
-            using Mat disparity = BuildGrayCodeDisparity(
-                mainCode,
-                secondaryCode,
+            using Mat disparity = GrayPhaseStructuredLightDecoder.Match(
+                mainDecode,
+                secondaryDecode,
                 disparitySign,
-                out int matchedPixelCount,
-                out GrayCodeMatchDiagnostics matchDiagnostics
+                out GrayPhaseMatchDiagnostics matchDiagnostics
             );
-            LogStructuredLightMatchDiagnostics(project.Id, 1, disparitySign, matchDiagnostics);
+            int matchedPixelCount = checked((int)matchDiagnostics.MatchedPixels);
+            LogGrayPhaseDecodeDiagnostics(0, "Main", mainDecode);
+            LogGrayPhaseDecodeDiagnostics(0, "Secondary", secondaryDecode);
             if (matchedPixelCount == 0)
             {
-                throw new UserFriendlyException("多尺度条纹未找到有效双目对应点，请检查采集帧序与曝光。");
+                throw new UserFriendlyException("相移条纹未找到有效双目对应点，请检查配置、采集帧序与曝光。");
             }
 
             await ReportProgressAsync(project.Id, 65, "立体匹配完成", cancellationToken);
@@ -1284,32 +1555,37 @@ public class CalibPointCloudAppService : AuroraStruct3DAppService, ICalibPointCl
                 var (pointCloud, colors) = StereoReconstructionUtils.GeneratePointCloud(
                     depth,
                     rectified,
-                    calibrationData.ProjectionP1
+                    calibrationData.ProjectionP1,
+                    sampleStep: 1
                 );
+                using (pointCloud)
+                using (colors)
+                {
 
-                await ReportProgressAsync(project.Id, 90, "点云生成完成，正在保存 PLY 文件...", cancellationToken);
+                    await ReportProgressAsync(project.Id, 90, "点云生成完成，正在保存 PLY 文件...", cancellationToken);
 
-                byte[] plyBytes = StereoReconstructionUtils.WritePly(pointCloud, colors);
+                    byte[] plyBytes = StereoReconstructionUtils.WritePly(pointCloud, colors);
 
-                string plyBlobKey = $"{project.Id}/pointcloud/{DateTime.UtcNow:yyyyMMddHHmmss}.ply";
-                await _blobContainer.SaveAsync(plyBlobKey, plyBytes, overrideExisting: false);
+                    string plyBlobKey = $"{project.Id}/pointcloud/{DateTime.UtcNow:yyyyMMddHHmmss}.ply";
+                    await _blobContainer.SaveAsync(plyBlobKey, plyBytes, overrideExisting: false);
 
-                string plyDownloadUrl = $"/api/app/calib-point-cloud/download/{project.Id}";
+                    string plyDownloadUrl = $"/api/app/calib-point-cloud/download/{project.Id}";
 
-                PointCloudStatusDto completed = _stateStore.Complete(
-                    project.Id,
-                    plyDownloadUrl,
-                    plyBytes.Length,
-                    plyBlobKey
-                );
-                await _notifier.NotifyStatusAsync(completed);
+                    PointCloudStatusDto completed = _stateStore.Complete(
+                        project.Id,
+                        plyDownloadUrl,
+                        plyBytes.Length,
+                        plyBlobKey
+                    );
+                    await _notifier.NotifyStatusAsync(completed);
 
-                _logger.LogInformation(
-                    "Step7 点云生成完成：ProjectId={ProjectId}, PointCount={PointCount}, FileSize={FileSize} bytes",
-                    project.Id,
-                    pointCloud.Rows,
-                    plyBytes.Length
-                );
+                    _logger.LogInformation(
+                        "Step7 点云生成完成：ProjectId={ProjectId}, PointCount={PointCount}, FileSize={FileSize} bytes",
+                        project.Id,
+                        pointCloud.Rows,
+                        plyBytes.Length
+                    );
+                }
             }
         }
         catch (OperationCanceledException)
@@ -1357,13 +1633,40 @@ public class CalibPointCloudAppService : AuroraStruct3DAppService, ICalibPointCl
         {
             return null;
         }
+        if (
+            !project.MainCameraDeviceId.HasValue
+            || !project.SecondaryCameraDeviceId.HasValue
+            || stereoResult.MainCameraDeviceId != project.MainCameraDeviceId.Value
+            || stereoResult.SecondaryCameraDeviceId != project.SecondaryCameraDeviceId.Value
+        )
+        {
+            throw new UserFriendlyException("当前主从相机绑定与双目标定结果不一致，请重新执行双目标定");
+        }
+        if (stereoResult.StereoReprojectionError > CalibConsts.MaxStereoReprojectionError)
+        {
+            throw new UserFriendlyException(
+                $"双目标定误差 {stereoResult.StereoReprojectionError:F4} px 已超过允许值，"
+                    + "请重新执行双目标定"
+            );
+        }
 
         IQueryable<CalibProjectorParam> projParamQuery = await _projectorParamRepository.GetQueryableAsync();
         CalibProjectorParam? projParam = await AsyncExecuter.FirstOrDefaultAsync(
             projParamQuery.Where(x => x.CalibProjectId == project.Id)
         );
 
-        if (requireProjectorParameters && (projParam == null || projParam.PatternCount <= 0))
+        if (
+            requireProjectorParameters
+            && (
+                projParam == null
+                || projParam.PatternCount < 3
+                || projParam.PeriodCount <= 0
+                || !projParam.PhaseShift.HasValue
+                || projParam.PhaseShift.Value <= 0
+                || projParam.ResolutionWidth <= 0
+                || projParam.ResolutionHeight <= 0
+            )
+        )
         {
             return null;
         }
@@ -1608,8 +1911,14 @@ public class CalibPointCloudAppService : AuroraStruct3DAppService, ICalibPointCl
             Map2y = map2y,
             PatternCount = projParam?.PatternCount ?? 0,
             PeriodCount = projParam?.PeriodCount ?? 0,
+            PhaseShift = (double)(projParam?.PhaseShift ?? 0),
             ProjectorWidth = projParam?.ResolutionWidth ?? 0,
             ProjectorHeight = projParam?.ResolutionHeight ?? 0,
+            InvertedPatterns = string.Equals(
+                projParam?.FringeType,
+                "wb",
+                StringComparison.OrdinalIgnoreCase
+            ),
         };
     }
 
@@ -2049,7 +2358,18 @@ public class CalibPointCloudAppService : AuroraStruct3DAppService, ICalibPointCl
         );
     }
 
-    private class CalibrationData
+    private void LogGrayPhaseDecodeDiagnostics(long roundIndex, string camera,
+        GrayPhaseDecodeResult result)
+    {
+        GrayPhaseDecodeDiagnostics? d = result.Diagnostics;
+        if (d is null) return;
+        _logger.LogInformation(
+            "Gray+相移解码诊断：Round={Round}, Camera={Camera}, Valid={Valid}, SaturatedRejected={Saturated}, LowContrastRejected={LowContrast}, LowModulationRejected={LowModulation}, PhaseResidualRejected={PhaseResidual}",
+            roundIndex, camera, result.ValidCount, d.SaturatedPixels, d.LowContrastPixels,
+            d.LowModulationPixels, d.PhaseResidualPixels);
+    }
+
+    private sealed class CalibrationData : IDisposable
     {
         public Mat ProjectionP1 { get; set; } = new();
         public Mat ProjectionP2 { get; set; } = new();
@@ -2060,8 +2380,20 @@ public class CalibPointCloudAppService : AuroraStruct3DAppService, ICalibPointCl
         public Mat Map2y { get; set; } = new();
         public int PatternCount { get; set; }
         public int PeriodCount { get; set; }
+        public double PhaseShift { get; set; }
         public int ProjectorWidth { get; set; }
         public int ProjectorHeight { get; set; }
+        public bool InvertedPatterns { get; set; }
+
+        public void Dispose()
+        {
+            ProjectionP1.Dispose();
+            ProjectionP2.Dispose();
+            Map1x.Dispose();
+            Map1y.Dispose();
+            Map2x.Dispose();
+            Map2y.Dispose();
+        }
     }
 
     private class ScanImages

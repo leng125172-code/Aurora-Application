@@ -1,8 +1,7 @@
 namespace AuroraStruct3D.Calibration;
 
 /// <summary>
-/// 固定 1280×720 投影分辨率的多尺度二值条纹帧布局。
-/// 每种条纹宽度均按原图、互补图成对排列，先横条纹再竖条纹。
+/// 旧版固定多尺度二值条纹布局，仅供历史解码辅助代码使用。
 /// </summary>
 internal static class GrayCodePatternLayout
 {

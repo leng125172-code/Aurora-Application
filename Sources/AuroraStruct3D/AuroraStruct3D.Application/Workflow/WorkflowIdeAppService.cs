@@ -173,6 +173,51 @@ public sealed class WorkflowIdeAppService : ApplicationService
         return new() { DocumentVersion = input.DocumentVersion, Items = items };
     }
 
+    [HttpPost("operator-snippet")]
+    public async Task<WorkflowOperatorSnippetDto> OperatorSnippetAsync(
+        WorkflowOperatorSnippetInput input,
+        CancellationToken cancellationToken = default)
+    {
+        if (input.OperatorId == Guid.Empty)
+            throw new UserFriendlyException("必须选择有效的算子。");
+
+        OperatorDescriptor? descriptor = (await _registry.GetAllOperatorsAsync(cancellationToken))
+            .FirstOrDefault(x => x.Id == input.OperatorId);
+        if (descriptor is null)
+            throw new UserFriendlyException($"算子 {input.OperatorId:D} 未注册。");
+
+        OperatorParametersDescriptor? parameters =
+            await _registry.GetParametersAsync(input.OperatorId, cancellationToken);
+        IReadOnlyList<ConfigParameterDescriptor> config = parameters?.Config ?? [];
+        IReadOnlyDictionary<string, JsonElement> configValues = input.ConfigValues
+            ?? new Dictionary<string, JsonElement>(StringComparer.Ordinal);
+        HashSet<string> knownConfig = config.Select(x => x.Name)
+            .ToHashSet(StringComparer.Ordinal);
+        string? unknown = configValues.Keys
+            .FirstOrDefault(x => !knownConfig.Contains(x));
+        if (unknown is not null)
+            throw new UserFriendlyException($"算子没有配置参数 '{unknown}'。");
+
+        foreach (ConfigParameterDescriptor parameter in config)
+        {
+            if (configValues.TryGetValue(parameter.Name, out JsonElement value))
+            {
+                ValidateSnippetConfigValue(parameter, value);
+                continue;
+            }
+
+            if (parameter.Required)
+                throw new UserFriendlyException($"缺少必填配置参数 '{parameter.Name}'。");
+        }
+
+        string className = descriptor.TypeFullName.Split('.').Last();
+        return new WorkflowOperatorSnippetDto
+        {
+            DocumentVersion = input.DocumentVersion,
+            InsertText = BuildOperatorCompletion(className, parameters, configValues),
+        };
+    }
+
     private async Task<List<WorkflowIdeCompletionDto>?> TryGetMemberCompletionsAsync(
         WorkflowIdeDocumentInput input)
     {
@@ -804,9 +849,10 @@ public sealed class WorkflowIdeAppService : ApplicationService
         }
     }
 
-    private static string BuildOperatorCompletion(
+    internal static string BuildOperatorCompletion(
         string className,
-        OperatorParametersDescriptor? parameters)
+        OperatorParametersDescriptor? parameters,
+        IReadOnlyDictionary<string, JsonElement>? fixedConfigValues = null)
     {
         IReadOnlyList<ParameterDescriptor> inputs = parameters?.Inputs ?? [];
         IReadOnlyList<ParameterDescriptor> outputs = parameters?.Outputs ?? [];
@@ -826,9 +872,17 @@ public sealed class WorkflowIdeAppService : ApplicationService
         arguments.AddRange(
             inputs.Select(x =>
                 $"${{{placeholder++}:{CompletionName(x.ParameterName, "input")}}}"));
-        arguments.AddRange(
-            config.Select(x =>
-                $"{x.Name}: ${{{placeholder++}:{CompletionDefault(x)}}}"));
+        foreach (ConfigParameterDescriptor parameter in config)
+        {
+            if (fixedConfigValues?.TryGetValue(parameter.Name, out JsonElement fixedValue) == true)
+            {
+                arguments.Add($"{parameter.Name}: {CompletionLiteral(fixedValue)}");
+                continue;
+            }
+
+            arguments.Add(
+                $"{parameter.Name}: ${{{placeholder++}:{CompletionDefault(parameter)}}}");
+        }
         if (arguments.Count == 0)
             return $"{assignment}{className}();";
         return $"{assignment}{className}(\n    "
@@ -883,6 +937,82 @@ public sealed class WorkflowIdeAppService : ApplicationService
             value = JsonSerializer.Serialize(value);
         return value.Replace("$", "\\$", StringComparison.Ordinal)
             .Replace("}", "\\}", StringComparison.Ordinal);
+    }
+
+    private static string CompletionLiteral(JsonElement value) =>
+        value.GetRawText()
+            .Replace("$", "\\$", StringComparison.Ordinal)
+            .Replace("}", "\\}", StringComparison.Ordinal);
+
+    private static void ValidateSnippetConfigValue(
+        ConfigParameterDescriptor parameter,
+        JsonElement value)
+    {
+        // ProductModelSelect is 9. CalibProjectSelect is intentionally appended as 11 so the
+        // numeric metadata contract remains compatible with existing clients and persisted data.
+        bool resourceSelector = (int)parameter.ControlType is 9 or 11;
+        if (resourceSelector)
+        {
+            if (value.ValueKind != JsonValueKind.String
+                || !Guid.TryParse(value.GetString(), out Guid id)
+                || id == Guid.Empty)
+            {
+                throw new UserFriendlyException(
+                    $"配置参数 '{parameter.Name}' 必须是有效的资源 GUID。");
+            }
+            return;
+        }
+
+        Type? target = ValueCoercion.ResolveType(parameter.ParameterTypeName);
+        Type? actual = target is null ? null : Nullable.GetUnderlyingType(target) ?? target;
+        bool valid = actual switch
+        {
+            null => true,
+            _ when actual == typeof(string) => value.ValueKind == JsonValueKind.String,
+            _ when actual == typeof(bool) => value.ValueKind is JsonValueKind.True or JsonValueKind.False,
+            _ when actual == typeof(int) => value.ValueKind == JsonValueKind.Number
+                && value.TryGetInt32(out _),
+            _ when actual == typeof(long) => value.ValueKind == JsonValueKind.Number
+                && value.TryGetInt64(out _),
+            _ when actual == typeof(float) || actual == typeof(double) || actual == typeof(decimal) =>
+                value.ValueKind == JsonValueKind.Number,
+            _ when actual.IsEnum => value.ValueKind == JsonValueKind.String
+                && Enum.TryParse(actual, value.GetString(), ignoreCase: true, out _),
+            _ => true,
+        };
+        if (!valid)
+            throw new UserFriendlyException(
+                $"配置参数 '{parameter.Name}' 不是有效的 {parameter.ParameterTypeName} 值。");
+
+        if ((int)parameter.ControlType == 6
+            && value.ValueKind == JsonValueKind.Number
+            && TryReadNumericRange(parameter.ValueLimit, out double min, out double max)
+            && value.TryGetDouble(out double number)
+            && (number < min || number > max))
+        {
+            throw new UserFriendlyException(
+                $"配置参数 '{parameter.Name}' 必须在 {min} 到 {max} 之间。");
+        }
+    }
+
+    private static bool TryReadNumericRange(object? valueLimit, out double min, out double max)
+    {
+        min = default;
+        max = default;
+        if (valueLimit is null)
+            return false;
+
+        JsonElement limits = valueLimit is JsonElement json
+            ? json
+            : JsonSerializer.SerializeToElement(valueLimit, valueLimit.GetType());
+        if (limits.ValueKind != JsonValueKind.Array || limits.GetArrayLength() < 2)
+            return false;
+        JsonElement.ArrayEnumerator values = limits.EnumerateArray();
+        if (!values.MoveNext() || !values.Current.TryGetDouble(out min))
+            return false;
+        if (!values.MoveNext() || !values.Current.TryGetDouble(out max))
+            return false;
+        return true;
     }
 
     private static IReadOnlyList<string> ReadDeclaredVariables(string source)

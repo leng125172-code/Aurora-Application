@@ -9,6 +9,44 @@ public static class CalibComputationUtils
 {
     public const double MinimumRectificationCoveragePercent = 5d;
 
+    /// <summary>
+    /// 双目整平时允许 OpenCV 分别平移左右主点，以最大化有效共同视场。
+    /// 大夹角/会聚安装下强制 ZeroDisparity 会把两张有效图推向相反方向，
+    /// 即使原始图像存在共同视场，生成的映射也可能完全不重叠。
+    /// </summary>
+    public static void StereoRectifyMaximizeUsefulArea(
+        Mat cameraMatrix1,
+        Mat distCoeffs1,
+        Mat cameraMatrix2,
+        Mat distCoeffs2,
+        Size imageSize,
+        Mat rotation,
+        Mat translation,
+        Mat rectification1,
+        Mat rectification2,
+        Mat projection1,
+        Mat projection2,
+        Mat disparityToDepth)
+    {
+        Cv2.StereoRectify(
+            cameraMatrix1,
+            distCoeffs1,
+            cameraMatrix2,
+            distCoeffs2,
+            imageSize,
+            rotation,
+            translation,
+            rectification1,
+            rectification2,
+            projection1,
+            projection2,
+            disparityToDepth,
+            flags: StereoRectificationFlags.None,
+            alpha: -1d,
+            newImageSize: imageSize
+        );
+    }
+
     public static bool TryValidateCameraModel(
         Mat cameraMatrix,
         Mat distCoeffs,

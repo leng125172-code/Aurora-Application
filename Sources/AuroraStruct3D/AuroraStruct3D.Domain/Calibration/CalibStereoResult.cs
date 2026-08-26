@@ -66,6 +66,17 @@ public class CalibStereoResult : FullAuditedEntity<Guid>
     protected CalibStereoResult() { }
 
     /// <summary>
+    /// 恢复已软删除的标定结果，以便重新计算时复用同一项目的唯一记录。
+    /// </summary>
+    public CalibStereoResult Restore()
+    {
+        IsDeleted = false;
+        DeleterId = null;
+        DeletionTime = null;
+        return this;
+    }
+
+    /// <summary>
     /// 创建双目标定结果。
     /// </summary>
     public CalibStereoResult(

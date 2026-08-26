@@ -53,3 +53,12 @@ export async function getPointCloudStatus(calibProjectId: string): Promise<Point
   const res = await httpClient.get<PointCloudStatusDto>(`${BASE}/status/${calibProjectId}`)
   return res.data
 }
+
+/** 使用当前登录令牌下载 PLY，避免原生链接请求丢失 Authorization 头。 */
+export async function downloadPointCloud(calibProjectId: string): Promise<Blob> {
+  const res = await httpClient.get<Blob>(`${BASE}/download/${calibProjectId}`, {
+    responseType: 'blob',
+    timeout: 120_000,
+  })
+  return res.data
+}

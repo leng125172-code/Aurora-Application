@@ -21,6 +21,7 @@ public static class WorkflowDefinitionDbContextModelCreatingExtensions
             b.ToTable("AbpProWorkflowPlcHandshakeConfigs");
             b.ConfigureByConvention();
             b.Property(x => x.LastError).HasMaxLength(1024);
+            b.Property(x => x.RequestSequence).IsRequired();
             b.Property(x => x.CaptureRequestAddress).HasMaxLength(1024);
             b.Property(x => x.RequestIdAddress).HasMaxLength(1024);
             b.Property(x => x.ResultAckAddress).HasMaxLength(1024);

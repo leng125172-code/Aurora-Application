@@ -16,6 +16,7 @@ namespace AuroraStruct3D.Workflow.Runtime;
 /// </summary>
 public interface IWorkflowRuntimeVariablePool
 {
+    IDisposable BeginRunScope(Guid runId);
     /// <summary>
     /// 从数据库加载指定项目的变量定义默认值，填充到内存池（幂等：已存在的键不覆盖）。
     /// </summary>
@@ -49,9 +50,10 @@ public sealed class WorkflowRuntimeVariablePool : IWorkflowRuntimeVariablePool, 
 {
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ConcurrentDictionary<
-        (Guid OwnerWorkflowId, string VariableName),
+        (Guid RunId, Guid OwnerWorkflowId, string VariableName),
         object?
     > _values = new();
+    private readonly AsyncLocal<Guid?> _currentRunId = new();
 
     /// <summary>
     /// 构造函数。
@@ -60,6 +62,15 @@ public sealed class WorkflowRuntimeVariablePool : IWorkflowRuntimeVariablePool, 
     {
         _scopeFactory = scopeFactory;
     }
+
+    public IDisposable BeginRunScope(Guid runId)
+    {
+        Guid? previous = _currentRunId.Value;
+        _currentRunId.Value = runId;
+        return new RunScope(() => _currentRunId.Value = previous);
+    }
+
+    private Guid CurrentRunId => _currentRunId.Value ?? Guid.Empty;
 
     /// <inheritdoc/>
     public async Task InitializeAsync(Guid projectId)
@@ -89,7 +100,7 @@ public sealed class WorkflowRuntimeVariablePool : IWorkflowRuntimeVariablePool, 
             {
                 byte[] bytes = Convert.FromBase64String(definition.DefaultValueJson);
                 object? value = WorkflowValueSerializer.Deserialize(bytes, definition.TypeName);
-                _values.TryAdd((definition.OwnerWorkflowId, definition.Name), value);
+                _values.TryAdd((CurrentRunId, definition.OwnerWorkflowId, definition.Name), value);
             }
             catch
             {
@@ -114,7 +125,7 @@ public sealed class WorkflowRuntimeVariablePool : IWorkflowRuntimeVariablePool, 
             {
                 byte[] bytes = Convert.FromBase64String(definition.DefaultValueJson);
                 object? value = WorkflowValueSerializer.Deserialize(bytes, definition.TypeName);
-                _values.TryAdd((definition.OwnerWorkflowId, definition.Name), value);
+                _values.TryAdd((CurrentRunId, definition.OwnerWorkflowId, definition.Name), value);
             }
             catch
             {
@@ -125,12 +136,23 @@ public sealed class WorkflowRuntimeVariablePool : IWorkflowRuntimeVariablePool, 
 
     /// <inheritdoc/>
     public bool TryRead(Guid ownerWorkflowId, string variableName, out object? value) =>
-        _values.TryGetValue((ownerWorkflowId, variableName), out value);
+        _values.TryGetValue((CurrentRunId, ownerWorkflowId, variableName), out value);
 
     /// <inheritdoc/>
     public void Write(Guid ownerWorkflowId, string variableName, object? value) =>
-        _values[(ownerWorkflowId, variableName)] = value;
+        _values[(CurrentRunId, ownerWorkflowId, variableName)] = value;
 
     /// <inheritdoc/>
-    public void Clear() => _values.Clear();
+    public void Clear()
+    {
+        Guid runId = CurrentRunId;
+        foreach (var key in _values.Keys.Where(x => x.RunId == runId).ToArray())
+            _values.TryRemove(key, out _);
+    }
+
+    private sealed class RunScope(Action restore) : IDisposable
+    {
+        private Action? _restore = restore;
+        public void Dispose() => Interlocked.Exchange(ref _restore, null)?.Invoke();
+    }
 }
