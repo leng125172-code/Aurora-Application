@@ -519,7 +519,28 @@ def build_installation_angle_graph(point_cloud_path, relaxed_demo=False):
         end_properties = next(
             item["properties"] for item in nodes if item["id"] == ids["end"]
         )
-        for display_name in ("安装角是否合格", "安装角汇总结果"):
-            end_properties["inputBindings"].pop(display_name, None)
-            end_properties["inputBindingSources"].pop(display_name, None)
+        end_properties["inputBindings"] = {
+            "平面夹角结果": "plane_angle_result",
+            "轴线对平面结果": "axis_plane_result",
+            "轴线夹角结果": "axis_axis_result",
+            "平面内旋转结果": "twist_result",
+            "斜视图结果": "tilted_result_url",
+        }
+        end_properties["inputBindingSources"] = {
+            name: "variable" for name in end_properties["inputBindings"]
+        }
+        end_properties["inputBindingDisplayNames"] = {
+            "平面夹角结果": "① 平面相对安装角（X/Y 方向）",
+            "轴线对平面结果": "② 轴线相对基准面角度",
+            "轴线夹角结果": "③ 基准轴线与安装轴线夹角",
+            "平面内旋转结果": "④ 平面内旋转（Twist）",
+            "斜视图结果": "检测区域斜视图",
+        }
+    else:
+        end_properties = next(
+            item["properties"] for item in nodes if item["id"] == ids["end"]
+        )
+        end_properties["inputBindingDisplayNames"] = {
+            "安装角汇总结果": "安装角总体判定",
+        }
     return {"nodes": nodes, "edges": edges}

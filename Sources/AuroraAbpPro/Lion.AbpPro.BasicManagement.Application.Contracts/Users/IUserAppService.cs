@@ -58,6 +58,16 @@ namespace Lion.AbpPro.BasicManagement.Users
         Task LockAsync(LockUserInput input);
 
         /// <summary>
+        /// 启用或禁用用户
+        /// </summary>
+        Task SetActiveAsync(SetUserActiveInput input);
+
+        /// <summary>
+        /// 更新用户所属角色
+        /// </summary>
+        Task UpdateRolesAsync(UpdateUserRolesInput input);
+
+        /// <summary>
         /// 通过username获取用户信息
         /// </summary>
         Task<IdentityUserDto> FindByUserNameAsync(FindByUserNameInput input);

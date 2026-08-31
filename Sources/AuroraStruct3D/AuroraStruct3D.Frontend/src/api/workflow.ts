@@ -34,15 +34,192 @@ export interface WorkflowExecutionInput {
     outputVariableNames?: string[]
 }
 
+export type WorkflowExecutionMode = 0 | 1 | 2
+
+export type WorkflowExecutionState = 0 | 1 | 2 | 3 | 4
+
+export type WorkflowDebugState =
+    | 'ready'
+    | 'running'
+    | 'paused'
+    | 'completed'
+    | 'faulted'
+    | 'stopped'
+
+export interface WorkflowConfiguredOutput {
+    name: string
+    displayName?: string | null
+    valueType?: string | null
+    hasValue: boolean
+}
+
+export interface WorkflowExecutionOutput<T = unknown> {
+    name: string
+    displayName?: string | null
+    valueType: string
+    value: T | null
+    stagedKey?: string | null
+}
+
 export interface WorkflowExecutionStatus {
     executionId: string
+    updatedAt: string
+    stateVersion: number
+    isPaused: boolean
+    debugState: WorkflowDebugState
+    isTerminal: boolean
+    canContinue: boolean
+    canStep: boolean
+    canPause: boolean
+    canStop: boolean
+    currentStatementId?: string | null
+    currentNodeName?: string | null
+    currentNodeDurationMs: number
+    runId?: string | null
+    projectId: string
     workflowId: string
     workflowName: string
-    status: number
+    mode: WorkflowExecutionMode
+    status: WorkflowExecutionState
+    executedSteps: number
+    totalSteps: number
+    currentNodeId?: string | null
+    workflowOrderNo: number
+    currentNodeOrderNo: number
+    faultNodeId?: string | null
+    loopCount: number
+    completedLoops: number
+    errorMessage?: string | null
+    errorCode?: string | null
+    durationMs: number
+    configuredOutputs: WorkflowConfiguredOutput[]
+    outputs: WorkflowExecutionOutput[]
+    variables?: WorkflowExecutionOutput[] | null
+    /** @deprecated Use debugState/errorMessage. Kept for older gateway responses. */
     error?: boolean
-    errorCode?: string
-    message?: string
-    variables?: Array<Record<string, unknown>>
+    /** @deprecated Use errorMessage. Kept for older gateway responses. */
+    message?: string | null
+}
+
+export interface WorkflowExecutionTriggerResult {
+    executionId: string
+    status: WorkflowExecutionStatus
+    error: boolean
+    errorCode?: string | null
+    resultImageUrls: string[]
+    message?: string | null
+    variables: WorkflowExecutionOutput[]
+}
+
+export interface WorkflowInspectionResult<TDetails = Record<string, unknown>> {
+    details?: TDetails | null
+    isValid: boolean
+    isOk: boolean
+    resultCode: 'OK' | 'NG' | 'UNKNOWN' | 'ERROR'
+    message: string
+    reasons: string[]
+}
+
+export interface CloudCompareHeightDifference {
+    MaxDistance: number
+    MeanDistance: number
+    StdDev: number
+    MinDistance: number
+    P95Distance: number
+    DefectCount: number
+    DefectRatio: number
+    Threshold: number
+    MatchedPointCount: number
+    UnmatchedPointCount: number
+}
+
+export interface CloudComparePositionDifference {
+    TranslationX: number
+    TranslationY: number
+    TranslationZ: number
+    TranslationMagnitude: number
+    RotationAngleDeg: number
+    RotationMatrix: number[]
+}
+
+export interface CloudCompareDetails {
+    SourcePointCount: number
+    TargetPointCount: number
+    HeightDifference: CloudCompareHeightDifference
+    PositionDifference: CloudComparePositionDifference
+    RegistrationMethod: string
+    UsedCoarseRegistration: boolean
+    IsOk: boolean
+    MaxDefectRatio: number
+    MaxMeanDistance: number
+    MissingRatio: number
+    MaxMissingRatio: number
+    MissingSurfaceCheckEnabled: boolean
+    EffectiveVoxelSizeMm: number
+    EffectiveMaxCorrespondenceDistanceMm: number
+    SourceRegistrationPointCount: number
+    TargetRegistrationPointCount: number
+    CoarseCorrespondenceCount: number
+    CoarseInlierCount: number
+    CoarseInlierRatio: number
+    FineIterations: number
+    FineConverged: boolean
+    FineCorrespondenceCount: number
+    FineCorrespondenceRatio: number
+    RegistrationRmseMm: number
+    MatchedSourcePointCount: number
+    UnmatchedSourcePointCount: number
+    MatchedTargetPointCount: number
+    UnmatchedTargetPointCount: number
+    MissingTargetPointCount: number
+}
+
+export interface Workflow3DComparisonOutputs<TDetails = CloudCompareDetails> {
+    inspectionResult?: WorkflowInspectionResult<TDetails>
+    footprintFilter?: ReferenceFootprintFilterResult
+    alignedPointCloudUrl?: string
+    distanceImageUrl?: string
+    anomalyImageUrl?: string
+    modelId?: string
+}
+
+export interface ReferenceFootprintFilterResult {
+    sourcePointCount: number
+    referencePointCount: number
+    keptPointCount: number
+    ignoredPointCount: number
+    keptRatio: number
+    lateralToleranceMm: number
+}
+
+export interface PoseCalibrationResult {
+    rotationXDeg: number
+    rotationYDeg: number
+    rotationZDeg: number
+    translationX: number
+    translationY: number
+    translationZ: number
+    rotationMatrix: number[]
+    transformMatrix: number[]
+    inlierRatio: number
+    trimmedRmse: number
+    secondBestTrimmedRmse: number
+    confidenceGap: number
+    iterations: number
+    hypothesisCount: number
+    sourceSampleCount: number
+    targetSampleCount: number
+    eulerConvention: 'Rz*Ry*Rx'
+    preserveUpDirection: boolean
+    yawCenterDeg: number
+    yawSearchRangeDeg: number
+    yawOffsetFromCenterDeg: number
+}
+
+export interface WorkflowPoseAlignmentOutputs {
+    poseCalibration?: PoseCalibrationResult
+    alignedPointCloudUrl?: string
+    modelId?: string
 }
 
 export interface ProjectTaskBatch {
@@ -207,7 +384,7 @@ export async function getOutputPaths(id: string, variableName: string) {
 
 export async function executeWorkflow(
     input: WorkflowExecutionInput
-): Promise<{ executionId: string; status: WorkflowExecutionStatus }> {
+): Promise<WorkflowExecutionTriggerResult> {
     return (await httpClient.post(`${BASE}/executions`, { mode: 0, loopCount: 1, ...input })).data
 }
 
@@ -217,6 +394,127 @@ export async function getExecutionStatus(executionId: string): Promise<WorkflowE
             params: { includeVariables: true },
         })
     ).data
+}
+
+/**
+ * Older snapshots may JSON-wrap string/blob values or leave a trailing quote after converting
+ * an operator-file URL to a Blob Key. Decode the wrapper once and clean Blob Keys, while leaving
+ * objects, arrays and ordinary strings untouched.
+ */
+export function decodeWorkflowOutputValue<T = unknown>(
+    output: WorkflowExecutionOutput
+): T | null {
+    const value = output.value
+    if (typeof value !== 'string') {
+        return value as T | null
+    }
+
+    const valueType = output.valueType.toLowerCase()
+    if (valueType !== 'string' && valueType !== 'blob') return value as T
+
+    try {
+        const decoded: unknown = JSON.parse(value)
+        return (typeof decoded === 'string' ? decoded : value) as T
+    } catch {
+        return (valueType === 'blob' ? value.replace(/^"+|"+$/g, '') : value) as T
+    }
+}
+
+export function findWorkflowOutput<T = unknown>(
+    status: Pick<WorkflowExecutionStatus, 'outputs'>,
+    name: string
+): T | null | undefined {
+    const output = status.outputs.find((item) => item.name === name)
+    return output ? decodeWorkflowOutputValue<T>(output) : undefined
+}
+
+export function parse3DComparisonOutputs<TDetails = CloudCompareDetails>(
+    status: Pick<WorkflowExecutionStatus, 'outputs'>
+): Workflow3DComparisonOutputs<TDetails> {
+    const rawFootprintFilter = findWorkflowOutput<unknown>(status, 'footprint_filter_result')
+    let footprintFilter: ReferenceFootprintFilterResult | undefined
+    if (typeof rawFootprintFilter === 'string') {
+        try {
+            const parsed: unknown = JSON.parse(rawFootprintFilter)
+            if (parsed && typeof parsed === 'object') {
+                footprintFilter = parsed as ReferenceFootprintFilterResult
+            }
+        } catch {
+            footprintFilter = undefined
+        }
+    } else if (rawFootprintFilter && typeof rawFootprintFilter === 'object') {
+        footprintFilter = rawFootprintFilter as ReferenceFootprintFilterResult
+    }
+    return {
+        inspectionResult: findWorkflowOutput<WorkflowInspectionResult<TDetails>>(
+            status,
+            'inspection_result'
+        ) ?? undefined,
+        footprintFilter,
+        alignedPointCloudUrl:
+            findWorkflowOutput<string>(status, 'aligned_cloud_download_url') ?? undefined,
+        distanceImageUrl:
+            findWorkflowOutput<string>(status, 'distance_image_download_url') ?? undefined,
+        anomalyImageUrl:
+            findWorkflowOutput<string>(status, 'anomaly_image_download_url') ?? undefined,
+        modelId: findWorkflowOutput<string>(status, 'selected_model_id') ?? undefined,
+    }
+}
+
+export function parsePoseAlignmentOutputs(
+    status: Pick<WorkflowExecutionStatus, 'outputs'>
+): WorkflowPoseAlignmentOutputs {
+    const rawPose = findWorkflowOutput<unknown>(status, 'pose_calibration_json')
+    let poseCalibration: PoseCalibrationResult | undefined
+    if (typeof rawPose === 'string') {
+        try {
+            const parsed: unknown = JSON.parse(rawPose)
+            if (parsed && typeof parsed === 'object') {
+                poseCalibration = parsed as PoseCalibrationResult
+            }
+        } catch {
+            poseCalibration = undefined
+        }
+    } else if (rawPose && typeof rawPose === 'object') {
+        poseCalibration = rawPose as PoseCalibrationResult
+    }
+
+    return {
+        poseCalibration,
+        alignedPointCloudUrl:
+            findWorkflowOutput<string>(status, 'pose_aligned_cloud_download_url') ?? undefined,
+        modelId: findWorkflowOutput<string>(status, 'selected_model_id') ?? undefined,
+    }
+}
+
+export function resolveWorkflowFileUrl(baseUrl: string, relativeOrAbsoluteUrl: string): string {
+    const normalized = relativeOrAbsoluteUrl.replace(/^"+|"+$/g, '')
+    if (!/^https?:\/\//i.test(normalized) && !normalized.startsWith('/')) {
+        const downloadPath = `/api/app/operator-file/download?blobName=${encodeURIComponent(normalized)}`
+        return new URL(downloadPath, baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`).toString()
+    }
+    return new URL(
+        normalized,
+        baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`
+    ).toString()
+}
+
+export async function waitForWorkflowExecution(
+    executionId: string,
+    options: { intervalMs?: number; timeoutMs?: number } = {}
+): Promise<WorkflowExecutionStatus> {
+    const intervalMs = options.intervalMs ?? 750
+    const timeoutMs = options.timeoutMs ?? 30_000
+    const deadline = Date.now() + timeoutMs
+
+    while (true) {
+        const status = await getExecutionStatus(executionId)
+        if (status.isTerminal) return status
+        if (Date.now() >= deadline) {
+            throw new Error(`Workflow execution timed out after ${timeoutMs} ms: ${executionId}`)
+        }
+        await new Promise<void>((resolve) => globalThis.setTimeout(resolve, intervalMs))
+    }
 }
 
 export async function getProjectRuns(input: ProjectRunQuery): Promise<ProjectRun[]> {

@@ -18,7 +18,7 @@ namespace Lion.AbpPro.BasicManagement.Systems
         }
 
         [HttpPost("update")]
-        [SwaggerOperation(summary: "更新角色", Tags = new[] { "Permissions" })]
+        [SwaggerOperation(summary: "更新角色或用户权限", Tags = new[] { "Permissions" })]
         public Task UpdatePermissionAsync(UpdateRolePermissionsInput input)
         {
             return _rolePermissionAppService.UpdatePermissionAsync(input);

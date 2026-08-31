@@ -61,6 +61,8 @@ public sealed class installation_twist_inspection : IOperator
         if (measuredRmse > _maxRmse) reasons.Add("安装方向拟合残差过大");
         bool valid = reasons.Count == 0;
         bool ok = valid && Math.Abs(deviation) <= _maxDeviation;
+        if (valid && Math.Abs(deviation) > _maxDeviation)
+            reasons.Add($"平面内旋转偏差 {deviation:F3}° 超过允许值 ±{_maxDeviation:F3}°");
         string status = !valid ? "UNKNOWN" : ok ? "OK" : "NG";
         installation_axis_to_plane_inspection.SetResult(context, status, valid, ok,
             new InstallationAxisInspectionDetails { twistZ = InstallationAngleMath.Round(twist), twistDeviation = InstallationAngleMath.Round(deviation), referenceRmse = referenceRmse, measuredRmse = measuredRmse, reasons = reasons });

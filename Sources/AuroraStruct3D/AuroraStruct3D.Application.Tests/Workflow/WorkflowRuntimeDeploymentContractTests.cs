@@ -1,4 +1,5 @@
 using System.Reflection;
+using AuroraStruct3D.OperatorFile;
 using AuroraStruct3D.Workflow;
 using AuroraStruct3D.Workflow.Dtos;
 using AuroraStruct3D.Workflow.Runtime;
@@ -178,6 +179,21 @@ public class WorkflowRuntimeDeploymentContractTests
             resultMethod.GetCustomAttribute<HttpGetAttribute>()
         );
         Assert.Equal("executions/{executionId:guid}/result", route.Template);
+    }
+
+    [Fact]
+    public void Operator_File_Download_Should_Use_Stable_Absolute_Get_Route()
+    {
+        MethodInfo downloadMethod = typeof(OperatorFileAppService).GetMethod(
+            nameof(OperatorFileAppService.DownloadAsync)
+        )!;
+
+        // 相对 HttpGet("download") 会被注册成根路径 /download；而完全依赖 ABP
+        // 约定时，DownloadAsync 又不满足 Get* 命名规则。使用绝对模板固定公开 GET 地址。
+        HttpGetAttribute route = Assert.Single(
+            downloadMethod.GetCustomAttributes<HttpGetAttribute>()
+        );
+        Assert.Equal("/api/app/operator-file/download", route.Template);
     }
 
     private static WorkflowProjectDeployment CreatePublishedDeployment()

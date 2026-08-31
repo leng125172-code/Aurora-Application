@@ -59,12 +59,15 @@ REGISTRATION_METHOD = "point_to_plane"
 # 因旋转角度或平移差异较大而落入错误的局部最优。
 USE_COARSE_REGISTRATION = True
 MAX_ITERATIONS = 50
-MAX_CORRESPONDENCE_DISTANCE = 0.1
+MAX_CORRESPONDENCE_DISTANCE = 0.0
 DISTANCE_THRESHOLD = 0.05
-VOXEL_SIZE = 0.2
+VOXEL_SIZE = 0.0
 MAX_DEFECT_RATIO = 0.05
 MAX_MEAN_DISTANCE = 0.05
 MAX_MISSING_RATIO = 0.05
+# 生产扫描只覆盖相机可见表面。保留反向缺失率作为诊断信息，但默认不把
+# 数模中未被相机看到的底面/侧面判为产品缺失。
+CHECK_MISSING_SURFACE = False
 MIN_COARSE_INLIER_RATIO = 0.1
 MIN_FINE_CORRESPONDENCE_RATIO = 0.15
 MAX_REGISTRATION_RMSE = 0.0
@@ -193,7 +196,12 @@ def parse_args() -> argparse.Namespace:
         "--input-ply",
         help="跳过拍照，上传并固定使用本地 PLY 点云文件",
     )
-    parser.add_argument("--product-model-id", required=True, help="模型库中已就绪的工艺模型 ID")
+    reference_group = parser.add_mutually_exclusive_group(required=True)
+    reference_group.add_argument("--product-model-id", help="模型库中已就绪的完整工艺模型 ID")
+    reference_group.add_argument(
+        "--reference-ply",
+        help="合格品局部/顶面参考 PLY；适合固定相机与治具下的局部扫描",
+    )
     parser.add_argument("--scan-cycles", type=int, default=1, help="每次运行的扫描周期数（1-20）")
     parser.add_argument("--scan-timeout", type=int, default=300, help="扫描超时秒数（10-3600）")
     parser.add_argument("--no-table-filter", dest="enable_table_filter", action="store_false")
@@ -224,11 +232,27 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-defect-ratio", type=float, default=MAX_DEFECT_RATIO)
     parser.add_argument("--max-mean-distance", type=float, default=MAX_MEAN_DISTANCE)
     parser.add_argument("--max-missing-ratio", type=float, default=MAX_MISSING_RATIO)
+    missing_group = parser.add_mutually_exclusive_group()
+    missing_group.add_argument(
+        "--check-missing-surface",
+        dest="check_missing_surface",
+        action="store_true",
+        help="完整扫描时启用模型反向缺失面判定",
+    )
+    missing_group.add_argument(
+        "--partial-surface",
+        dest="check_missing_surface",
+        action="store_false",
+        help="局部/顶面扫描：不把未扫描的模型表面判为缺失（默认）",
+    )
+    parser.set_defaults(check_missing_surface=CHECK_MISSING_SURFACE)
     parser.add_argument("--min-coarse-inlier-ratio", type=float, default=MIN_COARSE_INLIER_RATIO)
     parser.add_argument("--min-fine-correspondence-ratio", type=float, default=MIN_FINE_CORRESPONDENCE_RATIO)
     parser.add_argument("--max-registration-rmse", type=float, default=MAX_REGISTRATION_RMSE)
     args = parser.parse_args()
-    uuid_options = [("--product-model-id", args.product_model_id)]
+    uuid_options = []
+    if args.product_model_id:
+        uuid_options.append(("--product-model-id", args.product_model_id))
     if args.calib_project_id:
         uuid_options.append(("--calib-project-id", args.calib_project_id))
     for option, value in uuid_options:
@@ -244,6 +268,12 @@ def parse_args() -> argparse.Namespace:
             parser.error(f"--input-ply 文件不存在：{args.input_ply}")
         if os.path.splitext(args.input_ply)[1].lower() != ".ply":
             parser.error("--input-ply 当前只接受 .ply 文件")
+    if args.reference_ply:
+        args.reference_ply = os.path.abspath(args.reference_ply)
+        if not os.path.isfile(args.reference_ply):
+            parser.error(f"--reference-ply 文件不存在：{args.reference_ply}")
+        if os.path.splitext(args.reference_ply)[1].lower() != ".ply":
+            parser.error("--reference-ply 当前只接受 .ply 文件")
 
     if not 1 <= args.scan_cycles <= 20:
         parser.error("--scan-cycles 必须在 1 到 20 之间")
@@ -552,7 +582,9 @@ def edge(source_id: str, target_id: str) -> dict:
 
 
 def build_graph_data(
-    args: argparse.Namespace, input_point_cloud_blob: str | None = None
+    args: argparse.Namespace,
+    input_point_cloud_blob: str | None = None,
+    reference_point_cloud_blob: str | None = None,
 ) -> dict:
     id_start = new_uuid()
     id_scan = new_uuid()
@@ -561,6 +593,7 @@ def build_graph_data(
     id_preview = new_uuid()
     id_export_cloud = new_uuid()
     id_export_image = new_uuid()
+    id_export_anomaly = new_uuid()
     id_end = new_uuid()
 
     if input_point_cloud_blob:
@@ -611,9 +644,11 @@ def build_graph_data(
     end_input_bindings = {
         "alignedPointCloudUrl": "aligned_cloud_download_url",
         "distanceImageUrl": "distance_image_download_url",
+        "anomalyImageUrl": "anomaly_image_download_url",
         "inspectionResult": "inspection_result",
-        "modelId": "selected_model_id",
     }
+    if not reference_point_cloud_blob:
+        end_input_bindings["modelId"] = "selected_model_id"
     if not input_point_cloud_blob:
         end_input_bindings.update(
             {
@@ -624,10 +659,22 @@ def build_graph_data(
         )
     end_input_sources = {name: "variable" for name in end_input_bindings}
 
-    nodes = [
-        node(id_start, "start-node", 560, 40, "开始", make_properties()),
-        input_cloud_node,
-        node(
+    if reference_point_cloud_blob:
+        reference_cloud_node = node(
+            id_read_model,
+            OP_READ_POINT_CLOUD,
+            740,
+            120,
+            "读取合格顶面参考",
+            make_properties(
+                input_bindings={"point_cloud_path": reference_point_cloud_blob},
+                input_sources={"point_cloud_path": "literal"},
+                output_bindings={"output_point_cloud": "model_cloud"},
+                output_sources={"output_point_cloud": "variable"},
+            ),
+        )
+    else:
+        reference_cloud_node = node(
             id_read_model,
             OP_READ_PRODUCT_MODEL,
             740,
@@ -645,7 +692,12 @@ def build_graph_data(
                     "model_id": "variable",
                 },
             ),
-        ),
+        )
+
+    nodes = [
+        node(id_start, "start-node", 560, 40, "开始", make_properties()),
+        input_cloud_node,
+        reference_cloud_node,
         node(
             id_compare,
             OP_CLOUD_COMPARE,
@@ -654,7 +706,11 @@ def build_graph_data(
             "3D比较",
             make_properties(
                 params={
-                    "useCoarseRegistration": str(args.use_coarse).lower(),
+                    # 同一相机/治具生成的合格参考云与生产扫描已在同一坐标系，
+                    # 直接精配准比局部面到完整模型的全局粗配准更可靠。
+                    "useCoarseRegistration": str(
+                        args.use_coarse and not reference_point_cloud_blob
+                    ).lower(),
                     "registrationMethod": args.registration_method,
                     "maxIterations": args.max_iterations,
                     "maxCorrespondenceDistance": args.max_correspondence_distance,
@@ -664,6 +720,11 @@ def build_graph_data(
                     "maxDefectRatio": args.max_defect_ratio,
                     "maxMeanDistance": args.max_mean_distance,
                     "maxMissingRatio": args.max_missing_ratio,
+                    # 合格顶面参考与扫描覆盖范围一致，可以正常检查该可见面的缺失；
+                    # 完整数模 + 局部扫描时才需要关闭反向缺失判定。
+                    "checkMissingSurface": str(
+                        True if reference_point_cloud_blob else args.check_missing_surface
+                    ).lower(),
                     "minCoarseInlierRatio": args.min_coarse_inlier_ratio,
                     "minFineCorrespondenceRatio": args.min_fine_correspondence_ratio,
                     "maxRegistrationRmse": args.max_registration_rmse,
@@ -679,6 +740,7 @@ def build_graph_data(
                     "maxDefectRatio": "literal",
                     "maxMeanDistance": "literal",
                     "maxMissingRatio": "literal",
+                    "checkMissingSurface": "literal",
                     "minCoarseInlierRatio": "literal",
                     "minFineCorrespondenceRatio": "literal",
                     "maxRegistrationRmse": "literal",
@@ -696,6 +758,7 @@ def build_graph_data(
                     "transform_matrix": "transform_matrix",
                     "distance_mat": "distance_mat",
                     "distance_image": "distance_image",
+                    "anomaly_image": "anomaly_image",
                     "result": "inspection_result",
                 },
                 output_sources={
@@ -703,6 +766,7 @@ def build_graph_data(
                     "transform_matrix": "variable",
                     "distance_mat": "variable",
                     "distance_image": "variable",
+                    "anomaly_image": "variable",
                     "result": "variable",
                 },
             ),
@@ -787,6 +851,27 @@ def build_graph_data(
                 input_sources=end_input_sources,
             ),
         ),
+        node(
+            id_export_anomaly,
+            OP_SAVE_IMAGE_BLOB,
+            900,
+            400,
+            "异常标注图存Blob",
+            make_properties(
+                params={"fileName": "3d-compare-anomaly.png"},
+                param_sources={"fileName": "literal"},
+                input_bindings={"input_mat": "anomaly_image"},
+                input_sources={"input_mat": "variable"},
+                output_bindings={
+                    "blob_name": "anomaly_image_blob_name",
+                    "download_url": "anomaly_image_download_url",
+                },
+                output_sources={
+                    "blob_name": "variable",
+                    "download_url": "variable",
+                },
+            ),
+        ),
     ]
 
     edges = [
@@ -797,9 +882,11 @@ def build_graph_data(
         edge(id_compare, id_preview),
         edge(id_compare, id_export_cloud),
         edge(id_compare, id_export_image),
+        edge(id_compare, id_export_anomaly),
         edge(id_preview, id_end),
         edge(id_export_cloud, id_end),
         edge(id_export_image, id_end),
+        edge(id_export_anomaly, id_end),
     ]
 
     return {"nodes": nodes, "edges": edges}
@@ -809,10 +896,15 @@ def create_workflow(
     project_id: str,
     args: argparse.Namespace,
     input_point_cloud_blob: str | None = None,
+    reference_point_cloud_blob: str | None = None,
 ) -> dict:
     print(f"[2/2] 创建工作流：{WORKFLOW_NAME} ...")
 
-    graph_data = build_graph_data(args, input_point_cloud_blob)
+    graph_data = build_graph_data(
+        args,
+        input_point_cloud_blob,
+        reference_point_cloud_blob,
+    )
     payload = {
         "projectId": project_id,
         "name": WORKFLOW_NAME,
@@ -865,7 +957,10 @@ def main():
     else:
         print(f"  标定项目：{args.calib_project_id}")
         print(f"  扫描周期：{args.scan_cycles}")
-    print(f"  工艺模型：{args.product_model_id}")
+    if args.reference_ply:
+        print(f"  合格顶面参考：{args.reference_ply}")
+    else:
+        print(f"  工艺模型：{args.product_model_id}")
     print(f"  配准方法：{args.registration_method}")
     print(f"  启用粗配准：{args.use_coarse}")
     print("=" * 60)
@@ -874,10 +969,12 @@ def main():
     try:
         login()
         print()
-        validate_product_model(args.product_model_id)
-        print()
+        if args.product_model_id:
+            validate_product_model(args.product_model_id)
+            print()
         project_id = create_project()
         uploaded_point_cloud = None
+        uploaded_reference_cloud = None
         if args.input_ply:
             uploaded_point_cloud = upload_operator_file(
                 project_id,
@@ -885,16 +982,33 @@ def main():
                 args.input_ply,
             )
             print()
+        if args.reference_ply:
+            if args.input_ply and os.path.samefile(args.input_ply, args.reference_ply):
+                uploaded_reference_cloud = uploaded_point_cloud
+            else:
+                uploaded_reference_cloud = upload_operator_file(
+                    project_id,
+                    OP_READ_POINT_CLOUD,
+                    args.reference_ply,
+                )
+                print()
         workflow = create_workflow(
             project_id,
             args,
             uploaded_point_cloud["blobName"] if uploaded_point_cloud else None,
+            uploaded_reference_cloud["blobName"] if uploaded_reference_cloud else None,
         )
         if uploaded_point_cloud:
             confirm_operator_file(
                 project_id,
                 OP_READ_POINT_CLOUD,
                 uploaded_point_cloud["blobName"],
+            )
+        if uploaded_reference_cloud and uploaded_reference_cloud is not uploaded_point_cloud:
+            confirm_operator_file(
+                project_id,
+                OP_READ_POINT_CLOUD,
+                uploaded_reference_cloud["blobName"],
             )
         print()
         print("=" * 60)

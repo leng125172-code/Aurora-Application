@@ -215,7 +215,7 @@ public class OperatorFileAppService : AuroraStruct3DAppService, IOperatorFileApp
     }
 
     /// <inheritdoc/>
-    [HttpGet("download")]
+    [HttpGet("/api/app/operator-file/download")]
     public async Task<IRemoteStreamContent> DownloadAsync(string blobName)
     {
         Check.NotNullOrWhiteSpace(blobName, nameof(blobName));

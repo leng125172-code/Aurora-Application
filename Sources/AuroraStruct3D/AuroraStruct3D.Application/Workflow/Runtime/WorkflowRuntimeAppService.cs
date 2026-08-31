@@ -3012,39 +3012,14 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
             }
 
             List<WorkflowVariableResultDto> outputs = await ResolveOutputVariables(session);
-            HashSet<string> blobOutputVariables = new(StringComparer.Ordinal);
-            CollectBlobOutputVariables(
-                session.RuntimeWorkflow.Statements,
-                blobOutputVariables
-            );
             List<WorkflowExecutionOutputResultDto> results = new(outputs.Count);
             foreach (WorkflowVariableResultDto output in outputs)
             {
-                bool isBlobOutput = blobOutputVariables.Contains(
-                    GetOutputRootVariableName(output.Name)
-                );
-                object? resultValue = isBlobOutput
-                    ? NormalizeExecutionResultValue(output.Value)
-                    : output.Value;
-                string valueType = NormalizeExecutionResultValueType(
-                    output.ValueType,
-                    resultValue
-                );
-                if (isBlobOutput && resultValue is string)
-                {
-                    valueType = WorkflowValueTypes.Blob;
-                }
-
                 results.Add(
-                    new WorkflowExecutionOutputResultDto
-                    {
-                        Name = output.Name,
-                        DisplayName =
-                            session.OutputDisplayNames.GetValueOrDefault(output.Name)
-                            ?? output.Name,
-                        ValueType = valueType,
-                        Value = resultValue,
-                    }
+                    CreateExecutionOutputResult(
+                        output,
+                        session.OutputDisplayNames.GetValueOrDefault(output.Name) ?? output.Name
+                    )
                 );
             }
             return results;
@@ -3055,85 +3030,21 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
         }
     }
 
-    private static string NormalizeExecutionResultValueType(
-        string? storedValueType,
-        object? value
+    /// <summary>
+    /// 调试结果与状态接口 outputs 使用同一份公开值，不再把下载地址改写为 Blob Key。
+    /// </summary>
+    internal static WorkflowExecutionOutputResultDto CreateExecutionOutputResult(
+        WorkflowVariableResultDto output,
+        string displayName
     )
     {
-        if (value is JsonObject)
+        return new WorkflowExecutionOutputResultDto
         {
-            return WorkflowValueTypes.Object;
-        }
-        if (value is JsonArray)
-        {
-            return WorkflowValueTypes.Array;
-        }
-
-        string type = storedValueType?.Trim() ?? string.Empty;
-        return type.ToLowerInvariant() switch
-        {
-            "system.int32" or "int32" or "int" => WorkflowValueTypes.Int,
-            "system.int64" or "int64" or "long" => WorkflowValueTypes.Long,
-            "system.single" or "single" or "float" => WorkflowValueTypes.Float,
-            "system.double" or "double" => WorkflowValueTypes.Double,
-            "system.decimal" or "decimal" => WorkflowValueTypes.Decimal,
-            "system.boolean" or "boolean" or "bool" => WorkflowValueTypes.Bool,
-            "system.string" or "string" => WorkflowValueTypes.String,
-            "blob" => WorkflowValueTypes.Blob,
-            "system.datetime"
-            or "system.datetimeoffset"
-            or "datetime"
-            or "datetimeoffset" => WorkflowValueTypes.DateTime,
-            "system.guid" or "guid" => WorkflowValueTypes.Guid,
-            "object" => WorkflowValueTypes.Object,
-            "array" => WorkflowValueTypes.Array,
-            "mat" or "opencvsharp.mat" => WorkflowValueTypes.Mat,
-            "pointclouddata" or "aurorastruct3d.pointclouddata" =>
-                WorkflowValueTypes.PointCloud,
-            _ when value is not null => WorkflowValueSerializer.InferValueType(value),
-            _ => WorkflowValueTypes.String,
+            Name = output.Name,
+            DisplayName = displayName,
+            ValueType = output.ValueType,
+            Value = output.Value,
         };
-    }
-
-    /// <summary>
-    /// 兼容历史工作流中绑定 download_url/preview_url 的情况。
-    /// 结果接口只返回 Blob Key，不返回由后端拼接的访问 URL。
-    /// </summary>
-    internal static object? NormalizeExecutionResultValue(object? value)
-    {
-        if (value is not string text || string.IsNullOrWhiteSpace(text))
-        {
-            return value;
-        }
-
-        if (
-            !text.Contains(
-                "/api/app/operator-file/preview?",
-                StringComparison.OrdinalIgnoreCase
-            )
-            && !text.Contains(
-                "/api/app/operator-file/download?",
-                StringComparison.OrdinalIgnoreCase
-            )
-        )
-        {
-            return value;
-        }
-
-        const string parameter = "blobName=";
-        int parameterStart = text.IndexOf(parameter, StringComparison.OrdinalIgnoreCase);
-        if (parameterStart < 0)
-        {
-            return value;
-        }
-
-        int valueStart = parameterStart + parameter.Length;
-        int valueEnd = text.IndexOf('&', valueStart);
-        string encodedBlobName =
-            valueEnd < 0 ? text[valueStart..] : text[valueStart..valueEnd];
-        return string.IsNullOrWhiteSpace(encodedBlobName)
-            ? value
-            : Uri.UnescapeDataString(encodedBlobName);
     }
 
     /// <inheritdoc/>
@@ -4232,15 +4143,25 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
                 .ToLowerInvariant();
             string localPath = Path.Combine(cacheRoot, $"{hash}{extension.ToLowerInvariant()}");
 
-            if (File.Exists(localPath))
-            {
-                return localPath;
-            }
-
             Stream? blobStream = await _operatorFileBlobContainer.GetAsync(blobName);
             if (blobStream is null)
             {
+                // Blob 已删除时不能继续复用旧缓存，否则工作流会读取到过期甚至不同格式的文件。
+                // 缓存只是 Blob 的加速副本，Blob 始终是有效性的权威来源。
+                try
+                {
+                    if (File.Exists(localPath))
+                        File.Delete(localPath);
+                }
+                catch (IOException) { }
+                catch (UnauthorizedAccessException) { }
                 continue;
+            }
+
+            if (File.Exists(localPath))
+            {
+                await blobStream.DisposeAsync();
+                return localPath;
             }
 
             await using (blobStream)
@@ -4856,47 +4777,6 @@ public class WorkflowRuntimeAppService : AuroraStruct3DAppService, IWorkflowRunt
                 case IfElseStatement ifElse:
                     CollectResultImageUrlVariables(ifElse.ThenBody, variableNames);
                     CollectResultImageUrlVariables(ifElse.ElseBody, variableNames);
-                    break;
-            }
-        }
-    }
-
-    /// <summary>
-    /// 根据工作流输出来源识别 Blob Key。不能仅凭字符串内容或扩展名推断，
-    /// 否则普通的 ".png" 文本会被误判为文件。
-    /// </summary>
-    internal static void CollectBlobOutputVariables(
-        IReadOnlyList<IWorkflowStatement> statements,
-        HashSet<string> variableNames
-    )
-    {
-        foreach (IWorkflowStatement statement in statements)
-        {
-            switch (statement)
-            {
-                case OperatorCallStatement operatorCall
-                    when operatorCall.OperatorType == typeof(save_image_to_blob)
-                        || operatorCall.OperatorType == typeof(save_point_cloud_to_blob):
-                    foreach (string portName in new[] { "blob_name", "download_url" })
-                    {
-                        if (
-                            operatorCall.OutputBindings.TryGetValue(
-                                portName,
-                                out OutputBinding? binding
-                            )
-                            && !string.IsNullOrWhiteSpace(binding.VariableName)
-                        )
-                        {
-                            variableNames.Add(binding.VariableName);
-                        }
-                    }
-                    break;
-                case ForLoopStatement forLoop:
-                    CollectBlobOutputVariables(forLoop.Body, variableNames);
-                    break;
-                case IfElseStatement ifElse:
-                    CollectBlobOutputVariables(ifElse.ThenBody, variableNames);
-                    CollectBlobOutputVariables(ifElse.ElseBody, variableNames);
                     break;
             }
         }

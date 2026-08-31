@@ -105,6 +105,8 @@ export default {
         expand: '펼치기',
     },
     error: {
+        forbidden: '접근 권한 없음',
+        forbiddenDesc: '이 페이지에 접근할 권한이 없습니다',
         notFound: '페이지를 찾을 수 없습니다',
         notFoundDesc: '요청한 페이지가 존재하지 않거나 삭제되었습니다',
         backHome: '홈으로',

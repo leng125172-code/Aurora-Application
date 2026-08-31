@@ -1,6 +1,9 @@
 {
   "culture": "en",
   "texts": {
+    "Permission:Access": "Application access",
+    "Permission:Access.Operation": "Operation access",
+    "Permission:Access.Management": "Management access",
     "Menu:Home": "Home",
     "Welcome": "Welcome",
     "Test": "Test",

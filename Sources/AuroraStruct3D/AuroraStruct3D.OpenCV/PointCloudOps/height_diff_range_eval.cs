@@ -68,8 +68,8 @@ public class height_diff_range_eval : IOperator
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
 
-        double heightA = context.Get<double>("height_a");
-        double heightB = context.Get<double>("height_b");
+        double heightA = RequireHeight(context, "height_a", "区域A高度");
+        double heightB = RequireHeight(context, "height_b", "区域B高度");
         double signedDiff = Math.Round(heightA - heightB, 6);
         double absDiff = Math.Round(Math.Abs(signedDiff), 6);
         bool isOk = signedDiff >= _minDiff && signedDiff <= _maxDiff;
@@ -84,6 +84,40 @@ public class height_diff_range_eval : IOperator
             isOk);
 
         context.Set("result", InspectionResults.CreateTyped(true, isOk, result));
+    }
+
+    private static double RequireHeight(
+        IWorkflowContext context,
+        string parameterName,
+        string displayName
+    )
+    {
+        object? raw = context.Get(parameterName);
+        if (raw is null)
+        {
+            throw new InvalidOperationException(
+                $"{displayName}未连接。请将 {parameterName} 绑定到高度统计节点的数值输出。"
+            );
+        }
+
+        try
+        {
+            double value = Convert.ToDouble(raw, System.Globalization.CultureInfo.InvariantCulture);
+            if (!double.IsFinite(value))
+                throw new InvalidOperationException($"{displayName}不是有效有限数值。");
+            return value;
+        }
+        catch (InvalidOperationException)
+        {
+            throw;
+        }
+        catch (Exception exception) when (exception is FormatException or InvalidCastException or OverflowException)
+        {
+            throw new InvalidOperationException(
+                $"{displayName}不是有效数值；当前绑定值为 '{raw}'。请检查输入绑定来源是否为变量。",
+                exception
+            );
+        }
     }
 
     public void Dispose()

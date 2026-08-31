@@ -67,6 +67,10 @@ public class InstallationPlaneAngleInspectionOperatorTests
         Assert.InRange(result.ToDetailsNode()!["tiltX"]!.GetValue<double>(), 1.999, 2.001);
         Assert.InRange(result.ToDetailsNode()!["tiltY"]!.GetValue<double>(), -1.001, -0.999);
         Assert.InRange(result.ToDetailsNode()!["totalTilt"]!.GetValue<double>(), 2.235, 2.237);
+        Assert.Contains(
+            result.ToDetailsNode()!["qualityReasons"]!.AsArray(),
+            reason => reason!.GetValue<string>().Contains("X方向偏差")
+        );
     }
 
     [Fact]

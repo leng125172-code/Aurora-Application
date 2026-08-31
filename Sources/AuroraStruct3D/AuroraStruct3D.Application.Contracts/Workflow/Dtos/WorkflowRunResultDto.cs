@@ -115,6 +115,11 @@ public class WorkflowVariableResultDto
                 {
                     return node;
                 }
+                if (node is JsonValue jsonValue && jsonValue.TryGetValue(out string? text))
+                {
+                    // 兼容升级前已保存的 CLR string 快照；旧序列化器会额外包一层 JSON 引号。
+                    return text;
+                }
             }
             catch (JsonException)
             {

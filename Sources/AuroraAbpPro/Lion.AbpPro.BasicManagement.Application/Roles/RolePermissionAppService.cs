@@ -26,6 +26,7 @@ namespace Lion.AbpPro.BasicManagement.Roles
         /// </summary>
         public virtual async Task<PermissionOutput> GetPermissionAsync(GetPermissionInput input)
         {
+            await CheckManagePermissionAsync(input.ProviderName);
             var permissions = await _rolePermissionAppService.GetAsync(
                 input.ProviderName,
                 input.ProviderKey
@@ -37,14 +38,22 @@ namespace Lion.AbpPro.BasicManagement.Roles
         /// <summary>
         /// 更新权限
         /// </summary>
-        [Authorize(IdentityPermissions.Roles.ManagePermissions)]
         public virtual async Task UpdatePermissionAsync(UpdateRolePermissionsInput input)
         {
+            await CheckManagePermissionAsync(input.ProviderName);
             await _rolePermissionAppService.UpdateAsync(
                 input.ProviderName,
                 input.ProviderKey,
                 input.UpdatePermissionsDto
             );
+        }
+
+        private Task CheckManagePermissionAsync(string providerName)
+        {
+            var permissionName = providerName == "U"
+                ? IdentityPermissions.Users.ManagePermissions
+                : IdentityPermissions.Roles.ManagePermissions;
+            return AuthorizationService.CheckAsync(permissionName);
         }
 
         /// <summary>

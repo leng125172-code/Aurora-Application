@@ -282,6 +282,8 @@ export default {
         stableBannerDesc: 'The service has been running continuously for {days} days. Keep up the great work!',
     },
     error: {
+        forbidden: 'Access denied',
+        forbiddenDesc: 'Your account does not have permission to access this page',
         notFound: 'Page Not Found',
         notFoundDesc: 'The page you visited does not exist or was removed',
         backHome: 'Back to Home',

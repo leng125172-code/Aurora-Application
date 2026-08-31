@@ -22,12 +22,16 @@ import {
     FolderKanban,
     ChevronDown,
     ChevronRight,
+    Users,
+    ShieldCheck,
 } from '@lucide/vue'
 import { cn } from '@/lib/utils'
+import { useAuthStore } from '@/stores/auth'
 
 const route = useRoute()
 const router = useRouter()
 const { t } = useI18n()
+const auth = useAuthStore()
 const workflowDebugEnabled = __WORKFLOW_DEBUG__
 
 // 展开状态：CAP 和 Hangfire 默认展开（若当前路由匹配）
@@ -73,10 +77,11 @@ function navigate(path: string, tab?: string): void {
             AuroraStruct3D
         </div>
         <nav class="sidebar-nav flex-1 space-y-1 overflow-y-auto p-2">
-            <div class="px-3 py-1 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+            <div v-if="auth.canOperate" class="px-3 py-1 text-xs font-medium text-muted-foreground uppercase tracking-wider">
                 {{ t('menu.visualApplications') }}
             </div>
             <Button
+                v-if="auth.canOperate"
                 size="small"
                 text
                 severity="secondary"
@@ -95,12 +100,13 @@ function navigate(path: string, tab?: string): void {
             </Button>
 
             <!-- 工具监控 -->
-            <div class="px-3 py-1 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+            <div v-if="auth.canManage" class="px-3 py-1 text-xs font-medium text-muted-foreground uppercase tracking-wider">
                 {{ t('menu.tools') }}
             </div>
 
             <!-- 仪表盘 -->
             <Button
+                v-if="auth.canOperate"
                 size="small"
                 text
                 severity="secondary"
@@ -122,7 +128,7 @@ function navigate(path: string, tab?: string): void {
                 size="small"
                 text
                 severity="secondary"
-                v-if="workflowDebugEnabled"
+                v-if="workflowDebugEnabled && auth.canManage"
                 :class="
                     cn(
                         'flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors text-left',
@@ -139,6 +145,7 @@ function navigate(path: string, tab?: string): void {
 
             <!-- Swagger -->
             <Button
+                v-if="auth.canManage"
                 size="small"
                 text
                 severity="secondary"
@@ -157,7 +164,7 @@ function navigate(path: string, tab?: string): void {
             </Button>
 
             <!-- CAP 展开组 -->
-            <div>
+            <div v-if="auth.canManage">
                 <Button
                     size="small"
                     text
@@ -206,7 +213,7 @@ function navigate(path: string, tab?: string): void {
             </div>
 
             <!-- Hangfire 展开组 -->
-            <div>
+            <div v-if="auth.canManage">
                 <Button
                     size="small"
                     text
@@ -256,6 +263,7 @@ function navigate(path: string, tab?: string): void {
 
             <!-- MiniProfiler -->
             <Button
+                v-if="auth.canManage"
                 size="small"
                 text
                 severity="secondary"
@@ -275,6 +283,7 @@ function navigate(path: string, tab?: string): void {
 
             <!-- 系统信息 -->
             <Button
+                v-if="auth.canManage"
                 size="small"
                 text
                 severity="secondary"
@@ -293,12 +302,13 @@ function navigate(path: string, tab?: string): void {
             </Button>
 
             <!-- 设备状态 -->
-            <div class="px-3 py-1 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+            <div v-if="auth.canOperate" class="px-3 py-1 text-xs font-medium text-muted-foreground uppercase tracking-wider">
                 {{ t('menu.deviceState') }}
             </div>
 
             <!-- 故障历史 -->
             <Button
+                v-if="auth.canOperate"
                 size="small"
                 text
                 severity="secondary"
@@ -318,6 +328,7 @@ function navigate(path: string, tab?: string): void {
 
             <!-- 状态日志 -->
             <Button
+                v-if="auth.canOperate"
                 size="small"
                 text
                 severity="secondary"
@@ -336,7 +347,7 @@ function navigate(path: string, tab?: string): void {
             </Button>
 
             <!-- 投影仪管理展开组 -->
-            <div>
+            <div v-if="auth.canOperate">
                 <Button
                     size="small"
                     text
@@ -393,7 +404,7 @@ function navigate(path: string, tab?: string): void {
             </div>
 
             <!-- 相机管理展开组 -->
-            <div>
+            <div v-if="auth.canOperate">
                 <Button
                     size="small"
                     text
@@ -450,7 +461,7 @@ function navigate(path: string, tab?: string): void {
             </div>
 
             <!-- 485 串口管理 -->
-            <div>
+            <div v-if="auth.canOperate">
                 <Button
                     size="small"
                     text
@@ -507,7 +518,7 @@ function navigate(path: string, tab?: string): void {
             </div>
 
             <!-- 485 电机设备管理 -->
-            <div>
+            <div v-if="auth.canOperate">
                 <Button
                     size="small"
                     text
@@ -565,6 +576,7 @@ function navigate(path: string, tab?: string): void {
 
             <!-- 三维数模管理 -->
             <Button
+                v-if="auth.canOperate"
                 size="small"
                 text
                 severity="secondary"
@@ -583,7 +595,7 @@ function navigate(path: string, tab?: string): void {
             </Button>
 
             <!-- 三维数模管理 -->
-            <div>
+            <div v-if="auth.canOperate">
                 <Button
                     size="small"
                     text
@@ -640,7 +652,7 @@ function navigate(path: string, tab?: string): void {
             </div>
 
             <!-- AI 模型管理 -->
-            <div>
+            <div v-if="auth.canOperate">
                 <Button
                     size="small"
                     text
@@ -697,7 +709,7 @@ function navigate(path: string, tab?: string): void {
             </div>
 
             <!-- 标定管理 可展开菜单 -->
-            <div>
+            <div v-if="auth.canOperate">
                 <Button
                     size="small"
                     text
@@ -737,6 +749,46 @@ function navigate(path: string, tab?: string): void {
                     </Button>
                 </div>
             </div>
+
+            <template v-if="auth.canManage">
+                <div class="px-3 py-1 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                    {{ t('menu.system') }}
+                </div>
+                <Button
+                    size="small"
+                    text
+                    severity="secondary"
+                    :class="
+                        cn(
+                            'flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors text-left',
+                            isExactActive('/system/users')
+                                ? 'bg-accent text-accent-foreground'
+                                : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                        )
+                    "
+                    @click="navigate('/system/users')"
+                >
+                    <Users class="size-4 shrink-0" />
+                    {{ t('menu.users') }}
+                </Button>
+                <Button
+                    size="small"
+                    text
+                    severity="secondary"
+                    :class="
+                        cn(
+                            'flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors text-left',
+                            isExactActive('/system/roles')
+                                ? 'bg-accent text-accent-foreground'
+                                : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                        )
+                    "
+                    @click="navigate('/system/roles')"
+                >
+                    <ShieldCheck class="size-4 shrink-0" />
+                    {{ t('menu.roles') }}
+                </Button>
+            </template>
         </nav>
     </aside>
 </template>

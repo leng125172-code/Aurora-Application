@@ -84,6 +84,20 @@ namespace Lion.AbpPro.BasicManagement.Systems
             return _userAppService.LockAsync(input);
         }
 
+        [HttpPost("setActive")]
+        [SwaggerOperation(summary: "启用或禁用用户", Tags = new[] { "Users" })]
+        public Task SetActiveAsync(SetUserActiveInput input)
+        {
+            return _userAppService.SetActiveAsync(input);
+        }
+
+        [HttpPost("roles/update")]
+        [SwaggerOperation(summary: "更新用户所属角色", Tags = new[] { "Users" })]
+        public Task UpdateRolesAsync(UpdateUserRolesInput input)
+        {
+            return _userAppService.UpdateRolesAsync(input);
+        }
+
         [HttpPost("findByUserName")]
         [SwaggerOperation(summary: "通过用户名查找用户", Tags = new[] { "Users" })]
         public Task<IdentityUserDto> FindByUserNameAsync(FindByUserNameInput input)

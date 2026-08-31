@@ -92,6 +92,8 @@ export default {
         expand: 'Ausklappen',
     },
     error: {
+        forbidden: 'Zugriff verweigert',
+        forbiddenDesc: 'Ihr Konto ist nicht berechtigt, auf diese Seite zuzugreifen',
         notFound: 'Seite nicht gefunden',
         notFoundDesc: 'Die aufgerufene Seite existiert nicht oder wurde entfernt',
         backHome: 'Zur Startseite',

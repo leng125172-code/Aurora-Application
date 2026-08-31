@@ -30,7 +30,8 @@ namespace Lion.AbpPro.BasicManagement.Data.Seeds
             var role = await _identityRoleManager.FindByNameAsync(adminUserName);
             if (role != null)
             {
-                role.IsDefault = true;
+                // 管理员角色不能作为新用户的默认角色，否则新建账号会自动获得管理权限。
+                role.IsDefault = false;
                 await _identityRoleManager.UpdateAsync(role);
             }
         }

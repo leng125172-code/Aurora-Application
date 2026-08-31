@@ -34,6 +34,20 @@ public class WorkflowVariableCompileRequestFactoryTests
     }
 
     [Fact]
+    public void NormalizeDeclaredType_Should_Use_Object_For_Generic_Type_Exceeding_Storage_Limit()
+    {
+        Type longGenericType = typeof(
+            Dictionary<string, Dictionary<string, Dictionary<string, List<Mat>>>>
+        );
+
+        string normalized = WorkflowExecutionTypeNormalizer.NormalizeDeclaredType(
+            longGenericType.AssemblyQualifiedName!
+        );
+
+        Assert.Equal("System.Object", normalized);
+    }
+
+    [Fact]
     public void NormalizeRuntimeValueType_Should_Preserve_ListOfMat_Type()
     {
         using Mat first = new(2, 2, MatType.CV_8UC1);

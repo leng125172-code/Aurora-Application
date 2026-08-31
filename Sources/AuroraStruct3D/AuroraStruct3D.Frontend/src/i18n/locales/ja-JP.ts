@@ -105,6 +105,8 @@ export default {
         expand: '展開する',
     },
     error: {
+        forbidden: 'アクセス権限がありません',
+        forbiddenDesc: 'このページにアクセスする権限がありません',
         notFound: 'ページが見つかりません',
         notFoundDesc: 'アクセスしたページは存在しないか削除されました',
         backHome: 'ホームへ戻る',

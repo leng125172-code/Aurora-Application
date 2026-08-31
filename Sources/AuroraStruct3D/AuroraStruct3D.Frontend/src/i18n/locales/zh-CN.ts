@@ -282,6 +282,8 @@ export default {
         stableBannerDesc: '服务已连续稳定运行 {days} 天，请继续保持良好状态！',
     },
     error: {
+        forbidden: '无权访问',
+        forbiddenDesc: '当前账号没有访问此页面所需的权限',
         notFound: '页面未找到',
         notFoundDesc: '您访问的页面不存在或已被移除',
         backHome: '返回首页',

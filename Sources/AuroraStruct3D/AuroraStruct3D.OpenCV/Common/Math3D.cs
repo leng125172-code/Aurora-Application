@@ -183,38 +183,25 @@ public static class Math3D
         double h22
     )
     {
-        // HᵀH（3×3 对称）
-        double s00 = h00 * h00 + h10 * h10 + h20 * h20;
-        double s01 = h00 * h01 + h10 * h11 + h20 * h21;
-        double s02 = h00 * h02 + h10 * h12 + h20 * h22;
-        double s11 = h01 * h01 + h11 * h11 + h21 * h21;
-        double s12 = h01 * h02 + h11 * h12 + h21 * h22;
-        double s22 = h02 * h02 + h12 * h12 + h22 * h22;
+        // 直接对 H 做 SVD。旧实现通过 HᵀH 手工恢复 U，在三点 RANSAC 的
+        // 秩亏/近共面情况下会把很小但非零的奇异方向保留下来，产生缩放矩阵。
+        // OpenCV 的完整 U/V 基能稳定补齐退化方向，确保输出始终是真正的刚体旋转。
+        using Mat h = new(3, 3, MatType.CV_64FC1);
+        h.Set(0, 0, h00);
+        h.Set(0, 1, h01);
+        h.Set(0, 2, h02);
+        h.Set(1, 0, h10);
+        h.Set(1, 1, h11);
+        h.Set(1, 2, h12);
+        h.Set(2, 0, h20);
+        h.Set(2, 1, h21);
+        h.Set(2, 2, h22);
+        using Mat singularValues = new();
+        using Mat u = new();
+        using Mat vt = new();
+        Cv2.SVDecomp(h, singularValues, u, vt, SVD.Flags.FullUV);
 
-        // HᵀH = V·Σ²·Vᵀ，特征值降序，V 列与之对应
-        var (eigenvalues, V) = Jacobi3x3(s00, s01, s02, s11, s12, s22);
-
-        double[] sigma = new double[3];
-        for (int i = 0; i < 3; i++)
-            sigma[i] = eigenvalues[i] > 0 ? Math.Sqrt(eigenvalues[i]) : 0;
-
-        // U = H·V·Σ⁻¹（逐列）
-        double[,] U = new double[3, 3];
-        for (int c = 0; c < 3; c++)
-        {
-            double inv = sigma[c] > 1e-12 ? 1.0 / sigma[c] : 0;
-            U[0, c] = (h00 * V[0, c] + h01 * V[1, c] + h02 * V[2, c]) * inv;
-            U[1, c] = (h10 * V[0, c] + h11 * V[1, c] + h12 * V[2, c]) * inv;
-            U[2, c] = (h20 * V[0, c] + h21 * V[1, c] + h22 * V[2, c]) * inv;
-        }
-
-        FixDegenerateColumns(U);
-
-        // R = V·Uᵀ
-        double[] R = new double[9];
-        for (int r = 0; r < 3; r++)
-        for (int c = 0; c < 3; c++)
-            R[r * 3 + c] = V[r, 0] * U[c, 0] + V[r, 1] * U[c, 1] + V[r, 2] * U[c, 2];
+        double[] R = MultiplyVUt(vt, u);
 
         // 强制 det(R) = +1
         double det =
@@ -224,12 +211,25 @@ public static class Math3D
 
         if (det < 0)
         {
-            R[2] = -R[2];
-            R[5] = -R[5];
-            R[8] = -R[8];
+            // V 的最后一列取反；Vᵀ 中对应最后一行。
+            for (int c = 0; c < 3; c++)
+                vt.Set(2, c, -vt.Get<double>(2, c));
+            R = MultiplyVUt(vt, u);
         }
 
         return R;
+    }
+
+    private static double[] MultiplyVUt(Mat vt, Mat u)
+    {
+        var result = new double[9];
+        for (int r = 0; r < 3; r++)
+        for (int c = 0; c < 3; c++)
+            result[r * 3 + c] =
+                vt.Get<double>(0, r) * u.Get<double>(c, 0)
+                + vt.Get<double>(1, r) * u.Get<double>(c, 1)
+                + vt.Get<double>(2, r) * u.Get<double>(c, 2);
+        return result;
     }
 
     /// <summary>

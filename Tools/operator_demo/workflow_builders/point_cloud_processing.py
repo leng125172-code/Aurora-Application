@@ -19,6 +19,7 @@ from constants import (
     OP_Z_CHANNEL_STATS,
     OP_POINT_TO_PLANE_DISTANCE,
     OP_LINE_FIT_3D,
+    OP_ANNOTATE_3D_LINE_ANGLE_RESULT,
     OP_CIRCLE_FIT_3D,
     OP_COLORED_POINT_CLOUD_TO_IMAGE,
     OP_SAVE_POINT_CLOUD_BLOB,
@@ -28,6 +29,7 @@ from constants import (
     OP_POINT_CLOUD_CROP,
     OP_PLANE_AREA_MEASURE,
     OP_COMBINE_INSPECTION_RESULTS,
+    OP_INSTALLATION_AXIS_TO_AXIS,
     IMAGE_RESOLUTION,
     PROJECTION_BOUNDS,
 )
@@ -156,12 +158,19 @@ def build_3d_point_cloud_processing_graph(point_cloud_path, relaxed_demo=False):
     id_z_stats = new_uuid()
     id_plane_distance = new_uuid()
     id_plane_area = new_uuid()
-    id_line_fit = new_uuid()
+    id_line1_fit, id_line2_fit = new_uuid(), new_uuid()
+    id_line_angle_inspection = new_uuid()
+    id_line_angle_annotate = new_uuid()
     id_circle_fit = new_uuid()
     id_preview = new_uuid()
-    id_plane_roi, id_line_roi, id_circle_roi = new_uuid(), new_uuid(), new_uuid()
-    id_plane_crop, id_line_crop, id_circle_crop = new_uuid(), new_uuid(), new_uuid()
-    id_plane_overlay, id_line_overlay, id_circle_overlay = (
+    id_plane_roi, id_line1_roi, id_line2_roi, id_circle_roi = (
+        new_uuid(), new_uuid(), new_uuid(), new_uuid()
+    )
+    id_plane_crop, id_line1_crop, id_line2_crop, id_circle_crop = (
+        new_uuid(), new_uuid(), new_uuid(), new_uuid()
+    )
+    id_plane_overlay, id_line1_overlay, id_line2_overlay, id_circle_overlay = (
+        new_uuid(),
         new_uuid(),
         new_uuid(),
         new_uuid(),
@@ -335,11 +344,11 @@ def build_3d_point_cloud_processing_graph(point_cloud_path, relaxed_demo=False):
             ),
         ),
         node(
-            id_line_fit,
+            id_line1_fit,
             OP_LINE_FIT_3D,
-            560,
+            460,
             520,
-            "3D直线拟合（角度检测）",
+            "3D直线1拟合",
             make_properties(
                 params={
                     "distanceThreshold": 0.01,
@@ -347,7 +356,7 @@ def build_3d_point_cloud_processing_graph(point_cloud_path, relaxed_demo=False):
                     "probability": 0.99,
                     "referenceAxis": "x",
                     "minAngle": 0.0,
-                    "maxAngle": 180.0 if relaxed_demo else 5.0,
+                    "maxAngle": 180.0,
                 },
                 param_sources={
                     "distanceThreshold": "literal",
@@ -357,14 +366,14 @@ def build_3d_point_cloud_processing_graph(point_cloud_path, relaxed_demo=False):
                     "minAngle": "literal",
                     "maxAngle": "literal",
                 },
-                input_bindings={"input_point_cloud": "line_roi_cloud"},
+                input_bindings={"input_point_cloud": "line1_roi_cloud"},
                 input_sources={"input_point_cloud": "variable"},
                 output_bindings={
-                    "line_params": "line_params",
-                    "inlier_points": "line_inlier_cloud",
-                    "outlier_points": "line_outlier_cloud",
-                    "fitting_error": "line_fitting_error",
-                    "result": "line_result",
+                    "line_params": "line1_params",
+                    "inlier_points": "line1_inlier_cloud",
+                    "outlier_points": "line1_outlier_cloud",
+                    "fitting_error": "line1_fitting_error",
+                    "result": "line1_fit_result",
                 },
                 output_sources={
                     "line_params": "variable",
@@ -373,6 +382,82 @@ def build_3d_point_cloud_processing_graph(point_cloud_path, relaxed_demo=False):
                     "fitting_error": "variable",
                     "result": "variable",
                 },
+            ),
+        ),
+        node(
+            id_line2_fit,
+            OP_LINE_FIT_3D,
+            660,
+            520,
+            "3D直线2拟合",
+            make_properties(
+                params={
+                    "distanceThreshold": 0.01,
+                    "maxIterations": 1000,
+                    "probability": 0.99,
+                    "referenceAxis": "y",
+                    "minAngle": 0.0,
+                    "maxAngle": 180.0,
+                },
+                param_sources={
+                    "distanceThreshold": "literal",
+                    "maxIterations": "literal",
+                    "probability": "literal",
+                    "referenceAxis": "literal",
+                    "minAngle": "literal",
+                    "maxAngle": "literal",
+                },
+                input_bindings={"input_point_cloud": "line2_roi_cloud"},
+                input_sources={"input_point_cloud": "variable"},
+                output_bindings={
+                    "line_params": "line2_params",
+                    "inlier_points": "line2_inlier_cloud",
+                    "outlier_points": "line2_outlier_cloud",
+                    "fitting_error": "line2_fitting_error",
+                    "result": "line2_fit_result",
+                },
+                output_sources={
+                    "line_params": "variable",
+                    "inlier_points": "variable",
+                    "outlier_points": "variable",
+                    "fitting_error": "variable",
+                    "result": "variable",
+                },
+            ),
+        ),
+        node(
+            id_line_angle_inspection,
+            OP_INSTALLATION_AXIS_TO_AXIS,
+            560,
+            600,
+            "双直线夹角检测",
+            make_properties(
+                params={
+                    "nominalAngle": 90.0,
+                    "maxAngleDeviation": 2.0 if not relaxed_demo else 90.0,
+                    "maxFitRmse": 0.05,
+                    "minPointCount": 20,
+                },
+                param_sources={
+                    "nominalAngle": "literal",
+                    "maxAngleDeviation": "literal",
+                    "maxFitRmse": "literal",
+                    "minPointCount": "literal",
+                },
+                input_bindings={
+                    "reference_axis_params": "line1_params",
+                    "reference_axis_points": "line1_inlier_cloud",
+                    "measured_axis_params": "line2_params",
+                    "measured_axis_points": "line2_inlier_cloud",
+                },
+                input_sources={
+                    "reference_axis_params": "variable",
+                    "reference_axis_points": "variable",
+                    "measured_axis_params": "variable",
+                    "measured_axis_points": "variable",
+                },
+                output_bindings={"result": "line_angle_result"},
+                output_sources={"result": "variable"},
             ),
         ),
         node(
@@ -444,12 +529,20 @@ def build_3d_point_cloud_processing_graph(point_cloud_path, relaxed_demo=False):
             "plane_roi_metadata",
         ),
         _roi_node(
-            id_line_roi,
-            "角度检测选区",
-            560,
-            _roi_json("直线区域", 210, 120, 120, 180),
-            "line_roi_mask",
-            "line_roi_metadata",
+            id_line1_roi,
+            "直线1选区",
+            460,
+            _roi_json("LINE 1", 314, 226, 102, 25),
+            "line1_roi_mask",
+            "line1_roi_metadata",
+        ),
+        _roi_node(
+            id_line2_roi,
+            "直线2选区",
+            660,
+            _roi_json("LINE 2", 402, 255, 22, 79),
+            "line2_roi_mask",
+            "line2_roi_metadata",
         ),
         _roi_node(
             id_circle_roi,
@@ -468,12 +561,20 @@ def build_3d_point_cloud_processing_graph(point_cloud_path, relaxed_demo=False):
             "plane_roi_cloud",
         ),
         _crop_node(
-            id_line_crop,
-            "裁剪角度检测区域",
-            560,
-            "line_roi_mask",
-            "line_roi_metadata",
-            "line_roi_cloud",
+            id_line1_crop,
+            "裁剪直线1区域",
+            460,
+            "line1_roi_mask",
+            "line1_roi_metadata",
+            "line1_roi_cloud",
+        ),
+        _crop_node(
+            id_line2_crop,
+            "裁剪直线2区域",
+            660,
+            "line2_roi_mask",
+            "line2_roi_metadata",
+            "line2_roi_cloud",
         ),
         _crop_node(
             id_circle_crop,
@@ -542,11 +643,11 @@ def build_3d_point_cloud_processing_graph(point_cloud_path, relaxed_demo=False):
             ),
         ),
         node(
-            id_line_overlay,
+            id_line1_overlay,
             OP_OVERLAY_ROI_MARKERS,
-            560,
+            460,
             840,
-            "叠加角度检测选区",
+            "叠加直线1选区",
             make_properties(
                 params={
                     "overlayAlpha": 0.2,
@@ -560,13 +661,71 @@ def build_3d_point_cloud_processing_graph(point_cloud_path, relaxed_demo=False):
                 },
                 input_bindings={
                     "input_mat": "plane_overlay_image",
-                    "roi_metadata": "line_roi_metadata",
+                    "roi_metadata": "line1_roi_metadata",
                 },
                 input_sources={
                     "input_mat": "variable",
                     "roi_metadata": "variable",
                 },
-                output_bindings={"output_mat": "line_overlay_image"},
+                output_bindings={"output_mat": "line1_overlay_image"},
+                output_sources={"output_mat": "variable"},
+            ),
+        ),
+        node(
+            id_line2_overlay,
+            OP_OVERLAY_ROI_MARKERS,
+            660,
+            840,
+            "叠加直线2选区",
+            make_properties(
+                params={
+                    "overlayAlpha": 0.2,
+                    "borderThickness": 1,
+                    "showLabel": "true",
+                },
+                param_sources={
+                    "overlayAlpha": "literal",
+                    "borderThickness": "literal",
+                    "showLabel": "literal",
+                },
+                input_bindings={
+                    "input_mat": "line1_overlay_image",
+                    "roi_metadata": "line2_roi_metadata",
+                },
+                input_sources={
+                    "input_mat": "variable",
+                    "roi_metadata": "variable",
+                },
+                output_bindings={"output_mat": "line2_overlay_image"},
+                output_sources={"output_mat": "variable"},
+            ),
+        ),
+        node(
+            id_line_angle_annotate,
+            OP_ANNOTATE_3D_LINE_ANGLE_RESULT,
+            560,
+            920,
+            "标注双直线夹角",
+            make_properties(
+                input_bindings={
+                    "input_mat": "line2_overlay_image",
+                    "projection_mapping": "projection_mapping",
+                    "line1_params": "line1_params",
+                    "line1_points": "line1_inlier_cloud",
+                    "line2_params": "line2_params",
+                    "line2_points": "line2_inlier_cloud",
+                    "inspection_result": "line_angle_result",
+                },
+                input_sources={
+                    "input_mat": "variable",
+                    "projection_mapping": "variable",
+                    "line1_params": "variable",
+                    "line1_points": "variable",
+                    "line2_params": "variable",
+                    "line2_points": "variable",
+                    "inspection_result": "variable",
+                },
+                output_bindings={"output_mat": "line_angle_image"},
                 output_sources={"output_mat": "variable"},
             ),
         ),
@@ -588,7 +747,7 @@ def build_3d_point_cloud_processing_graph(point_cloud_path, relaxed_demo=False):
                     "showLabel": "literal",
                 },
                 input_bindings={
-                    "input_mat": "line_overlay_image",
+                    "input_mat": "line_angle_image",
                     "roi_metadata": "circle_roi_metadata",
                 },
                 input_sources={
@@ -608,7 +767,7 @@ def build_3d_point_cloud_processing_graph(point_cloud_path, relaxed_demo=False):
             make_properties(
                 input_bindings={
                     "flatness_result": "flatness_result",
-                    "line_result": "line_result",
+                    "line_result": "line_angle_result",
                     "circle_result": "circle_result",
                 },
                 input_sources={
@@ -698,19 +857,28 @@ def build_3d_point_cloud_processing_graph(point_cloud_path, relaxed_demo=False):
         edge(id_denoise, id_normal),
         edge(id_denoise, id_z_stats),
         edge(id_preview, id_plane_roi),
-        edge(id_preview, id_line_roi),
+        edge(id_preview, id_line1_roi),
+        edge(id_preview, id_line2_roi),
         edge(id_preview, id_circle_roi),
         edge(id_plane_roi, id_plane_crop),
-        edge(id_line_roi, id_line_crop),
+        edge(id_line1_roi, id_line1_crop),
+        edge(id_line2_roi, id_line2_crop),
         edge(id_circle_roi, id_circle_crop),
         edge(id_preview, id_plane_overlay),
         edge(id_plane_roi, id_plane_overlay),
-        edge(id_plane_overlay, id_line_overlay),
-        edge(id_line_roi, id_line_overlay),
-        edge(id_line_overlay, id_circle_overlay),
+        edge(id_plane_overlay, id_line1_overlay),
+        edge(id_line1_roi, id_line1_overlay),
+        edge(id_line1_overlay, id_line2_overlay),
+        edge(id_line2_roi, id_line2_overlay),
+        edge(id_line2_overlay, id_line_angle_annotate),
+        edge(id_line_angle_inspection, id_line_angle_annotate),
+        edge(id_line_angle_annotate, id_circle_overlay),
         edge(id_circle_roi, id_circle_overlay),
         edge(id_plane_crop, id_plane_fit),
-        edge(id_line_crop, id_line_fit),
+        edge(id_line1_crop, id_line1_fit),
+        edge(id_line2_crop, id_line2_fit),
+        edge(id_line1_fit, id_line_angle_inspection),
+        edge(id_line2_fit, id_line_angle_inspection),
         edge(id_circle_crop, id_circle_fit),
         edge(id_plane_fit, id_plane_distance),
         edge(id_plane_fit, id_plane_area),
@@ -719,7 +887,7 @@ def build_3d_point_cloud_processing_graph(point_cloud_path, relaxed_demo=False):
         edge(id_circle_overlay, id_export_image),
         edge(id_plane_distance, id_export_distance_image),
         edge(id_plane_distance, id_result),
-        edge(id_line_fit, id_result),
+        edge(id_line_angle_inspection, id_result),
         edge(id_circle_fit, id_result),
         edge(id_result, id_end),
         edge(id_export_cloud, id_end),
@@ -847,24 +1015,30 @@ def build_split_3d_point_cloud_graphs(point_cloud_path):
     line_angle = focused_graph(
         common
         | {
-            "角度检测选区",
-            "裁剪角度检测区域",
-            "叠加角度检测选区",
-            "3D直线拟合（角度检测）",
+            "直线1选区",
+            "直线2选区",
+            "裁剪直线1区域",
+            "裁剪直线2区域",
+            "叠加直线1选区",
+            "叠加直线2选区",
+            "3D直线1拟合",
+            "3D直线2拟合",
+            "双直线夹角检测",
+            "标注双直线夹角",
             "投影图存Blob",
         },
         {
             "roiImageUrl": "image_download_url",
-            "result": "line_result",
+            "result": "line_angle_result",
         },
-        {"投影图存Blob", "3D直线拟合（角度检测）"},
+        {"投影图存Blob", "双直线夹角检测"},
         {
-            "叠加角度检测选区": {"input_mat": "preview_image"},
-            "投影图存Blob": {"input_mat": "line_overlay_image"},
+            "叠加直线1选区": {"input_mat": "preview_image"},
+            "投影图存Blob": {"input_mat": "line_angle_image"},
         },
         [
-            ("点云投影成图", "叠加角度检测选区"),
-            ("叠加角度检测选区", "投影图存Blob"),
+            ("点云投影成图", "叠加直线1选区"),
+            ("标注双直线夹角", "投影图存Blob"),
         ],
     )
 

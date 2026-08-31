@@ -11,7 +11,6 @@ import Tag from 'primevue/tag'
 import Dialog from 'primevue/dialog'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
-import Select from 'primevue/select'
 import ConfirmDialog from 'primevue/confirmdialog'
 import { useConfirm } from 'primevue/useconfirm'
 import { AppCard } from '@/components/primevue'
@@ -21,7 +20,7 @@ import {
     createUserAsync,
     deleteUserAsync,
     resetUserPasswordAsync,
-    lockUserAsync,
+    setUserActiveAsync,
     type UserDto,
 } from '@/api/management'
 
@@ -116,35 +115,15 @@ async function submitReset(): Promise<void> {
     }
 }
 
-// ——— 锁定用户弹窗 ———
-const showLock = ref(false)
-const lockTarget = ref<UserDto | null>(null)
-const lockSeconds = ref(3600)
-const locking = ref(false)
-
-const lockOptions = [
-    { label: `5 ${t('management.minutes')}`, value: 300 },
-    { label: `30 ${t('management.minutes')}`, value: 1800 },
-    { label: `1 ${t('management.hours')}`, value: 3600 },
-    { label: `24 ${t('management.hours')}`, value: 86400 },
-]
-
-function openLock(user: UserDto): void {
-    lockTarget.value = user
-    lockSeconds.value = 3600
-    showLock.value = true
-}
-
-async function submitLock(): Promise<void> {
-    if (!lockTarget.value?.id) return
-    locking.value = true
+// ——— 启用/禁用用户 ———
+async function toggleUserActive(user: UserDto): Promise<void> {
+    if (!user.id) return
     try {
-        await lockUserAsync({ id: lockTarget.value.id, seconds: lockSeconds.value })
+        await setUserActiveAsync({ id: user.id, isActive: !user.isActive })
         toast.success(t('common.success'))
-        showLock.value = false
         await loadUsers()
-    } finally {
-        locking.value = false
+    } catch {
+        // 错误已在拦截器处理
     }
 }
 
@@ -283,8 +262,8 @@ watch(total, updateTotalPages, { immediate: true })
                                 text
                                 severity="secondary"
                                 size="small"
-                                :title="t('management.lockUser')"
-                                @click="openLock(data)"
+                                :title="data.isActive ? t('management.inactive') : t('management.active')"
+                                @click="toggleUserActive(data)"
                             >
                                 <Lock class="size-4" />
                             </Button>
@@ -371,33 +350,6 @@ watch(total, updateTotalPages, { immediate: true })
             </Button>
             <Button size="small" :disabled="resetting || !newPassword" @click="submitReset">
                 {{ resetting ? t('common.loading') : t('common.confirm') }}
-            </Button>
-        </template>
-    </Dialog>
-
-    <!-- 锁定用户弹窗 -->
-    <Dialog
-        v-model:visible="showLock"
-        modal
-        :header="`${t('management.lockUser')}: ${lockTarget?.userName ?? ''}`"
-        :style="{ width: '400px' }"
-    >
-        <div class="space-y-1">
-            <label class="text-sm">{{ t('management.lockDuration') }}</label>
-            <Select
-                v-model="lockSeconds"
-                :options="lockOptions"
-                option-label="label"
-                option-value="value"
-                class="w-full"
-            />
-        </div>
-        <template #footer>
-            <Button severity="secondary" outlined size="small" @click="showLock = false">
-                {{ t('common.cancel') }}
-            </Button>
-            <Button size="small" :disabled="locking" @click="submitLock">
-                {{ locking ? t('common.loading') : t('common.confirm') }}
             </Button>
         </template>
     </Dialog>

@@ -34,6 +34,42 @@ public class HeightDiffWorkflowOperatorsTests
     }
 
     [Fact]
+    public void HeightDiffRangeEval_Should_Calculate_Bound_Height_Variables()
+    {
+        using WorkflowContext context = new();
+        context.Set("height_a", 2.824d);
+        context.Set("height_b", 0.9296d);
+
+        using var eval = new height_diff_range_eval(-0.2, 0.2);
+        eval.Execute(context);
+
+        InspectionResultBase result = Assert.IsAssignableFrom<InspectionResultBase>(context.Get("result"));
+        JsonNode details = result.ToDetailsNode()!;
+        Assert.Equal(2.824d, details["heightA"]!.GetValue<double>());
+        Assert.Equal(0.9296d, details["heightB"]!.GetValue<double>());
+        Assert.Equal(1.8944d, details["signedDiff"]!.GetValue<double>());
+        Assert.Equal(InspectionResultCode.NG, result.resultCode);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("measure_height")]
+    public void HeightDiffRangeEval_Should_Reject_Missing_Or_Literal_Variable_Name(object? invalidValue)
+    {
+        using WorkflowContext context = new();
+        if (invalidValue is not null)
+            context.Set("height_a", invalidValue);
+        context.Set("height_b", 0.9296d);
+
+        using var eval = new height_diff_range_eval(-0.2, 0.2);
+        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(
+            () => eval.Execute(context)
+        );
+
+        Assert.Contains("区域A高度", exception.Message);
+    }
+
+    [Fact]
     public void AnnotateHeightDiffResult_Should_Expose_Expected_Contracts()
     {
         List<IVisionParameter>? inputs = annotate_height_diff_result.InputVisionParameters;

@@ -73,9 +73,11 @@ import {
 import { useAuthStore } from '@/stores/auth'
 import { Bug, CircleStop, Code2, GitBranch, Play, Save, StepForward, WandSparkles } from '@lucide/vue'
 import WorkflowBlobPreview from '@/components/workflow/WorkflowBlobPreview.vue'
+import WorkflowInspectionResult from '@/components/workflow/WorkflowInspectionResult.vue'
 import WorkflowJsonTree from '@/components/workflow/WorkflowJsonTree.vue'
 import {
     classifyWorkflowResult,
+    isWorkflowInspectionResult,
     workflowResultFileName,
     type WorkflowResultPresentation,
 } from '@/utils/workflow-result'
@@ -1831,6 +1833,19 @@ function resultPresentation(result: DebugExecutionResult): WorkflowResultPresent
     return classifyWorkflowResult(result.valueType, result.value)
 }
 
+const INSTALLATION_RESULT_NAMES: Record<string, string> = {
+    plane_angle_result: '① 平面相对安装角（X/Y 方向）',
+    axis_plane_result: '② 轴线相对基准面角度',
+    axis_axis_result: '③ 基准轴线与安装轴线夹角',
+    twist_result: '④ 平面内旋转（Twist）',
+    tilted_result_url: '检测区域斜视图',
+    installation_result: '安装角总体判定',
+}
+
+function resultDisplayName(result: DebugExecutionResult): string {
+    return INSTALLATION_RESULT_NAMES[result.name] ?? result.displayName ?? result.name
+}
+
 function isFilePresentation(presentation: WorkflowResultPresentation): boolean {
     return ['image', 'point-cloud', 'model-3d', 'cad', 'json-file', 'text-file', 'file'].includes(presentation)
 }
@@ -3581,20 +3596,24 @@ async function rollbackMigration(workflowId?: string) {
                     <table v-else class="debug-table">
                         <thead>
                             <tr>
-                                <th>Display 名称</th>
-                                <th>变量名称</th>
-                                <th>值类型</th>
-                                <th>值</th>
+                                <th>输出项</th>
+                                <th>内部变量</th>
+                                <th>类型</th>
+                                <th>检测结果</th>
                             </tr>
                         </thead>
                         <tbody>
                             <tr v-for="result in debugResults" :key="result.name">
-                                <td>{{ result.displayName || result.name }}</td>
+                                <td>{{ resultDisplayName(result) }}</td>
                                 <td>{{ result.name }}</td>
                                 <td>{{ result.valueType || '—' }}</td>
                                 <td>
+                                    <WorkflowInspectionResult
+                                        v-if="isWorkflowInspectionResult(result.value)"
+                                        :value="result.value"
+                                    />
                                     <span
-                                        v-if="resultPresentation(result) === 'boolean'"
+                                        v-else-if="resultPresentation(result) === 'boolean'"
                                         :class="result.value === true ? 'text-emerald-600' : 'text-red-600'"
                                         class="font-semibold"
                                         :title="`原始值：${String(result.value)}`"

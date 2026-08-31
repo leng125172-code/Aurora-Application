@@ -122,6 +122,9 @@ public static class WorkflowValueSerializer
             DateTimeOffset dateTimeOffset =>
                 dateTimeOffset.ToString("O", CultureInfo.InvariantCulture),
             Guid guid => guid.ToString("D"),
+            string text => text,
+            char character => character.ToString(),
+            Enum enumValue => enumValue.ToString(),
             JsonNode jsonNode => jsonNode.ToJsonString(),
             JsonElement jsonElement => jsonElement.GetRawText(),
             Array or System.Collections.IEnumerable when value is not string =>

@@ -130,6 +130,15 @@ public sealed class installation_plane_angle_inspection : IOperator
             && deviationY >= _minDeviationY
             && deviationY <= _maxDeviationY
             && totalDeviation <= _maxTotalDeviation;
+        if (isValid)
+        {
+            if (deviationX < _minDeviationX || deviationX > _maxDeviationX)
+                qualityReasons.Add($"X方向偏差 {deviationX:F3}° 不在 {_minDeviationX:F3}°～{_maxDeviationX:F3}° 范围内");
+            if (deviationY < _minDeviationY || deviationY > _maxDeviationY)
+                qualityReasons.Add($"Y方向偏差 {deviationY:F3}° 不在 {_minDeviationY:F3}°～{_maxDeviationY:F3}° 范围内");
+            if (totalDeviation > _maxTotalDeviation)
+                qualityReasons.Add($"合成偏差 {totalDeviation:F3}° 超过 {_maxTotalDeviation:F3}°");
+        }
         string status = !isValid ? "UNKNOWN" : isOk ? "OK" : "NG";
 
         context.Set("result", InspectionResults.CreateTyped(isValid, isOk,

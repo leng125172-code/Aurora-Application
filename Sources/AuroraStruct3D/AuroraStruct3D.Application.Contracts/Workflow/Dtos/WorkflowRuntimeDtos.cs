@@ -730,7 +730,8 @@ public class WorkflowExecutionOutputResultDto
     public string ValueType { get; set; } = string.Empty;
 
     /// <summary>
-    /// 原生 JSON 值。文件类输出的 valueType 为 blob，此处直接返回 Blob Key。
+    /// 原生 JSON 值，与执行状态 outputs 中同名输出的 value/valueType 保持一致。
+    /// 已保存文件通常为 string 类型的相对下载或预览地址。
     /// 原始 Mat/PointCloudData 始终返回 null，避免序列化非托管指针及大型数据。
     /// </summary>
     public object? Value

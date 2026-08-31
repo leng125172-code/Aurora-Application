@@ -68,6 +68,7 @@ async function handleSubmit(): Promise<void> {
                 roles: cfg.currentUser.roles ?? [],
             })
         }
+        auth.setGrantedPolicies(cfg.auth.grantedPolicies)
 
         toast.success(t('login.loginSuccess'))
         const redirect = (route.query.redirect as string) || '/'

@@ -1,6 +1,9 @@
 {
   "culture": "zh-Hans",
   "texts": {
+    "Permission:Access": "应用访问权限",
+    "Permission:Access.Operation": "操作权限",
+    "Permission:Access.Management": "管理权限",
     "Menu:Home": "首页",
     "Welcome": "欢迎",
     "Test": "测试",

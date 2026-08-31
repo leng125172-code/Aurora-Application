@@ -14,6 +14,7 @@ using System.Text.RegularExpressions;
 
 namespace AuroraStruct3D.Workflow;
 
+[Authorize(AuroraStruct3D.Permissions.AuroraStruct3DAccessPermissions.Management)]
 [Route("api/app/workflow/source")]
 public sealed class WorkflowIdeAppService : ApplicationService
 {

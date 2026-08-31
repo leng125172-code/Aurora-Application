@@ -1,3 +1,7 @@
+using System.Buffers.Binary;
+using System.Globalization;
+using System.Text;
+
 namespace AuroraStruct3D.OpenCV.File.PointCloud;
 
 /// <summary>
@@ -168,111 +172,368 @@ public class read_point_cloud : IOperator
     /// </summary>
     private (Mat, Mat?) ReadPlyFile(string filePath)
     {
-        var points = new List<float[]>();
-        var colors = new List<byte[]>();
-        bool hasColor = false;
-        bool hasNormal = false;
-        int vertexCount = 0;
+        using FileStream stream = new(
+            filePath,
+            FileMode.Open,
+            FileAccess.Read,
+            FileShare.Read,
+            64 * 1024,
+            FileOptions.SequentialScan
+        );
+        PlyHeader header = ReadPlyHeader(stream);
+        var points = new List<float[]>(header.VertexCount);
+        var colors = header.HasColors ? new List<byte[]>(header.VertexCount) : null;
 
-        using (var reader = new StreamReader(filePath))
+        if (header.Format == PlyFormat.Ascii)
         {
-            string? line;
-            bool inHeader = true;
-            bool inVertexSection = false;
+            ReadAsciiPlyVertices(stream, header, points, colors);
+        }
+        else
+        {
+            ReadBinaryPlyVertices(stream, header, points, colors);
+        }
 
-            while ((line = reader.ReadLine()) != null)
+        return (
+            ConvertToMat(points),
+            colors is { Count: > 0 } ? ConvertColorsToMat(colors) : null
+        );
+    }
+
+    private static PlyHeader ReadPlyHeader(Stream stream)
+    {
+        string? firstLine = ReadAsciiLine(stream);
+        if (!string.Equals(firstLine?.Trim(), "ply", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidDataException("PLY 文件头无效：缺少 ply 标识。");
+
+        PlyFormat? format = null;
+        int vertexCount = -1;
+        bool readingVertexProperties = false;
+        var properties = new List<PlyProperty>();
+
+        while (true)
+        {
+            string line = ReadAsciiLine(stream)?.Trim()
+                ?? throw new InvalidDataException("PLY 文件头不完整：缺少 end_header。");
+            if (line.Length == 0 || line.StartsWith("comment ", StringComparison.OrdinalIgnoreCase))
+                continue;
+            if (line.Equals("end_header", StringComparison.OrdinalIgnoreCase))
+                break;
+
+            string[] parts = line.Split(
+                (char[]?)null,
+                StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries
+            );
+            if (parts.Length >= 3 && parts[0].Equals("format", StringComparison.OrdinalIgnoreCase))
             {
-                line = line.Trim();
-
-                if (inHeader)
+                format = parts[1].ToLowerInvariant() switch
                 {
-                    if (line.StartsWith("element vertex", StringComparison.OrdinalIgnoreCase))
-                    {
-                        vertexCount = int.Parse(line.Split(' ')[^1]);
-                    }
-                    else if (line.StartsWith("property", StringComparison.OrdinalIgnoreCase))
-                    {
-                        var parts = line.Split(' ');
-                        string propertyName = parts[^1].ToLower();
-
-                        if (
-                            propertyName == "red"
-                            || propertyName == "green"
-                            || propertyName == "blue"
-                        )
-                        {
-                            hasColor = true;
-                        }
-                        else if (
-                            propertyName == "nx"
-                            || propertyName == "ny"
-                            || propertyName == "nz"
-                        )
-                        {
-                            hasNormal = true;
-                        }
-                    }
-                    else if (line == "end_header")
-                    {
-                        inHeader = false;
-                        inVertexSection = true;
-                        continue;
-                    }
-                }
-                else if (inVertexSection)
+                    "ascii" => PlyFormat.Ascii,
+                    "binary_little_endian" => PlyFormat.BinaryLittleEndian,
+                    "binary_big_endian" => PlyFormat.BinaryBigEndian,
+                    _ => throw new InvalidDataException($"不支持的 PLY 编码格式：{parts[1]}。"),
+                };
+            }
+            else if (
+                parts.Length >= 3
+                && parts[0].Equals("element", StringComparison.OrdinalIgnoreCase)
+            )
+            {
+                readingVertexProperties = parts[1].Equals(
+                    "vertex",
+                    StringComparison.OrdinalIgnoreCase
+                );
+                if (readingVertexProperties)
                 {
-                    if (string.IsNullOrWhiteSpace(line))
-                        continue;
-
-                    var values = line.Split(
-                        new[] { ' ', '\t' },
-                        StringSplitOptions.RemoveEmptyEntries
-                    );
-
-                    if (values.Length >= 3)
-                    {
-                        int columnCount = 3;
-                        if (hasNormal)
-                            columnCount += 3;
-
-                        var point = new float[columnCount];
-                        point[0] = float.Parse(values[0]);
-                        point[1] = float.Parse(values[1]);
-                        point[2] = float.Parse(values[2]);
-
-                        int normalValueOffset = 3;
-                        if (hasColor && values.Length >= 6)
-                        {
-                            colors.Add(
-                                new[]
-                                {
-                                    (byte)float.Parse(values[5]), // B
-                                    (byte)float.Parse(values[4]), // G
-                                    (byte)float.Parse(values[3]), // R
-                                }
-                            );
-                            normalValueOffset = 6;
-                        }
-
-                        if (hasNormal && values.Length >= normalValueOffset + 3)
-                        {
-                            // 坐标 Mat 的法向量始终位于列 3..5；normalValueOffset 仅表示
-                            // PLY 文本中的法向量位置（颜色存在时为 6..8）。
-                            point[3] = float.Parse(values[normalValueOffset]);
-                            point[4] = float.Parse(values[normalValueOffset + 1]);
-                            point[5] = float.Parse(values[normalValueOffset + 2]);
-                        }
-
-                        points.Add(point);
-                    }
-
-                    if (points.Count >= vertexCount && vertexCount > 0)
-                        break;
+                    if (
+                        !int.TryParse(
+                            parts[2],
+                            NumberStyles.None,
+                            CultureInfo.InvariantCulture,
+                            out vertexCount
+                        )
+                        || vertexCount < 0
+                    )
+                        throw new InvalidDataException($"PLY 顶点数量无效：{parts[2]}。");
                 }
+            }
+            else if (
+                readingVertexProperties
+                && parts.Length >= 3
+                && parts[0].Equals("property", StringComparison.OrdinalIgnoreCase)
+            )
+            {
+                if (parts[1].Equals("list", StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidDataException("暂不支持顶点元素中的 PLY list 属性。");
+                properties.Add(new PlyProperty(parts[^1].ToLowerInvariant(), ParsePlyScalarType(parts[1])));
             }
         }
 
-        return (ConvertToMat(points), hasColor ? ConvertColorsToMat(colors) : null);
+        if (format is null)
+            throw new InvalidDataException("PLY 文件头不完整：缺少 format 声明。");
+        if (vertexCount < 0)
+            throw new InvalidDataException("PLY 文件头不完整：缺少 element vertex 声明。");
+
+        var header = new PlyHeader(format.Value, vertexCount, properties);
+        if (header.XIndex < 0 || header.YIndex < 0 || header.ZIndex < 0)
+            throw new InvalidDataException("PLY 顶点属性必须包含 x、y、z。");
+        return header;
+    }
+
+    private static void ReadAsciiPlyVertices(
+        Stream stream,
+        PlyHeader header,
+        List<float[]> points,
+        List<byte[]>? colors
+    )
+    {
+        using var reader = new StreamReader(
+            stream,
+            Encoding.ASCII,
+            detectEncodingFromByteOrderMarks: false,
+            bufferSize: 64 * 1024,
+            leaveOpen: true
+        );
+        while (points.Count < header.VertexCount)
+        {
+            string line = reader.ReadLine()
+                ?? throw new InvalidDataException(
+                    $"PLY 顶点数据提前结束：声明 {header.VertexCount}，实际 {points.Count}。"
+                );
+            if (string.IsNullOrWhiteSpace(line))
+                continue;
+
+            string[] values = line.Split(
+                (char[]?)null,
+                StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries
+            );
+            if (values.Length < header.Properties.Count)
+                throw new InvalidDataException(
+                    $"PLY 顶点第 {points.Count + 1} 行列数不足：需要 {header.Properties.Count}，实际 {values.Length}。"
+                );
+
+            double[] parsed = new double[header.Properties.Count];
+            for (int i = 0; i < parsed.Length; i++)
+            {
+                if (!double.TryParse(values[i], NumberStyles.Float, CultureInfo.InvariantCulture, out parsed[i]))
+                    throw new InvalidDataException(
+                        $"PLY 顶点第 {points.Count + 1} 行属性 {header.Properties[i].Name} 不是有效数字。"
+                    );
+            }
+            AddPlyVertex(header, parsed, points, colors);
+        }
+    }
+
+    private static void ReadBinaryPlyVertices(
+        Stream stream,
+        PlyHeader header,
+        List<float[]> points,
+        List<byte[]>? colors
+    )
+    {
+        using var reader = new BinaryReader(stream, Encoding.ASCII, leaveOpen: true);
+        bool littleEndian = header.Format == PlyFormat.BinaryLittleEndian;
+        try
+        {
+            for (int row = 0; row < header.VertexCount; row++)
+            {
+                double[] values = new double[header.Properties.Count];
+                for (int i = 0; i < values.Length; i++)
+                    values[i] = ReadPlyScalar(reader, header.Properties[i].Type, littleEndian);
+                AddPlyVertex(header, values, points, colors);
+            }
+        }
+        catch (EndOfStreamException ex)
+        {
+            throw new InvalidDataException(
+                $"PLY 二进制顶点数据提前结束：声明 {header.VertexCount}，实际 {points.Count}。",
+                ex
+            );
+        }
+    }
+
+    private static void AddPlyVertex(
+        PlyHeader header,
+        double[] values,
+        List<float[]> points,
+        List<byte[]>? colors
+    )
+    {
+        var point = new float[header.HasNormals ? 6 : 3];
+        point[0] = checked((float)values[header.XIndex]);
+        point[1] = checked((float)values[header.YIndex]);
+        point[2] = checked((float)values[header.ZIndex]);
+        if (header.HasNormals)
+        {
+            point[3] = checked((float)values[header.NxIndex]);
+            point[4] = checked((float)values[header.NyIndex]);
+            point[5] = checked((float)values[header.NzIndex]);
+        }
+        points.Add(point);
+
+        if (colors is not null)
+        {
+            colors.Add(
+                [
+                    ToColorByte(values[header.BlueIndex]),
+                    ToColorByte(values[header.GreenIndex]),
+                    ToColorByte(values[header.RedIndex]),
+                ]
+            );
+        }
+    }
+
+    private static byte ToColorByte(double value) =>
+        (byte)Math.Clamp(Math.Round(value), byte.MinValue, byte.MaxValue);
+
+    private static string? ReadAsciiLine(Stream stream)
+    {
+        var bytes = new List<byte>(128);
+        while (true)
+        {
+            int value = stream.ReadByte();
+            if (value < 0)
+                return bytes.Count == 0 ? null : Encoding.ASCII.GetString(bytes.ToArray());
+            if (value == '\n')
+                break;
+            if (value != '\r')
+                bytes.Add((byte)value);
+        }
+        return Encoding.ASCII.GetString(bytes.ToArray());
+    }
+
+    private static PlyScalarType ParsePlyScalarType(string value) =>
+        value.ToLowerInvariant() switch
+        {
+            "char" or "int8" => PlyScalarType.Int8,
+            "uchar" or "uint8" => PlyScalarType.UInt8,
+            "short" or "int16" => PlyScalarType.Int16,
+            "ushort" or "uint16" => PlyScalarType.UInt16,
+            "int" or "int32" => PlyScalarType.Int32,
+            "uint" or "uint32" => PlyScalarType.UInt32,
+            "float" or "float32" => PlyScalarType.Float32,
+            "double" or "float64" => PlyScalarType.Float64,
+            _ => throw new InvalidDataException($"不支持的 PLY 属性类型：{value}。"),
+        };
+
+    private static double ReadPlyScalar(
+        BinaryReader reader,
+        PlyScalarType type,
+        bool littleEndian
+    ) =>
+        type switch
+        {
+            PlyScalarType.Int8 => unchecked((sbyte)reader.ReadByte()),
+            PlyScalarType.UInt8 => reader.ReadByte(),
+            PlyScalarType.Int16 => ReadInt16(reader, littleEndian),
+            PlyScalarType.UInt16 => ReadUInt16(reader, littleEndian),
+            PlyScalarType.Int32 => ReadInt32(reader, littleEndian),
+            PlyScalarType.UInt32 => ReadUInt32(reader, littleEndian),
+            PlyScalarType.Float32 => BitConverter.Int32BitsToSingle(ReadInt32(reader, littleEndian)),
+            PlyScalarType.Float64 => BitConverter.Int64BitsToDouble(ReadInt64(reader, littleEndian)),
+            _ => throw new InvalidDataException($"不支持的 PLY 属性类型：{type}。"),
+        };
+
+    private static short ReadInt16(BinaryReader reader, bool littleEndian)
+    {
+        Span<byte> bytes = stackalloc byte[2];
+        reader.BaseStream.ReadExactly(bytes);
+        return littleEndian
+            ? BinaryPrimitives.ReadInt16LittleEndian(bytes)
+            : BinaryPrimitives.ReadInt16BigEndian(bytes);
+    }
+
+    private static ushort ReadUInt16(BinaryReader reader, bool littleEndian)
+    {
+        Span<byte> bytes = stackalloc byte[2];
+        reader.BaseStream.ReadExactly(bytes);
+        return littleEndian
+            ? BinaryPrimitives.ReadUInt16LittleEndian(bytes)
+            : BinaryPrimitives.ReadUInt16BigEndian(bytes);
+    }
+
+    private static int ReadInt32(BinaryReader reader, bool littleEndian)
+    {
+        Span<byte> bytes = stackalloc byte[4];
+        reader.BaseStream.ReadExactly(bytes);
+        return littleEndian
+            ? BinaryPrimitives.ReadInt32LittleEndian(bytes)
+            : BinaryPrimitives.ReadInt32BigEndian(bytes);
+    }
+
+    private static uint ReadUInt32(BinaryReader reader, bool littleEndian)
+    {
+        Span<byte> bytes = stackalloc byte[4];
+        reader.BaseStream.ReadExactly(bytes);
+        return littleEndian
+            ? BinaryPrimitives.ReadUInt32LittleEndian(bytes)
+            : BinaryPrimitives.ReadUInt32BigEndian(bytes);
+    }
+
+    private static long ReadInt64(BinaryReader reader, bool littleEndian)
+    {
+        Span<byte> bytes = stackalloc byte[8];
+        reader.BaseStream.ReadExactly(bytes);
+        return littleEndian
+            ? BinaryPrimitives.ReadInt64LittleEndian(bytes)
+            : BinaryPrimitives.ReadInt64BigEndian(bytes);
+    }
+
+    private enum PlyFormat
+    {
+        Ascii,
+        BinaryLittleEndian,
+        BinaryBigEndian,
+    }
+
+    private enum PlyScalarType
+    {
+        Int8,
+        UInt8,
+        Int16,
+        UInt16,
+        Int32,
+        UInt32,
+        Float32,
+        Float64,
+    }
+
+    private sealed record PlyProperty(string Name, PlyScalarType Type);
+
+    private sealed class PlyHeader
+    {
+        public PlyHeader(PlyFormat format, int vertexCount, List<PlyProperty> properties)
+        {
+            Format = format;
+            VertexCount = vertexCount;
+            Properties = properties;
+            XIndex = Find("x");
+            YIndex = Find("y");
+            ZIndex = Find("z");
+            NxIndex = Find("nx");
+            NyIndex = Find("ny");
+            NzIndex = Find("nz");
+            RedIndex = Find("red");
+            GreenIndex = Find("green");
+            BlueIndex = Find("blue");
+        }
+
+        public PlyFormat Format { get; }
+        public int VertexCount { get; }
+        public List<PlyProperty> Properties { get; }
+        public int XIndex { get; }
+        public int YIndex { get; }
+        public int ZIndex { get; }
+        public int NxIndex { get; }
+        public int NyIndex { get; }
+        public int NzIndex { get; }
+        public int RedIndex { get; }
+        public int GreenIndex { get; }
+        public int BlueIndex { get; }
+        public bool HasNormals => NxIndex >= 0 && NyIndex >= 0 && NzIndex >= 0;
+        public bool HasColors => RedIndex >= 0 && GreenIndex >= 0 && BlueIndex >= 0;
+
+        private int Find(string name) =>
+            Properties.FindIndex(property => property.Name.Equals(name, StringComparison.Ordinal));
     }
 
     /// <summary>

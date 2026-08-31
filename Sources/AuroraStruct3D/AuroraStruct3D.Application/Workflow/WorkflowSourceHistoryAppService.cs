@@ -8,6 +8,7 @@ using Volo.Abp;
 
 namespace AuroraStruct3D.Workflow;
 
+[Authorize(AuroraStruct3D.Permissions.AuroraStruct3DAccessPermissions.Management)]
 [Route("api/app/workflow")]
 public sealed class WorkflowSourceHistoryAppService : ApplicationService
 {

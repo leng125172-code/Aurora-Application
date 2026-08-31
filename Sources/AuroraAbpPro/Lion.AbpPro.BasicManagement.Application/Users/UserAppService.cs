@@ -77,6 +77,7 @@ namespace Lion.AbpPro.BasicManagement.Users
             );
         }
 
+        [Authorize(IdentityPermissions.Users.Default)]
         public async Task<List<IdentityUserDto>> ListAllAsync(PagingUserListInput input)
         {
             var request = new GetIdentityUsersInput
@@ -130,9 +131,6 @@ namespace Lion.AbpPro.BasicManagement.Users
         [Authorize(IdentityPermissions.Users.Create)]
         public virtual async Task<IdentityUserDto> CreateAsync(IdentityUserCreateDto input)
         {
-            // abp 5.0 之后新增字段,是否运行用户登录，默认设置为true
-            input.IsActive = true;
-            input.LockoutEnabled = true;
             return await _identityUserAppService.CreateAsync(input);
         }
 
@@ -157,6 +155,7 @@ namespace Lion.AbpPro.BasicManagement.Users
         /// <summary>
         /// 获取用户角色信息
         /// </summary>
+        [Authorize(IdentityPermissions.Users.Default)]
         public virtual async Task<ListResultDto<IdentityRoleDto>> GetRoleByUserId(IdInput input)
         {
             var roles = await _identityUserRepository.GetRolesAsync(input.Id);
@@ -259,6 +258,27 @@ namespace Lion.AbpPro.BasicManagement.Users
             var identityUser = await _userManager.GetByIdAsync(input.UserId);
             identityUser.SetIsActive(input.Locked);
             await _userManager.UpdateAsync(identityUser);
+        }
+
+        /// <summary>
+        /// 启用或禁用用户。该接口使用含义明确的 IsActive 字段，替代历史 Lock 接口。
+        /// </summary>
+        [Authorize(BasicManagementPermissions.SystemManagement.UserEnable)]
+        public virtual async Task SetActiveAsync(SetUserActiveInput input)
+        {
+            var identityUser = await _userManager.GetByIdAsync(input.UserId);
+            identityUser.SetIsActive(input.IsActive);
+            (await _userManager.UpdateAsync(identityUser)).CheckErrors();
+        }
+
+        /// <summary>
+        /// 更新用户所属角色
+        /// </summary>
+        [Authorize(IdentityPermissions.Users.ManageRoles)]
+        public virtual async Task UpdateRolesAsync(UpdateUserRolesInput input)
+        {
+            var identityUser = await _userManager.GetByIdAsync(input.UserId);
+            (await _userManager.SetRolesAsync(identityUser, input.RoleNames)).CheckErrors();
         }
 
         /// <summary>

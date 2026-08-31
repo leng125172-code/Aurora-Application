@@ -13,6 +13,7 @@ using Volo.Abp.Uow;
 
 namespace AuroraStruct3D.Workflow;
 
+[Authorize(AuroraStruct3D.Permissions.AuroraStruct3DAccessPermissions.Management)]
 [Route("api/app/workflow/migration-batches")]
 public sealed class WorkflowMigrationBatchAppService : ApplicationService
 {

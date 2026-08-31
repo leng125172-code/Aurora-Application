@@ -23,6 +23,7 @@ public class cloud_compare : IOperator
             new MatImg() { ParameterName = "transform_matrix", DisplayName = "变换矩阵" },
             new MatImg() { ParameterName = "distance_mat", DisplayName = "距离矩阵" },
             new MatImg() { ParameterName = "distance_image", DisplayName = "距离图像" },
+            new MatImg() { ParameterName = "anomaly_image", DisplayName = "异常区域标注图" },
             InspectionResults.Output<CloudCompareResult>("点云比较结果"),
         };
 
@@ -149,6 +150,15 @@ public class cloud_compare : IOperator
                 Required = false,
                 ControlType = PortControlType.Input,
             },
+            new ConfigParameter
+            {
+                Name = "checkMissingSurface",
+                DisplayName = "检查未扫描表面",
+                ParameterType = typeof(bool),
+                DefaultValue = "true",
+                Required = false,
+                ControlType = PortControlType.Switch,
+            },
         };
 
     private readonly bool _useCoarseRegistration;
@@ -161,6 +171,7 @@ public class cloud_compare : IOperator
     private readonly double _maxDefectRatio;
     private readonly double _maxMeanDistance;
     private readonly double _maxMissingRatio;
+    private readonly bool _checkMissingSurface;
     private readonly double _minCoarseInlierRatio;
     private readonly double _minFineCorrespondenceRatio;
     private readonly double _maxRegistrationRmse;
@@ -173,6 +184,40 @@ public class cloud_compare : IOperator
         PropertyNameCaseInsensitive = true,
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
     };
+
+    // 兼容升级前已经持久化的工作流。运行时按实参数量反射查找构造函数，
+    // 可选参数不会让 14 参数构造函数自动匹配旧的 13 参数调用。
+    public cloud_compare(
+        bool useCoarseRegistration,
+        string registrationMethod,
+        int maxIterations,
+        double maxCorrespondenceDistance,
+        double distanceThreshold,
+        int imageResolution,
+        double voxelSize,
+        double maxDefectRatio,
+        double maxMeanDistance,
+        double maxMissingRatio,
+        double minCoarseInlierRatio,
+        double minFineCorrespondenceRatio,
+        double maxRegistrationRmse
+    )
+        : this(
+            useCoarseRegistration,
+            registrationMethod,
+            maxIterations,
+            maxCorrespondenceDistance,
+            distanceThreshold,
+            imageResolution,
+            voxelSize,
+            maxDefectRatio,
+            maxMeanDistance,
+            maxMissingRatio,
+            minCoarseInlierRatio,
+            minFineCorrespondenceRatio,
+            maxRegistrationRmse,
+            checkMissingSurface: true
+        ) { }
 
     public cloud_compare(
         bool useCoarseRegistration = true,
@@ -187,7 +232,8 @@ public class cloud_compare : IOperator
         double maxMissingRatio = 0,
         double minCoarseInlierRatio = 0.1,
         double minFineCorrespondenceRatio = 0.15,
-        double maxRegistrationRmse = 0
+        double maxRegistrationRmse = 0,
+        bool checkMissingSurface = true
     )
     {
         _useCoarseRegistration = useCoarseRegistration;
@@ -226,6 +272,7 @@ public class cloud_compare : IOperator
         _maxDefectRatio = maxDefectRatio;
         _maxMeanDistance = maxMeanDistance;
         _maxMissingRatio = maxMissingRatio;
+        _checkMissingSurface = checkMissingSurface;
         _minCoarseInlierRatio = minCoarseInlierRatio;
         _minFineCorrespondenceRatio = minFineCorrespondenceRatio;
         _maxRegistrationRmse = maxRegistrationRmse;
@@ -440,7 +487,7 @@ public class cloud_compare : IOperator
             alignedCloud,
             forwardDistance.Distances,
             _imageResolution,
-            Math.Max(forwardDistance.MaxDistance, _distanceThreshold)
+            _distanceThreshold
         );
 
         double rotationAngle = ComputeRotationAngle(accumR);
@@ -456,13 +503,20 @@ public class cloud_compare : IOperator
             : 1;
         bool isOk =
             defectRatio <= _maxDefectRatio
-            && missingRatio <= _maxMissingRatio
+            && (!_checkMissingSurface || missingRatio <= _maxMissingRatio)
             && forwardDistance.MeanDistance <= _maxMeanDistance;
+
+        Mat anomalyImage = GenerateAnomalyAnnotation(
+            alignedCloud,
+            forwardDistance.Distances,
+            distanceImage,
+            _distanceThreshold
+        );
 
         List<string> reasons = [];
         if (defectRatio > _maxDefectRatio)
             reasons.Add($"超差点比例 {defectRatio:P2} > {_maxDefectRatio:P2}");
-        if (missingRatio > _maxMissingRatio)
+        if (_checkMissingSurface && missingRatio > _maxMissingRatio)
             reasons.Add($"缺失点比例 {missingRatio:P2} > {_maxMissingRatio:P2}");
         if (forwardDistance.MeanDistance > _maxMeanDistance)
             reasons.Add(
@@ -502,6 +556,7 @@ public class cloud_compare : IOperator
             MaxMeanDistance = _maxMeanDistance,
             MissingRatio = missingRatio,
             MaxMissingRatio = _maxMissingRatio,
+            MissingSurfaceCheckEnabled = _checkMissingSurface,
             EffectiveVoxelSizeMm = effectiveVoxelSize,
             EffectiveMaxCorrespondenceDistanceMm = effectiveMaxCorrespondenceDistance,
             SourceRegistrationPointCount = workingSource.Rows,
@@ -530,6 +585,7 @@ public class cloud_compare : IOperator
         context.Set("transform_matrix", transformMatrix);
         context.Set("distance_mat", forwardDistance.Distances);
         context.Set("distance_image", distanceImage);
+        context.Set("anomaly_image", anomalyImage);
         context.Set(
             "result",
             new InspectionResult<CloudCompareResult>
@@ -1361,7 +1417,25 @@ public class cloud_compare : IOperator
         int srcCount = srcX.Length;
         int tgtCount = tgtX.Length;
 
-        var grid = new SpatialHashGrid(tgtX, tgtY, tgtZ, (float)maxCorrespondenceDistance, tgtCount);
+        var index = new KdTree3D(tgtX, tgtY, tgtZ, tgtCount);
+        var nearestSquaredDistances = new double[srcCount];
+        Parallel.For(
+            0,
+            srcCount,
+            i =>
+            {
+                int nearestIdx = index.FindNearestNeighborWithin(
+                    srcX[i],
+                    srcY[i],
+                    srcZ[i],
+                    maxCorrespondenceDistance,
+                    out double distSq
+                );
+                nearestSquaredDistances[i] = nearestIdx >= 0
+                    ? distSq
+                    : double.MaxValue;
+            }
+        );
 
         Mat distances = new Mat(srcCount, 1, MatType.CV_64FC1);
         double maxDist = 0;
@@ -1374,14 +1448,8 @@ public class cloud_compare : IOperator
 
         for (int i = 0; i < srcCount; i++)
         {
-            int nearestIdx = grid.FindNearestNeighborWithin(
-                srcX[i],
-                srcY[i],
-                srcZ[i],
-                maxCorrespondenceDistance,
-                out double distSq
-            );
-            if (nearestIdx >= 0)
+            double distSq = nearestSquaredDistances[i];
+            if (distSq < double.MaxValue)
             {
                 double dist = Math.Sqrt(distSq);
                 distances.Set(i, 0, dist);
@@ -1467,7 +1535,9 @@ public class cloud_compare : IOperator
             countImage.Set(py, px, countImage.Get<int>(py, px) + 1);
         }
 
-        using Mat normalizedMat = new Mat(resolution, resolution, MatType.CV_8UC1);
+        // 未被点云覆盖的区域保持黑色。有效点按固定检测阈值着色：
+        // 0 mm 为绿色，半阈值为黄色，达到或超过阈值为红色。
+        Mat colorMap = Mat.Zeros(resolution, resolution, MatType.CV_8UC3);
         double effectiveMax = maxDist > 0 ? maxDist : 1.0;
         for (int y = 0; y < resolution; y++)
         {
@@ -1477,15 +1547,157 @@ public class cloud_compare : IOperator
                 if (count > 0)
                 {
                     double avg = accumImage.Get<double>(y, x) / count;
-                    byte val = (byte)Math.Clamp(avg / effectiveMax * 255, 0, 255);
-                    normalizedMat.Set(y, x, val);
+                    double ratio = Math.Clamp(avg / effectiveMax, 0, 1);
+                    byte red;
+                    byte green;
+                    if (ratio <= 0.5)
+                    {
+                        red = (byte)Math.Round(ratio * 2 * 255);
+                        green = 255;
+                    }
+                    else
+                    {
+                        red = 255;
+                        green = (byte)Math.Round((1 - ratio) * 2 * 255);
+                    }
+                    colorMap.Set(y, x, new Vec3b(0, green, red));
                 }
             }
         }
-
-        Mat colorMap = new Mat();
-        Cv2.ApplyColorMap(normalizedMat, colorMap, ColormapTypes.Jet);
         return colorMap;
+    }
+
+    /// <summary>
+    /// 在距离伪彩图上把超过距离阈值或没有有效模型对应点的投影区域标为红色轮廓。
+    /// 投影范围与 <see cref="GenerateDistanceHeatmap"/> 完全一致，保证轮廓和热力图对齐。
+    /// </summary>
+    private static Mat GenerateAnomalyAnnotation(
+        Mat pointCloud,
+        Mat distances,
+        Mat distanceImage,
+        double distanceThreshold
+    )
+    {
+        int pointCount = pointCloud.Rows;
+        int width = distanceImage.Cols;
+        int height = distanceImage.Rows;
+        Mat output = distanceImage.Clone();
+
+        float minX = float.MaxValue,
+            maxX = float.MinValue;
+        float minY = float.MaxValue,
+            maxY = float.MinValue;
+        for (int i = 0; i < pointCount; i++)
+        {
+            float x = pointCloud.Get<float>(i, 0);
+            float y = pointCloud.Get<float>(i, 1);
+            if (x < minX)
+                minX = x;
+            if (x > maxX)
+                maxX = x;
+            if (y < minY)
+                minY = y;
+            if (y > maxY)
+                maxY = y;
+        }
+
+        float rangeX = maxX - minX;
+        float rangeY = maxY - minY;
+        if (rangeX < 1e-6f)
+            rangeX = 1;
+        if (rangeY < 1e-6f)
+            rangeY = 1;
+
+        using Mat rawMask = Mat.Zeros(height, width, MatType.CV_8UC1);
+        int anomalyPointCount = 0;
+        for (int i = 0; i < pointCount; i++)
+        {
+            double distance = distances.Get<double>(i, 0);
+            bool unmatched = !double.IsFinite(distance) || distance >= double.MaxValue;
+            if (!unmatched && distance <= distanceThreshold)
+                continue;
+
+            int px = (int)((pointCloud.Get<float>(i, 0) - minX) / rangeX * (width - 1));
+            int py = (int)((pointCloud.Get<float>(i, 1) - minY) / rangeY * (height - 1));
+            rawMask.Set(Math.Clamp(py, 0, height - 1), Math.Clamp(px, 0, width - 1), (byte)255);
+            anomalyPointCount++;
+        }
+
+        using Mat connectedMask = new();
+        using Mat kernel = Cv2.GetStructuringElement(MorphShapes.Ellipse, new Size(5, 5));
+        Cv2.MorphologyEx(
+            rawMask,
+            connectedMask,
+            MorphTypes.Close,
+            kernel,
+            iterations: 2
+        );
+        Cv2.Dilate(connectedMask, connectedMask, kernel, iterations: 1);
+        Cv2.FindContours(
+            connectedMask,
+            out Point[][] allContours,
+            out HierarchyIndex[] _,
+            RetrievalModes.External,
+            ContourApproximationModes.ApproxSimple
+        );
+
+        double minimumArea = Math.Max(9, width * height * 0.00005);
+        Point[][] contours = allContours
+            .Where(contour => Cv2.ContourArea(contour) >= minimumArea)
+            .OrderByDescending(contour => Cv2.ContourArea(contour))
+            .ToArray();
+
+        if (contours.Length > 0)
+        {
+            using Mat overlay = output.Clone();
+            Cv2.DrawContours(overlay, contours, -1, new Scalar(0, 0, 255), -1);
+            Cv2.AddWeighted(overlay, 0.28, output, 0.72, 0, output);
+            Cv2.DrawContours(output, contours, -1, new Scalar(0, 0, 255), 2);
+
+            int labelCount = Math.Min(contours.Length, 20);
+            for (int index = 0; index < labelCount; index++)
+            {
+                Rect rect = Cv2.BoundingRect(contours[index]);
+                Point origin = new(rect.X, Math.Max(18, rect.Y - 4));
+                string label = $"NG-{index + 1}";
+                Cv2.PutText(
+                    output,
+                    label,
+                    origin + new Point(1, 1),
+                    HersheyFonts.HersheySimplex,
+                    0.45,
+                    Scalar.Black,
+                    3
+                );
+                Cv2.PutText(
+                    output,
+                    label,
+                    origin,
+                    HersheyFonts.HersheySimplex,
+                    0.45,
+                    new Scalar(0, 0, 255),
+                    1
+                );
+            }
+        }
+
+        string summary = anomalyPointCount > 0
+            ? $"ANOMALY AREAS: {contours.Length}  POINTS: {anomalyPointCount}  > {distanceThreshold:F3} mm"
+            : $"NO ANOMALY > {distanceThreshold:F3} mm";
+        Scalar summaryColor = anomalyPointCount > 0
+            ? new Scalar(0, 0, 255)
+            : new Scalar(0, 200, 0);
+        Cv2.Rectangle(output, new Rect(0, 0, width, 34), new Scalar(20, 20, 20), -1);
+        Cv2.PutText(
+            output,
+            summary,
+            new Point(10, 23),
+            HersheyFonts.HersheySimplex,
+            0.5,
+            summaryColor,
+            1
+        );
+        return output;
     }
 
     private static double ComputeRotationAngle(double[] R)
@@ -1845,6 +2057,7 @@ public class cloud_compare : IOperator
         public double MaxMeanDistance { get; set; }
         public double MissingRatio { get; set; }
         public double MaxMissingRatio { get; set; }
+        public bool MissingSurfaceCheckEnabled { get; set; }
         public double EffectiveVoxelSizeMm { get; set; }
         public double EffectiveMaxCorrespondenceDistanceMm { get; set; }
         public int SourceRegistrationPointCount { get; set; }

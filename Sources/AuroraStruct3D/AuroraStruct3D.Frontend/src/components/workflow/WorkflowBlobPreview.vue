@@ -13,6 +13,7 @@ import { httpClient } from '@/api/client'
 import WorkflowJsonTree from '@/components/workflow/WorkflowJsonTree.vue'
 import { useThemeStore } from '@/stores/theme'
 import {
+    workflowResultBlobKey,
     workflowResultFileExtension,
     workflowResultFileName,
     type WorkflowResultPresentation,
@@ -87,7 +88,7 @@ async function fetchBlob(): Promise<Blob> {
         ? '/api/app/operator-file/preview'
         : '/api/app/operator-file/download'
     const response = await httpClient.get(endpoint, {
-        params: { blobName: props.blobKey },
+        params: { blobName: workflowResultBlobKey(props.blobKey) },
         responseType: 'blob',
     })
     return response.data as Blob

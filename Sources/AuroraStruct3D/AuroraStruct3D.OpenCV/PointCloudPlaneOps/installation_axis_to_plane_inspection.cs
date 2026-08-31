@@ -79,6 +79,15 @@ public sealed class installation_axis_to_plane_inspection : IOperator
         if (axisRmse > _maxRmse) reasons.Add("轴线拟合残差过大");
         bool valid = reasons.Count == 0;
         bool ok = valid && Math.Abs(dx) <= _maxX && Math.Abs(dy) <= _maxY && total <= _maxTotal;
+        if (valid)
+        {
+            if (Math.Abs(dx) > _maxX)
+                reasons.Add($"X方向偏差 {dx:F3}° 超过允许值 ±{_maxX:F3}°");
+            if (Math.Abs(dy) > _maxY)
+                reasons.Add($"Y方向偏差 {dy:F3}° 超过允许值 ±{_maxY:F3}°");
+            if (total > _maxTotal)
+                reasons.Add($"合成偏差 {total:F3}° 超过 {_maxTotal:F3}°");
+        }
         string status = !valid ? "UNKNOWN" : ok ? "OK" : "NG";
         SetResult(context, status, valid, ok, new InstallationAxisInspectionDetails
         {

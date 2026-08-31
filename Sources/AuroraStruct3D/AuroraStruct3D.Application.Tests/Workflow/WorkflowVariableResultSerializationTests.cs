@@ -1,9 +1,5 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using AuroraStruct3D.OpenCV.File.Images;
-using AuroraStruct3D.OpenCV.File.PointCloud;
-using AuroraStruct3D.OpenCV.Workflow;
-using AuroraStruct3D.OpenCV.Workflow.Statements;
 using AuroraStruct3D.OpenCV.Workflow.Values;
 using AuroraStruct3D.Workflow.Dtos;
 using AuroraStruct3D.Workflow.Runtime;
@@ -77,6 +73,17 @@ public class WorkflowVariableResultSerializationTests
     }
 
     [Fact]
+    public void Runtime_string_snapshot_should_not_add_json_quotes()
+    {
+        const string url =
+            "/api/app/operator-file/download?blobName=workflow-results%2Fresult.ply";
+
+        string? scalarValue = WorkflowValueSerializer.ScalarToString(url);
+
+        Assert.Equal(url, scalarValue);
+    }
+
+    [Fact]
     public void Blob_key_should_remain_an_unchanged_string_value()
     {
         const string blobKey = "workflow-results/2026/07/result.PLY";
@@ -100,35 +107,48 @@ public class WorkflowVariableResultSerializationTests
 
     [Theory]
     [InlineData(
-        "/api/app/operator-file/preview?blobName=workflow-image%2F20260729210625_132_height-diff-result.png"
+        "/api/app/operator-file/preview?blobName=workflow-image%2Fheight-diff-result.png"
     )]
     [InlineData(
-        "http://localhost:5000/api/app/operator-file/download?blobName=workflow-image%2Fresult.png&download=true"
+        "/api/app/operator-file/download?blobName=workflow-results%2Fpose-aligned-cloud.ply"
     )]
-    public void Legacy_operator_file_url_should_be_normalized_to_blob_key(string value)
+    public void Legacy_json_wrapped_string_snapshot_should_be_unwrapped(string value)
     {
-        object? normalized = WorkflowRuntimeAppService.NormalizeExecutionResultValue(value);
+        WorkflowVariableResultDto output = new()
+        {
+            Name = "file_download_url",
+            ValueType = WorkflowValueTypes.String,
+            ScalarValue = JsonSerializer.Serialize(value),
+        };
 
-        Assert.Equal(
-            value.Contains("height-diff", StringComparison.Ordinal)
-                ? "workflow-image/20260729210625_132_height-diff-result.png"
-                : "workflow-image/result.png",
-            normalized
-        );
-        Assert.Equal(
-            WorkflowValueTypes.String,
-            WorkflowValueSerializer.InferValueType(normalized)
-        );
+        Assert.Equal(value, output.Value);
     }
 
     [Fact]
-    public void Existing_blob_key_should_not_be_rewritten()
+    public void Debug_result_should_match_run_once_output_value_and_type()
     {
-        const string blobKey = "workflow-image/20260729210625_132_height-diff-result.png";
+        const string url =
+            "/api/app/operator-file/download?blobName=workflow-results%2Fpose-aligned-cloud.ply";
+        WorkflowVariableResultDto runOnceOutput = new()
+        {
+            Name = "pose_aligned_cloud_download_url",
+            DisplayName = "姿态对齐点云",
+            ValueType = WorkflowValueTypes.String,
+            ScalarValue = url,
+        };
 
-        object? normalized = WorkflowRuntimeAppService.NormalizeExecutionResultValue(blobKey);
+        WorkflowExecutionOutputResultDto debugOutput =
+            WorkflowRuntimeAppService.CreateExecutionOutputResult(
+                runOnceOutput,
+                runOnceOutput.DisplayName!
+            );
 
-        Assert.Equal(blobKey, normalized);
+        Assert.Equal(runOnceOutput.Name, debugOutput.Name);
+        Assert.Equal(runOnceOutput.DisplayName, debugOutput.DisplayName);
+        Assert.Equal(runOnceOutput.ValueType, debugOutput.ValueType);
+        Assert.Equal(runOnceOutput.Value, debugOutput.Value);
+        Assert.Equal(WorkflowValueTypes.String, debugOutput.ValueType);
+        Assert.Equal(url, debugOutput.Value);
     }
 
     [Fact]
@@ -136,38 +156,6 @@ public class WorkflowVariableResultSerializationTests
     {
         Assert.Equal("blob", WorkflowValueTypes.Blob);
         Assert.True(WorkflowValueTypes.IsScalar(WorkflowValueTypes.Blob));
-    }
-
-    [Fact]
-    public void Blob_type_should_be_derived_from_operator_output_provenance()
-    {
-        List<IWorkflowStatement> statements =
-        [
-            new OperatorCallStatement(
-                typeof(save_image_to_blob),
-                outputBindings: new Dictionary<string, OutputBinding>
-                {
-                    ["blob_name"] = new("image_blob"),
-                    ["download_url"] = new("legacy_image_url"),
-                }
-            ),
-            new OperatorCallStatement(
-                typeof(save_point_cloud_to_blob),
-                outputBindings: new Dictionary<string, OutputBinding>
-                {
-                    ["blob_name"] = new("cloud_blob"),
-                }
-            ),
-        ];
-        HashSet<string> blobVariables = new(StringComparer.Ordinal);
-
-        WorkflowRuntimeAppService.CollectBlobOutputVariables(statements, blobVariables);
-
-        Assert.Equal(3, blobVariables.Count);
-        Assert.Contains("image_blob", blobVariables);
-        Assert.Contains("legacy_image_url", blobVariables);
-        Assert.Contains("cloud_blob", blobVariables);
-        Assert.DoesNotContain("ordinary_text", blobVariables);
     }
 
     [Fact]

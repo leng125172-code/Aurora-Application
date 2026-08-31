@@ -1,4 +1,5 @@
 using AuroraStruct3D.OpenCV.File.PointCloud;
+using AuroraStruct3D.OpenCV.Common;
 using AuroraStruct3D.OpenCV.PointCloudDistance;
 using AuroraStruct3D.OpenCV.VisionParameters;
 using AuroraStruct3D.OpenCV.Workflow;
@@ -29,6 +30,10 @@ public class ProductModelComparisonOperatorTests
     {
         Assert.Contains(cloud_compare.OutputVisionParameters!, output =>
             output.ParameterName == "result" && typeof(InspectionResultBase).IsAssignableFrom(output.ParameterType));
+        Assert.Contains(
+            cloud_compare.OutputVisionParameters!,
+            output => output.ParameterName == "anomaly_image" && output is MatImg
+        );
         Assert.Contains(
             cloud_compare.ConfigParameters!,
             config => config.Name == "maxDefectRatio"
@@ -88,6 +93,70 @@ public class ProductModelComparisonOperatorTests
     }
 
     [Fact]
+    public void DistanceHeatmap_Should_Use_Green_Yellow_Red_Threshold_Gradient()
+    {
+        using Mat cloud = new(3, 3, MatType.CV_32FC1);
+        using Mat distances = new(3, 1, MatType.CV_64FC1);
+        for (int index = 0; index < 3; index++)
+        {
+            cloud.Set(index, 0, (float)index);
+            cloud.Set(index, 1, 0f);
+            cloud.Set(index, 2, 0f);
+            distances.Set(index, 0, index * 0.5);
+        }
+        System.Reflection.MethodInfo method = Assert.IsAssignableFrom<System.Reflection.MethodInfo>(
+            typeof(cloud_compare).GetMethod(
+                "GenerateDistanceHeatmap",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static
+            )
+        );
+        using Mat image = Assert.IsType<Mat>(method.Invoke(null, [cloud, distances, 9, 1.0]));
+
+        Assert.Equal(new Vec3b(0, 255, 0), image.Get<Vec3b>(0, 0));
+        Assert.Equal(new Vec3b(0, 255, 255), image.Get<Vec3b>(0, 4));
+        Assert.Equal(new Vec3b(0, 0, 255), image.Get<Vec3b>(0, 8));
+        Assert.Equal(new Vec3b(0, 0, 0), image.Get<Vec3b>(4, 4));
+    }
+
+    [Fact]
+    public void CloudCompare_Should_Keep_Thirteen_Argument_Workflow_Constructor_Compatible()
+    {
+        object? instance = Activator.CreateInstance(
+            typeof(cloud_compare),
+            false,
+            "icp",
+            10,
+            0.2,
+            0.01,
+            32,
+            0.001,
+            0.05,
+            0.05,
+            0.05,
+            0.1,
+            0.15,
+            0.1
+        );
+
+        Assert.IsType<cloud_compare>(instance).Dispose();
+    }
+
+    [Fact]
+    public void CloudCompare_Config_Order_Should_Match_Current_Workflow_Constructor()
+    {
+        string[] configNames = cloud_compare.ConfigParameters!.Select(config => config.Name).ToArray();
+        string[] constructorNames = typeof(cloud_compare)
+            .GetConstructors()
+            .OrderByDescending(constructor => constructor.GetParameters().Length)
+            .First()
+            .GetParameters()
+            .Select(parameter => parameter.Name!)
+            .ToArray();
+
+        Assert.Equal(constructorNames, configNames);
+    }
+
+    [Fact]
     public void CloudCompare_Should_Use_Capped_Registration_Cloud_But_Return_Full_Colored_Source()
     {
         const int width = 50;
@@ -138,6 +207,10 @@ public class ProductModelComparisonOperatorTests
         Assert.Equal(0, details.UnmatchedTargetPointCount);
         Assert.Equal(0.01, details.EffectiveVoxelSizeMm, 6);
         Assert.Equal(2, details.EffectiveMaxCorrespondenceDistanceMm, 6);
+        Mat anomalyImage = Assert.IsType<Mat>(context.Get("anomaly_image"));
+        Assert.Equal(32, anomalyImage.Rows);
+        Assert.Equal(32, anomalyImage.Cols);
+        Assert.Equal(3, anomalyImage.Channels());
     }
 
     [Fact]
@@ -175,6 +248,12 @@ public class ProductModelComparisonOperatorTests
         Assert.Equal(20, details.MatchedTargetPointCount);
         Assert.InRange(details.HeightDifference.MaxDistance, 0, 1e-5);
         Assert.InRange(details.RegistrationRmseMm, 0, 1e-5);
+
+        Mat distanceImage = Assert.IsType<Mat>(context.Get("distance_image"));
+        Vec3b emptyBackgroundPixel = distanceImage.Get<Vec3b>(16, 16);
+        Assert.Equal((byte)0, emptyBackgroundPixel.Item0);
+        Assert.Equal((byte)0, emptyBackgroundPixel.Item1);
+        Assert.Equal((byte)0, emptyBackgroundPixel.Item2);
     }
 
     [Fact]
@@ -333,6 +412,81 @@ public class ProductModelComparisonOperatorTests
         Assert.Equal(1, details.HeightDifference.DefectCount);
         Assert.Equal(1d / 21, details.HeightDifference.DefectRatio, 6);
         Assert.Equal(0, details.MissingRatio);
+        Mat distanceImage = Assert.IsType<Mat>(context.Get("distance_image"));
+        Mat anomalyImage = Assert.IsType<Mat>(context.Get("anomaly_image"));
+        using Mat difference = new();
+        using Mat differenceGray = new();
+        Cv2.Absdiff(distanceImage, anomalyImage, difference);
+        Cv2.CvtColor(difference, differenceGray, ColorConversionCodes.BGR2GRAY);
+        Assert.True(Cv2.CountNonZero(differenceGray) > 0);
+    }
+
+    [Fact]
+    public void CloudCompare_Partial_Surface_Mode_Should_Not_Reject_Unscanned_Model_Surfaces()
+    {
+        PointCloudData target = CreateAsymmetricCloudWithNormals(includeNormals: false);
+        Mat sourcePoints = new(10, 3, MatType.CV_32FC1);
+        for (int row = 0; row < sourcePoints.Rows; row++)
+        for (int col = 0; col < sourcePoints.Cols; col++)
+            sourcePoints.Set(row, col, target.PointCloud!.Get<float>(row, col));
+
+        using WorkflowContext context = new();
+        context.Set("source_cloud", new PointCloudData { Value = sourcePoints });
+        context.Set("target_cloud", target);
+        using var op = new cloud_compare(
+            useCoarseRegistration: false,
+            registrationMethod: "icp",
+            maxIterations: 10,
+            maxCorrespondenceDistance: 0.2,
+            distanceThreshold: 0.01,
+            imageResolution: 32,
+            voxelSize: 0.001,
+            maxDefectRatio: 0,
+            maxMeanDistance: 0.01,
+            maxMissingRatio: 0,
+            minFineCorrespondenceRatio: 0.9,
+            maxRegistrationRmse: 0.01,
+            checkMissingSurface: false
+        );
+
+        op.Execute(context);
+
+        InspectionResult<cloud_compare.CloudCompareResult> inspection = Assert.IsType<
+            InspectionResult<cloud_compare.CloudCompareResult>
+        >(context.Get("result"));
+        cloud_compare.CloudCompareResult details = Assert.IsType<cloud_compare.CloudCompareResult>(
+            inspection.details
+        );
+        Assert.True(inspection.isOk);
+        Assert.False(details.MissingSurfaceCheckEnabled);
+        Assert.Equal(0, details.HeightDifference.DefectRatio);
+        Assert.True(details.MissingRatio > 0);
+        Assert.DoesNotContain(inspection.reasons, reason => reason.Contains("缺失点比例"));
+    }
+
+    [Fact]
+    public void RotationFromCrossCovariance_Should_Return_Proper_Rotation_For_RankDeficient_Input()
+    {
+        double[] rotation = Math3D.RotationFromCrossCovariance(
+            1.2, -0.3, 0,
+            0.4, 0.8, 0,
+            0, 0, 0
+        );
+
+        for (int row = 0; row < 3; row++)
+        for (int col = 0; col < 3; col++)
+        {
+            double dot = 0;
+            for (int k = 0; k < 3; k++)
+                dot += rotation[row * 3 + k] * rotation[col * 3 + k];
+            Assert.InRange(Math.Abs(dot - (row == col ? 1 : 0)), 0, 1e-10);
+        }
+
+        double determinant =
+            rotation[0] * (rotation[4] * rotation[8] - rotation[5] * rotation[7])
+            - rotation[1] * (rotation[3] * rotation[8] - rotation[5] * rotation[6])
+            + rotation[2] * (rotation[3] * rotation[7] - rotation[4] * rotation[6]);
+        Assert.InRange(Math.Abs(determinant - 1), 0, 1e-10);
     }
 
     [Fact]

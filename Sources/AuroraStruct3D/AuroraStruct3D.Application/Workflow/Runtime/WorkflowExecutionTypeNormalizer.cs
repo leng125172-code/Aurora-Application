@@ -1,5 +1,6 @@
 using AuroraStruct3D.OpenCV.Workflow.Compilation;
 using AuroraStruct3D.OpenCV.Workflow.Values;
+using AuroraStruct3D.Variables;
 
 namespace AuroraStruct3D.Workflow.Runtime;
 
@@ -96,7 +97,10 @@ internal static class WorkflowExecutionTypeNormalizer
             return WorkflowValueTypes.PointCloud;
         }
 
-        return GetCanonicalTypeName(resolved);
+        string canonicalTypeName = GetCanonicalTypeName(resolved);
+        return canonicalTypeName.Length <= VariableDefinitionConsts.MaxTypeNameLength
+            ? canonicalTypeName
+            : "System.Object";
     }
 
     private static string GetCanonicalTypeName(Type type)

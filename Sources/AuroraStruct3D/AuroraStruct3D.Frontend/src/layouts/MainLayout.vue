@@ -32,6 +32,7 @@ onMounted(async () => {
                 roles: cfg.currentUser.roles ?? [],
             })
         }
+        auth.setGrantedPolicies(cfg.auth.grantedPolicies)
         tenant.setCurrent({
             id: cfg.currentTenant.id ?? null,
             name: cfg.currentTenant.name ?? null,

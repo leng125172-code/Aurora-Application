@@ -22,17 +22,26 @@ const TEXT_EXTENSIONS = new Set(['txt', 'csv', 'log'])
 const NUMERIC_TYPES = new Set(['int', 'long', 'float', 'double', 'decimal'])
 const RAW_BINARY_TYPES = new Set(['mat', 'pointclouddata'])
 
-export function workflowResultFileExtension(value: unknown): string {
+export function workflowResultBlobKey(value: unknown): string {
     if (typeof value !== 'string') return ''
-    const normalized = value.split(/[?#]/, 1)[0]?.replaceAll('\\', '/') ?? ''
+    const normalized = value.replace(/^"+|"+$/g, '')
+    if (!normalized.includes('/api/app/operator-file/')) return normalized
+    try {
+        return new URL(normalized, 'http://workflow.local').searchParams.get('blobName') ?? normalized
+    } catch {
+        return normalized
+    }
+}
+
+export function workflowResultFileExtension(value: unknown): string {
+    const normalized = workflowResultBlobKey(value).split(/[?#]/, 1)[0]?.replaceAll('\\', '/') ?? ''
     const fileName = normalized.slice(normalized.lastIndexOf('/') + 1)
     const match = /\.([a-z][a-z0-9]{0,9})$/i.exec(fileName)
     return match?.[1]?.toLowerCase() ?? ''
 }
 
 export function workflowResultFileName(value: unknown): string {
-    if (typeof value !== 'string') return ''
-    const normalized = value.split(/[?#]/, 1)[0]?.replaceAll('\\', '/') ?? ''
+    const normalized = workflowResultBlobKey(value).split(/[?#]/, 1)[0]?.replaceAll('\\', '/') ?? ''
     return normalized.slice(normalized.lastIndexOf('/') + 1)
 }
 
@@ -52,7 +61,9 @@ export function classifyWorkflowResult(
     if (type === 'array' || Array.isArray(value)) return 'array'
     if (type === 'object' || typeof value === 'object') return 'object'
     if (RAW_BINARY_TYPES.has(type)) return 'unsupported-binary'
-    if (type !== 'blob') return 'text'
+    const isFileReference = type === 'blob'
+        || (typeof value === 'string' && value.includes('/api/app/operator-file/'))
+    if (!isFileReference) return 'text'
 
     const extension = workflowResultFileExtension(value)
     if (!extension) return 'file'
@@ -63,6 +74,15 @@ export function classifyWorkflowResult(
     if (extension === 'json') return 'json-file'
     if (TEXT_EXTENSIONS.has(extension)) return 'text-file'
     return 'file'
+}
+
+export function isWorkflowInspectionResult(value: unknown): boolean {
+    if (value === null || typeof value !== 'object' || Array.isArray(value)) return false
+    const record = value as Record<string, unknown>
+    const resultCode = typeof record.resultCode === 'string' ? record.resultCode.toUpperCase() : ''
+    return ['OK', 'NG', 'UNKNOWN', 'ERROR'].includes(resultCode)
+        && typeof record.isValid === 'boolean'
+        && typeof record.isOk === 'boolean'
 }
 
 export function workflowBlobDownloadUrl(blobKey: string): string {

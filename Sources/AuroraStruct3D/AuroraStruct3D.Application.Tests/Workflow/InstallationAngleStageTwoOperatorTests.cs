@@ -32,6 +32,10 @@ public class InstallationAngleStageTwoOperatorTests
         Assert.Equal(InspectionResultCode.NG, Result(context).resultCode);
         Assert.InRange(Number(context, "tiltX"), 2.999, 3.001);
         Assert.InRange(Number(context, "axisToPlaneAngle"), 86.999, 87.001);
+        Assert.Contains(
+            Result(context).ToDetailsNode()!["reasons"]!.AsArray(),
+            reason => reason!.GetValue<string>().Contains("X方向偏差")
+        );
     }
 
     [Fact]

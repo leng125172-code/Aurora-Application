@@ -196,7 +196,9 @@ def build_height_diff_graph(point_cloud_path, extended_annotation=True):
             520,
             "基准面选区",
             make_properties(
-                params={"roiJson": _roi_json("基准面", 70, 120)},
+                # OpenCV Hershey fonts only support ASCII. Keep the persisted ROI
+                # label ASCII so result annotations never render as question marks.
+                params={"roiJson": _roi_json("REFERENCE", 70, 120)},
                 param_sources={"roiJson": "literal"},
                 input_bindings={
                     "input_mat": "preview_image",
@@ -223,7 +225,7 @@ def build_height_diff_graph(point_cloud_path, extended_annotation=True):
             520,
             "测量区域选区",
             make_properties(
-                params={"roiJson": _roi_json("测量区域", 300, 120)},
+                params={"roiJson": _roi_json("MEASURE", 300, 120)},
                 param_sources={"roiJson": "literal"},
                 input_bindings={
                     "input_mat": "preview_image",

@@ -2,6 +2,7 @@ namespace Lion.AbpPro.BasicManagement.Roles.Dtos
 {
     public class GetPermissionInput : IValidatableObject
     {
+        [RegularExpression("^(R|U)$")]
         public string ProviderName { get; set; }
         public string? ProviderKey { get; set; }
 
