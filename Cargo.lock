@@ -102,6 +102,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "aurora-s7"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "aurora-comm-core",
+ "aurora-comm-transport",
+ "tokio",
+]
+
+[[package]]
 name = "axum"
 version = "0.8.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"

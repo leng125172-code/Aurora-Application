@@ -13,6 +13,8 @@ The first production slice contains:
 - Modbus TCP/UDP, RTU/ASCII serial, and RTU/ASCII-over-TCP clients compatible
   with the address forms used by the existing C# implementation;
 - committed protocol golden vectors that keep CI independent of the C# source.
+- Siemens ISO-on-TCP/S7comm with model defaults for S7-1200/300/400/1500,
+  S7-200 SMART, and S7-200 endpoints.
 
 The implementation is derived from internally licensed protocol behavior and
 must not be redistributed outside the authorized organization.
