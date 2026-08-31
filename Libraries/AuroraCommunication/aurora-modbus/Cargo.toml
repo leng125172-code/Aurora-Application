@@ -16,6 +16,8 @@ tokio.workspace = true
 [dev-dependencies]
 futures.workspace = true
 aurora-comm-runtime = { path = "../aurora-comm-runtime" }
+serde.workspace = true
+serde_json.workspace = true
 
 [lints]
 workspace = true

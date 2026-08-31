@@ -11,6 +11,7 @@ description = "Tokio transports for Aurora industrial communication"
 async-trait.workspace = true
 aurora-comm-core = { path = "../aurora-comm-core" }
 tokio.workspace = true
+tokio-serial.workspace = true
 
 [lints]
 workspace = true

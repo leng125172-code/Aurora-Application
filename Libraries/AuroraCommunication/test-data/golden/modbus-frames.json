@@ -1,0 +1,19 @@
+{
+  "source": "AuroraCommunication C# compatibility oracle and Modbus Application Protocol",
+  "vectors": [
+    {
+      "name": "read_holding_registers",
+      "unit": 17,
+      "pdu_hex": "03006B0003",
+      "rtu_hex": "1103006B00037687",
+      "ascii": ":1103006B00037E\r\n"
+    },
+    {
+      "name": "write_single_register",
+      "unit": 1,
+      "pdu_hex": "0600010003",
+      "rtu_hex": "010600010003980B",
+      "ascii": ":010600010003F5\r\n"
+    }
+  ]
+}

@@ -1,6 +1,8 @@
 //! Pure Modbus frame and value codecs.
 
-use aurora_comm_core::{CommError, CommErrorCategory, CommResult, DeviceDataType, DeviceValue};
+use aurora_comm_core::{
+    CommError, CommErrorCategory, CommResult, DataLayout, DeviceDataType, DeviceValue,
+};
 
 pub(crate) fn read_pdu(function: u8, offset: u16, quantity: u16) -> Vec<u8> {
     let mut pdu = Vec::with_capacity(5);
@@ -58,6 +60,7 @@ pub(crate) fn decode_registers(
     payload: &[u8],
     data_type: DeviceDataType,
     count: u16,
+    layout: DataLayout,
 ) -> CommResult<DeviceValue> {
     let expected = usize::from(register_width(data_type)? * count) * 2;
     if payload.len() != expected {
@@ -76,7 +79,11 @@ pub(crate) fn decode_registers(
         ($size:literal, $convert:expr, $scalar:ident, $array:ident) => {{
             let values = payload
                 .chunks_exact($size)
-                .map($convert)
+                .map(|source| {
+                    let mut chunk = source.to_vec();
+                    layout.reorder(&mut chunk);
+                    $convert(&chunk)
+                })
                 .collect::<Vec<_>>();
             if count == 1 {
                 DeviceValue::$scalar(values[0])
@@ -152,6 +159,8 @@ pub(crate) fn encode_write(
     address_function: u8,
     offset: u16,
     value: &DeviceValue,
+    layout: DataLayout,
+    disable_function_code_06: bool,
 ) -> CommResult<Vec<u8>> {
     match value {
         DeviceValue::Bool(value) if address_function == 1 => {
@@ -177,7 +186,9 @@ pub(crate) fn encode_write(
             pdu.extend_from_slice(&data);
             Ok(pdu)
         }
-        value if address_function == 3 => encode_register_write(offset, value),
+        value if address_function == 3 => {
+            encode_register_write(offset, value, layout, disable_function_code_06)
+        }
         _ => Err(CommError::new(
             "MODBUS.WRITE.TYPE_OR_AREA",
             CommErrorCategory::Configuration,
@@ -187,41 +198,46 @@ pub(crate) fn encode_write(
     }
 }
 
-fn encode_register_write(offset: u16, value: &DeviceValue) -> CommResult<Vec<u8>> {
+fn encode_register_write(
+    offset: u16,
+    value: &DeviceValue,
+    layout: DataLayout,
+    disable_function_code_06: bool,
+) -> CommResult<Vec<u8>> {
     let mut data = Vec::new();
     match value {
-        DeviceValue::UInt16(value) => data.extend_from_slice(&value.to_be_bytes()),
-        DeviceValue::Int16(value) => data.extend_from_slice(&value.to_be_bytes()),
-        DeviceValue::UInt32(value) => data.extend_from_slice(&value.to_be_bytes()),
-        DeviceValue::Int32(value) => data.extend_from_slice(&value.to_be_bytes()),
-        DeviceValue::UInt64(value) => data.extend_from_slice(&value.to_be_bytes()),
-        DeviceValue::Int64(value) => data.extend_from_slice(&value.to_be_bytes()),
-        DeviceValue::Float32(value) => data.extend_from_slice(&value.to_be_bytes()),
-        DeviceValue::Float64(value) => data.extend_from_slice(&value.to_be_bytes()),
+        DeviceValue::UInt16(value) => append_layout(&mut data, &value.to_be_bytes(), layout),
+        DeviceValue::Int16(value) => append_layout(&mut data, &value.to_be_bytes(), layout),
+        DeviceValue::UInt32(value) => append_layout(&mut data, &value.to_be_bytes(), layout),
+        DeviceValue::Int32(value) => append_layout(&mut data, &value.to_be_bytes(), layout),
+        DeviceValue::UInt64(value) => append_layout(&mut data, &value.to_be_bytes(), layout),
+        DeviceValue::Int64(value) => append_layout(&mut data, &value.to_be_bytes(), layout),
+        DeviceValue::Float32(value) => append_layout(&mut data, &value.to_be_bytes(), layout),
+        DeviceValue::Float64(value) => append_layout(&mut data, &value.to_be_bytes(), layout),
         DeviceValue::UInt16s(values) => values
             .iter()
-            .for_each(|value| data.extend_from_slice(&value.to_be_bytes())),
+            .for_each(|value| append_layout(&mut data, &value.to_be_bytes(), layout)),
         DeviceValue::Int16s(values) => values
             .iter()
-            .for_each(|value| data.extend_from_slice(&value.to_be_bytes())),
+            .for_each(|value| append_layout(&mut data, &value.to_be_bytes(), layout)),
         DeviceValue::UInt32s(values) => values
             .iter()
-            .for_each(|value| data.extend_from_slice(&value.to_be_bytes())),
+            .for_each(|value| append_layout(&mut data, &value.to_be_bytes(), layout)),
         DeviceValue::Int32s(values) => values
             .iter()
-            .for_each(|value| data.extend_from_slice(&value.to_be_bytes())),
+            .for_each(|value| append_layout(&mut data, &value.to_be_bytes(), layout)),
         DeviceValue::UInt64s(values) => values
             .iter()
-            .for_each(|value| data.extend_from_slice(&value.to_be_bytes())),
+            .for_each(|value| append_layout(&mut data, &value.to_be_bytes(), layout)),
         DeviceValue::Int64s(values) => values
             .iter()
-            .for_each(|value| data.extend_from_slice(&value.to_be_bytes())),
+            .for_each(|value| append_layout(&mut data, &value.to_be_bytes(), layout)),
         DeviceValue::Float32s(values) => values
             .iter()
-            .for_each(|value| data.extend_from_slice(&value.to_be_bytes())),
+            .for_each(|value| append_layout(&mut data, &value.to_be_bytes(), layout)),
         DeviceValue::Float64s(values) => values
             .iter()
-            .for_each(|value| data.extend_from_slice(&value.to_be_bytes())),
+            .for_each(|value| append_layout(&mut data, &value.to_be_bytes(), layout)),
         DeviceValue::Bytes(values) => data.extend_from_slice(values),
         DeviceValue::Bool(_) | DeviceValue::Bools(_) | DeviceValue::String(_) => {
             return Err(CommError::new(
@@ -251,7 +267,7 @@ fn encode_register_write(offset: u16, value: &DeviceValue) -> CommResult<Vec<u8>
     }
 
     let quantity = u16::try_from(data.len() / 2).map_err(|_| write_too_large())?;
-    if quantity == 1 {
+    if quantity == 1 && !disable_function_code_06 {
         let mut pdu = vec![6];
         pdu.extend_from_slice(&offset.to_be_bytes());
         pdu.extend_from_slice(&data);
@@ -264,6 +280,12 @@ fn encode_register_write(offset: u16, value: &DeviceValue) -> CommResult<Vec<u8>
     pdu.push(u8::try_from(data.len()).map_err(|_| write_too_large())?);
     pdu.extend_from_slice(&data);
     Ok(pdu)
+}
+
+fn append_layout(target: &mut Vec<u8>, source: &[u8], layout: DataLayout) {
+    let mut encoded = source.to_vec();
+    layout.reorder(&mut encoded);
+    target.extend_from_slice(&encoded);
 }
 
 fn write_too_large() -> CommError {

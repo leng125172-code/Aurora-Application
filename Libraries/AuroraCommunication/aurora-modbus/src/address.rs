@@ -48,6 +48,18 @@ impl FromStr for ModbusAddress {
     }
 }
 
+impl ModbusAddress {
+    pub(crate) fn apply_base(&mut self, address_start_with_zero: bool) -> Result<(), CommError> {
+        if !address_start_with_zero {
+            self.offset = self
+                .offset
+                .checked_sub(1)
+                .ok_or_else(|| invalid_address("one-based address zero"))?;
+        }
+        Ok(())
+    }
+}
+
 fn invalid_address(value: &str) -> CommError {
     CommError::new(
         "MODBUS.ADDRESS.INVALID",

@@ -4,6 +4,7 @@ use async_trait::async_trait;
 use aurora_comm_core::{CommError, CommErrorCategory, CommResult};
 use std::io::ErrorKind;
 use std::time::Duration;
+use std::time::Instant;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio::sync::Mutex;
@@ -20,6 +21,37 @@ pub trait ByteStream: Send + Sync {
     async fn write_all(&self, payload: &[u8], deadline: Duration) -> CommResult<()>;
     /// Reads exactly `length` bytes before the deadline.
     async fn read_exact(&self, length: usize, deadline: Duration) -> CommResult<Vec<u8>>;
+    /// Reads through the delimiter with a bounded frame size.
+    async fn read_until(
+        &self,
+        delimiter: u8,
+        maximum: usize,
+        deadline: Duration,
+    ) -> CommResult<Vec<u8>> {
+        let started = Instant::now();
+        let mut payload = Vec::new();
+        while payload.len() < maximum {
+            let remaining = deadline.checked_sub(started.elapsed()).ok_or_else(|| {
+                CommError::new(
+                    "COMM.TIMEOUT",
+                    CommErrorCategory::Timeout,
+                    "Delimited frame read exceeded its deadline",
+                    true,
+                )
+            })?;
+            let next = self.read_exact(1, remaining).await?[0];
+            payload.push(next);
+            if next == delimiter {
+                return Ok(payload);
+            }
+        }
+        Err(CommError::new(
+            "COMM.PROTOCOL.FRAME_TOO_LARGE",
+            CommErrorCategory::Protocol,
+            format!("Delimited frame exceeded {maximum} bytes"),
+            false,
+        ))
+    }
     /// Reports whether a stream is currently installed.
     async fn is_connected(&self) -> bool;
 }

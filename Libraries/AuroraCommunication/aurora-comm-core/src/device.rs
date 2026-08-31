@@ -1,6 +1,6 @@
 //! Protocol-neutral device lifecycle and operation contracts.
 
-use crate::{CommResult, DeviceDataType, DeviceValue};
+use crate::{CommResult, DeviceCapabilities, DeviceDataType, DeviceValue};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::time::{Duration, SystemTime};
@@ -160,9 +160,31 @@ pub struct WatchSpec {
     pub interval: Duration,
 }
 
+/// Result of one item in a batch read without failing the remaining items.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct BatchReadResult {
+    /// Application-level point identity.
+    pub key: String,
+    /// Per-item outcome.
+    pub result: CommResult<DeviceValue>,
+}
+
+/// Result of one item in a batch write without failing the remaining items.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BatchWriteResult {
+    /// Application-level point identity.
+    pub key: String,
+    /// Per-item outcome.
+    pub result: CommResult<()>,
+}
+
 /// Minimal protocol client implemented by each device protocol crate.
 #[async_trait]
 pub trait DeviceClient: Send + Sync {
+    /// Describes optional features without probing the device.
+    fn capabilities(&self) -> DeviceCapabilities {
+        DeviceCapabilities::READ_WRITE
+    }
     /// Establishes the underlying device session.
     async fn connect(&self) -> CommResult<()>;
     /// Closes the underlying device session.
@@ -171,6 +193,28 @@ pub trait DeviceClient: Send + Sync {
     async fn read(&self, request: &ReadRequest) -> CommResult<DeviceValue>;
     /// Writes a typed value.
     async fn write(&self, request: &WriteRequest) -> CommResult<()>;
+    /// Reads multiple points. Protocols override this when native batching is available.
+    async fn read_many(&self, requests: &[ReadRequest]) -> Vec<BatchReadResult> {
+        let mut results = Vec::with_capacity(requests.len());
+        for request in requests {
+            results.push(BatchReadResult {
+                key: request.key.clone(),
+                result: self.read(request).await,
+            });
+        }
+        results
+    }
+    /// Writes multiple points. Protocols override this when native batching is available.
+    async fn write_many(&self, requests: &[WriteRequest]) -> Vec<BatchWriteResult> {
+        let mut results = Vec::with_capacity(requests.len());
+        for request in requests {
+            results.push(BatchWriteResult {
+                key: request.key.clone(),
+                result: self.write(request).await,
+            });
+        }
+        results
+    }
     /// Subscribes to connection lifecycle changes.
     fn status(&self) -> watch::Receiver<DeviceStatus>;
 }

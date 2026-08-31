@@ -4,8 +4,8 @@ use crate::address::ModbusAddress;
 use crate::codec::{decode_bits, decode_registers, encode_write, read_pdu, register_width};
 use async_trait::async_trait;
 use aurora_comm_core::{
-    CommError, CommErrorCategory, CommResult, ConnectionState, DeviceClient, DeviceDataType,
-    DeviceStatus, DeviceValue, ReadRequest, WriteRequest,
+    CommError, CommErrorCategory, CommResult, ConnectionState, DataLayout, DeviceClient,
+    DeviceDataType, DeviceStatus, DeviceValue, ReadRequest, WriteRequest,
 };
 use aurora_comm_transport::{ByteStream, TcpTransport, TcpTransportOptions};
 use std::str::FromStr;
@@ -24,6 +24,12 @@ pub struct ModbusTcpOptions {
     pub unit_id: u8,
     /// Maximum connection-establishment duration.
     pub connect_timeout: Duration,
+    /// Whether addresses are already zero-based protocol offsets.
+    pub address_start_with_zero: bool,
+    /// Multi-register byte and word ordering.
+    pub data_layout: DataLayout,
+    /// Forces FC16 even for a single holding register.
+    pub disable_function_code_06: bool,
 }
 
 impl ModbusTcpOptions {
@@ -34,6 +40,9 @@ impl ModbusTcpOptions {
             port: 502,
             unit_id,
             connect_timeout: Duration::from_secs(5),
+            address_start_with_zero: true,
+            data_layout: DataLayout::Abcd,
+            disable_function_code_06: false,
         }
     }
 }
@@ -45,6 +54,9 @@ pub struct ModbusTcpClient {
     transaction_id: AtomicU16,
     transaction_gate: Mutex<()>,
     status_tx: watch::Sender<DeviceStatus>,
+    address_start_with_zero: bool,
+    data_layout: DataLayout,
+    disable_function_code_06: bool,
 }
 
 impl ModbusTcpClient {
@@ -59,6 +71,9 @@ impl ModbusTcpClient {
             transaction_id: AtomicU16::new(0),
             transaction_gate: Mutex::new(()),
             status_tx,
+            address_start_with_zero: options.address_start_with_zero,
+            data_layout: options.data_layout,
+            disable_function_code_06: options.disable_function_code_06,
         }
     }
 
@@ -165,7 +180,8 @@ impl DeviceClient for ModbusTcpClient {
     }
 
     async fn read(&self, request: &ReadRequest) -> CommResult<DeviceValue> {
-        let address = ModbusAddress::from_str(&request.address)?;
+        let mut address = ModbusAddress::from_str(&request.address)?;
+        address.apply_base(self.address_start_with_zero)?;
         let unit = address.station.unwrap_or(self.unit_id);
         let quantity = if matches!(address.function, 1 | 2) {
             if request.data_type != DeviceDataType::Bool {
@@ -230,14 +246,21 @@ impl DeviceClient for ModbusTcpClient {
         if matches!(address.function, 1 | 2) {
             decode_bits(payload, request.count)
         } else {
-            decode_registers(payload, request.data_type, request.count)
+            decode_registers(payload, request.data_type, request.count, self.data_layout)
         }
     }
 
     async fn write(&self, request: &WriteRequest) -> CommResult<()> {
-        let address = ModbusAddress::from_str(&request.address)?;
+        let mut address = ModbusAddress::from_str(&request.address)?;
+        address.apply_base(self.address_start_with_zero)?;
         let unit = address.station.unwrap_or(self.unit_id);
-        let request_pdu = encode_write(address.function, address.offset, &request.value)?;
+        let request_pdu = encode_write(
+            address.function,
+            address.offset,
+            &request.value,
+            self.data_layout,
+            self.disable_function_code_06,
+        )?;
         let response = self.transact(unit, &request_pdu, request.timeout).await;
         match response {
             Ok(pdu) if pdu.get(1..5) == request_pdu.get(1..5) => Ok(()),
