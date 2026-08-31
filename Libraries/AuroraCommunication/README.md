@@ -15,6 +15,8 @@ The first production slice contains:
 - committed protocol golden vectors that keep CI independent of the C# source.
 - Siemens ISO-on-TCP/S7comm with model defaults for S7-1200/300/400/1500,
   S7-200 SMART, and S7-200 endpoints.
+- Mitsubishi MC protocol 3E binary/ASCII over TCP or UDP (4E/A1E/FX are
+  intentionally separate future protocols).
 
 The implementation is derived from internally licensed protocol behavior and
 must not be redistributed outside the authorized organization.

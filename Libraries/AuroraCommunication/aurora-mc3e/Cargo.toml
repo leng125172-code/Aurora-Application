@@ -1,0 +1,17 @@
+[package]
+name = "aurora-mc3e"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+description = "Mitsubishi MC protocol 3E client for AuroraCommunication"
+
+[dependencies]
+async-trait.workspace = true
+aurora-comm-core = { path = "../aurora-comm-core" }
+aurora-comm-transport = { path = "../aurora-comm-transport" }
+tokio.workspace = true
+
+[lints]
+workspace = true

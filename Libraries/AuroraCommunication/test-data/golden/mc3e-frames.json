@@ -1,0 +1,5 @@
+{
+  "scope": "MC protocol 3E only; excludes 4E, A1E and FX serial",
+  "binary_read_d100_2": "500000FFFF03000C00100001040000640000A80200",
+  "ascii_read_d100_2": "500000FF03FF000018001004010000D*0000640002"
+}

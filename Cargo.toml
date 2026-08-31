@@ -6,6 +6,7 @@ members = [
     "Libraries/AuroraCommunication/aurora-comm-runtime",
     "Libraries/AuroraCommunication/aurora-modbus",
     "Libraries/AuroraCommunication/aurora-s7",
+    "Libraries/AuroraCommunication/aurora-mc3e",
     "Services/AuroraCore",
 ]
 
