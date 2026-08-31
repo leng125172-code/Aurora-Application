@@ -7,6 +7,8 @@ members = [
     "Libraries/AuroraCommunication/aurora-modbus",
     "Libraries/AuroraCommunication/aurora-s7",
     "Libraries/AuroraCommunication/aurora-mc3e",
+    "Libraries/AuroraCommunication/aurora-opcua-sys",
+    "Libraries/AuroraCommunication/aurora-opcua",
     "Services/AuroraCore",
 ]
 

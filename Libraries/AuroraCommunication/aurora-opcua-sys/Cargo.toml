@@ -1,0 +1,24 @@
+[package]
+name = "aurora-opcua-sys"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+description = "Private open62541 1.5.4 and mbedTLS 3.6.7 native boundary"
+build = "build.rs"
+
+[features]
+default = []
+native = []
+
+[build-dependencies]
+bzip2 = "0.6.1"
+cc = "1.2.50"
+cmake = "0.1.57"
+sha2 = "0.10.9"
+tar = "0.4.44"
+
+[lints.rust]
+unsafe_code = "allow"
+missing_docs = "warn"

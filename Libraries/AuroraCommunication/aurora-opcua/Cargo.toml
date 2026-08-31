@@ -1,0 +1,21 @@
+[package]
+name = "aurora-opcua"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+description = "Safe OPC UA client contract and open62541 adapter"
+
+[features]
+default = []
+native = ["dep:aurora-opcua-sys", "aurora-opcua-sys/native"]
+
+[dependencies]
+async-trait.workspace = true
+aurora-comm-core = { path = "../aurora-comm-core" }
+aurora-opcua-sys = { path = "../aurora-opcua-sys", optional = true }
+tokio.workspace = true
+
+[lints]
+workspace = true

@@ -8,9 +8,10 @@
 - `aurora-modbus`：Modbus TCP/UDP、RTU/ASCII 串口及 RTU/ASCII over TCP，支持 HSL 风格地址、零/一基址、字节字序和 FC20/21/22/23 PDU。
 - `aurora-s7`：ISO-on-TCP/S7comm，支持 S1200、S300、S400、S1500、S200Smart、S200 的 TSAP 默认值及 DB/I/Q/M/T/C 地址。
 - `aurora-mc3e`：Mitsubishi MC 3E 二进制/ASCII、TCP/UDP，支持 D/M/X/Y/W/B/R/ZR 及计时器、计数器等常用软元件。
+- `aurora-opcua`：安全 Rust API、Browse/Read/Write/订阅契约与 simulator；`aurora-opcua-sys` 隔离固定的 open62541 1.5.4 + mbedTLS 3.6.7 静态 native 边界。
 
 地址 `s=2;x=4;500` 表示临时使用站号 2、功能码 4、偏移 500；缺省功能码是 3。一次连接上的 Modbus 事务严格串行，避免响应错配。控制命令进入高优先级队列，但通过 `max_control_burst` 保证普通采集不会永久饥饿。
 
 自动化测试会启动 50 个独立 TCP 仿真设备，同时执行连接、读取和写入。该测试证明框架并发模型和资源边界，不替代真实交换机、PLC 和噪声环境下的 72 小时老化测试。
 
-下一协议为 OPC UA（open62541 FFI）。提交到 `test-data/golden` 的报文是 CI 的固定行为基准，CI 不访问外部 C# 源码。不得把 HSL 派生代码发布到授权组织之外。
+OPC UA simulator 已覆盖 Browse、Read、Write 和订阅通知；native feature 当前覆盖证书信任、用户认证和标量读写。native Browse/MonitoredItem 尚未通过 HIL，因此能力查询会明确返回 `browse=false`、`watch=false`，不得将其标记为生产就绪。提交到 `test-data/golden` 的报文是 CI 的固定行为基准，CI 不访问外部 C# 源码。不得把 HSL 派生代码发布到授权组织之外。

@@ -39,6 +39,16 @@ jobs:
       - run: cargo fmt --all --check
       - run: cargo test --workspace --locked
 
+  opcua-native:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.98.0
+      - name: Build pinned open62541 and mbedTLS boundary
+        run: cargo check -p aurora-opcua --features native --locked
+
   hmi-host:
     runs-on: ubuntu-latest
     steps:

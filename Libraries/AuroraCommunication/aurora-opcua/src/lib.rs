@@ -1,0 +1,528 @@
+//! Safe OPC UA API with a deterministic simulator and optional native backend.
+
+use async_trait::async_trait;
+use aurora_comm_core::{
+    CommError, CommErrorCategory, CommResult, ConnectionState, DeviceCapabilities, DeviceClient,
+    DeviceStatus, DeviceValue, ReadRequest, WriteRequest,
+};
+use std::{
+    collections::HashMap,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
+    time::SystemTime,
+};
+use tokio::sync::{RwLock, broadcast, watch};
+
+/// OPC UA message security mode.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MessageSecurityMode {
+    /// No signing or encryption.
+    None,
+    /// Signed messages.
+    Sign,
+    /// Signed and encrypted messages.
+    SignAndEncrypt,
+}
+
+/// OPC UA security policy selection.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SecurityPolicy {
+    /// No security policy.
+    None,
+    /// Basic256Sha256.
+    Basic256Sha256,
+    /// AES-128/SHA-256/RSA-OAEP.
+    Aes128Sha256RsaOaep,
+    /// AES-256/SHA-256/RSA-PSS.
+    Aes256Sha256RsaPss,
+}
+
+/// Endpoint identity and certificate configuration.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OpcUaOptions {
+    /// `opc.tcp://` endpoint URL.
+    pub endpoint: String,
+    /// Message security mode.
+    pub security_mode: MessageSecurityMode,
+    /// Security policy.
+    pub security_policy: SecurityPolicy,
+    /// DER/PEM application certificate.
+    pub certificate: Option<Vec<u8>>,
+    /// DER/PEM private key.
+    pub private_key: Option<Vec<u8>>,
+    /// Trusted issuer/server certificates.
+    pub trust_list: Vec<Vec<u8>>,
+    /// Optional username.
+    pub username: Option<String>,
+    /// Optional password.
+    pub password: Option<String>,
+}
+
+impl OpcUaOptions {
+    /// Creates an anonymous, unsecured endpoint configuration.
+    pub fn anonymous(endpoint: impl Into<String>) -> Self {
+        Self {
+            endpoint: endpoint.into(),
+            security_mode: MessageSecurityMode::None,
+            security_policy: SecurityPolicy::None,
+            certificate: None,
+            private_key: None,
+            trust_list: Vec::new(),
+            username: None,
+            password: None,
+        }
+    }
+
+    /// Rejects unsafe or incomplete combinations before native code runs.
+    pub fn validate(&self) -> CommResult<()> {
+        if !self.endpoint.starts_with("opc.tcp://") {
+            return Err(configuration("endpoint must start with opc.tcp://"));
+        }
+        if self.security_mode != MessageSecurityMode::None
+            && (self.certificate.is_none()
+                || self.private_key.is_none()
+                || self.trust_list.is_empty())
+        {
+            return Err(configuration(
+                "secure OPC UA requires certificate, private key and trust list",
+            ));
+        }
+        if self.security_mode == MessageSecurityMode::None
+            && self.security_policy != SecurityPolicy::None
+        {
+            return Err(configuration(
+                "security policy requires Sign or SignAndEncrypt",
+            ));
+        }
+        Ok(())
+    }
+}
+
+/// One namespace entry returned from Browse.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BrowseNode {
+    /// NodeId text.
+    pub node_id: String,
+    /// Browse name.
+    pub browse_name: String,
+    /// Human-readable display name.
+    pub display_name: String,
+    /// Whether the node can hold a value.
+    pub variable: bool,
+}
+
+/// Backend contract implemented by native code and the deterministic simulator.
+#[async_trait]
+pub trait OpcUaBackend: Send + Sync {
+    /// Opens a session.
+    async fn connect(&self, options: &OpcUaOptions) -> CommResult<()>;
+    /// Closes a session.
+    async fn disconnect(&self) -> CommResult<()>;
+    /// Reads a Value attribute.
+    async fn read_value(&self, node_id: &str) -> CommResult<DeviceValue>;
+    /// Writes a Value attribute.
+    async fn write_value(&self, node_id: &str, value: &DeviceValue) -> CommResult<()>;
+    /// Browses hierarchical children.
+    async fn browse(&self, node_id: &str) -> CommResult<Vec<BrowseNode>>;
+    /// Receives data-change notifications.
+    fn subscribe(&self) -> broadcast::Receiver<(String, DeviceValue)>;
+    /// Reports backend-specific native features.
+    fn capabilities(&self) -> DeviceCapabilities {
+        DeviceCapabilities::READ_WRITE
+    }
+}
+
+/// Safe OPC UA client used through the common `DeviceClient` interface.
+pub struct OpcUaClient<B: OpcUaBackend> {
+    options: OpcUaOptions,
+    backend: Arc<B>,
+    status_tx: watch::Sender<DeviceStatus>,
+}
+
+impl<B: OpcUaBackend> OpcUaClient<B> {
+    /// Creates a disconnected client.
+    pub fn new(options: OpcUaOptions, backend: Arc<B>) -> CommResult<Self> {
+        options.validate()?;
+        let (status_tx, _) = watch::channel(DeviceStatus::disconnected());
+        Ok(Self {
+            options,
+            backend,
+            status_tx,
+        })
+    }
+    /// Browses one node.
+    pub async fn browse(&self, node_id: &str) -> CommResult<Vec<BrowseNode>> {
+        self.backend.browse(node_id).await
+    }
+    /// Subscribes to data changes.
+    pub fn subscribe(&self) -> broadcast::Receiver<(String, DeviceValue)> {
+        self.backend.subscribe()
+    }
+    fn publish(&self, state: ConnectionState, error: Option<&CommError>) {
+        self.status_tx.send_replace(DeviceStatus {
+            state,
+            changed_at: SystemTime::now(),
+            last_error_code: error.map(|error| error.code.clone()),
+            reconnect_attempt: 0,
+        });
+    }
+}
+
+#[async_trait]
+impl<B: OpcUaBackend + 'static> DeviceClient for OpcUaClient<B> {
+    async fn connect(&self) -> CommResult<()> {
+        self.publish(ConnectionState::Connecting, None);
+        let result = self.backend.connect(&self.options).await;
+        self.publish(
+            if result.is_ok() {
+                ConnectionState::Connected
+            } else {
+                ConnectionState::Faulted
+            },
+            result.as_ref().err(),
+        );
+        result
+    }
+    async fn disconnect(&self) -> CommResult<()> {
+        let result = self.backend.disconnect().await;
+        self.publish(ConnectionState::Disconnected, result.as_ref().err());
+        result
+    }
+    async fn read(&self, request: &ReadRequest) -> CommResult<DeviceValue> {
+        self.backend.read_value(&request.address).await
+    }
+    async fn write(&self, request: &WriteRequest) -> CommResult<()> {
+        self.backend
+            .write_value(&request.address, &request.value)
+            .await
+    }
+    fn status(&self) -> watch::Receiver<DeviceStatus> {
+        self.status_tx.subscribe()
+    }
+    fn capabilities(&self) -> DeviceCapabilities {
+        self.backend.capabilities()
+    }
+}
+
+/// Deterministic backend used by simulator CI without external servers.
+pub struct SimulatorBackend {
+    connected: AtomicBool,
+    values: RwLock<HashMap<String, DeviceValue>>,
+    nodes: RwLock<HashMap<String, Vec<BrowseNode>>>,
+    updates: broadcast::Sender<(String, DeviceValue)>,
+}
+
+impl Default for SimulatorBackend {
+    fn default() -> Self {
+        let (updates, _) = broadcast::channel(256);
+        Self {
+            connected: AtomicBool::new(false),
+            values: RwLock::new(HashMap::new()),
+            nodes: RwLock::new(HashMap::new()),
+            updates,
+        }
+    }
+}
+
+impl SimulatorBackend {
+    /// Inserts a variable and makes it visible below its parent.
+    pub async fn insert(&self, parent: &str, node_id: &str, browse_name: &str, value: DeviceValue) {
+        self.values.write().await.insert(node_id.to_owned(), value);
+        self.nodes
+            .write()
+            .await
+            .entry(parent.to_owned())
+            .or_default()
+            .push(BrowseNode {
+                node_id: node_id.to_owned(),
+                browse_name: browse_name.to_owned(),
+                display_name: browse_name.to_owned(),
+                variable: true,
+            });
+    }
+    fn ensure_connected(&self) -> CommResult<()> {
+        if self.connected.load(Ordering::Acquire) {
+            Ok(())
+        } else {
+            Err(CommError::new(
+                "OPCUA.UNAVAILABLE.DISCONNECTED",
+                CommErrorCategory::Unavailable,
+                "OPC UA session is disconnected",
+                true,
+            ))
+        }
+    }
+}
+
+#[async_trait]
+impl OpcUaBackend for SimulatorBackend {
+    async fn connect(&self, _: &OpcUaOptions) -> CommResult<()> {
+        self.connected.store(true, Ordering::Release);
+        Ok(())
+    }
+    async fn disconnect(&self) -> CommResult<()> {
+        self.connected.store(false, Ordering::Release);
+        Ok(())
+    }
+    async fn read_value(&self, node_id: &str) -> CommResult<DeviceValue> {
+        self.ensure_connected()?;
+        self.values
+            .read()
+            .await
+            .get(node_id)
+            .cloned()
+            .ok_or_else(node_not_found)
+    }
+    async fn write_value(&self, node_id: &str, value: &DeviceValue) -> CommResult<()> {
+        self.ensure_connected()?;
+        let mut values = self.values.write().await;
+        if !values.contains_key(node_id) {
+            return Err(node_not_found());
+        }
+        values.insert(node_id.to_owned(), value.clone());
+        let _ = self.updates.send((node_id.to_owned(), value.clone()));
+        Ok(())
+    }
+    async fn browse(&self, node_id: &str) -> CommResult<Vec<BrowseNode>> {
+        self.ensure_connected()?;
+        Ok(self
+            .nodes
+            .read()
+            .await
+            .get(node_id)
+            .cloned()
+            .unwrap_or_default())
+    }
+    fn subscribe(&self) -> broadcast::Receiver<(String, DeviceValue)> {
+        self.updates.subscribe()
+    }
+
+    fn capabilities(&self) -> DeviceCapabilities {
+        DeviceCapabilities {
+            browse: true,
+            secure_channel: true,
+            ..DeviceCapabilities::READ_WRITE
+        }
+    }
+}
+
+fn configuration(message: impl Into<String>) -> CommError {
+    CommError::new(
+        "OPCUA.CONFIGURATION.INVALID",
+        CommErrorCategory::Configuration,
+        message,
+        false,
+    )
+}
+fn node_not_found() -> CommError {
+    CommError::new(
+        "OPCUA.NODE.NOT_FOUND",
+        CommErrorCategory::DeviceRejected,
+        "OPC UA node was not found",
+        false,
+    )
+}
+
+#[cfg(feature = "native")]
+mod native_backend {
+    use super::*;
+    use aurora_opcua_sys::{NativeClient, NativeScalar};
+    use tokio::sync::Mutex;
+
+    /// open62541-backed scalar read/write and secure-session backend.
+    pub struct Open62541Backend {
+        client: Mutex<Option<NativeClient>>,
+        updates: broadcast::Sender<(String, DeviceValue)>,
+    }
+
+    impl Default for Open62541Backend {
+        fn default() -> Self {
+            let (updates, _) = broadcast::channel(16);
+            Self {
+                client: Mutex::new(None),
+                updates,
+            }
+        }
+    }
+
+    #[async_trait]
+    impl OpcUaBackend for Open62541Backend {
+        async fn connect(&self, options: &OpcUaOptions) -> CommResult<()> {
+            options.validate()?;
+            let credentials = options
+                .username
+                .as_deref()
+                .map(|username| (username, options.password.as_deref().unwrap_or("")));
+            let certificate = options.certificate.as_deref().unwrap_or_default();
+            let private_key = options.private_key.as_deref().unwrap_or_default();
+            let trust = options
+                .trust_list
+                .first()
+                .map(Vec::as_slice)
+                .unwrap_or_default();
+            let client = NativeClient::connect_configured(
+                &options.endpoint,
+                certificate,
+                private_key,
+                trust,
+                credentials,
+            )
+            .map_err(native_error)?;
+            *self.client.lock().await = Some(client);
+            Ok(())
+        }
+
+        async fn disconnect(&self) -> CommResult<()> {
+            self.client.lock().await.take();
+            Ok(())
+        }
+
+        async fn read_value(&self, node_id: &str) -> CommResult<DeviceValue> {
+            let guard = self.client.lock().await;
+            let value = guard
+                .as_ref()
+                .ok_or_else(disconnected)?
+                .read(node_id)
+                .map_err(native_error)?;
+            decode(value)
+        }
+
+        async fn write_value(&self, node_id: &str, value: &DeviceValue) -> CommResult<()> {
+            let scalar = encode(value)?;
+            let guard = self.client.lock().await;
+            guard
+                .as_ref()
+                .ok_or_else(disconnected)?
+                .write(node_id, scalar)
+                .map_err(native_error)
+        }
+
+        async fn browse(&self, _: &str) -> CommResult<Vec<BrowseNode>> {
+            Err(CommError::new(
+                "OPCUA.NATIVE.BROWSE_PENDING",
+                CommErrorCategory::Unavailable,
+                "native Browse is gated for the next HIL milestone",
+                false,
+            ))
+        }
+
+        fn subscribe(&self) -> broadcast::Receiver<(String, DeviceValue)> {
+            self.updates.subscribe()
+        }
+
+        fn capabilities(&self) -> DeviceCapabilities {
+            DeviceCapabilities {
+                browse: false,
+                watch: false,
+                secure_channel: true,
+                ..DeviceCapabilities::READ_WRITE
+            }
+        }
+    }
+
+    fn disconnected() -> CommError {
+        CommError::new(
+            "OPCUA.UNAVAILABLE.DISCONNECTED",
+            CommErrorCategory::Unavailable,
+            "OPC UA session is disconnected",
+            true,
+        )
+    }
+    fn native_error(code: u32) -> CommError {
+        CommError::new(
+            "OPCUA.NATIVE.STATUS",
+            CommErrorCategory::Protocol,
+            format!("open62541 status 0x{code:08X}"),
+            false,
+        )
+        .with_protocol_code(code as i32)
+    }
+    fn decode(value: NativeScalar) -> CommResult<DeviceValue> {
+        let d = value.data;
+        Ok(match value.kind {
+            0 => DeviceValue::Bool(d[0] != 0),
+            1 => DeviceValue::UInt16(u16::from_ne_bytes(d[..2].try_into().unwrap())),
+            2 => DeviceValue::Int16(i16::from_ne_bytes(d[..2].try_into().unwrap())),
+            3 => DeviceValue::UInt32(u32::from_ne_bytes(d[..4].try_into().unwrap())),
+            4 => DeviceValue::Int32(i32::from_ne_bytes(d[..4].try_into().unwrap())),
+            5 => DeviceValue::UInt64(u64::from_ne_bytes(d[..8].try_into().unwrap())),
+            6 => DeviceValue::Int64(i64::from_ne_bytes(d[..8].try_into().unwrap())),
+            7 => DeviceValue::Float32(f32::from_ne_bytes(d[..4].try_into().unwrap())),
+            8 => DeviceValue::Float64(f64::from_ne_bytes(d[..8].try_into().unwrap())),
+            _ => return Err(native_error(0x8074_0000)),
+        })
+    }
+    fn encode(value: &DeviceValue) -> CommResult<NativeScalar> {
+        let (kind, bytes) = match value {
+            DeviceValue::Bool(v) => (0, vec![u8::from(*v)]),
+            DeviceValue::UInt16(v) => (1, v.to_ne_bytes().to_vec()),
+            DeviceValue::Int16(v) => (2, v.to_ne_bytes().to_vec()),
+            DeviceValue::UInt32(v) => (3, v.to_ne_bytes().to_vec()),
+            DeviceValue::Int32(v) => (4, v.to_ne_bytes().to_vec()),
+            DeviceValue::UInt64(v) => (5, v.to_ne_bytes().to_vec()),
+            DeviceValue::Int64(v) => (6, v.to_ne_bytes().to_vec()),
+            DeviceValue::Float32(v) => (7, v.to_ne_bytes().to_vec()),
+            DeviceValue::Float64(v) => (8, v.to_ne_bytes().to_vec()),
+            _ => {
+                return Err(configuration(
+                    "native OPC UA currently accepts scalar numeric values",
+                ));
+            }
+        };
+        let mut data = [0; 16];
+        data[..bytes.len()].copy_from_slice(&bytes);
+        Ok(NativeScalar {
+            kind,
+            data,
+            length: bytes.len() as u32,
+        })
+    }
+}
+
+#[cfg(feature = "native")]
+pub use native_backend::Open62541Backend;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use aurora_comm_core::DeviceDataType;
+    use std::time::Duration;
+
+    #[tokio::test]
+    async fn simulator_covers_browse_read_write_and_subscription() {
+        let backend = Arc::new(SimulatorBackend::default());
+        backend
+            .insert("i=85", "ns=2;s=Speed", "Speed", DeviceValue::Float32(1.5))
+            .await;
+        let client =
+            OpcUaClient::new(OpcUaOptions::anonymous("opc.tcp://localhost:4840"), backend).unwrap();
+        client.connect().await.unwrap();
+        assert_eq!(client.browse("i=85").await.unwrap().len(), 1);
+        assert_eq!(
+            client
+                .read(&ReadRequest {
+                    key: "speed".into(),
+                    address: "ns=2;s=Speed".into(),
+                    data_type: DeviceDataType::Float32,
+                    count: 1,
+                    timeout: Duration::from_secs(1)
+                })
+                .await
+                .unwrap(),
+            DeviceValue::Float32(1.5)
+        );
+        let mut updates = client.subscribe();
+        client
+            .write(&WriteRequest {
+                key: "speed".into(),
+                address: "ns=2;s=Speed".into(),
+                value: DeviceValue::Float32(2.0),
+                timeout: Duration::from_secs(1),
+            })
+            .await
+            .unwrap();
+        assert_eq!(updates.recv().await.unwrap().1, DeviceValue::Float32(2.0));
+    }
+}

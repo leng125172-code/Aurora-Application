@@ -12,3 +12,5 @@
 | 6 | 冻结并归档 ABP | 业务、历史数据、审计和运维入口全部切换 |
 
 协议迁移时禁止按 C# 类逐个翻译。应先固化报文样例和错误行为，再实现 Rust codec/transport/session，最后接入 Core。每次只迁移一个真实设备族，并保留可回退的 1.x 发布包。
+
+阶段 2 当前是 preview：Modbus、S7、MC3E 已具备 simulator/golden CI；OPC UA native 标量与安全会话已进入构建门禁，但 Browse/MonitoredItem 仍待 HIL。阶段 2 只有在真实设备矩阵通过、50 设备混合负载控制请求 P99 小于 100 ms、断线恢复及 72 小时老化全部完成后才可关闭。
