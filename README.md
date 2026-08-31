@@ -1,8 +1,18 @@
 ﻿# Aurora Application
 
-基于ABP的模块化开发框架，集成OpenCV工业计算机视觉平台，包含两个核心模块，为工业视觉应用提供完整的解决方案。
+> `2.0` 分支正在移除 ABP 运行时依赖。新架构采用 Rust Core Service + 独立
+> AuroraCommunication + .NET HMI Host；现有 ABP/C# 项目仅作为 1.x 迁移来源保留。
 
-## 项目简介
+## Aurora 2.0
+
+- Rust 承担跨平台业务执行、工站 Actor 和设备通讯；
+- Windows HMI 使用 C# WinUI，Linux 首选 Avalonia；
+- HMI Host 同时托管 REST、SignalR 和 Web 调试页，通过本机 gRPC 访问 Core；
+- 当前纵向切片支持 Modbus TCP，并包含 50 个独立设备的并发仿真测试。
+
+请从 [Aurora 2.0 文档](Documents/Aurora2/index.md) 开始。以下内容描述仍在迁移的 1.x 系统。
+
+## 1.x 项目简介
 
 Aurora Application是一个基于ABP的模块化开发框架，用于快速应用开发、模块管理、解决方案生成和嵌入式资源提取。同时，它也是一个功能强大的工业计算机视觉平台，专为工业自动化场景设计，提供从图像获取到分析输出的完整视觉解决方案。
 

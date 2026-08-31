@@ -1,0 +1,21 @@
+[package]
+name = "aurora-modbus"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+description = "Modbus protocols for AuroraCommunication"
+
+[dependencies]
+async-trait.workspace = true
+aurora-comm-core = { path = "../aurora-comm-core" }
+aurora-comm-transport = { path = "../aurora-comm-transport" }
+tokio.workspace = true
+
+[dev-dependencies]
+futures.workspace = true
+aurora-comm-runtime = { path = "../aurora-comm-runtime" }
+
+[lints]
+workspace = true

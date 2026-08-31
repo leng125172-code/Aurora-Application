@@ -168,3 +168,16 @@ $RECYCLE.BIN/
 *.bak
 *~
 .history/
+
+# ------------------------------------------------------------
+# Rust / Cargo
+# ------------------------------------------------------------
+target/
+**/*.rs.bk
+
+# Aurora 2.0 local runtime data
+Data/Aurora2/
+
+# Aurora 2.0 HMI Host owns a small checked-in diagnostic UI.
+!Sources/Aurora2/Aurora.Hmi.Host/wwwroot/
+!Sources/Aurora2/Aurora.Hmi.Host/wwwroot/index.html

@@ -1,0 +1,33 @@
+[package]
+name = "aurora-core-service"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+description = "Aurora 2.0 industrial control core service"
+
+[dependencies]
+anyhow.workspace = true
+prost.workspace = true
+redb.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tokio-postgres.workspace = true
+tonic.workspace = true
+tonic-prost.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+uuid.workspace = true
+
+[build-dependencies]
+prost-build = "0.14.1"
+protoc-bin-vendored = "3.2.0"
+tonic-prost-build = "0.14.2"
+
+[dev-dependencies]
+tempfile = "3.27.0"
+
+[lints]
+workspace = true

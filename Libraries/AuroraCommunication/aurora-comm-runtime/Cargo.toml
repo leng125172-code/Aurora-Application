@@ -1,0 +1,18 @@
+[package]
+name = "aurora-comm-runtime"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+description = "Managed sessions, priority queues, and watches for AuroraCommunication"
+
+[dependencies]
+aurora-comm-core = { path = "../aurora-comm-core" }
+tokio.workspace = true
+tokio-util.workspace = true
+tracing.workspace = true
+uuid.workspace = true
+
+[lints]
+workspace = true

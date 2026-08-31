@@ -1,0 +1,75 @@
+syntax = "proto3";
+
+package aurora.v2;
+
+service StationControl {
+  rpc GetStation(GetStationRequest) returns (StationSnapshot);
+  rpc Start(StationCommandRequest) returns (CommandReply);
+  rpc Stop(StationCommandRequest) returns (CommandReply);
+  rpc EmergencyStop(StationCommandRequest) returns (CommandReply);
+  rpc AcknowledgeSafeStop(StationCommandRequest) returns (CommandReply);
+  rpc AcquireRemoteLease(AcquireRemoteLeaseRequest) returns (RemoteLeaseReply);
+  rpc ReleaseRemoteLease(ReleaseRemoteLeaseRequest) returns (CommandReply);
+}
+
+enum StationRunState {
+  STATION_RUN_STATE_UNSPECIFIED = 0;
+  STATION_RUN_STATE_SAFE_STOP = 1;
+  STATION_RUN_STATE_IDLE = 2;
+  STATION_RUN_STATE_RUNNING = 3;
+  STATION_RUN_STATE_FAULTED = 4;
+}
+
+enum ControlOrigin {
+  CONTROL_ORIGIN_UNSPECIFIED = 0;
+  CONTROL_ORIGIN_LOCAL_HMI = 1;
+  CONTROL_ORIGIN_REMOTE_WEB = 2;
+}
+
+message GetStationRequest {
+  string station_id = 1;
+}
+
+message StationSnapshot {
+  string station_id = 1;
+  StationRunState state = 2;
+  uint64 sequence = 3;
+  bool requires_manual_acknowledgement = 4;
+  string last_reason = 5;
+  int64 changed_at_unix_ms = 6;
+}
+
+message StationCommandRequest {
+  string station_id = 1;
+  string operator_id = 2;
+  ControlOrigin origin = 3;
+  string lease_token = 4;
+  string reason = 5;
+}
+
+message CommandReply {
+  bool accepted = 1;
+  string error_code = 2;
+  string message = 3;
+  StationSnapshot snapshot = 4;
+}
+
+message AcquireRemoteLeaseRequest {
+  string station_id = 1;
+  string operator_id = 2;
+  uint32 requested_seconds = 3;
+}
+
+message RemoteLeaseReply {
+  bool accepted = 1;
+  string lease_token = 2;
+  int64 expires_at_unix_ms = 3;
+  string error_code = 4;
+  string message = 5;
+}
+
+message ReleaseRemoteLeaseRequest {
+  string station_id = 1;
+  string operator_id = 2;
+  string lease_token = 3;
+}

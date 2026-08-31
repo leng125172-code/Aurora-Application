@@ -1,0 +1,68 @@
+name: Aurora 2.0 CI
+
+on:
+  push:
+    branches: ["2.0"]
+    paths:
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "rust-toolchain.toml"
+      - "Libraries/AuroraCommunication/**"
+      - "Services/AuroraCore/**"
+      - "Contracts/Protos/**"
+      - "Sources/Aurora2/**"
+      - "Documents/Aurora2/**"
+      - ".github/workflows/aurora2-ci.yml"
+  pull_request:
+    paths:
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "rust-toolchain.toml"
+      - "Libraries/AuroraCommunication/**"
+      - "Services/AuroraCore/**"
+      - "Contracts/Protos/**"
+      - "Sources/Aurora2/**"
+      - "Documents/Aurora2/**"
+
+jobs:
+  rust:
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.98.0
+          components: rustfmt
+      - run: cargo fmt --all --check
+      - run: cargo test --workspace --locked
+
+  hmi-host:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+      - run: dotnet build Sources/Aurora2/Aurora.Hmi.Host/Aurora.Hmi.Host.csproj --configuration Release
+
+  docs:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: Documents/Aurora2
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: Documents/Aurora2/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: aurora2-docs
+          path: Documents/Aurora2/.vitepress/dist

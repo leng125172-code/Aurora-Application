@@ -1067,6 +1067,9 @@
             <Platform Solution="*|x86" Project="x86" />
         </Project>
     </Folder>
+    <Folder Name="/Sources/Aurora2/">
+        <Project Path="Sources/Aurora2/Aurora.Hmi.Host/Aurora.Hmi.Host.csproj" />
+    </Folder>
     <Folder Name="/Tools/" />
     <Folder Name="/Tools/CSharpTools/" />
     <Folder Name="/Tools/PythonTools/" />

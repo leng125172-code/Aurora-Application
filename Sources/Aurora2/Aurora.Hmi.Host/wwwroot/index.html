@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Aurora 2.0 调试台</title>
+  <style>
+    :root { color-scheme: dark; font-family: system-ui, sans-serif; background: #10151d; color: #e7edf7; }
+    body { max-width: 820px; margin: 4rem auto; padding: 0 1rem; }
+    .panel { background: #18212c; border: 1px solid #2d3b4c; border-radius: 12px; padding: 1.25rem; margin: 1rem 0; }
+    .state { font-size: 2rem; color: #65d1ff; }
+    label { display: block; margin: .7rem 0; }
+    input { width: 100%; box-sizing: border-box; padding: .65rem; background: #0f151d; color: inherit; border: 1px solid #405269; border-radius: 6px; }
+    button { padding: .7rem 1rem; margin: .3rem; border: 0; border-radius: 6px; cursor: pointer; }
+    .danger { background: #c73e45; color: white; }
+    pre { white-space: pre-wrap; color: #a9bad0; }
+  </style>
+</head>
+<body>
+  <h1>Aurora 2.0 Web 调试台</h1>
+  <p>页面由设备上的 HMI Host 托管。远程控制默认关闭，启用时需要 API Key 和控制租约。</p>
+  <section class="panel">
+    <div id="state" class="state">连接中…</div>
+    <pre id="snapshot"></pre>
+  </section>
+  <section class="panel">
+    <label>操作员 <input id="operator" value="debug-user"></label>
+    <label>远程 API Key <input id="apiKey" type="password"></label>
+    <button onclick="lease()">申请 60 秒租约</button>
+    <button onclick="command('start')">启动</button>
+    <button onclick="command('stop')">停止</button>
+    <button class="danger" onclick="command('emergency-stop')">安全停机</button>
+    <pre id="result"></pre>
+  </section>
+  <script>
+    let leaseToken = '';
+    const headers = () => ({ 'Content-Type': 'application/json', 'X-Aurora-Remote-Key': apiKey.value });
+    async function refresh() {
+      try {
+        const value = await fetch('/api/stations/main').then(r => r.json());
+        state.textContent = ['未知', '安全停机', '待机', '运行', '故障'][value.state] ?? value.state;
+        snapshot.textContent = JSON.stringify(value, null, 2);
+      } catch (error) { state.textContent = 'Core 离线'; }
+    }
+    async function lease() {
+      const response = await fetch('/api/remote/stations/main/lease', {
+        method: 'POST', headers: headers(), body: JSON.stringify({ operatorId: operator.value, requestedSeconds: 60 })
+      });
+      const value = await response.json(); leaseToken = value.leaseToken ?? '';
+      result.textContent = JSON.stringify(value, null, 2);
+    }
+    async function command(name) {
+      const response = await fetch('/api/remote/stations/main/' + name, {
+        method: 'POST', headers: headers(), body: JSON.stringify({ operatorId: operator.value, leaseToken, reason: 'Web debug console' })
+      });
+      result.textContent = JSON.stringify(await response.json(), null, 2); await refresh();
+    }
+    refresh(); setInterval(refresh, 1000);
+  </script>
+</body>
+</html>
