@@ -558,11 +558,25 @@ mod native_backend {
         )
     }
     fn native_error(code: u32) -> CommError {
+        let (stable_code, category, retryable) = match code {
+            0x800A_0000 | 0x8085_0000 => ("OPCUA.NATIVE.TIMEOUT", CommErrorCategory::Timeout, true),
+            0x8005_0000 | 0x800C_0000 | 0x800D_0000 | 0x8026_0000 | 0x8086_0000 | 0x808A_0000
+            | 0x80AC_0000 | 0x80AE_0000 => {
+                ("OPCUA.NATIVE.TRANSPORT", CommErrorCategory::Transport, true)
+            }
+            0x8013_0000 | 0x8016_0000 | 0x8017_0000 | 0x8018_0000 | 0x801A_0000 | 0x801D_0000
+            | 0x801F_0000 | 0x8021_0000 | 0x8054_0000 | 0x8055_0000 => (
+                "OPCUA.NATIVE.AUTHENTICATION",
+                CommErrorCategory::Authentication,
+                false,
+            ),
+            _ => ("OPCUA.NATIVE.STATUS", CommErrorCategory::Protocol, false),
+        };
         CommError::new(
-            "OPCUA.NATIVE.STATUS",
-            CommErrorCategory::Protocol,
+            stable_code,
+            category,
             format!("open62541 status 0x{code:08X}"),
-            false,
+            retryable,
         )
         .with_protocol_code(code as i32)
     }

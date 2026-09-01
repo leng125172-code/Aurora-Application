@@ -153,7 +153,13 @@ UA_StatusCode aurora_opc_browse(AuroraOpcClient *client, const char *text,
             aurora_copy_ua_string(output->display_name, sizeof(output->display_name), &reference->displayName.text);
             output->variable = reference->nodeClass == UA_NODECLASS_VARIABLE;
         }
-        if(result.continuationPoint.length == 0 || *written >= capacity) break;
+        if(result.continuationPoint.length == 0) break;
+        if(*written >= capacity) {
+            UA_BrowseResult released = UA_Client_browseNext(client->client, true,
+                                                            result.continuationPoint);
+            UA_BrowseResult_clear(&released);
+            break;
+        }
         UA_ByteString continuation = UA_BYTESTRING_NULL;
         code = UA_ByteString_copy(&result.continuationPoint, &continuation);
         UA_BrowseResult_clear(&result);
