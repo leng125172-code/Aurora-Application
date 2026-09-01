@@ -31,7 +31,7 @@ pub enum MessageSecurityMode {
 pub enum SecurityPolicy {
     /// No security policy.
     None,
-    /// Basic256Sha256.
+    /// `Basic256Sha256`.
     Basic256Sha256,
     /// AES-128/SHA-256/RSA-OAEP.
     Aes128Sha256RsaOaep,
@@ -76,6 +76,10 @@ impl OpcUaOptions {
     }
 
     /// Rejects unsafe or incomplete combinations before native code runs.
+    ///
+    /// # Errors
+    ///
+    /// Returns a configuration error for invalid endpoint or certificate settings.
     pub fn validate(&self) -> CommResult<()> {
         if !self.endpoint.starts_with("opc.tcp://") {
             return Err(configuration("endpoint must start with opc.tcp://"));
@@ -103,7 +107,7 @@ impl OpcUaOptions {
 /// One namespace entry returned from Browse.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BrowseNode {
-    /// NodeId text.
+    /// `NodeId` text.
     pub node_id: String,
     /// Browse name.
     pub browse_name: String,
@@ -143,6 +147,10 @@ pub struct OpcUaClient<B: OpcUaBackend> {
 
 impl<B: OpcUaBackend> OpcUaClient<B> {
     /// Creates a disconnected client.
+    ///
+    /// # Errors
+    ///
+    /// Returns a configuration error when `options` are inconsistent.
     pub fn new(options: OpcUaOptions, backend: Arc<B>) -> CommResult<Self> {
         options.validate()?;
         let (status_tx, _) = watch::channel(DeviceStatus::disconnected());
@@ -153,6 +161,10 @@ impl<B: OpcUaBackend> OpcUaClient<B> {
         })
     }
     /// Browses one node.
+    ///
+    /// # Errors
+    ///
+    /// Returns backend connection, service, or node errors.
     pub async fn browse(&self, node_id: &str) -> CommResult<Vec<BrowseNode>> {
         self.backend.browse(node_id).await
     }

@@ -81,8 +81,8 @@ impl ManagedSession {
         let status_rx = client.status();
         let shutdown = CancellationToken::new();
         let worker_shutdown = shutdown.clone();
-        let worker_client = Arc::clone(&client);
-        let worker_options = options.clone();
+        let worker_client = client;
+        let worker_options = options;
         let worker = tokio::spawn(async move {
             run_session(
                 worker_client,
@@ -108,6 +108,10 @@ impl ManagedSession {
     }
 
     /// Executes a read on the requested priority lane.
+    ///
+    /// # Errors
+    ///
+    /// Returns a queue, connection, protocol, or device error.
     pub async fn read(
         &self,
         request: ReadRequest,
@@ -124,6 +128,10 @@ impl ManagedSession {
     }
 
     /// Executes a write on the requested priority lane.
+    ///
+    /// # Errors
+    ///
+    /// Returns a queue, connection, protocol, or device error.
     pub async fn write(
         &self,
         request: WriteRequest,
@@ -140,6 +148,10 @@ impl ManagedSession {
     }
 
     /// Creates a latest-value polling subscription.
+    ///
+    /// # Errors
+    ///
+    /// Returns an unavailable error after the session worker has stopped.
     pub fn watch(&self, spec: WatchSpec) -> CommResult<WatchSubscription> {
         let id = Uuid::new_v4();
         let initial = DeviceUpdate {
@@ -212,7 +224,7 @@ async fn run_session(
 
         tokio::select! {
             biased;
-            _ = shutdown.cancelled() => break,
+            () = shutdown.cancelled() => break,
             Some(id) = watch_cancel_rx.recv() => { watches.remove(&id); },
             Some((id, spec, sender)) = watch_add_rx.recv() => {
                 watches.insert(id, WatchEntry { spec, next_due: Instant::now(), sender });
@@ -336,6 +348,7 @@ async fn ensure_connected(
     }
 }
 
+#[allow(clippy::needless_pass_by_value)]
 fn queue_error<T>(error: mpsc::error::TrySendError<T>) -> CommError {
     match error {
         mpsc::error::TrySendError::Full(_) => CommError::new(

@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 
 /// Features implemented by a concrete device client.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[allow(clippy::struct_excessive_bools)]
 pub struct DeviceCapabilities {
     /// Supports individual reads.
     pub read: bool,

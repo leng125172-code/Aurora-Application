@@ -23,7 +23,7 @@ impl DataLayout {
         match self {
             Self::Abcd => {}
             Self::Badc => {
-                for word in value.chunks_exact_mut(2) {
+                for word in value.as_chunks_mut::<2>().0 {
                     word.swap(0, 1);
                 }
             }

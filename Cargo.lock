@@ -48,6 +48,7 @@ dependencies = [
 name = "aurora-comm-runtime"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "aurora-comm-core",
  "tokio",
  "tokio-util",
