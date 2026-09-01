@@ -55,7 +55,7 @@ mod native {
     impl NativeClient {
         /// Connects a new client.
         pub fn connect(endpoint: &str) -> Result<Self, u32> {
-            let endpoint = CString::new(endpoint).map_err(|_| 0x80ab_0000)?;
+            let endpoint = CString::new(endpoint).map_err(|_| 0x80ab_0000_u32)?;
             let raw = unsafe { aurora_opc_new(endpoint.as_ptr()) };
             if raw.is_null() {
                 Err(0x8005_0000)
@@ -71,15 +71,15 @@ mod native {
             trust: &[u8],
             credentials: Option<(&str, &str)>,
         ) -> Result<Self, u32> {
-            let endpoint = CString::new(endpoint).map_err(|_| 0x80ab_0000)?;
+            let endpoint = CString::new(endpoint).map_err(|_| 0x80ab_0000_u32)?;
             let username = credentials
                 .map(|value| CString::new(value.0))
                 .transpose()
-                .map_err(|_| 0x80ab_0000)?;
+                .map_err(|_| 0x80ab_0000_u32)?;
             let password = credentials
                 .map(|value| CString::new(value.1))
                 .transpose()
-                .map_err(|_| 0x80ab_0000)?;
+                .map_err(|_| 0x80ab_0000_u32)?;
             let raw = unsafe {
                 aurora_opc_new_configured(
                     endpoint.as_ptr(),
@@ -105,7 +105,7 @@ mod native {
         }
         /// Reads one scalar.
         pub fn read(&self, node: &str) -> Result<NativeScalar, u32> {
-            let node = CString::new(node).map_err(|_| 0x80ab_0000)?;
+            let node = CString::new(node).map_err(|_| 0x80ab_0000_u32)?;
             let mut value = Scalar {
                 kind: 0,
                 length: 0,
@@ -124,7 +124,7 @@ mod native {
         }
         /// Writes one scalar.
         pub fn write(&self, node: &str, value: NativeScalar) -> Result<(), u32> {
-            let node = CString::new(node).map_err(|_| 0x80ab_0000)?;
+            let node = CString::new(node).map_err(|_| 0x80ab_0000_u32)?;
             let value = Scalar {
                 kind: value.kind,
                 length: value.length,
