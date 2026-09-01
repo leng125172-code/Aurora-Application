@@ -21,6 +21,17 @@ pub enum StationRunState {
     Faulted,
 }
 
+/// Trusted source that initiated a station transition.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum StationCommandOrigin {
+    /// Core lifecycle or an internal safety action.
+    CoreService,
+    /// Operator physically present at the machine HMI.
+    LocalHmi,
+    /// Authenticated remote operator holding the control lease.
+    RemoteWeb,
+}
+
 /// Immutable station state published to API clients.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StationSnapshot {
@@ -41,6 +52,7 @@ pub struct StationSnapshot {
 enum StationCommand {
     Transition {
         target: StationRunState,
+        origin: StationCommandOrigin,
         operator_id: String,
         reason: String,
         response: oneshot::Sender<Result<StationSnapshot>>,
@@ -58,16 +70,37 @@ pub struct StationHandle {
 }
 
 impl StationHandle {
-    /// Starts a station in safe-stop state after service startup.
-    pub fn spawn(station_id: impl Into<String>, journal: Arc<EventJournal>) -> Self {
+    /// Starts a station in safe-stop state and durably records the service startup.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the startup safety event cannot be persisted or
+    /// the station sequence is exhausted.
+    pub fn spawn(station_id: impl Into<String>, journal: Arc<EventJournal>) -> Result<Self> {
         let station_id = station_id.into();
+        let sequence = journal
+            .last_sequence(&station_id)?
+            .checked_add(1)
+            .ok_or_else(|| anyhow!("station sequence exhausted"))?;
+        let changed_at = SystemTime::now();
+        journal.append(&StationEvent {
+            event_id: Uuid::new_v4(),
+            station_id: station_id.clone(),
+            sequence,
+            previous_state: "ServiceOffline".to_owned(),
+            new_state: format!("{:?}", StationRunState::SafeStop),
+            origin: format!("{:?}", StationCommandOrigin::CoreService),
+            operator_id: "aurora-core-service".to_owned(),
+            reason: "CORE_SERVICE_STARTED".to_owned(),
+            occurred_at: changed_at,
+        })?;
         let initial = StationSnapshot {
             station_id,
             state: StationRunState::SafeStop,
-            sequence: 0,
+            sequence,
             requires_manual_acknowledgement: true,
             last_reason: "CORE_SERVICE_STARTED".to_owned(),
-            changed_at: SystemTime::now(),
+            changed_at,
         };
         let (snapshot_tx, snapshot) = watch::channel(initial.clone());
         let (sender, mut receiver) = mpsc::channel(128);
@@ -80,6 +113,7 @@ impl StationHandle {
                     }
                     StationCommand::Transition {
                         target,
+                        origin,
                         operator_id,
                         reason,
                         response,
@@ -94,11 +128,12 @@ impl StationHandle {
                                     sequence: current.sequence + 1,
                                     previous_state: format!("{previous:?}"),
                                     new_state: format!("{target:?}"),
+                                    origin: format!("{origin:?}"),
                                     operator_id,
                                     reason: reason.clone(),
                                     occurred_at: SystemTime::now(),
                                 };
-                                if let Err(error) = journal.append(&event).await {
+                                if let Err(error) = journal.append(&event) {
                                     tracing::error!(%error, "station transition journal failed");
                                     let _ = response.send(Err(error));
                                     continue;
@@ -120,7 +155,7 @@ impl StationHandle {
                 }
             }
         });
-        Self { sender, snapshot }
+        Ok(Self { sender, snapshot })
     }
 
     /// Returns the latest in-memory snapshot without a database round trip.
@@ -129,6 +164,10 @@ impl StationHandle {
     }
 
     /// Reads through the actor mailbox, useful as a liveness check.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the actor mailbox or response channel is closed.
     pub async fn get(&self) -> Result<StationSnapshot> {
         let (response, receiver) = oneshot::channel();
         self.sender.send(StationCommand::Get { response }).await?;
@@ -136,9 +175,15 @@ impl StationHandle {
     }
 
     /// Requests a validated state transition.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the mailbox is unavailable, persistence fails, or
+    /// the requested transition violates the station state machine.
     pub async fn set_state(
         &self,
         target: StationRunState,
+        origin: StationCommandOrigin,
         operator_id: String,
         reason: String,
     ) -> Result<StationSnapshot> {
@@ -146,6 +191,7 @@ impl StationHandle {
         self.sender
             .send(StationCommand::Transition {
                 target,
+                origin,
                 operator_id,
                 reason,
                 response,
@@ -158,11 +204,11 @@ impl StationHandle {
 fn transition(current: &StationSnapshot, target: StationRunState) -> Result<()> {
     let allowed = matches!(
         (current.state, target),
-        (StationRunState::SafeStop, StationRunState::Idle)
-            | (StationRunState::Idle, StationRunState::Running)
-            | (StationRunState::Running, StationRunState::Idle)
-            | (_, StationRunState::SafeStop)
-            | (_, StationRunState::Faulted)
+        (
+            StationRunState::SafeStop | StationRunState::Running,
+            StationRunState::Idle
+        ) | (StationRunState::Idle, StationRunState::Running)
+            | (_, StationRunState::SafeStop | StationRunState::Faulted)
     );
     if allowed {
         Ok(())

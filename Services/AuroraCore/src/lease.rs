@@ -24,6 +24,11 @@ pub struct LeaseManager {
 
 impl LeaseManager {
     /// Grants a lease for at most five minutes, replacing an expired lease only.
+    ///
+    /// # Errors
+    ///
+    /// Returns `CONTROL.LEASE.ALREADY_HELD` while another unexpired lease is
+    /// active.
     pub async fn acquire(
         &self,
         operator_id: String,

@@ -2,6 +2,7 @@
 
 pub mod actor;
 pub mod api;
+pub mod device_vision_api;
 pub mod lease;
 pub mod persistence;
 

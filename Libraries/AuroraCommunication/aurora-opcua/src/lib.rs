@@ -366,7 +366,11 @@ fn node_not_found() -> CommError {
 
 #[cfg(feature = "native")]
 mod native_backend {
-    use super::*;
+    use super::{
+        Arc, AtomicBool, BrowseNode, CommError, CommErrorCategory, CommResult, DeviceCapabilities,
+        DeviceValue, MessageSecurityMode, OpcUaBackend, OpcUaOptions, Ordering, SecurityPolicy,
+        async_trait, broadcast, configuration,
+    };
     use aurora_opcua_sys::{NativeClient, NativeScalar};
     use std::sync::Mutex as StdMutex;
     use tokio::sync::Mutex;
@@ -449,10 +453,10 @@ mod native_backend {
                         .ok()
                         .and_then(|guard| guard.as_ref().and_then(|client| client.iterate(50).ok()))
                         .flatten();
-                    if let Some(event) = event {
-                        if let Ok(value) = decode(event.value) {
-                            let _ = updates.send((event.node_id, value));
-                        }
+                    if let Some(event) = event
+                        && let Ok(value) = decode(event.value)
+                    {
+                        let _ = updates.send((event.node_id, value));
                     }
                 }
             }));
@@ -578,7 +582,7 @@ mod native_backend {
             format!("open62541 status 0x{code:08X}"),
             retryable,
         )
-        .with_protocol_code(code as i32)
+        .with_protocol_code(code.cast_signed())
     }
     fn decode(value: NativeScalar) -> CommResult<DeviceValue> {
         let d = value.data;
@@ -614,11 +618,9 @@ mod native_backend {
         };
         let mut data = [0; 16];
         data[..bytes.len()].copy_from_slice(&bytes);
-        Ok(NativeScalar {
-            kind,
-            data,
-            length: bytes.len() as u32,
-        })
+        let length = u32::try_from(bytes.len())
+            .map_err(|_| configuration("native OPC UA scalar is too large"))?;
+        Ok(NativeScalar { kind, data, length })
     }
 }
 

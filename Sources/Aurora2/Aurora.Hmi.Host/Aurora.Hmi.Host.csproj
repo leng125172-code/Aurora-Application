@@ -18,6 +18,9 @@
     <Protobuf Include="..\..\..\Contracts\Protos\aurora\v2\core.proto"
               GrpcServices="Client"
               Link="Protos\core.proto" />
+    <Protobuf Include="..\..\..\Contracts\Protos\aurora\v2\device_vision.proto"
+              GrpcServices="Client"
+              Link="Protos\device_vision.proto" />
     <Content Update="wwwroot\**\*">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>

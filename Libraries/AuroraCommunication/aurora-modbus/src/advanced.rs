@@ -34,6 +34,11 @@ pub fn mask_write_register_pdu(address: u16, and_mask: u16, or_mask: u16) -> Vec
 }
 
 /// Builds an FC23 read/write-multiple-registers PDU.
+///
+/// # Errors
+///
+/// Returns a configuration error when either quantity is outside the Modbus
+/// FC23 limits.
 pub fn read_write_multiple_registers_pdu(
     read_address: u16,
     read_registers: u16,
@@ -60,6 +65,11 @@ pub fn read_write_multiple_registers_pdu(
 }
 
 /// Builds an FC20 read-file-record PDU.
+///
+/// # Errors
+///
+/// Returns a configuration error when the request is empty or contains an
+/// invalid file or register count.
 pub fn read_file_record_pdu(records: &[FileRecordRead]) -> CommResult<Vec<u8>> {
     if records.is_empty() || records.len() > 35 {
         return Err(configuration("FC20 requires between 1 and 35 records"));
@@ -80,6 +90,11 @@ pub fn read_file_record_pdu(records: &[FileRecordRead]) -> CommResult<Vec<u8>> {
 }
 
 /// Builds an FC21 write-file-record PDU.
+///
+/// # Errors
+///
+/// Returns a configuration error when a record is invalid or the encoded PDU
+/// would exceed the one-byte Modbus byte-count field.
 pub fn write_file_record_pdu(records: &[FileRecordWrite]) -> CommResult<Vec<u8>> {
     if records.is_empty() {
         return Err(configuration("FC21 requires at least one record"));
@@ -99,7 +114,9 @@ pub fn write_file_record_pdu(records: &[FileRecordWrite]) -> CommResult<Vec<u8>>
         pdu.push(6);
         pdu.extend_from_slice(&record.file.to_be_bytes());
         pdu.extend_from_slice(&record.record.to_be_bytes());
-        pdu.extend_from_slice(&(record.values.len() as u16).to_be_bytes());
+        let register_count = u16::try_from(record.values.len())
+            .map_err(|_| configuration("FC21 register count exceeds 65535"))?;
+        pdu.extend_from_slice(&register_count.to_be_bytes());
         for value in &record.values {
             pdu.extend_from_slice(&value.to_be_bytes());
         }

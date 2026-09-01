@@ -35,8 +35,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: 1.98.0
-          components: rustfmt
+          components: rustfmt, clippy
       - run: cargo fmt --all --check
+      - run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - run: cargo test --workspace --locked
 
   opcua-native:
@@ -46,8 +47,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: 1.98.0
+          components: clippy
       - name: Build pinned open62541 and mbedTLS boundary
-        run: cargo check -p aurora-opcua --features native --locked
+        run: cargo clippy -p aurora-opcua --features native --all-targets --locked -- -D warnings
 
   hmi-host:
     runs-on: ubuntu-latest
@@ -56,6 +58,7 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "10.0.x"
+      - run: dotnet build Sources/Aurora2/Aurora.DeviceVision.Host/Aurora.DeviceVision.Host.csproj --configuration Release
       - run: dotnet build Sources/Aurora2/Aurora.Hmi.Host/Aurora.Hmi.Host.csproj --configuration Release
 
   docs:

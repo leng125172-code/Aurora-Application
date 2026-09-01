@@ -36,6 +36,11 @@ pub struct S7Address {
 
 impl S7Address {
     /// Absolute bit offset encoded in an S7 ANY pointer.
+    ///
+    /// # Errors
+    ///
+    /// Returns a configuration error when the address cannot fit in the
+    /// 24-bit S7 ANY wire offset.
     pub fn wire_bit_offset(self) -> CommResult<u32> {
         self.byte_offset
             .checked_mul(8)

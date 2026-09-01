@@ -329,7 +329,7 @@ fn encode_value(value: &DeviceValue) -> CommResult<(Vec<u8>, u16, bool)> {
         ($v:expr) => {
             Ok((
                 $v.to_be_bytes().to_vec(),
-                std::mem::size_of_val($v) as u16,
+                wire_count(std::mem::size_of_val($v))?,
                 false,
             ))
         };
@@ -340,7 +340,8 @@ fn encode_value(value: &DeviceValue) -> CommResult<(Vec<u8>, u16, bool)> {
             for v in $v {
                 b.extend_from_slice(&v.to_be_bytes());
             }
-            Ok((b, (std::mem::size_of_val(&$v[0]) * $v.len()) as u16, false))
+            let length = std::mem::size_of_val($v.as_slice());
+            Ok((b, wire_count(length)?, false))
         }};
     }
     match value {
@@ -352,7 +353,7 @@ fn encode_value(value: &DeviceValue) -> CommResult<(Vec<u8>, u16, bool)> {
                     b[i / 8] |= 1 << (i % 8);
                 }
             }
-            Ok((b, v.len() as u16, true))
+            Ok((b, wire_count(v.len())?, true))
         }
         DeviceValue::UInt16(v) => scalar!(v),
         DeviceValue::Int16(v) => scalar!(v),
@@ -370,10 +371,14 @@ fn encode_value(value: &DeviceValue) -> CommResult<(Vec<u8>, u16, bool)> {
         DeviceValue::Int64s(v) => many!(v),
         DeviceValue::Float32s(v) => many!(v),
         DeviceValue::Float64s(v) => many!(v),
-        DeviceValue::String(v) => Ok((v.as_bytes().to_vec(), v.len() as u16, false)),
-        DeviceValue::Bytes(v) => Ok((v.clone(), v.len() as u16, false)),
+        DeviceValue::String(v) => Ok((v.as_bytes().to_vec(), wire_count(v.len())?, false)),
+        DeviceValue::Bytes(v) => Ok((v.clone(), wire_count(v.len())?, false)),
         _ => Err(protocol("unsupported future S7 value type")),
     }
+}
+
+fn wire_count(value: usize) -> CommResult<u16> {
+    u16::try_from(value).map_err(|_| protocol("S7 value exceeds 65535 wire units"))
 }
 
 fn protocol(message: impl Into<String>) -> CommError {

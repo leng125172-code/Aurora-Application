@@ -1,6 +1,6 @@
 //! Local-only gRPC boundary consumed by the .NET HMI host.
 
-use crate::actor::{StationHandle, StationRunState, StationSnapshot};
+use crate::actor::{StationCommandOrigin, StationHandle, StationRunState, StationSnapshot};
 use crate::contracts::station_control_server::StationControl;
 use crate::contracts::{
     AcquireRemoteLeaseRequest, CommandReply, ControlOrigin, GetStationRequest,
@@ -52,9 +52,13 @@ impl StationControlApi {
 
     async fn command(
         &self,
-        request: StationCommandRequest,
+        mut request: StationCommandRequest,
         target: StationRunState,
     ) -> Result<Response<CommandReply>, Status> {
+        if target == StationRunState::SafeStop && request.operator_id.trim().is_empty() {
+            "local-safety-command".clone_into(&mut request.operator_id);
+        }
+        validate_command_request(&request)?;
         self.authorize(&request).await?;
         let reason = if request.reason.trim().is_empty() {
             format!("{target:?}")
@@ -63,13 +67,26 @@ impl StationControlApi {
         };
         let reply = match self
             .station
-            .set_state(target, request.operator_id, reason)
+            .set_state(
+                target,
+                command_origin(request.origin),
+                request.operator_id,
+                reason,
+            )
             .await
         {
             Ok(snapshot) => accepted(snapshot),
             Err(error) => rejected("STATION.COMMAND.REJECTED", error.to_string()),
         };
         Ok(Response::new(reply))
+    }
+}
+
+fn command_origin(origin: i32) -> StationCommandOrigin {
+    match ControlOrigin::try_from(origin).unwrap_or(ControlOrigin::Unspecified) {
+        ControlOrigin::LocalHmi => StationCommandOrigin::LocalHmi,
+        ControlOrigin::RemoteWeb => StationCommandOrigin::RemoteWeb,
+        ControlOrigin::Unspecified => StationCommandOrigin::CoreService,
     }
 }
 
@@ -133,9 +150,7 @@ impl StationControl for StationControlApi {
     ) -> Result<Response<RemoteLeaseReply>, Status> {
         let request = request.into_inner();
         self.require_station(&request.station_id)?;
-        if request.operator_id.trim().is_empty() {
-            return Err(Status::invalid_argument("CONTROL.OPERATOR.REQUIRED"));
-        }
+        validate_operator(&request.operator_id)?;
         let requested = Duration::from_secs(u64::from(request.requested_seconds));
         let reply = match self.lease.acquire(request.operator_id, requested).await {
             Ok(lease) => RemoteLeaseReply {
@@ -162,6 +177,7 @@ impl StationControl for StationControlApi {
     ) -> Result<Response<CommandReply>, Status> {
         let request = request.into_inner();
         self.require_station(&request.station_id)?;
+        validate_operator(&request.operator_id)?;
         let released = self
             .lease
             .release(&request.operator_id, &request.lease_token)
@@ -180,6 +196,27 @@ impl StationControl for StationControlApi {
             )
         }))
     }
+}
+
+fn validate_command_request(request: &StationCommandRequest) -> Result<(), Status> {
+    validate_operator(&request.operator_id)?;
+    if request.reason.len() > 1_024 {
+        return Err(Status::invalid_argument("CONTROL.REASON.TOO_LONG"));
+    }
+    if request.lease_token.len() > 128 {
+        return Err(Status::invalid_argument("CONTROL.LEASE_TOKEN.TOO_LONG"));
+    }
+    Ok(())
+}
+
+fn validate_operator(operator_id: &str) -> Result<(), Status> {
+    if operator_id.trim().is_empty() {
+        return Err(Status::invalid_argument("CONTROL.OPERATOR.REQUIRED"));
+    }
+    if operator_id.len() > 128 {
+        return Err(Status::invalid_argument("CONTROL.OPERATOR.TOO_LONG"));
+    }
+    Ok(())
 }
 
 fn accepted(snapshot: StationSnapshot) -> CommandReply {
@@ -224,5 +261,46 @@ impl From<StationSnapshot> for crate::contracts::StationSnapshot {
             last_reason: value.last_reason,
             changed_at_unix_ms: unix_ms(value.changed_at),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::persistence::EventJournal;
+    use std::sync::Arc;
+
+    #[tokio::test]
+    async fn invalid_local_command_does_not_preempt_remote_lease() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let journal = Arc::new(
+            EventJournal::open(directory.path().join("outbox.redb"), None)
+                .await
+                .expect("journal should open"),
+        );
+        let station = StationHandle::spawn("main", journal).expect("startup event should persist");
+        let leases = LeaseManager::default();
+        let lease = leases
+            .acquire("remote-user".to_owned(), Duration::from_secs(60))
+            .await
+            .expect("lease should be granted");
+        let api = StationControlApi::new(station, leases.clone());
+
+        let result = api
+            .command(
+                StationCommandRequest {
+                    station_id: "main".to_owned(),
+                    operator_id: " ".to_owned(),
+                    origin: ControlOrigin::LocalHmi.into(),
+                    lease_token: String::new(),
+                    reason: "invalid local request".to_owned(),
+                },
+                StationRunState::Running,
+            )
+            .await;
+
+        let error = result.expect_err("blank operator must be rejected");
+        assert_eq!(error.code(), tonic::Code::InvalidArgument);
+        assert!(leases.validate("remote-user", &lease.token).await);
     }
 }

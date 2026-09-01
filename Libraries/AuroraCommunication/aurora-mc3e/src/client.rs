@@ -252,10 +252,12 @@ impl DeviceClient for Mc3eClient {
 
 fn word_width(kind: DeviceDataType) -> CommResult<u16> {
     Ok(match kind {
-        DeviceDataType::UInt16 | DeviceDataType::Int16 => 1,
+        DeviceDataType::UInt16
+        | DeviceDataType::Int16
+        | DeviceDataType::String
+        | DeviceDataType::Bytes => 1,
         DeviceDataType::UInt32 | DeviceDataType::Int32 | DeviceDataType::Float32 => 2,
         DeviceDataType::UInt64 | DeviceDataType::Int64 | DeviceDataType::Float64 => 4,
-        DeviceDataType::String | DeviceDataType::Bytes => 1,
         DeviceDataType::Bool => return Err(configuration("Bool uses bit access")),
         _ => return Err(configuration("unsupported future MC data type")),
     })
@@ -340,7 +342,7 @@ fn encode_words(value: &DeviceValue) -> CommResult<(Vec<u8>, u16, bool)> {
     macro_rules! scalar {
         ($v:expr) => {{
             let b = $v.to_le_bytes().to_vec();
-            let p = (b.len() / 2) as u16;
+            let p = wire_count(b.len() / 2)?;
             Ok((b, p, false))
         }};
     }
@@ -350,7 +352,7 @@ fn encode_words(value: &DeviceValue) -> CommResult<(Vec<u8>, u16, bool)> {
             for x in $v {
                 b.extend_from_slice(&x.to_le_bytes());
             }
-            let p = (b.len() / 2) as u16;
+            let p = wire_count(b.len() / 2)?;
             Ok((b, p, false))
         }};
     }
@@ -363,7 +365,7 @@ fn encode_words(value: &DeviceValue) -> CommResult<(Vec<u8>, u16, bool)> {
                     b[i / 2] |= if i % 2 == 0 { 0x10 } else { 1 };
                 }
             }
-            Ok((b, v.len() as u16, true))
+            Ok((b, wire_count(v.len())?, true))
         }
         DeviceValue::UInt16(v) => scalar!(v),
         DeviceValue::Int16(v) => scalar!(v),
@@ -383,22 +385,25 @@ fn encode_words(value: &DeviceValue) -> CommResult<(Vec<u8>, u16, bool)> {
         DeviceValue::Float64s(v) => many!(v),
         DeviceValue::String(v) => {
             let mut b = v.as_bytes().to_vec();
-            if b.len() % 2 != 0 {
+            if !b.len().is_multiple_of(2) {
                 b.push(0);
             }
-            let p = (b.len() / 2) as u16;
+            let p = wire_count(b.len() / 2)?;
             Ok((b, p, false))
         }
         DeviceValue::Bytes(v) => {
             let mut b = v.clone();
-            if b.len() % 2 != 0 {
+            if !b.len().is_multiple_of(2) {
                 b.push(0);
             }
-            let p = (b.len() / 2) as u16;
+            let p = wire_count(b.len() / 2)?;
             Ok((b, p, false))
         }
         _ => Err(configuration("unsupported future MC value type")),
     }
+}
+fn wire_count(value: usize) -> CommResult<u16> {
+    u16::try_from(value).map_err(|_| configuration("MC value exceeds 65535 wire points"))
 }
 fn protocol(message: impl Into<String>) -> CommError {
     CommError::new(

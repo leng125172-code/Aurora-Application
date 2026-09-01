@@ -12,6 +12,10 @@ pub fn encode_rtu_frame(unit_id: u8, pdu: &[u8]) -> Vec<u8> {
 }
 
 /// Validates and decodes one complete RTU application data unit.
+///
+/// # Errors
+///
+/// Returns a protocol error when the frame is too short or its CRC is invalid.
 pub fn decode_rtu_frame(frame: &[u8]) -> CommResult<(u8, Vec<u8>)> {
     if frame.len() < 4 {
         return Err(frame_error(
@@ -43,6 +47,11 @@ pub fn encode_ascii_frame(unit_id: u8, pdu: &[u8]) -> Vec<u8> {
 }
 
 /// Validates and decodes one complete Modbus ASCII frame.
+///
+/// # Errors
+///
+/// Returns a protocol error when delimiters, hexadecimal data, length, or LRC
+/// validation fails.
 pub fn decode_ascii_frame(frame: &[u8]) -> CommResult<(u8, Vec<u8>)> {
     if frame.len() < 9 || frame.first() != Some(&b':') || !frame.ends_with(b"\r\n") {
         return Err(frame_error(
@@ -58,7 +67,7 @@ pub fn decode_ascii_frame(frame: &[u8]) -> CommResult<(u8, Vec<u8>)> {
         ));
     }
     let mut binary = Vec::with_capacity(hexadecimal.len() / 2);
-    for pair in hexadecimal.chunks_exact(2) {
+    for pair in hexadecimal.as_chunks::<2>().0 {
         let text = std::str::from_utf8(pair)
             .map_err(|_| frame_error("MODBUS.ASCII.HEX", "ASCII payload is not UTF-8"))?;
         binary.push(u8::from_str_radix(text, 16).map_err(|_| {
@@ -74,7 +83,12 @@ pub fn decode_ascii_frame(frame: &[u8]) -> CommResult<(u8, Vec<u8>)> {
             "ASCII payload is too short",
         ));
     }
-    let received = binary.pop().expect("validated non-empty payload");
+    let Some(received) = binary.pop() else {
+        return Err(frame_error(
+            "MODBUS.ASCII.LENGTH",
+            "ASCII payload does not contain an LRC byte",
+        ));
+    };
     if lrc(&binary) != received {
         return Err(frame_error(
             "MODBUS.ASCII.LRC",

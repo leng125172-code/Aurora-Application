@@ -1,0 +1,110 @@
+syntax = "proto3";
+
+package aurora.v2;
+
+service DeviceGateway {
+  rpc ListDevices(ListDevicesRequest) returns (ListDevicesReply);
+  rpc GetDevice(GetDeviceRequest) returns (DeviceDescriptor);
+  rpc CaptureFrame(CaptureFrameRequest) returns (FrameDescriptor);
+}
+
+service VisionGateway {
+  rpc ListOperators(ListVisionOperatorsRequest) returns (ListVisionOperatorsReply);
+  rpc ExecuteOperator(ExecuteVisionOperatorRequest) returns (VisionOperatorReply);
+}
+
+enum DeviceKind {
+  DEVICE_KIND_UNSPECIFIED = 0;
+  DEVICE_KIND_CAMERA = 1;
+  DEVICE_KIND_PROJECTOR = 2;
+  DEVICE_KIND_MOTOR = 3;
+  DEVICE_KIND_PLC = 4;
+}
+
+enum DeviceConnectionState {
+  DEVICE_CONNECTION_STATE_UNSPECIFIED = 0;
+  DEVICE_CONNECTION_STATE_OFFLINE = 1;
+  DEVICE_CONNECTION_STATE_DISCONNECTED = 2;
+  DEVICE_CONNECTION_STATE_CONNECTED = 3;
+  DEVICE_CONNECTION_STATE_CAPTURING = 4;
+  DEVICE_CONNECTION_STATE_FAULTED = 5;
+}
+
+enum FrameTransport {
+  FRAME_TRANSPORT_UNSPECIFIED = 0;
+  FRAME_TRANSPORT_INLINE = 1;
+  FRAME_TRANSPORT_SHARED_MEMORY = 2;
+}
+
+message ListDevicesRequest {
+  DeviceKind kind = 1;
+}
+
+message ListDevicesReply {
+  repeated DeviceDescriptor devices = 1;
+}
+
+message GetDeviceRequest {
+  string device_id = 1;
+}
+
+message DeviceDescriptor {
+  string device_id = 1;
+  string driver_id = 2;
+  string hardware_id = 3;
+  string display_name = 4;
+  DeviceKind kind = 5;
+  DeviceConnectionState state = 6;
+  repeated string capabilities = 7;
+  string connection_summary = 8;
+  string last_error_code = 9;
+  bool simulated = 10;
+}
+
+message CaptureFrameRequest {
+  string device_id = 1;
+  uint32 timeout_ms = 2;
+  bool preview = 3;
+}
+
+message FrameDescriptor {
+  string frame_id = 1;
+  uint32 width = 2;
+  uint32 height = 3;
+  uint32 stride = 4;
+  string pixel_format = 5;
+  uint64 frame_index = 6;
+  int64 captured_at_unix_ms = 7;
+  FrameTransport transport = 8;
+  bytes inline_data = 9;
+  string shared_memory_name = 10;
+  uint64 byte_length = 11;
+}
+
+message ListVisionOperatorsRequest {}
+
+message ListVisionOperatorsReply {
+  repeated VisionOperatorDescriptor operators = 1;
+}
+
+message VisionOperatorDescriptor {
+  string operator_id = 1;
+  string display_name = 2;
+  string description = 3;
+  repeated string accepted_pixel_formats = 4;
+  string parameters_schema_json = 5;
+}
+
+message ExecuteVisionOperatorRequest {
+  string operator_id = 1;
+  FrameDescriptor input_frame = 2;
+  string parameters_json = 3;
+}
+
+message VisionOperatorReply {
+  bool succeeded = 1;
+  string error_code = 2;
+  string message = 3;
+  string measurements_json = 4;
+  FrameDescriptor output_frame = 5;
+}

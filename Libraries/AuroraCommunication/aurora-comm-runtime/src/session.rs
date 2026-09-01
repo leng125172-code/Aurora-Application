@@ -262,6 +262,7 @@ async fn execute_command(
                 Ok(()) => client.read(&request).await,
                 Err(error) => Err(error),
             };
+            disconnect_after_invalidating_error(client, &result).await;
             let _ = response.send(result);
         }
         SessionCommand::Write { request, response } => {
@@ -269,6 +270,7 @@ async fn execute_command(
                 Ok(()) => client.write(&request).await,
                 Err(error) => Err(error),
             };
+            disconnect_after_invalidating_error(client, &result).await;
             let _ = response.send(result);
         }
     }
@@ -291,15 +293,22 @@ async fn poll_due_watches(
     }
 
     let connected = ensure_connected(client, reconnect_delay, options).await;
+    let mut connection_error = connected.as_ref().err().cloned();
     for id in due {
         let Some(entry) = watches.get_mut(&id) else {
             continue;
         };
         entry.next_due = now + entry.spec.interval;
-        let result = match &connected {
-            Ok(()) => client.read(&entry.spec.request).await,
-            Err(error) => Err(error.clone()),
+        let result = match &connection_error {
+            Some(error) => Err(error.clone()),
+            None => client.read(&entry.spec.request).await,
         };
+        if let Err(error) = &result
+            && error.invalidates_connection()
+        {
+            let _ = client.disconnect().await;
+            connection_error = Some(error.clone());
+        }
         let update = match result {
             Ok(value) => DeviceUpdate {
                 key: entry.spec.request.key.clone(),
@@ -321,6 +330,15 @@ async fn poll_due_watches(
             },
         };
         entry.sender.send_replace(update);
+    }
+}
+
+async fn disconnect_after_invalidating_error<T>(client: &dyn DeviceClient, result: &CommResult<T>) {
+    if result
+        .as_ref()
+        .is_err_and(CommError::invalidates_connection)
+    {
+        let _ = client.disconnect().await;
     }
 }
 
