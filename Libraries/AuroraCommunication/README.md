@@ -19,7 +19,8 @@ The first production slice contains:
   intentionally separate future protocols);
 - OPC UA backend contract with browse/read/write/subscription simulator tests,
   plus a feature-gated native boundary pinned to open62541 1.5.4 and mbedTLS
-  3.6.7. Native browse and monitored items remain HIL-gated preview features.
+  3.6.7. Native secure sessions, browse continuation and monitored items are
+  implemented but remain HIL-gated preview features.
 
 The implementation is derived from internally licensed protocol behavior and
 must not be redistributed outside the authorized organization.

@@ -130,6 +130,12 @@ pub trait OpcUaBackend: Send + Sync {
     async fn write_value(&self, node_id: &str, value: &DeviceValue) -> CommResult<()>;
     /// Browses hierarchical children.
     async fn browse(&self, node_id: &str) -> CommResult<Vec<BrowseNode>>;
+    /// Adds a native or simulated monitored item.
+    async fn monitor(
+        &self,
+        node_id: &str,
+        sampling_interval: std::time::Duration,
+    ) -> CommResult<()>;
     /// Receives data-change notifications.
     fn subscribe(&self) -> broadcast::Receiver<(String, DeviceValue)>;
     /// Reports backend-specific native features.
@@ -167,6 +173,18 @@ impl<B: OpcUaBackend> OpcUaClient<B> {
     /// Returns backend connection, service, or node errors.
     pub async fn browse(&self, node_id: &str) -> CommResult<Vec<BrowseNode>> {
         self.backend.browse(node_id).await
+    }
+    /// Creates a monitored item that publishes through [`Self::subscribe`].
+    ///
+    /// # Errors
+    ///
+    /// Returns backend connection, service, or node errors.
+    pub async fn monitor(
+        &self,
+        node_id: &str,
+        sampling_interval: std::time::Duration,
+    ) -> CommResult<()> {
+        self.backend.monitor(node_id, sampling_interval).await
     }
     /// Subscribes to data changes.
     pub fn subscribe(&self) -> broadcast::Receiver<(String, DeviceValue)> {
@@ -307,6 +325,15 @@ impl OpcUaBackend for SimulatorBackend {
             .cloned()
             .unwrap_or_default())
     }
+
+    async fn monitor(&self, node_id: &str, _: std::time::Duration) -> CommResult<()> {
+        self.ensure_connected()?;
+        if self.values.read().await.contains_key(node_id) {
+            Ok(())
+        } else {
+            Err(node_not_found())
+        }
+    }
     fn subscribe(&self) -> broadcast::Receiver<(String, DeviceValue)> {
         self.updates.subscribe()
     }
@@ -341,21 +368,32 @@ fn node_not_found() -> CommError {
 mod native_backend {
     use super::*;
     use aurora_opcua_sys::{NativeClient, NativeScalar};
+    use std::sync::Mutex as StdMutex;
     use tokio::sync::Mutex;
 
     /// open62541-backed scalar read/write and secure-session backend.
     pub struct Open62541Backend {
-        client: Mutex<Option<NativeClient>>,
+        client: Arc<StdMutex<Option<NativeClient>>>,
         updates: broadcast::Sender<(String, DeviceValue)>,
+        running: Arc<AtomicBool>,
+        worker: Mutex<Option<tokio::task::JoinHandle<()>>>,
     }
 
     impl Default for Open62541Backend {
         fn default() -> Self {
             let (updates, _) = broadcast::channel(16);
             Self {
-                client: Mutex::new(None),
+                client: Arc::new(StdMutex::new(None)),
                 updates,
+                running: Arc::new(AtomicBool::new(false)),
+                worker: Mutex::new(None),
             }
+        }
+    }
+
+    impl Drop for Open62541Backend {
+        fn drop(&mut self) {
+            self.running.store(false, Ordering::Release);
         }
     }
 
@@ -363,36 +401,82 @@ mod native_backend {
     impl OpcUaBackend for Open62541Backend {
         async fn connect(&self, options: &OpcUaOptions) -> CommResult<()> {
             options.validate()?;
+            if self.client.lock().map_err(|_| poisoned())?.is_some() {
+                return Ok(());
+            }
             let credentials = options
                 .username
                 .as_deref()
                 .map(|username| (username, options.password.as_deref().unwrap_or("")));
             let certificate = options.certificate.as_deref().unwrap_or_default();
             let private_key = options.private_key.as_deref().unwrap_or_default();
-            let trust = options
-                .trust_list
-                .first()
-                .map(Vec::as_slice)
-                .unwrap_or_default();
+            let security_mode = match options.security_mode {
+                MessageSecurityMode::None => 1,
+                MessageSecurityMode::Sign => 2,
+                MessageSecurityMode::SignAndEncrypt => 3,
+            };
+            let security_policy = match options.security_policy {
+                SecurityPolicy::None => "http://opcfoundation.org/UA/SecurityPolicy#None",
+                SecurityPolicy::Basic256Sha256 => {
+                    "http://opcfoundation.org/UA/SecurityPolicy#Basic256Sha256"
+                }
+                SecurityPolicy::Aes128Sha256RsaOaep => {
+                    "http://opcfoundation.org/UA/SecurityPolicy#Aes128_Sha256_RsaOaep"
+                }
+                SecurityPolicy::Aes256Sha256RsaPss => {
+                    "http://opcfoundation.org/UA/SecurityPolicy#Aes256_Sha256_RsaPss"
+                }
+            };
             let client = NativeClient::connect_configured(
                 &options.endpoint,
                 certificate,
                 private_key,
-                trust,
+                &options.trust_list,
+                security_mode,
+                security_policy,
                 credentials,
             )
             .map_err(native_error)?;
-            *self.client.lock().await = Some(client);
+            *self.client.lock().map_err(|_| poisoned())? = Some(client);
+            self.running.store(true, Ordering::Release);
+            let native = Arc::clone(&self.client);
+            let running = Arc::clone(&self.running);
+            let updates = self.updates.clone();
+            *self.worker.lock().await = Some(tokio::task::spawn_blocking(move || {
+                while running.load(Ordering::Acquire) {
+                    let event = native
+                        .lock()
+                        .ok()
+                        .and_then(|guard| guard.as_ref().and_then(|client| client.iterate(50).ok()))
+                        .flatten();
+                    if let Some(event) = event {
+                        if let Ok(value) = decode(event.value) {
+                            let _ = updates.send((event.node_id, value));
+                        }
+                    }
+                }
+            }));
             Ok(())
         }
 
         async fn disconnect(&self) -> CommResult<()> {
-            self.client.lock().await.take();
+            self.running.store(false, Ordering::Release);
+            if let Some(worker) = self.worker.lock().await.take() {
+                worker.await.map_err(|error| {
+                    CommError::new(
+                        "OPCUA.NATIVE.WORKER",
+                        CommErrorCategory::Internal,
+                        format!("OPC UA iterate worker failed: {error}"),
+                        false,
+                    )
+                })?;
+            }
+            self.client.lock().map_err(|_| poisoned())?.take();
             Ok(())
         }
 
         async fn read_value(&self, node_id: &str) -> CommResult<DeviceValue> {
-            let guard = self.client.lock().await;
+            let guard = self.client.lock().map_err(|_| poisoned())?;
             let value = guard
                 .as_ref()
                 .ok_or_else(disconnected)?
@@ -403,7 +487,7 @@ mod native_backend {
 
         async fn write_value(&self, node_id: &str, value: &DeviceValue) -> CommResult<()> {
             let scalar = encode(value)?;
-            let guard = self.client.lock().await;
+            let guard = self.client.lock().map_err(|_| poisoned())?;
             guard
                 .as_ref()
                 .ok_or_else(disconnected)?
@@ -411,13 +495,36 @@ mod native_backend {
                 .map_err(native_error)
         }
 
-        async fn browse(&self, _: &str) -> CommResult<Vec<BrowseNode>> {
-            Err(CommError::new(
-                "OPCUA.NATIVE.BROWSE_PENDING",
-                CommErrorCategory::Unavailable,
-                "native Browse is gated for the next HIL milestone",
-                false,
-            ))
+        async fn browse(&self, node_id: &str) -> CommResult<Vec<BrowseNode>> {
+            let guard = self.client.lock().map_err(|_| poisoned())?;
+            let nodes = guard
+                .as_ref()
+                .ok_or_else(disconnected)?
+                .browse(node_id, 4096)
+                .map_err(native_error)?;
+            Ok(nodes
+                .into_iter()
+                .map(|node| BrowseNode {
+                    node_id: node.node_id,
+                    browse_name: node.browse_name,
+                    display_name: node.display_name,
+                    variable: node.variable,
+                })
+                .collect())
+        }
+
+        async fn monitor(
+            &self,
+            node_id: &str,
+            sampling_interval: std::time::Duration,
+        ) -> CommResult<()> {
+            let milliseconds = sampling_interval.as_secs_f64() * 1000.0;
+            let guard = self.client.lock().map_err(|_| poisoned())?;
+            guard
+                .as_ref()
+                .ok_or_else(disconnected)?
+                .subscribe(node_id, milliseconds)
+                .map_err(native_error)
         }
 
         fn subscribe(&self) -> broadcast::Receiver<(String, DeviceValue)> {
@@ -426,8 +533,8 @@ mod native_backend {
 
         fn capabilities(&self) -> DeviceCapabilities {
             DeviceCapabilities {
-                browse: false,
-                watch: false,
+                browse: true,
+                watch: true,
                 secure_channel: true,
                 ..DeviceCapabilities::READ_WRITE
             }
@@ -440,6 +547,14 @@ mod native_backend {
             CommErrorCategory::Unavailable,
             "OPC UA session is disconnected",
             true,
+        )
+    }
+    fn poisoned() -> CommError {
+        CommError::new(
+            "OPCUA.NATIVE.LOCK_POISONED",
+            CommErrorCategory::Internal,
+            "OPC UA native client lock was poisoned",
+            false,
         )
     }
     fn native_error(code: u32) -> CommError {
@@ -512,6 +627,10 @@ mod tests {
             OpcUaClient::new(OpcUaOptions::anonymous("opc.tcp://localhost:4840"), backend).unwrap();
         client.connect().await.unwrap();
         assert_eq!(client.browse("i=85").await.unwrap().len(), 1);
+        client
+            .monitor("ns=2;s=Speed", Duration::from_millis(100))
+            .await
+            .unwrap();
         assert_eq!(
             client
                 .read(&ReadRequest {

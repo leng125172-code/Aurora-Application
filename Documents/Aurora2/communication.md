@@ -14,6 +14,6 @@
 
 自动化测试包含 50 个独立 Modbus TCP 端点，以及 Modbus/S7/MC3E/OPC UA 四类混合会话的优先级负载。混合测试在每台设备存在普通采集积压时测量控制命令 P99，并要求低于 100 ms。该测试证明框架调度模型和资源边界，不替代真实交换机、PLC 和噪声环境下的 72 小时老化测试。
 
-OPC UA simulator 已覆盖 Browse、Read、Write 和订阅通知；native feature 当前覆盖证书信任、用户认证和标量读写。native Browse/MonitoredItem 尚未通过 HIL，因此能力查询会明确返回 `browse=false`、`watch=false`，不得将其标记为生产就绪。提交到 `test-data/golden` 的报文是 CI 的固定行为基准，CI 不访问外部 C# 源码。不得把 HSL 派生代码发布到授权组织之外。
+OPC UA simulator 已覆盖 Browse、Read、Write 和订阅通知；native feature 已实现完整 trust list、明确的 SecurityMode/Policy、用户认证、标量读写、带 continuation point 的 Browse，以及后台 `UA_Client_run_iterate` 驱动的 MonitoredItem 通知。native 代码虽已通过 Linux 静态编译，尚未完成真实服务器矩阵、证书组合与长稳 HIL，因此仍不得标记为生产就绪。提交到 `test-data/golden` 的报文是 CI 的固定行为基准，CI 不访问外部 C# 源码。不得把 HSL 派生代码发布到授权组织之外。
 
 Linux native 构建命令为 `cargo check -p aurora-opcua --features native --locked`，已在 Ubuntu 26.04、GCC 15、CMake 4.2、Rust 1.98 上验证。Windows/macOS native 构建仍由对应 CI/HIL runner 给出结论。
