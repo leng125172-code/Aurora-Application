@@ -84,7 +84,7 @@ public class CalibProjectorParam : FullAuditedEntity<Guid>
         ProjectorDeviceId = projectorDeviceId;
         SetName(name);
         PatternType = ProjectorPatternType.SineFringe;
-        PatternCount = 4;
+        PatternCount = 8;
         PeriodCount = 8;
         FringeType = "bw";
         DarkLevel = 24;

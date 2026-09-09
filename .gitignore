@@ -168,3 +168,8 @@ $RECYCLE.BIN/
 *.bak
 *~
 .history/
+# Rust build output
+/target/
+
+# Local integration/runtime databases
+/Data/**/*.redb

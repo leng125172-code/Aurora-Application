@@ -5,6 +5,14 @@ namespace AuroraStruct3D.Calibration;
 
 public static class StereoReconstructionUtils
 {
+    private const int DepthOutlierSampleLimit = 50_000;
+    private const double DepthOutlierTailFraction = 0.005d;
+    private const double DepthOutlierSupportRadiusMm = 3d;
+    private const int DepthOutlierMinimumStandaloneComponentSize = 64;
+    private const int DepthOutlierMaximumPixelSearchRadius = 64;
+    private const int TriangulationBatchSize = 65_536;
+    private const double MaximumTriangulationReprojectionErrorPixels = 0.5d;
+
     public static (Mat rectifiedLeft, Mat rectifiedRight) RectifyImages(
         Mat leftImage,
         Mat rightImage,
@@ -83,39 +91,196 @@ public static class StereoReconstructionUtils
         Mat projectionP1,
         Mat projectionP2,
         double baselineMm = 100.0,
-        int disparitySign = 1)
+        int disparitySign = 1,
+        double[]? secondaryYCoordinates = null)
     {
+        ArgumentNullException.ThrowIfNull(disparity);
+        ArgumentNullException.ThrowIfNull(projectionP1);
+        ArgumentNullException.ThrowIfNull(projectionP2);
+        if (disparity.Empty() || disparity.Type() != MatType.CV_64FC1)
+            throw new ArgumentException("Disparity must be a non-empty CV_64FC1 matrix.", nameof(disparity));
+        if (projectionP1.Rows != 3 || projectionP1.Cols != 4
+            || projectionP2.Rows != 3 || projectionP2.Cols != 4)
+            throw new ArgumentException("Stereo projection matrices must both be 3x4.");
+        if (!double.IsFinite(baselineMm) || baselineMm <= 0d)
+            throw new ArgumentOutOfRangeException(nameof(baselineMm));
+        if (disparitySign is not (-1 or 1))
+            throw new ArgumentOutOfRangeException(nameof(disparitySign));
+        if (secondaryYCoordinates is not null
+            && secondaryYCoordinates.Length != checked(disparity.Rows * disparity.Cols))
+            throw new ArgumentException(
+                "Secondary Y coordinates must match the disparity matrix dimensions.",
+                nameof(secondaryYCoordinates)
+            );
+
         int rows = disparity.Rows;
         int cols = disparity.Cols;
+        int pixelCount = checked(rows * cols);
+        double[] disparityValues = new double[pixelCount];
+        System.Runtime.InteropServices.Marshal.Copy(
+            disparity.Data,
+            disparityValues,
+            0,
+            disparityValues.Length
+        );
+        double[] depthValues = Enumerable.Repeat(double.NaN, pixelCount).ToArray();
 
-        double fx = projectionP1.At<double>(0, 0);
+        using Mat p1 = new();
+        using Mat p2 = new();
+        projectionP1.ConvertTo(p1, MatType.CV_64FC1);
+        projectionP2.ConvertTo(p2, MatType.CV_64FC1);
+        double[] p1Values = new double[12];
+        double[] p2Values = new double[12];
+        System.Runtime.InteropServices.Marshal.Copy(p1.Data, p1Values, 0, p1Values.Length);
+        System.Runtime.InteropServices.Marshal.Copy(p2.Data, p2Values, 0, p2Values.Length);
+
+        double p1Scale = p1Values[10];
+        double p2Scale = p2Values[10];
+        if (Math.Abs(p1Scale) < 1e-12 || Math.Abs(p2Scale) < 1e-12)
+            throw new ArgumentException("Stereo projection matrices have an invalid homogeneous scale.");
         double principalPointDifference =
-            projectionP1.At<double>(0, 2) - projectionP2.At<double>(0, 2);
+            p1Values[2] / p1Scale - p2Values[2] / p2Scale;
+        double encodedBaseline = Math.Abs(
+            -p2Values[3] / p2Values[0] + p1Values[3] / p1Values[0]
+        );
+        if (!double.IsFinite(encodedBaseline) || encodedBaseline <= 1e-12)
+            throw new ArgumentException("Stereo projection matrices encode an invalid baseline.");
+        double unitScale = Math.Abs(baselineMm) / encodedBaseline;
 
-        Mat depth = new(rows, cols, MatType.CV_64FC1);
-
-        for (int y = 0; y < rows; y++)
+        int[] pixelOffsets = new int[TriangulationBatchSize];
+        double[] leftPoints = new double[TriangulationBatchSize * 2];
+        double[] rightPoints = new double[TriangulationBatchSize * 2];
+        int batchCount = 0;
+        for (int offset = 0; offset < pixelCount; offset++)
         {
-            for (int x = 0; x < cols; x++)
+            double disp = disparityValues[offset];
+            double signedGeometricDisparity =
+                (disp - principalPointDifference) * disparitySign;
+            if (!double.IsFinite(disp) || signedGeometricDisparity <= 0.1d)
+                continue;
+
+            int y = offset / cols;
+            int x = offset - y * cols;
+            double secondaryY = secondaryYCoordinates?[offset] ?? y;
+            if (!double.IsFinite(secondaryY))
+                continue;
+            pixelOffsets[batchCount] = offset;
+            leftPoints[batchCount] = x;
+            leftPoints[TriangulationBatchSize + batchCount] = y;
+            rightPoints[batchCount] = x - disp;
+            rightPoints[TriangulationBatchSize + batchCount] = secondaryY;
+            batchCount++;
+
+            if (batchCount == TriangulationBatchSize)
             {
-                double disp = disparity.At<double>(y, x);
-                // 非 ZeroDisparity 整平会保留 cx1 != cx2。此时几何视差为
-                // d - (cx1-cx2)，不能直接用图像坐标差 d 计算深度。
-                double signedGeometricDisparity =
-                    (disp - principalPointDifference) * disparitySign;
-                if (signedGeometricDisparity > 0.1)
-                {
-                    double z = fx * Math.Abs(baselineMm) / signedGeometricDisparity;
-                    depth.Set(y, x, z);
-                }
-                else
-                {
-                    depth.Set(y, x, double.NaN);
-                }
+                TriangulateBatch(batchCount);
+                batchCount = 0;
             }
         }
+        if (batchCount > 0)
+            TriangulateBatch(batchCount);
 
+        Mat depth = new(rows, cols, MatType.CV_64FC1);
+        System.Runtime.InteropServices.Marshal.Copy(
+            depthValues,
+            0,
+            depth.Data,
+            depthValues.Length
+        );
         return depth;
+
+        void TriangulateBatch(int count)
+        {
+            // 工作数组按最大批次保存第二行；尾批次需移动到紧邻第一行的位置，
+            // 以构成 OpenCV 期望的 2xN 单通道矩阵。
+            if (count != TriangulationBatchSize)
+            {
+                Array.Copy(leftPoints, TriangulationBatchSize, leftPoints, count, count);
+                Array.Copy(rightPoints, TriangulationBatchSize, rightPoints, count, count);
+            }
+
+            using Mat left = new(2, count, MatType.CV_64FC1);
+            using Mat right = new(2, count, MatType.CV_64FC1);
+            System.Runtime.InteropServices.Marshal.Copy(leftPoints, 0, left.Data, count * 2);
+            System.Runtime.InteropServices.Marshal.Copy(rightPoints, 0, right.Data, count * 2);
+            using Mat homogeneous = new();
+            Cv2.TriangulatePoints(p1, p2, left, right, homogeneous);
+            using Mat homogeneous64 = new();
+            homogeneous.ConvertTo(homogeneous64, MatType.CV_64FC1);
+            double[] coordinates = new double[checked(count * 4)];
+            System.Runtime.InteropServices.Marshal.Copy(
+                homogeneous64.Data,
+                coordinates,
+                0,
+                coordinates.Length
+            );
+
+            for (int i = 0; i < count; i++)
+            {
+                double w = coordinates[3 * count + i];
+                if (!double.IsFinite(w) || Math.Abs(w) < 1e-12)
+                    continue;
+                double worldX = coordinates[i] / w;
+                double worldY = coordinates[count + i] / w;
+                double worldZ = coordinates[2 * count + i] / w;
+                if (!double.IsFinite(worldX)
+                    || !double.IsFinite(worldY)
+                    || !double.IsFinite(worldZ)
+                    || worldZ <= 0d)
+                    continue;
+
+                if (!TryProject(p1Values, worldX, worldY, worldZ, out double leftX, out double leftY)
+                    || !TryProject(p2Values, worldX, worldY, worldZ, out double rightX, out double rightY))
+                    continue;
+                double leftError = Math.Sqrt(
+                    Math.Pow(leftX - leftPoints[i], 2d)
+                        + Math.Pow(leftY - leftPoints[count + i], 2d)
+                );
+                double rightError = Math.Sqrt(
+                    Math.Pow(rightX - rightPoints[i], 2d)
+                        + Math.Pow(rightY - rightPoints[count + i], 2d)
+                );
+                if (Math.Max(leftError, rightError)
+                    > MaximumTriangulationReprojectionErrorPixels)
+                    continue;
+
+                double scaledDepth = worldZ * unitScale;
+                if (double.IsFinite(scaledDepth) && scaledDepth > 0d)
+                    depthValues[pixelOffsets[i]] = scaledDepth;
+            }
+        }
+    }
+
+    private static bool TryProject(
+        double[] projection,
+        double x,
+        double y,
+        double z,
+        out double imageX,
+        out double imageY)
+    {
+        double denominator = projection[8] * x
+            + projection[9] * y
+            + projection[10] * z
+            + projection[11];
+        if (!double.IsFinite(denominator) || Math.Abs(denominator) < 1e-12)
+        {
+            imageX = imageY = double.NaN;
+            return false;
+        }
+        imageX = (
+            projection[0] * x
+                + projection[1] * y
+                + projection[2] * z
+                + projection[3]
+        ) / denominator;
+        imageY = (
+            projection[4] * x
+                + projection[5] * y
+                + projection[6] * z
+                + projection[7]
+        ) / denominator;
+        return double.IsFinite(imageX) && double.IsFinite(imageY);
     }
 
     /// <summary>
@@ -135,6 +300,183 @@ public static class StereoReconstructionUtils
         double centerX1 = -projectionP1.At<double>(0, 3) / fx1;
         double centerX2 = -projectionP2.At<double>(0, 3) / fx2;
         return centerX2 >= centerX1 ? 1 : -1;
+    }
+
+    /// <summary>
+    /// Removes only a statistically sparse far-depth tail. This targets spatially unsupported
+    /// near-zero-disparity matches without imposing a scene-specific maximum depth.
+    /// A tail larger than 0.5% is retained because it may be real scene geometry.
+    /// </summary>
+    public static DepthOutlierFilterResult RemoveSparseFarDepthOutliers(
+        Mat depth,
+        Mat projectionP1)
+    {
+        ArgumentNullException.ThrowIfNull(depth);
+        ArgumentNullException.ThrowIfNull(projectionP1);
+        if (depth.Empty() || depth.Type() != MatType.CV_64FC1)
+            throw new ArgumentException("Depth must be a non-empty CV_64FC1 matrix.", nameof(depth));
+        if (projectionP1.Rows != 3 || projectionP1.Cols != 4)
+            throw new ArgumentException("Projection P1 must be a 3x4 matrix.", nameof(projectionP1));
+
+        double fx = projectionP1.At<double>(0, 0);
+        double fy = projectionP1.At<double>(1, 1);
+        double cx = projectionP1.At<double>(0, 2);
+        double cy = projectionP1.At<double>(1, 2);
+        if (!double.IsFinite(fx) || !double.IsFinite(fy)
+            || Math.Abs(fx) < 1e-12 || Math.Abs(fy) < 1e-12)
+            throw new ArgumentException("Projection P1 contains an invalid focal length.", nameof(projectionP1));
+
+        int rows = depth.Rows;
+        int cols = depth.Cols;
+        int validPointCount = 0;
+        for (int y = 0; y < rows; y++)
+        {
+            for (int x = 0; x < cols; x++)
+            {
+                double value = depth.At<double>(y, x);
+                if (double.IsFinite(value) && value > 0)
+                    validPointCount++;
+            }
+        }
+
+        if (validPointCount < 1_000)
+            return new DepthOutlierFilterResult(validPointCount, 0, double.NaN);
+
+        int sampleCount = Math.Min(validPointCount, DepthOutlierSampleLimit);
+        double[] samples = new double[sampleCount];
+        int validIndex = 0;
+        int written = 0;
+        for (int y = 0; y < rows && written < sampleCount; y++)
+        {
+            for (int x = 0; x < cols && written < sampleCount; x++)
+            {
+                double value = depth.At<double>(y, x);
+                if (!double.IsFinite(value) || value <= 0)
+                    continue;
+
+                if ((long)validIndex * sampleCount >= (long)written * validPointCount)
+                    samples[written++] = value;
+                validIndex++;
+            }
+        }
+
+        Array.Sort(samples);
+        double firstQuartile = Percentile(samples, 0.25d);
+        double thirdQuartile = Percentile(samples, 0.75d);
+        double highPercentile = Percentile(samples, 1d - DepthOutlierTailFraction);
+        double interquartileRange = Math.Max(0d, thirdQuartile - firstQuartile);
+        // Tukey's 1.5 IQR fence finds the beginning of the abnormal tail. The 50 mm
+        // floor and P99.5 bound below prevent clipping a naturally shallow depth range
+        // or considering more than the sparsest 0.5% of valid depths.
+        double upperFence = thirdQuartile + Math.Max(50d, interquartileRange * 1.5d);
+        double cutoff = Math.Max(upperFence, highPercentile);
+        // Use Ceiling here. Percentile rounding can leave ceil(N * fraction) values above
+        // the selected percentile; Floor made the guard reject the entire filtering pass
+        // by a single point (for example, 334 candidates out of 333,825 points).
+        int maximumRemovalCount = Math.Max(
+            1,
+            (int)Math.Ceiling(validPointCount * DepthOutlierTailFraction)
+        );
+        List<int> outlierOffsets = new(Math.Min(maximumRemovalCount, 1_024));
+
+        for (int y = 0; y < rows; y++)
+        {
+            for (int x = 0; x < cols; x++)
+            {
+                double value = depth.At<double>(y, x);
+                if (!double.IsFinite(value) || value <= cutoff)
+                    continue;
+
+                outlierOffsets.Add(checked(y * cols + x));
+                if (outlierOffsets.Count > maximumRemovalCount)
+                    return new DepthOutlierFilterResult(validPointCount, 0, cutoff);
+            }
+        }
+
+        double supportRadiusSquared = DepthOutlierSupportRadiusMm * DepthOutlierSupportRadiusMm;
+        double maximumFocalLength = Math.Max(Math.Abs(fx), Math.Abs(fy));
+        HashSet<int> outlierOffsetSet = new(outlierOffsets);
+        HashSet<int> visitedOffsets = [];
+        Queue<int> pendingOffsets = new();
+        List<int> unsupportedOutliers = [];
+        foreach (int seedOffset in outlierOffsets)
+        {
+            if (!visitedOffsets.Add(seedOffset))
+                continue;
+
+            List<int> componentOffsets = [];
+            bool connectedToMainSurface = false;
+            pendingOffsets.Enqueue(seedOffset);
+            while (pendingOffsets.Count > 0)
+            {
+                int offset = pendingOffsets.Dequeue();
+                componentOffsets.Add(offset);
+                int y = offset / cols;
+                int x = offset % cols;
+                double z = depth.At<double>(y, x);
+                double pointX = (x - cx) * z / fx;
+                double pointY = (y - cy) * z / fy;
+                int pixelSearchRadius = Math.Clamp(
+                    (int)Math.Ceiling(DepthOutlierSupportRadiusMm * maximumFocalLength / z) + 1,
+                    1,
+                    DepthOutlierMaximumPixelSearchRadius
+                );
+
+                for (int dy = -pixelSearchRadius; dy <= pixelSearchRadius; dy++)
+                for (int dx = -pixelSearchRadius; dx <= pixelSearchRadius; dx++)
+                {
+                    if (dx == 0 && dy == 0) continue;
+                    int neighborY = y + dy;
+                    int neighborX = x + dx;
+                    if (neighborY < 0 || neighborY >= rows || neighborX < 0 || neighborX >= cols)
+                        continue;
+                    double neighborZ = depth.At<double>(neighborY, neighborX);
+                    if (!double.IsFinite(neighborZ) || neighborZ <= 0d)
+                        continue;
+
+                    double neighborPointX = (neighborX - cx) * neighborZ / fx;
+                    double neighborPointY = (neighborY - cy) * neighborZ / fy;
+                    double deltaX = neighborPointX - pointX;
+                    double deltaY = neighborPointY - pointY;
+                    double deltaZ = neighborZ - z;
+                    if (deltaX * deltaX + deltaY * deltaY + deltaZ * deltaZ
+                        > supportRadiusSquared)
+                        continue;
+
+                    int neighborOffset = checked(neighborY * cols + neighborX);
+                    if (!outlierOffsetSet.Contains(neighborOffset))
+                    {
+                        connectedToMainSurface = true;
+                    }
+                    else if (visitedOffsets.Add(neighborOffset))
+                    {
+                        pendingOffsets.Enqueue(neighborOffset);
+                    }
+                }
+            }
+
+            // A real continuous surface is retained when it connects back to the main
+            // depth distribution. A separate surface also survives when it contains
+            // enough samples to be reliable. This removes tiny line/spot clusters whose
+            // members previously kept one another alive after structured-light decoding.
+            if (!connectedToMainSurface
+                && componentOffsets.Count < DepthOutlierMinimumStandaloneComponentSize)
+                unsupportedOutliers.AddRange(componentOffsets);
+        }
+
+        foreach (int offset in unsupportedOutliers)
+            depth.Set(offset / cols, offset % cols, double.NaN);
+
+        return new DepthOutlierFilterResult(validPointCount, unsupportedOutliers.Count, cutoff);
+
+        static double Percentile(double[] sortedValues, double percentile)
+        {
+            int index = (int)Math.Round(
+                (sortedValues.Length - 1) * percentile,
+                MidpointRounding.AwayFromZero
+            );
+            return sortedValues[Math.Clamp(index, 0, sortedValues.Length - 1)];
+        }
     }
 
     public static (Mat pointCloud, Mat colors) GeneratePointCloud(
@@ -280,4 +622,13 @@ public static class StereoReconstructionUtils
 
         return Math.Sqrt(dx * dx + dy * dy + dz * dz);
     }
+}
+
+public readonly record struct DepthOutlierFilterResult(
+    int ValidPointCount,
+    int RemovedPointCount,
+    double DepthCutoffMm
+)
+{
+    public bool Applied => RemovedPointCount > 0;
 }

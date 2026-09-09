@@ -715,7 +715,7 @@ public class ProjectorDeviceAppService : AuroraStruct3DAppService, IProjectorDev
 
     /// <summary>
     /// 按 Step3 保存/提交的参数生成条纹图一维像素数据。
-    /// 前 ImageCount 张为横条纹，后 ImageCount 张为竖条纹。
+    /// 每个方向依次包含 Gray 正反码帧和 ImageCount 张相移帧，先横条纹后竖条纹。
     /// 投影仪 Flash 地址空间为 1280×1280：
     /// 竖条纹沿水平方向变化，数据长度为 1280；横条纹沿垂直方向变化，数据长度为 720，
     /// 下载时由 DlpProjectorService 补 560 列黑色填充到 1280 列。

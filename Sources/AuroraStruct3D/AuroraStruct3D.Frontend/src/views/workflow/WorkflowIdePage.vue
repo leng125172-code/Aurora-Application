@@ -8,6 +8,7 @@ import { Background } from '@vue-flow/background'
 import { Controls } from '@vue-flow/controls'
 import Button from 'primevue/button'
 import Checkbox from 'primevue/checkbox'
+import Dialog from 'primevue/dialog'
 import InputNumber from 'primevue/inputnumber'
 import InputText from 'primevue/inputtext'
 import Select from 'primevue/select'
@@ -17,10 +18,12 @@ import '@vue-flow/core/dist/theme-default.css'
 import {
     completions,
     continueDebug,
+    createWorkflowTemplate,
     debugAndRunSource,
     debugSource,
     diagnostics,
     definition,
+    deleteWorkflowTemplate,
     formatSource,
     hover,
     getWorkflowNodePalette,
@@ -31,8 +34,11 @@ import {
     getPerformance,
     getStack,
     getTrace,
+    getWorkflowTemplate,
     getWorkflowSource,
+    instantiateWorkflowTemplate,
     listProjects,
+    listWorkflowTemplates,
     listWorkflows,
     operatorSnippet,
     patchGraph,
@@ -55,6 +61,7 @@ import {
     stepOut,
     stepOver,
     stopDebug,
+    updateWorkflowTemplate,
     watch as evaluateWatch,
     type DebugStatus,
     type DebugExecutionResult,
@@ -64,6 +71,7 @@ import {
     type WorkflowGraph,
     type WorkflowGraphNode,
     type WorkflowSource,
+    type WorkflowTemplateBrief,
     type WorkflowNodeDefinition,
     type OperatorConfigFieldDefinition,
     type WorkflowMigrationBatch,
@@ -155,6 +163,24 @@ const migrationBusy = ref(false)
 const migrationItems = ref<WorkflowMigrationItem[]>([])
 const migrationBatch = ref<WorkflowMigrationBatch>()
 const migrationPanelOpen = ref(false)
+const templateLibraryOpen = ref(false)
+const templateLibraryLoading = ref(false)
+const templateActionBusy = ref(false)
+const workflowTemplates = ref<WorkflowTemplateBrief[]>([])
+const templateSearch = ref('')
+const selectedTemplateId = ref('')
+const templateInstanceName = ref('')
+const templateForm = ref({ name: '', category: '', description: '' })
+const selectedWorkflowTemplate = computed(() =>
+    workflowTemplates.value.find((item) => item.id === selectedTemplateId.value)
+)
+const filteredWorkflowTemplates = computed(() => {
+    const keyword = templateSearch.value.trim().toLocaleLowerCase()
+    if (!keyword) return workflowTemplates.value
+    return workflowTemplates.value.filter((item) =>
+        item.name.toLocaleLowerCase().includes(keyword)
+    )
+})
 const debugStatus = ref<DebugStatus>()
 const debugResults = ref<DebugExecutionResult[]>([])
 const previewResult = ref<DebugExecutionResult>()
@@ -1332,6 +1358,141 @@ async function loadWorkflows() {
     if (!workflowId.value && workflows.value.length) workflowId.value = workflows.value[0]!.id
 }
 
+async function loadWorkflowTemplates() {
+    templateLibraryLoading.value = true
+    try {
+        workflowTemplates.value = await listWorkflowTemplates()
+        if (
+            selectedTemplateId.value &&
+            !workflowTemplates.value.some((item) => item.id === selectedTemplateId.value)
+        ) {
+            selectedTemplateId.value = ''
+        }
+    } catch (error) {
+        toast.error(`加载流程库失败：${String(error)}`)
+    } finally {
+        templateLibraryLoading.value = false
+    }
+}
+
+async function openTemplateLibrary() {
+    templateLibraryOpen.value = true
+    templateForm.value = {
+        name: source.value?.name ?? '',
+        category: '',
+        description: '',
+    }
+    await loadWorkflowTemplates()
+}
+
+function selectWorkflowTemplate(template: WorkflowTemplateBrief) {
+    selectedTemplateId.value = template.id
+    templateInstanceName.value = `${template.name} - 副本`
+}
+
+async function persistCurrentWorkflowIfNeeded(): Promise<boolean> {
+    if (!source.value || !workflowId.value) {
+        toast.error('请先选择一个工作流。')
+        return false
+    }
+    return !dirty.value || (await save())
+}
+
+async function saveCurrentAsTemplate() {
+    if (!(await persistCurrentWorkflowIfNeeded())) return
+    if (!templateForm.value.name.trim()) {
+        toast.error('请输入模板名称。')
+        return
+    }
+    templateActionBusy.value = true
+    try {
+        const created = await createWorkflowTemplate({
+            workflowId: workflowId.value,
+            name: templateForm.value.name.trim(),
+            category: templateForm.value.category.trim(),
+            description: templateForm.value.description.trim() || undefined,
+        })
+        await loadWorkflowTemplates()
+        selectWorkflowTemplate(created)
+        toast.success('当前工作流已保存到流程库。')
+    } catch (error) {
+        toast.error(`保存模板失败：${String(error)}`)
+    } finally {
+        templateActionBusy.value = false
+    }
+}
+
+async function overwriteWorkflowTemplate(template: WorkflowTemplateBrief) {
+    if (!(await persistCurrentWorkflowIfNeeded())) return
+    if (!(await confirmAction({
+        header: '更新流程模板',
+        message: `确认使用当前工作流覆盖模板“${template.name}”的流程内容？已创建的流程不会受影响。`,
+    }))) return
+
+    templateActionBusy.value = true
+    try {
+        const detail = await getWorkflowTemplate(template.id)
+        await updateWorkflowTemplate(template.id, {
+            workflowId: workflowId.value,
+            name: template.name,
+            category: detail.category,
+            description: detail.description,
+        })
+        await loadWorkflowTemplates()
+        toast.success('模板内容已更新。')
+    } catch (error) {
+        toast.error(`更新模板失败：${String(error)}`)
+    } finally {
+        templateActionBusy.value = false
+    }
+}
+
+async function addSelectedTemplateToProject() {
+    const template = selectedWorkflowTemplate.value
+    if (!template || !projectId.value || !templateInstanceName.value.trim()) return
+    if (dirty.value && !(await confirmAction({
+        header: '切换工作流',
+        message: '当前工作流有未保存修改。创建模板副本并切换后，这些修改会丢失，确认继续？',
+    }))) return
+
+    templateActionBusy.value = true
+    try {
+        const workflow = await instantiateWorkflowTemplate(
+            template.id,
+            projectId.value,
+            templateInstanceName.value.trim(),
+        )
+        await loadWorkflows()
+        templateLibraryOpen.value = false
+        workflowId.value = workflow.id
+        await router.replace({
+            query: { ...route.query, projectId: projectId.value, workflowId: workflow.id },
+        })
+        toast.success('模板已添加为独立工作流，可直接修改参数和节点。')
+    } catch (error) {
+        toast.error(`从模板创建工作流失败：${String(error)}`)
+    } finally {
+        templateActionBusy.value = false
+    }
+}
+
+async function removeWorkflowTemplate(template: WorkflowTemplateBrief) {
+    if (!(await confirmAction({
+        header: '删除流程模板',
+        message: `确认删除模板“${template.name}”？已经创建的工作流不会被删除。`,
+    }))) return
+    templateActionBusy.value = true
+    try {
+        await deleteWorkflowTemplate(template.id)
+        await loadWorkflowTemplates()
+        toast.success('模板已删除。')
+    } catch (error) {
+        toast.error(`删除模板失败：${String(error)}`)
+    } finally {
+        templateActionBusy.value = false
+    }
+}
+
 async function loadProjects() {
     projects.value = await listProjects()
     if (!projects.value.length) {
@@ -2330,6 +2491,9 @@ async function rollbackMigration(workflowId?: string) {
                     <Button size="small" :disabled="!dirty || saving || taskSaving" @click="save">
                         <Save class="size-3.5" />
                         {{ saving ? '保存中' : '保存工作流' }}
+                    </Button>
+                    <Button size="small" severity="secondary" outlined :disabled="!projectId" @click="openTemplateLibrary">
+                        流程库
                     </Button>
                     <Button size="small" severity="secondary" outlined :disabled="!projectId" @click="openTaskDrawer">
                         任务配置
@@ -3679,6 +3843,155 @@ async function rollbackMigration(workflowId?: string) {
                 <div v-else class="font-mono" v-for="(line, index) in output" :key="index">{{ line }}</div>
             </div>
         </section>
+
+        <Dialog
+            v-model:visible="templateLibraryOpen"
+            modal
+            header="流程库"
+            :style="{ width: 'min(64rem, 96vw)' }"
+            :content-style="{ paddingTop: '0.75rem' }"
+        >
+            <div class="grid gap-4 lg:grid-cols-[19rem_minmax(0,1fr)]">
+                <section class="rounded-lg border bg-muted/15 p-4">
+                    <h3 class="text-sm font-semibold">当前流程保存为模板</h3>
+                    <p class="mt-1 text-xs text-muted-foreground">
+                        保存的是当前已持久化流程的独立快照，之后修改流程不会影响模板。
+                    </p>
+                    <label class="mt-4 block text-xs font-medium">模板名称</label>
+                    <InputText
+                        v-model.trim="templateForm.name"
+                        class="mt-1 w-full"
+                        size="small"
+                        maxlength="128"
+                        placeholder="例如：双相机平面检测"
+                    />
+                    <label class="mt-3 block text-xs font-medium">分类</label>
+                    <InputText
+                        v-model.trim="templateForm.category"
+                        class="mt-1 w-full"
+                        size="small"
+                        maxlength="64"
+                        placeholder="例如：三维检测"
+                    />
+                    <label class="mt-3 block text-xs font-medium">说明</label>
+                    <Textarea
+                        v-model.trim="templateForm.description"
+                        class="mt-1 min-h-24 w-full resize-none text-sm"
+                        maxlength="1024"
+                        placeholder="说明用途、需要调整的参数和可扩展节点"
+                    />
+                    <Button
+                        class="mt-3 w-full"
+                        size="small"
+                        :disabled="!workflowId || !templateForm.name.trim()"
+                        :loading="templateActionBusy"
+                        @click="saveCurrentAsTemplate"
+                    >
+                        添加到流程库
+                    </Button>
+                    <p v-if="dirty" class="mt-2 text-[11px] text-amber-600">
+                        添加前会先保存当前工作流，确保模板包含最新修改。
+                    </p>
+                </section>
+
+                <section class="min-w-0">
+                    <div class="flex items-center gap-2">
+                        <InputText
+                            v-model.trim="templateSearch"
+                            class="min-w-0 flex-1"
+                            size="small"
+                            placeholder="搜索模板名称"
+                        />
+                        <Button
+                            size="small"
+                            severity="secondary"
+                            outlined
+                            :loading="templateLibraryLoading"
+                            @click="loadWorkflowTemplates"
+                        >
+                            刷新
+                        </Button>
+                    </div>
+
+                    <div class="mt-3 max-h-[25rem] space-y-2 overflow-y-auto pr-1">
+                        <div v-if="templateLibraryLoading" class="rounded border border-dashed p-8 text-center text-sm text-muted-foreground">
+                            正在加载流程模板…
+                        </div>
+                        <div
+                            v-else-if="filteredWorkflowTemplates.length === 0"
+                            class="rounded border border-dashed p-8 text-center text-sm text-muted-foreground"
+                        >
+                            {{ workflowTemplates.length ? '没有匹配的模板。' : '流程库还是空的，可从左侧添加当前流程。' }}
+                        </div>
+                        <article
+                            v-for="template in filteredWorkflowTemplates"
+                            :key="template.id"
+                            class="cursor-pointer rounded-lg border p-3 transition-colors hover:bg-muted/40"
+                            :class="selectedTemplateId === template.id && 'border-primary bg-primary/5'"
+                            @click="selectWorkflowTemplate(template)"
+                        >
+                            <div class="flex items-start gap-3">
+                                <div class="min-w-0 flex-1">
+                                    <strong class="truncate text-sm">{{ template.name }}</strong>
+                                    <div class="mt-2 text-[10px] text-muted-foreground">
+                                        {{ template.graphData.nodes.length }} 个节点 ·
+                                        {{ template.graphData.edges.length }} 条连线
+                                    </div>
+                                </div>
+                                <div class="flex flex-none gap-1">
+                                    <Button
+                                        size="small"
+                                        text
+                                        severity="secondary"
+                                        :disabled="!workflowId || templateActionBusy"
+                                        title="用当前工作流覆盖此模板的流程内容"
+                                        @click.stop="overwriteWorkflowTemplate(template)"
+                                    >
+                                        覆盖
+                                    </Button>
+                                    <Button
+                                        size="small"
+                                        text
+                                        severity="danger"
+                                        :disabled="templateActionBusy"
+                                        @click.stop="removeWorkflowTemplate(template)"
+                                    >
+                                        删除
+                                    </Button>
+                                </div>
+                            </div>
+                        </article>
+                    </div>
+
+                    <div class="mt-4 rounded-lg border bg-card p-3">
+                        <div class="text-xs font-medium">
+                            {{ selectedWorkflowTemplate ? `使用“${selectedWorkflowTemplate.name}”` : '请选择一个模板' }}
+                        </div>
+                        <div class="mt-2 flex flex-col gap-2 sm:flex-row">
+                            <InputText
+                                v-model.trim="templateInstanceName"
+                                class="min-w-0 flex-1"
+                                size="small"
+                                maxlength="256"
+                                placeholder="新工作流名称"
+                                :disabled="!selectedWorkflowTemplate"
+                            />
+                            <Button
+                                size="small"
+                                :disabled="!selectedWorkflowTemplate || !projectId || !templateInstanceName.trim()"
+                                :loading="templateActionBusy"
+                                @click="addSelectedTemplateToProject"
+                            >
+                                添加到当前项目
+                            </Button>
+                        </div>
+                        <p class="mt-2 text-[11px] text-muted-foreground">
+                            创建后是完整独立副本，可修改参数、增删节点；不会改变流程库模板。
+                        </p>
+                    </div>
+                </section>
+            </div>
+        </Dialog>
     </div>
 </template>
 

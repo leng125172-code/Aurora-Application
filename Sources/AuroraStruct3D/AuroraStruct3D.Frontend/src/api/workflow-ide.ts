@@ -1,6 +1,7 @@
 import { httpClient } from '@/api/client'
 
 const BASE = '/api/app/workflow'
+const TEMPLATE_BASE = '/api/app/workflow-template'
 
 /** Must stay numerically aligned with the backend PortControlType enum. */
 export enum PortControlType {
@@ -22,6 +23,28 @@ export interface WorkflowBrief {
     id: string
     name: string
     projectId: string
+}
+
+export interface WorkflowTemplateBrief {
+    id: string
+    name: string
+    graphData: WorkflowGraph
+}
+
+export interface WorkflowTemplateDetail extends WorkflowTemplateBrief {
+    category: string
+    description?: string
+    sourceWorkflowId?: string
+    usageCount: number
+    creationTime: string
+    lastModificationTime?: string
+}
+
+export interface SaveWorkflowTemplate {
+    workflowId: string
+    name: string
+    category: string
+    description?: string
 }
 
 export interface ProjectBrief {
@@ -283,6 +306,48 @@ export interface DebugExecutionResult {
 
 export async function listWorkflows(projectId: string): Promise<WorkflowBrief[]> {
     return (await httpClient.get<WorkflowBrief[]>(BASE, { params: { projectId } })).data
+}
+
+export async function listWorkflowTemplates(filter?: string): Promise<WorkflowTemplateBrief[]> {
+    return (
+        await httpClient.get<WorkflowTemplateBrief[]>(TEMPLATE_BASE, {
+            params: { filter: filter || undefined },
+        })
+    ).data
+}
+
+export async function getWorkflowTemplate(id: string): Promise<WorkflowTemplateDetail> {
+    return (await httpClient.get<WorkflowTemplateDetail>(`${TEMPLATE_BASE}/${id}`)).data
+}
+
+export async function createWorkflowTemplate(
+    input: SaveWorkflowTemplate,
+): Promise<WorkflowTemplateDetail> {
+    return (await httpClient.post<WorkflowTemplateDetail>(TEMPLATE_BASE, input)).data
+}
+
+export async function updateWorkflowTemplate(
+    id: string,
+    input: SaveWorkflowTemplate,
+): Promise<WorkflowTemplateDetail> {
+    return (await httpClient.put<WorkflowTemplateDetail>(`${TEMPLATE_BASE}/${id}`, input)).data
+}
+
+export async function instantiateWorkflowTemplate(
+    id: string,
+    projectId: string,
+    name: string,
+): Promise<{ id: string; projectId: string; name: string }> {
+    return (
+        await httpClient.post<{ id: string; projectId: string; name: string }>(
+            `${TEMPLATE_BASE}/${id}/instantiate`,
+            { projectId, name },
+        )
+    ).data
+}
+
+export async function deleteWorkflowTemplate(id: string): Promise<void> {
+    await httpClient.delete(`${TEMPLATE_BASE}/${id}`)
 }
 
 export async function getWorkflowSource(id: string): Promise<WorkflowSource> {

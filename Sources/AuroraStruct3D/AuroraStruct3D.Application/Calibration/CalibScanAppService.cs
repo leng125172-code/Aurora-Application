@@ -277,6 +277,15 @@ public class CalibScanAppService : AuroraStruct3DAppService, ICalibScanAppServic
         }
 
         CalibScanSessionState session = _stateStore.Start(project.Id, mode, totalFrameCount);
+        if (
+            (mode is CalibScanMode.TwoCamera0Light or CalibScanMode.TwoCamera1Light)
+            && project.SecondaryCameraDeviceId.HasValue
+        )
+        {
+            // A scan is a new accumulation boundary. Do not reuse chunks left by a
+            // failed/stopped previous run merely because its point-cloud session still exists.
+            _pointCloudStateStore.StartIncrementalMode(project.Id);
+        }
 
         // 扫描循环会在当前 HTTP 请求结束后继续运行，不能捕获本请求作用域中的
         // AppService、BlobContainer 或仓储。为整个循环创建独立作用域，停止扫描
@@ -378,6 +387,15 @@ public class CalibScanAppService : AuroraStruct3DAppService, ICalibScanAppServic
             if (projectorService != null && totalFrameCount > 0)
             {
                 // 含投影仪模式：结构光扫描流程
+                // 投影仪断电重启后可能把 MA 播放范围恢复为旧的 16 帧。
+                // 每轮先恢复与当前 Gray+相移布局一致的范围和横竖方向，避免第 17 次 N
+                // 指令没有同步脉冲而令两台相机一起 WaitForFrame 超时。
+                await projectorService.ConfigureFringePlaybackAsync(
+                    totalFrameCount,
+                    totalFrameCount / 2,
+                    cancellationToken
+                );
+
                 // 每轮都执行 B0 -> 等待 2 秒 -> B2，清除可能残留的旧触发状态，
                 // 确保随后 T 显示首帧、N 单帧推进。
                 await EnterSingleFrameTriggerModeAsync(projectorService, cancellationToken);

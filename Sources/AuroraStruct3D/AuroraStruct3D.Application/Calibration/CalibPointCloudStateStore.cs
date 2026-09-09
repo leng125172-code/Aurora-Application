@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.IO.Compression;
 using AuroraStruct3D.Calibration.Dtos;
 
 namespace AuroraStruct3D.Calibration;
@@ -23,7 +24,7 @@ public class PointCloudSessionState
 
     public bool IsIncrementalMode { get; set; }
     public int TotalPointCount { get; set; }
-    public List<byte[]> AccumulatedPointCloudChunks { get; } = new();
+    public List<CompressedPointCloudChunk> AccumulatedPointCloudChunks { get; } = new();
     public long AccumulatedPointCloudBytes { get; set; }
     public bool EnableTableFilter { get; set; } = true;
     public double TableClearanceMm { get; set; } = 3d;
@@ -270,33 +271,70 @@ public class CalibPointCloudStateStore
     }
 
     /// <summary>添加增量点云数据块。</summary>
-    public bool AddIncrementalPointCloud(Guid calibProjectId, byte[] chunkBytes, int pointCount)
+    public IncrementalPointCloudAddResult AddIncrementalPointCloud(
+        Guid calibProjectId,
+        byte[] chunkBytes,
+        int pointCount)
     {
         if (!_sessions.TryGetValue(calibProjectId, out PointCloudSessionState? session))
         {
-            return false;
+            return new IncrementalPointCloudAddResult(
+                IncrementalPointCloudAddStatus.SessionInactive,
+                0,
+                MaximumAccumulatedPointCloudBytes
+            );
         }
 
         lock (session.SyncRoot)
         {
             if (!session.IsIncrementalMode)
             {
-                return false;
+                return new IncrementalPointCloudAddResult(
+                    IncrementalPointCloudAddStatus.SessionInactive,
+                    session.AccumulatedPointCloudBytes,
+                    MaximumAccumulatedPointCloudBytes
+                );
             }
+
+            byte[] compressedBytes = CompressChunk(chunkBytes);
             if (
-                chunkBytes.LongLength > MaximumAccumulatedPointCloudBytes
+                compressedBytes.LongLength > MaximumAccumulatedPointCloudBytes
                     - session.AccumulatedPointCloudBytes
             )
             {
-                return false;
+                return new IncrementalPointCloudAddResult(
+                    IncrementalPointCloudAddStatus.StorageLimitExceeded,
+                    session.AccumulatedPointCloudBytes,
+                    MaximumAccumulatedPointCloudBytes
+                );
             }
 
-            session.AccumulatedPointCloudChunks.Add(chunkBytes);
-            session.AccumulatedPointCloudBytes += chunkBytes.LongLength;
+            session.AccumulatedPointCloudChunks.Add(
+                new CompressedPointCloudChunk(compressedBytes, chunkBytes.Length, pointCount)
+            );
+            session.AccumulatedPointCloudBytes += compressedBytes.LongLength;
             session.TotalPointCount += pointCount;
             session.LastUpdatedAt = DateTime.UtcNow;
+            return new IncrementalPointCloudAddResult(
+                IncrementalPointCloudAddStatus.Added,
+                session.AccumulatedPointCloudBytes,
+                MaximumAccumulatedPointCloudBytes
+            );
         }
-        return true;
+
+        static byte[] CompressChunk(byte[] source)
+        {
+            using MemoryStream output = new();
+            using (BrotliStream compressor = new(
+                output,
+                CompressionLevel.SmallestSize,
+                leaveOpen: true
+            ))
+            {
+                compressor.Write(source);
+            }
+            return output.ToArray();
+        }
     }
 
     /// <summary>完成增量点云模式，保存最终合并后的 PLY 文件。</summary>
@@ -327,11 +365,11 @@ public class CalibPointCloudStateStore
     }
 
     /// <summary>获取增量模式下的累积点云块。</summary>
-    public List<byte[]> GetAccumulatedPointCloudChunks(Guid calibProjectId)
+    public List<CompressedPointCloudChunk> GetAccumulatedPointCloudChunks(Guid calibProjectId)
     {
         if (!_sessions.TryGetValue(calibProjectId, out PointCloudSessionState? session))
         {
-            return new List<byte[]>();
+            return new List<CompressedPointCloudChunk>();
         }
         lock (session.SyncRoot)
         {
@@ -387,4 +425,26 @@ public class CalibPointCloudStateStore
             return session.TotalPointCount;
         }
     }
+}
+
+public sealed record CompressedPointCloudChunk(
+    byte[] CompressedBytes,
+    int OriginalByteCount,
+    int PointCount
+);
+
+public enum IncrementalPointCloudAddStatus
+{
+    Added,
+    SessionInactive,
+    StorageLimitExceeded,
+}
+
+public readonly record struct IncrementalPointCloudAddResult(
+    IncrementalPointCloudAddStatus Status,
+    long AccumulatedCompressedBytes,
+    long MaximumCompressedBytes
+)
+{
+    public bool Added => Status == IncrementalPointCloudAddStatus.Added;
 }

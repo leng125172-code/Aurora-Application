@@ -17,20 +17,45 @@ public class ConfiguredFringePatternTests
 
         byte[][] frames = InvokeBuild(input);
 
-        Assert.Equal(imageCount * 2, frames.Length);
-        Assert.All(frames.Take(imageCount), frame => Assert.Equal(720, frame.Length));
-        Assert.All(frames.Skip(imageCount), frame => Assert.Equal(1280, frame.Length));
+        int framesPerDirection = GrayPhasePatternLayout.GetFramesPerDirection(
+            input.PeriodCount,
+            imageCount
+        );
+        Assert.Equal(framesPerDirection * 2, frames.Length);
+        Assert.All(
+            frames.Take(framesPerDirection),
+            frame => Assert.Equal(720, frame.Length)
+        );
+        Assert.All(
+            frames.Skip(framesPerDirection),
+            frame => Assert.Equal(1280, frame.Length)
+        );
     }
 
     [Fact]
-    public void BuildFringeImagePixels_ShouldApplyConfiguredPhaseShift()
+    public void BuildFringeImagePixels_ShouldGenerateUniformPhaseStepsAfterGrayFrames()
     {
         DownloadFringePatternInputDto input = CreateInput(imageCount: 4);
 
         byte[][] frames = InvokeBuild(input);
 
-        Assert.Equal(frames[0][2], frames[1][0]);
-        Assert.Equal(frames[4][2], frames[5][0]);
+        int grayFrameCount = GrayPhasePatternLayout.GetGrayBitCount(input.PeriodCount) * 2;
+        int framesPerDirection = GrayPhasePatternLayout.GetFramesPerDirection(
+            input.PeriodCount,
+            input.ImageCount
+        );
+        byte expectedCenter = (byte)((input.DarkLevel + input.BrightLevel) / 2);
+
+        Assert.Equal(input.BrightLevel, frames[grayFrameCount][0]);
+        Assert.Equal(expectedCenter, frames[grayFrameCount + 1][0]);
+        Assert.Equal(input.DarkLevel, frames[grayFrameCount + 2][0]);
+        Assert.Equal(expectedCenter, frames[grayFrameCount + 3][0]);
+
+        int verticalPhaseOffset = framesPerDirection + grayFrameCount;
+        Assert.Equal(input.BrightLevel, frames[verticalPhaseOffset][0]);
+        Assert.Equal(expectedCenter, frames[verticalPhaseOffset + 1][0]);
+        Assert.Equal(input.DarkLevel, frames[verticalPhaseOffset + 2][0]);
+        Assert.Equal(expectedCenter, frames[verticalPhaseOffset + 3][0]);
     }
 
     [Fact]

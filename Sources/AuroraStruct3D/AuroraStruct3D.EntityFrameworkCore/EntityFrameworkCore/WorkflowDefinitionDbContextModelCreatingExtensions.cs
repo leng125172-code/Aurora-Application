@@ -77,6 +77,20 @@ public static class WorkflowDefinitionDbContextModelCreatingExtensions
             b.HasIndex(x => new { x.ProjectId, x.Name });
         });
 
+        builder.Entity<WorkflowTemplate>(b =>
+        {
+            b.ToTable($"{TablePrefix}WorkflowTemplates");
+            b.ConfigureByConvention();
+            b.Property(x => x.Name).IsRequired().HasMaxLength(WorkflowTemplateConsts.MaxNameLength);
+            b.Property(x => x.Category).IsRequired().HasMaxLength(WorkflowTemplateConsts.MaxCategoryLength);
+            b.Property(x => x.Description).HasMaxLength(WorkflowTemplateConsts.MaxDescriptionLength);
+            b.Property(x => x.GraphData).IsRequired().HasColumnType("text");
+            b.Property(x => x.UsageCount).IsRequired();
+            b.HasIndex(x => x.Name);
+            b.HasIndex(x => x.Category);
+            b.HasIndex(x => x.SourceWorkflowId);
+        });
+
         builder.Entity<WorkflowSourceDraft>(b =>
         {
             b.ToTable("AbpProWorkflowSourceDrafts");

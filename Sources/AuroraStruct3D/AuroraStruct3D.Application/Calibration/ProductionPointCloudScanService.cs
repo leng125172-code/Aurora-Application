@@ -557,6 +557,15 @@ public sealed class ProductionPointCloudScanService
         List<byte[]> main = new(frameCount);
         List<byte[]> secondary = new(frameCount);
 
+        await projector.ConfigureFringePlaybackAsync(
+            frameCount,
+            GrayPhasePatternLayout.GetFramesPerDirection(
+                profile.PeriodCount,
+                profile.PatternCount
+            ),
+            cancellationToken
+        );
+
         await RequireProjectorAsync(
             projector.SetTriggerModeAsync(ProjectorTriggerMode.Normal, cancellationToken),
             "SetTriggerMode(Normal)"
@@ -748,7 +757,19 @@ public sealed class ProductionPointCloudScanService
             mainDecode,
             secondaryDecode,
             disparitySign,
+            profile.ProjectionP1.At<double>(0, 2)
+                - profile.ProjectionP2.At<double>(0, 2),
+            out double[] secondaryYCoordinates,
             out GrayPhaseMatchDiagnostics diagnostics
+        );
+        _logger.LogInformation(
+            "Structured-light match filtering: ProjectId={ProjectId}, Matched={Matched}, "
+                + "BidirectionalRejected={BidirectionalRejected}, "
+                + "VerticalStripeRejected={VerticalStripeRejected}",
+            profile.ProjectId,
+            diagnostics.MatchedPixels,
+            diagnostics.BidirectionalRejected,
+            diagnostics.VerticalStripeRejected
         );
         if (diagnostics.MatchedPixels < MinimumReliableStructuredLightMatches)
             throw new InvalidOperationException(
@@ -762,9 +783,11 @@ public sealed class ProductionPointCloudScanService
             profile.ProjectionP1,
             profile.ProjectionP2,
             profile.BaselineMm,
-            disparitySign
+            disparitySign,
+            secondaryYCoordinates
         );
         ApplyTableFilter(depth, profile, request, ref cachedTablePlane);
+        RemoveSparseFarDepthOutliers(depth, profile.ProjectionP1, profile.ProjectId);
         using Mat texture = CalibImageUtils.LoadBgrMat(frames.Texture);
         using Mat rectifiedTexture = new();
         Cv2.Remap(
@@ -831,6 +854,7 @@ public sealed class ProductionPointCloudScanService
                 disparitySign
             );
             ApplyTableFilter(depth, profile, request, ref cachedTablePlane);
+            RemoveSparseFarDepthOutliers(depth, profile.ProjectionP1, profile.ProjectId);
             (Mat points, Mat colors) = StereoReconstructionUtils.GeneratePointCloud(
                 depth,
                 rectifiedMain,
@@ -874,6 +898,26 @@ public sealed class ProductionPointCloudScanService
             profile.ProjectId,
             filter.RemovedPointCount,
             request.TableClearanceMm
+        );
+    }
+
+    private void RemoveSparseFarDepthOutliers(
+        Mat depth,
+        Mat projectionP1,
+        Guid projectId)
+    {
+        DepthOutlierFilterResult result =
+            StereoReconstructionUtils.RemoveSparseFarDepthOutliers(depth, projectionP1);
+        if (!result.Applied)
+            return;
+
+        _logger.LogInformation(
+            "Production scan sparse far-depth outliers removed: ProjectId={ProjectId}, "
+                + "Removed={Removed}/{Valid}, DepthCutoffMm={DepthCutoffMm:F2}",
+            projectId,
+            result.RemovedPointCount,
+            result.ValidPointCount,
+            result.DepthCutoffMm
         );
     }
 

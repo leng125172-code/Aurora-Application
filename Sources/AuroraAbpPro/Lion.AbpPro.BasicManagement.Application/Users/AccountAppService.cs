@@ -77,7 +77,8 @@ namespace Lion.AbpPro.BasicManagement.Users
 
             if (result.IsNotAllowed)
             {
-                throw new BusinessException(BasicManagementErrorCodes.UserDisabled);
+                var notAllowedUser = await _userManager.FindByNameAsync(input.Name);
+                await ThrowNotAllowedExceptionAsync(notAllowedUser);
             }
 
             if (result.IsLockedOut)
@@ -137,7 +138,7 @@ namespace Lion.AbpPro.BasicManagement.Users
 
             if (result.IsNotAllowed)
             {
-                throw new BusinessException(BasicManagementErrorCodes.UserDisabled);
+                await ThrowNotAllowedExceptionAsync(user);
             }
 
             if (result.IsLockedOut)
@@ -159,6 +160,26 @@ namespace Lion.AbpPro.BasicManagement.Users
                 }
             );
             return await BuildResult(user);
+        }
+
+        private async Task ThrowNotAllowedExceptionAsync(IdentityUser? user)
+        {
+            if (user?.IsActive == false)
+            {
+                throw new BusinessException(BasicManagementErrorCodes.UserDisabled);
+            }
+
+            if (user?.ShouldChangePasswordOnNextLogin == true)
+            {
+                throw new BusinessException(BasicManagementErrorCodes.NewPasswordExpire);
+            }
+
+            if (user != null && await _userManager.ShouldPeriodicallyChangePasswordAsync(user))
+            {
+                throw new BusinessException(BasicManagementErrorCodes.OldPasswordExpire);
+            }
+
+            throw new BusinessException(BasicManagementErrorCodes.UserDisabled);
         }
 
         public async Task<LoginOutput> LoginOidcAsync(LoginOidcInput input)
@@ -264,7 +285,7 @@ namespace Lion.AbpPro.BasicManagement.Users
                     user.UserName,
                     user.Name,
                     user.Email,
-                    user.TenantId.ToString(),
+                    user.TenantId,
                     roles.ToList()
                 );
                 var refreshToken = await GenerateRefreshTokenAsync(
@@ -286,8 +307,11 @@ namespace Lion.AbpPro.BasicManagement.Users
 
         #region 私有方法
 
-        protected virtual async Task<LoginOutput> BuildResult(IdentityUser user)
+        protected virtual async Task<LoginOutput> BuildResult(IdentityUser? user)
         {
+            if (user == null)
+                throw new BusinessException(BasicManagementErrorCodes.UserNotExist);
+
             if (!user.IsActive)
                 throw new BusinessException(BasicManagementErrorCodes.UserLockedOut);
             var roles = await _userManager.GetRolesAsync(user);
@@ -298,7 +322,7 @@ namespace Lion.AbpPro.BasicManagement.Users
                 user.UserName,
                 user.Name,
                 user.Email,
-                user.TenantId.ToString(),
+                user.TenantId,
                 roles.ToList()
             );
             var loginOutput = user.Adapt<LoginOutput>();
@@ -315,9 +339,9 @@ namespace Lion.AbpPro.BasicManagement.Users
         protected virtual string GenerateJwt(
             Guid userId,
             string userName,
-            string name,
-            string email,
-            string tenantId,
+            string? name,
+            string? email,
+            Guid? tenantId,
             List<string> roles
         )
         {
@@ -330,11 +354,25 @@ namespace Lion.AbpPro.BasicManagement.Users
                 new Claim(JwtClaimTypes.Audience, _jwtOptions.Audience),
                 new Claim(JwtClaimTypes.Issuer, _jwtOptions.Issuer),
                 new Claim(AbpClaimTypes.UserId, userId.ToString()),
-                new Claim(AbpClaimTypes.Name, name),
                 new Claim(AbpClaimTypes.UserName, userName),
-                new Claim(AbpClaimTypes.Email, email),
-                new Claim(AbpClaimTypes.TenantId, tenantId),
             };
+
+            // Name、Email 和 TenantId 都是可选字段。普通预置用户可能没有填写 Name，
+            // 不能将 null 传给 Claim，否则成功验证密码后会以 ArgumentNullException 结束登录。
+            if (!name.IsNullOrWhiteSpace())
+            {
+                claims.Add(new Claim(AbpClaimTypes.Name, name));
+            }
+
+            if (!email.IsNullOrWhiteSpace())
+            {
+                claims.Add(new Claim(AbpClaimTypes.Email, email));
+            }
+
+            if (tenantId.HasValue)
+            {
+                claims.Add(new Claim(AbpClaimTypes.TenantId, tenantId.Value.ToString()));
+            }
 
             foreach (var item in roles)
             {

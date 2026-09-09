@@ -492,6 +492,70 @@ public class DlpProjectorService : IDlpProjectorService, IDisposable
             .ConfigureAwait(false);
     }
 
+    /// <inheritdoc/>
+    public Task ConfigureFringePlaybackAsync(
+        int imageCount,
+        int horizontalFrameCount,
+        CancellationToken cancellationToken = default
+    )
+    {
+        return ExecuteOperationAsync(
+            () => ConfigureFringePlaybackCoreAsync(
+                imageCount,
+                horizontalFrameCount,
+                cancellationToken
+            ),
+            cancellationToken
+        );
+    }
+
+    private async Task ConfigureFringePlaybackCoreAsync(
+        int imageCount,
+        int horizontalFrameCount,
+        CancellationToken cancellationToken
+    )
+    {
+        EnsureClient();
+        if (imageCount is < 1 or > 128)
+            throw new ArgumentOutOfRangeException(nameof(imageCount));
+        if (horizontalFrameCount < 0 || horizontalFrameCount > imageCount)
+            throw new ArgumentOutOfRangeException(nameof(horizontalFrameCount));
+
+        const string NewLine = "\r\n";
+        string rangeCommand =
+            $"{TjProjectorCommands.SetImageRepeatPrefix}0 {imageCount - 1} 0 0{NewLine}";
+        await SendCommandAndReadCoreAsync(rangeCommand, cancellationToken).ConfigureAwait(false);
+        await Task.Delay(100, cancellationToken).ConfigureAwait(false);
+
+        string directionCommand =
+            $"{TjProjectorCommands.SetFringeDirectionPrefix}{horizontalFrameCount}{NewLine}";
+        await SendCommandAndReadCoreAsync(directionCommand, cancellationToken).ConfigureAwait(false);
+        await Task.Delay(50, cancellationToken).ConfigureAwait(false);
+
+        int orientationBlockCount = (imageCount + 31) / 32;
+        for (int blockIndex = 0; blockIndex < orientationBlockCount; blockIndex++)
+        {
+            string orientationCommand = BuildFringeOrientationCommand(
+                imageCount,
+                horizontalFrameCount,
+                blockIndex
+            );
+            await SendCommandAndReadCoreAsync(orientationCommand, cancellationToken)
+                .ConfigureAwait(false);
+            await Task.Delay(50, cancellationToken).ConfigureAwait(false);
+        }
+
+        _logger.LogInformation(
+            "{Tag} [Device {Device}] Fringe playback restored: images={ImageCount}, lastIndex={LastIndex}, horizontalFrames={HorizontalFrameCount}, orientationBlocks={OrientationBlockCount}",
+            LogTag,
+            DeviceId,
+            imageCount,
+            imageCount - 1,
+            horizontalFrameCount,
+            orientationBlockCount
+        );
+    }
+
     // ─── 通用命令 ────────────────────────────────────────────────
 
     /// <inheritdoc/>

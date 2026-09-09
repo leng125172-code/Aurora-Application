@@ -95,9 +95,9 @@ public class WorkflowApiRouteContractTests
     [Fact]
     public void Workflow_App_Service_Should_Be_Authorized()
     {
-        Assert.NotNull(typeof(WorkflowAppService).GetCustomAttribute<AuthorizeAttribute>());
-        Assert.NotNull(
-            typeof(WorkflowExecutionAppService).GetCustomAttribute<AuthorizeAttribute>()
+        Assert.NotEmpty(typeof(WorkflowAppService).GetCustomAttributes<AuthorizeAttribute>());
+        Assert.NotEmpty(
+            typeof(WorkflowExecutionAppService).GetCustomAttributes<AuthorizeAttribute>()
         );
     }
 

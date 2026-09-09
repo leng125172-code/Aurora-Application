@@ -111,16 +111,30 @@ internal sealed class TucamHardwareTriggerCaptureSession : IAsyncDisposable
         {
             // GrabFrameRawAsync 内部是同步 SDK 等待，必须放在线程池线程中，才能在其阻塞时
             // 继续向投影仪发送 T/N。每台相机拥有独立 handle 和 frame buffer。
+            // 先通过 workerReady 确认两个线程池工作项都已实际开始执行，再计算硬件
+            // 预留延时；否则线程池繁忙时单纯 Delay(50ms) 可能在第二个工作项尚未调度
+            // 前就发送触发沿，造成一侧相机漏帧或主从条纹错位。
+            TaskCompletionSource[] workerReady = _cameras
+                .Select(_ => new TaskCompletionSource(
+                    TaskCreationOptions.RunContinuationsAsynchronously
+                ))
+                .ToArray();
             waiters = _cameras
-                .Select(camera =>
+                .Select((camera, index) =>
                     Task.Run(
-                        () =>
-                            camera.GrabAsync(cancellationToken),
+                        async () =>
+                        {
+                            workerReady[index].TrySetResult();
+                            return await camera.GrabAsync(cancellationToken)
+                                .ConfigureAwait(false);
+                        },
                         CancellationToken.None
                     )
                 )
                 .ToArray();
 
+            await Task.WhenAll(workerReady.Select(x => x.Task))
+                .WaitAsync(cancellationToken);
             // 实机 A/B 测试采用 50ms，确保两个 WaitForFrame 都已进入 native 阻塞等待。
             await Task.Delay(TriggerArmDelayMs, cancellationToken);
             await triggerAsync(cancellationToken);

@@ -565,7 +565,7 @@ const fringeDarkLevel = ref(24)
 const fringeBrightLevel = ref(220)
 const projectorHeightInput = ref<number>(720)
 const fringe3PeriodCount = ref<number>(8)
-const fringe3ImageCount = ref<number>(4)
+const fringe3ImageCount = ref<number>(8)
 const fringe3PhaseShift = ref<number>(2)
 const horizontalPaddingPosition = ref<'start' | 'end'>('end')
 

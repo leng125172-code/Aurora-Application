@@ -27,6 +27,10 @@ public class TucamCameraService :
     // TUFRM_FMT_RGB888。相机不提供直接灰度帧，统一请求 SDK 输出三通道显示帧；
     // 标定等灰度场景在解码后由 OpenCV 转换，避免向硬件请求不支持的灰度格式。
     private const byte Rgb888FrameFormat = 0x12;
+    private const int MinimumUsbfsMemoryMb = 128;
+    private const string UsbfsMemoryPath = "/sys/module/usbcore/parameters/usbfs_memory_mb";
+
+    private static int _usbfsMemoryBudgetChecked;
 
     private static TUCamFrame CreateRgbFrameRequest() =>
         new() { uiRsdSize = 1, ucFormatGet = Rgb888FrameFormat };
@@ -315,6 +319,7 @@ public class TucamCameraService :
     public Task<int> InitializeAsync()
     {
         ThrowIfDisposed();
+        EnsureUsbfsMemoryBudget();
 
         if (_initialized && !_cameraHandles.IsEmpty)
         {
@@ -384,6 +389,102 @@ public class TucamCameraService :
             count
         );
         return Task.FromResult(count);
+    }
+
+    private void EnsureUsbfsMemoryBudget()
+    {
+        if (
+            !OperatingSystem.IsLinux()
+            || Interlocked.Exchange(ref _usbfsMemoryBudgetChecked, 1) != 0
+        )
+        {
+            return;
+        }
+
+        try
+        {
+            if (!File.Exists(UsbfsMemoryPath))
+            {
+                _logger.LogWarning(
+                    "{Tag} USBFS memory setting is unavailable at {Path}; dual-camera USB capture may time out",
+                    LogTag,
+                    UsbfsMemoryPath
+                );
+                return;
+            }
+
+            string rawValue = File.ReadAllText(UsbfsMemoryPath).Trim();
+            if (!int.TryParse(rawValue, out int currentMemoryMb))
+            {
+                _logger.LogWarning(
+                    "{Tag} Cannot parse USBFS memory setting at {Path}: {Value}",
+                    LogTag,
+                    UsbfsMemoryPath,
+                    rawValue
+                );
+                return;
+            }
+
+            int previousMemoryMb = currentMemoryMb;
+            if (currentMemoryMb < MinimumUsbfsMemoryMb)
+            {
+                File.WriteAllText(UsbfsMemoryPath, MinimumUsbfsMemoryMb.ToString());
+                rawValue = File.ReadAllText(UsbfsMemoryPath).Trim();
+                if (!int.TryParse(rawValue, out currentMemoryMb))
+                {
+                    throw new IOException(
+                        $"Cannot parse USBFS memory setting after write: {rawValue}"
+                    );
+                }
+            }
+
+            if (currentMemoryMb < MinimumUsbfsMemoryMb)
+            {
+                _logger.LogWarning(
+                    "{Tag} USBFS memory remains too small after configuration: {Current} MiB (required >= {Minimum} MiB); dual-camera capture may time out",
+                    LogTag,
+                    currentMemoryMb,
+                    MinimumUsbfsMemoryMb
+                );
+                return;
+            }
+
+            _logger.LogInformation(
+                "{Tag} USBFS memory budget verified: {Current} MiB (previously {Previous} MiB, required >= {Minimum} MiB)",
+                LogTag,
+                currentMemoryMb,
+                previousMemoryMb,
+                MinimumUsbfsMemoryMb
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(
+                ex,
+                "{Tag} Failed to configure USBFS memory at {Path} to at least {Minimum} MiB; dual-camera capture may time out",
+                LogTag,
+                UsbfsMemoryPath,
+                MinimumUsbfsMemoryMb
+            );
+        }
+    }
+
+    private static string GetUsbfsMemoryBudgetForDiagnostics()
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            return "not-applicable";
+        }
+
+        try
+        {
+            string value = File.ReadAllText(UsbfsMemoryPath).Trim();
+            return int.TryParse(value, out int memoryMb) ? memoryMb.ToString() : "unavailable";
+        }
+        catch
+        {
+            return "unavailable";
+        }
     }
 
     /// <inheritdoc/>
@@ -2228,13 +2329,42 @@ public class TucamCameraService :
             TUCamRet ret = TUCamNative.TUCAM_Buf_WaitForFrame(handle, ref frame, timeoutMs);
             if (ret != TUCamRet.Success)
             {
-                // Bug 4/5 诊断：超时时附加关键 GenICam 节点值，便于判断是否需调用 AcquisitionStart
-                string? exp = GenICamGetString(handle, "ExposureTime");
-                string? tm = GenICamGetString(handle, "TriggerMode");
-                string? am = GenICamGetString(handle, "AcquisitionMode");
-                long? fr = GenICamGetInt(handle, "AcquisitionFrameRate");
+                // Read each diagnostic node through its actual GenICam type. Reading a Float
+                // through the Int64 union member prints its IEEE-754 bit pattern, while reading
+                // Integer/Enumeration nodes as strings produces empty values.
+                long? exp = GenICamGetInt(handle, "ExposureTime");
+                long? tm = GenICamGetInt(handle, "TriggerMode");
+                long? ts = GenICamGetInt(handle, "TriggerSource");
+                long? am = GenICamGetInt(handle, "AcquisitionMode");
+                double? fr = GenICamGetFloat(handle, "AcquisitionFrameRate");
+                string exposureTime = exp?.ToString(
+                    System.Globalization.CultureInfo.InvariantCulture
+                ) ?? "unavailable";
+                string triggerMode = tm switch
+                {
+                    0 => "0(FreeRunning)",
+                    1 => "1(Standard)",
+                    2 => "2(Software)",
+                    null => "unavailable",
+                    _ => tm.Value.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                };
+                string acquisitionMode = am?.ToString(
+                    System.Globalization.CultureInfo.InvariantCulture
+                ) ?? "unavailable";
+                string triggerSource = ts switch
+                {
+                    0 => "0(External)",
+                    1 => "1(Software)",
+                    null => "unavailable",
+                    _ => ts.Value.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                };
+                string frameRate = fr?.ToString(
+                    "G",
+                    System.Globalization.CultureInfo.InvariantCulture
+                ) ?? "unavailable";
+                string usbfsMemoryMb = GetUsbfsMemoryBudgetForDiagnostics();
                 throw new InvalidOperationException(
-                    $"{LogTag} WaitForFrame failed (index={cameraIndex}): {ret}. timeout={timeoutMs}ms, ExposureTime={exp}, TriggerMode={tm}, AcquisitionMode={am}, AcquisitionFrameRate={fr}"
+                    $"{LogTag} WaitForFrame failed (index={cameraIndex}): {ret}. timeout={timeoutMs}ms, ExposureTimeUs={exposureTime}, TriggerMode={triggerMode}, TriggerSource={triggerSource}, AcquisitionMode={acquisitionMode}, AcquisitionFrameRateHz={frameRate}, UsbfsMemoryMb={usbfsMemoryMb}"
                 );
             }
 

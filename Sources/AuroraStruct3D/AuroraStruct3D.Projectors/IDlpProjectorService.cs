@@ -164,6 +164,18 @@ public interface IDlpProjectorService
     /// </summary>
     Task<bool> NextFrameAsync(CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// 恢复当前条纹序列的运行时播放范围与横竖方向。
+    /// 投影仪断电重启后可能恢复旧的播放范围，因此每次结构光扫描前都应调用。
+    /// </summary>
+    /// <param name="imageCount">条纹总帧数。</param>
+    /// <param name="horizontalFrameCount">序列开头连续的横条纹帧数。</param>
+    Task ConfigureFringePlaybackAsync(
+        int imageCount,
+        int horizontalFrameCount,
+        CancellationToken cancellationToken = default
+    );
+
     // ─── 通用命令 ────────────────────────────────────────────────
 
     /// <summary>

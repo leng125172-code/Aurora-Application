@@ -3,6 +3,7 @@ using AuroraStruct3D.Cameras;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Logging;
 using OpenCvSharp;
+using System.IO.Compression;
 using System.Text;
 using Volo.Abp;
 using Volo.Abp.BlobStoring;
@@ -215,6 +216,9 @@ public class CalibPointCloudAppService : AuroraStruct3DAppService, ICalibPointCl
                 mainDecode,
                 secondaryDecode,
                 disparitySign,
+                calibrationData.ProjectionP1.At<double>(0, 2)
+                    - calibrationData.ProjectionP2.At<double>(0, 2),
+                out double[] secondaryYCoordinates,
                 out GrayPhaseMatchDiagnostics matchDiagnostics
             );
             int matchedPixelCount = checked((int)matchDiagnostics.MatchedPixels);
@@ -222,11 +226,14 @@ public class CalibPointCloudAppService : AuroraStruct3DAppService, ICalibPointCl
             LogGrayPhaseDecodeDiagnostics(roundIndex, "Secondary", secondaryDecode);
             _logger.LogInformation(
                 "Gray+相移匹配：Round={Round}, MainValid={MainValid}, SecondaryValid={SecondaryValid}, "
-                    + "Attempted={Attempted}, Matched={Matched}, RejectY={RejectY}, RejectGap={RejectGap}, RejectDisparity={RejectDisparity}",
+                    + "Attempted={Attempted}, Matched={Matched}, RejectY={RejectY}, RejectGap={RejectGap}, "
+                    + "RejectDisparity={RejectDisparity}, RejectBidirectional={RejectBidirectional}, "
+                    + "RejectVerticalStripe={RejectVerticalStripe}",
                 roundIndex, mainDecode.ValidCount, secondaryDecode.ValidCount,
                 matchDiagnostics.AttemptedPixels, matchDiagnostics.MatchedPixels,
                 matchDiagnostics.ProjectorYRejected, matchDiagnostics.InterpolationGapRejected,
-                matchDiagnostics.DisparityRejected
+                matchDiagnostics.DisparityRejected, matchDiagnostics.BidirectionalRejected,
+                matchDiagnostics.VerticalStripeRejected
             );
             if (matchedPixelCount == 0)
             {
@@ -241,9 +248,16 @@ public class CalibPointCloudAppService : AuroraStruct3DAppService, ICalibPointCl
                 calibrationData.ProjectionP1,
                 calibrationData.ProjectionP2,
                 calibrationData.BaselineMm,
-                disparitySign
+                disparitySign,
+                secondaryYCoordinates
             );
             await ApplyTableFilterAsync(calibProjectId, roundIndex, depth, calibrationData.ProjectionP1);
+            RemoveSparseFarDepthOutliers(
+                calibProjectId,
+                roundIndex,
+                depth,
+                calibrationData.ProjectionP1
+            );
             byte[] qualityTextureBytes =
                 scanImages.TextureImage is { Length: > 0 } capturedTexture
                     ? capturedTexture
@@ -322,15 +336,15 @@ public class CalibPointCloudAppService : AuroraStruct3DAppService, ICalibPointCl
 
                     int totalPointCount =
                         _stateStore.GetTotalPointCount(calibProjectId) + pointCloud.Rows;
-                    if (!_stateStore.AddIncrementalPointCloud(
+                    IncrementalPointCloudAddResult addResult =
+                        _stateStore.AddIncrementalPointCloud(
                             calibProjectId,
                             plyBytes,
                             pointCloud.Rows
-                        ))
-                    {
-                        throw new InvalidOperationException(
-                            "增量点云内存缓存已达到安全上限，请停止扫描并保存当前点云"
                         );
+                    if (!addResult.Added)
+                    {
+                        throw new InvalidOperationException(BuildIncrementalChunkError(addResult));
                     }
 
                     await _notifier.NotifyIncrementalPointCloudAsync(
@@ -608,6 +622,12 @@ public class CalibPointCloudAppService : AuroraStruct3DAppService, ICalibPointCl
                     disparitySign
                 );
                 await ApplyTableFilterAsync(calibProjectId, roundIndex, depth, calibrationData.ProjectionP1);
+                RemoveSparseFarDepthOutliers(
+                    calibProjectId,
+                    roundIndex,
+                    depth,
+                    calibrationData.ProjectionP1
+                );
                 DepthQualityPreview depthPreview = BuildDepthQualityPreview(
                     depth,
                     textureImage: rectifiedMain
@@ -652,15 +672,15 @@ public class CalibPointCloudAppService : AuroraStruct3DAppService, ICalibPointCl
                     byte[] plyBytes = StereoReconstructionUtils.WritePly(pointCloud, colors);
                     int totalPointCount =
                         _stateStore.GetTotalPointCount(calibProjectId) + pointCloud.Rows;
-                    if (!_stateStore.AddIncrementalPointCloud(
+                    IncrementalPointCloudAddResult addResult =
+                        _stateStore.AddIncrementalPointCloud(
                             calibProjectId,
                             plyBytes,
                             pointCloud.Rows
-                        ))
-                    {
-                        throw new InvalidOperationException(
-                            "增量点云内存缓存已达到安全上限，请停止扫描并保存当前点云"
                         );
+                    if (!addResult.Added)
+                    {
+                        throw new InvalidOperationException(BuildIncrementalChunkError(addResult));
                     }
                     await _notifier.NotifyIncrementalPointCloudAsync(
                         calibProjectId,
@@ -754,23 +774,60 @@ public class CalibPointCloudAppService : AuroraStruct3DAppService, ICalibPointCl
                 return;
             }
 
-            List<byte[]> chunks = _stateStore.GetAccumulatedPointCloudChunks(calibProjectId);
+            List<CompressedPointCloudChunk> chunks =
+                _stateStore.GetAccumulatedPointCloudChunks(calibProjectId);
             if (chunks.Count == 0)
             {
                 await _notifier.NotifyStatusAsync(session.ToDto());
                 return;
             }
 
-            byte[] mergedPly = MergePlyFiles(chunks);
-
             string plyBlobKey = $"{calibProjectId}/pointcloud/{DateTime.UtcNow:yyyyMMddHHmmss}.ply";
-            await _blobContainer.SaveAsync(plyBlobKey, mergedPly, overrideExisting: false);
+            string temporaryPath = Path.Combine(
+                Path.GetTempPath(),
+                $"aurora-point-cloud-{Guid.NewGuid():N}.ply"
+            );
+            long mergedPlyLength;
+            try
+            {
+                await using FileStream mergedPly = new(
+                    temporaryPath,
+                    FileMode.CreateNew,
+                    FileAccess.ReadWrite,
+                    FileShare.None,
+                    bufferSize: 1024 * 1024,
+                    options: FileOptions.Asynchronous | FileOptions.SequentialScan
+                );
+                await MergePlyFilesAsync(chunks, mergedPly);
+                mergedPlyLength = mergedPly.Length;
+                mergedPly.Position = 0;
+                await _blobContainer.SaveAsync(
+                    plyBlobKey,
+                    mergedPly,
+                    overrideExisting: false
+                );
+            }
+            finally
+            {
+                try
+                {
+                    File.Delete(temporaryPath);
+                }
+                catch (Exception cleanupException)
+                {
+                    _logger.LogWarning(
+                        cleanupException,
+                        "Failed to delete temporary merged point-cloud file {TemporaryPath}",
+                        temporaryPath
+                    );
+                }
+            }
             _stateStore.ReleaseAccumulatedPointCloudChunks(calibProjectId);
 
             string plyDownloadUrl = $"/api/app/calib-point-cloud/download/{calibProjectId}";
 
             session.PlyDownloadUrl = plyDownloadUrl;
-            session.PlyFileSizeBytes = mergedPly.Length;
+            session.PlyFileSizeBytes = mergedPlyLength;
             session.PlyBlobKey = plyBlobKey;
 
             await _notifier.NotifyStatusAsync(session.ToDto());
@@ -779,7 +836,7 @@ public class CalibPointCloudAppService : AuroraStruct3DAppService, ICalibPointCl
                 "Step7 增量点云合并完成：ProjectId={ProjectId}, TotalPointCount={TotalPointCount}, FileSize={FileSize}",
                 calibProjectId,
                 session.TotalPointCount,
-                mergedPly.Length
+                mergedPlyLength
             );
         }
         catch (Exception ex)
@@ -1328,51 +1385,24 @@ public class CalibPointCloudAppService : AuroraStruct3DAppService, ICalibPointCl
         return result;
     }
 
-    private byte[] MergePlyFiles(List<byte[]> plyChunks)
+    private static string BuildIncrementalChunkError(IncrementalPointCloudAddResult result)
     {
-        if (plyChunks.Count == 0)
+        if (result.Status == IncrementalPointCloudAddStatus.SessionInactive)
         {
-            return Array.Empty<byte>();
+            return "增量点云会话已结束，当前轮次无法写入；请重新开始扫描。";
         }
 
-        if (plyChunks.Count == 1)
-        {
-            return plyChunks[0];
-        }
+        double usedMb = result.AccumulatedCompressedBytes / 1024d / 1024d;
+        double maximumMb = result.MaximumCompressedBytes / 1024d / 1024d;
+        return $"增量点云压缩缓存已达到安全上限（{usedMb:F1}/{maximumMb:F0} MB），"
+            + "请停止扫描并保存当前点云。";
+    }
 
-        int totalVertexCount = 0;
-        List<(byte[] Chunk, int DataOffset)> chunkData = new(plyChunks.Count);
-
-        foreach (byte[] chunk in plyChunks)
-        {
-            string content = Encoding.ASCII.GetString(chunk);
-            int headerEnd = content.IndexOf("end_header", StringComparison.Ordinal);
-            if (headerEnd < 0)
-            {
-                throw new InvalidDataException("增量点云块缺少 PLY end_header。");
-            }
-
-            int vertexLineStart = content.IndexOf("element vertex ", StringComparison.Ordinal);
-            int vertexLineEnd = vertexLineStart >= 0 ? content.IndexOf('\n', vertexLineStart) : -1;
-            if (vertexLineStart < 0
-                || vertexLineEnd < 0
-                || !int.TryParse(
-                    content.AsSpan(vertexLineStart + "element vertex ".Length,
-                        vertexLineEnd - vertexLineStart - "element vertex ".Length).Trim(),
-                    out int vertexCount))
-            {
-                throw new InvalidDataException("增量点云块的 PLY 顶点数量无效。");
-            }
-
-            totalVertexCount = checked(totalVertexCount + vertexCount);
-            int dataOffset = headerEnd + "end_header".Length;
-            while (dataOffset < chunk.Length && (chunk[dataOffset] == (byte)'\r' || chunk[dataOffset] == (byte)'\n'))
-            {
-                dataOffset++;
-            }
-            chunkData.Add((chunk, dataOffset));
-        }
-
+    internal static async Task MergePlyFilesAsync(
+        IReadOnlyList<CompressedPointCloudChunk> plyChunks,
+        Stream destination)
+    {
+        long totalVertexCount = plyChunks.Sum(chunk => (long)chunk.PointCount);
         string header =
             "ply\n"
             + "format ascii 1.0\n"
@@ -1384,22 +1414,42 @@ public class CalibPointCloudAppService : AuroraStruct3DAppService, ICalibPointCl
             + "property uchar green\n"
             + "property uchar blue\n"
             + "end_header\n";
-        int capacity = checked(
-            Encoding.ASCII.GetByteCount(header)
-            + chunkData.Sum(x => x.Chunk.Length - x.DataOffset + 1)
-        );
-        using MemoryStream merged = new(capacity);
-        merged.Write(Encoding.ASCII.GetBytes(header));
-        foreach ((byte[] chunk, int dataOffset) in chunkData)
+        await destination.WriteAsync(Encoding.ASCII.GetBytes(header));
+
+        foreach (CompressedPointCloudChunk chunk in plyChunks)
         {
-            merged.Write(chunk, dataOffset, chunk.Length - dataOffset);
-            if (chunk.Length == dataOffset || chunk[^1] != (byte)'\n')
+            using MemoryStream compressed = new(chunk.CompressedBytes, writable: false);
+            using BrotliStream decompressed = new(
+                compressed,
+                CompressionMode.Decompress,
+                leaveOpen: false
+            );
+            SkipPlyHeader(decompressed);
+            await decompressed.CopyToAsync(destination);
+        }
+    }
+
+    private static void SkipPlyHeader(Stream source)
+    {
+        const int maximumHeaderBytes = 64 * 1024;
+        StringBuilder line = new();
+        for (int readBytes = 0; readBytes < maximumHeaderBytes; readBytes++)
+        {
+            int value = source.ReadByte();
+            if (value < 0)
+                throw new InvalidDataException("增量点云块缺少完整的 PLY 文件头。");
+            if (value == '\n')
             {
-                merged.WriteByte((byte)'\n');
+                if (line.ToString().TrimEnd('\r') == "end_header")
+                    return;
+                line.Clear();
+            }
+            else
+            {
+                line.Append((char)value);
             }
         }
-
-        return merged.ToArray();
+        throw new InvalidDataException("增量点云块的 PLY 文件头超过安全长度。");
     }
 
     private async Task ApplyTableFilterAsync(
@@ -1448,6 +1498,28 @@ public class CalibPointCloudAppService : AuroraStruct3DAppService, ICalibPointCl
             result.CandidateCount,
             result.InlierCount,
             result.RemovedPointCount
+        );
+    }
+
+    private void RemoveSparseFarDepthOutliers(
+        Guid projectId,
+        long roundIndex,
+        Mat depth,
+        Mat projectionP1)
+    {
+        DepthOutlierFilterResult result =
+            StereoReconstructionUtils.RemoveSparseFarDepthOutliers(depth, projectionP1);
+        if (!result.Applied)
+            return;
+
+        _logger.LogInformation(
+            "Step7 sparse far-depth outliers removed: ProjectId={ProjectId}, Round={Round}, "
+                + "Removed={Removed}/{Valid}, DepthCutoffMm={DepthCutoffMm:F2}",
+            projectId,
+            roundIndex,
+            result.RemovedPointCount,
+            result.ValidPointCount,
+            result.DepthCutoffMm
         );
     }
 
@@ -1519,14 +1591,37 @@ public class CalibPointCloudAppService : AuroraStruct3DAppService, ICalibPointCl
                 mainDecode,
                 secondaryDecode,
                 disparitySign,
+                calibrationData.ProjectionP1.At<double>(0, 2)
+                    - calibrationData.ProjectionP2.At<double>(0, 2),
+                out double[] secondaryYCoordinates,
                 out GrayPhaseMatchDiagnostics matchDiagnostics
             );
             int matchedPixelCount = checked((int)matchDiagnostics.MatchedPixels);
             LogGrayPhaseDecodeDiagnostics(0, "Main", mainDecode);
             LogGrayPhaseDecodeDiagnostics(0, "Secondary", secondaryDecode);
-            if (matchedPixelCount == 0)
+            _logger.LogInformation(
+                "Gray+相移匹配：Round={Round}, MainValid={MainValid}, SecondaryValid={SecondaryValid}, "
+                    + "Attempted={Attempted}, Matched={Matched}, RejectY={RejectY}, RejectGap={RejectGap}, "
+                    + "RejectDisparity={RejectDisparity}, RejectBidirectional={RejectBidirectional}, "
+                    + "RejectVerticalStripe={RejectVerticalStripe}",
+                0,
+                mainDecode.ValidCount,
+                secondaryDecode.ValidCount,
+                matchDiagnostics.AttemptedPixels,
+                matchDiagnostics.MatchedPixels,
+                matchDiagnostics.ProjectorYRejected,
+                matchDiagnostics.InterpolationGapRejected,
+                matchDiagnostics.DisparityRejected,
+                matchDiagnostics.BidirectionalRejected,
+                matchDiagnostics.VerticalStripeRejected
+            );
+            if (matchedPixelCount < MinimumReliableStructuredLightMatches)
             {
-                throw new UserFriendlyException("相移条纹未找到有效双目对应点，请检查配置、采集帧序与曝光。");
+                throw new UserFriendlyException(
+                    $"结构光有效匹配仅 {matchedPixelCount}/"
+                        + $"{MinimumReliableStructuredLightMatches}，"
+                        + "请检查配置、采集帧序、曝光、对焦和主从相机同步。"
+                );
             }
 
             await ReportProgressAsync(project.Id, 65, "立体匹配完成", cancellationToken);
@@ -1539,7 +1634,20 @@ public class CalibPointCloudAppService : AuroraStruct3DAppService, ICalibPointCl
                 calibrationData.ProjectionP1,
                 calibrationData.ProjectionP2,
                 baselineMm,
-                disparitySign
+                disparitySign,
+                secondaryYCoordinates
+            );
+            await ApplyTableFilterAsync(
+                project.Id,
+                roundIndex: 0,
+                depth,
+                calibrationData.ProjectionP1
+            );
+            RemoveSparseFarDepthOutliers(
+                project.Id,
+                roundIndex: 0,
+                depth,
+                calibrationData.ProjectionP1
             );
 
             await ReportProgressAsync(project.Id, 80, "深度图计算完成", cancellationToken);
@@ -2364,9 +2472,9 @@ public class CalibPointCloudAppService : AuroraStruct3DAppService, ICalibPointCl
         GrayPhaseDecodeDiagnostics? d = result.Diagnostics;
         if (d is null) return;
         _logger.LogInformation(
-            "Gray+相移解码诊断：Round={Round}, Camera={Camera}, Valid={Valid}, SaturatedRejected={Saturated}, LowContrastRejected={LowContrast}, LowModulationRejected={LowModulation}, PhaseResidualRejected={PhaseResidual}",
+            "Gray+相移解码诊断：Round={Round}, Camera={Camera}, Valid={Valid}, SaturatedRejected={Saturated}, LowContrastRejected={LowContrast}, LowModulationRejected={LowModulation}, PhaseResidualRejected={PhaseResidual}, GrayRecovered={GrayRecovered}",
             roundIndex, camera, result.ValidCount, d.SaturatedPixels, d.LowContrastPixels,
-            d.LowModulationPixels, d.PhaseResidualPixels);
+            d.LowModulationPixels, d.PhaseResidualPixels, d.GrayRecoveredPixels);
     }
 
     private sealed class CalibrationData : IDisposable

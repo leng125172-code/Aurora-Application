@@ -511,6 +511,31 @@ public class IdentityUserManager : UserManager<IdentityUser>, IDomainService
         return result;
     }
 
+    public override async Task<IdentityResult> AddPasswordAsync(
+        IdentityUser user,
+        string password
+    )
+    {
+        var result = await base.AddPasswordAsync(user, password);
+
+        await ClearShouldChangePasswordOnNextLoginAsync(user, result);
+
+        return result;
+    }
+
+    public override async Task<IdentityResult> ResetPasswordAsync(
+        IdentityUser user,
+        string token,
+        string newPassword
+    )
+    {
+        var result = await base.ResetPasswordAsync(user, token, newPassword);
+
+        await ClearShouldChangePasswordOnNextLoginAsync(user, result);
+
+        return result;
+    }
+
     public override async Task<IdentityResult> ChangePasswordAsync(
         IdentityUser user,
         string currentPassword,
@@ -520,6 +545,8 @@ public class IdentityUserManager : UserManager<IdentityUser>, IDomainService
         var result = await base.ChangePasswordAsync(user, currentPassword, newPassword);
 
         result.CheckErrors();
+
+        await ClearShouldChangePasswordOnNextLoginAsync(user, result);
 
         await DistributedEventBus.PublishAsync(
             new IdentityUserPasswordChangedEto
@@ -531,6 +558,20 @@ public class IdentityUserManager : UserManager<IdentityUser>, IDomainService
         );
 
         return result;
+    }
+
+    private async Task ClearShouldChangePasswordOnNextLoginAsync(
+        IdentityUser user,
+        IdentityResult passwordResult
+    )
+    {
+        if (!passwordResult.Succeeded || !user.ShouldChangePasswordOnNextLogin)
+        {
+            return;
+        }
+
+        user.SetShouldChangePasswordOnNextLogin(false);
+        (await UpdateUserAsync(user)).CheckErrors();
     }
 
     public virtual async Task UpdateRoleAsync(Guid sourceRoleId, Guid? targetRoleId)
